@@ -1,0 +1,174 @@
+import { getServerSession } from "next-auth";
+import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
+import { authOptions } from "@/lib/auth";
+import { TopBar } from "@/components/layout/TopBar";
+import { prisma } from "@/lib/prisma";
+
+export const metadata = { title: "Pedido" };
+
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pendente",
+  CONFIRMED: "Confirmado",
+  PREPARING: "Preparando",
+  READY: "Pronto",
+  OUT_FOR_DELIVERY: "Em entrega",
+  DELIVERED: "Entregue",
+  CANCELLED: "Cancelado",
+};
+
+export default async function OrderDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+
+  const order = await prisma.order.findUnique({
+    where: { id: params.id },
+    include: {
+      items: true,
+      payment: true,
+      customer: { select: { id: true, name: true, phone: true } },
+      deliveryAddress: true,
+    },
+  });
+
+  if (!order || order.restaurantId !== session.user.restaurantId) {
+    notFound();
+  }
+
+  return (
+    <>
+      <TopBar title={`Pedido — ${order.customer.name}`} />
+      <div className="p-6 space-y-5">
+        <Link href="/dashboard/orders" className="text-sm text-brand-600 hover:underline">
+          ← Voltar para pedidos
+        </Link>
+
+        {/* Status + meta */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <Link
+                href={`/dashboard/customers/${order.customer.id}`}
+                className="font-semibold text-brand-600 hover:underline"
+              >
+                {order.customer.name}
+              </Link>
+              <p className="text-sm text-gray-500">{order.customer.phone}</p>
+            </div>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+              {STATUS_LABELS[order.status] ?? order.status}
+            </span>
+          </div>
+
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <dt className="text-gray-500">Tipo</dt>
+              <dd className="font-medium">{order.type}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-500">Data</dt>
+              <dd className="font-medium">
+                {new Date(order.createdAt).toLocaleString("pt-BR")}
+              </dd>
+            </div>
+            {order.deliveryAddress && (
+              <div className="col-span-2">
+                <dt className="text-gray-500">Endereço de entrega</dt>
+                <dd className="font-medium">
+                  {order.deliveryAddress.street}, {order.deliveryAddress.number} —{" "}
+                  {order.deliveryAddress.neighborhood}, {order.deliveryAddress.city}/
+                  {order.deliveryAddress.state}
+                </dd>
+              </div>
+            )}
+            {order.notes && (
+              <div className="col-span-2">
+                <dt className="text-gray-500">Observações</dt>
+                <dd className="font-medium">{order.notes}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+
+        {/* Items */}
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className="border-b border-gray-100 bg-gray-50 px-5 py-3">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              Itens
+            </h2>
+          </div>
+          <ul className="divide-y divide-gray-100">
+            {order.items.map((item) => (
+              <li key={item.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                <span className="text-gray-900">
+                  {item.quantity}× {item.name}
+                  {item.notes && <span className="ml-1 text-xs text-gray-400">({item.notes})</span>}
+                </span>
+                <span className="font-medium">R$ {Number(item.total).toFixed(2)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="border-t border-gray-100 px-5 py-3">
+            <div className="flex justify-between text-sm text-gray-500">
+              <span>Subtotal</span>
+              <span>R$ {Number(order.subtotal).toFixed(2)}</span>
+            </div>
+            {Number(order.deliveryFee) > 0 && (
+              <div className="flex justify-between text-sm text-gray-500">
+                <span>Taxa de entrega</span>
+                <span>R$ {Number(order.deliveryFee).toFixed(2)}</span>
+              </div>
+            )}
+            {Number(order.discount) > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>Desconto</span>
+                <span>– R$ {Number(order.discount).toFixed(2)}</span>
+              </div>
+            )}
+            <div className="mt-2 flex justify-between font-semibold text-gray-900">
+              <span>Total</span>
+              <span>R$ {Number(order.total).toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Payment */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">
+            Pagamento
+          </h2>
+          {order.payment ? (
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-gray-500">Método</dt>
+                <dd className="font-medium">{order.payment.method}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Status</dt>
+                <dd className="font-medium">{order.payment.status}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Valor</dt>
+                <dd className="font-medium">R$ {Number(order.payment.amount).toFixed(2)}</dd>
+              </div>
+              {order.payment.paidAt && (
+                <div>
+                  <dt className="text-gray-500">Pago em</dt>
+                  <dd className="font-medium">
+                    {new Date(order.payment.paidAt).toLocaleString("pt-BR")}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : (
+            <p className="text-sm text-gray-400">Nenhum registro de pagamento ainda.</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}

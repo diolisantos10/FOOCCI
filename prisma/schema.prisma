@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────
 //  CRM Restaurante – Prisma Schema
-//  Full schema defined in Phase 1 to prevent destructive
-//  migrations in later phases.
+//  Full schema defined upfront to prevent destructive migrations.
+//  Phase 2 adds: OrderDraft, OrderDraftItem, FulfillmentType,
+//  OrderDraftStatus; corrects Order.deliveryAddr → deliveryAddressId.
 // ─────────────────────────────────────────────────────────────
 
 datasource db {
@@ -31,11 +32,11 @@ model Restaurant {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
   users            User[]
   customers        Customer[]
   menuCategories   MenuCategory[]
   orders           Order[]
+  orderDrafts      OrderDraft[]
   campaigns        Campaign[]
   conversations    Conversation[]
   offers           Offer[]
@@ -52,7 +53,7 @@ enum Plan {
 }
 
 // ═══════════════════════════════════════════
-//  USERS  (staff/owners of a restaurant)
+//  USERS
 // ═══════════════════════════════════════════
 
 model User {
@@ -60,7 +61,7 @@ model User {
   restaurantId String
   name         String
   email        String
-  password     String   // bcrypt hash
+  password     String
   role         Role     @default(STAFF)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -68,7 +69,6 @@ model User {
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
-  // Same email can own/work at multiple restaurants
   @@unique([email, restaurantId])
   @@index([restaurantId])
   @@map("users")
@@ -81,14 +81,14 @@ enum Role {
 }
 
 // ═══════════════════════════════════════════
-//  CUSTOMERS  (restaurant's end-customers)
+//  CUSTOMERS
 // ═══════════════════════════════════════════
 
 model Customer {
   id           String    @id @default(cuid())
   restaurantId String
   name         String
-  phone        String    // WhatsApp number – E.164 format
+  phone        String    // E.164 format – WhatsApp identifier
   email        String?
   birthDate    DateTime?
   notes        String?
@@ -99,9 +99,10 @@ model Customer {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  restaurant     Restaurant                @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant     Restaurant                  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   addresses      Address[]
   orders         Order[]
+  orderDrafts    OrderDraft[]
   conversations  Conversation[]
   preferences    CustomerPreference?
   segmentMembers CustomerSegmentMembership[]
@@ -114,7 +115,7 @@ model Customer {
 model Address {
   id           String   @id @default(cuid())
   customerId   String
-  label        String?  // e.g. "Home", "Work"
+  label        String?
   street       String
   number       String
   complement   String?
@@ -126,7 +127,9 @@ model Address {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderDrafts OrderDraft[] // drafts referencing this address
+  orders      Order[]      // orders referencing this address
 
   @@index([customerId])
   @@map("addresses")
@@ -135,7 +138,7 @@ model Address {
 model CustomerPreference {
   id           String   @id @default(cuid())
   customerId   String   @unique
-  dietary      String[] // e.g. ["vegetarian", "gluten-free"]
+  dietary      String[]
   allergies    String[]
   favoriteDish String?
   notes        String?
@@ -173,46 +176,113 @@ model MenuItem {
   categoryId  String
   name        String
   description String?
-  price       Decimal  @db.Decimal(10, 2) // Never Float for money
+  price       Decimal  @db.Decimal(10, 2)
   imageUrl    String?
   sortOrder   Int      @default(0)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  category   MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  orderItems OrderItem[]
+  category        MenuCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems      OrderItem[]
+  orderDraftItems OrderDraftItem[]
 
   @@index([categoryId])
   @@map("menu_items")
 }
 
 // ═══════════════════════════════════════════
-//  ORDERS
+//  ORDER DRAFTS  (mutable cart before confirmation)
+// ═══════════════════════════════════════════
+
+model OrderDraft {
+  id                String           @id @default(cuid())
+  restaurantId      String
+  customerId        String
+  conversationId    String?          // nullable – set when draft originates from WhatsApp (Phase 3)
+  status            OrderDraftStatus @default(OPEN)
+  fulfillmentType   FulfillmentType  @default(DELIVERY)
+  deliveryAddressId String?          // FK to Address; null for PICKUP/DINE_IN
+  subtotal          Decimal          @default(0) @db.Decimal(10, 2)
+  deliveryFee       Decimal          @default(0) @db.Decimal(10, 2)
+  totalAmount       Decimal          @default(0) @db.Decimal(10, 2)
+  notes             String?
+  aiSummary         String?          // Phase 3: AI-generated order summary
+  confirmedAt       DateTime?
+  abandonedAt       DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  restaurant      Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  deliveryAddress Address?        @relation(fields: [deliveryAddressId], references: [id])
+  items           OrderDraftItem[]
+  order           Order?          // populated after confirmation
+
+  @@index([restaurantId])
+  @@index([customerId])
+  @@index([restaurantId, status])
+  @@map("order_drafts")
+}
+
+model OrderDraftItem {
+  id           String   @id @default(cuid())
+  orderDraftId String
+  menuItemId   String
+  quantity     Int
+  unitPrice    Decimal  @db.Decimal(10, 2) // snapshot of price at time of add
+  isUpsell     Boolean  @default(false)    // true if suggested by AI upsell (Phase 3)
+  notes        String?
+  addedAt      DateTime @default(now())
+
+  orderDraft OrderDraft @relation(fields: [orderDraftId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem   @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderDraftId])
+  @@map("order_draft_items")
+}
+
+enum OrderDraftStatus {
+  OPEN
+  CONFIRMED
+  ABANDONED
+}
+
+enum FulfillmentType {
+  DELIVERY
+  PICKUP
+  DINE_IN
+}
+
+// ═══════════════════════════════════════════
+//  ORDERS  (immutable after confirmation)
 // ═══════════════════════════════════════════
 
 model Order {
-  id           String      @id @default(cuid())
-  restaurantId String
-  customerId   String
-  status       OrderStatus @default(PENDING)
-  type         OrderType   @default(DELIVERY)
-  subtotal     Decimal     @db.Decimal(10, 2)
-  deliveryFee  Decimal     @default(0) @db.Decimal(10, 2)
-  discount     Decimal     @default(0) @db.Decimal(10, 2)
-  total        Decimal     @db.Decimal(10, 2)
-  notes        String?
-  deliveryAddr String?     // Snapshot of address at order time
-  estimatedAt  DateTime?
-  completedAt  DateTime?
-  cancelledAt  DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id                String      @id @default(cuid())
+  restaurantId      String
+  customerId        String
+  orderDraftId      String?     @unique // traceability back to originating draft
+  status            OrderStatus @default(PENDING)
+  type              OrderType   @default(DELIVERY)
+  subtotal          Decimal     @db.Decimal(10, 2)
+  deliveryFee       Decimal     @default(0) @db.Decimal(10, 2)
+  discount          Decimal     @default(0) @db.Decimal(10, 2)
+  total             Decimal     @db.Decimal(10, 2)
+  notes             String?
+  deliveryAddressId String?     // FK to Address snapshot at order time
+  estimatedAt       DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  customer   Customer   @relation(fields: [customerId], references: [id])
-  items      OrderItem[]
-  payment    Payment?
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer        Customer   @relation(fields: [customerId], references: [id])
+  orderDraft      OrderDraft? @relation(fields: [orderDraftId], references: [id])
+  deliveryAddress Address?   @relation(fields: [deliveryAddressId], references: [id])
+  items           OrderItem[]
+  payment         Payment?
 
   @@index([restaurantId])
   @@index([customerId])
@@ -224,7 +294,7 @@ model OrderItem {
   id         String  @id @default(cuid())
   orderId    String
   menuItemId String
-  name       String  // Snapshot of name at order time
+  name       String  // snapshot of name at order time
   price      Decimal @db.Decimal(10, 2)
   quantity   Int
   notes      String?
@@ -288,7 +358,7 @@ enum PaymentStatus {
 }
 
 // ═══════════════════════════════════════════
-//  CONVERSATIONS & MESSAGES  (Phase 2)
+//  CONVERSATIONS & MESSAGES  (Phase 3)
 // ═══════════════════════════════════════════
 
 model Conversation {
@@ -297,7 +367,7 @@ model Conversation {
   customerId   String
   channel      Channel            @default(WHATSAPP)
   status       ConversationStatus @default(OPEN)
-  assignedTo   String?            // userId of assigned agent
+  assignedTo   String?
   resolvedAt   DateTime?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
@@ -324,7 +394,7 @@ model Message {
   deliveredAt    DateTime?
   readAt         DateTime?
   errorMessage   String?
-  metadata       Json?       // Provider-specific fields (e.g. WhatsApp message ID)
+  metadata       Json?
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -340,8 +410,8 @@ enum Channel {
 
 enum ConversationStatus {
   OPEN
-  BOT      // Handled by AI
-  HUMAN    // Escalated to human agent
+  BOT
+  HUMAN
   RESOLVED
 }
 
@@ -360,7 +430,7 @@ enum MessageType {
 }
 
 // ═══════════════════════════════════════════
-//  CAMPAIGNS  (Phase 2)
+//  CAMPAIGNS  (Phase 3)
 // ═══════════════════════════════════════════
 
 model Campaign {
@@ -377,8 +447,8 @@ model Campaign {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
-  restaurant Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  segment    CustomerSegment?  @relation(fields: [segmentId], references: [id])
+  restaurant Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  segment    CustomerSegment?   @relation(fields: [segmentId], references: [id])
   executions CampaignExecution[]
 
   @@index([restaurantId])
@@ -418,7 +488,7 @@ enum ExecutionStatus {
 }
 
 // ═══════════════════════════════════════════
-//  CUSTOMER SEGMENTS  (Phase 2)
+//  CUSTOMER SEGMENTS  (Phase 3)
 // ═══════════════════════════════════════════
 
 model CustomerSegment {
@@ -426,7 +496,7 @@ model CustomerSegment {
   restaurantId String
   name         String
   description  String?
-  filters      Json     // Structured filter DSL (e.g. { minOrders: 3, lastDays: 30 })
+  filters      Json
   memberCount  Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -452,7 +522,7 @@ model CustomerSegmentMembership {
 }
 
 // ═══════════════════════════════════════════
-//  OFFERS / PROMOTIONS  (Phase 2)
+//  OFFERS  (Phase 3)
 // ═══════════════════════════════════════════
 
 model Offer {
