@@ -1,0 +1,509 @@
+// ─────────────────────────────────────────────────────────────
+//  CRM Restaurante – Prisma Schema
+//  Full schema defined in Phase 1 to prevent destructive
+//  migrations in later phases.
+// ─────────────────────────────────────────────────────────────
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ═══════════════════════════════════════════
+//  TENANT – RESTAURANT
+// ═══════════════════════════════════════════
+
+model Restaurant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  phone       String?
+  email       String?
+  logoUrl     String?
+  address     String?
+  timezone    String   @default("America/Sao_Paulo")
+  isActive    Boolean  @default(true)
+  plan        Plan     @default(STARTER)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users            User[]
+  customers        Customer[]
+  menuCategories   MenuCategory[]
+  orders           Order[]
+  campaigns        Campaign[]
+  conversations    Conversation[]
+  offers           Offer[]
+  customerSegments CustomerSegment[]
+  aiLogs           AIInteractionLog[]
+
+  @@map("restaurants")
+}
+
+enum Plan {
+  STARTER
+  GROWTH
+  PRO
+}
+
+// ═══════════════════════════════════════════
+//  USERS  (staff/owners of a restaurant)
+// ═══════════════════════════════════════════
+
+model User {
+  id           String   @id @default(cuid())
+  restaurantId String
+  name         String
+  email        String
+  password     String   // bcrypt hash
+  role         Role     @default(STAFF)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  // Same email can own/work at multiple restaurants
+  @@unique([email, restaurantId])
+  @@index([restaurantId])
+  @@map("users")
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+// ═══════════════════════════════════════════
+//  CUSTOMERS  (restaurant's end-customers)
+// ═══════════════════════════════════════════
+
+model Customer {
+  id           String    @id @default(cuid())
+  restaurantId String
+  name         String
+  phone        String    // WhatsApp number – E.164 format
+  email        String?
+  birthDate    DateTime?
+  notes        String?
+  totalOrders  Int       @default(0)
+  totalSpend   Decimal   @default(0) @db.Decimal(10, 2)
+  lastOrderAt  DateTime?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  restaurant     Restaurant                @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  addresses      Address[]
+  orders         Order[]
+  conversations  Conversation[]
+  preferences    CustomerPreference?
+  segmentMembers CustomerSegmentMembership[]
+
+  @@unique([phone, restaurantId])
+  @@index([restaurantId])
+  @@map("customers")
+}
+
+model Address {
+  id           String   @id @default(cuid())
+  customerId   String
+  label        String?  // e.g. "Home", "Work"
+  street       String
+  number       String
+  complement   String?
+  neighborhood String
+  city         String
+  state        String
+  zipCode      String
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("addresses")
+}
+
+model CustomerPreference {
+  id           String   @id @default(cuid())
+  customerId   String   @unique
+  dietary      String[] // e.g. ["vegetarian", "gluten-free"]
+  allergies    String[]
+  favoriteDish String?
+  notes        String?
+  updatedAt    DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("customer_preferences")
+}
+
+// ═══════════════════════════════════════════
+//  MENU
+// ═══════════════════════════════════════════
+
+model MenuCategory {
+  id           String   @id @default(cuid())
+  restaurantId String
+  name         String
+  description  String?
+  imageUrl     String?
+  sortOrder    Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  items      MenuItem[]
+
+  @@index([restaurantId])
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id          String   @id @default(cuid())
+  categoryId  String
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2) // Never Float for money
+  imageUrl    String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category   MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([categoryId])
+  @@map("menu_items")
+}
+
+// ═══════════════════════════════════════════
+//  ORDERS
+// ═══════════════════════════════════════════
+
+model Order {
+  id           String      @id @default(cuid())
+  restaurantId String
+  customerId   String
+  status       OrderStatus @default(PENDING)
+  type         OrderType   @default(DELIVERY)
+  subtotal     Decimal     @db.Decimal(10, 2)
+  deliveryFee  Decimal     @default(0) @db.Decimal(10, 2)
+  discount     Decimal     @default(0) @db.Decimal(10, 2)
+  total        Decimal     @db.Decimal(10, 2)
+  notes        String?
+  deliveryAddr String?     // Snapshot of address at order time
+  estimatedAt  DateTime?
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer   Customer   @relation(fields: [customerId], references: [id])
+  items      OrderItem[]
+  payment    Payment?
+
+  @@index([restaurantId])
+  @@index([customerId])
+  @@index([restaurantId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String  @id @default(cuid())
+  orderId    String
+  menuItemId String
+  name       String  // Snapshot of name at order time
+  price      Decimal @db.Decimal(10, 2)
+  quantity   Int
+  notes      String?
+  total      Decimal @db.Decimal(10, 2)
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderType {
+  DELIVERY
+  PICKUP
+  DINE_IN
+}
+
+// ═══════════════════════════════════════════
+//  PAYMENTS
+// ═══════════════════════════════════════════
+
+model Payment {
+  id        String        @id @default(cuid())
+  orderId   String        @unique
+  method    PaymentMethod
+  status    PaymentStatus @default(PENDING)
+  amount    Decimal       @db.Decimal(10, 2)
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  PIX
+  ONLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+// ═══════════════════════════════════════════
+//  CONVERSATIONS & MESSAGES  (Phase 2)
+// ═══════════════════════════════════════════
+
+model Conversation {
+  id           String             @id @default(cuid())
+  restaurantId String
+  customerId   String
+  channel      Channel            @default(WHATSAPP)
+  status       ConversationStatus @default(OPEN)
+  assignedTo   String?            // userId of assigned agent
+  resolvedAt   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer   Customer   @relation(fields: [customerId], references: [id])
+  messages   Message[]
+
+  @@index([restaurantId])
+  @@index([customerId])
+  @@index([restaurantId, status])
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  direction      Direction   @default(INBOUND)
+  content        String
+  type           MessageType @default(TEXT)
+  mediaUrl       String?
+  isRead         Boolean     @default(false)
+  sentAt         DateTime    @default(now())
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  errorMessage   String?
+  metadata       Json?       // Provider-specific fields (e.g. WhatsApp message ID)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+enum Channel {
+  WHATSAPP
+  EMAIL
+  SMS
+}
+
+enum ConversationStatus {
+  OPEN
+  BOT      // Handled by AI
+  HUMAN    // Escalated to human agent
+  RESOLVED
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  DOCUMENT
+  TEMPLATE
+  INTERACTIVE
+}
+
+// ═══════════════════════════════════════════
+//  CAMPAIGNS  (Phase 2)
+// ═══════════════════════════════════════════
+
+model Campaign {
+  id           String         @id @default(cuid())
+  restaurantId String
+  name         String
+  message      String
+  segmentId    String?
+  scheduledAt  DateTime?
+  sentAt       DateTime?
+  status       CampaignStatus @default(DRAFT)
+  totalSent    Int            @default(0)
+  totalRead    Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  restaurant Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  segment    CustomerSegment?  @relation(fields: [segmentId], references: [id])
+  executions CampaignExecution[]
+
+  @@index([restaurantId])
+  @@map("campaigns")
+}
+
+model CampaignExecution {
+  id           String          @id @default(cuid())
+  campaignId   String
+  customerId   String
+  status       ExecutionStatus @default(PENDING)
+  sentAt       DateTime?
+  readAt       DateTime?
+  errorMessage String?
+  createdAt    DateTime        @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("campaign_executions")
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+enum ExecutionStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+// ═══════════════════════════════════════════
+//  CUSTOMER SEGMENTS  (Phase 2)
+// ═══════════════════════════════════════════
+
+model CustomerSegment {
+  id           String   @id @default(cuid())
+  restaurantId String
+  name         String
+  description  String?
+  filters      Json     // Structured filter DSL (e.g. { minOrders: 3, lastDays: 30 })
+  memberCount  Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant                  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  members    CustomerSegmentMembership[]
+  campaigns  Campaign[]
+
+  @@index([restaurantId])
+  @@map("customer_segments")
+}
+
+model CustomerSegmentMembership {
+  segmentId  String
+  customerId String
+  addedAt    DateTime @default(now())
+
+  segment  CustomerSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  customer Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@id([segmentId, customerId])
+  @@map("customer_segment_memberships")
+}
+
+// ═══════════════════════════════════════════
+//  OFFERS / PROMOTIONS  (Phase 2)
+// ═══════════════════════════════════════════
+
+model Offer {
+  id            String    @id @default(cuid())
+  restaurantId  String
+  title         String
+  description   String?
+  discount      Decimal   @db.Decimal(5, 2)
+  type          OfferType
+  code          String?
+  minOrderValue Decimal?  @db.Decimal(10, 2)
+  maxUses       Int?
+  usedCount     Int       @default(0)
+  validFrom     DateTime?
+  validUntil    DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@map("offers")
+}
+
+enum OfferType {
+  PERCENTAGE
+  FIXED
+  FREE_DELIVERY
+}
+
+// ═══════════════════════════════════════════
+//  AI INTERACTION LOGS  (Phase 3)
+// ═══════════════════════════════════════════
+
+model AIInteractionLog {
+  id               String   @id @default(cuid())
+  restaurantId     String
+  conversationId   String?
+  model            String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  latencyMs        Int      @default(0)
+  success          Boolean  @default(true)
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([conversationId])
+  @@map("ai_interaction_logs")
+}
