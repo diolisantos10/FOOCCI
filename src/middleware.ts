@@ -17,10 +17,11 @@ import { TENANT_HEADER, USER_HEADER, ROLE_HEADER } from "@/lib/tenant";
 
 // Routes that do NOT require authentication
 const PUBLIC_PATHS: RegExp[] = [
-  /^\/$/,                         // landing page
-  /^\/login(\/.*)?$/,             // login + sub-pages
-  /^\/api\/auth(\/.*)?$/,         // NextAuth endpoints
-  /^\/api\/restaurants\/register$/, // self-service registration
+  /^\/$/,                              // landing page
+  /^\/login(\/.*)?$/,                  // login + sub-pages
+  /^\/api\/auth(\/.*)?$/,              // NextAuth endpoints
+  /^\/api\/restaurants\/register$/,    // self-service registration
+  /^\/api\/webhooks\/evolution$/,      // Evolution API webhook receiver (verified by HMAC)
 ];
 
 function isPublicPath(pathname: string): boolean {

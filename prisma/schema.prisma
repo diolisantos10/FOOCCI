@@ -3,6 +3,8 @@
 //  Full schema defined upfront to prevent destructive migrations.
 //  Phase 2 adds: OrderDraft, OrderDraftItem, FulfillmentType,
 //  OrderDraftStatus; corrects Order.deliveryAddr → deliveryAddressId.
+//  Phase 3 adds: EvolutionConfig, Conversation.lastMessageAt/unreadCount,
+//  Message.externalMessageId/externalStatus.
 // ─────────────────────────────────────────────────────────────
 
 datasource db {
@@ -42,6 +44,7 @@ model Restaurant {
   offers           Offer[]
   customerSegments CustomerSegment[]
   aiLogs           AIInteractionLog[]
+  evolutionConfig  EvolutionConfig?
 
   @@map("restaurants")
 }
@@ -362,15 +365,17 @@ enum PaymentStatus {
 // ═══════════════════════════════════════════
 
 model Conversation {
-  id           String             @id @default(cuid())
-  restaurantId String
-  customerId   String
-  channel      Channel            @default(WHATSAPP)
-  status       ConversationStatus @default(OPEN)
-  assignedTo   String?
-  resolvedAt   DateTime?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  id            String             @id @default(cuid())
+  restaurantId  String
+  customerId    String
+  channel       Channel            @default(WHATSAPP)
+  status        ConversationStatus @default(OPEN)
+  assignedTo    String?
+  resolvedAt    DateTime?
+  lastMessageAt DateTime?          // updated on every new message; used for inbox sort
+  unreadCount   Int                @default(0) // denormalized; reset when agent marks read
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   customer   Customer   @relation(fields: [customerId], references: [id])
@@ -379,22 +384,26 @@ model Conversation {
   @@index([restaurantId])
   @@index([customerId])
   @@index([restaurantId, status])
+  @@index([restaurantId, lastMessageAt])
   @@map("conversations")
 }
 
 model Message {
-  id             String      @id @default(cuid())
-  conversationId String
-  direction      Direction   @default(INBOUND)
-  content        String
-  type           MessageType @default(TEXT)
-  mediaUrl       String?
-  isRead         Boolean     @default(false)
-  sentAt         DateTime    @default(now())
-  deliveredAt    DateTime?
-  readAt         DateTime?
-  errorMessage   String?
-  metadata       Json?
+  id                String      @id @default(cuid())
+  conversationId    String
+  direction         Direction   @default(INBOUND)
+  content           String
+  type              MessageType @default(TEXT)
+  mediaUrl          String?
+  isRead            Boolean     @default(false)
+  sentAt            DateTime    @default(now())
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  errorMessage      String?
+  metadata          Json?
+  // Phase 3: explicit external identifiers for idempotency and status tracking
+  externalMessageId String?     @unique // Evolution API / WhatsApp message ID
+  externalStatus    String?             // sent | delivered | read | failed
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -576,4 +585,31 @@ model AIInteractionLog {
   @@index([restaurantId])
   @@index([conversationId])
   @@map("ai_interaction_logs")
+}
+
+// ═══════════════════════════════════════════
+//  EVOLUTION API CONFIG  (Phase 3)
+//  Per-restaurant Evolution API credentials.
+//  apiKey and webhookSecret are stored AES-256-GCM encrypted.
+//  Plain values are NEVER returned in API responses — only masked.
+//
+//  Future: RestaurantBrandConfig will sit alongside this model and
+//  provide per-tenant AI persona settings (tone, formality, vocabulary,
+//  emoji usage, upsell style) consumed by the Phase 4 AI layer.
+// ═══════════════════════════════════════════
+
+model EvolutionConfig {
+  id            String   @id @default(cuid())
+  restaurantId  String   @unique
+  instanceName  String   // Evolution instance identifier (used to route inbound webhooks)
+  baseUrl       String   // e.g. https://evo.example.com
+  apiKey        String   // AES-256-GCM encrypted
+  webhookSecret String   // AES-256-GCM encrypted; used to verify inbound webhook signatures
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("evolution_configs")
 }
