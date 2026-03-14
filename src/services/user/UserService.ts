@@ -22,12 +22,12 @@ export class UserService {
    * List all users for a restaurant (excludes passwords).
    */
   static async list(restaurantId: string): Promise<ServiceResult<UserPublic[]>> {
-    const users = await prisma.user.findMany({
+    const rawUsers = await prisma.user.findMany({
       where: { restaurantId },
-      omit: { password: true },
       orderBy: { createdAt: "asc" },
     });
 
+    const users = rawUsers.map(({ password: _pwd, ...u }) => u);
     return serviceOk(users);
   }
 
@@ -38,15 +38,15 @@ export class UserService {
     restaurantId: string,
     userId: string
   ): Promise<ServiceResult<UserPublic>> {
-    const user = await prisma.user.findUnique({
+    const rawUser = await prisma.user.findUnique({
       where: { id: userId },
-      omit: { password: true },
     });
 
-    if (!user || user.restaurantId !== restaurantId) {
+    if (!rawUser || rawUser.restaurantId !== restaurantId) {
       return serviceFail("User not found", 404);
     }
 
+    const { password: _pwd, ...user } = rawUser;
     return serviceOk(user);
   }
 
@@ -73,7 +73,7 @@ export class UserService {
 
     const hashedPassword = await hash(input.password, 12);
 
-    const user = await prisma.user.create({
+    const rawUser = await prisma.user.create({
       data: {
         restaurantId,
         name: input.name,
@@ -81,9 +81,9 @@ export class UserService {
         password: hashedPassword,
         role: input.role,
       },
-      omit: { password: true },
     });
 
+    const { password: _pwd, ...user } = rawUser;
     return serviceOk(user);
   }
 
@@ -105,16 +105,16 @@ export class UserService {
       return serviceFail("User not found", 404);
     }
 
-    const updated = await prisma.user.update({
+    const rawUpdated = await prisma.user.update({
       where: { id: userId },
       data: {
         ...(input.name !== undefined && { name: input.name }),
         ...(input.role !== undefined && { role: input.role }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),
       },
-      omit: { password: true },
     });
 
+    const { password: _pwd, ...updated } = rawUpdated;
     return serviceOk(updated);
   }
 

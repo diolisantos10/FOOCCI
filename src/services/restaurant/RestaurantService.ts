@@ -88,7 +88,6 @@ export class RestaurantService {
   ): Promise<ServiceResult<RestaurantPublic>> {
     const restaurant = await prisma.restaurant.findUnique({
       where: { id: restaurantId },
-      omit: { updatedAt: false }, // keep all fields, just typed
     });
 
     if (!restaurant) {
