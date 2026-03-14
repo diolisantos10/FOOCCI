@@ -16,8 +16,8 @@ build/
 # Keep the example template
 !.env.example
 
-# Prisma
-prisma/migrations/
+# Prisma – migrations must be committed to version control (Prisma best practice)
+# prisma/migrations/   <-- intentionally NOT ignored
 
 # Debug
 npm-debug.log*
