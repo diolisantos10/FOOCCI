@@ -1,10 +1,10 @@
 // ─────────────────────────────────────────────────────────────
 //  CRM Restaurante – Prisma Schema
-//  Full schema defined upfront to prevent destructive migrations.
-//  Phase 2 adds: OrderDraft, OrderDraftItem, FulfillmentType,
-//  OrderDraftStatus; corrects Order.deliveryAddr → deliveryAddressId.
-//  Phase 3 adds: EvolutionConfig, Conversation.lastMessageAt/unreadCount,
-//  Message.externalMessageId/externalStatus.
+//  Phase 2: OrderDraft, OrderDraftItem, FulfillmentType, OrderDraftStatus.
+//  Phase 3: EvolutionConfig, Conversation.lastMessageAt/unreadCount,
+//           Message.externalMessageId/externalStatus.
+//  Phase 4: RestaurantBrandConfig (AI brand voice),
+//           AIInteractionLog.toolCalls/turnNumber/estimatedCostUsd.
 // ─────────────────────────────────────────────────────────────
 
 datasource db {
@@ -45,6 +45,7 @@ model Restaurant {
   customerSegments CustomerSegment[]
   aiLogs           AIInteractionLog[]
   evolutionConfig  EvolutionConfig?
+  brandConfig      RestaurantBrandConfig?
 
   @@map("restaurants")
 }
@@ -578,6 +579,10 @@ model AIInteractionLog {
   latencyMs        Int      @default(0)
   success          Boolean  @default(true)
   errorMessage     String?
+  // Phase 4 additions
+  turnNumber       Int      @default(0)    // which conversation turn (for multi-turn audit)
+  toolCalls        Json?                   // array of {name, args, result} for every tool executed
+  estimatedCostUsd Decimal? @db.Decimal(10, 6) // calculated from model pricing at log time
   createdAt        DateTime @default(now())
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -612,4 +617,49 @@ model EvolutionConfig {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("evolution_configs")
+}
+
+// ═══════════════════════════════════════════
+//  RESTAURANT BRAND CONFIG  (Phase 4)
+//  Per-restaurant AI brand voice and ordering engine settings.
+//  Injected into PromptBuilder to shape the AI's tone, style,
+//  and behaviour for every conversation turn.
+// ═══════════════════════════════════════════
+
+model RestaurantBrandConfig {
+  id                   String   @id @default(cuid())
+  restaurantId         String   @unique
+
+  // ── Voice & tone ────────────────────────────────────────────
+  tone                 String   @default("friendly")
+  // friendly | professional | casual | warm
+  formality            String   @default("informal")
+  // formal | informal | mixed
+  emojiUsage           String   @default("moderate")
+  // none | minimal | moderate | expressive
+  communicationStyle   String   @default("conversational")
+  // conversational | concise | detailed
+
+  // ── Ordering behaviour ──────────────────────────────────────
+  upsellStyle          String   @default("gentle")
+  // none | gentle | moderate | proactive
+  greetingTemplate     String?  // optional custom opening message
+
+  // ── Advanced overrides ──────────────────────────────────────
+  // When set, replaces the auto-generated system prompt entirely.
+  // The token {CONTEXT} is replaced with the dynamic context block.
+  systemPromptOverride String?
+
+  // ── AI model settings ───────────────────────────────────────
+  aiModel              String   @default("gpt-4o-mini")
+  // gpt-4o-mini | gpt-4o
+  maxHistoryMessages   Int      @default(20)
+  // how many recent messages to include in the prompt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("restaurant_brand_configs")
 }

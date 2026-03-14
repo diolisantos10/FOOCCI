@@ -7,18 +7,15 @@
  *   2. Idempotency: skip duplicate messages using externalMessageId.
  *   3. Find or create Customer.
  *   4. Conversation reuse logic:
- *        a. Prefer OPEN or HUMAN conversation.
+ *        a. Prefer OPEN or HUMAN conversation (HUMAN messages are only read by staff).
  *        b. Reopen a recently-RESOLVED conversation (< REOPEN_WINDOW_HOURS).
  *        c. Create a new conversation otherwise.
  *   5. Persist Message with externalMessageId.
  *   6. Update Conversation.lastMessageAt and unreadCount.
- *   7. Handle message status updates (deliveredAt, readAt).
- *   8. Handle connection state changes.
- *
- * Note: No AI or automated reply logic lives here (Phase 4).
- * This processor is intentionally passive — it records what happened
- * and notifies the human inbox layer. The future AI layer will hook
- * in here with per-restaurant brand config (tone, vocabulary, etc.).
+ *   7. Phase 4: If conversation is OPEN or BOT, trigger AIOrderService.processTurn().
+ *      HUMAN conversations are skipped — human agent is handling them.
+ *   8. Handle message status updates (deliveredAt, readAt).
+ *   9. Handle connection state changes.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -30,6 +27,8 @@ import type {
   ConnectionUpdateEvent,
 } from "./WebhookParserService";
 import { ConversationStatus, MessageType } from "@prisma/client";
+// Phase 4: lazy import to avoid circular dependency issues at module load time
+import type { AIOrderService as AIOrderServiceType } from "@/services/ai/AIOrderService";
 
 // Resolved conversations older than this are treated as new threads.
 const REOPEN_WINDOW_HOURS = 24;
@@ -116,12 +115,36 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     }),
   ]);
 
+  // 7. Phase 4: trigger AI for OPEN and BOT conversations.
+  //    HUMAN conversations are handled by a staff agent — AI must not interfere.
+  const shouldTriggerAI =
+    conversation.status === ConversationStatus.OPEN ||
+    conversation.status === ConversationStatus.BOT;
+
+  if (shouldTriggerAI) {
+    // Dynamic import breaks potential circular references and lets the module
+    // initialise cleanly. Errors are swallowed — the message is already saved
+    // and a human agent can always respond manually via the inbox.
+    void import("@/services/ai/AIOrderService")
+      .then(({ AIOrderService }) =>
+        AIOrderService.processTurn(conversation.id).catch((err) =>
+          console.error("[WebhookProcessor] AI turn failed:", err)
+        )
+      )
+      .catch((err) =>
+        console.error("[WebhookProcessor] AI module load failed:", err)
+      );
+  }
+
   return {
     handled: true,
     action: "message_persisted",
     detail: `conversation:${conversation.id}`,
   };
 }
+
+// Silence unused-import warning — the type is used only for documentation.
+type _AIRef = AIOrderServiceType;
 
 // ─── conversation reuse ───────────────────────────────────────
 
