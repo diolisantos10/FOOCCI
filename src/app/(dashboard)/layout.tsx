@@ -8,7 +8,12 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    // Throws when NEXTAUTH_SECRET is missing; treat as unauthenticated.
+  }
 
   if (!session) {
     redirect("/login");

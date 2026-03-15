@@ -13,11 +13,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 export default async function RootPage() {
-  const session = await getServerSession(authOptions);
-
-  if (session) {
-    redirect("/dashboard");
-  } else {
-    redirect("/login");
+  try {
+    const session = await getServerSession(authOptions);
+    if (session) {
+      redirect("/dashboard");
+    }
+  } catch {
+    // getServerSession throws when NEXTAUTH_SECRET is missing or misconfigured.
+    // Fall through to redirect to /login so the app is never a blank error page.
   }
+  redirect("/login");
 }
