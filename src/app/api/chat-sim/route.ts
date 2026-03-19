@@ -1,13 +1,15 @@
 /**
  * /api/chat-sim
  *
- * GET  — returns active category names for the UI chip bar.
- * POST — stateless AI endpoint. Receives full conversation history,
- *        loads menu + brand config, builds a two-phase system prompt,
- *        and returns a single OpenAI completion.
+ * GET  — returns full active menu (categories + items + prices) for the UI.
+ * POST — stateless two-phase AI endpoint.
+ *        Receives conversation history + current cart from the client,
+ *        builds a cart-aware system prompt, and returns a single completion.
  *
- * No DB conversation / message records are created — purely a sandbox
- * for validating the guided-selling flow before connecting WhatsApp.
+ * Cart context in the prompt lets the AI:
+ *  • Know exactly what the customer already ordered (never re-suggest)
+ *  • In Phase 2, identify which categories still need upsell
+ *  • Show an accurate running total on demand
  */
 
 import { NextRequest } from "next/server";
@@ -17,31 +19,39 @@ import { openai } from "@/lib/openai";
 import { ok, badRequest, unauthorized, serverError } from "@/lib/api-response";
 import type OpenAI from "openai";
 
-// ─── shared types ─────────────────────────────────────────────
+// ─── types ────────────────────────────────────────────────────
 
-interface HistoryMessage {
+interface HistoryEntry {
   role: "user" | "assistant";
   content: string;
 }
 
-interface ChatSimRequest {
-  message: string;
-  history: HistoryMessage[];
+interface CartItem {
+  name: string;
+  price: number; // number, not Decimal
+  qty: number;
 }
 
-type MenuItem    = { name: string; price: unknown; description: string | null };
-type MenuCategory = { name: string; description: string | null; items: MenuItem[] };
+interface ChatSimRequest {
+  message: string;
+  history: HistoryEntry[];
+  cart?: CartItem[];
+}
+
+type DbMenuItem = { name: string; price: unknown; description: string | null };
+type DbCategory  = { name: string; description: string | null; items: DbMenuItem[] };
 
 // ─── system prompt ────────────────────────────────────────────
 
 function buildSystemPrompt(
   restaurantName: string,
-  categories: MenuCategory[],
-  emojiUsage: string
+  categories: DbCategory[],
+  emojiUsage: string,
+  cart: CartItem[]
 ): string {
   const active = categories.filter((c) => c.items.length > 0);
 
-  // Full menu — each category labelled, items with optional description
+  // ── Full menu block ────────────────────────────────────────
   const menuBlock = active
     .map((cat) => {
       const rows = cat.items
@@ -56,33 +66,61 @@ function buildSystemPrompt(
     })
     .join("\n\n");
 
-  const categoryList = active.map((c) => c.name).join(", ");
+  const categoryList = active.map((c) => `"${c.name}"`).join(", ");
 
-  // Drink & dessert categories detected by name for Phase-2 upsell hints
-  const drinkCat = active.find((c) =>
-    ["bebidas", "drinks", "bebida"].some((k) => c.name.toLowerCase().includes(k))
-  );
-  const dessertCat = active.find((c) =>
-    ["sobremesa", "sobremesas", "doce", "doces"].some((k) =>
-      c.name.toLowerCase().includes(k)
-    )
-  );
+  // ── Cart context ───────────────────────────────────────────
+  let cartBlock: string;
+  let categoriesWithItems: string[] = [];
+  let categoriesWithout: string[] = [];
 
-  const drinkExample = drinkCat?.items[0]
-    ? `${drinkCat.name} (ex: ${drinkCat.items[0].name} — R$ ${Number(drinkCat.items[0].price).toFixed(2)})`
-    : null;
-  const dessertExample = dessertCat?.items[0]
-    ? `${dessertCat.name} (ex: ${dessertCat.items[0].name} — R$ ${Number(dessertCat.items[0].price).toFixed(2)})`
-    : null;
+  if (cart.length === 0) {
+    cartBlock = "PEDIDO ATUAL: Nenhum item adicionado ainda.";
+    categoriesWithout = active.map((c) => c.name);
+  } else {
+    const cartNames = new Set(cart.map((c) => c.name));
+
+    categoriesWithItems = active
+      .filter((cat) => cat.items.some((i) => cartNames.has(i.name)))
+      .map((c) => c.name);
+
+    categoriesWithout = active
+      .filter((cat) => !cat.items.some((i) => cartNames.has(i.name)))
+      .map((c) => c.name);
+
+    const cartLines = cart
+      .map((i) => `  • ${i.name} × ${i.qty} — R$ ${(i.price * i.qty).toFixed(2)}`)
+      .join("\n");
+    const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+
+    cartBlock = [
+      `PEDIDO ATUAL:`,
+      cartLines,
+      `Total parcial: R$ ${total.toFixed(2)}`,
+      `Categorias COM itens: ${categoriesWithItems.join(", ") || "nenhuma"}`,
+      `Categorias SEM itens: ${categoriesWithout.join(", ") || "nenhuma — pedido completo!"}`,
+    ].join("\n");
+  }
+
+  // ── Upsell hints for Phase 2 ───────────────────────────────
+  const upsellHints = categoriesWithout
+    .map((name) => {
+      const cat = active.find((c) => c.name === name);
+      const examples = cat?.items
+        .slice(0, 2)
+        .map((i) => `${i.name} (R$ ${Number(i.price).toFixed(2)})`)
+        .join(", ");
+      return examples ? `  → ${name}: ex. ${examples}` : `  → ${name}`;
+    })
+    .join("\n");
 
   const emojiRule =
-    emojiUsage === "none"    ? "NÃO use emojis." :
-    emojiUsage === "minimal" ? "Máx. 1 emoji por mensagem." :
+    emojiUsage === "none"       ? "NÃO use emojis." :
+    emojiUsage === "minimal"    ? "Máx. 1 emoji por mensagem." :
     emojiUsage === "expressive" ? "Use emojis livremente." :
     "Use 1–2 emojis por mensagem.";
 
   return `Você é o atendente de vendas do *${restaurantName}* no WhatsApp.
-Missão: guiar o cliente pelo cardápio e fechar o pedido rapidamente.
+Missão: guiar o cliente pelo cardápio, etapa por etapa, e fechar o pedido.
 ${emojiRule}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -91,62 +129,69 @@ CARDÁPIO COMPLETO
 ${menuBlock || "Cardápio temporariamente indisponível."}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-FASE 1 — EXPLORAÇÃO GUIADA  (fase padrão)
+${cartBlock}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-Na SAUDAÇÃO (início da conversa):
-  Diga em no máximo 2 linhas: cumprimento curto + lista as categorias disponíveis.
-  Exemplo: "Olá! 😊 No *${restaurantName}* temos: ${categoryList}. Por onde quer começar?"
-  PROIBIDO: "como posso ajudar?", "em que posso te ajudar?", perguntas abertas sem opção.
 
-Quando o cliente PEDE UMA CATEGORIA (ex: "ver pizzas", "o que tem nas bebidas?"):
-  → Liste TODOS os itens daquela categoria com preços.
-  → Ao final pergunte apenas: "Quer pedir algo daqui ou ver outra categoria?"
+━━━━━━━━━━━━━━━━━━━━━━━━━
+FASE 1 — EXPLORAÇÃO GUIADA  ← fase padrão
+━━━━━━━━━━━━━━━━━━━━━━━━━
+SAUDAÇÃO (primeira mensagem da conversa):
+  Em 1–2 linhas: cumprimento + ofereça as categorias como opções explícitas.
+  Modelo: "Olá! 😊 Temos ${categoryList}. Por onde quer começar?"
+  PROIBIDO: "Como posso ajudar?", "Em que posso te ajudar?", ou qualquer pergunta aberta sem opções.
 
-Quando o cliente FAZ UM PEDIDO (ex: "quero uma calabresa", "me vê uma coca"):
-  → Confirme o item em 1 linha. Ex: "Anotei! 🍕 Calabresa — R$ 44,90."
-  → Pergunte em seguida: "Mais alguma coisa ou posso finalizar?"
-  → NÃO faça upsell ainda nesta fase.
+Quando cliente pede uma CATEGORIA (ex: "ver pizzas"):
+  → Liste TODOS os itens daquela categoria com preços do cardápio acima.
+  → Ao final: "Quer pedir algo daqui ou ver outra categoria?"
+
+Quando cliente PEDE UM ITEM (ex: "quero uma calabresa", "me vê uma coca"):
+  → Confirme em 1 linha: "✅ Anotei! [Item] — R$ X,XX"
+  → Pergunte: "Mais alguma coisa? Temos também: ${categoryList.split(",").slice(0, 2).join(",")}, etc."
+  → NÃO faça upsell nesta fase — apenas colete e confirme itens.
 
 Permaneça na Fase 1 enquanto o cliente estiver explorando.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 TRANSIÇÃO → FASE 2
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-Ative a Fase 2 IMEDIATAMENTE quando o cliente disser QUALQUER um destes:
+Ative Fase 2 IMEDIATAMENTE quando cliente disser qualquer um destes:
 "só isso" | "é isso" | "pode fechar" | "finalizar" | "já escolhi" |
-"pode confirmar" | "tô bem" | "acabei" | "mais nada" | "isso mesmo"
+"pode confirmar" | "tô bem" | "acabei" | "mais nada" | "isso mesmo" | "pode ir"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 FASE 2 — UPSELL INTELIGENTE
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-Ao entrar na Fase 2:
-1. Leia o histórico e identifique quais categorias já têm itens pedidos.
-2. Liste internamente as categorias SEM nenhum item no pedido.
-3. Para a PRIMEIRA categoria ausente, ofereça brevemente:
-   "Perfeito! Quer incluir algo de [categoria]? Temos [1–2 opções rápidas]."
-   ${drinkExample   ? `Exemplo de bebida:  "Que tal uma ${drinkExample}?"` : ""}
-   ${dessertExample ? `Exemplo de sobremesa: "Posso incluir um ${dessertExample}?"` : ""}
-4. Se o cliente ACEITAR → anote o item, passe para a próxima categoria ausente.
-5. Se o cliente RECUSAR (ex: "não", "tô bem", "só isso") → passe para a próxima categoria ausente, SEM insistir.
-6. Ofereça UMA categoria de cada vez. Nunca duas ao mesmo tempo.
-7. Quando todas as categorias ausentes forem cobertas ou recusadas:
-   → Exiba o resumo do pedido: cada item com preço e quantidade.
-   → Informe o total.
-   → Pergunte: "Vai ser entrega ou retirada?"
+Ao entrar na Fase 2, use o PEDIDO ATUAL acima para saber o que já foi escolhido.
+
+${categoriesWithout.length > 0 ? `Categorias SEM itens no pedido (ofereça nesta ordem):
+${upsellHints}
+
+Regras:
+1. Ofereça a PRIMEIRA categoria sem itens com 2 opções concretas do cardápio.
+   Modelo: "Perfeito! 😊 Quer incluir uma *[Categoria]*? Temos *[Opção1]* (R$ X) ou *[Opção2]* (R$ X)."
+2. Se cliente ACEITAR → confirme o item, passe para próxima categoria ausente.
+3. Se cliente RECUSAR (qualquer forma de "não") → passe para próxima categoria SEM insistir.
+4. Ofereça UMA categoria por vez. Nunca duas ao mesmo tempo.
+5. Quando todas as categorias forem cobertas ou recusadas:
+   → Liste todos os itens do PEDIDO ATUAL com preços e total.
+   → Pergunte: "Vai ser entrega ou retirada?"` :
+`Todas as categorias já têm itens no pedido!
+→ Liste o PEDIDO ATUAL completo com total.
+→ Pergunte: "Vai ser entrega ou retirada?"`}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 REGRAS ABSOLUTAS
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 • NUNCA diga "como posso ajudar" ou qualquer variação.
-• Fase 1: sem upsell — apenas explorar e anotar pedidos.
-• Fase 2: UMA sugestão por vez, sem insistência.
-• NUNCA invente itens, nomes ou preços fora do cardápio acima.
-• Respostas CURTAS — máximo 6 linhas.
+• Fase 1: guie e colete — sem upsell.
+• Fase 2: UMA categoria por vez, sem insistir.
+• NUNCA invente itens ou preços fora do cardápio acima.
+• Respostas CURTAS: máx. 5 linhas.
 • Sempre em português brasileiro.`;
 }
 
 // ─── GET /api/chat-sim ────────────────────────────────────────
-// Returns active category names so the UI can render category chips.
+// Returns full menu so the UI can render contextual chips.
 
 export async function GET(req: NextRequest) {
   try {
@@ -156,10 +201,25 @@ export async function GET(req: NextRequest) {
     const categories = await prisma.menuCategory.findMany({
       where: { restaurantId: ctx.restaurantId, isActive: true },
       orderBy: { sortOrder: "asc" },
-      select: { name: true },
+      include: {
+        items: {
+          where: { isActive: true },
+          orderBy: { sortOrder: "asc" },
+          select: { name: true, price: true, description: true },
+        },
+      },
     });
 
-    return ok({ categories: categories.map((c) => c.name) });
+    return ok({
+      categories: categories.map((c) => ({
+        name: c.name,
+        items: c.items.map((i) => ({
+          name: i.name,
+          price: Number(i.price),
+          description: i.description,
+        })),
+      })),
+    });
   } catch (err) {
     console.error("[GET /api/chat-sim]", err);
     return serverError();
@@ -180,11 +240,10 @@ export async function POST(req: NextRequest) {
       return badRequest("Invalid JSON body.");
     }
 
-    const { message, history } = body;
-    if (!message?.trim())       return badRequest("message is required.");
+    const { message, history, cart = [] } = body;
+    if (!message?.trim())        return badRequest("message is required.");
     if (!Array.isArray(history)) return badRequest("history must be an array.");
 
-    // Load restaurant info, menu, and brand config in parallel
     const [restaurant, categories, brandConfig] = await Promise.all([
       prisma.restaurant.findUnique({
         where: { id: ctx.restaurantId },
@@ -208,11 +267,16 @@ export async function POST(req: NextRequest) {
     ]);
 
     const restaurantName = restaurant?.name ?? "Restaurante";
-    const emojiUsage     = brandConfig?.emojiUsage        ?? "moderate";
-    const aiModel        = brandConfig?.aiModel           ?? "gpt-4o-mini";
+    const emojiUsage     = brandConfig?.emojiUsage         ?? "moderate";
+    const aiModel        = brandConfig?.aiModel            ?? "gpt-4o-mini";
     const maxHistory     = brandConfig?.maxHistoryMessages ?? 20;
 
-    const systemPrompt = buildSystemPrompt(restaurantName, categories, emojiUsage);
+    const systemPrompt = buildSystemPrompt(
+      restaurantName,
+      categories,
+      emojiUsage,
+      cart
+    );
 
     const cappedHistory = history.slice(-maxHistory);
 
@@ -226,7 +290,7 @@ export async function POST(req: NextRequest) {
       model: aiModel,
       messages,
       max_tokens: 400,
-      temperature: 0.3, // tight = consistent phase discipline
+      temperature: 0.3,
     });
 
     const reply =
