@@ -22,6 +22,8 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/auth(\/.*)?$/,              // NextAuth endpoints
   /^\/api\/restaurants\/register$/,    // self-service registration
   /^\/api\/webhooks\/evolution$/,      // Evolution API webhook receiver (verified by HMAC)
+  /^\/setup$/,                         // First-time browser setup (blocked after first restaurant exists)
+  /^\/api\/setup$/,                    // Setup API
 ];
 
 function isPublicPath(pathname: string): boolean {
