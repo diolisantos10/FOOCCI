@@ -497,8 +497,15 @@ export function MenuManager({ initialCategories }: { initialCategories: Category
 
       {/* Empty state */}
       {categories.length === 0 && (
-        <div className="rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-400">
-          Nenhuma categoria criada ainda. Clique em <strong>+ Nova categoria</strong> para começar.
+        <div className="rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-400 space-y-3">
+          <p>Nenhuma categoria criada ainda. Clique em <strong>+ Nova categoria</strong> para começar.</p>
+          <p>
+            Ou{" "}
+            <a href="/seed-menu" className="font-medium text-orange-500 hover:underline">
+              popular com um cardápio de exemplo
+            </a>
+            {" "}(pizzaria, 4 categorias, 11 itens).
+          </p>
         </div>
       )}
 
