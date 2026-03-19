@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/menu",               label: "Cardápio",  icon: "🍽" },
   { href: "/orders",             label: "Pedidos",   icon: "📋" },
   { href: "/conversations",      label: "Conversas", icon: "💬" },
+  { href: "/chat-sim",           label: "Testar IA",  icon: "🧪" },
   { href: "/settings/whatsapp",  label: "WhatsApp",  icon: "⚙️" },
   { href: "/settings/ai",        label: "IA / Voz",  icon: "🤖" },
 ];
