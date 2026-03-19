@@ -25,6 +25,7 @@ interface ChatMessage {
 
 type UIState = "idle" | "thinking" | "error";
 type Phase   = "exploration" | "upsell";
+type HistoryEntry = { role: "user" | "assistant"; content: string };
 
 // ─── helpers ──────────────────────────────────────────────────
 
@@ -198,6 +199,48 @@ export default function ChatSimPage() {
   const inputRef   = useRef<HTMLTextAreaElement>(null);
   const greeted    = useRef(false);
 
+  // ── core AI call ────────────────────────────────────────────
+  // Declared before the effects that call it to avoid temporal dead zone.
+
+  const callAI = useCallback(async (
+    history: HistoryEntry[],
+    userText: string,
+    isGreeting = false
+  ) => {
+    setUiState("thinking");
+    setErrorMsg("");
+
+    try {
+      const res = await fetch("/api/chat-sim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userText, history }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? `Erro ${res.status}`);
+
+      const assistantMsg: ChatMessage = {
+        id: uid(), role: "assistant", content: json.data.reply, ts: new Date(),
+      };
+
+      if (isGreeting) {
+        setMessages([assistantMsg]);
+      } else {
+        setMessages((prev) => [...prev, assistantMsg]);
+      }
+
+      setTimeout(() => inputRef.current?.focus(), 80);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Erro desconhecido");
+      setUiState("error");
+      return;
+    }
+
+    setUiState("idle");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -221,41 +264,6 @@ export default function ChatSimPage() {
     greeted.current = true;
     callAI([], "oi", true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── core AI call ────────────────────────────────────────────
-
-  const callAI = useCallback(async (
-    history: Array<{ role: "user" | "assistant"; content: string }>,
-    userText: string,
-    isGreeting = false
-  ) => {
-    setUiState("thinking");
-    setErrorMsg("");
-
-    try {
-      const res = await fetch("/api/chat-sim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userText, history }),
-      });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? `Erro ${res.status}`);
-
-      const assistantMsg: ChatMessage = {
-        id: uid(), role: "assistant", content: json.data.reply, ts: new Date(),
-      };
-
-      setMessages(isGreeting ? [assistantMsg] : (prev) => [...prev, assistantMsg]);
-      setTimeout(() => inputRef.current?.focus(), 80);
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Erro desconhecido");
-      setUiState("error");
-      return;
-    }
-
-    setUiState("idle");
   }, []);
 
   // ── send ────────────────────────────────────────────────────
@@ -333,7 +341,7 @@ export default function ChatSimPage() {
       {phase === "exploration" ? (
         <div className="shrink-0 border-b border-blue-100 bg-blue-50 px-4 py-1.5 text-center text-xs text-blue-700">
           <strong>Fase 1 · Exploração</strong> — o assistente guia pelo cardápio sem upsell.
-          Diga <em>"só isso"</em> ou clique em <strong>Finalizar ✓</strong> para avançar.
+          Diga <em>&ldquo;só isso&rdquo;</em> ou clique em <strong>Finalizar ✓</strong> para avançar.
         </div>
       ) : (
         <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800">
@@ -399,8 +407,8 @@ export default function ChatSimPage() {
             onKeyDown={handleKeyDown}
             placeholder={
               phase === "exploration"
-                ? "Simule o cliente… ex: "quero ver pizzas""
-                : "Responda à sugestão… ex: "sim" ou "não obrigado""
+                ? `Simule o cliente… ex: "quero ver pizzas"`
+                : `Responda à sugestão… ex: "sim" ou "não obrigado"`
             }
             rows={1}
             disabled={busy}
