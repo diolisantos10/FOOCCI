@@ -47,7 +47,8 @@ export async function middleware(req: NextRequest) {
     pathname === "/setup" ||
     pathname.startsWith("/api/setup") ||
     pathname === "/recover" ||
-    pathname.startsWith("/api/recover")
+    pathname.startsWith("/api/recover") ||
+    pathname.startsWith("/api/admin/reset-owner")
   ) {
     return NextResponse.next();
   }
