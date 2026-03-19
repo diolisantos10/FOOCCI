@@ -83,17 +83,23 @@ function TypingIndicator() {
 
 // ─── quick prompts ────────────────────────────────────────────
 
-const QUICK_PROMPTS = [
-  "Ver cardápio",
-  "Quero pedir uma pizza",
-  "Quais são as sobremesas?",
-  "Qual o preço do Quatro Queijos?",
+// Realistic customer messages grouped by stage
+const QUICK_PROMPTS: { label: string; text: string }[] = [
+  { label: "Oi 👋",                text: "oi" },
+  { label: "Ver cardápio",         text: "qual é o cardápio?" },
+  { label: "Quero uma calabresa",  text: "quero uma calabresa" },
+  { label: "Me vê uma coca",       text: "me vê uma coca cola" },
+  { label: "Quatro queijos 🍕",    text: "quero um quatro queijos" },
+  { label: "Preço da pizza",       text: "quanto custa a pizza de camarão?" },
+  { label: "Confirmar pedido",     text: "pode confirmar o pedido" },
+  { label: "É pra entrega",        text: "é pra entregar" },
 ];
 
 // ─── main component ───────────────────────────────────────────
 
-const GREETING_MSG =
-  "Olá! (início da conversa — cumprimente o cliente e apresente-se brevemente)";
+// Hidden trigger sent as the very first message. The system prompt tells the
+// assistant to respond with a greeting + highlights + category list.
+const GREETING_MSG = "oi";
 
 export default function ChatSimPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -284,17 +290,17 @@ export default function ChatSimPage() {
         onSubmit={handleSend}
         className="shrink-0 border-t border-gray-200 bg-white px-4 py-3"
       >
-        {/* Quick prompts */}
-        <div className="mb-2 flex flex-wrap gap-1.5">
+        {/* Quick prompts — scrollable row */}
+        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {QUICK_PROMPTS.map((q) => (
             <button
-              key={q}
+              key={q.text}
               type="button"
-              onClick={() => handleQuickPrompt(q)}
+              onClick={() => handleQuickPrompt(q.text)}
               disabled={uiState === "thinking"}
-              className="rounded-full border border-[#25d366] bg-[#e7fbe8] px-2.5 py-0.5 text-xs text-green-900 hover:bg-[#d0f5d2] disabled:opacity-40"
+              className="shrink-0 rounded-full border border-[#25d366] bg-[#e7fbe8] px-2.5 py-0.5 text-xs text-green-900 hover:bg-[#d0f5d2] disabled:opacity-40"
             >
-              {q}
+              {q.label}
             </button>
           ))}
         </div>

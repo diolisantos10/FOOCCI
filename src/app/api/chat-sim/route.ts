@@ -28,73 +28,123 @@ interface ChatSimRequest {
   history: HistoryMessage[];
 }
 
+type MenuItem = { name: string; price: unknown; description: string | null };
+type MenuCategory = { name: string; description: string | null; items: MenuItem[] };
+
 function buildSystemPrompt(
   restaurantName: string,
-  categories: Array<{
-    name: string;
-    description: string | null;
-    items: Array<{ name: string; price: unknown; description: string | null }>;
-  }>,
-  tone: string,
+  categories: MenuCategory[],
   emojiUsage: string
 ): string {
-  const menuLines = categories
-    .filter((c) => c.items.length > 0)
+  const activeCategories = categories.filter((c) => c.items.length > 0);
+
+  // ── Full menu block ─────────────────────────────────────────
+  const menuBlock = activeCategories
     .map((cat) => {
-      const header = cat.description
-        ? `📂 ${cat.name} — ${cat.description}`
-        : `📂 ${cat.name}`;
       const items = cat.items
-        .map(
-          (item) =>
-            `  • ${item.name} — R$ ${Number(item.price).toFixed(2)}` +
-            (item.description ? `\n    ${item.description}` : "")
-        )
+        .map((item) => {
+          const price = `R$ ${Number(item.price).toFixed(2)}`;
+          return item.description
+            ? `  • ${item.name} — ${price}\n    ↳ ${item.description}`
+            : `  • ${item.name} — ${price}`;
+        })
         .join("\n");
-      return `${header}\n${items}`;
+      return `[${cat.name.toUpperCase()}]\n${items}`;
     })
     .join("\n\n");
 
-  const toneDesc =
-    tone === "professional"
-      ? "profissional e cortês"
-      : tone === "casual"
-      ? "descontraído e informal"
-      : "amigável e acolhedor";
+  // ── Highlights: first 3 items across the first 2 food categories ─
+  const highlights = activeCategories
+    .filter((c) => !["bebidas", "drinks"].includes(c.name.toLowerCase()))
+    .slice(0, 2)
+    .flatMap((c) => c.items.slice(0, 2))
+    .slice(0, 3)
+    .map((item) => `• ${item.name} — R$ ${Number(item.price).toFixed(2)}`)
+    .join("\n");
+
+  // ── Drink upsell: first item in a drinks-like category ────────
+  const drinkCat = activeCategories.find((c) =>
+    ["bebidas", "drinks", "bebida"].some((k) => c.name.toLowerCase().includes(k))
+  );
+  const drinkUpsell = drinkCat?.items[0]
+    ? `Aproveita e leva uma *${drinkCat.items[0].name}* por apenas R$ ${Number(drinkCat.items[0].price).toFixed(2)}? 🥤`
+    : null;
+
+  // ── Dessert upsell: first item in a dessert-like category ─────
+  const dessertCat = activeCategories.find((c) =>
+    ["sobremesa", "sobremesas", "doce", "doces"].some((k) =>
+      c.name.toLowerCase().includes(k)
+    )
+  );
+  const dessertUpsell = dessertCat?.items[0]
+    ? `Que tal fechar com *${dessertCat.items[0].name}* por R$ ${Number(dessertCat.items[0].price).toFixed(2)}? 🍰`
+    : null;
+
+  const categoryList = activeCategories.map((c) => c.name).join(", ");
 
   const emojiRule =
     emojiUsage === "none"
-      ? "Não use emojis."
-      : emojiUsage === "expressive"
-      ? "Use emojis com frequência para tornar a conversa animada."
+      ? "NÃO use emojis."
       : emojiUsage === "minimal"
-      ? "Use emojis raramente, apenas quando muito adequado."
-      : "Use emojis moderadamente para tornar a conversa mais agradável.";
+      ? "Use no máximo 1 emoji por mensagem."
+      : emojiUsage === "expressive"
+      ? "Use emojis livremente — seja animado."
+      : "Use 1–2 emojis por mensagem de forma natural.";
 
-  return `Você é o assistente virtual do *${restaurantName}*, atendendo clientes pelo WhatsApp.
-Seu tom deve ser ${toneDesc}. ${emojiRule}
+  return `Você é o atendente de vendas do *${restaurantName}* no WhatsApp.
+Sua missão é atender rápido, vender mais e fechar o pedido.
+${emojiRule}
 
----
+━━━━━━━━━━━━━━━━━━━━━━━━━
+CARDÁPIO COMPLETO
+━━━━━━━━━━━━━━━━━━━━━━━━━
+${menuBlock || "Cardápio temporariamente indisponível."}
 
-## CARDÁPIO COMPLETO
+━━━━━━━━━━━━━━━━━━━━━━━━━
+DESTAQUES (use na saudação ou quando cliente não sabe o que quer)
+━━━━━━━━━━━━━━━━━━━━━━━━━
+${highlights || "Ver cardápio acima."}
 
-${menuLines || "Cardápio não disponível no momento."}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+UPSELL AUTOMÁTICO
+━━━━━━━━━━━━━━━━━━━━━━━━━
+${drinkUpsell ? `Depois de qualquer prato → ofereça: "${drinkUpsell}"` : ""}
+${dessertUpsell ? `Quando pedido estiver quase fechado → ofereça: "${dessertUpsell}"` : ""}
+Se não houver bebida/sobremesa no pedido, sempre pergunte.
 
----
+━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRAS DE OURO
+━━━━━━━━━━━━━━━━━━━━━━━━━
+1. NUNCA diga "como posso ajudar", "em que posso te ajudar", ou qualquer resposta genérica sem ação.
+2. Quando o cliente disser "oi", "olá", "bom dia" ou similar:
+   → Cumprimente em 1 linha + mostre os DESTAQUES + liste as categorias (${categoryList}).
+3. Respostas CURTAS (máx. 5 linhas). WhatsApp, não e-mail.
+4. Sempre termine com uma pergunta ou ação clara para avançar o pedido.
+5. Reconheça pedidos naturais: "quero uma calabresa", "me vê uma coca", "pode fazer um 4 queijos".
+6. Quando o cliente escolher um item → confirme + faça upsell imediato de bebida ou sobremesa.
+7. Quando o pedido estiver montado → resuma, informe o total e pergunte: entrega ou retirada?
+8. NUNCA invente itens ou preços fora do cardápio acima.
+9. Responda SEMPRE em português brasileiro.
 
-## INSTRUÇÕES
+━━━━━━━━━━━━━━━━━━━━━━━━━
+EXEMPLOS DE BOA CONDUTA
+━━━━━━━━━━━━━━━━━━━━━━━━━
+Cliente: "oi"
+✅ "Olá! 😊 Seja bem-vindo ao *${restaurantName}*!
+${highlights}
+Temos também: ${categoryList}.
+O que vai ser hoje?"
 
-- Cumprimente o cliente com simpatia quando iniciar a conversa.
-- Quando o cliente pedir o cardápio, apresente as categorias e itens de forma organizada.
-- Ajude o cliente a escolher itens; responda dúvidas sobre ingredientes e descrições.
-- Informe os preços com exatidão — use apenas os valores listados acima.
-- Quando o cliente escolher os itens, resuma o pedido e pergunte sobre entrega ou retirada.
-- Se o pedido for confirmado, agradeça e informe que está sendo processado.
-- Se a pergunta for fora do escopo (reclamações, suporte técnico, etc.), ofereça transferir para um atendente humano.
-- Nunca invente itens ou preços que não estão no cardápio acima.
-- Responda sempre em português brasileiro.
+Cliente: "quero uma calabresa"
+✅ "Ótima pedida! 🍕 *Calabresa* — R$ 44,90
+${drinkUpsell ?? "Vai querer alguma bebida também?"}
+Confirmo no pedido?"
 
-⚠️ AMBIENTE DE SIMULAÇÃO: Esta é uma conversa de teste para validar o fluxo de atendimento.`;
+Cliente: "qual o cardápio?"
+✅ Liste cada categoria com todos os itens e preços do CARDÁPIO COMPLETO acima.
+
+Cliente: "qual o preço do quatro queijos?"
+✅ Responda com o preço exato do item listado acima. Nada mais, nada menos.`;
 }
 
 export async function POST(req: NextRequest) {
@@ -142,17 +192,11 @@ export async function POST(req: NextRequest) {
     ]);
 
     const restaurantName = restaurant?.name ?? "Restaurante";
-    const tone = brandConfig?.tone ?? "friendly";
     const emojiUsage = brandConfig?.emojiUsage ?? "moderate";
     const aiModel = brandConfig?.aiModel ?? "gpt-4o-mini";
     const maxHistory = brandConfig?.maxHistoryMessages ?? 20;
 
-    const systemPrompt = buildSystemPrompt(
-      restaurantName,
-      categories,
-      tone,
-      emojiUsage
-    );
+    const systemPrompt = buildSystemPrompt(restaurantName, categories, emojiUsage);
 
     // Cap history to avoid token bloat
     const cappedHistory = history.slice(-maxHistory);
@@ -166,8 +210,8 @@ export async function POST(req: NextRequest) {
     const completion = await openai.chat.completions.create({
       model: aiModel,
       messages,
-      max_tokens: 600,
-      temperature: 0.7,
+      max_tokens: 400,   // short WhatsApp-style replies
+      temperature: 0.4,  // consistent, sales-focused, less random
     });
 
     const reply =
