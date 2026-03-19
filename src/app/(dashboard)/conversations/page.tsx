@@ -138,7 +138,7 @@ export default async function ConversationsPage({
                 return (
                   <li key={conv.id}>
                     <Link
-                      href={`/dashboard/conversations/${conv.id}`}
+                      href={`/conversations/${conv.id}`}
                       className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50"
                     >
                       {/* Avatar placeholder */}

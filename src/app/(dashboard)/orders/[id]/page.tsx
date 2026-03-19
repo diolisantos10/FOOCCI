@@ -43,7 +43,7 @@ export default async function OrderDetailPage({
     <>
       <TopBar title={`Pedido — ${order.customer.name}`} />
       <div className="p-6 space-y-5">
-        <Link href="/dashboard/orders" className="text-sm text-brand-600 hover:underline">
+        <Link href="/orders" className="text-sm text-brand-600 hover:underline">
           ← Voltar para pedidos
         </Link>
 
@@ -52,7 +52,7 @@ export default async function OrderDetailPage({
           <div className="flex items-start justify-between">
             <div>
               <Link
-                href={`/dashboard/customers/${order.customer.id}`}
+                href={`/customers/${order.customer.id}`}
                 className="font-semibold text-brand-600 hover:underline"
               >
                 {order.customer.name}

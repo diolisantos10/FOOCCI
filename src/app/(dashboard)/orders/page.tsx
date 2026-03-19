@@ -75,7 +75,7 @@ export default async function OrdersPage({
         {/* Status filter pills */}
         <div className="mb-4 flex flex-wrap gap-2">
           <Link
-            href="/dashboard/orders"
+            href="/orders"
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               !statusFilter
                 ? "bg-gray-900 text-white"
@@ -87,7 +87,7 @@ export default async function OrdersPage({
           {STATUS_KEYS.map((s) => (
             <Link
               key={s}
-              href={`/dashboard/orders?status=${s}`}
+              href={`/orders?status=${s}`}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 statusFilter === s
                   ? "bg-gray-900 text-white"
@@ -122,7 +122,7 @@ export default async function OrdersPage({
                 <tr key={order.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <Link
-                      href={`/dashboard/orders/${order.id}`}
+                      href={`/orders/${order.id}`}
                       className="font-medium text-brand-600 hover:underline"
                     >
                       {order.customer.name}

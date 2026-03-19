@@ -5,13 +5,13 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: "▦" },
-  { href: "/dashboard/customers", label: "Clientes", icon: "👤" },
-  { href: "/dashboard/menu", label: "Cardápio", icon: "🍽" },
-  { href: "/dashboard/orders", label: "Pedidos", icon: "📋" },
-  { href: "/dashboard/conversations", label: "Conversas", icon: "💬" },
-  { href: "/dashboard/settings/whatsapp", label: "WhatsApp", icon: "⚙️" },
-  { href: "/dashboard/settings/ai",       label: "IA / Voz",  icon: "🤖" },
+  { href: "/dashboard",          label: "Dashboard", icon: "▦" },
+  { href: "/customers",          label: "Clientes",  icon: "👤" },
+  { href: "/menu",               label: "Cardápio",  icon: "🍽" },
+  { href: "/orders",             label: "Pedidos",   icon: "📋" },
+  { href: "/conversations",      label: "Conversas", icon: "💬" },
+  { href: "/settings/whatsapp",  label: "WhatsApp",  icon: "⚙️" },
+  { href: "/settings/ai",        label: "IA / Voz",  icon: "🤖" },
 ];
 
 export function Sidebar() {

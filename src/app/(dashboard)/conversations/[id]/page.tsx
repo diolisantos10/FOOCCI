@@ -178,7 +178,7 @@ export default function ConversationDetailPage({
       <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
         <p className="text-gray-500">{error}</p>
         <button
-          onClick={() => router.push("/dashboard/conversations")}
+          onClick={() => router.push("/conversations")}
           className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
         >
           ← Voltar
@@ -197,7 +197,7 @@ export default function ConversationDetailPage({
       <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.push("/dashboard/conversations")}
+            onClick={() => router.push("/conversations")}
             className="text-sm text-gray-400 hover:text-gray-600"
           >
             ←

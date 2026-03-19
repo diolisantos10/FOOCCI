@@ -52,7 +52,7 @@ export default async function CustomerDetailPage({
       <TopBar title={customer.name} />
       <div className="p-6 space-y-6">
         {/* Back */}
-        <Link href="/dashboard/customers" className="text-sm text-brand-600 hover:underline">
+        <Link href="/customers" className="text-sm text-brand-600 hover:underline">
           ← Voltar para clientes
         </Link>
 
@@ -120,7 +120,7 @@ export default async function CustomerDetailPage({
               {customer.orders.map((order) => (
                 <li key={order.id}>
                   <Link
-                    href={`/dashboard/orders/${order.id}`}
+                    href={`/orders/${order.id}`}
                     className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3 text-sm hover:bg-gray-100"
                   >
                     <span className="font-medium text-gray-700">
