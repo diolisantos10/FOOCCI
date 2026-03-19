@@ -42,6 +42,11 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Explicit early exit for setup — must never require auth, even behind proxies
+  if (pathname === "/setup" || pathname.startsWith("/api/setup")) {
+    return NextResponse.next();
+  }
+
   if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
@@ -61,8 +66,14 @@ export async function middleware(req: NextRequest) {
       );
     }
 
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("callbackUrl", req.url);
+    // Use NEXTAUTH_URL (public domain) to build the redirect so that
+    // Railway's internal hostname (localhost:8080) never leaks into callbackUrl.
+    const publicBase =
+      process.env.NEXTAUTH_URL?.replace(/\/$/, "") ??
+      `${req.nextUrl.protocol}//${req.nextUrl.host}`;
+
+    const loginUrl = new URL("/login", publicBase);
+    loginUrl.searchParams.set("callbackUrl", `${publicBase}${pathname}`);
     return NextResponse.redirect(loginUrl);
   }
 
