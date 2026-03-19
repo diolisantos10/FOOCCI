@@ -158,15 +158,16 @@ model CustomerPreference {
 // ═══════════════════════════════════════════
 
 model MenuCategory {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   restaurantId String
   name         String
   description  String?
   imageUrl     String?
-  sortOrder    Int      @default(0)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  sortOrder    Int        @default(0)
+  isActive     Boolean    @default(true)
+  source       MenuSource @default(MANUAL)  // tracks whether created manually or via external integration
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   items      MenuItem[]
@@ -556,6 +557,11 @@ model Offer {
 
   @@index([restaurantId])
   @@map("offers")
+}
+
+enum MenuSource {
+  MANUAL    // created by restaurant staff via the dashboard
+  EXTERNAL  // imported from a third-party POS or menu integration
 }
 
 enum OfferType {
