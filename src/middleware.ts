@@ -42,8 +42,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Explicit early exit for setup — must never require auth, even behind proxies
-  if (pathname === "/setup" || pathname.startsWith("/api/setup")) {
+  // Explicit early exit for setup/recover — must never require auth, even behind proxies
+  if (
+    pathname === "/setup" ||
+    pathname.startsWith("/api/setup") ||
+    pathname === "/recover" ||
+    pathname.startsWith("/api/recover")
+  ) {
     return NextResponse.next();
   }
 
