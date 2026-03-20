@@ -58,7 +58,16 @@ interface Promo {
 
 type HistoryEntry = { role: "user" | "assistant"; content: string };
 type UIState = "idle" | "thinking" | "error";
-type Phase   = "exploration" | "upsell" | "done";
+
+/**
+ * Central ordering stage — the single source of truth for UI rendering.
+ * The AI only generates short guidance text; it never drives stage transitions.
+ *   exploration → user browsing categories / items
+ *   upsell      → user finishing, assistant offers missing categories one-by-one
+ *   checkout    → all upsell done, choose delivery or pickup
+ *   done        → order placed, show summary
+ */
+type Stage = "exploration" | "upsell" | "checkout" | "done";
 
 type ChipBarMode =
   | { type: "categories"; categories: MenuCategory[] }
@@ -66,17 +75,6 @@ type ChipBarMode =
   | { type: "upsell"; category: string; categoryImage: string | null; items: MenuItem[] }
   | { type: "fulfillment" }
   | { type: "done" };
-
-/**
- * Explicit chip override set by the AI-reply inference effect.
- * Takes priority over the auto-computed ChipBarMode so chips always
- * reflect what the assistant is currently talking about.
- */
-type ChipOverride =
-  | { type: "items-for";    categoryName: string }
-  | { type: "upsell-for";   categoryName: string }
-  | { type: "fulfillment" }
-  | null;
 
 // ─── helpers ──────────────────────────────────────────────────
 
@@ -94,22 +92,6 @@ function categoryEmoji(name: string): string {
   if (n.includes("lanche") || n.includes("burger"))    return "🍔";
   if (n.includes("entrada") || n.includes("porcao"))   return "🥗";
   return "🍽️";
-}
-
-const UPSELL_TRIGGERS = [
-  "so isso", "e isso", "pode fechar", "finalizar", "ja escolhi",
-  "pode confirmar", "to bem", "acabei", "mais nada", "isso mesmo",
-  "pode ir", "finalize", "fecha o pedido",
-];
-
-function isUpsellTrigger(text: string) {
-  const n = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return UPSELL_TRIGGERS.some((t) => n.includes(t));
-}
-
-function extractItemsFromMessage(text: string, menu: MenuCategory[]): MenuItem[] {
-  const lower = text.toLowerCase();
-  return menu.flatMap((c) => c.items).filter((i) => lower.includes(i.name.toLowerCase()));
 }
 
 /** Calculates a bundle promo when user declines upsell ≥ 2 times. */
@@ -499,32 +481,23 @@ function ChipBar({
 // ─── main component ───────────────────────────────────────────
 
 export default function ChatSimPage() {
-  const [messages,          setMessages]          = useState<ChatMessage[]>([]);
-  const [menu,              setMenu]              = useState<MenuCategory[]>([]);
-  const [cart,              setCart]              = useState<CartItem[]>([]);
-  const [visitedCategories, setVisitedCategories] = useState<string[]>([]);
-  const [phase,             setPhase]             = useState<Phase>("exploration");
-  const [activeCategory,    setActiveCategory]    = useState<string | null>(null);
-  const [upsellAttempts,    setUpsellAttempts]    = useState(0);
-  const [promo,             setPromo]             = useState<Promo | null>(null);
-  const [promoActive,       setPromoActive]       = useState(false);
-  const [chipOverride,      setChipOverride]      = useState<ChipOverride>(null);
-  const [input,             setInput]             = useState("");
-  const [uiState,           setUiState]           = useState<UIState>("idle");
-  const [errorMsg,          setErrorMsg]          = useState("");
+  const [messages,           setMessages]           = useState<ChatMessage[]>([]);
+  const [menu,               setMenu]               = useState<MenuCategory[]>([]);
+  const [cart,               setCart]               = useState<CartItem[]>([]);
+  const [visitedCategories,  setVisitedCategories]  = useState<string[]>([]);
+  const [stage,              setStage]              = useState<Stage>("exploration");
+  const [currentCategory,    setCurrentCategory]    = useState<string | null>(null);
+  const [declinedCategories, setDeclinedCategories] = useState<string[]>([]);
+  const [upsellAttempts,     setUpsellAttempts]     = useState(0);
+  const [promo,              setPromo]              = useState<Promo | null>(null);
+  const [promoActive,        setPromoActive]        = useState(false);
+  const [input,              setInput]              = useState("");
+  const [uiState,            setUiState]            = useState<UIState>("idle");
+  const [errorMsg,           setErrorMsg]           = useState("");
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
   const greeted   = useRef(false);
-
-  // Stable refs so the AI-inference effect can read current values without
-  // adding them to its dependency array (avoids re-running on every state change).
-  const menuRef  = useRef<MenuCategory[]>([]);
-  const cartRef  = useRef<CartItem[]>([]);
-  const phaseRef = useRef<Phase>("exploration");
-  useEffect(() => { menuRef.current  = menu;  }, [menu]);
-  useEffect(() => { cartRef.current  = cart;  }, [cart]);
-  useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   const busy = uiState === "thinking";
 
@@ -537,58 +510,34 @@ export default function ChatSimPage() {
     });
   }
 
-  // ── chip bar mode ─────────────────────────────────────────
-  // Priority: phase=done → chipOverride → auto-computed from phase+activeCategory+cart
+  // ── chip bar mode — pure, deterministic, no AI text inference ─
 
-  function getChipMode(): ChipBarMode {
-    if (phase === "done") return { type: "done" };
+  function computeChipMode(
+    stg: Stage,
+    curCat: string | null,
+    cartSnap: CartItem[],
+    declined: string[]
+  ): ChipBarMode {
+    if (stg === "done")     return { type: "done" };
+    if (stg === "checkout") return { type: "fulfillment" };
 
-    // ── Override from AI reply inference (highest priority after "done") ──
-    if (chipOverride?.type === "fulfillment") {
+    if (stg === "upsell") {
+      const cartNames = new Set(cartSnap.map((c) => c.name));
+      const next = menu.find(
+        (c) => !c.items.some((i) => cartNames.has(i.name)) && !declined.includes(c.name)
+      );
+      if (next) return { type: "upsell", category: next.name, categoryImage: next.imageUrl ?? null, items: next.items };
       return { type: "fulfillment" };
     }
-    if (chipOverride?.type === "items-for") {
-      const cat = menu.find((c) => c.name === chipOverride.categoryName);
-      if (cat) {
-        return { type: "items", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items };
-      }
-    }
-    if (chipOverride?.type === "upsell-for") {
-      const cat = menu.find((c) => c.name === chipOverride.categoryName);
-      if (cat) {
-        return { type: "upsell", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items };
-      }
-    }
 
-    // ── Auto-computed ─────────────────────────────────────────────────────
-    if (phase === "exploration") {
-      if (activeCategory) {
-        const cat = menu.find((c) => c.name === activeCategory);
-        return {
-          type: "items",
-          category: activeCategory,
-          categoryImage: cat?.imageUrl ?? null,
-          items: cat?.items ?? [],
-        };
-      }
-      // Only show categories that don't yet have cart items
-      const cartNames = new Set(cart.map((c) => c.name));
-      const remaining = menu.filter((c) => !c.items.some((i) => cartNames.has(i.name)));
-      return { type: "categories", categories: remaining };
+    // exploration
+    if (curCat) {
+      const cat = menu.find((c) => c.name === curCat);
+      return { type: "items", category: curCat, categoryImage: cat?.imageUrl ?? null, items: cat?.items ?? [] };
     }
-
-    // Upsell phase: first missing category
-    const cartNames = new Set(cart.map((c) => c.name));
-    const missing = menu.find((c) => !c.items.some((i) => cartNames.has(i.name)));
-    if (missing) {
-      return {
-        type: "upsell",
-        category: missing.name,
-        categoryImage: missing.imageUrl ?? null,
-        items: missing.items,
-      };
-    }
-    return { type: "fulfillment" };
+    const cartNames = new Set(cartSnap.map((c) => c.name));
+    const remaining = menu.filter((c) => !c.items.some((i) => cartNames.has(i.name)));
+    return { type: "categories", categories: remaining };
   }
 
   // ── auto-scroll ───────────────────────────────────────────
@@ -596,85 +545,6 @@ export default function ChatSimPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, uiState, promoActive]);
-
-  // ── Infer chip state from latest AI reply ─────────────────
-  // Runs whenever a new assistant message arrives.
-  // Reads from refs (not state deps) so it stays stable.
-
-  useEffect(() => {
-    const last = messages[messages.length - 1];
-    if (!last || last.role !== "assistant") return;
-
-    const reply = last.content;
-    const low   = reply.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const currentMenu  = menuRef.current;
-    const currentCart  = cartRef.current;
-    const currentPhase = phaseRef.current;
-    const cartNames    = new Set(currentCart.map((c) => c.name));
-
-    // 1. Fulfillment — AI asking delivery or pickup
-    const fulfillmentPhrases = [
-      "entrega ou retirada",
-      "retirada ou entrega",
-      "vai ser entrega",
-      "como vai receber",
-      "entrega ou retira",
-    ];
-    if (fulfillmentPhrases.some((p) => low.includes(p))) {
-      setPhase((prev) => (prev === "done" ? "done" : "upsell"));
-      setActiveCategory(null);
-      setChipOverride({ type: "fulfillment" });
-      return;
-    }
-
-    // 2. Category detection — which category has the most items named in the reply
-    let bestCat: MenuCategory | null = null;
-    let bestCount = 0;
-    for (const cat of currentMenu) {
-      const count = cat.items.filter((item) => {
-        const n = item.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        return low.includes(n);
-      }).length;
-      if (count > bestCount) { bestCount = count; bestCat = cat; }
-    }
-
-    if (bestCat && bestCount >= 2) {
-      // AI is listing items from bestCat
-      const catInCart = bestCat.items.some((i) => cartNames.has(i.name));
-      const upsellPhrases = [
-        "antes de fechar", "antes de finalizar", "que tal", "quer incluir",
-        "quer uma", "quer um", "aproveitar",
-      ];
-      const isUpsellReply = upsellPhrases.some((p) => low.includes(p))
-        || catInCart
-        || currentPhase === "upsell";
-
-      if (isUpsellReply) {
-        setChipOverride({ type: "upsell-for", categoryName: bestCat.name });
-        setPhase("upsell");
-        setActiveCategory(null);
-      } else {
-        // Exploration listing — show the item grid for this category
-        setActiveCategory(bestCat.name);
-        setChipOverride(null);
-      }
-      return;
-    }
-
-    // 3. Post-item confirmation — AI confirmed an item and is offering next options
-    const confirmationPhrases = ["adicionado", "anotei", "complementar seu pedido", "agora vamos"];
-    if (confirmationPhrases.some((p) => low.includes(p))) {
-      setActiveCategory(null);
-      setChipOverride(null);
-    }
-
-    // 4. Greeting / category list — go back to category chips
-    if (last === messages[0] || low.includes("o que vai querer") || low.includes("por onde quer comecar")) {
-      setActiveCategory(null);
-      setChipOverride(null);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages]); // intentionally stable — reads from refs
 
   // ── core AI call ─────────────────────────────────────────
 
@@ -750,98 +620,84 @@ export default function ChatSimPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── send ─────────────────────────────────────────────────
+  // ── send helper — always takes explicit snapshots ─────────
 
   async function sendText(
     text: string,
-    cartSnapshot?: CartItem[],
-    visitedSnapshot?: string[],
-    promoSnapshot?: Promo | null
+    cartSnap: CartItem[],
+    visitedSnap: string[],
+    promoSnap: Promo | null
   ) {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
     setInput("");
-
-    if (phase === "exploration" && isUpsellTrigger(trimmed)) {
-      setPhase("upsell");
-    }
-
-    // Optimistic cart update from typed text
-    const foundItems = extractItemsFromMessage(trimmed, menu);
-    foundItems.forEach(addToCart);
-
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
     const userMsg: ChatMessage = { id: uid(), role: "user", content: trimmed, ts: new Date() };
     setMessages((prev) => [...prev, userMsg]);
-
-    const effectiveCart = cartSnapshot ?? (() => {
-      const updated = [...cart];
-      foundItems.forEach((item) => {
-        if (!updated.some((c) => c.name === item.name)) {
-          updated.push({ name: item.name, price: item.price, qty: 1 });
-        }
-      });
-      return updated;
-    })();
-
-    await callAI(
-      history,
-      trimmed,
-      effectiveCart,
-      visitedSnapshot ?? visitedCategories,
-      promoSnapshot !== undefined ? promoSnapshot : promo
-    );
+    await callAI(history, trimmed, cartSnap, visitedSnap, promoSnap);
   }
 
   function handleSubmit(e?: FormEvent) {
     e?.preventDefault();
-    sendText(input);
+    sendText(input, cart, visitedCategories, promo);
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(input); }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(input, cart, visitedCategories, promo); }
   }
 
-  // ── chip handlers ─────────────────────────────────────────
+  // ── chip handlers — STATE FIRST, then AI ─────────────────
 
   function handleCategorySelect(cat: MenuCategory) {
     const newVisited = visitedCategories.includes(cat.name)
       ? visitedCategories
       : [...visitedCategories, cat.name];
     setVisitedCategories(newVisited);
-    setActiveCategory(cat.name);
-    setChipOverride(null); // explicit navigation overrides inference
-    sendText(`Ver ${cat.name}`, cart, newVisited);
+    setCurrentCategory(cat.name);
+    sendText(`Ver ${cat.name}`, cart, newVisited, promo);
   }
 
   function handleItemSelect(item: MenuItem) {
-    addToCart(item);
-    setActiveCategory(null); // snap back to category list
-    setChipOverride(null);   // let inference update after AI confirms
     const newCart = cart.some((c) => c.name === item.name)
       ? cart
       : [...cart, { name: item.name, price: item.price, qty: 1 }];
-    sendText(`Quero ${item.name}`, newCart, visitedCategories);
+    addToCart(item);
+    setCurrentCategory(null);
+    sendText(`Quero ${item.name}`, newCart, visitedCategories, promo);
   }
 
   function handleBack() {
-    setActiveCategory(null);
-    setChipOverride(null);
+    setCurrentCategory(null);
   }
 
   function handleFinalize() {
-    setPhase("upsell");
-    setActiveCategory(null);
-    setChipOverride(null);
-    sendText("só isso, pode finalizar");
+    setStage("upsell");
+    setCurrentCategory(null);
+    sendText("só isso, pode finalizar", cart, visitedCategories, promo);
   }
 
   function handleUpsellDecline() {
-    const chipMode = getChipMode();
+    const chipMode = computeChipMode(stage, currentCategory, cart, declinedCategories);
     const categoryName = chipMode.type === "upsell" ? chipMode.category : "";
+
+    const newDeclined = categoryName ? [...declinedCategories, categoryName] : declinedCategories;
+    setDeclinedCategories(newDeclined);
 
     const nextAttempts = upsellAttempts + 1;
     setUpsellAttempts(nextAttempts);
+
+    // Check if all upsell exhausted after this decline
+    const cartNames = new Set(cart.map((c) => c.name));
+    const hasMoreUpsell = menu.some(
+      (c) => !c.items.some((i) => cartNames.has(i.name)) && !newDeclined.includes(c.name)
+    );
+
+    if (!hasMoreUpsell) {
+      setStage("checkout");
+      const text = categoryName ? `não quero ${categoryName.toLowerCase()}, obrigado` : "pode finalizar";
+      sendText(text, cart, visitedCategories, null);
+      return;
+    }
 
     // After 2 declines → trigger promotion (once)
     if (nextAttempts >= 2 && !promoActive) {
@@ -849,36 +705,34 @@ export default function ChatSimPage() {
       if (calculated) {
         setPromo(calculated);
         setPromoActive(true);
-        // Don't send message yet — wait for user to interact with PromoCard
-        return;
+        return; // wait for PromoCard interaction
       }
     }
 
     if (categoryName) {
-      sendText(`não quero ${categoryName.toLowerCase()}, obrigado`);
+      sendText(`não quero ${categoryName.toLowerCase()}, obrigado`, cart, visitedCategories, null);
     }
   }
 
   function handleAcceptPromo() {
     if (!promo) return;
+    const newCart = cart.some((c) => c.name === promo.item.name)
+      ? cart
+      : [...cart, { name: promo.item.name, price: promo.item.price, qty: 1 }];
     addToCart(promo.item);
     setPromoActive(false);
-    setChipOverride(null); // let inference pick up after AI responds
-    const newCart = [...cart, { name: promo.item.name, price: promo.item.price, qty: 1 }];
     sendText("Quero aproveitar a promoção!", newCart, visitedCategories, promo);
   }
 
   function handleDeclinePromo() {
     setPromoActive(false);
-    setPhase("upsell");
-    setChipOverride(null);
+    setStage("checkout");
     sendText("pode finalizar sem a promoção", cart, visitedCategories, null);
   }
 
   function handleFulfillment(type: "delivery" | "pickup") {
-    setPhase("done");
-    setChipOverride(null);
-    sendText(type === "delivery" ? "Quero entrega por favor" : "Vou retirar no local");
+    setStage("done");
+    sendText(type === "delivery" ? "Quero entrega por favor" : "Vou retirar no local", cart, visitedCategories, null);
   }
 
   // ── reset ─────────────────────────────────────────────────
@@ -887,9 +741,9 @@ export default function ChatSimPage() {
     setMessages([]);
     setCart([]);
     setVisitedCategories([]);
-    setPhase("exploration");
-    setActiveCategory(null);
-    setChipOverride(null);
+    setStage("exploration");
+    setCurrentCategory(null);
+    setDeclinedCategories([]);
     setUpsellAttempts(0);
     setPromo(null);
     setPromoActive(false);
@@ -902,7 +756,7 @@ export default function ChatSimPage() {
 
   // ─── render ───────────────────────────────────────────────
 
-  const chipMode = getChipMode();
+  const chipMode = computeChipMode(stage, currentCategory, cart, declinedCategories);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#ece5dd]">
@@ -919,7 +773,7 @@ export default function ChatSimPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {phase === "upsell" && (
+          {stage === "upsell" && (
             <span className="rounded-full bg-amber-400/30 px-2.5 py-0.5 text-[10px] font-semibold text-amber-100">
               Finalizando
             </span>
