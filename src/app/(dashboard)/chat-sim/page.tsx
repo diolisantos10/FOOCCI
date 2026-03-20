@@ -460,14 +460,15 @@ function ChipBar({
   if (mode.type === "ADDRESS_CONFIRM") {
     return (
       <div className="flex flex-col gap-2">
-        <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
-          <p className="text-[11px] font-bold text-blue-800">📍 Confirmar endereço:</p>
-          <p className="mt-0.5 text-[11px] text-blue-700">{mode.summary}</p>
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+          <p className="text-[11px] font-bold text-blue-800">📍 Endereço de entrega:</p>
+          <p className="mt-0.5 text-[12px] font-semibold text-blue-900">{mode.summary}</p>
+          <p className="mt-1 text-[10px] text-blue-600">A entrega será realizada exatamente neste endereço. Confirme para prosseguir.</p>
         </div>
         <div className="flex gap-2">
           <button type="button" disabled={disabled} onClick={onAddressConfirm}
             className="flex-1 rounded-xl bg-[#25d366] py-2.5 text-sm font-bold text-white hover:bg-[#20b857] disabled:opacity-40 transition-colors">
-            ✅ Confirmar
+            ✅ Confirmar endereço
           </button>
           <button type="button" disabled={disabled} onClick={onAddressEdit}
             className="flex-1 rounded-xl border border-gray-200 bg-white py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
@@ -621,6 +622,9 @@ export default function ChatSimPage() {
   const [deliveryMethod,   setDeliveryMethod]   = useState<"delivery" | "pickup" | null>(null);
   const [address,          setAddress]          = useState<Address>({ street: "", number: "", neighborhood: "", complement: "" });
   const [customerName,     setCustomerName]     = useState("");
+  const [paymentMethod,    setPaymentMethod]    = useState<"dinheiro" | "cartao" | "pix" | null>(null);
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
+  const [promoShown,       setPromoShown]       = useState(false);
   const [input,            setInput]            = useState("");
   const [uiState,          setUiState]          = useState<UIState>("idle");
   const [errorMsg,         setErrorMsg]         = useState("");
@@ -869,10 +873,11 @@ export default function ChatSimPage() {
     setRefusalCount(newCount);
 
     // After 2 refusals → PROMO stage (once per session)
-    if (newCount >= 2 && stage !== "PROMO") {
+    if (newCount >= 2 && !promoShown) {
       const calculated = calculatePromo(cart, menu);
       if (calculated) {
         setPromo(calculated);
+        setPromoShown(true);
         setStage("PROMO");
         return;
       }
@@ -922,6 +927,7 @@ export default function ChatSimPage() {
   }
 
   function handleAddressConfirm() {
+    setAddressConfirmed(true);
     setStage("ASK_NAME");
     sendText(
       `Endereço confirmado: ${formatAddress(address)}`,
@@ -935,6 +941,7 @@ export default function ChatSimPage() {
   }
 
   function handlePayment(method: "dinheiro" | "cartao" | "pix") {
+    setPaymentMethod(method);
     setStage("DONE");
     const labels = { dinheiro: "Dinheiro", cartao: "Cartão", pix: "Pix" };
     sendText(`Vou pagar com ${labels[method]}`, cart, visitedCategories, null, "DONE");
@@ -954,6 +961,9 @@ export default function ChatSimPage() {
     setDeliveryMethod(null);
     setAddress({ street: "", number: "", neighborhood: "", complement: "" });
     setCustomerName("");
+    setPaymentMethod(null);
+    setAddressConfirmed(false);
+    setPromoShown(false);
     setInput("");
     setErrorMsg("");
     setUiState("idle");

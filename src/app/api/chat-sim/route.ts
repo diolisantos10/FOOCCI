@@ -299,7 +299,7 @@ export async function POST(req: NextRequest) {
       return badRequest("Invalid JSON body.");
     }
 
-    const { message, history, cart = [], visitedCategories = [], promo = null, stage = "exploration" } = body;
+    const { message, history, cart = [], visitedCategories = [], promo = null, stage = "SELECT_MAIN" } = body;
     if (!message?.trim())        return badRequest("message is required.");
     if (!Array.isArray(history)) return badRequest("history must be an array.");
 
