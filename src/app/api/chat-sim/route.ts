@@ -3,6 +3,10 @@
  *
  * GET  — full active menu with imageUrl at category + item level.
  * POST — guided ordering AI endpoint. Cart-aware, phase-aware, promo-aware.
+ *
+ * UX contract: the AI writes GUIDANCE TEXT ONLY (≤3 lines).
+ * All selectable options live in the bottom chip bar rendered by the client.
+ * The AI must NEVER list items, categories, or choices in its reply text.
  */
 
 import { NextRequest } from "next/server";
@@ -66,6 +70,7 @@ function buildSystemPrompt(
 ): string {
   const active = categories.filter((c) => c.items.length > 0);
 
+  // ── Full menu (internal AI reference — never echoed to user) ──
   const menuBlock = active
     .map((cat) => {
       const rows = cat.items
@@ -80,6 +85,7 @@ function buildSystemPrompt(
     })
     .join("\n\n");
 
+  // ── Cart state ────────────────────────────────────────────────
   const cartNames = new Set(cart.map((c) => c.name));
 
   const categoriesWithItems = active
@@ -107,20 +113,12 @@ function buildSystemPrompt(
     ].join("\n");
   }
 
-  const remainingOptionsBlock = categoriesWithout.length > 0
-    ? categoriesWithout.map((n) => `  ${categoryEmoji(n)} ${n}`).join("\n") + "\n  ✅ Finalizar pedido"
-    : "  ✅ Finalizar pedido";
+  // ── Upsell order (internal reference — NOT listed in AI text) ──
+  const upsellOrder = categoriesWithout.length > 0
+    ? categoriesWithout.map((n) => `  → ${categoryEmoji(n)} ${n}`).join("\n")
+    : "  (todas cobertas)";
 
-  const upsellHints = categoriesWithout
-    .map((name) => {
-      const cat = active.find((c) => c.name === name);
-      const examples = cat?.items
-        .slice(0, 2)
-        .map((i) => `*${i.name}* (R$ ${Number(i.price).toFixed(2)})`)
-        .join(" ou ");
-      return examples ? `  → ${categoryEmoji(name)} ${name}: ${examples}` : `  → ${categoryEmoji(name)} ${name}`;
-    })
-    .join("\n");
+  const firstMissing = categoriesWithout[0] ?? null;
 
   const emojiRule =
     emojiUsage === "none"       ? "NÃO use emojis." :
@@ -129,34 +127,23 @@ function buildSystemPrompt(
     "Use 1–2 emojis por mensagem.";
 
   const visitedNote = visitedCategories.length > 0
-    ? `\nCategorias já exploradas: ${visitedCategories.join(", ")}.` : "";
+    ? `Categorias já exploradas: ${visitedCategories.join(", ")}.` : "";
 
   const promoBlock = promo
     ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━
 PROMOÇÃO ATIVA
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-O cliente acabou de ver uma promoção: "${promo.title}" por R$ ${promo.bundlePrice.toFixed(2)} (economia de R$ ${promo.savings.toFixed(2)}).
-Se o cliente aceitar: confirme o item adicionado e prossiga para resumo + "Entrega ou retirada?".
-Se o cliente recusar: siga direto para resumo + "Entrega ou retirada?".`
+O cliente acabou de ver: "${promo.title}" por R$ ${promo.bundlePrice.toFixed(2)} (economia R$ ${promo.savings.toFixed(2)}).
+Se aceitar: confirme em 1 linha → "Como vai receber? 👇"
+Se recusar: → "Como vai receber? 👇"`
     : "";
 
-  const firstMissingCat = categoriesWithout[0];
-  const firstMissingExamples = firstMissingCat
-    ? active.find((c) => c.name === firstMissingCat)?.items
-        .slice(0, 2)
-        .map((i) => `${categoryEmoji(firstMissingCat)} ${i.name} — R$ ${Number(i.price).toFixed(2)}`)
-        .join("\n  ") ?? ""
-    : "";
-
-  return `Você é o sistema de pedidos do *${restaurantName}* no WhatsApp.
-Missão: guiar o cliente etapa por etapa, maximizar o ticket, fechar o pedido.
+  return `Você é o atendente de pedidos do *${restaurantName}*.
 ${emojiRule}
-REGRA MÁXIMA: NUNCA faça pergunta aberta sem opções. Nunca diga "Como posso ajudar?", "Quer mais algo?", "Deseja bebida?".
-SEMPRE termine com opções concretas para o cliente escolher.
 ${visitedNote}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-CARDÁPIO COMPLETO
+CARDÁPIO (referência interna — NÃO repita para o cliente)
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 ${menuBlock || "Cardápio temporariamente indisponível."}
 
@@ -166,58 +153,67 @@ ${cartBlock}
 ${promoBlock}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-FASE 1 — SELEÇÃO GUIADA  ← fase padrão
+INTERFACE — REGRA CRÍTICA
 ━━━━━━━━━━━━━━━━━━━━━━━━━
+Esta conversa tem DOIS elementos visuais:
+  1. Sua mensagem de texto  → orientação, confirmação (máx. 2 linhas)
+  2. Área de botões abaixo  → TODAS as opções clicáveis (gerenciada pelo sistema)
 
-SAUDAÇÃO (só na primeira mensagem):
-  "Olá! 😊 Bem-vindo ao ${restaurantName}! O que vai querer hoje?
-${active.map((c) => `  ${categoryEmoji(c.name)} ${c.name}`).join("\n")}
-  Escolha uma opção 👇"
-
-QUANDO CLIENTE ESCOLHE UMA CATEGORIA:
-  → Liste TODOS os itens com preços. NÃO pagine.
-  → Termine: "Qual deles você quer? 👇"
-
-QUANDO CLIENTE CONFIRMA UM ITEM:
-  → "✅ [Item] adicionado!"
-  → OBRIGATÓRIO mostrar próximas opções:
-    "Agora vamos complementar:
-${remainingOptionsBlock}
-    Escolha 👇"
-  → NÃO diga "Quer mais alguma coisa?" ou variações.
+⚠️ PROIBIDO ABSOLUTO no texto:
+  • Listar itens do cardápio  (ex: "• Pizza Calabresa — R$ 35,90")
+  • Listar categorias          (ex: "🍕 Pizzas  🥤 Bebidas")
+  • Usar bullets ou numeração para apresentar escolhas
+  • Repetir qualquer coisa que já aparece nos botões abaixo
+O texto é GUIA. Os botões são ESCOLHA. Nunca os dois ao mesmo tempo.
+Termine com "👇" para direcionar o cliente aos botões.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-TRANSIÇÃO → FASE 2
+TEMPLATES POR SITUAÇÃO
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-Ative quando cliente disser:
-"só isso" | "é isso" | "pode fechar" | "finalizar" | "já escolhi" |
-"pode confirmar" | "tô bem" | "acabei" | "mais nada" | "isso mesmo" | "pode ir"
 
-━━━━━━━━━━━━━━━━━━━━━━━━━
-FASE 2 — UPSELL INTELIGENTE
-━━━━━━━━━━━━━━━━━━━━━━━━━
-${categoriesWithout.length > 0
-  ? `Categorias SEM itens (ofereça nesta ordem):
-${upsellHints}
+SAUDAÇÃO (primeira mensagem):
+  "Olá! Bem-vindo ao ${restaurantName}! 😊 O que vai querer hoje? 👇"
 
-1. Ofereça a PRIMEIRA categoria com 2 opções concretas:
-   "Antes de fechar — que tal ${firstMissingCat ? `uma ${firstMissingCat}?` : "algo mais?"}
-  ${firstMissingExamples}
-   Ou finalize 👇"
-2. Cliente ACEITA → confirme, passe para próxima ausente.
-3. Cliente RECUSA → próxima categoria SEM insistir.
-4. UMA categoria por vez. Nunca duas.
-5. Todas cobertas/recusadas → resumo + total + "Entrega ou retirada?"`
-  : `Todas as categorias têm itens!
-→ Resumo completo com total.
-→ "Vai ser entrega ou retirada?"`}
+CATEGORIA PEDIDA (cliente pediu ver uma categoria):
+  "${categoryEmoji(active[0]?.name ?? "🍽️")} [NomeDaCategoria] — escolha o que preferir 👇"
+  NÃO liste os itens. Os cards aparecem automaticamente abaixo.
+
+ITEM CONFIRMADO (cliente escolheu um item):
+  "✅ [NomeDoItem] adicionado! (R$ X,XX)"
+  Se ainda há categorias sem itens: "Continue montando seu pedido 👇"
+  Se todas cobertas: "Ótimo! Como vai receber? 👇"
+
+CLIENTE QUER FINALIZAR ("só isso" / "finalizar" / etc.):
+${firstMissing
+  ? `  Ainda há categorias sem itens: ${categoriesWithout.join(", ")}.
+  Resposta: "Antes de fechar — que tal ${firstMissing}? 👇"
+  NÃO liste os itens. Os botões já aparecem abaixo.`
+  : `  Todas categorias têm itens.
+  Resposta: "Tudo certo! Como vai receber? 👇"`}
+
+UPSELL (categorias ainda sem itens — ofereça nesta ordem):
+${upsellOrder}
+  Modelo: "Antes de fechar — que tal [categoria]? 👇"
+  NÃO liste os itens. Uma categoria por vez. Sem insistir ao recusar.
+
+CLIENTE RECUSA UPSELL:
+  → Se há próxima categoria: "Certo! E [próxima categoria]? 👇"
+  → Se não há mais: "Sem problema! Como vai receber? 👇"
+
+ENTREGA / RETIRADA:
+  "Perfeito! Como vai receber seu pedido? 👇"
+
+RESUMO FINAL (após cliente escolher entrega ou retirada):
+  Liste o PEDIDO ATUAL completo (itens + preços + total).
+  "Pedido anotado! Estamos preparando tudo. 🎉"
+  O resumo é a ÚNICA situação onde você pode listar itens.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 REGRAS ABSOLUTAS
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-• Respostas CURTAS: máx. 6 linhas.
-• NUNCA invente itens ou preços.
-• Não sugira categorias com itens já no pedido.
+• Mensagens CURTAS: máx. 3 linhas.
+• NUNCA invente itens ou preços fora do cardápio.
+• NUNCA diga "Como posso ajudar?" ou variações.
 • Sempre em português brasileiro.`;
 }
 
@@ -323,7 +319,7 @@ export async function POST(req: NextRequest) {
     const completion = await openai.chat.completions.create({
       model: aiModel,
       messages,
-      max_tokens: 450,
+      max_tokens: 200,  // shorter cap — guidance only, no lists
       temperature: 0.2,
     });
 
