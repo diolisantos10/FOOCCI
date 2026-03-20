@@ -625,6 +625,7 @@ export default function ChatSimPage() {
   const [paymentMethod,    setPaymentMethod]    = useState<"dinheiro" | "cartao" | "pix" | null>(null);
   const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [promoShown,       setPromoShown]       = useState(false);
+  const [uncoveredCategories, setUncoveredCategories] = useState<Array<"main"|"drink"|"dessert">>(["main","drink","dessert"]);
   const [input,            setInput]            = useState("");
   const [uiState,          setUiState]          = useState<UIState>("idle");
   const [errorMsg,         setErrorMsg]         = useState("");
@@ -833,14 +834,17 @@ export default function ChatSimPage() {
 
     let nextStage: Stage = stage;
     if (stage === "SELECT_DRINK") {
+      setUncoveredCategories((prev) => prev.filter((c) => c !== "drink"));
       nextStage = nextUpsellStage(menu, newCart, { ...refusals, drink: true });
       setStage(nextStage);
       setCurrentCategory(null);
     } else if (stage === "SELECT_DESSERT") {
-      nextStage = "CONFIRM_ORDER";
+      setUncoveredCategories((prev) => prev.filter((c) => c !== "dessert"));
+      nextStage = nextUpsellStage(menu, newCart, { ...refusals, dessert: true });
       setStage(nextStage);
       setCurrentCategory(null);
     } else {
+      setUncoveredCategories((prev) => prev.filter((c) => c !== "main"));
       setCurrentCategory(null); // stay in SELECT_MAIN, snap back to categories
     }
 
@@ -868,6 +872,8 @@ export default function ChatSimPage() {
       dessert: isDesert  ? true : refusals.dessert,
     };
     setRefusals(newRefusals);
+    if (isDrink)  setUncoveredCategories((prev) => prev.filter((c) => c !== "drink"));
+    if (isDesert) setUncoveredCategories((prev) => prev.filter((c) => c !== "dessert"));
 
     const newCount = refusalCount + 1;
     setRefusalCount(newCount);
@@ -906,6 +912,12 @@ export default function ChatSimPage() {
   }
 
   function handleConfirmOrder() {
+    if (uncoveredCategories.length > 0) {
+      // Still have upsell stages to offer — redirect instead of confirming
+      const nextStage = nextUpsellStage(menu, cart, refusals);
+      setStage(nextStage);
+      return;
+    }
     setStage("DELIVERY_TYPE");
     sendText("Confirmar pedido", cart, visitedCategories, null, "DELIVERY_TYPE");
   }
@@ -941,6 +953,9 @@ export default function ChatSimPage() {
   }
 
   function handlePayment(method: "dinheiro" | "cartao" | "pix") {
+    // Hard blocks — these states must be set before order can complete
+    if (!customerName) return;
+    if (deliveryMethod === "delivery" && !addressConfirmed) return;
     setPaymentMethod(method);
     setStage("DONE");
     const labels = { dinheiro: "Dinheiro", cartao: "Cartão", pix: "Pix" };
@@ -964,6 +979,7 @@ export default function ChatSimPage() {
     setPaymentMethod(null);
     setAddressConfirmed(false);
     setPromoShown(false);
+    setUncoveredCategories(["main", "drink", "dessert"]);
     setInput("");
     setErrorMsg("");
     setUiState("idle");
