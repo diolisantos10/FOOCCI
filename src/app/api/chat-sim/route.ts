@@ -36,14 +36,18 @@ interface PromoContext {
 }
 
 type OrderStage =
-  | "exploration"
-  | "upsell_bebidas"
-  | "upsell_sobremesas"
-  | "confirm_order"
-  | "delivery_method"
-  | "address"
-  | "payment"
-  | "done";
+  | "SELECT_MAIN"
+  | "SELECT_DRINK"
+  | "SELECT_DESSERT"
+  | "PROMO"
+  | "CONFIRM_ORDER"
+  | "DELIVERY_TYPE"
+  | "ADDRESS_INPUT"
+  | "ADDRESS_DETAILS"
+  | "ADDRESS_CONFIRM"
+  | "ASK_NAME"
+  | "PAYMENT"
+  | "DONE";
 
 interface ChatSimRequest {
   message: string;
@@ -184,46 +188,56 @@ ETAPA ATUAL DO PEDIDO: ${stage}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ⚠️ REGRA DE TRANSIÇÃO — CRÍTICA:
-O stage recebido já reflete a PRÓXIMA etapa após qualquer recusa ou confirmação.
-Se o cliente acabou de recusar algo, NÃO responda com "Sem problema" sozinho.
-Gere diretamente a mensagem da etapa atual — flua para frente sem pausar.
+O stage já reflete a PRÓXIMA etapa. Gere diretamente o texto da etapa atual.
+Nunca diga "Sem problema" isolado. Flua para frente com energia.
+Varie as frases — evite repetição literal das sugestões abaixo.
 
-${stage === "exploration" ? `EXPLORAÇÃO — cliente está montando o pedido.
+${stage === "SELECT_MAIN" ? `EXPLORAÇÃO (SELECT_MAIN) — cliente está escolhendo os itens principais.
   Saudação:   "Olá! Bem-vindo ao ${restaurantName}! 😊 O que vai querer hoje? 👇"
   Categoria:  "[emoji] [Categoria] — escolha o que preferir 👇"
-  Item conf.: "✅ [Item] adicionado! (R$ X,XX) — o que mais vai querer? 👇"` : ""}
+  Item conf.: Confirme o item (ex: "✅ [Item] adicionado!") e convide a continuar 👇` : ""}
 
-${stage === "upsell_bebidas" ? `UPSELL BEBIDAS — ofereça bebidas de forma atrativa e direta.
-  Ao entrar nesta etapa (vindo da seleção de itens):
-    "🥤 Antes de fechar — que tal uma bebida para acompanhar? 👇"
-  NÃO liste itens. Os botões aparecem abaixo automaticamente.` : ""}
+${stage === "SELECT_DRINK" ? `UPSELL BEBIDA (SELECT_DRINK) — ofereça uma bebida de forma natural.
+  Variar entre: "🥤 Antes de fechar — que tal uma bebida? 👇"
+               "Uma bebida pra acompanhar fica ótimo! 🥤 👇"
+  NÃO liste itens. Cards aparecem abaixo.` : ""}
 
-${stage === "upsell_sobremesas" ? `UPSELL SOBREMESAS — avance imediatamente para a oferta de sobremesa.
-  Se veio de recusa de bebidas: "Perfeito 👌 🍰 E uma sobremesa para fechar com chave de ouro? 👇"
-  Se chegou aqui diretamente:   "🍰 Que tal uma sobremesa para completar o pedido? 👇"
-  NÃO diga apenas "Sem problema". Avance para a oferta. Botões aparecem abaixo.` : ""}
+${stage === "SELECT_DESSERT" ? `UPSELL SOBREMESA (SELECT_DESSERT) — ofereça sobremesa com entusiasmo.
+  Se veio de recusa de bebida: "Perfeito 👌 🍰 E uma sobremesa pra fechar com chave de ouro? 👇"
+  Se chegou direto:            "🍰 Que tal uma sobremesa? Vai combinar muito bem! 👇"
+  NÃO liste itens. Cards aparecem abaixo.` : ""}
 
-${stage === "confirm_order" ? `CONFIRMAÇÃO DO PEDIDO — convide a confirmar com entusiasmo.
+${stage === "PROMO" ? `PROMO — bundle especial após recusas. Destaque o valor da oferta.
+  "🔥 Espera! Temos uma oferta especial pra você hoje — dá uma olhada! 👇"` : ""}
+
+${stage === "CONFIRM_ORDER" ? `CONFIRMAÇÃO (CONFIRM_ORDER) — foque no positivo, convide a confirmar.
   "Ótimo pedido! 🎉 Confirme abaixo ou adicione mais itens 👇"
-  NÃO mencione itens recusados. Foque no que foi escolhido.` : ""}
+  NÃO mencione recusas. Celebre o que foi escolhido.` : ""}
 
-${stage === "delivery_method" ? `FORMA DE ENTREGA — avance para a escolha de entrega/retirada.
-  "Perfeito! Como vai receber seu pedido? 👇"` : ""}
+${stage === "DELIVERY_TYPE" ? `FORMA DE ENTREGA (DELIVERY_TYPE).
+  "Perfeito! Como vai receber? 👇"` : ""}
 
-${stage === "address" ? `ENDEREÇO DE ENTREGA — solicite o endereço de forma clara.
-  "📍 Informe seu endereço completo no campo acima e toque em Enviar ↑"` : ""}
+${stage === "ADDRESS_INPUT" ? `ENDEREÇO — passo 1: rua e número.
+  "📍 Qual o endereço de entrega? Informe a rua e número acima ↑"` : ""}
 
-${stage === "payment" ? `PAGAMENTO — último passo, mantenha o ritmo.
-  "Quase lá! 💳 Como prefere pagar? 👇"` : ""}
+${stage === "ADDRESS_DETAILS" ? `ENDEREÇO — passo 2: bairro e complemento.
+  "Ótimo! Agora informe o bairro (e complemento se houver) acima ↑"` : ""}
 
-${stage === "done" ? `PEDIDO CONCLUÍDO — liste o pedido completo e despeça com entusiasmo.
-  Liste PEDIDO ATUAL (itens + preços + total).
-  "Pedido confirmado! Estamos preparando tudo. 🎉"
-  Este é o ÚNICO momento onde você pode listar itens.` : ""}
+${stage === "ADDRESS_CONFIRM" ? `ENDEREÇO — confirmação: endereço coletado, aguardando confirmação do cliente.
+  "Confira o endereço abaixo e confirme para prosseguir 👇"` : ""}
 
-FALLBACK (apenas se nenhum template acima se aplicar):
-  Item adicionado: "✅ [Item] adicionado! (R$ X,XX)"
-  Promoção aceita: "Ótimo! Combinação perfeita 🎉 👇"
+${stage === "ASK_NAME" ? `NOME DO CLIENTE (ASK_NAME) — pedido quase pronto, só falta o nome.
+  "Quase lá! 😊 Qual é o seu nome para identificar o pedido? Digite acima ↑"` : ""}
+
+${stage === "PAYMENT" ? `PAGAMENTO (PAYMENT) — último passo.
+  Variar: "💳 Como vai pagar? 👇"  /  "Quase lá! Escolha a forma de pagamento 👇"` : ""}
+
+${stage === "DONE" ? `PEDIDO CONCLUÍDO (DONE) — liste o pedido e despeça com entusiasmo.
+  Liste PEDIDO ATUAL completo (itens + preços + total).
+  "Pedido confirmado, [nome]! Estamos preparando tudo. 🎉"
+  ÚNICO momento onde você pode listar itens.` : ""}
+
+FALLBACK: "✅ [Item] adicionado! (R$ X,XX)"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 REGRAS ABSOLUTAS

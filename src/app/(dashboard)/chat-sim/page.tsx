@@ -60,35 +60,55 @@ type HistoryEntry = { role: "user" | "assistant"; content: string };
 type UIState = "idle" | "thinking" | "error";
 
 /**
- * Mandatory order flow — every transition is client-driven, AI generates guidance text only.
- *   exploration      → browsing categories / picking items
- *   upsell_bebidas   → offer beverages (if none in cart)
- *   upsell_sobremesas→ offer desserts  (if none in cart)
- *   confirm_order    → show cart summary + confirm button
- *   delivery_method  → delivery or pickup choice
- *   address          → collect delivery address (delivery only)
- *   payment          → choose payment method
- *   done             → order complete
+ * Mandatory order flow — fully state-driven, AI generates guidance text only.
+ *   SELECT_MAIN      → browsing main-dish categories
+ *   SELECT_DRINK     → drink upsell (if no drink in cart and not refused)
+ *   SELECT_DESSERT   → dessert upsell (if no dessert in cart and not refused)
+ *   PROMO            → bundle promo card (after 2 refusals)
+ *   CONFIRM_ORDER    → cart summary + confirm button
+ *   DELIVERY_TYPE    → delivery or pickup
+ *   ADDRESS_INPUT    → collect street + number
+ *   ADDRESS_DETAILS  → collect neighborhood + complement
+ *   ADDRESS_CONFIRM  → show full address for confirmation
+ *   ASK_NAME         → collect customer name
+ *   PAYMENT          → choose payment method
+ *   DONE             → order complete
  */
 type Stage =
-  | "exploration"
-  | "upsell_bebidas"
-  | "upsell_sobremesas"
-  | "confirm_order"
-  | "delivery_method"
-  | "address"
-  | "payment"
-  | "done";
+  | "SELECT_MAIN"
+  | "SELECT_DRINK"
+  | "SELECT_DESSERT"
+  | "PROMO"
+  | "CONFIRM_ORDER"
+  | "DELIVERY_TYPE"
+  | "ADDRESS_INPUT"
+  | "ADDRESS_DETAILS"
+  | "ADDRESS_CONFIRM"
+  | "ASK_NAME"
+  | "PAYMENT"
+  | "DONE";
+
+interface Address {
+  street:       string;
+  number:       string;
+  neighborhood: string;
+  complement:   string;
+}
+
+interface Refusals { drink: boolean; dessert: boolean; }
 
 type ChipBarMode =
   | { type: "categories"; categories: MenuCategory[] }
-  | { type: "items"; category: string; categoryImage: string | null; items: MenuItem[] }
-  | { type: "upsell"; upsellStage: "upsell_bebidas" | "upsell_sobremesas"; category: string; categoryImage: string | null; items: MenuItem[] }
-  | { type: "confirm_order" }
-  | { type: "delivery_method" }
-  | { type: "address" }
-  | { type: "payment" }
-  | { type: "done" };
+  | { type: "items";   category: string; categoryImage: string | null; items: MenuItem[] }
+  | { type: "upsell";  category: string; categoryImage: string | null; items: MenuItem[] }
+  | { type: "CONFIRM_ORDER" }
+  | { type: "DELIVERY_TYPE" }
+  | { type: "ADDRESS_INPUT" }
+  | { type: "ADDRESS_DETAILS" }
+  | { type: "ADDRESS_CONFIRM"; summary: string }
+  | { type: "ASK_NAME" }
+  | { type: "PAYMENT" }
+  | { type: "DONE" };
 
 // ─── helpers ──────────────────────────────────────────────────
 
@@ -122,16 +142,41 @@ const findDessertCat  = (menu: MenuCategory[]) =>
   findMenuCat(menu, "sobremesa", "doce");
 
 /**
- * Returns the first upsell stage that still has no item in the cart,
- * or "confirm_order" if both categories are already covered / don't exist.
+ * Returns the first uncovered upsell stage the user has not yet refused,
+ * or "CONFIRM_ORDER" if everything is covered / refused.
  */
-function firstUpsellStage(menu: MenuCategory[], cart: CartItem[]): Stage {
+function nextUpsellStage(
+  menu: MenuCategory[],
+  cart: CartItem[],
+  refusals: Refusals
+): Stage {
   const names = new Set(cart.map((c) => c.name));
   const bev = findBeverageCat(menu);
-  if (bev && !bev.items.some((i) => names.has(i.name))) return "upsell_bebidas";
+  if (bev && !bev.items.some((i) => names.has(i.name)) && !refusals.drink) return "SELECT_DRINK";
   const des = findDessertCat(menu);
-  if (des && !des.items.some((i) => names.has(i.name))) return "upsell_sobremesas";
-  return "confirm_order";
+  if (des && !des.items.some((i) => names.has(i.name)) && !refusals.dessert) return "SELECT_DESSERT";
+  return "CONFIRM_ORDER";
+}
+
+/** Parses "Rua X, 123" into { street, number }. */
+function parseStreetLine(raw: string): { street: string; number: string } {
+  const m = raw.trim().match(/^(.*?),?\s*(\d+\S*)\s*$/);
+  return m ? { street: (m[1] ?? "").trim(), number: (m[2] ?? "").trim() } : { street: raw.trim(), number: "" };
+}
+
+/** Parses "Bairro, Complemento" into { neighborhood, complement }. */
+function parseNeighborhoodLine(raw: string): { neighborhood: string; complement: string } {
+  const parts = raw.split(",").map((p) => p.trim());
+  return { neighborhood: parts[0] ?? "", complement: parts.slice(1).join(", ") };
+}
+
+function formatAddress(addr: Address): string {
+  const parts = [
+    addr.street && addr.number ? `${addr.street}, ${addr.number}` : addr.street,
+    addr.neighborhood,
+    addr.complement,
+  ].filter(Boolean);
+  return parts.join(" — ");
 }
 
 /** Calculates a bundle promo when user declines upsell ≥ 2 times. */
@@ -349,6 +394,8 @@ function ChipBar({
   onConfirmOrder,
   onBackToExploration,
   onDeliveryMethod,
+  onAddressConfirm,
+  onAddressEdit,
   onPayment,
 }: {
   mode: ChipBarMode;
@@ -361,12 +408,14 @@ function ChipBar({
   onConfirmOrder: () => void;
   onBackToExploration: () => void;
   onDeliveryMethod: (type: "delivery" | "pickup") => void;
+  onAddressConfirm: () => void;
+  onAddressEdit: () => void;
   onPayment: (method: "dinheiro" | "cartao" | "pix") => void;
 }) {
   const chip = "shrink-0 rounded-full border px-3 py-1 text-xs font-medium disabled:opacity-40 transition-colors";
 
   // ── Done ──────────────────────────────────────────────────
-  if (mode.type === "done") {
+  if (mode.type === "DONE") {
     return (
       <p className="py-1 text-center text-xs text-gray-400">
         Pedido encerrado · clique em <strong>Reiniciar</strong> para nova conversa
@@ -375,7 +424,7 @@ function ChipBar({
   }
 
   // ── Payment ───────────────────────────────────────────────
-  if (mode.type === "payment") {
+  if (mode.type === "PAYMENT") {
     return (
       <div className="flex flex-col gap-2">
         <p className="text-center text-xs font-semibold text-gray-600">Como vai pagar?</p>
@@ -397,24 +446,63 @@ function ChipBar({
     );
   }
 
-  // ── Address ───────────────────────────────────────────────
-  if (mode.type === "address") {
+  // ── Ask name ──────────────────────────────────────────────
+  if (mode.type === "ASK_NAME") {
     return (
-      <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-center">
-        <p className="text-xs font-semibold text-blue-800">
-          📍 Digite seu endereço completo acima e toque em Enviar ↑
-        </p>
+      <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 text-center">
+        <p className="text-xs font-semibold text-green-800">👤 Qual é o seu nome para o pedido?</p>
+        <p className="mt-0.5 text-[11px] text-green-600">Digite acima e toque em Enviar ↑</p>
       </div>
     );
   }
 
-  // ── Delivery method ───────────────────────────────────────
-  if (mode.type === "delivery_method") {
+  // ── Address confirm ───────────────────────────────────────
+  if (mode.type === "ADDRESS_CONFIRM") {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-center text-xs font-semibold text-gray-600">
-          Como vai receber seu pedido?
-        </p>
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
+          <p className="text-[11px] font-bold text-blue-800">📍 Confirmar endereço:</p>
+          <p className="mt-0.5 text-[11px] text-blue-700">{mode.summary}</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" disabled={disabled} onClick={onAddressConfirm}
+            className="flex-1 rounded-xl bg-[#25d366] py-2.5 text-sm font-bold text-white hover:bg-[#20b857] disabled:opacity-40 transition-colors">
+            ✅ Confirmar
+          </button>
+          <button type="button" disabled={disabled} onClick={onAddressEdit}
+            className="flex-1 rounded-xl border border-gray-200 bg-white py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
+            ✏️ Corrigir
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Address details (neighborhood) ────────────────────────
+  if (mode.type === "ADDRESS_DETAILS") {
+    return (
+      <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-center">
+        <p className="text-xs font-semibold text-blue-800">🏘️ Bairro e complemento</p>
+        <p className="mt-0.5 text-[11px] text-blue-600">ex: Bela Vista, Apto 42 — Digite acima ↑</p>
+      </div>
+    );
+  }
+
+  // ── Address input (street) ────────────────────────────────
+  if (mode.type === "ADDRESS_INPUT") {
+    return (
+      <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-center">
+        <p className="text-xs font-semibold text-blue-800">📍 Rua e número</p>
+        <p className="mt-0.5 text-[11px] text-blue-600">ex: Av. Paulista, 1000 — Digite acima ↑</p>
+      </div>
+    );
+  }
+
+  // ── Delivery type ─────────────────────────────────────────
+  if (mode.type === "DELIVERY_TYPE") {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-center text-xs font-semibold text-gray-600">Como vai receber seu pedido?</p>
         <div className="flex gap-2">
           <button type="button" disabled={disabled} onClick={() => onDeliveryMethod("delivery")}
             className="flex-1 rounded-xl border border-[#25d366] bg-[#e7fbe8] py-2.5 text-sm font-bold text-green-900 hover:bg-[#d0f5d2] disabled:opacity-40 transition-colors">
@@ -430,12 +518,10 @@ function ChipBar({
   }
 
   // ── Confirm order ─────────────────────────────────────────
-  if (mode.type === "confirm_order") {
+  if (mode.type === "CONFIRM_ORDER") {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-center text-xs font-semibold text-green-700">
-          Pedido montado! Deseja confirmar?
-        </p>
+        <p className="text-center text-xs font-semibold text-green-700">Pedido montado! Deseja confirmar?</p>
         <div className="flex gap-2">
           <button type="button" disabled={disabled} onClick={onConfirmOrder}
             className="flex-1 rounded-xl bg-[#25d366] py-2.5 text-sm font-bold text-white hover:bg-[#20b857] disabled:opacity-40 transition-colors">
@@ -469,62 +555,52 @@ function ChipBar({
     );
   }
 
-  // ── Items — image card grid ───────────────────────────────
-  if (mode.type === "items") {
-    const emoji = categoryEmoji(mode.category);
-    return (
-      <div className="flex flex-col gap-2">
-        <div className="flex gap-1.5">
+  // ── Items or Upsell — full visual card grid ───────────────
+  // Both "items" (exploration) and "upsell" (drink/dessert) use the same card grid.
+  // Upsell additionally shows a "Não quero, obrigado" skip button.
+  const isUpsell = mode.type === "upsell";
+  const emoji = categoryEmoji(mode.category);
+  return (
+    <div className="flex flex-col gap-2">
+      {/* Nav row */}
+      <div className="flex gap-1.5">
+        {!isUpsell && (
           <button type="button" disabled={disabled} onClick={onBack}
             className={`${chip} border-gray-300 bg-white text-gray-600 hover:bg-gray-50`}>
             Continuar pedido
           </button>
-          <button type="button" disabled={disabled} onClick={onFinalize}
-            className={`${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}>
-            ✅ Finalizar pedido
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto sm:grid-cols-3">
-          {mode.items.map((item) => (
-            <button key={item.name} type="button" disabled={disabled}
-              onClick={() => onItemSelect(item)}
-              className="flex flex-col overflow-hidden rounded-xl border border-green-200 bg-white text-left shadow-sm hover:shadow-md hover:border-green-400 disabled:opacity-40 transition-all">
-              <div className="flex h-16 w-full items-center justify-center overflow-hidden bg-gray-50">
-                <ItemImage src={item.imageUrl} fallback={mode.categoryImage} emoji={emoji} alt={item.name} />
-              </div>
-              <div className="p-2">
-                <p className="text-[11px] font-semibold text-gray-900 leading-tight line-clamp-2">{item.name}</p>
-                <p className="mt-0.5 text-[11px] font-bold text-green-700">R$&nbsp;{item.price.toFixed(2)}</p>
-                {item.description && (
-                  <p className="mt-0.5 text-[10px] text-gray-400 line-clamp-1">{item.description}</p>
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
+        )}
+        <button type="button" disabled={disabled} onClick={isUpsell ? onUpsellDecline : onFinalize}
+          className={isUpsell
+            ? `${chip} border-gray-300 bg-white text-gray-500 hover:bg-gray-50`
+            : `${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}>
+          {isUpsell ? "Não quero, obrigado" : "✅ Finalizar pedido"}
+        </button>
       </div>
-    );
-  }
-
-  // ── Upsell chips ──────────────────────────────────────────
-  const emoji = categoryEmoji(mode.category);
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="text-xs font-semibold text-purple-700">
-        {emoji} Que tal adicionar {mode.category.toLowerCase()}? 👇
-      </p>
-      <div className="flex flex-wrap gap-1.5">
+      {/* Card grid */}
+      <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto sm:grid-cols-3">
         {mode.items.map((item) => (
           <button key={item.name} type="button" disabled={disabled}
             onClick={() => onItemSelect(item)}
-            className={`${chip} border-purple-300 bg-purple-50 text-purple-800 hover:bg-purple-100`}>
-            {item.name} — R$&nbsp;{item.price.toFixed(2)}
+            className={`flex flex-col overflow-hidden rounded-xl border text-left shadow-sm hover:shadow-md disabled:opacity-40 transition-all ${
+              isUpsell
+                ? "border-purple-200 bg-white hover:border-purple-400"
+                : "border-green-200 bg-white hover:border-green-400"
+            }`}>
+            <div className="flex h-16 w-full items-center justify-center overflow-hidden bg-gray-50">
+              <ItemImage src={item.imageUrl} fallback={mode.categoryImage} emoji={emoji} alt={item.name} />
+            </div>
+            <div className="p-2">
+              <p className="text-[11px] font-semibold text-gray-900 leading-tight line-clamp-2">{item.name}</p>
+              <p className={`mt-0.5 text-[11px] font-bold ${isUpsell ? "text-purple-700" : "text-green-700"}`}>
+                R$&nbsp;{item.price.toFixed(2)}
+              </p>
+              {item.description && (
+                <p className="mt-0.5 text-[10px] text-gray-400 line-clamp-1">{item.description}</p>
+              )}
+            </div>
           </button>
         ))}
-        <button type="button" disabled={disabled} onClick={onUpsellDecline}
-          className={`${chip} border-gray-300 bg-white text-gray-500 hover:bg-gray-50`}>
-          Não quero, obrigado
-        </button>
       </div>
     </div>
   );
@@ -533,21 +609,21 @@ function ChipBar({
 // ─── main component ───────────────────────────────────────────
 
 export default function ChatSimPage() {
-  const [messages,           setMessages]           = useState<ChatMessage[]>([]);
-  const [menu,               setMenu]               = useState<MenuCategory[]>([]);
-  const [cart,               setCart]               = useState<CartItem[]>([]);
-  const [visitedCategories,  setVisitedCategories]  = useState<string[]>([]);
-  const [stage,              setStage]              = useState<Stage>("exploration");
-  const [currentCategory,    setCurrentCategory]    = useState<string | null>(null);
-  const [declinedCategories, setDeclinedCategories] = useState<string[]>([]);
-  const [upsellAttempts,     setUpsellAttempts]     = useState(0);
-  const [promo,              setPromo]              = useState<Promo | null>(null);
-  const [promoActive,        setPromoActive]        = useState(false);
-  const [deliveryMethod,     setDeliveryMethod]     = useState<"delivery" | "pickup" | null>(null);
-  const [deliveryAddress,    setDeliveryAddress]    = useState("");
-  const [input,              setInput]              = useState("");
-  const [uiState,            setUiState]            = useState<UIState>("idle");
-  const [errorMsg,           setErrorMsg]           = useState("");
+  const [messages,         setMessages]         = useState<ChatMessage[]>([]);
+  const [menu,             setMenu]             = useState<MenuCategory[]>([]);
+  const [cart,             setCart]             = useState<CartItem[]>([]);
+  const [visitedCategories,setVisitedCategories]= useState<string[]>([]);
+  const [stage,            setStage]            = useState<Stage>("SELECT_MAIN");
+  const [currentCategory,  setCurrentCategory]  = useState<string | null>(null);
+  const [refusals,         setRefusals]         = useState<Refusals>({ drink: false, dessert: false });
+  const [refusalCount,     setRefusalCount]     = useState(0);
+  const [promo,            setPromo]            = useState<Promo | null>(null);
+  const [deliveryMethod,   setDeliveryMethod]   = useState<"delivery" | "pickup" | null>(null);
+  const [address,          setAddress]          = useState<Address>({ street: "", number: "", neighborhood: "", complement: "" });
+  const [customerName,     setCustomerName]     = useState("");
+  const [input,            setInput]            = useState("");
+  const [uiState,          setUiState]          = useState<UIState>("idle");
+  const [errorMsg,         setErrorMsg]         = useState("");
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
@@ -566,30 +642,30 @@ export default function ChatSimPage() {
 
   // ── chip bar mode — pure, deterministic ──────────────────
 
-  function computeChipMode(
-    stg: Stage,
-    curCat: string | null,
-    cartSnap: CartItem[],
-  ): ChipBarMode {
-    if (stg === "done")            return { type: "done" };
-    if (stg === "payment")         return { type: "payment" };
-    if (stg === "address")         return { type: "address" };
-    if (stg === "delivery_method") return { type: "delivery_method" };
-    if (stg === "confirm_order")   return { type: "confirm_order" };
+  function computeChipMode(stg: Stage, curCat: string | null, cartSnap: CartItem[]): ChipBarMode {
+    if (stg === "DONE")            return { type: "DONE" };
+    if (stg === "PAYMENT")         return { type: "PAYMENT" };
+    if (stg === "ASK_NAME")        return { type: "ASK_NAME" };
+    if (stg === "ADDRESS_CONFIRM") return { type: "ADDRESS_CONFIRM", summary: formatAddress(address) };
+    if (stg === "ADDRESS_DETAILS") return { type: "ADDRESS_DETAILS" };
+    if (stg === "ADDRESS_INPUT")   return { type: "ADDRESS_INPUT" };
+    if (stg === "DELIVERY_TYPE")   return { type: "DELIVERY_TYPE" };
+    if (stg === "CONFIRM_ORDER")   return { type: "CONFIRM_ORDER" };
+    // PROMO handled by PromoCard rendered separately — chip bar hidden when stage === "PROMO"
 
-    if (stg === "upsell_bebidas") {
+    if (stg === "SELECT_DRINK") {
       const cat = findBeverageCat(menu);
-      if (cat) return { type: "upsell", upsellStage: stg, category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items };
-      return { type: "confirm_order" };
+      if (cat) return { type: "upsell", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items };
+      return { type: "CONFIRM_ORDER" };
     }
 
-    if (stg === "upsell_sobremesas") {
+    if (stg === "SELECT_DESSERT") {
       const cat = findDessertCat(menu);
-      if (cat) return { type: "upsell", upsellStage: stg, category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items };
-      return { type: "confirm_order" };
+      if (cat) return { type: "upsell", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items };
+      return { type: "CONFIRM_ORDER" };
     }
 
-    // exploration
+    // SELECT_MAIN — exploration
     if (curCat) {
       const cat = menu.find((c) => c.name === curCat);
       return { type: "items", category: curCat, categoryImage: cat?.imageUrl ?? null, items: cat?.items ?? [] };
@@ -603,7 +679,7 @@ export default function ChatSimPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, uiState, promoActive]);
+  }, [messages, uiState, stage]);
 
   // ── core AI call ─────────────────────────────────────────
 
@@ -614,7 +690,7 @@ export default function ChatSimPage() {
     currentVisited: string[],
     currentPromo: Promo | null,
     isGreeting = false,
-    currentStage: Stage = "exploration"
+    currentStage: Stage = "SELECT_MAIN"
   ) => {
     setUiState("thinking");
     setErrorMsg("");
@@ -701,16 +777,35 @@ export default function ChatSimPage() {
 
   function handleSubmit(e?: FormEvent) {
     e?.preventDefault();
-    // Address stage — repurpose textarea to collect delivery address
-    if (stage === "address") {
-      const addr = input.trim();
-      if (!addr) return;
-      setDeliveryAddress(addr);
-      setStage("payment");
-      sendText(`Endereço de entrega: ${addr}`, cart, visitedCategories, null, "payment");
+    const val = input.trim();
+    if (!val) return;
+
+    if (stage === "ADDRESS_INPUT") {
+      if (!/\d/.test(val)) return; // must contain a number
+      const { street, number } = parseStreetLine(val);
+      setAddress((a) => ({ ...a, street, number }));
+      setStage("ADDRESS_DETAILS");
+      sendText(`Rua: ${val}`, cart, visitedCategories, null, "ADDRESS_DETAILS");
       return;
     }
-    sendText(input, cart, visitedCategories, promo);
+
+    if (stage === "ADDRESS_DETAILS") {
+      const { neighborhood, complement } = parseNeighborhoodLine(val);
+      setAddress((a) => ({ ...a, neighborhood, complement }));
+      setStage("ADDRESS_CONFIRM");
+      // Don't call AI here — ADDRESS_CONFIRM chip bar shows the address for visual confirmation
+      setInput("");
+      return;
+    }
+
+    if (stage === "ASK_NAME") {
+      setCustomerName(val);
+      setStage("PAYMENT");
+      sendText(`Meu nome é ${val}`, cart, visitedCategories, null, "PAYMENT");
+      return;
+    }
+
+    sendText(val, cart, visitedCategories, promo);
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -721,8 +816,7 @@ export default function ChatSimPage() {
 
   function handleCategorySelect(cat: MenuCategory) {
     const newVisited = visitedCategories.includes(cat.name)
-      ? visitedCategories
-      : [...visitedCategories, cat.name];
+      ? visitedCategories : [...visitedCategories, cat.name];
     setVisitedCategories(newVisited);
     setCurrentCategory(cat.name);
     sendText(`${categoryEmoji(cat.name)} ${cat.name}`, cart, newVisited, promo);
@@ -730,121 +824,120 @@ export default function ChatSimPage() {
 
   function handleItemSelect(item: MenuItem) {
     const newCart = cart.some((c) => c.name === item.name)
-      ? cart
-      : [...cart, { name: item.name, price: item.price, qty: 1 }];
+      ? cart : [...cart, { name: item.name, price: item.price, qty: 1 }];
     addToCart(item);
 
     let nextStage: Stage = stage;
-    if (stage === "upsell_bebidas") {
-      const cartNames = new Set(newCart.map((c) => c.name));
-      const des = findDessertCat(menu);
-      nextStage = des && !des.items.some((i) => cartNames.has(i.name))
-        ? "upsell_sobremesas"
-        : "confirm_order";
+    if (stage === "SELECT_DRINK") {
+      nextStage = nextUpsellStage(menu, newCart, { ...refusals, drink: true });
       setStage(nextStage);
       setCurrentCategory(null);
-    } else if (stage === "upsell_sobremesas") {
-      nextStage = "confirm_order";
+    } else if (stage === "SELECT_DESSERT") {
+      nextStage = "CONFIRM_ORDER";
       setStage(nextStage);
       setCurrentCategory(null);
     } else {
-      setCurrentCategory(null);
+      setCurrentCategory(null); // stay in SELECT_MAIN, snap back to categories
     }
 
     sendText(`Quero ${item.name}`, newCart, visitedCategories, promo, nextStage);
   }
 
-  function handleBack() {
-    setCurrentCategory(null);
-  }
+  function handleBack() { setCurrentCategory(null); }
 
   function handleFinalize() {
-    const nextStage = firstUpsellStage(menu, cart);
+    const nextStage = nextUpsellStage(menu, cart, refusals);
     setStage(nextStage);
     setCurrentCategory(null);
     sendText("Continuar pedido", cart, visitedCategories, promo, nextStage);
   }
 
   function handleUpsellDecline() {
-    const chipMode = computeChipMode(stage, currentCategory, cart);
-    const categoryName = chipMode.type === "upsell" ? chipMode.category : "";
+    const isDrink   = stage === "SELECT_DRINK";
+    const isDesert  = stage === "SELECT_DESSERT";
+    const catLabel  = isDrink ? (findBeverageCat(menu)?.name ?? "bebidas")
+                    : isDesert ? (findDessertCat(menu)?.name ?? "sobremesas")
+                    : "";
 
-    const newDeclined = categoryName ? [...declinedCategories, categoryName] : declinedCategories;
-    setDeclinedCategories(newDeclined);
+    const newRefusals: Refusals = {
+      drink:   isDrink   ? true : refusals.drink,
+      dessert: isDesert  ? true : refusals.dessert,
+    };
+    setRefusals(newRefusals);
 
-    const nextAttempts = upsellAttempts + 1;
-    setUpsellAttempts(nextAttempts);
+    const newCount = refusalCount + 1;
+    setRefusalCount(newCount);
 
-    // After 2 declines → trigger promotion once, then advance to confirm
-    if (nextAttempts >= 2 && !promoActive) {
+    // After 2 refusals → PROMO stage (once per session)
+    if (newCount >= 2 && stage !== "PROMO") {
       const calculated = calculatePromo(cart, menu);
       if (calculated) {
         setPromo(calculated);
-        setPromoActive(true);
-        // Stage stays — handleAcceptPromo / handleDeclinePromo will set confirm_order
+        setStage("PROMO");
         return;
       }
     }
 
-    // Advance through mandatory upsell sequence
-    let nextStage: Stage = "confirm_order";
-    if (stage === "upsell_bebidas") {
-      const cartNames = new Set(cart.map((c) => c.name));
-      const des = findDessertCat(menu);
-      if (des && !des.items.some((i) => cartNames.has(i.name))) {
-        nextStage = "upsell_sobremesas";
-      }
-    }
+    // Advance: never re-offer refused category
+    const nextStage = nextUpsellStage(menu, cart, newRefusals);
     setStage(nextStage);
 
-    const text = categoryName
-      ? `não quero ${categoryName.toLowerCase()}, obrigado`
-      : "pode continuar";
+    const text = catLabel ? `não quero ${catLabel.toLowerCase()}, obrigado` : "pode continuar";
     sendText(text, cart, visitedCategories, null, nextStage);
   }
 
   function handleAcceptPromo() {
     if (!promo) return;
     const newCart = cart.some((c) => c.name === promo.item.name)
-      ? cart
-      : [...cart, { name: promo.item.name, price: promo.item.price, qty: 1 }];
+      ? cart : [...cart, { name: promo.item.name, price: promo.item.price, qty: 1 }];
     addToCart(promo.item);
-    setPromoActive(false);
-    setStage("confirm_order");
-    sendText("Quero aproveitar a promoção!", newCart, visitedCategories, promo, "confirm_order");
+    setStage("CONFIRM_ORDER");
+    sendText("Quero aproveitar a promoção!", newCart, visitedCategories, promo, "CONFIRM_ORDER");
   }
 
   function handleDeclinePromo() {
-    setPromoActive(false);
-    setStage("confirm_order");
-    sendText("pode finalizar sem a promoção", cart, visitedCategories, null, "confirm_order");
+    setStage("CONFIRM_ORDER");
+    sendText("pode finalizar sem a promoção", cart, visitedCategories, null, "CONFIRM_ORDER");
   }
 
   function handleConfirmOrder() {
-    setStage("delivery_method");
-    sendText("Confirmar pedido", cart, visitedCategories, null, "delivery_method");
+    setStage("DELIVERY_TYPE");
+    sendText("Confirmar pedido", cart, visitedCategories, null, "DELIVERY_TYPE");
   }
 
   function handleBackToExploration() {
-    setStage("exploration");
+    setStage("SELECT_MAIN");
     setCurrentCategory(null);
   }
 
   function handleDeliveryMethod(type: "delivery" | "pickup") {
     setDeliveryMethod(type);
     if (type === "delivery") {
-      setStage("address");
-      sendText("Quero entrega por favor", cart, visitedCategories, null, "address");
+      setStage("ADDRESS_INPUT");
+      sendText("Quero entrega por favor", cart, visitedCategories, null, "ADDRESS_INPUT");
     } else {
-      setStage("payment");
-      sendText("Vou retirar no local", cart, visitedCategories, null, "payment");
+      setStage("ASK_NAME");
+      sendText("Vou retirar no local", cart, visitedCategories, null, "ASK_NAME");
     }
   }
 
+  function handleAddressConfirm() {
+    setStage("ASK_NAME");
+    sendText(
+      `Endereço confirmado: ${formatAddress(address)}`,
+      cart, visitedCategories, null, "ASK_NAME"
+    );
+  }
+
+  function handleAddressEdit() {
+    setAddress({ street: "", number: "", neighborhood: "", complement: "" });
+    setStage("ADDRESS_INPUT");
+  }
+
   function handlePayment(method: "dinheiro" | "cartao" | "pix") {
-    setStage("done");
+    setStage("DONE");
     const labels = { dinheiro: "Dinheiro", cartao: "Cartão", pix: "Pix" };
-    sendText(`Vou pagar com ${labels[method]}`, cart, visitedCategories, null, "done");
+    sendText(`Vou pagar com ${labels[method]}`, cart, visitedCategories, null, "DONE");
   }
 
   // ── reset ─────────────────────────────────────────────────
@@ -853,14 +946,14 @@ export default function ChatSimPage() {
     setMessages([]);
     setCart([]);
     setVisitedCategories([]);
-    setStage("exploration");
+    setStage("SELECT_MAIN");
     setCurrentCategory(null);
-    setDeclinedCategories([]);
-    setUpsellAttempts(0);
+    setRefusals({ drink: false, dessert: false });
+    setRefusalCount(0);
     setPromo(null);
-    setPromoActive(false);
     setDeliveryMethod(null);
-    setDeliveryAddress("");
+    setAddress({ street: "", number: "", neighborhood: "", complement: "" });
+    setCustomerName("");
     setInput("");
     setErrorMsg("");
     setUiState("idle");
@@ -887,19 +980,21 @@ export default function ChatSimPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {(stage === "upsell_bebidas" || stage === "upsell_sobremesas") && (
+          {(stage === "SELECT_DRINK" || stage === "SELECT_DESSERT" || stage === "PROMO") && (
             <span className="rounded-full bg-amber-400/30 px-2.5 py-0.5 text-[10px] font-semibold text-amber-100">
               Upsell
             </span>
           )}
-          {(stage === "confirm_order" || stage === "delivery_method" || stage === "address" || stage === "payment") && (
+          {(stage === "CONFIRM_ORDER" || stage === "DELIVERY_TYPE" || stage === "ADDRESS_INPUT" ||
+            stage === "ADDRESS_DETAILS" || stage === "ADDRESS_CONFIRM" || stage === "ASK_NAME" ||
+            stage === "PAYMENT") && (
             <span className="rounded-full bg-green-400/30 px-2.5 py-0.5 text-[10px] font-semibold text-green-100">
               Finalizando
             </span>
           )}
-          {upsellAttempts > 0 && !promoActive && (
+          {refusalCount > 0 && stage !== "PROMO" && (
             <span className="rounded-full bg-red-400/30 px-2 py-0.5 text-[10px] text-red-200">
-              {upsellAttempts} recusa{upsellAttempts > 1 ? "s" : ""}
+              {refusalCount} recusa{refusalCount > 1 ? "s" : ""}
             </span>
           )}
           <button
@@ -947,7 +1042,7 @@ export default function ChatSimPage() {
       <CartBar cart={cart} />
 
       {/* ── Promo card ──────────────────────────────────── */}
-      {promoActive && promo && (
+      {stage === "PROMO" && promo && (
         <PromoCard
           promo={promo}
           disabled={busy}
@@ -961,7 +1056,7 @@ export default function ChatSimPage() {
         onSubmit={handleSubmit}
         className="shrink-0 border-t border-gray-200 bg-white px-4 py-3"
       >
-        {!promoActive && (
+        {stage !== "PROMO" && (
           <div className="mb-2.5">
             <ChipBar
               mode={chipMode}
@@ -974,6 +1069,8 @@ export default function ChatSimPage() {
               onConfirmOrder={handleConfirmOrder}
               onBackToExploration={handleBackToExploration}
               onDeliveryMethod={handleDeliveryMethod}
+              onAddressConfirm={handleAddressConfirm}
+              onAddressEdit={handleAddressEdit}
               onPayment={handlePayment}
             />
           </div>
@@ -984,7 +1081,12 @@ export default function ChatSimPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={stage === "address" ? "Rua, número, bairro, cidade…" : "Digite ou use os botões acima…"}
+            placeholder={
+              stage === "ADDRESS_INPUT"   ? "ex: Av. Paulista, 1000" :
+              stage === "ADDRESS_DETAILS" ? "ex: Bela Vista, Apto 42" :
+              stage === "ASK_NAME"        ? "Seu nome completo…" :
+              "Digite ou use os botões acima…"
+            }
             rows={1}
             disabled={busy}
             className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#25d366] disabled:opacity-60"
