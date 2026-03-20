@@ -67,6 +67,17 @@ type ChipBarMode =
   | { type: "fulfillment" }
   | { type: "done" };
 
+/**
+ * Explicit chip override set by the AI-reply inference effect.
+ * Takes priority over the auto-computed ChipBarMode so chips always
+ * reflect what the assistant is currently talking about.
+ */
+type ChipOverride =
+  | { type: "items-for";    categoryName: string }
+  | { type: "upsell-for";   categoryName: string }
+  | { type: "fulfillment" }
+  | null;
+
 // ─── helpers ──────────────────────────────────────────────────
 
 function uid() { return Math.random().toString(36).slice(2); }
@@ -497,6 +508,7 @@ export default function ChatSimPage() {
   const [upsellAttempts,    setUpsellAttempts]    = useState(0);
   const [promo,             setPromo]             = useState<Promo | null>(null);
   const [promoActive,       setPromoActive]       = useState(false);
+  const [chipOverride,      setChipOverride]      = useState<ChipOverride>(null);
   const [input,             setInput]             = useState("");
   const [uiState,           setUiState]           = useState<UIState>("idle");
   const [errorMsg,          setErrorMsg]          = useState("");
@@ -504,6 +516,15 @@ export default function ChatSimPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
   const greeted   = useRef(false);
+
+  // Stable refs so the AI-inference effect can read current values without
+  // adding them to its dependency array (avoids re-running on every state change).
+  const menuRef  = useRef<MenuCategory[]>([]);
+  const cartRef  = useRef<CartItem[]>([]);
+  const phaseRef = useRef<Phase>("exploration");
+  useEffect(() => { menuRef.current  = menu;  }, [menu]);
+  useEffect(() => { cartRef.current  = cart;  }, [cart]);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   const busy = uiState === "thinking";
 
@@ -517,10 +538,29 @@ export default function ChatSimPage() {
   }
 
   // ── chip bar mode ─────────────────────────────────────────
+  // Priority: phase=done → chipOverride → auto-computed from phase+activeCategory+cart
 
   function getChipMode(): ChipBarMode {
     if (phase === "done") return { type: "done" };
 
+    // ── Override from AI reply inference (highest priority after "done") ──
+    if (chipOverride?.type === "fulfillment") {
+      return { type: "fulfillment" };
+    }
+    if (chipOverride?.type === "items-for") {
+      const cat = menu.find((c) => c.name === chipOverride.categoryName);
+      if (cat) {
+        return { type: "items", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items };
+      }
+    }
+    if (chipOverride?.type === "upsell-for") {
+      const cat = menu.find((c) => c.name === chipOverride.categoryName);
+      if (cat) {
+        return { type: "upsell", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items };
+      }
+    }
+
+    // ── Auto-computed ─────────────────────────────────────────────────────
     if (phase === "exploration") {
       if (activeCategory) {
         const cat = menu.find((c) => c.name === activeCategory);
@@ -531,13 +571,13 @@ export default function ChatSimPage() {
           items: cat?.items ?? [],
         };
       }
-      // Only categories without any cart items
+      // Only show categories that don't yet have cart items
       const cartNames = new Set(cart.map((c) => c.name));
       const remaining = menu.filter((c) => !c.items.some((i) => cartNames.has(i.name)));
       return { type: "categories", categories: remaining };
     }
 
-    // Phase = "upsell": find first missing category
+    // Upsell phase: first missing category
     const cartNames = new Set(cart.map((c) => c.name));
     const missing = menu.find((c) => !c.items.some((i) => cartNames.has(i.name)));
     if (missing) {
@@ -548,7 +588,6 @@ export default function ChatSimPage() {
         items: missing.items,
       };
     }
-    // All covered → fulfillment
     return { type: "fulfillment" };
   }
 
@@ -557,6 +596,85 @@ export default function ChatSimPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, uiState, promoActive]);
+
+  // ── Infer chip state from latest AI reply ─────────────────
+  // Runs whenever a new assistant message arrives.
+  // Reads from refs (not state deps) so it stays stable.
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant") return;
+
+    const reply = last.content;
+    const low   = reply.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const currentMenu  = menuRef.current;
+    const currentCart  = cartRef.current;
+    const currentPhase = phaseRef.current;
+    const cartNames    = new Set(currentCart.map((c) => c.name));
+
+    // 1. Fulfillment — AI asking delivery or pickup
+    const fulfillmentPhrases = [
+      "entrega ou retirada",
+      "retirada ou entrega",
+      "vai ser entrega",
+      "como vai receber",
+      "entrega ou retira",
+    ];
+    if (fulfillmentPhrases.some((p) => low.includes(p))) {
+      setPhase((prev) => (prev === "done" ? "done" : "upsell"));
+      setActiveCategory(null);
+      setChipOverride({ type: "fulfillment" });
+      return;
+    }
+
+    // 2. Category detection — which category has the most items named in the reply
+    let bestCat: MenuCategory | null = null;
+    let bestCount = 0;
+    for (const cat of currentMenu) {
+      const count = cat.items.filter((item) => {
+        const n = item.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return low.includes(n);
+      }).length;
+      if (count > bestCount) { bestCount = count; bestCat = cat; }
+    }
+
+    if (bestCat && bestCount >= 2) {
+      // AI is listing items from bestCat
+      const catInCart = bestCat.items.some((i) => cartNames.has(i.name));
+      const upsellPhrases = [
+        "antes de fechar", "antes de finalizar", "que tal", "quer incluir",
+        "quer uma", "quer um", "aproveitar",
+      ];
+      const isUpsellReply = upsellPhrases.some((p) => low.includes(p))
+        || catInCart
+        || currentPhase === "upsell";
+
+      if (isUpsellReply) {
+        setChipOverride({ type: "upsell-for", categoryName: bestCat.name });
+        setPhase("upsell");
+        setActiveCategory(null);
+      } else {
+        // Exploration listing — show the item grid for this category
+        setActiveCategory(bestCat.name);
+        setChipOverride(null);
+      }
+      return;
+    }
+
+    // 3. Post-item confirmation — AI confirmed an item and is offering next options
+    const confirmationPhrases = ["adicionado", "anotei", "complementar seu pedido", "agora vamos"];
+    if (confirmationPhrases.some((p) => low.includes(p))) {
+      setActiveCategory(null);
+      setChipOverride(null);
+    }
+
+    // 4. Greeting / category list — go back to category chips
+    if (last === messages[0] || low.includes("o que vai querer") || low.includes("por onde quer comecar")) {
+      setActiveCategory(null);
+      setChipOverride(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]); // intentionally stable — reads from refs
 
   // ── core AI call ─────────────────────────────────────────
 
@@ -692,12 +810,14 @@ export default function ChatSimPage() {
       : [...visitedCategories, cat.name];
     setVisitedCategories(newVisited);
     setActiveCategory(cat.name);
+    setChipOverride(null); // explicit navigation overrides inference
     sendText(`Ver ${cat.name}`, cart, newVisited);
   }
 
   function handleItemSelect(item: MenuItem) {
     addToCart(item);
-    setActiveCategory(null); // snap back to filtered category list
+    setActiveCategory(null); // snap back to category list
+    setChipOverride(null);   // let inference update after AI confirms
     const newCart = cart.some((c) => c.name === item.name)
       ? cart
       : [...cart, { name: item.name, price: item.price, qty: 1 }];
@@ -706,11 +826,13 @@ export default function ChatSimPage() {
 
   function handleBack() {
     setActiveCategory(null);
+    setChipOverride(null);
   }
 
   function handleFinalize() {
     setPhase("upsell");
     setActiveCategory(null);
+    setChipOverride(null);
     sendText("só isso, pode finalizar");
   }
 
@@ -741,6 +863,7 @@ export default function ChatSimPage() {
     if (!promo) return;
     addToCart(promo.item);
     setPromoActive(false);
+    setChipOverride(null); // let inference pick up after AI responds
     const newCart = [...cart, { name: promo.item.name, price: promo.item.price, qty: 1 }];
     sendText("Quero aproveitar a promoção!", newCart, visitedCategories, promo);
   }
@@ -748,12 +871,13 @@ export default function ChatSimPage() {
   function handleDeclinePromo() {
     setPromoActive(false);
     setPhase("upsell");
-    // Send finalize after declining promo
+    setChipOverride(null);
     sendText("pode finalizar sem a promoção", cart, visitedCategories, null);
   }
 
   function handleFulfillment(type: "delivery" | "pickup") {
     setPhase("done");
+    setChipOverride(null);
     sendText(type === "delivery" ? "Quero entrega por favor" : "Vou retirar no local");
   }
 
@@ -765,6 +889,7 @@ export default function ChatSimPage() {
     setVisitedCategories([]);
     setPhase("exploration");
     setActiveCategory(null);
+    setChipOverride(null);
     setUpsellAttempts(0);
     setPromo(null);
     setPromoActive(false);
