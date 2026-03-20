@@ -477,7 +477,7 @@ function ChipBar({
         <div className="flex gap-1.5">
           <button type="button" disabled={disabled} onClick={onBack}
             className={`${chip} border-gray-300 bg-white text-gray-600 hover:bg-gray-50`}>
-            ← Categorias
+            Continuar pedido
           </button>
           <button type="button" disabled={disabled} onClick={onFinalize}
             className={`${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}>
