@@ -35,12 +35,23 @@ interface PromoContext {
   savings: number;
 }
 
+type OrderStage =
+  | "exploration"
+  | "upsell_bebidas"
+  | "upsell_sobremesas"
+  | "confirm_order"
+  | "delivery_method"
+  | "address"
+  | "payment"
+  | "done";
+
 interface ChatSimRequest {
   message: string;
   history: HistoryEntry[];
   cart?: CartItem[];
   visitedCategories?: string[];
   promo?: PromoContext | null;
+  stage?: OrderStage;
 }
 
 type DbMenuItem = { name: string; price: unknown; description: string | null; imageUrl: string | null };
@@ -66,7 +77,8 @@ function buildSystemPrompt(
   emojiUsage: string,
   cart: CartItem[],
   visitedCategories: string[],
-  promo: PromoContext | null
+  promo: PromoContext | null,
+  stage: OrderStage
 ): string {
   const active = categories.filter((c) => c.items.length > 0);
 
@@ -168,45 +180,45 @@ O texto é GUIA. Os botões são ESCOLHA. Nunca os dois ao mesmo tempo.
 Termine com "👇" para direcionar o cliente aos botões.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-TEMPLATES POR SITUAÇÃO
+ETAPA ATUAL DO PEDIDO: ${stage}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SAUDAÇÃO (primeira mensagem):
-  "Olá! Bem-vindo ao ${restaurantName}! 😊 O que vai querer hoje? 👇"
+Gere exatamente 1–2 linhas condizentes com a etapa abaixo.
 
-CATEGORIA PEDIDA (cliente pediu ver uma categoria):
-  "${categoryEmoji(active[0]?.name ?? "🍽️")} [NomeDaCategoria] — escolha o que preferir 👇"
-  NÃO liste os itens. Os cards aparecem automaticamente abaixo.
+${stage === "exploration" ? `EXPLORAÇÃO — cliente está montando o pedido.
+  Saudação:   "Olá! Bem-vindo ao ${restaurantName}! 😊 O que vai querer hoje? 👇"
+  Categoria:  "[emoji] [Categoria] — escolha o que preferir 👇"
+  Item conf.: "✅ [Item] adicionado! (R$ X,XX) — continue montando seu pedido 👇"` : ""}
 
-ITEM CONFIRMADO (cliente escolheu um item):
-  "✅ [NomeDoItem] adicionado! (R$ X,XX)"
-  Se ainda há categorias sem itens: "Continue montando seu pedido 👇"
-  Se todas cobertas: "Ótimo! Como vai receber? 👇"
+${stage === "upsell_bebidas" ? `UPSELL BEBIDAS — ofereça bebidas de forma atrativa.
+  "🥤 Que tal uma bebida para acompanhar? 👇"
+  NÃO liste itens. Os botões aparecem abaixo.` : ""}
 
-CLIENTE QUER FINALIZAR ("só isso" / "finalizar" / etc.):
-${firstMissing
-  ? `  Ainda há categorias sem itens: ${categoriesWithout.join(", ")}.
-  Resposta: "Antes de fechar — que tal ${firstMissing}? 👇"
-  NÃO liste os itens. Os botões já aparecem abaixo.`
-  : `  Todas categorias têm itens.
-  Resposta: "Tudo certo! Como vai receber? 👇"`}
+${stage === "upsell_sobremesas" ? `UPSELL SOBREMESAS — ofereça sobremesas de forma atrativa.
+  "🍰 Para fechar com chave de ouro — que tal uma sobremesa? 👇"
+  NÃO liste itens. Os botões aparecem abaixo.` : ""}
 
-UPSELL (categorias ainda sem itens — ofereça nesta ordem):
-${upsellOrder}
-  Modelo: "Antes de fechar — que tal [categoria]? 👇"
-  NÃO liste os itens. Uma categoria por vez. Sem insistir ao recusar.
+${stage === "confirm_order" ? `CONFIRMAÇÃO DO PEDIDO — mostre resumo curto e convide a confirmar.
+  "Ótimo pedido! 🎉 Confirme abaixo ou adicione mais itens 👇"` : ""}
 
-CLIENTE RECUSA UPSELL:
-  → Se há próxima categoria: "Certo! E [próxima categoria]? 👇"
-  → Se não há mais: "Sem problema! Como vai receber? 👇"
+${stage === "delivery_method" ? `FORMA DE ENTREGA — cliente confirmou, escolha entrega ou retirada.
+  "Perfeito! Como vai receber seu pedido? 👇"` : ""}
 
-ENTREGA / RETIRADA:
-  "Perfeito! Como vai receber seu pedido? 👇"
+${stage === "address" ? `ENDEREÇO DE ENTREGA — cliente escolheu entrega.
+  "📍 Informe seu endereço completo no campo acima e toque em Enviar ↑"` : ""}
 
-RESUMO FINAL (após cliente escolher entrega ou retirada):
-  Liste o PEDIDO ATUAL completo (itens + preços + total).
-  "Pedido anotado! Estamos preparando tudo. 🎉"
-  O resumo é a ÚNICA situação onde você pode listar itens.
+${stage === "payment" ? `PAGAMENTO — último passo antes de concluir.
+  "Quase lá! 💳 Como prefere pagar? 👇"` : ""}
+
+${stage === "done" ? `PEDIDO CONCLUÍDO — liste o pedido completo e despeça.
+  Liste PEDIDO ATUAL (itens + preços + total).
+  "Pedido confirmado! Estamos preparando tudo. 🎉"
+  Este é o ÚNICO momento onde você pode listar itens.` : ""}
+
+TEMPLATES UNIVERSAIS (use quando a etapa não tiver template específico):
+  Item conf.: "✅ [Item] adicionado! (R$ X,XX)"
+  Recusa upsell: "Sem problema! 👇"
+  Promoção aceita: "Ótimo! Combinação perfeita 🎉 Como vai receber? 👇"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 REGRAS ABSOLUTAS
@@ -268,7 +280,7 @@ export async function POST(req: NextRequest) {
       return badRequest("Invalid JSON body.");
     }
 
-    const { message, history, cart = [], visitedCategories = [], promo = null } = body;
+    const { message, history, cart = [], visitedCategories = [], promo = null, stage = "exploration" } = body;
     if (!message?.trim())        return badRequest("message is required.");
     if (!Array.isArray(history)) return badRequest("history must be an array.");
 
@@ -305,7 +317,8 @@ export async function POST(req: NextRequest) {
       emojiUsage,
       cart,
       visitedCategories,
-      promo
+      promo,
+      stage as OrderStage
     );
 
     const cappedHistory = history.slice(-maxHistory);
