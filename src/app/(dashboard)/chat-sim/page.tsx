@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * /chat-sim — Guided sales simulation
+ * /chat-sim — High-conversion guided ordering simulation
  *
- * Two-phase conversation:
- *  Phase 1 (EXPLORATION): category chips → item chips per category.
- *    Assistant lists items one category at a time, no upsell.
- *  Phase 2 (UPSELL): triggered by "só isso" / "finalizar" etc.
- *    Assistant identifies missing categories, offers one at a time.
+ * Flow:
+ *  1. Greeting → shows all categories as chips
+ *  2. Category selected → shows ALL items in that category (no pagination)
+ *  3. Item selected → addToCart + snap back to remaining categories (rule: never re-show covered categories)
+ *  4. "Finalizar" clicked → Phase 2 upsell: ONE missing category at a time
+ *  5. All categories covered → order summary + delivery/pickup
  *
- * Cart is tracked client-side (chip clicks + keyword matching on typed msgs)
- * and injected into every API call so the AI always knows what was ordered.
+ * Never asks yes/no. Always presents explicit choices.
  */
 
 import {
@@ -52,12 +52,27 @@ type HistoryEntry = { role: "user" | "assistant"; content: string };
 type UIState = "idle" | "thinking" | "error";
 type Phase   = "exploration" | "upsell";
 
+type ChipBarMode =
+  | { type: "categories"; categories: MenuCategory[] }
+  | { type: "items"; category: string; items: MenuItem[] }
+  | { type: "upsell"; category: string; items: MenuItem[] };
+
 // ─── helpers ──────────────────────────────────────────────────
 
 function uid() { return Math.random().toString(36).slice(2); }
 
 function formatTime(d: Date) {
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function categoryEmoji(name: string): string {
+  const n = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (n.includes("pizza"))                             return "🍕";
+  if (n.includes("bebida") || n.includes("drink"))     return "🥤";
+  if (n.includes("sobremesa") || n.includes("doce"))   return "🍰";
+  if (n.includes("lanche") || n.includes("burger"))    return "🍔";
+  if (n.includes("entrada") || n.includes("porcao"))   return "🥗";
+  return "🍽️";
 }
 
 const UPSELL_TRIGGERS = [
@@ -71,15 +86,12 @@ function isUpsellTrigger(text: string) {
   return UPSELL_TRIGGERS.some((t) => n.includes(t));
 }
 
-/** Returns items whose name appears (case-insensitive) in the message. */
 function extractItemsFromMessage(text: string, menu: MenuCategory[]): MenuItem[] {
   const lower = text.toLowerCase();
-  return menu
-    .flatMap((c) => c.items)
-    .filter((i) => lower.includes(i.name.toLowerCase()));
+  return menu.flatMap((c) => c.items).filter((i) => lower.includes(i.name.toLowerCase()));
 }
 
-// ─── sub-components ───────────────────────────────────────────
+// ─── Bubble ───────────────────────────────────────────────────
 
 function Bubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === "user";
@@ -107,6 +119,8 @@ function Bubble({ msg }: { msg: ChatMessage }) {
     </div>
   );
 }
+
+// ─── TypingIndicator ──────────────────────────────────────────
 
 function TypingIndicator() {
   return (
@@ -137,7 +151,7 @@ function CartBar({ cart }: { cart: CartItem[] }) {
   return (
     <div className="shrink-0 border-t border-green-200 bg-green-50 px-4 py-2">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-green-800">🛒 Pedido:</span>
+        <span className="text-xs font-semibold text-green-800">🛒</span>
         <div className="flex flex-1 flex-wrap gap-1">
           {cart.map((item) => (
             <span
@@ -149,7 +163,7 @@ function CartBar({ cart }: { cart: CartItem[] }) {
           ))}
         </div>
         <span className="shrink-0 text-xs font-bold text-green-900">
-          R$ {total.toFixed(2)}
+          R$&nbsp;{total.toFixed(2)}
         </span>
       </div>
     </div>
@@ -157,11 +171,6 @@ function CartBar({ cart }: { cart: CartItem[] }) {
 }
 
 // ─── ChipBar ──────────────────────────────────────────────────
-
-type ChipBarMode =
-  | { type: "categories"; categories: string[] }
-  | { type: "items"; category: string; items: MenuItem[] }
-  | { type: "upsell"; category: string; items: MenuItem[] };
 
 function ChipBar({
   mode,
@@ -174,27 +183,27 @@ function ChipBar({
 }: {
   mode: ChipBarMode;
   disabled: boolean;
-  onCategorySelect: (name: string) => void;
+  onCategorySelect: (cat: MenuCategory) => void;
   onItemSelect: (item: MenuItem) => void;
   onBack: () => void;
   onFinalize: () => void;
   onUpsellDecline: () => void;
 }) {
-  const chip =
-    "shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium disabled:opacity-40";
+  const chip = "shrink-0 rounded-full border px-3 py-1 text-xs font-medium disabled:opacity-40 transition-colors";
 
+  // ── Category chips (remaining categories without cart items) ─
   if (mode.type === "categories") {
     return (
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-wrap gap-1.5 pb-0.5">
         {mode.categories.map((cat) => (
           <button
-            key={cat}
+            key={cat.name}
             type="button"
             disabled={disabled}
             onClick={() => onCategorySelect(cat)}
             className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}
           >
-            {cat}
+            {categoryEmoji(cat.name)} {cat.name}
           </button>
         ))}
         <button
@@ -203,15 +212,16 @@ function ChipBar({
           onClick={onFinalize}
           className={`${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}
         >
-          Já escolhi tudo ✓
+          ✅ Finalizar pedido
         </button>
       </div>
     );
   }
 
+  // ── Item chips (all items in selected category — no pagination) ─
   if (mode.type === "items") {
     return (
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-wrap gap-1.5 pb-0.5">
         <button
           type="button"
           disabled={disabled}
@@ -228,7 +238,7 @@ function ChipBar({
             onClick={() => onItemSelect(item)}
             className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}
           >
-            {item.name} — R$ {item.price.toFixed(2)}
+            {item.name} — R$&nbsp;{item.price.toFixed(2)}
           </button>
         ))}
         <button
@@ -237,17 +247,17 @@ function ChipBar({
           onClick={onFinalize}
           className={`${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}
         >
-          Já escolhi tudo ✓
+          ✅ Finalizar pedido
         </button>
       </div>
     );
   }
 
-  // upsell mode
+  // ── Upsell chips (one missing category at a time) ─────────
   return (
-    <div className="flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <span className="shrink-0 self-center text-xs text-purple-600 font-medium">
-        {mode.category}:
+    <div className="flex flex-wrap gap-1.5 pb-0.5">
+      <span className="shrink-0 self-center text-xs font-semibold text-purple-700">
+        {categoryEmoji(mode.category)} {mode.category}:
       </span>
       {mode.items.map((item) => (
         <button
@@ -257,7 +267,7 @@ function ChipBar({
           onClick={() => onItemSelect(item)}
           className={`${chip} border-purple-300 bg-purple-50 text-purple-800 hover:bg-purple-100`}
         >
-          {item.name} — R$ {item.price.toFixed(2)}
+          {item.name} — R$&nbsp;{item.price.toFixed(2)}
         </button>
       ))}
       <button
@@ -266,7 +276,7 @@ function ChipBar({
         onClick={onUpsellDecline}
         className={`${chip} border-gray-300 bg-white text-gray-500 hover:bg-gray-50`}
       >
-        Sem {mode.category.toLowerCase()}
+        Pular {mode.category.toLowerCase()}
       </button>
     </div>
   );
@@ -275,14 +285,15 @@ function ChipBar({
 // ─── main component ───────────────────────────────────────────
 
 export default function ChatSimPage() {
-  const [messages,        setMessages]        = useState<ChatMessage[]>([]);
-  const [menu,            setMenu]            = useState<MenuCategory[]>([]);
-  const [cart,            setCart]            = useState<CartItem[]>([]);
-  const [phase,           setPhase]           = useState<Phase>("exploration");
-  const [activeCategory,  setActiveCategory]  = useState<string | null>(null);
-  const [input,           setInput]           = useState("");
-  const [uiState,         setUiState]         = useState<UIState>("idle");
-  const [errorMsg,        setErrorMsg]        = useState("");
+  const [messages,           setMessages]           = useState<ChatMessage[]>([]);
+  const [menu,               setMenu]               = useState<MenuCategory[]>([]);
+  const [cart,               setCart]               = useState<CartItem[]>([]);
+  const [visitedCategories,  setVisitedCategories]  = useState<string[]>([]);
+  const [phase,              setPhase]              = useState<Phase>("exploration");
+  const [activeCategory,     setActiveCategory]     = useState<string | null>(null);
+  const [input,              setInput]              = useState("");
+  const [uiState,            setUiState]            = useState<UIState>("idle");
+  const [errorMsg,           setErrorMsg]           = useState("");
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
@@ -299,12 +310,9 @@ export default function ChatSimPage() {
     });
   }
 
-  function tryAddItemsFromMessage(text: string) {
-    const found = extractItemsFromMessage(text, menu);
-    found.forEach(addToCart);
-  }
-
   // ── chip bar mode ─────────────────────────────────────────
+  // Rule 4: never re-show categories that already have cart items.
+  // Rule 6: always show ALL items in a category (no pagination).
 
   function getChipMode(): ChipBarMode {
     if (phase === "exploration") {
@@ -312,18 +320,21 @@ export default function ChatSimPage() {
         const cat = menu.find((c) => c.name === activeCategory);
         return { type: "items", category: activeCategory, items: cat?.items ?? [] };
       }
-      return { type: "categories", categories: menu.map((c) => c.name) };
+      // Only show categories that do NOT yet have items in the cart
+      const cartNames = new Set(cart.map((c) => c.name));
+      const remaining = menu.filter(
+        (c) => !c.items.some((i) => cartNames.has(i.name))
+      );
+      return { type: "categories", categories: remaining };
     }
 
-    // Phase 2: find first category with no cart items
+    // Phase 2: upsell — find first category with no cart items
     const cartNames = new Set(cart.map((c) => c.name));
-    const missing = menu.find(
-      (c) => !c.items.some((i) => cartNames.has(i.name))
-    );
+    const missing = menu.find((c) => !c.items.some((i) => cartNames.has(i.name)));
     if (missing) {
       return { type: "upsell", category: missing.name, items: missing.items };
     }
-    // All categories covered — show confirm chips as "categories" type with just confirm
+    // All categories covered → show empty category list (just Finalizar button)
     return { type: "categories", categories: [] };
   }
 
@@ -339,6 +350,7 @@ export default function ChatSimPage() {
     history: HistoryEntry[],
     userText: string,
     currentCart: CartItem[],
+    currentVisited: string[],
     isGreeting = false
   ) => {
     setUiState("thinking");
@@ -348,7 +360,12 @@ export default function ChatSimPage() {
       const res = await fetch("/api/chat-sim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userText, history, cart: currentCart }),
+        body: JSON.stringify({
+          message: userText,
+          history,
+          cart: currentCart,
+          visitedCategories: currentVisited,
+        }),
       });
 
       const json = await res.json();
@@ -393,40 +410,41 @@ export default function ChatSimPage() {
   useEffect(() => {
     if (greeted.current) return;
     greeted.current = true;
-    callAI([], "oi", [], true);
+    callAI([], "oi", [], [], true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── send ─────────────────────────────────────────────────
 
-  async function sendText(text: string) {
+  async function sendText(text: string, cartSnapshot?: CartItem[], visitedSnapshot?: string[]) {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
     setInput("");
 
-    // Detect phase transition
     if (phase === "exploration" && isUpsellTrigger(trimmed)) {
       setPhase("upsell");
     }
 
-    // Optimistic cart update from typed messages
-    tryAddItemsFromMessage(trimmed);
+    // Optimistic cart update from typed text (chip clicks are handled separately)
+    const foundItems = extractItemsFromMessage(trimmed, menu);
+    foundItems.forEach(addToCart);
 
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
-    const userMsg: ChatMessage = {
-      id: uid(), role: "user", content: trimmed, ts: new Date(),
-    };
+    const userMsg: ChatMessage = { id: uid(), role: "user", content: trimmed, ts: new Date() };
     setMessages((prev) => [...prev, userMsg]);
 
-    // Pass the updated cart (may include items just found in `trimmed`)
-    const updatedCart = [...cart];
-    extractItemsFromMessage(trimmed, menu).forEach((item) => {
-      if (!updatedCart.some((c) => c.name === item.name)) {
-        updatedCart.push({ name: item.name, price: item.price, qty: 1 });
-      }
-    });
+    // Build snapshot of cart including any newly extracted items
+    const effectiveCart = cartSnapshot ?? (() => {
+      const updated = [...cart];
+      foundItems.forEach((item) => {
+        if (!updated.some((c) => c.name === item.name)) {
+          updated.push({ name: item.name, price: item.price, qty: 1 });
+        }
+      });
+      return updated;
+    })();
 
-    await callAI(history, trimmed, updatedCart);
+    await callAI(history, trimmed, effectiveCart, visitedSnapshot ?? visitedCategories);
   }
 
   function handleSubmit(e?: FormEvent) {
@@ -440,15 +458,22 @@ export default function ChatSimPage() {
 
   // ── chip handlers ─────────────────────────────────────────
 
-  function handleCategorySelect(name: string) {
-    setActiveCategory(name);
-    sendText(`Quero ver ${name.toLowerCase()}`);
+  function handleCategorySelect(cat: MenuCategory) {
+    const newVisited = visitedCategories.includes(cat.name)
+      ? visitedCategories
+      : [...visitedCategories, cat.name];
+    setVisitedCategories(newVisited);
+    setActiveCategory(cat.name);
+    sendText(`Ver ${cat.name}`, cart, newVisited);
   }
 
   function handleItemSelect(item: MenuItem) {
     addToCart(item);
-    setActiveCategory(null);
-    sendText(`Quero ${item.name}`);
+    setActiveCategory(null); // snap back to remaining category chips
+    const newCart = cart.some((c) => c.name === item.name)
+      ? cart
+      : [...cart, { name: item.name, price: item.price, qty: 1 }];
+    sendText(`Quero ${item.name}`, newCart, visitedCategories);
   }
 
   function handleBack() {
@@ -473,13 +498,14 @@ export default function ChatSimPage() {
   function handleClear() {
     setMessages([]);
     setCart([]);
+    setVisitedCategories([]);
     setPhase("exploration");
     setActiveCategory(null);
     setInput("");
     setErrorMsg("");
     setUiState("idle");
     greeted.current = true;
-    callAI([], "oi", [], true);
+    callAI([], "oi", [], [], true);
   }
 
   // ─── render ───────────────────────────────────────────────
@@ -496,7 +522,7 @@ export default function ChatSimPage() {
             IA
           </div>
           <div>
-            <p className="text-sm font-semibold leading-tight">Assistente Virtual</p>
+            <p className="text-sm font-semibold leading-tight">Pedido Guiado</p>
             <p className="text-xs text-green-200">{busy ? "digitando…" : "online"}</p>
           </div>
         </div>
@@ -504,16 +530,13 @@ export default function ChatSimPage() {
         <div className="flex items-center gap-2">
           {phase === "exploration" ? (
             <span className="rounded-full bg-blue-500/30 px-2.5 py-0.5 text-[10px] font-semibold text-blue-100">
-              Fase 1 · Exploração
+              Seleção
             </span>
           ) : (
             <span className="rounded-full bg-amber-400/30 px-2.5 py-0.5 text-[10px] font-semibold text-amber-100">
-              Fase 2 · Upsell
+              Finalizando
             </span>
           )}
-          <span className="rounded-full bg-[#128c7e] px-2 py-0.5 text-[10px] font-medium text-green-100">
-            Simulação
-          </span>
           <button
             onClick={handleClear}
             disabled={busy}
@@ -523,18 +546,6 @@ export default function ChatSimPage() {
           </button>
         </div>
       </div>
-
-      {/* ── Phase strip ─────────────────────────────────── */}
-      {phase === "exploration" ? (
-        <div className="shrink-0 border-b border-blue-100 bg-blue-50 px-4 py-1.5 text-center text-xs text-blue-700">
-          <strong>Fase 1 · Exploração</strong> — escolha uma categoria, depois os itens.
-          Clique em <strong>Já escolhi tudo ✓</strong> para avançar ao upsell.
-        </div>
-      ) : (
-        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800">
-          <strong>Fase 2 · Upsell</strong> — o assistente sugere categorias não pedidas, uma por vez.
-        </div>
-      )}
 
       {/* ── Messages ────────────────────────────────────── */}
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
@@ -551,7 +562,6 @@ export default function ChatSimPage() {
         )}
 
         {messages.map((msg) => <Bubble key={msg.id} msg={msg} />)}
-
         {busy && <TypingIndicator />}
 
         {uiState === "error" && (
@@ -581,7 +591,7 @@ export default function ChatSimPage() {
         className="shrink-0 border-t border-gray-200 bg-white px-4 py-3"
       >
         {/* Context-aware chip bar */}
-        <div className="mb-2">
+        <div className="mb-2.5">
           <ChipBar
             mode={chipMode}
             disabled={busy}
@@ -599,11 +609,7 @@ export default function ChatSimPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              phase === "exploration"
-                ? `Simule o cliente… ex: "quero uma calabresa"`
-                : `Responda à sugestão… ex: "sim" ou "não obrigado"`
-            }
+            placeholder="Digite ou use os botões acima…"
             rows={1}
             disabled={busy}
             className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#25d366] disabled:opacity-60"
