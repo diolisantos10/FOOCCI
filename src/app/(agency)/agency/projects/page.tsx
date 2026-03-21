@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { FolderKanban, Plus, Search, ChevronDown, X } from "lucide-react";
 import { PageHeader } from "@/components/agency/ui/PageHeader";
 import { Badge } from "@/components/agency/ui/Badge";
-import { MOCK_PROJECTS } from "@/lib/agency/mock-data";
+import { useAgencyStore } from "@/lib/agency/store";
 import Link from "next/link";
 
 const STAGE_META: Record<string, { label: string; color: string }> = {
@@ -24,10 +24,12 @@ const STATUS_MAP: Record<string, string> = {
 };
 const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
-const ALL_CLIENTS = Array.from(new Set(MOCK_PROJECTS.map((p) => p.clientName))).sort();
-const ALL_STAGES  = ["briefing","diagnosis","planning","production","review","delivery","ongoing","completed"] as const;
+const ALL_STAGES = ["briefing","diagnosis","planning","production","review","delivery","ongoing","completed"] as const;
 
 export default function ProjectsPage() {
+  const projects = useAgencyStore((s) => s.projects);
+  const ALL_CLIENTS = Array.from(new Set(projects.map((p) => p.clientName))).sort();
+
   const [statusFilter, setStatusFilter] = useState("All");
   const [clientFilter, setClientFilter] = useState("All");
   const [stageFilter,  setStageFilter]  = useState("All");
@@ -35,7 +37,7 @@ export default function ProjectsPage() {
   const [sortBy,       setSortBy]       = useState<"deadline" | "priority">("deadline");
 
   const filtered = useMemo(() => {
-    let list = [...MOCK_PROJECTS];
+    let list = [...projects];
     if (statusFilter !== "All") list = list.filter((p) => p.status === STATUS_MAP[statusFilter]);
     if (clientFilter !== "All") list = list.filter((p) => p.clientName === clientFilter);
     if (stageFilter  !== "All") list = list.filter((p) => p.stage === stageFilter);
@@ -51,7 +53,7 @@ export default function ProjectsPage() {
         : a.deadline.localeCompare(b.deadline),
     );
     return list;
-  }, [statusFilter, clientFilter, stageFilter, search, sortBy]);
+  }, [projects, statusFilter, clientFilter, stageFilter, search, sortBy]);
 
   const hasFilters = statusFilter !== "All" || clientFilter !== "All" || stageFilter !== "All" || !!search.trim();
 
@@ -64,7 +66,7 @@ export default function ProjectsPage() {
       <div className="px-8 py-7">
         <PageHeader
           title="Projects"
-          subtitle={`${filtered.length} of ${MOCK_PROJECTS.length} projects`}
+          subtitle={`${filtered.length} of ${projects.length} projects`}
           icon={FolderKanban}
         >
           <Link

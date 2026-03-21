@@ -6,6 +6,8 @@ import {
   CheckCircle2, Loader2, Circle, Check,
 } from "lucide-react";
 import { MOCK_AGENTS } from "@/lib/agency/mock-data";
+import { useAgencyStore } from "@/lib/agency/store";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 type OrchestratorState = "idle" | "analyzing" | "plan_ready" | "approved";
@@ -44,7 +46,10 @@ const STEPS = [
 ];
 
 export default function OrchestratorPage() {
+  const { clients, createProject } = useAgencyStore();
+  const router = useRouter();
   const [orchState, setOrchState] = useState<OrchestratorState>("idle");
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
   const [form, setForm] = useState({
     client: "", type: "", goal: "", deadline: "", budget: "", notes: "",
   });
@@ -60,11 +65,24 @@ export default function OrchestratorPage() {
   }
 
   function handleApprove() {
+    const clientObj = clients.find((c) => c.name === form.client);
+    const projectId = createProject({
+      clientId:    clientObj?.id ?? "c1",
+      clientName:  form.client,
+      type:        form.type,
+      goal:        form.goal,
+      deadline:    form.deadline,
+      budget:      form.budget,
+      agentNames:  MOCK_OUTPUT.agents,
+      plannedTasks: MOCK_OUTPUT.tasks,
+    });
+    setCreatedProjectId(projectId);
     setOrchState("approved");
   }
 
   function handleReset() {
     setOrchState("idle");
+    setCreatedProjectId(null);
     setForm({ client: "", type: "", goal: "", deadline: "", budget: "", notes: "" });
   }
 
@@ -144,9 +162,9 @@ export default function OrchestratorPage() {
                   className={INPUT_BASE}
                 >
                   <option value="">Select client...</option>
-                  <option>Santioh</option>
-                  <option>Sushikasa</option>
-                  <option>Dioli Studio</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -294,11 +312,15 @@ export default function OrchestratorPage() {
                   <div>
                     <p className="text-[13px] font-semibold text-[#166534]">Project created and added to pipeline</p>
                     <p className="text-[11px] text-[#15803D]">
-                      Visit{" "}
-                      <Link href="/agency/projects" className="font-semibold underline underline-offset-2">
-                        Projects
-                      </Link>
-                      {" "}to view the new project.
+                      {createdProjectId ? (
+                        <Link href={`/agency/projects/${createdProjectId}`} className="font-semibold underline underline-offset-2">
+                          Open project →
+                        </Link>
+                      ) : (
+                        <Link href="/agency/projects" className="font-semibold underline underline-offset-2">
+                          View in Projects
+                        </Link>
+                      )}
                     </p>
                   </div>
                   <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.06em] text-[#15803D]">

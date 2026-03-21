@@ -4,7 +4,8 @@ import { useState } from "react";
 import {
   GitBranch, AlertCircle, Clock, ChevronLeft, ChevronRight, Plus,
 } from "lucide-react";
-import { MOCK_PROJECTS, PipelineStage, Project } from "@/lib/agency/mock-data";
+import { PipelineStage, Project } from "@/lib/agency/mock-data";
+import { useAgencyStore } from "@/lib/agency/store";
 import Link from "next/link";
 
 const COLUMNS: { key: PipelineStage; label: string; color: string; dot: string }[] = [
@@ -117,27 +118,21 @@ function KanbanCard({ project, currentStage, onMove, recentlyMoved }: KanbanCard
 }
 
 export default function PipelinePage() {
-  const [localStages, setLocalStages] = useState<Record<string, PipelineStage>>({});
+  const { projects, moveProjectStage } = useAgencyStore();
   const [recentMoves, setRecentMoves] = useState<Record<string, boolean>>({});
 
-  function getStage(project: Project): PipelineStage {
-    return localStages[project.id] ?? project.stage;
-  }
-
   function moveStage(id: string, dir: 1 | -1) {
-    const project   = MOCK_PROJECTS.find((p) => p.id === id)!;
-    const current   = getStage(project);
-    const idx       = STAGE_ORDER.indexOf(current);
-    const nextIdx   = idx + dir;
+    const project = projects.find((p) => p.id === id);
+    if (!project) return;
+    const idx     = STAGE_ORDER.indexOf(project.stage);
+    const nextIdx = idx + dir;
     if (nextIdx < 0 || nextIdx >= STAGE_ORDER.length) return;
     const next = STAGE_ORDER[nextIdx] as PipelineStage;
 
-    setLocalStages((prev) => ({ ...prev, [id]: next }));
+    moveProjectStage(id, next);
     setRecentMoves((prev) => ({ ...prev, [id]: true }));
     setTimeout(() => setRecentMoves((prev) => ({ ...prev, [id]: false })), 1500);
   }
-
-  const movedCount = Object.keys(localStages).length;
 
   return (
     <div className="min-h-full" style={{ backgroundColor: "#F5F5F3" }}>
@@ -153,10 +148,7 @@ export default function PipelinePage() {
                 Pipeline
               </h1>
               <p className="text-[12px] text-[#A1A1AA]">
-                {MOCK_PROJECTS.length} projects · {movedCount > 0 && (
-                  <span className="text-[#5B5BD6]">{movedCount} stage{movedCount !== 1 ? "s" : ""} updated locally</span>
-                )}
-                {movedCount === 0 && "hover a card to move stages"}
+                {projects.length} project{projects.length !== 1 ? "s" : ""} · hover a card to move stages
               </p>
             </div>
           </div>
@@ -187,7 +179,7 @@ export default function PipelinePage() {
         {/* Kanban board */}
         <div className="flex gap-3 overflow-x-auto pb-6" style={{ scrollbarWidth: "none" }}>
           {COLUMNS.map((col) => {
-            const colProjects = MOCK_PROJECTS.filter((p) => getStage(p) === col.key);
+            const colProjects = projects.filter((p) => p.stage === col.key);
             return (
               <div key={col.key} className="w-[216px] flex-none">
                 {/* Column header */}
@@ -215,7 +207,7 @@ export default function PipelinePage() {
                     <KanbanCard
                       key={project.id}
                       project={project}
-                      currentStage={getStage(project)}
+                      currentStage={project.stage}
                       onMove={(dir) => moveStage(project.id, dir)}
                       recentlyMoved={!!recentMoves[project.id]}
                     />

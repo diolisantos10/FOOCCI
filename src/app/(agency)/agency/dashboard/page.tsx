@@ -1,47 +1,47 @@
+"use client";
+
 import {
-  FolderKanban,
-  AlertTriangle,
-  CheckSquare,
-  Clock,
-  Zap,
-  ArrowRight,
+  FolderKanban, AlertTriangle, CheckSquare, Clock, Zap, ArrowRight,
 } from "lucide-react";
 import { StatCard } from "@/components/agency/ui/StatCard";
 import { ActivityFeed } from "@/components/agency/dashboard/ActivityFeed";
 import { PipelineOverview } from "@/components/agency/dashboard/PipelineOverview";
-import { MOCK_PROJECTS, MOCK_TASKS, MOCK_DELIVERABLES } from "@/lib/agency/mock-data";
+import { useAgencyStore } from "@/lib/agency/store";
 import { Badge } from "@/components/agency/ui/Badge";
 import Link from "next/link";
 
-export const metadata = { title: "Dashboard" };
+function todayLabel() {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", year: "numeric",
+  });
+}
 
 export default function DashboardPage() {
-  const activeProjects  = MOCK_PROJECTS.filter((p) => p.status === "active").length;
-  const atRiskProjects  = MOCK_PROJECTS.filter((p) => p.status === "at_risk").length;
-  const openTasks       = MOCK_TASKS.filter((t) => t.status === "in_progress" || t.status === "pending").length;
-  const blockedTasks    = MOCK_TASKS.filter((t) => t.status === "blocked").length;
-  const recentDelivered = MOCK_DELIVERABLES.filter((d) => d.status === "delivered" || d.status === "approved").length;
-  const urgentProjects  = MOCK_PROJECTS.filter((p) => p.priority === "critical" && p.status !== "completed");
-  const openTasksList   = MOCK_TASKS.filter((t) => t.status !== "done").slice(0, 5);
+  const { projects, tasks, deliverables } = useAgencyStore();
+
+  const activeProjects  = projects.filter((p) => p.status === "active").length;
+  const atRiskProjects  = projects.filter((p) => p.status === "at_risk").length;
+  const openTasks       = tasks.filter((t) => t.status === "in_progress" || t.status === "pending").length;
+  const blockedTasks    = tasks.filter((t) => t.status === "blocked").length;
+  const recentDelivered = deliverables.filter((d) => d.status === "delivered" || d.status === "approved").length;
+  const urgentProjects  = projects.filter((p) => p.priority === "critical" && p.status !== "completed");
+  const openTasksList   = tasks.filter((t) => t.status !== "done").slice(0, 5);
 
   return (
     <div className="min-h-full" style={{ backgroundColor: "#F5F5F3" }}>
 
-      {/* ── Command Header ──────────────────────────────────────────── */}
+      {/* ── Command Header ─────────────────────────────────────────── */}
       <div className="border-b border-[#E5E5E2] bg-white">
         <div className="flex items-center justify-between px-8 py-5">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#C0C0BC]">
-              Friday · March 21, 2026
+              {todayLabel()}
             </p>
-            <h1
-              className="mt-1 text-[22px] font-bold text-[#0A0A0A]"
-              style={{ letterSpacing: "-0.02em" }}
-            >
+            <h1 className="mt-1 text-[22px] font-bold text-[#0A0A0A]" style={{ letterSpacing: "-0.02em" }}>
               Command Dashboard
             </h1>
             <p className="mt-1 text-[13px] text-[#71717A]">
-              {activeProjects} projects active
+              {activeProjects} project{activeProjects !== 1 ? "s" : ""} active
               {blockedTasks > 0 && (
                 <>
                   {" "}·{" "}
@@ -61,7 +61,7 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* KPI row — inline with header */}
+        {/* KPI row */}
         <div className="grid grid-cols-4 border-t border-[#F0F0EE]">
           {[
             {
@@ -69,7 +69,7 @@ export default function DashboardPage() {
               value: activeProjects,
               icon: FolderKanban,
               color: "#5B5BD6",
-              trend: { value: "+2", direction: "up" as const, label: "this month" },
+              trend: { value: `${projects.length} total`, direction: "flat" as const },
             },
             {
               label: "At Risk",
@@ -92,7 +92,7 @@ export default function DashboardPage() {
               value: recentDelivered,
               icon: Clock,
               color: "#7C3AED",
-              trend: { value: "this cycle", direction: "flat" as const },
+              trend: { value: "approved + delivered", direction: "flat" as const },
             },
           ].map((stat, i) => (
             <div
@@ -113,12 +113,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="px-8 py-7 space-y-5">
+      <div className="space-y-5 px-8 py-7">
 
-        {/* ── Attention Banner ──────────────────────────────────────── */}
+        {/* ── Attention Banner ───────────────────────────────────────── */}
         {urgentProjects.length > 0 && (
           <div
-            className="rounded-xl border border-[#FECACA] bg-[#FFFAFA]"
+            className="overflow-hidden rounded-xl border border-[#FECACA] bg-[#FFFAFA]"
             style={{ boxShadow: "0 1px 2px 0 rgba(220,38,38,0.06)" }}
           >
             <div className="flex items-center gap-2 border-b border-[#FEE2E2] px-5 py-3">
@@ -147,7 +147,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge variant={p.status} />
-                    <span className="text-[11px] text-[#A1A1AA]">Due {p.deadline}</span>
+                    <span className="mono-num text-[11px] text-[#A1A1AA]">Due {p.deadline}</span>
                     <ArrowRight size={12} className="text-[#D0D0CC]" />
                   </div>
                 </Link>
@@ -156,7 +156,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── Activity + Pipeline ───────────────────────────────────── */}
+        {/* ── Activity + Pipeline ────────────────────────────────────── */}
         <div className="grid grid-cols-5 gap-5">
           <div className="col-span-3">
             <ActivityFeed />
@@ -166,7 +166,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── Open Tasks Table ─────────────────────────────────────── */}
+        {/* ── Open Tasks Table ───────────────────────────────────────── */}
         <div
           className="rounded-xl border border-[#E5E5E2] bg-white"
           style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
@@ -184,60 +184,64 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          {/* Column headers */}
-          <div className="grid grid-cols-12 border-b border-[#F5F5F3] bg-[#FAFAF9] px-5 py-2.5">
-            {[
-              { label: "Task",    span: "col-span-5" },
-              { label: "Project", span: "col-span-3" },
-              { label: "Agent",   span: "col-span-2" },
-              { label: "Status",  span: "col-span-1" },
-              { label: "Due",     span: "col-span-1" },
-            ].map((c) => (
-              <div
-                key={c.label}
-                className={`${c.span} text-[10px] font-semibold uppercase tracking-[0.07em] text-[#A1A1AA]`}
-              >
-                {c.label}
-              </div>
-            ))}
-          </div>
-
-          {openTasksList.map((task, i) => (
-            <div
-              key={task.id}
-              className="grid grid-cols-12 items-center px-5 py-3.5 transition-colors hover:bg-[#FAFAF9]"
-              style={{
-                borderBottom: i < openTasksList.length - 1 ? "1px solid #F5F5F3" : "none",
-              }}
-            >
-              <div className="col-span-5 flex items-center gap-3 min-w-0 pr-4">
-                <div
-                  className="h-[14px] w-[14px] flex-none rounded-[3px] border-[1.5px]"
-                  style={{
-                    borderColor:
-                      task.status === "blocked"
-                        ? "#DC2626"
-                        : task.status === "in_progress"
-                        ? "#5B5BD6"
-                        : "#D0D0CC",
-                  }}
-                />
-                <p className="truncate text-[13px] font-medium text-[#0A0A0A]">{task.title}</p>
-              </div>
-              <div className="col-span-3 min-w-0 pr-3">
-                <p className="truncate text-[12px] text-[#71717A]">{task.clientName}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="truncate text-[11px] text-[#A1A1AA]">{task.agentName}</p>
-              </div>
-              <div className="col-span-1">
-                <Badge variant={task.status} />
-              </div>
-              <div className="col-span-1 text-[11px] text-[#A1A1AA] mono-num">
-                {task.dueDate.slice(5)}
-              </div>
+          {openTasksList.length === 0 ? (
+            <div className="px-5 py-10 text-center">
+              <p className="text-[12px] text-[#A1A1AA]">All tasks are completed. Great work.</p>
             </div>
-          ))}
+          ) : (
+            <>
+              <div className="grid grid-cols-12 border-b border-[#F5F5F3] bg-[#FAFAF9] px-5 py-2.5">
+                {[
+                  { label: "Task",    span: "col-span-5" },
+                  { label: "Project", span: "col-span-3" },
+                  { label: "Agent",   span: "col-span-2" },
+                  { label: "Status",  span: "col-span-1" },
+                  { label: "Due",     span: "col-span-1" },
+                ].map((c) => (
+                  <div key={c.label} className={`${c.span} text-[10px] font-semibold uppercase tracking-[0.07em] text-[#A1A1AA]`}>
+                    {c.label}
+                  </div>
+                ))}
+              </div>
+              {openTasksList.map((task, i) => (
+                <div
+                  key={task.id}
+                  className="grid grid-cols-12 items-center px-5 py-3.5 transition-colors hover:bg-[#FAFAF9]"
+                  style={{ borderBottom: i < openTasksList.length - 1 ? "1px solid #F5F5F3" : "none" }}
+                >
+                  <div className="col-span-5 flex min-w-0 items-center gap-3 pr-4">
+                    <div
+                      className="h-[14px] w-[14px] flex-none rounded-[3px] border-[1.5px]"
+                      style={{
+                        borderColor:
+                          task.status === "blocked" ? "#DC2626"
+                          : task.status === "in_progress" ? "#5B5BD6"
+                          : "#D0D0CC",
+                      }}
+                    />
+                    <Link
+                      href={`/agency/projects/${task.projectId}`}
+                      className="truncate text-[13px] font-medium text-[#0A0A0A] hover:text-[#5B5BD6] transition-colors"
+                    >
+                      {task.title}
+                    </Link>
+                  </div>
+                  <div className="col-span-3 min-w-0 pr-3">
+                    <p className="truncate text-[12px] text-[#71717A]">{task.clientName}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="truncate text-[11px] text-[#A1A1AA]">{task.agentName}</p>
+                  </div>
+                  <div className="col-span-1">
+                    <Badge variant={task.status} />
+                  </div>
+                  <div className="mono-num col-span-1 text-[11px] text-[#A1A1AA]">
+                    {task.dueDate.slice(5)}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>

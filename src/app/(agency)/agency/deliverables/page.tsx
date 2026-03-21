@@ -3,7 +3,8 @@
 import { useState, useMemo } from "react";
 import { FileDown, Plus, Search, ChevronDown, X, ExternalLink, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/agency/ui/PageHeader";
-import { MOCK_DELIVERABLES, DeliverableStatus } from "@/lib/agency/mock-data";
+import { DeliverableStatus } from "@/lib/agency/mock-data";
+import { useAgencyStore } from "@/lib/agency/store";
 import Link from "next/link";
 
 const TYPE_STYLE: Record<string, { bg: string; text: string }> = {
@@ -25,8 +26,7 @@ const STATUS_CYCLE: Record<DeliverableStatus, DeliverableStatus> = {
   draft: "in_review", in_review: "approved", approved: "delivered", delivered: "draft",
 };
 
-const ALL_TYPES    = Array.from(new Set(MOCK_DELIVERABLES.map((d) => d.type))).sort();
-const ALL_PROJECTS = Array.from(new Set(MOCK_DELIVERABLES.map((d) => d.projectName))).sort();
+// (computed dynamically from store below)
 const ALL_STATUSES: { key: DeliverableStatus; label: string }[] = [
   { key: "draft",     label: "Draft" },
   { key: "in_review", label: "In Review" },
@@ -35,23 +35,23 @@ const ALL_STATUSES: { key: DeliverableStatus; label: string }[] = [
 ];
 
 export default function DeliverablesPage() {
-  const [localStatuses, setLocalStatuses] = useState<Record<string, DeliverableStatus>>({});
+  const { deliverables: allDeliverables, updateDeliverableStatus } = useAgencyStore();
+
+  const ALL_TYPES    = useMemo(() => Array.from(new Set(allDeliverables.map((d) => d.type))).sort(),        [allDeliverables]);
+  const ALL_PROJECTS = useMemo(() => Array.from(new Set(allDeliverables.map((d) => d.projectName))).sort(), [allDeliverables]);
+
   const [filterStatus,  setFilterStatus]  = useState("All");
   const [filterType,    setFilterType]    = useState("All");
   const [filterProject, setFilterProject] = useState("All");
   const [search,        setSearch]        = useState("");
 
-  function getStatus(id: string, orig: DeliverableStatus): DeliverableStatus {
-    return localStatuses[id] ?? orig;
-  }
-
   function cycleStatus(id: string, current: DeliverableStatus) {
-    setLocalStatuses((prev) => ({ ...prev, [id]: STATUS_CYCLE[current] }));
+    updateDeliverableStatus(id, STATUS_CYCLE[current]);
   }
 
   const filtered = useMemo(() => {
-    return MOCK_DELIVERABLES.filter((d) => {
-      const status = localStatuses[d.id] ?? d.status;
+    return allDeliverables.filter((d) => {
+      const status = d.status;
       if (filterStatus  !== "All" && status    !== filterStatus)  return false;
       if (filterType    !== "All" && d.type    !== filterType)    return false;
       if (filterProject !== "All" && d.projectName !== filterProject) return false;
@@ -61,7 +61,7 @@ export default function DeliverablesPage() {
       }
       return true;
     });
-  }, [localStatuses, filterStatus, filterType, filterProject, search]);
+  }, [allDeliverables, filterStatus, filterType, filterProject, search]);
 
   const hasFilters = filterStatus !== "All" || filterType !== "All" || filterProject !== "All" || !!search.trim();
 
@@ -74,7 +74,7 @@ export default function DeliverablesPage() {
       <div className="px-8 py-7">
         <PageHeader
           title="Deliverables"
-          subtitle={`${filtered.length} of ${MOCK_DELIVERABLES.length} outputs`}
+          subtitle={`${filtered.length} of ${allDeliverables.length} outputs`}
           icon={FileDown}
           iconColor="#5B5BD6"
         >
@@ -176,7 +176,7 @@ export default function DeliverablesPage() {
           ) : (
             filtered.map((d, i) => {
               const typeStyle    = TYPE_STYLE[d.type] ?? { bg: "#F4F4F5", text: "#52525B" };
-              const currentStatus = getStatus(d.id, d.status);
+              const currentStatus = d.status;
               const statusMeta   = STATUS_META[currentStatus];
               return (
                 <div
@@ -241,7 +241,7 @@ export default function DeliverablesPage() {
         </div>
 
         {/* Legend */}
-        {MOCK_DELIVERABLES.length > 0 && (
+        {allDeliverables.length > 0 && (
           <p className="mt-3 text-[10px] text-[#C0C0BC]">
             Click a status badge to advance it through the workflow: Draft → In Review → Approved → Delivered
           </p>

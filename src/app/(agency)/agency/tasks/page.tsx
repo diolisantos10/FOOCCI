@@ -6,7 +6,8 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/agency/ui/PageHeader";
 import { Badge } from "@/components/agency/ui/Badge";
-import { MOCK_TASKS, TaskStatus } from "@/lib/agency/mock-data";
+import { TaskStatus } from "@/lib/agency/mock-data";
+import { useAgencyStore } from "@/lib/agency/store";
 import Link from "next/link";
 
 const GROUPS = [
@@ -23,27 +24,24 @@ const STATUS_CYCLE: Record<TaskStatus, TaskStatus> = {
   blocked:     "pending",
 };
 
-const ALL_PROJECTS = Array.from(new Set(MOCK_TASKS.map((t) => t.projectName))).sort();
-const ALL_AGENTS   = Array.from(new Set(MOCK_TASKS.map((t) => t.agentName))).sort();
-
 export default function TasksPage() {
-  const [localStatuses, setLocalStatuses] = useState<Record<string, TaskStatus>>({});
+  const { tasks: allTasks, updateTaskStatus } = useAgencyStore();
+
+  const ALL_PROJECTS = useMemo(() => Array.from(new Set(allTasks.map((t) => t.projectName))).sort(), [allTasks]);
+  const ALL_AGENTS   = useMemo(() => Array.from(new Set(allTasks.map((t) => t.agentName))).sort(),   [allTasks]);
+
   const [filterGroup,   setFilterGroup]   = useState("all");
   const [filterProject, setFilterProject] = useState("All");
   const [filterAgent,   setFilterAgent]   = useState("All");
   const [search,        setSearch]        = useState("");
 
-  function getStatus(id: string, orig: TaskStatus): TaskStatus {
-    return localStatuses[id] ?? orig;
-  }
-
   function cycleStatus(id: string, current: TaskStatus) {
-    setLocalStatuses((prev) => ({ ...prev, [id]: STATUS_CYCLE[current] }));
+    updateTaskStatus(id, STATUS_CYCLE[current]);
   }
 
   const filteredTasks = useMemo(() => {
-    return MOCK_TASKS.filter((t) => {
-      const status = localStatuses[t.id] ?? t.status;
+    return allTasks.filter((t) => {
+      const status = t.status;
       if (filterGroup !== "all" && status !== filterGroup) return false;
       if (filterProject !== "All" && t.projectName !== filterProject) return false;
       if (filterAgent   !== "All" && t.agentName   !== filterAgent)   return false;
@@ -53,10 +51,10 @@ export default function TasksPage() {
       }
       return true;
     });
-  }, [localStatuses, filterGroup, filterProject, filterAgent, search]);
+  }, [allTasks, filterGroup, filterProject, filterAgent, search]);
 
-  const openCount = MOCK_TASKS.filter((t) => getStatus(t.id, t.status) !== "done").length;
-  const doneCount = MOCK_TASKS.filter((t) => getStatus(t.id, t.status) === "done").length;
+  const openCount = allTasks.filter((t) => t.status !== "done").length;
+  const doneCount = allTasks.filter((t) => t.status === "done").length;
   const hasFilters = filterGroup !== "all" || filterProject !== "All" || filterAgent !== "All" || !!search.trim();
 
   function clearFilters() {
@@ -154,7 +152,7 @@ export default function TasksPage() {
         ) : (
           <div className="space-y-6">
             {visibleGroups.map((group) => {
-              const tasks = filteredTasks.filter((t) => getStatus(t.id, t.status) === group.key);
+              const tasks = filteredTasks.filter((t) => t.status === group.key);
               if (tasks.length === 0) return null;
 
               return (
@@ -175,7 +173,7 @@ export default function TasksPage() {
                     style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
                   >
                     {tasks.map((task, i) => {
-                      const status   = getStatus(task.id, task.status);
+                      const status   = task.status;
                       const isDone   = status === "done";
                       const isBlocked = status === "blocked";
                       const isInProg  = status === "in_progress";

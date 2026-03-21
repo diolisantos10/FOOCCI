@@ -1,9 +1,12 @@
+"use client";
+
 import { notFound } from "next/navigation";
 import {
   Building2, Globe, FolderKanban, Palette, ArrowLeft,
   Plus, Calendar, ExternalLink, Clock,
 } from "lucide-react";
-import { MOCK_CLIENTS, MOCK_PROJECTS, MOCK_BRAND_ASSETS } from "@/lib/agency/mock-data";
+import { MOCK_CLIENTS, MOCK_BRAND_ASSETS } from "@/lib/agency/mock-data";
+import { useAgencyStore } from "@/lib/agency/store";
 import { Badge } from "@/components/agency/ui/Badge";
 import Link from "next/link";
 
@@ -28,10 +31,11 @@ const ASSET_TYPE_CONFIG: Record<string, { label: string; bg: string; text: strin
 };
 
 export default function ClientDetailPage({ params }: { params: { id: string } }) {
+  const storeProjects = useAgencyStore((s) => s.projects);
   const client = MOCK_CLIENTS.find((c) => c.id === params.id);
   if (!client) notFound();
 
-  const projects = MOCK_PROJECTS.filter((p) => p.clientId === client.id);
+  const projects = storeProjects.filter((p) => p.clientId === client.id);
   const assets   = MOCK_BRAND_ASSETS.filter((a) => a.clientId === client.id);
   const active   = projects.filter((p) => p.status === "active").length;
 

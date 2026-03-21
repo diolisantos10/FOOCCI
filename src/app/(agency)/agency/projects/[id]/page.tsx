@@ -8,9 +8,10 @@ import {
   Calendar, Target, CheckCircle2, RefreshCw,
 } from "lucide-react";
 import {
-  MOCK_PROJECTS, MOCK_TASKS, MOCK_DELIVERABLES, MOCK_AGENTS,
+  MOCK_AGENTS,
   TaskStatus, DeliverableStatus,
 } from "@/lib/agency/mock-data";
+import { useAgencyStore } from "@/lib/agency/store";
 import { Badge } from "@/components/agency/ui/Badge";
 import Link from "next/link";
 
@@ -54,35 +55,26 @@ const DELIVERABLE_STATUS_META: Record<DeliverableStatus, { label: string; bg: st
 
 export default function ProjectDetailPage({ params }: { params: { id: string } }) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [taskStatuses,        setTaskStatuses]        = useState<Record<string, TaskStatus>>({});
-  const [deliverableStatuses, setDeliverableStatuses] = useState<Record<string, DeliverableStatus>>({});
+  const { projects, tasks: allTasks, deliverables: allDeliverables, updateTaskStatus, updateDeliverableStatus } = useAgencyStore();
 
-  const project = MOCK_PROJECTS.find((p) => p.id === params.id);
+  const project = projects.find((p) => p.id === params.id);
   if (!project) notFound();
 
-  const tasks        = MOCK_TASKS.filter((t) => t.projectId === project.id);
-  const deliverables = MOCK_DELIVERABLES.filter((d) => d.projectId === project.id);
+  const tasks        = allTasks.filter((t) => t.projectId === project.id);
+  const deliverables = allDeliverables.filter((d) => d.projectId === project.id);
   const agents       = MOCK_AGENTS.filter((a) => project.assignedAgents.includes(a.id));
   const stageIndex   = PIPELINE_STAGES.indexOf(project.stage);
   const stageColor   = STAGE_COLORS[project.stage] ?? "#A1A1AA";
 
-  function getTaskStatus(id: string, orig: TaskStatus): TaskStatus {
-    return taskStatuses[id] ?? orig;
-  }
-  function cycleTask(id: string, orig: TaskStatus) {
-    const current = getTaskStatus(id, orig);
-    setTaskStatuses((prev) => ({ ...prev, [id]: TASK_STATUS_CYCLE[current] }));
+  function cycleTask(id: string, current: TaskStatus) {
+    updateTaskStatus(id, TASK_STATUS_CYCLE[current]);
   }
 
-  function getDeliverableStatus(id: string, orig: DeliverableStatus): DeliverableStatus {
-    return deliverableStatuses[id] ?? orig;
-  }
-  function cycleDeliverable(id: string, orig: DeliverableStatus) {
-    const current = getDeliverableStatus(id, orig);
-    setDeliverableStatuses((prev) => ({ ...prev, [id]: DELIVERABLE_STATUS_CYCLE[current] }));
+  function cycleDeliverable(id: string, current: DeliverableStatus) {
+    updateDeliverableStatus(id, DELIVERABLE_STATUS_CYCLE[current]);
   }
 
-  const tasksDone    = tasks.filter((t) => getTaskStatus(t.id, t.status) === "done").length;
+  const tasksDone    = tasks.filter((t) => t.status === "done").length;
   const tasksTotal   = tasks.length;
   const progressPct  = tasksTotal > 0 ? (tasksDone / tasksTotal) * 100 : 0;
 
@@ -208,7 +200,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 )}
                 <div>
                   {tasks.slice(0, 4).map((task, i) => {
-                    const status   = getTaskStatus(task.id, task.status);
+                    const status   = task.status;
                     const isDone   = status === "done";
                     const isBlocked = status === "blocked";
                     const isInProg  = status === "in_progress";
@@ -261,7 +253,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                     </button>
                   </div>
                   {deliverables.map((d, i) => {
-                    const dStatus = getDeliverableStatus(d.id, d.status);
+                    const dStatus = d.status;
                     const dMeta   = DELIVERABLE_STATUS_META[dStatus];
                     return (
                       <div
@@ -332,7 +324,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                   {[
                     { label: "Tasks total",   value: tasksTotal },
                     { label: "Tasks done",    value: tasksDone },
-                    { label: "Blocked",       value: tasks.filter((t) => getTaskStatus(t.id, t.status) === "blocked").length },
+                    { label: "Blocked",       value: tasks.filter((t) => t.status === "blocked").length },
                     { label: "Deliverables",  value: deliverables.length },
                     { label: "Agents active", value: agents.length },
                   ].map((s) => (
@@ -420,7 +412,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               </div>
             ) : (
               tasks.map((task, i) => {
-                const status   = getTaskStatus(task.id, task.status);
+                const status   = task.status;
                 const isDone   = status === "done";
                 const isBlocked = status === "blocked";
                 const isInProg  = status === "in_progress";
@@ -492,7 +484,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               </div>
             ) : (
               deliverables.map((d, i) => {
-                const dStatus = getDeliverableStatus(d.id, d.status);
+                const dStatus = d.status;
                 const dMeta   = DELIVERABLE_STATUS_META[dStatus];
                 return (
                   <div
