@@ -47,6 +47,7 @@ type OrderStage =
   | "ADDRESS_CONFIRM"
   | "ASK_NAME"
   | "PAYMENT"
+  | "REVIEW_ORDER"
   | "DONE";
 
 interface ChatSimRequest {
@@ -290,23 +291,39 @@ ${stage === "DELIVERY_TYPE" ? `FORMA DE ENTREGA (DELIVERY_TYPE).
   "Perfeito! Como vai receber? 👇"` : ""}
 
 ${stage === "ADDRESS_INPUT" ? `ENDEREÇO — passo 1: rua e número.
-  Se válido:  "📍 Qual o endereço de entrega? Informe a rua e número acima ↑"
-  Se número ausente: "Informe o número do endereço para continuar. Ex: Av. Paulista, 1000 ↑"
-  O número é obrigatório. Não avance sem ele.` : ""}
+  Varie entre: "Me diz a rua e o número pra entrega 👇"
+               "Qual é a rua e o número? 👇"
+               "📍 Me passa o endereço — rua e número 👇"
+  Se número ausente: "Preciso do número também — ex: Av. Paulista, 1000 👇"
+  O número é obrigatório. Não avance sem ele. NUNCA use "acima ↑" ou "Digite".` : ""}
 
 ${stage === "ADDRESS_DETAILS" ? `ENDEREÇO — passo 2: bairro e complemento.
-  "Ótimo! Agora informe o bairro (e complemento se houver) acima ↑"` : ""}
+  Varie entre: "Agora só falta o bairro — e o complemento se tiver 👇"
+               "Quase lá! Me passa o bairro 👇"
+               "Bairro e complemento (apto, bloco...) 👇"
+  NUNCA use "acima ↑" ou "Digite".` : ""}
 
 ${stage === "ADDRESS_CONFIRM" ? `ENDEREÇO — confirmação: endereço coletado, aguardando confirmação do cliente.
   "Confira o endereço abaixo e confirme para prosseguir 👇"` : ""}
 
 ${stage === "ASK_NAME" ? `NOME DO CLIENTE (ASK_NAME) — pedido quase pronto, só falta o nome.
-  "Quase lá! 😊 Qual é o seu nome para identificar o pedido? Digite acima ↑"` : ""}
+  Varie entre: "Quase lá! 😊 Como posso chamar você?"
+               "Tá quase perfeito — qual é o seu nome?"
+               "Só falta o nome pra fechar 😊 Como te chamo?"
+  NUNCA use "acima ↑", "Digite", "Informe acima".` : ""}
 
 ${stage === "PAYMENT" ? `PAGAMENTO (PAYMENT) — último passo antes do pedido confirmar.
   Variar: "💳 Última etapa — como vai pagar? 👇"
           "Tá quase pronto! Só falta a forma de pagamento 👇"
           "Ótimo pedido! Como vai pagar? Quase lá 😊👇"` : ""}
+
+${stage === "REVIEW_ORDER" ? `REVISÃO DO PEDIDO (REVIEW_ORDER) — resumo completo antes da confirmação final.
+  O card de revisão completo já está na tela (itens + entrega + pagamento + total).
+  Sua mensagem deve ser curta, calorosa e direcionar para o botão de confirmação:
+  Varie entre: "Tudo certo! 🎉 Confira o resumo abaixo e confirme seu pedido 👇"
+               "Perfeito! Seu pedido está pronto — só confirmar 👇"
+               "Que pedido incrível! 😍 Revise os detalhes abaixo e confirme 👇"
+  NÃO liste os itens — o card já mostra tudo. NÃO diga que o pedido foi feito.` : ""}
 
 ${stage === "DONE" ? `PEDIDO CONCLUÍDO (DONE) — ÚNICO momento onde você lista itens. Feche com recompensa emocional.
   Liste PEDIDO ATUAL completo (itens + preços + total).

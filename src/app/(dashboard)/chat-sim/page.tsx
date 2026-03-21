@@ -72,6 +72,7 @@ type UIState = "idle" | "thinking" | "error";
  *   ADDRESS_CONFIRM  → show full address for confirmation
  *   ASK_NAME         → collect customer name
  *   PAYMENT          → choose payment method
+ *   REVIEW_ORDER     → full order summary before final confirm
  *   DONE             → order complete
  */
 type Stage =
@@ -86,6 +87,7 @@ type Stage =
   | "ADDRESS_CONFIRM"
   | "ASK_NAME"
   | "PAYMENT"
+  | "REVIEW_ORDER"
   | "DONE";
 
 interface Address {
@@ -108,6 +110,7 @@ type ChipBarMode =
   | { type: "ADDRESS_CONFIRM"; summary: string }
   | { type: "ASK_NAME" }
   | { type: "PAYMENT" }
+  | { type: "REVIEW_ORDER"; cart: CartItem[]; address: Address; deliveryMethod: "delivery" | "pickup" | null; paymentMethod: "dinheiro" | "cartao" | "pix" | null; customerName: string }
   | { type: "DONE" };
 
 // ─── helpers ──────────────────────────────────────────────────
@@ -187,7 +190,7 @@ function resolveNextStage(
     return { stage: "ASK_NAME",       message: "Informar nome para o pedido" };
   if (!pmt)
     return { stage: "PAYMENT",        message: "Escolher forma de pagamento" };
-  return { stage: "DONE",             message: "" };
+  return { stage: "REVIEW_ORDER",     message: "confirmar pedido" };
 }
 
 /** Parses "Rua X, 123" into { street, number }. */
@@ -429,6 +432,8 @@ function ChipBar({
   onAddressConfirm,
   onAddressEdit,
   onPayment,
+  onFinalConfirm,
+  onEditOrder,
 }: {
   mode: ChipBarMode;
   disabled: boolean;
@@ -443,8 +448,64 @@ function ChipBar({
   onAddressConfirm: () => void;
   onAddressEdit: () => void;
   onPayment: (method: "dinheiro" | "cartao" | "pix") => void;
+  onFinalConfirm: () => void;
+  onEditOrder: () => void;
 }) {
   const chip = "shrink-0 rounded-full border px-3 py-1 text-xs font-medium disabled:opacity-40 transition-colors";
+
+  // ── Review order ──────────────────────────────────────────
+  if (mode.type === "REVIEW_ORDER") {
+    const total = mode.cart.reduce((s, i) => s + i.price * i.qty, 0);
+    const pmtLabel: Record<string, string> = { dinheiro: "💵 Dinheiro", cartao: "💳 Cartão", pix: "📱 Pix" };
+    return (
+      <div className="flex flex-col gap-2">
+        {/* Items */}
+        <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2.5">
+          <p className="mb-1 text-[11px] font-bold text-green-800">🧾 Seu pedido</p>
+          <div className="flex flex-col gap-0.5">
+            {mode.cart.map((item) => (
+              <div key={item.name} className="flex justify-between text-xs text-gray-800">
+                <span>{item.qty > 1 ? `${item.qty}× ` : ""}{item.name}</span>
+                <span className="font-medium">R$&nbsp;{(item.price * item.qty).toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-1.5 flex justify-between border-t border-green-200 pt-1 text-xs font-bold text-green-900">
+            <span>Total</span>
+            <span>R$&nbsp;{total.toFixed(2)}</span>
+          </div>
+        </div>
+        {/* Delivery + payment */}
+        <div className="flex gap-2">
+          <div className="flex-1 rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-2">
+            <p className="text-[10px] font-bold text-blue-800">
+              {mode.deliveryMethod === "delivery" ? "📍 Entrega" : "🏪 Retirada"}
+            </p>
+            <p className="mt-0.5 text-[11px] text-blue-900 leading-tight">
+              {mode.deliveryMethod === "delivery" ? formatAddress(mode.address) : "Retirada no local"}
+            </p>
+          </div>
+          <div className="min-w-[90px] rounded-xl border border-purple-200 bg-purple-50 px-2.5 py-2">
+            <p className="text-[10px] font-bold text-purple-800">Pagamento</p>
+            <p className="mt-0.5 text-[11px] font-semibold text-purple-900">
+              {mode.paymentMethod ? (pmtLabel[mode.paymentMethod] ?? mode.paymentMethod) : "—"}
+            </p>
+          </div>
+        </div>
+        {/* CTAs */}
+        <div className="flex gap-2">
+          <button type="button" disabled={disabled} onClick={onFinalConfirm}
+            className="flex-1 rounded-xl bg-[#25d366] py-2.5 text-sm font-bold text-white hover:bg-[#20b857] disabled:opacity-40 transition-colors">
+            ✅ Confirmar pedido
+          </button>
+          <button type="button" disabled={disabled} onClick={onEditOrder}
+            className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
+            ✏️ Editar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Done ──────────────────────────────────────────────────
   if (mode.type === "DONE") {
@@ -482,8 +543,8 @@ function ChipBar({
   if (mode.type === "ASK_NAME") {
     return (
       <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 text-center">
-        <p className="text-xs font-semibold text-green-800">👤 Qual é o seu nome para o pedido?</p>
-        <p className="mt-0.5 text-[11px] text-green-600">Digite acima e toque em Enviar ↑</p>
+        <p className="text-xs font-semibold text-green-800">👤 Como posso chamar você? 😊</p>
+        <p className="mt-0.5 text-[11px] text-green-600">Escreva seu nome no campo acima</p>
       </div>
     );
   }
@@ -515,8 +576,8 @@ function ChipBar({
   if (mode.type === "ADDRESS_DETAILS") {
     return (
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-center">
-        <p className="text-xs font-semibold text-blue-800">🏘️ Bairro e complemento</p>
-        <p className="mt-0.5 text-[11px] text-blue-600">ex: Bela Vista, Apto 42 — Digite acima ↑</p>
+        <p className="text-xs font-semibold text-blue-800">🏘️ Agora só falta o bairro</p>
+        <p className="mt-0.5 text-[11px] text-blue-600">ex: Bela Vista, Apto 42</p>
       </div>
     );
   }
@@ -525,8 +586,8 @@ function ChipBar({
   if (mode.type === "ADDRESS_INPUT") {
     return (
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-center">
-        <p className="text-xs font-semibold text-blue-800">📍 Rua e número</p>
-        <p className="mt-0.5 text-[11px] text-blue-600">ex: Av. Paulista, 1000 — Digite acima ↑</p>
+        <p className="text-xs font-semibold text-blue-800">📍 Me diz a rua e o número</p>
+        <p className="mt-0.5 text-[11px] text-blue-600">ex: Av. Paulista, 1000</p>
       </div>
     );
   }
@@ -681,6 +742,7 @@ export default function ChatSimPage() {
 
   function computeChipMode(stg: Stage, curCat: string | null, cartSnap: CartItem[]): ChipBarMode {
     if (stg === "DONE")            return { type: "DONE" };
+    if (stg === "REVIEW_ORDER")    return { type: "REVIEW_ORDER", cart: cartSnap, address, deliveryMethod, paymentMethod, customerName };
     if (stg === "PAYMENT")         return { type: "PAYMENT" };
     if (stg === "ASK_NAME")        return { type: "ASK_NAME" };
     if (stg === "ADDRESS_CONFIRM") return { type: "ADDRESS_CONFIRM", summary: formatAddress(address) };
@@ -872,6 +934,15 @@ export default function ChatSimPage() {
       // Unrecognised — let AI guide back to buttons
     }
 
+    // Intercept final confirm at REVIEW_ORDER stage
+    if (stage === "REVIEW_ORDER") {
+      const v = val.toLowerCase();
+      if (v.includes("confirm") || v.includes("finaliz") || v === "sim" || v === "ok" || v === "pode") {
+        handleFinalConfirm();
+        return;
+      }
+    }
+
     // Intercept confirm/finalize intents in navigable (non-checkout) stages
     if (
       stage === "SELECT_MAIN" || stage === "SELECT_DRINK" ||
@@ -943,7 +1014,7 @@ export default function ChatSimPage() {
       const next = resolveNextStage(newUncovered, menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
       const orch = next.stage === "DELIVERY_TYPE" || next.stage === "ADDRESS_INPUT" ||
         next.stage === "ADDRESS_DETAILS" || next.stage === "ADDRESS_CONFIRM" ||
-        next.stage === "ASK_NAME" || next.stage === "PAYMENT" || next.stage === "DONE"
+        next.stage === "ASK_NAME" || next.stage === "PAYMENT" || next.stage === "REVIEW_ORDER"
         ? "CONFIRM_ORDER" : next.stage;
 
       nextStage = orch;
@@ -1026,7 +1097,7 @@ export default function ChatSimPage() {
     const next = resolveNextStage(
       uncoveredCategories, menu, deliveryMethod, addressConfirmed, customerName, paymentMethod
     );
-    if (next.stage === "DONE") return; // reached only through handlePayment after full collection
+    if (next.stage === "REVIEW_ORDER" || next.stage === "DONE") return; // only via buttons
     if (next.stage === stage) { setInput(""); return; } // already at right stage — no-op, no loop
     setStage(next.stage);
     setCurrentCategory(null);
@@ -1083,9 +1154,19 @@ export default function ChatSimPage() {
       return;
     }
     setPaymentMethod(method);
-    setStage("DONE");
+    setStage("REVIEW_ORDER");
     const labels = { dinheiro: "Dinheiro", cartao: "Cartão", pix: "Pix" };
-    sendText(`Vou pagar com ${labels[method]}`, cart, visitedCategories, null, "DONE");
+    sendText(`Vou pagar com ${labels[method]}`, cart, visitedCategories, null, "REVIEW_ORDER");
+  }
+
+  function handleFinalConfirm() {
+    setStage("DONE");
+    sendText("Confirmar pedido", cart, visitedCategories, null, "DONE");
+  }
+
+  function handleEditOrder() {
+    setStage("CONFIRM_ORDER");
+    setCurrentCategory(null);
   }
 
   // ── reset ─────────────────────────────────────────────────
@@ -1224,6 +1305,8 @@ export default function ChatSimPage() {
               onAddressConfirm={handleAddressConfirm}
               onAddressEdit={handleAddressEdit}
               onPayment={handlePayment}
+              onFinalConfirm={handleFinalConfirm}
+              onEditOrder={handleEditOrder}
             />
           </div>
         )}
@@ -1236,8 +1319,8 @@ export default function ChatSimPage() {
             placeholder={
               stage === "ADDRESS_INPUT"   ? "ex: Av. Paulista, 1000" :
               stage === "ADDRESS_DETAILS" ? "ex: Bela Vista, Apto 42" :
-              stage === "ASK_NAME"        ? "Seu nome completo…" :
-              "Digite ou use os botões acima…"
+              stage === "ASK_NAME"        ? "Seu nome…" :
+              "Mensagem…"
             }
             rows={1}
             disabled={busy}
