@@ -626,7 +626,6 @@ export default function ChatSimPage() {
   const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [promoShown,          setPromoShown]          = useState(false);
   const [uncoveredCategories, setUncoveredCategories] = useState<Array<"main"|"drink"|"dessert">>(["main","drink","dessert"]);
-  const [showAllCategories,   setShowAllCategories]   = useState(false);
   const [input,            setInput]            = useState("");
   const [uiState,          setUiState]          = useState<UIState>("idle");
   const [errorMsg,         setErrorMsg]         = useState("");
@@ -676,11 +675,8 @@ export default function ChatSimPage() {
       const cat = menu.find((c) => c.name === curCat);
       return { type: "items", category: curCat, categoryImage: cat?.imageUrl ?? null, items: cat?.items ?? [] };
     }
-    const cartNames = new Set(cartSnap.map((c) => c.name));
-    const remaining = showAllCategories
-      ? menu
-      : menu.filter((c) => !c.items.some((i) => cartNames.has(i.name)));
-    return { type: "categories", categories: remaining };
+    // Always show the full menu — uncoveredCategories controls flow guards, not visibility
+    return { type: "categories", categories: menu };
   }
 
   // ── auto-scroll ───────────────────────────────────────────
@@ -858,9 +854,7 @@ export default function ChatSimPage() {
 
   function handleFinalize() {
     setUncoveredCategories((prev) => prev.filter((c) => c !== "main"));
-    setShowAllCategories(false);
-    const newRefusals = refusals; // refusals unchanged, but use fresh snap
-    const nextStage = nextUpsellStage(menu, cart, newRefusals);
+    const nextStage = nextUpsellStage(menu, cart, refusals);
     setStage(nextStage);
     setCurrentCategory(null);
     sendText("Continuar pedido", cart, visitedCategories, promo, nextStage);
@@ -930,7 +924,6 @@ export default function ChatSimPage() {
   }
 
   function handleBackToExploration() {
-    setShowAllCategories(true);
     setStage("SELECT_MAIN");
     setCurrentCategory(null);
   }
@@ -961,9 +954,17 @@ export default function ChatSimPage() {
   }
 
   function handlePayment(method: "dinheiro" | "cartao" | "pix") {
-    // Hard blocks — these states must be set before order can complete
-    if (!customerName) return;
-    if (deliveryMethod === "delivery" && !addressConfirmed) return;
+    // Hard blocks — redirect with AI guidance, never silently fail
+    if (deliveryMethod === "delivery" && !addressConfirmed) {
+      setStage("ADDRESS_CONFIRM");
+      sendText("Confirme o endereço para continuar.", cart, visitedCategories, null, "ADDRESS_CONFIRM");
+      return;
+    }
+    if (!customerName) {
+      setStage("ASK_NAME");
+      sendText("Informe o nome do pedido para avançar.", cart, visitedCategories, null, "ASK_NAME");
+      return;
+    }
     setPaymentMethod(method);
     setStage("DONE");
     const labels = { dinheiro: "Dinheiro", cartao: "Cartão", pix: "Pix" };
@@ -988,7 +989,6 @@ export default function ChatSimPage() {
     setAddressConfirmed(false);
     setPromoShown(false);
     setUncoveredCategories(["main", "drink", "dessert"]);
-    setShowAllCategories(false);
     setInput("");
     setErrorMsg("");
     setUiState("idle");
