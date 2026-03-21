@@ -522,15 +522,15 @@ function ChipBar({
   if (mode.type === "CONFIRM_ORDER") {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-center text-xs font-semibold text-green-700">Pedido montado! Deseja confirmar?</p>
+        <p className="text-center text-xs font-semibold text-green-700">Pedido montado! Confirme abaixo 👇</p>
         <div className="flex gap-2">
           <button type="button" disabled={disabled} onClick={onConfirmOrder}
             className="flex-1 rounded-xl bg-[#25d366] py-2.5 text-sm font-bold text-white hover:bg-[#20b857] disabled:opacity-40 transition-colors">
             ✅ Confirmar pedido
           </button>
           <button type="button" disabled={disabled} onClick={onBackToExploration}
-            className="flex-1 rounded-xl border border-gray-200 bg-white py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
-            ← Adicionar item
+            className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
+            📋 Ver cardápio
           </button>
         </div>
       </div>
@@ -624,8 +624,9 @@ export default function ChatSimPage() {
   const [customerName,     setCustomerName]     = useState("");
   const [paymentMethod,    setPaymentMethod]    = useState<"dinheiro" | "cartao" | "pix" | null>(null);
   const [addressConfirmed, setAddressConfirmed] = useState(false);
-  const [promoShown,       setPromoShown]       = useState(false);
+  const [promoShown,          setPromoShown]          = useState(false);
   const [uncoveredCategories, setUncoveredCategories] = useState<Array<"main"|"drink"|"dessert">>(["main","drink","dessert"]);
+  const [showAllCategories,   setShowAllCategories]   = useState(false);
   const [input,            setInput]            = useState("");
   const [uiState,          setUiState]          = useState<UIState>("idle");
   const [errorMsg,         setErrorMsg]         = useState("");
@@ -676,7 +677,9 @@ export default function ChatSimPage() {
       return { type: "items", category: curCat, categoryImage: cat?.imageUrl ?? null, items: cat?.items ?? [] };
     }
     const cartNames = new Set(cartSnap.map((c) => c.name));
-    const remaining = menu.filter((c) => !c.items.some((i) => cartNames.has(i.name)));
+    const remaining = showAllCategories
+      ? menu
+      : menu.filter((c) => !c.items.some((i) => cartNames.has(i.name)));
     return { type: "categories", categories: remaining };
   }
 
@@ -854,7 +857,10 @@ export default function ChatSimPage() {
   function handleBack() { setCurrentCategory(null); }
 
   function handleFinalize() {
-    const nextStage = nextUpsellStage(menu, cart, refusals);
+    setUncoveredCategories((prev) => prev.filter((c) => c !== "main"));
+    setShowAllCategories(false);
+    const newRefusals = refusals; // refusals unchanged, but use fresh snap
+    const nextStage = nextUpsellStage(menu, cart, newRefusals);
     setStage(nextStage);
     setCurrentCategory(null);
     sendText("Continuar pedido", cart, visitedCategories, promo, nextStage);
@@ -913,9 +919,10 @@ export default function ChatSimPage() {
 
   function handleConfirmOrder() {
     if (uncoveredCategories.length > 0) {
-      // Still have upsell stages to offer — redirect instead of confirming
+      // Upsell stages still pending — redirect with AI guidance (never silently fail)
       const nextStage = nextUpsellStage(menu, cart, refusals);
       setStage(nextStage);
+      sendText("quero confirmar o pedido", cart, visitedCategories, null, nextStage);
       return;
     }
     setStage("DELIVERY_TYPE");
@@ -923,6 +930,7 @@ export default function ChatSimPage() {
   }
 
   function handleBackToExploration() {
+    setShowAllCategories(true);
     setStage("SELECT_MAIN");
     setCurrentCategory(null);
   }
@@ -980,6 +988,7 @@ export default function ChatSimPage() {
     setAddressConfirmed(false);
     setPromoShown(false);
     setUncoveredCategories(["main", "drink", "dessert"]);
+    setShowAllCategories(false);
     setInput("");
     setErrorMsg("");
     setUiState("idle");

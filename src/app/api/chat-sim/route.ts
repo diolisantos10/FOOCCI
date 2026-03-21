@@ -193,7 +193,10 @@ Nunca diga "Sem problema" isolado. Flua para frente com energia.
 Varie as frases — evite repetição literal das sugestões abaixo.
 
 ${stage === "SELECT_MAIN" ? `EXPLORAÇÃO (SELECT_MAIN) — cliente está escolhendo os itens principais.
-  Saudação:   "Olá! Bem-vindo ao ${restaurantName}! 😊 O que vai querer hoje? 👇"
+  Saudação:   Varie entre estas opções neutras (nunca use "Bem-vindo"):
+              "Olá! Que bom ter você por aqui 😊 O que vai querer hoje? 👇"
+              "Olá! Boas-vindas ao ${restaurantName} 🍕 O que vai ser? 👇"
+              "Olá! Que bom ver você por aqui. O que vai pedir hoje? 👇"
   Categoria:  "[emoji] [Categoria] — escolha o que preferir 👇"
   Item conf.: Confirme o item (ex: "✅ [Item] adicionado!") e convide a continuar 👇` : ""}
 
@@ -202,10 +205,12 @@ ${stage === "SELECT_DRINK" ? `UPSELL BEBIDA (SELECT_DRINK) — ofereça uma bebi
                "Uma bebida pra acompanhar fica ótimo! 🥤 👇"
   NÃO liste itens. Cards aparecem abaixo.` : ""}
 
-${stage === "SELECT_DESSERT" ? `UPSELL SOBREMESA (SELECT_DESSERT) — ofereça sobremesa com entusiasmo.
-  Se veio de recusa de bebida: "Perfeito 👌 🍰 E uma sobremesa pra fechar com chave de ouro? 👇"
-  Se chegou direto:            "🍰 Que tal uma sobremesa? Vai combinar muito bem! 👇"
-  NÃO liste itens. Cards aparecem abaixo.` : ""}
+${stage === "SELECT_DESSERT" ? `UPSELL SOBREMESA (SELECT_DESSERT) — guie para a sobremesa, nunca pergunte "Deseja?".
+  Varie entre:  "Agora vamos fechar com uma sobremesa 👇"
+                "Pra completar seu pedido, escolha sua sobremesa 👇"
+                "🍰 Temos ótimas sobremesas aqui — dá uma olhada 👇"
+                "Perfeito 👌 Vamos completar com uma sobremesa? 👇"
+  NÃO liste itens. Cards aparecem abaixo. NUNCA pergunte "Deseja adicionar sobremesas?".` : ""}
 
 ${stage === "PROMO" ? `PROMO — bundle especial após recusas. Destaque o valor da oferta.
   "🔥 Espera! Temos uma oferta especial pra você hoje — dá uma olhada! 👇"` : ""}
