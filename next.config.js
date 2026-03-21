@@ -1,9 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Strict mode for catching bugs early
+  // Required for Railway (and Docker) deployment
+  output: "standalone",
+
   reactStrictMode: true,
 
-  // Image domains – expand as needed (e.g. S3, Cloudinary)
   images: {
     remotePatterns: [
       {
@@ -13,12 +14,10 @@ const nextConfig = {
     ],
   },
 
-  // Expose only non-secret env vars to the browser (prefix NEXT_PUBLIC_)
-  // Secret vars are accessed server-side only via process.env
   experimental: {
-    // Enable server actions for future use
     serverActions: {
-      allowedOrigins: ["localhost:3000"],
+      // Remove localhost restriction — Next.js validates host/origin by default
+      // allowedOrigins should be set to the production domain if needed
     },
   },
 };
