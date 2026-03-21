@@ -1,12 +1,13 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import {
-  Client, Project, Task, Deliverable,
-  MOCK_CLIENTS, MOCK_PROJECTS, MOCK_TASKS, MOCK_DELIVERABLES, MOCK_ACTIVITY,
+  Client, Project, Task, Deliverable, Briefing,
+  MOCK_CLIENTS, MOCK_PROJECTS, MOCK_TASKS, MOCK_DELIVERABLES, MOCK_BRIEFINGS, MOCK_ACTIVITY,
   MOCK_AGENTS,
-  PipelineStage, TaskStatus, DeliverableStatus, Priority,
+  PipelineStage, TaskStatus, DeliverableStatus, Priority, ClientStatus, ProjectStatus,
 } from "./mock-data";
 
-// ─── Activity Events ───────────────────────────────────────────────────────
+// ─── Activity Events ────────────────────────────────────────────────────────
 
 export type ActivityEventType =
   | "task_completed"
@@ -17,8 +18,10 @@ export type ActivityEventType =
   | "deliverable_delivered"
   | "project_advanced"
   | "project_created"
+  | "project_updated"
   | "briefing_submitted"
-  | "agent_assigned";
+  | "agent_assigned"
+  | "client_added";
 
 export interface ActivityEvent {
   id: string;
@@ -29,7 +32,7 @@ export interface ActivityEvent {
   timestamp: string;
 }
 
-// ─── Orchestrator Payload ─────────────────────────────────────────────────
+// ─── Payloads ───────────────────────────────────────────────────────────────
 
 export interface CreateProjectPayload {
   clientId: string;
@@ -42,7 +45,15 @@ export interface CreateProjectPayload {
   plannedTasks: Array<{ seq: string; agent: string; task: string }>;
 }
 
-// ─── Utilities ─────────────────────────────────────────────────────────────
+export interface CreateClientPayload {
+  name: string;
+  industry: string;
+  status: ClientStatus;
+  website?: string;
+  description: string;
+}
+
+// ─── Utilities ──────────────────────────────────────────────────────────────
 
 function genId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
@@ -58,17 +69,39 @@ const seedActivity: ActivityEvent[] = MOCK_ACTIVITY.map((a) => ({
   timestamp: a.timestamp,
 }));
 
-// ─── Store Interface ────────────────────────────────────────────────────────
+// Seed factory — fresh arrays on every call (used for reset)
+const SEED = {
+  clients:     (): Client[]      => MOCK_CLIENTS.map((c) => ({ ...c })),
+  projects:    (): Project[]     => MOCK_PROJECTS.map((p) => ({ ...p })),
+  tasks:       (): Task[]        => MOCK_TASKS.map((t) => ({ ...t })),
+  deliverables:(): Deliverable[] => MOCK_DELIVERABLES.map((d) => ({ ...d })),
+  briefings:   (): Briefing[]    => MOCK_BRIEFINGS.map((b) => ({ ...b })),
+  activity:    (): ActivityEvent[]=> [...seedActivity],
+};
+
+// ─── Store Interface ─────────────────────────────────────────────────────────
 
 interface AgencyStore {
-  clients: Client[];
-  projects: Project[];
-  tasks: Task[];
+  clients:      Client[];
+  projects:     Project[];
+  tasks:        Task[];
   deliverables: Deliverable[];
-  activity: ActivityEvent[];
+  briefings:    Briefing[];
+  activity:     ActivityEvent[];
+
+  // Client CRUD
+  createClient: (payload: CreateClientPayload) => string;
+  updateClient: (
+    clientId: string,
+    updates: Partial<Pick<Client, "name" | "industry" | "status" | "website" | "description">>,
+  ) => void;
 
   // Project actions
   moveProjectStage: (projectId: string, newStage: PipelineStage) => void;
+  updateProject: (
+    projectId: string,
+    updates: Partial<Pick<Project, "name" | "goal" | "deadline" | "priority" | "stage" | "status">>,
+  ) => void;
 
   // Task actions
   updateTaskStatus: (taskId: string, newStatus: TaskStatus) => void;
@@ -76,187 +109,330 @@ interface AgencyStore {
   // Deliverable actions
   updateDeliverableStatus: (deliverableId: string, newStatus: DeliverableStatus) => void;
 
+  // Briefing actions
+  createBriefing: (payload: Omit<Briefing, "id" | "submittedAt">) => string;
+
   // Orchestrator — create full project from approved plan
   createProject: (payload: CreateProjectPayload) => string;
 
-  // Activity log
+  // System
   logActivity: (event: Omit<ActivityEvent, "id" | "timestamp">) => void;
+  resetStore: () => void;
 }
 
-// ─── Store ─────────────────────────────────────────────────────────────────
+// ─── Store ───────────────────────────────────────────────────────────────────
 
-export const useAgencyStore = create<AgencyStore>((set, get) => ({
-  clients:     [...MOCK_CLIENTS],
-  projects:    [...MOCK_PROJECTS],
-  tasks:       [...MOCK_TASKS],
-  deliverables:[...MOCK_DELIVERABLES],
-  activity:    seedActivity,
+export const useAgencyStore = create<AgencyStore>()(
+  persist(
+    (set, get) => ({
+      clients:      SEED.clients(),
+      projects:     SEED.projects(),
+      tasks:        SEED.tasks(),
+      deliverables: SEED.deliverables(),
+      briefings:    SEED.briefings(),
+      activity:     SEED.activity(),
 
-  // ── Move project stage ──────────────────────────────────────────────────
-  moveProjectStage: (projectId, newStage) => {
-    const project = get().projects.find((p) => p.id === projectId);
-    if (!project) return;
+      // ── Create client ──────────────────────────────────────────────────────
+      createClient: (payload) => {
+        const id = genId("c");
+        const newClient: Client = {
+          id,
+          name:           payload.name,
+          industry:       payload.industry,
+          status:         payload.status,
+          website:        payload.website || undefined,
+          description:    payload.description,
+          activeProjects: 0,
+          totalProjects:  0,
+          createdAt:      new Date().toISOString().slice(0, 10),
+        };
+        set((state) => ({ clients: [...state.clients, newClient] }));
+        get().logActivity({
+          type:        "client_added",
+          description: `"${payload.name}" added as a client`,
+          client:      payload.name,
+        });
+        return id;
+      },
 
-    set((state) => ({
-      projects: state.projects.map((p) =>
-        p.id === projectId ? { ...p, stage: newStage } : p,
-      ),
-    }));
+      // ── Update client ─────────────────────────────────────────────────────
+      updateClient: (clientId, updates) => {
+        set((state) => ({
+          clients: state.clients.map((c) =>
+            c.id === clientId ? { ...c, ...updates } : c,
+          ),
+        }));
+      },
 
-    get().logActivity({
-      type: "project_advanced",
-      description: `${project.name} advanced to ${newStage}`,
-      project: project.name,
-      client: project.clientName,
-    });
-  },
+      // ── Move project stage ────────────────────────────────────────────────
+      moveProjectStage: (projectId, newStage) => {
+        const project = get().projects.find((p) => p.id === projectId);
+        if (!project) return;
 
-  // ── Update task status ──────────────────────────────────────────────────
-  updateTaskStatus: (taskId, newStatus) => {
-    const task = get().tasks.find((t) => t.id === taskId);
-    if (!task) return;
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === projectId ? { ...p, stage: newStage } : p,
+          ),
+        }));
 
-    set((state) => ({
-      tasks: state.tasks.map((t) =>
-        t.id === taskId ? { ...t, status: newStatus } : t,
-      ),
-    }));
+        get().logActivity({
+          type:        "project_advanced",
+          description: `${project.name} advanced to ${newStage}`,
+          project:     project.name,
+          client:      project.clientName,
+        });
+      },
 
-    // Only log meaningful transitions
-    const wasBlocked = task.status === "blocked";
-    if (newStatus === "done") {
-      get().logActivity({
-        type: "task_completed",
-        description: `"${task.title}" marked as done`,
-        project: task.projectName,
-        client: task.clientName,
-      });
-    } else if (wasBlocked && newStatus === "pending") {
-      get().logActivity({
-        type: "task_unblocked",
-        description: `"${task.title}" unblocked`,
-        project: task.projectName,
-        client: task.clientName,
-      });
-    }
-  },
+      // ── Update project ────────────────────────────────────────────────────
+      updateProject: (projectId, updates) => {
+        const project = get().projects.find((p) => p.id === projectId);
+        if (!project) return;
 
-  // ── Update deliverable status ───────────────────────────────────────────
-  updateDeliverableStatus: (deliverableId, newStatus) => {
-    const d = get().deliverables.find((x) => x.id === deliverableId);
-    if (!d) return;
+        const newName = updates.name ?? project.name;
 
-    set((state) => ({
-      deliverables: state.deliverables.map((x) =>
-        x.id === deliverableId ? { ...x, status: newStatus } : x,
-      ),
-    }));
+        // Cascade name change to related records
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === projectId ? { ...p, ...updates } : p,
+          ),
+          tasks: updates.name
+            ? state.tasks.map((t) =>
+                t.projectId === projectId ? { ...t, projectName: newName } : t,
+              )
+            : state.tasks,
+          deliverables: updates.name
+            ? state.deliverables.map((d) =>
+                d.projectId === projectId ? { ...d, projectName: newName } : d,
+              )
+            : state.deliverables,
+          briefings: updates.name
+            ? state.briefings.map((b) =>
+                b.projectId === projectId ? { ...b, projectName: newName } : b,
+              )
+            : state.briefings,
+        }));
 
-    if (newStatus === "approved") {
-      get().logActivity({
-        type: "deliverable_approved",
-        description: `"${d.name}" approved`,
-        project: d.projectName,
-        client: d.clientName,
-      });
-    } else if (newStatus === "delivered") {
-      get().logActivity({
-        type: "deliverable_delivered",
-        description: `"${d.name}" delivered to client`,
-        project: d.projectName,
-        client: d.clientName,
-      });
-    } else if (newStatus === "in_review") {
-      get().logActivity({
-        type: "deliverable_uploaded",
-        description: `"${d.name}" submitted for review`,
-        project: d.projectName,
-        client: d.clientName,
-      });
-    }
-  },
+        if (updates.stage && updates.stage !== project.stage) {
+          get().logActivity({
+            type:        "project_advanced",
+            description: `${newName} advanced to ${updates.stage}`,
+            project:     newName,
+            client:      project.clientName,
+          });
+        } else {
+          get().logActivity({
+            type:        "project_updated",
+            description: `"${newName}" updated`,
+            project:     newName,
+            client:      project.clientName,
+          });
+        }
+      },
 
-  // ── Create project from Orchestrator plan ───────────────────────────────
-  createProject: (payload) => {
-    const { clientId, clientName, type, goal, deadline, agentNames, plannedTasks } = payload;
+      // ── Update task status ────────────────────────────────────────────────
+      updateTaskStatus: (taskId, newStatus) => {
+        const task = get().tasks.find((t) => t.id === taskId);
+        if (!task) return;
 
-    const projectId   = genId("p");
-    const projectName = `${clientName} — ${type}`;
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === taskId ? { ...t, status: newStatus } : t,
+          ),
+        }));
 
-    // Resolve agent IDs
-    const agentIds = [
-      "a0", // Orchestrator always included
-      ...agentNames
-        .map((name) => MOCK_AGENTS.find((a) => a.name === name)?.id)
-        .filter((id): id is string => !!id && id !== "a0"),
-    ];
+        const wasBlocked = task.status === "blocked";
+        if (newStatus === "done") {
+          get().logActivity({
+            type:        "task_completed",
+            description: `"${task.title}" marked as done`,
+            project:     task.projectName,
+            client:      task.clientName,
+          });
+        } else if (wasBlocked && newStatus === "pending") {
+          get().logActivity({
+            type:        "task_unblocked",
+            description: `"${task.title}" unblocked`,
+            project:     task.projectName,
+            client:      task.clientName,
+          });
+        }
+      },
 
-    const fallbackDeadline = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
+      // ── Update deliverable status ─────────────────────────────────────────
+      updateDeliverableStatus: (deliverableId, newStatus) => {
+        const d = get().deliverables.find((x) => x.id === deliverableId);
+        if (!d) return;
 
-    const newProject: Project = {
-      id:             projectId,
-      name:           projectName,
-      clientId,
-      clientName,
-      stage:          "planning",
-      priority:       "high" as Priority,
-      status:         "active",
-      deadline:       deadline || fallbackDeadline,
-      description:    goal,
-      goal,
-      assignedAgents: agentIds,
-      createdAt:      new Date().toISOString().slice(0, 10),
-    };
+        set((state) => ({
+          deliverables: state.deliverables.map((x) =>
+            x.id === deliverableId ? { ...x, status: newStatus } : x,
+          ),
+        }));
 
-    // Build tasks — spread due dates backward from deadline
-    const base = deadline ? new Date(deadline).getTime() : Date.now() + 60 * 24 * 60 * 60 * 1000;
-    const gap  = Math.floor((base - Date.now()) / (plannedTasks.length + 1));
+        if (newStatus === "approved") {
+          get().logActivity({
+            type:        "deliverable_approved",
+            description: `"${d.name}" approved`,
+            project:     d.projectName,
+            client:      d.clientName,
+          });
+        } else if (newStatus === "delivered") {
+          get().logActivity({
+            type:        "deliverable_delivered",
+            description: `"${d.name}" delivered to client`,
+            project:     d.projectName,
+            client:      d.clientName,
+          });
+        } else if (newStatus === "in_review") {
+          get().logActivity({
+            type:        "deliverable_uploaded",
+            description: `"${d.name}" submitted for review`,
+            project:     d.projectName,
+            client:      d.clientName,
+          });
+        }
+      },
 
-    const newTasks: Task[] = plannedTasks.map((t, i) => {
-      const agent = MOCK_AGENTS.find((a) => a.name === t.agent);
-      const dueMs = Date.now() + gap * (i + 1);
-      return {
-        id:          genId("t"),
-        title:       t.task,
-        projectId,
-        projectName,
-        clientName,
-        agentId:     agent?.id ?? "a0",
-        agentName:   t.agent,
-        status:      "pending" as TaskStatus,
-        priority:    i === 0 ? ("high" as Priority) : ("medium" as Priority),
-        dueDate:     new Date(dueMs).toISOString().slice(0, 10),
-        description: `Orchestrator-assigned task for ${type}.`,
-      };
-    });
+      // ── Create briefing ───────────────────────────────────────────────────
+      createBriefing: (payload) => {
+        const id = genId("b");
+        const newBriefing: Briefing = {
+          ...payload,
+          id,
+          submittedAt: new Date().toISOString().slice(0, 10),
+        };
+        set((state) => ({ briefings: [...state.briefings, newBriefing] }));
+        get().logActivity({
+          type:        "briefing_submitted",
+          description: `Briefing submitted for "${payload.projectName}"`,
+          project:     payload.projectName,
+          client:      payload.clientName,
+        });
+        return id;
+      },
 
-    set((state) => ({
-      projects: [...state.projects, newProject],
-      tasks:    [...state.tasks, ...newTasks],
-    }));
+      // ── Create project from Orchestrator plan ─────────────────────────────
+      createProject: (payload) => {
+        const { clientId, clientName, type, goal, deadline, agentNames, plannedTasks } = payload;
 
-    get().logActivity({
-      type:        "project_created",
-      description: `Project created: ${projectName}`,
-      project:     projectName,
-      client:      clientName,
-    });
+        const projectId   = genId("p");
+        const projectName = `${clientName} — ${type}`;
 
-    return projectId;
-  },
+        const agentIds = [
+          "a0",
+          ...agentNames
+            .map((name) => MOCK_AGENTS.find((a) => a.name === name)?.id)
+            .filter((id): id is string => !!id && id !== "a0"),
+        ];
 
-  // ── Log activity event ──────────────────────────────────────────────────
-  logActivity: (event) => {
-    const newEvent: ActivityEvent = {
-      ...event,
-      id:        genId("act"),
-      timestamp: new Date().toISOString(),
-    };
-    set((state) => ({
-      // Cap at 25 events, newest first
-      activity: [newEvent, ...state.activity].slice(0, 25),
-    }));
-  },
-}));
+        const fallbackDeadline = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+
+        const newProject: Project = {
+          id:             projectId,
+          name:           projectName,
+          clientId,
+          clientName,
+          stage:          "planning",
+          priority:       "high" as Priority,
+          status:         "active" as ProjectStatus,
+          deadline:       deadline || fallbackDeadline,
+          description:    goal,
+          goal,
+          assignedAgents: agentIds,
+          createdAt:      new Date().toISOString().slice(0, 10),
+        };
+
+        const base = deadline ? new Date(deadline).getTime() : Date.now() + 60 * 24 * 60 * 60 * 1000;
+        const gap  = Math.floor((base - Date.now()) / (plannedTasks.length + 1));
+
+        const newTasks: Task[] = plannedTasks.map((t, i) => {
+          const agent = MOCK_AGENTS.find((a) => a.name === t.agent);
+          const dueMs = Date.now() + gap * (i + 1);
+          return {
+            id:          genId("t"),
+            title:       t.task,
+            projectId,
+            projectName,
+            clientName,
+            agentId:     agent?.id ?? "a0",
+            agentName:   t.agent,
+            status:      "pending" as TaskStatus,
+            priority:    i === 0 ? ("high" as Priority) : ("medium" as Priority),
+            dueDate:     new Date(dueMs).toISOString().slice(0, 10),
+            description: `Orchestrator-assigned task for ${type}.`,
+          };
+        });
+
+        // Auto-create a briefing from the Orchestrator form data
+        const newBriefing: Briefing = {
+          id:              genId("b"),
+          projectId,
+          projectName,
+          clientName,
+          goal,
+          targetAudience:  "To be defined in the diagnosis stage.",
+          keyMessage:      "To be defined in the planning stage.",
+          deliverables:    plannedTasks.map((t) => t.task),
+          deadline:        deadline || fallbackDeadline,
+          budget:          payload.budget,
+          successCriteria: "To be defined with the client.",
+          submittedAt:     new Date().toISOString().slice(0, 10),
+          status:          "pending_analysis",
+        };
+
+        set((state) => ({
+          projects:    [...state.projects, newProject],
+          tasks:       [...state.tasks, ...newTasks],
+          briefings:   [...state.briefings, newBriefing],
+        }));
+
+        get().logActivity({
+          type:        "project_created",
+          description: `Project created: ${projectName}`,
+          project:     projectName,
+          client:      clientName,
+        });
+
+        return projectId;
+      },
+
+      // ── Log activity event ────────────────────────────────────────────────
+      logActivity: (event) => {
+        const newEvent: ActivityEvent = {
+          ...event,
+          id:        genId("act"),
+          timestamp: new Date().toISOString(),
+        };
+        set((state) => ({
+          activity: [newEvent, ...state.activity].slice(0, 25),
+        }));
+      },
+
+      // ── Reset to mock data ────────────────────────────────────────────────
+      resetStore: () => {
+        set({
+          clients:      SEED.clients(),
+          projects:     SEED.projects(),
+          tasks:        SEED.tasks(),
+          deliverables: SEED.deliverables(),
+          briefings:    SEED.briefings(),
+          activity:     SEED.activity(),
+        });
+      },
+    }),
+    {
+      name: "agency-os-v1",
+      // Only persist data, not action functions
+      partialize: (state) => ({
+        clients:      state.clients,
+        projects:     state.projects,
+        tasks:        state.tasks,
+        deliverables: state.deliverables,
+        briefings:    state.briefings,
+        activity:     state.activity,
+      }),
+    },
+  ),
+);

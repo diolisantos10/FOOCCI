@@ -12,8 +12,10 @@ const TYPE_CONFIG: Record<ActivityEventType, { icon: React.ElementType; color: s
   deliverable_delivered:{ icon: Upload,       color: "#0D9488", bg: "#F0FDFA" },
   project_advanced:     { icon: ArrowRight,   color: "#7C3AED", bg: "#F5F3FF" },
   project_created:      { icon: Plus,         color: "#5B5BD6", bg: "#EEEEFD" },
+  project_updated:      { icon: ArrowRight,   color: "#52525B", bg: "#F4F4F5" },
   briefing_submitted:   { icon: FileText,     color: "#CA8A04", bg: "#FFFBEB" },
   agent_assigned:       { icon: UserCheck,    color: "#0D9488", bg: "#F0FDFA" },
+  client_added:         { icon: UserCheck,    color: "#7C3AED", bg: "#F5F3FF" },
 };
 
 const FALLBACK_CONFIG = { icon: ArrowRight, color: "#A1A1AA", bg: "#F4F4F5" };

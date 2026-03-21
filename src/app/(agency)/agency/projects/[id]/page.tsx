@@ -5,14 +5,15 @@ import { notFound } from "next/navigation";
 import {
   ArrowLeft, Bot, CheckSquare, FileDown, GitBranch,
   Layers, Lightbulb, Palette, Clock, Plus, AlertCircle,
-  Calendar, Target, CheckCircle2, RefreshCw,
+  Calendar, Target, CheckCircle2, RefreshCw, Pencil,
 } from "lucide-react";
 import {
   MOCK_AGENTS,
-  TaskStatus, DeliverableStatus,
+  TaskStatus, DeliverableStatus, Priority, PipelineStage, ProjectStatus,
 } from "@/lib/agency/mock-data";
 import { useAgencyStore } from "@/lib/agency/store";
 import { Badge } from "@/components/agency/ui/Badge";
+import { Modal, FIELD_LABEL, INPUT_CLS, SELECT_CLS } from "@/components/agency/ui/Modal";
 import Link from "next/link";
 
 const STAGE_COLORS: Record<string, string> = {
@@ -55,10 +56,21 @@ const DELIVERABLE_STATUS_META: Record<DeliverableStatus, { label: string; bg: st
 
 export default function ProjectDetailPage({ params }: { params: { id: string } }) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const { projects, tasks: allTasks, deliverables: allDeliverables, updateTaskStatus, updateDeliverableStatus } = useAgencyStore();
+  const [showEdit, setShowEdit]   = useState(false);
+  const { projects, tasks: allTasks, deliverables: allDeliverables, updateTaskStatus, updateDeliverableStatus, updateProject } = useAgencyStore();
 
-  const project = projects.find((p) => p.id === params.id);
-  if (!project) notFound();
+  const projectData = projects.find((p) => p.id === params.id);
+  if (!projectData) notFound();
+  const project = projectData!;
+
+  const [editForm, setEditForm] = useState({
+    name:     project.name,
+    goal:     project.goal,
+    deadline: project.deadline,
+    priority: project.priority as Priority,
+    stage:    project.stage   as PipelineStage,
+    status:   project.status  as ProjectStatus,
+  });
 
   const tasks        = allTasks.filter((t) => t.projectId === project.id);
   const deliverables = allDeliverables.filter((d) => d.projectId === project.id);
@@ -74,11 +86,36 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     updateDeliverableStatus(id, DELIVERABLE_STATUS_CYCLE[current]);
   }
 
+  function openEditProject() {
+    setEditForm({
+      name:     project.name,
+      goal:     project.goal,
+      deadline: project.deadline,
+      priority: project.priority,
+      stage:    project.stage,
+      status:   project.status,
+    });
+    setShowEdit(true);
+  }
+
+  function handleSaveProject() {
+    updateProject(project.id, {
+      name:     editForm.name.trim()     || project.name,
+      goal:     editForm.goal.trim()     || project.goal,
+      deadline: editForm.deadline        || project.deadline,
+      priority: editForm.priority,
+      stage:    editForm.stage,
+      status:   editForm.status,
+    });
+    setShowEdit(false);
+  }
+
   const tasksDone    = tasks.filter((t) => t.status === "done").length;
   const tasksTotal   = tasks.length;
   const progressPct  = tasksTotal > 0 ? (tasksDone / tasksTotal) * 100 : 0;
 
   return (
+    <>
     <div className="flex min-h-full flex-col" style={{ backgroundColor: "#F5F5F3" }}>
 
       {/* ── Project Header ─────────────────────────────────────────── */}
@@ -114,8 +151,11 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               </div>
             </div>
             <div className="flex flex-none gap-2">
-              <button className="rounded-lg border border-[#E5E5E2] bg-white px-3.5 py-2 text-[12px] font-medium text-[#52525B] transition-colors hover:border-[#D0D0CC]">
-                Edit
+              <button
+                onClick={openEditProject}
+                className="flex items-center gap-1.5 rounded-lg border border-[#E5E5E2] bg-white px-3.5 py-2 text-[12px] font-medium text-[#52525B] transition-colors hover:border-[#D0D0CC]"
+              >
+                <Pencil size={12} /> Edit
               </button>
               <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3.5 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#4848C2]">
                 <Plus size={13} /> Add Task
@@ -591,5 +631,100 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         )}
       </div>
     </div>
+
+    {/* ── Edit Project Modal ───────────────────────────────────────── */}
+    <Modal
+      open={showEdit}
+      onClose={() => setShowEdit(false)}
+      title="Edit Project"
+      subtitle={project.name}
+      maxWidth="560px"
+    >
+      <div className="space-y-4 px-6 py-5">
+        <div>
+          <label className={FIELD_LABEL}>Project Name</label>
+          <input
+            className={INPUT_CLS}
+            value={editForm.name}
+            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className={FIELD_LABEL}>Business Goal / Objective</label>
+          <textarea
+            rows={3}
+            className={`${INPUT_CLS} resize-none`}
+            value={editForm.goal}
+            onChange={(e) => setEditForm({ ...editForm, goal: e.target.value })}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={FIELD_LABEL}>Deadline</label>
+            <input
+              type="date"
+              className={INPUT_CLS}
+              value={editForm.deadline}
+              onChange={(e) => setEditForm({ ...editForm, deadline: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className={FIELD_LABEL}>Priority</label>
+            <select
+              className={SELECT_CLS}
+              value={editForm.priority}
+              onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as Priority })}
+            >
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          <div>
+            <label className={FIELD_LABEL}>Pipeline Stage</label>
+            <select
+              className={SELECT_CLS}
+              value={editForm.stage}
+              onChange={(e) => setEditForm({ ...editForm, stage: e.target.value as PipelineStage })}
+            >
+              {["briefing","diagnosis","planning","production","review","delivery","ongoing","completed"].map((s) => (
+                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={FIELD_LABEL}>Status</label>
+            <select
+              className={SELECT_CLS}
+              value={editForm.status}
+              onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ProjectStatus })}
+            >
+              <option value="active">Active</option>
+              <option value="at_risk">At Risk</option>
+              <option value="blocked">Blocked</option>
+              <option value="completed">Completed</option>
+              <option value="paused">Paused</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-2.5 border-t border-[#F0F0EE] px-6 py-4">
+        <button
+          onClick={() => setShowEdit(false)}
+          className="rounded-lg border border-[#E5E5E2] px-4 py-2 text-[12px] font-medium text-[#52525B] transition-colors hover:border-[#D0D0CC]"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSaveProject}
+          className="rounded-lg bg-[#5B5BD6] px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#4848C2]"
+        >
+          Save Changes
+        </button>
+      </div>
+    </Modal>
+    </>
   );
 }
