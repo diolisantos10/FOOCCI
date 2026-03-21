@@ -907,22 +907,47 @@ export default function ChatSimPage() {
     addToCart(item);
 
     let nextStage: Stage = stage;
+
     if (stage === "SELECT_DRINK") {
-      setUncoveredCategories((prev) => prev.filter((c) => c !== "drink"));
+      const newUncovered = uncoveredCategories.filter((c) => c !== "drink");
+      setUncoveredCategories(newUncovered);
       nextStage = nextUpsellStage(menu, newCart, { ...refusals, drink: true });
       setStage(nextStage);
       setCurrentCategory(null);
+
     } else if (stage === "SELECT_DESSERT") {
-      setUncoveredCategories((prev) => prev.filter((c) => c !== "dessert"));
+      const newUncovered = uncoveredCategories.filter((c) => c !== "dessert");
+      setUncoveredCategories(newUncovered);
       nextStage = nextUpsellStage(menu, newCart, { ...refusals, dessert: true });
       setStage(nextStage);
       setCurrentCategory(null);
+
     } else {
-      setUncoveredCategories((prev) => prev.filter((c) => c !== "main"));
-      setCurrentCategory(null); // stay in SELECT_MAIN, snap back to categories
+      // SELECT_MAIN — detect which category this item actually belongs to
+      const bevCat = findBeverageCat(menu);
+      const desCat = findDessertCat(menu);
+      const categoryToClear: "main" | "drink" | "dessert" =
+        (bevCat && currentCategory === bevCat.name) ? "drink"
+        : (desCat && currentCategory === desCat.name) ? "dessert"
+        : "main";
+
+      const newUncovered = uncoveredCategories.filter((c) => c !== categoryToClear);
+      setUncoveredCategories(newUncovered);
+      setCurrentCategory(null);
+
+      // Determine AI message stage from orchestrator (capped at CONFIRM_ORDER)
+      const next = resolveNextStage(newUncovered, menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
+      const orch = next.stage === "DELIVERY_TYPE" || next.stage === "ADDRESS_INPUT" ||
+        next.stage === "ADDRESS_DETAILS" || next.stage === "ADDRESS_CONFIRM" ||
+        next.stage === "ASK_NAME" || next.stage === "PAYMENT" || next.stage === "DONE"
+        ? "CONFIRM_ORDER" : next.stage;
+
+      nextStage = orch;
+      // Advance UI stage only when moving off SELECT_MAIN (drink/dessert added)
+      if (categoryToClear !== "main") setStage(orch);
     }
 
-    sendText(`Quero ${item.name}`, newCart, visitedCategories, promo, nextStage);
+    sendText(`Quero ${item.name}`, newCart, visitedCategories, null, nextStage);
   }
 
   function handleBack() { setCurrentCategory(null); }

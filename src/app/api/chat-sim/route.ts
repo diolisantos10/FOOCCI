@@ -198,7 +198,8 @@ ${stage === "SELECT_MAIN" ? `EXPLORAÇÃO (SELECT_MAIN) — cliente está escolh
               "Olá! Boas-vindas ao ${restaurantName} 🍕 O que vai ser? 👇"
               "Olá! Que bom ver você por aqui. O que vai pedir hoje? 👇"
   Categoria:  "[emoji] [Categoria] — escolha o que preferir 👇"
-  Item conf.: "✅ [Item] adicionado! Clique em Finalizar para avançar 👇"
+  Item conf.: "✅ [Item] adicionado! Continue montando seu pedido 👇"
+  NUNCA diga "Finalizar", "Clique em Finalizar" ou "Confirmar" na confirmação de item.
   PROIBIDO usar: "Explore mais", "Se quiser", "quando estiver pronto", "O que mais?".
   SEMPRE aponte para o chip bar com 👇 — as opções estão lá.` : ""}
 
