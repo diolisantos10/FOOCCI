@@ -785,7 +785,12 @@ export default function ChatSimPage() {
     if (!val) return;
 
     if (stage === "ADDRESS_INPUT") {
-      if (!/\d/.test(val)) return; // must contain a number
+      if (!/\d/.test(val)) {
+        // Number missing — explain clearly, do not proceed silently
+        setInput("");
+        sendText(val, cart, visitedCategories, null, "ADDRESS_INPUT");
+        return;
+      }
       const { street, number } = parseStreetLine(val);
       setAddress((a) => ({ ...a, street, number }));
       setStage("ADDRESS_DETAILS");
@@ -807,6 +812,17 @@ export default function ChatSimPage() {
       setStage("PAYMENT");
       sendText(`Meu nome é ${val}`, cart, visitedCategories, null, "PAYMENT");
       return;
+    }
+
+    if (stage === "PAYMENT") {
+      const v = val.toLowerCase();
+      const method: "pix" | "cartao" | "dinheiro" | null =
+        v.includes("pix")                           ? "pix"
+        : v.includes("cart")                        ? "cartao"
+        : v.includes("dinheiro") || v.includes("dinhei") || v.includes("espécie") || v.includes("especie") ? "dinheiro"
+        : null;
+      if (method) { handlePayment(method); return; }
+      // Unrecognised — let AI guide back to buttons
     }
 
     sendText(val, cart, visitedCategories, promo);
@@ -955,6 +971,11 @@ export default function ChatSimPage() {
 
   function handlePayment(method: "dinheiro" | "cartao" | "pix") {
     // Hard blocks — redirect with AI guidance, never silently fail
+    if (!deliveryMethod) {
+      setStage("DELIVERY_TYPE");
+      sendText("Antes de concluir, escolha se será entrega ou retirada.", cart, visitedCategories, null, "DELIVERY_TYPE");
+      return;
+    }
     if (deliveryMethod === "delivery" && !addressConfirmed) {
       setStage("ADDRESS_CONFIRM");
       sendText("Confirme o endereço para continuar.", cart, visitedCategories, null, "ADDRESS_CONFIRM");

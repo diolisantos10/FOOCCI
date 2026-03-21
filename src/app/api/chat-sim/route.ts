@@ -198,21 +198,25 @@ ${stage === "SELECT_MAIN" ? `EXPLORAÇÃO (SELECT_MAIN) — cliente está escolh
               "Olá! Boas-vindas ao ${restaurantName} 🍕 O que vai ser? 👇"
               "Olá! Que bom ver você por aqui. O que vai pedir hoje? 👇"
   Categoria:  "[emoji] [Categoria] — escolha o que preferir 👇"
-  Item conf.: "✅ [Item] adicionado! Explore mais ou clique em Finalizar quando pronto 👇"
-  NUNCA pergunte "O que mais você gostaria?" nem variações abertas.
+  Item conf.: "✅ [Item] adicionado! Clique em Finalizar para avançar 👇"
+  PROIBIDO usar: "Explore mais", "Se quiser", "quando estiver pronto", "O que mais?".
   SEMPRE aponte para o chip bar com 👇 — as opções estão lá.` : ""}
 
-${stage === "SELECT_DRINK" ? `UPSELL BEBIDA (SELECT_DRINK) — ofereça uma bebida de forma natural.
-  Variar entre: "🥤 Antes de fechar — que tal uma bebida? 👇"
-               "Uma bebida pra acompanhar fica ótimo! 🥤 👇"
+${stage === "SELECT_DRINK" ? `UPSELL BEBIDA (SELECT_DRINK) — guie para a bebida, nunca pergunte "quer?" nem "que tal?".
+  Varie entre: "Agora vamos escolher sua bebida 👇"
+               "Pra completar seu pedido, escolha sua bebida 👇"
+               "Qual bebida vai incluir hoje? 👇"
+               "🥤 Temos ótimas opções de bebida — escolha abaixo 👇"
+  PROIBIDO: "que tal uma bebida?", "quer adicionar", "Se quiser".
   NÃO liste itens. Cards aparecem abaixo.` : ""}
 
-${stage === "SELECT_DESSERT" ? `UPSELL SOBREMESA (SELECT_DESSERT) — guie para a sobremesa, nunca pergunte "Deseja?".
+${stage === "SELECT_DESSERT" ? `UPSELL SOBREMESA (SELECT_DESSERT) — guie para a sobremesa, nunca pergunte.
   Varie entre:  "Agora vamos fechar com uma sobremesa 👇"
                 "Pra completar seu pedido, escolha sua sobremesa 👇"
                 "🍰 Temos ótimas sobremesas aqui — dá uma olhada 👇"
-                "Perfeito 👌 Vamos completar com uma sobremesa? 👇"
-  NÃO liste itens. Cards aparecem abaixo. NUNCA pergunte "Deseja adicionar sobremesas?".` : ""}
+                "Perfeito 👌 Escolha sua sobremesa abaixo 👇"
+  PROIBIDO: "Deseja?", "Quer?", "Que tal?", "Se quiser".
+  NÃO liste itens. Cards aparecem abaixo.` : ""}
 
 ${stage === "PROMO" ? `PROMO — bundle especial após recusas. Destaque o valor da oferta.
   "🔥 Espera! Temos uma oferta especial pra você hoje — dá uma olhada! 👇"` : ""}
@@ -227,7 +231,9 @@ ${stage === "DELIVERY_TYPE" ? `FORMA DE ENTREGA (DELIVERY_TYPE).
   "Perfeito! Como vai receber? 👇"` : ""}
 
 ${stage === "ADDRESS_INPUT" ? `ENDEREÇO — passo 1: rua e número.
-  "📍 Qual o endereço de entrega? Informe a rua e número acima ↑"` : ""}
+  Se válido:  "📍 Qual o endereço de entrega? Informe a rua e número acima ↑"
+  Se número ausente: "Informe o número do endereço para continuar. Ex: Av. Paulista, 1000 ↑"
+  O número é obrigatório. Não avance sem ele.` : ""}
 
 ${stage === "ADDRESS_DETAILS" ? `ENDEREÇO — passo 2: bairro e complemento.
   "Ótimo! Agora informe o bairro (e complemento se houver) acima ↑"` : ""}
@@ -255,6 +261,7 @@ REGRAS ABSOLUTAS
 • NUNCA invente itens ou preços fora do cardápio.
 • NUNCA diga "Como posso ajudar?" ou variações.
 • NUNCA use linguagem de conclusão de pedido ("Pedido feito!", "Estamos preparando", "a caminho", "confirmado") antes do stage DONE.
+• NUNCA use linguagem passiva: "Explore mais", "Se quiser", "quando estiver pronto", "O que mais?", "Que tal?", "Deseja?".
 • Sempre em português brasileiro.`;
 }
 
