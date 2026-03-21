@@ -466,9 +466,10 @@ function ChipBar({
           <p className="mb-1 text-[11px] font-bold text-green-800">🧾 Seu pedido</p>
           <div className="flex flex-col gap-0.5">
             {mode.cart.map((item) => (
-              <div key={item.name} className="flex justify-between text-xs text-gray-800">
-                <span>{item.qty > 1 ? `${item.qty}× ` : ""}{item.name}</span>
-                <span className="font-medium">R$&nbsp;{(item.price * item.qty).toFixed(2)}</span>
+              <div key={item.name} className="flex items-baseline gap-1.5 text-xs text-gray-800">
+                <span className="shrink-0 font-bold text-gray-400">x{item.qty}</span>
+                <span className="flex-1">{item.name}</span>
+                <span className="shrink-0 font-medium">R$&nbsp;{(item.price * item.qty).toFixed(2)}</span>
               </div>
             ))}
           </div>
