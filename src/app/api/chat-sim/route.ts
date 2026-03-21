@@ -56,6 +56,8 @@ interface ChatSimRequest {
   visitedCategories?: string[];
   promo?: PromoContext | null;
   stage?: OrderStage;
+  uncoveredCategories?: Array<"main" | "drink" | "dessert">;
+  refusals?: { drink: boolean; dessert: boolean };
 }
 
 type DbMenuItem = { name: string; price: unknown; description: string | null; imageUrl: string | null };
@@ -82,7 +84,9 @@ function buildSystemPrompt(
   cart: CartItem[],
   visitedCategories: string[],
   promo: PromoContext | null,
-  stage: OrderStage
+  stage: OrderStage,
+  uncoveredCategories: Array<"main" | "drink" | "dessert">,
+  refusals: { drink: boolean; dessert: boolean },
 ): string {
   const active = categories.filter((c) => c.items.length > 0);
 
@@ -136,6 +140,50 @@ function buildSystemPrompt(
 
   const firstMissing = categoriesWithout[0] ?? null;
 
+  // ── Sales Intelligence block ──────────────────────────────────
+  const lastItem = cart.at(-1)?.name ?? null;
+
+  const salesPushLines: string[] = [];
+  if (uncoveredCategories.includes("main")) {
+    salesPushLines.push(`→ PUSH PRATO PRINCIPAL: direcione imediatamente — "Agora escolha o principal do seu pedido 👇"`);
+  }
+  if (uncoveredCategories.includes("drink")) {
+    if (!refusals.drink) {
+      const ref = lastItem ? `cliente tem "${lastItem}" — ` : "";
+      salesPushLines.push(`→ PUSH BEBIDA (${ref}use copy sensorial): ex: "Essa ${lastItem ?? "escolha"} pede uma bebida gelada 🥤👇" / "Tá quase perfeito — só falta a bebida 😏👇"`);
+    } else {
+      salesPushLines.push(`→ BEBIDA JÁ RECUSADA: insista com variação leve — "Temos opções rápidas que combinam muito — dá uma olhada 👇"`);
+    }
+  }
+  if (uncoveredCategories.includes("dessert")) {
+    if (!refusals.dessert) {
+      salesPushLines.push(`→ PUSH SOBREMESA: use pressão emocional — "Falta só a melhor parte 😏 Escolha sua sobremesa 🍰👇" / "Pra fechar perfeito, escolha a sobremesa 👇"`);
+    } else {
+      salesPushLines.push(`→ SOBREMESA JÁ RECUSADA: tente fechar com urgência — "Pra não perder, dá uma olhada nas sobremesas 👇"`);
+    }
+  }
+  if (uncoveredCategories.length === 0) {
+    salesPushLines.push(`→ PEDIDO COMPLETO: confirme os itens com entusiasmo e direcione para fechar os detalhes 👇`);
+  }
+
+  const salesIntelBlock = `
+━━━━━━━━━━━━━━━━━━━━━━━━━
+INTELIGÊNCIA DE VENDAS — LEIA ANTES DE RESPONDER
+━━━━━━━━━━━━━━━━━━━━━━━━━
+Categorias pendentes : ${uncoveredCategories.length > 0 ? uncoveredCategories.join(", ") : "nenhuma — pedido coberto"}
+Recusas registradas  : bebida=${refusals.drink ? "sim" : "não"}, sobremesa=${refusals.dessert ? "sim" : "não"}
+Último item no carrinho: ${lastItem ?? "nenhum"}
+
+AÇÃO OBRIGATÓRIA AGORA:
+${salesPushLines.join("\n")}
+
+REGRAS DO MOTOR DE VENDA:
+• NUNCA pergunte "O que mais?", "Quer adicionar?", "Deseja algo?", "Gostaria de?"
+• NUNCA pause, aguarde ou deixe momento morto — cada mensagem EMPURRA para frente ou AUMENTA o desejo
+• NUNCA sugira finalizar/confirmar pedido enquanto houver categorias pendentes acima
+• USE o nome do item já selecionado para criar associação sensorial (ex: "pizza" → "bebida gelada")
+• PRESUMA que o cliente quer — não pergunte se quer`;
+
   const emojiRule =
     emojiUsage === "none"       ? "NÃO use emojis." :
     emojiUsage === "minimal"    ? "Máx. 1 emoji por mensagem." :
@@ -167,6 +215,7 @@ ${menuBlock || "Cardápio temporariamente indisponível."}
 ${cartBlock}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 ${promoBlock}
+${salesIntelBlock}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 INTERFACE — REGRA CRÍTICA
@@ -203,21 +252,23 @@ ${stage === "SELECT_MAIN" ? `EXPLORAÇÃO (SELECT_MAIN) — cliente está escolh
   PROIBIDO usar: "Explore mais", "Se quiser", "quando estiver pronto", "O que mais?".
   SEMPRE aponte para o chip bar com 👇 — as opções estão lá.` : ""}
 
-${stage === "SELECT_DRINK" ? `UPSELL BEBIDA (SELECT_DRINK) — guie para a bebida, nunca pergunte "quer?" nem "que tal?".
-  Varie entre: "Agora vamos escolher sua bebida 👇"
-               "Pra completar seu pedido, escolha sua bebida 👇"
-               "Qual bebida vai incluir hoje? 👇"
-               "🥤 Temos ótimas opções de bebida — escolha abaixo 👇"
-  PROIBIDO: "que tal uma bebida?", "quer adicionar", "Se quiser".
-  NÃO liste itens. Cards aparecem abaixo.` : ""}
+${stage === "SELECT_DRINK" ? `UPSELL BEBIDA (SELECT_DRINK) — dirija o cliente à bebida com energia, nunca pergunte nem sugira.
+  Varie entre: "Agora a bebida pra acompanhar — escolha abaixo 🥤👇"
+               "Falta só a bebida certa pra completar 😏 Escolha abaixo 👇"
+               "Pedido quase completo! Adicione sua bebida 🥤👇"
+               "🥤 Escolha sua bebida agora e o pedido fica perfeito 👇"
+               "Que combinação! Agora escolha a bebida 👇"
+  PROIBIDO: "que tal?", "quer?", "quer adicionar", "Se quiser", "gostaria", "deseja".
+  NÃO liste itens. Cards aparecem abaixo automaticamente.` : ""}
 
-${stage === "SELECT_DESSERT" ? `UPSELL SOBREMESA (SELECT_DESSERT) — guie para a sobremesa, nunca pergunte.
-  Varie entre:  "Agora vamos fechar com uma sobremesa 👇"
-                "Pra completar seu pedido, escolha sua sobremesa 👇"
-                "🍰 Temos ótimas sobremesas aqui — dá uma olhada 👇"
-                "Perfeito 👌 Escolha sua sobremesa abaixo 👇"
-  PROIBIDO: "Deseja?", "Quer?", "Que tal?", "Se quiser".
-  NÃO liste itens. Cards aparecem abaixo.` : ""}
+${stage === "SELECT_DESSERT" ? `UPSELL SOBREMESA (SELECT_DESSERT) — pressione para a sobremesa com emoção, nunca pergunte.
+  Varie entre:  "Falta só a melhor parte 😏 Escolha sua sobremesa 🍰👇"
+                "Pra fechar perfeito, escolha a sobremesa 👇"
+                "Quase lá! A sobremesa vai deixar o pedido completo 🍰👇"
+                "Agora a sobremesa — não deixa escapar 😋👇"
+                "🍰 O fechamento do pedido é a sobremesa — escolha abaixo 👇"
+  PROIBIDO: "Deseja?", "Quer?", "Que tal?", "Se quiser", "gostaria".
+  NÃO liste itens. Cards aparecem abaixo automaticamente.` : ""}
 
 ${stage === "PROMO" ? `PROMO — bundle especial após recusas. Destaque o valor da oferta.
   "🔥 Espera! Temos uma oferta especial pra você hoje — dá uma olhada! 👇"` : ""}
@@ -248,10 +299,14 @@ ${stage === "ASK_NAME" ? `NOME DO CLIENTE (ASK_NAME) — pedido quase pronto, s�
 ${stage === "PAYMENT" ? `PAGAMENTO (PAYMENT) — último passo.
   Variar: "💳 Como vai pagar? 👇"  /  "Quase lá! Escolha a forma de pagamento 👇"` : ""}
 
-${stage === "DONE" ? `PEDIDO CONCLUÍDO (DONE) — liste o pedido e despeça com entusiasmo.
+${stage === "DONE" ? `PEDIDO CONCLUÍDO (DONE) — ÚNICO momento onde você lista itens. Despeça com entusiasmo e calor.
   Liste PEDIDO ATUAL completo (itens + preços + total).
-  "Pedido confirmado, [nome]! Estamos preparando tudo. 🎉"
-  ÚNICO momento onde você pode listar itens.` : ""}
+  Varie entre:
+    "Pedido confirmado, [nome]! 🚀 Já estamos preparando tudo com carinho. Já já chega aí pra você aproveitar! 🍕✨"
+    "Anotado, [nome]! 🎉 Seu pedido já entrou na cozinha — agora é só esperar coisa boa chegar 😍"
+    "Perfeito, [nome]! 🔥 A equipe já começou. Prepare-se para uma experiência incrível! 🍽️✨"
+    "Pedido feito, [nome]! 👨‍🍳✨ Estamos caprichando em cada detalhe — vai valer a espera!"
+  Use o nome do cliente SEMPRE. Feche com calor e antecipação, não apenas confirmação burocrática.` : ""}
 
 FALLBACK: "✅ [Item] adicionado! (R$ X,XX)"
 
@@ -260,9 +315,11 @@ REGRAS ABSOLUTAS
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 • Mensagens CURTAS: máx. 3 linhas.
 • NUNCA invente itens ou preços fora do cardápio.
-• NUNCA diga "Como posso ajudar?" ou variações.
+• NUNCA diga "Como posso ajudar?", "Em que posso te ajudar?" ou variações.
 • NUNCA use linguagem de conclusão de pedido ("Pedido feito!", "Estamos preparando", "a caminho", "confirmado") antes do stage DONE.
-• NUNCA use linguagem passiva: "Explore mais", "Se quiser", "quando estiver pronto", "O que mais?", "Que tal?", "Deseja?".
+• NUNCA use linguagem passiva ou de abertura: "Explore mais", "Se quiser", "quando estiver pronto", "O que mais?", "Que tal?", "Deseja?", "Gostaria?", "Quer adicionar?", "Quer incluir?".
+• NUNCA faça perguntas abertas — sempre direcione com afirmação ou comando.
+• NUNCA pause ou deixe momento neutro — cada mensagem deve empurrar para frente ou aumentar o desejo.
 • Sempre em português brasileiro.`;
 }
 
@@ -317,7 +374,16 @@ export async function POST(req: NextRequest) {
       return badRequest("Invalid JSON body.");
     }
 
-    const { message, history, cart = [], visitedCategories = [], promo = null, stage = "SELECT_MAIN" } = body;
+    const {
+      message,
+      history,
+      cart = [],
+      visitedCategories = [],
+      promo = null,
+      stage = "SELECT_MAIN",
+      uncoveredCategories = ["main", "drink", "dessert"],
+      refusals = { drink: false, dessert: false },
+    } = body;
     if (!message?.trim())        return badRequest("message is required.");
     if (!Array.isArray(history)) return badRequest("history must be an array.");
 
@@ -355,7 +421,9 @@ export async function POST(req: NextRequest) {
       cart,
       visitedCategories,
       promo,
-      stage as OrderStage
+      stage as OrderStage,
+      uncoveredCategories,
+      refusals,
     );
 
     const cappedHistory = history.slice(-maxHistory);

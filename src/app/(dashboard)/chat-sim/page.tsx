@@ -726,7 +726,9 @@ export default function ChatSimPage() {
     currentVisited: string[],
     currentPromo: Promo | null,
     isGreeting = false,
-    currentStage: Stage = "SELECT_MAIN"
+    currentStage: Stage = "SELECT_MAIN",
+    currentUncovered: Array<"main" | "drink" | "dessert"> = ["main", "drink", "dessert"],
+    currentRefusals: { drink: boolean; dessert: boolean } = { drink: false, dessert: false }
   ) => {
     setUiState("thinking");
     setErrorMsg("");
@@ -744,6 +746,8 @@ export default function ChatSimPage() {
           promo: currentPromo
             ? { title: currentPromo.title, bundlePrice: currentPromo.bundlePrice, savings: currentPromo.savings }
             : null,
+          uncoveredCategories: currentUncovered,
+          refusals: currentRefusals,
         }),
       });
 
@@ -808,7 +812,7 @@ export default function ChatSimPage() {
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
     const userMsg: ChatMessage = { id: uid(), role: "user", content: trimmed, ts: new Date() };
     setMessages((prev) => [...prev, userMsg]);
-    await callAI(history, trimmed, cartSnap, visitedSnap, promoSnap, false, stageSnap);
+    await callAI(history, trimmed, cartSnap, visitedSnap, promoSnap, false, stageSnap, uncoveredCategories, refusals);
   }
 
   function handleSubmit(e?: FormEvent) {
