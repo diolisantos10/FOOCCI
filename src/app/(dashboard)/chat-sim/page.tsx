@@ -102,7 +102,7 @@ interface Refusals { drink: boolean; dessert: boolean; }
 type ChipBarMode =
   | { type: "categories"; categories: MenuCategory[] }
   | { type: "items";   category: string; categoryImage: string | null; items: MenuItem[] }
-  | { type: "upsell";  category: string; categoryImage: string | null; items: MenuItem[] }
+  | { type: "upsell";  category: string; categoryImage: string | null; items: MenuItem[]; itemAdded: boolean }
   | { type: "CONFIRM_ORDER" }
   | { type: "DELIVERY_TYPE" }
   | { type: "ADDRESS_INPUT" }
@@ -434,6 +434,7 @@ function ChipBar({
   onPayment,
   onFinalConfirm,
   onEditOrder,
+  onUpsellContinue,
 }: {
   mode: ChipBarMode;
   disabled: boolean;
@@ -450,6 +451,7 @@ function ChipBar({
   onPayment: (method: "dinheiro" | "cartao" | "pix") => void;
   onFinalConfirm: () => void;
   onEditOrder: () => void;
+  onUpsellContinue: () => void;
 }) {
   const chip = "shrink-0 rounded-full border px-3 py-1 text-xs font-medium disabled:opacity-40 transition-colors";
 
@@ -651,8 +653,9 @@ function ChipBar({
 
   // ── Items or Upsell — full visual card grid ───────────────
   // Both "items" (exploration) and "upsell" (drink/dessert) use the same card grid.
-  // Upsell additionally shows a "Não quero, obrigado" skip button.
+  // Upsell: before any item added → "Não quero, obrigado"; after → "Continuar pedido".
   const isUpsell = mode.type === "upsell";
+  const upsellItemAdded = mode.type === "upsell" && mode.itemAdded;
   const emoji = categoryEmoji(mode.category);
   return (
     <div className="flex flex-col gap-2">
@@ -664,12 +667,24 @@ function ChipBar({
             Continuar pedido
           </button>
         )}
-        <button type="button" disabled={disabled} onClick={isUpsell ? onUpsellDecline : onFinalize}
-          className={isUpsell
-            ? `${chip} border-gray-300 bg-white text-gray-500 hover:bg-gray-50`
-            : `${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}>
-          {isUpsell ? "Não quero, obrigado" : "✅ Finalizar pedido"}
-        </button>
+        {isUpsell ? (
+          upsellItemAdded ? (
+            <button type="button" disabled={disabled} onClick={onUpsellContinue}
+              className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}>
+              ✅ Continuar pedido
+            </button>
+          ) : (
+            <button type="button" disabled={disabled} onClick={onUpsellDecline}
+              className={`${chip} border-gray-300 bg-white text-gray-500 hover:bg-gray-50`}>
+              Não quero, obrigado
+            </button>
+          )
+        ) : (
+          <button type="button" disabled={disabled} onClick={onFinalize}
+            className={`${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}>
+            ✅ Finalizar pedido
+          </button>
+        )}
       </div>
       {/* Card grid */}
       <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto sm:grid-cols-3">
@@ -754,13 +769,21 @@ export default function ChatSimPage() {
 
     if (stg === "SELECT_DRINK") {
       const cat = findBeverageCat(menu);
-      if (cat) return { type: "upsell", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items };
+      if (cat) {
+        const catNames = new Set(cat.items.map((i) => i.name));
+        const itemAdded = cartSnap.some((c) => catNames.has(c.name));
+        return { type: "upsell", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items, itemAdded };
+      }
       return { type: "CONFIRM_ORDER" };
     }
 
     if (stg === "SELECT_DESSERT") {
       const cat = findDessertCat(menu);
-      if (cat) return { type: "upsell", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items };
+      if (cat) {
+        const catNames = new Set(cat.items.map((i) => i.name));
+        const itemAdded = cartSnap.some((c) => catNames.has(c.name));
+        return { type: "upsell", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items, itemAdded };
+      }
       return { type: "CONFIRM_ORDER" };
     }
 
@@ -790,7 +813,8 @@ export default function ChatSimPage() {
     isGreeting = false,
     currentStage: Stage = "SELECT_MAIN",
     currentUncovered: Array<"main" | "drink" | "dessert"> = ["main", "drink", "dessert"],
-    currentRefusals: { drink: boolean; dessert: boolean } = { drink: false, dessert: false }
+    currentRefusals: { drink: boolean; dessert: boolean } = { drink: false, dessert: false },
+    currentDeliveryMethod: "delivery" | "pickup" | null = null
   ) => {
     setUiState("thinking");
     setErrorMsg("");
@@ -810,6 +834,7 @@ export default function ChatSimPage() {
             : null,
           uncoveredCategories: currentUncovered,
           refusals: currentRefusals,
+          deliveryMethod: currentDeliveryMethod,
         }),
       });
 
@@ -874,7 +899,7 @@ export default function ChatSimPage() {
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
     const userMsg: ChatMessage = { id: uid(), role: "user", content: trimmed, ts: new Date() };
     setMessages((prev) => [...prev, userMsg]);
-    await callAI(history, trimmed, cartSnap, visitedSnap, promoSnap, false, stageSnap, uncoveredCategories, refusals);
+    await callAI(history, trimmed, cartSnap, visitedSnap, promoSnap, false, stageSnap, uncoveredCategories, refusals, deliveryMethod);
   }
 
   function handleSubmit(e?: FormEvent) {
@@ -981,24 +1006,16 @@ export default function ChatSimPage() {
       ? cart : [...cart, { name: item.name, price: item.price, qty: 1 }];
     addToCart(item);
 
-    let nextStage: Stage = stage;
-
     if (stage === "SELECT_DRINK") {
-      const newUncovered = uncoveredCategories.filter((c) => c !== "drink");
-      setUncoveredCategories(newUncovered);
-      nextStage = nextUpsellStage(menu, newCart, { ...refusals, drink: true });
-      setStage(nextStage);
-      setCurrentCategory(null);
+      // Category loop: stay in SELECT_DRINK until user clicks "Continuar pedido"
+      sendText(`Quero ${item.name}`, newCart, visitedCategories, null, "SELECT_DRINK");
 
     } else if (stage === "SELECT_DESSERT") {
-      const newUncovered = uncoveredCategories.filter((c) => c !== "dessert");
-      setUncoveredCategories(newUncovered);
-      nextStage = nextUpsellStage(menu, newCart, { ...refusals, dessert: true });
-      setStage(nextStage);
-      setCurrentCategory(null);
+      // Category loop: stay in SELECT_DESSERT until user clicks "Continuar pedido"
+      sendText(`Quero ${item.name}`, newCart, visitedCategories, null, "SELECT_DESSERT");
 
     } else {
-      // SELECT_MAIN — detect which category this item actually belongs to
+      // SELECT_MAIN exploration — detect category for uncovered tracking
       const bevCat = findBeverageCat(menu);
       const desCat = findDessertCat(menu);
       const categoryToClear: "main" | "drink" | "dessert" =
@@ -1008,21 +1025,23 @@ export default function ChatSimPage() {
 
       const newUncovered = uncoveredCategories.filter((c) => c !== categoryToClear);
       setUncoveredCategories(newUncovered);
-      setCurrentCategory(null);
-
-      // Determine AI message stage from orchestrator (capped at CONFIRM_ORDER)
-      const next = resolveNextStage(newUncovered, menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
-      const orch = next.stage === "DELIVERY_TYPE" || next.stage === "ADDRESS_INPUT" ||
-        next.stage === "ADDRESS_DETAILS" || next.stage === "ADDRESS_CONFIRM" ||
-        next.stage === "ASK_NAME" || next.stage === "PAYMENT" || next.stage === "REVIEW_ORDER"
-        ? "CONFIRM_ORDER" : next.stage;
-
-      nextStage = orch;
-      // Advance UI stage only when moving off SELECT_MAIN (drink/dessert added)
-      if (categoryToClear !== "main") setStage(orch);
+      // Stay in current category (user must click "Continuar pedido" to go back)
+      sendText(`Quero ${item.name}`, newCart, visitedCategories, null, "SELECT_MAIN");
     }
+  }
 
-    sendText(`Quero ${item.name}`, newCart, visitedCategories, null, nextStage);
+  /**
+   * Called when user clicks "Continuar pedido" inside an upsell category.
+   * Removes the category from uncoveredCategories and advances via resolveNextStage.
+   */
+  function handleUpsellContinue() {
+    const catKey: "drink" | "dessert" = stage === "SELECT_DRINK" ? "drink" : "dessert";
+    const newUncovered = uncoveredCategories.filter((c) => c !== catKey);
+    setUncoveredCategories(newUncovered);
+    const next = resolveNextStage(newUncovered, menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
+    setStage(next.stage);
+    setCurrentCategory(null);
+    sendText("continuar", cart, visitedCategories, null, next.stage);
   }
 
   function handleBack() { setCurrentCategory(null); }
@@ -1161,7 +1180,8 @@ export default function ChatSimPage() {
 
   function handleFinalConfirm() {
     setStage("DONE");
-    sendText("Confirmar pedido", cart, visitedCategories, null, "DONE");
+    const deliveryCtx = deliveryMethod === "pickup" ? "retirada no local" : "entrega";
+    sendText(`Confirmar pedido — ${deliveryCtx}`, cart, visitedCategories, null, "DONE");
   }
 
   function handleEditOrder() {
@@ -1307,6 +1327,7 @@ export default function ChatSimPage() {
               onPayment={handlePayment}
               onFinalConfirm={handleFinalConfirm}
               onEditOrder={handleEditOrder}
+              onUpsellContinue={handleUpsellContinue}
             />
           </div>
         )}

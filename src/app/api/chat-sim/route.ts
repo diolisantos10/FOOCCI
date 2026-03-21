@@ -59,6 +59,7 @@ interface ChatSimRequest {
   stage?: OrderStage;
   uncoveredCategories?: Array<"main" | "drink" | "dessert">;
   refusals?: { drink: boolean; dessert: boolean };
+  deliveryMethod?: "delivery" | "pickup" | null;
 }
 
 type DbMenuItem = { name: string; price: unknown; description: string | null; imageUrl: string | null };
@@ -88,6 +89,7 @@ function buildSystemPrompt(
   stage: OrderStage,
   uncoveredCategories: Array<"main" | "drink" | "dessert">,
   refusals: { drink: boolean; dessert: boolean },
+  deliveryMethod: "delivery" | "pickup" | null,
 ): string {
   const active = categories.filter((c) => c.items.length > 0);
 
@@ -131,6 +133,7 @@ function buildSystemPrompt(
       `Total parcial: R$ ${total.toFixed(2)}`,
       `Categorias COM itens: ${categoriesWithItems.join(", ") || "nenhuma"}`,
       `Categorias SEM itens: ${categoriesWithout.join(", ") || "nenhuma — pedido completo!"}`,
+      `Entrega: ${deliveryMethod === "delivery" ? "ENTREGA no endereço do cliente" : deliveryMethod === "pickup" ? "RETIRADA no local" : "não definida"}`,
     ].join("\n");
   }
 
@@ -259,22 +262,31 @@ ${stage === "SELECT_MAIN" ? `EXPLORAÇÃO (SELECT_MAIN) — cliente está montan
   SEMPRE aponte para o chip bar com 👇 — as opções estão lá.` : ""}
 
 ${stage === "SELECT_DRINK" ? `UPSELL BEBIDA (SELECT_DRINK) — crie desejo pela bebida, use o item do carrinho, nunca pergunte.
-  Varie entre: "Uma bebida bem gelada pra acompanhar — vai ficar perfeito 🧊👇"
-               "Tá quase lá 😏 A bebida certa vai deixar o pedido ainda melhor 👇"
-               "Fica ainda melhor com uma boa bebida gelada — dá uma olhada 🥤👇"
-               "Pra combinar direitinho, a bebida está esperando 🥤👇"
-               "Perfeito até aqui! A bebida vai elevar o pedido 🧊👇"
-  USE o item já selecionado: "Essa [item] pede uma bebida bem gelada 🧊👇"
-  PROIBIDO: "que tal?", "quer?", "quer adicionar", "Se quiser", "gostaria", "deseja", "Agora vamos", "Escolha".
+  SE NENHUMA BEBIDA NO CARRINHO (primeira abordagem):
+    USE o item já selecionado: "Essa [item] pede uma bebida bem gelada 🧊👇"
+    Varie entre: "Uma bebida bem gelada pra acompanhar — vai ficar perfeito 🧊👇"
+                 "Tá quase lá 😏 A bebida certa vai deixar o pedido ainda melhor 👇"
+                 "Fica ainda melhor com uma boa bebida gelada — dá uma olhada 🥤👇"
+                 "Pra combinar direitinho, a bebida está esperando 🥤👇"
+  SE BEBIDA JÁ NO CARRINHO (item acabou de ser adicionado — cliente pode querer mais):
+    Confirme brevemente e convide a continuar:
+    "✅ [Item] adicionado! Quer incluir mais uma bebida ou pode continuar? 👇"
+    "✅ Adicionado! Adicione mais uma ou clique em Continuar 👇"
+    "✅ [Item] no carrinho 🥤 Mais uma bebida ou segue em frente? 👇"
+  PROIBIDO: "que tal?", "quer?", "quer adicionar", "Se quiser", "gostaria", "deseja", "Agora vamos".
   NÃO liste itens. Cards aparecem abaixo automaticamente.` : ""}
 
 ${stage === "SELECT_DESSERT" ? `UPSELL SOBREMESA (SELECT_DESSERT) — feche com emoção e prazer, nunca pergunte.
-  Varie entre:  "Falta só a melhor parte 😏 A sobremesa vai fechar com chave de ouro 🍰👇"
-                "Pra fechar perfeito, a sobremesa vai valer muito — dá uma olhada 👇"
-                "O melhor ainda tá por vir 😋 A sobremesa está esperando 🍰👇"
-                "Vai fechar com estilo? A sobremesa faz toda a diferença 😍👇"
-                "Quase perfeito! Só falta a sobremesa pra completar 🍰👇"
-  PROIBIDO: "Deseja?", "Quer?", "Que tal?", "Se quiser", "gostaria", "Agora vamos", "Escolha".
+  SE NENHUMA SOBREMESA NO CARRINHO (primeira abordagem):
+    "Falta só a melhor parte 😏 A sobremesa vai fechar com chave de ouro 🍰👇"
+    "Pra fechar perfeito, a sobremesa vai valer muito — dá uma olhada 👇"
+    "O melhor ainda tá por vir 😋 A sobremesa está esperando 🍰👇"
+    "Vai fechar com estilo? A sobremesa faz toda a diferença 😍👇"
+  SE SOBREMESA JÁ NO CARRINHO (item acabou de ser adicionado — cliente pode querer mais):
+    "✅ [Item] adicionado! 😋 Quer mais uma sobremesa ou pode continuar? 👇"
+    "✅ Adicionado com estilo! Mais alguma ou pode seguir em frente? 🍰👇"
+    "✅ [Item] no carrinho — quer incluir mais ou clique em Continuar 👇"
+  PROIBIDO: "Deseja?", "Quer?", "Que tal?", "Se quiser", "gostaria", "Agora vamos".
   NÃO liste itens. Cards aparecem abaixo automaticamente.` : ""}
 
 ${stage === "PROMO" ? `PROMO — bundle especial após recusas. Destaque o valor da oferta.
@@ -327,15 +339,22 @@ ${stage === "REVIEW_ORDER" ? `REVISÃO DO PEDIDO (REVIEW_ORDER) — resumo compl
 
 ${stage === "DONE" ? `PEDIDO CONCLUÍDO (DONE) — ÚNICO momento onde você lista itens. Feche com recompensa emocional.
   Liste PEDIDO ATUAL completo (itens + preços + total).
-  FORMATO PADRÃO (varie o texto, mantenha a estrutura em 3 linhas):
+  FORMATO PADRÃO (3 linhas):
     Linha 1: confirmação calorosa com nome — "Perfeito, [nome]! 🚀"
-    Linha 2: pedido entrou na cozinha com energia — "Seu pedido já entrou na cozinha 👨‍🍳🔥"
-    Linha 3: antecipação de prazer — "Já já chega aí pra você aproveitar!"
-  Exemplos completos:
-    "Perfeito, [nome]! 🚀\nSeu pedido já entrou na cozinha 👨‍🍳🔥\nJá já chega aí pra você aproveitar!"
-    "Anotado, [nome]! 🎉\nA equipe já começou — tudo com muito carinho 🍕✨\nVai valer a espera, pode apostar!"
-    "Que pedido incrível, [nome]! 🔥\nJá está na cozinha — tá chegando aí 👨‍🍳😍\nPreparado pra uma experiência deliciosa!"
-  Use o nome SEMPRE. Feche com calor e antecipação — NUNCA com burocracia fria.` : ""}
+    Linha 2: pedido entrou na cozinha — "Seu pedido já entrou na cozinha 👨‍🍳🔥"
+    Linha 3: OBRIGATÓRIO — depende do tipo de entrega:
+      ${deliveryMethod === "pickup"
+        ? `RETIRADA → "Assim que estiver pronto te avisamos para retirada 🙌" / "Pode vir buscar em breve! 😊🙌"`
+        : `ENTREGA  → "Já já chega aí pra você aproveitar! 🚀" / "A caminho! Vai valer a espera 😍"`
+      }
+  Exemplos para ${deliveryMethod === "pickup" ? "RETIRADA" : "ENTREGA"}:
+    ${deliveryMethod === "pickup"
+      ? `"Perfeito, [nome]! 🚀\\nSeu pedido já entrou na cozinha 👨‍🍳🔥\\nAssim que estiver pronto te avisamos para retirada 🙌"
+    "Anotado, [nome]! 🎉\\nTá sendo preparado com carinho 🍕✨\\nPode vir buscar em breve! 😊"`
+      : `"Perfeito, [nome]! 🚀\\nSeu pedido já entrou na cozinha 👨‍🍳🔥\\nJá já chega aí pra você aproveitar!"
+    "Anotado, [nome]! 🎉\\nA equipe já começou — tudo com carinho 🍕✨\\nVai valer a espera, pode apostar!"`
+    }
+  Use o nome SEMPRE. Feche com calor — NUNCA com burocracia fria.` : ""}
 
 FALLBACK: "✅ [Item] adicionado! (R$ X,XX)"
 
@@ -414,6 +433,7 @@ export async function POST(req: NextRequest) {
       stage = "SELECT_MAIN",
       uncoveredCategories = ["main", "drink", "dessert"],
       refusals = { drink: false, dessert: false },
+      deliveryMethod = null,
     } = body;
     if (!message?.trim())        return badRequest("message is required.");
     if (!Array.isArray(history)) return badRequest("history must be an array.");
@@ -455,6 +475,7 @@ export async function POST(req: NextRequest) {
       stage as OrderStage,
       uncoveredCategories,
       refusals,
+      deliveryMethod,
     );
 
     const cappedHistory = history.slice(-maxHistory);
