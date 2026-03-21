@@ -3,38 +3,21 @@
 import { useState } from "react";
 import { notFound } from "next/navigation";
 import {
-  ArrowLeft,
-  Bot,
-  CheckSquare,
-  FileDown,
-  GitBranch,
-  Layers,
-  Lightbulb,
-  Palette,
-  Clock,
-  Plus,
-  AlertCircle,
-  Calendar,
-  Target,
+  ArrowLeft, Bot, CheckSquare, FileDown, GitBranch,
+  Layers, Lightbulb, Palette, Clock, Plus, AlertCircle,
+  Calendar, Target, CheckCircle2, RefreshCw,
 } from "lucide-react";
 import {
-  MOCK_PROJECTS,
-  MOCK_TASKS,
-  MOCK_DELIVERABLES,
-  MOCK_AGENTS,
+  MOCK_PROJECTS, MOCK_TASKS, MOCK_DELIVERABLES, MOCK_AGENTS,
+  TaskStatus, DeliverableStatus,
 } from "@/lib/agency/mock-data";
 import { Badge } from "@/components/agency/ui/Badge";
 import Link from "next/link";
 
 const STAGE_COLORS: Record<string, string> = {
-  briefing:   "#A1A1AA",
-  diagnosis:  "#D97706",
-  planning:   "#3B82F6",
-  production: "#8B5CF6",
-  review:     "#F97316",
-  delivery:   "#0D9488",
-  ongoing:    "#16A34A",
-  completed:  "#A1A1AA",
+  briefing:   "#A1A1AA", diagnosis:  "#D97706", planning:   "#3B82F6",
+  production: "#8B5CF6", review:     "#F97316", delivery:   "#0D9488",
+  ongoing:    "#16A34A", completed:  "#A1A1AA",
 };
 
 const PIPELINE_STAGES = [
@@ -54,8 +37,25 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: "history",      label: "History",      icon: Clock },
 ];
 
+const TASK_STATUS_CYCLE: Record<TaskStatus, TaskStatus> = {
+  pending: "in_progress", in_progress: "done", done: "pending", blocked: "pending",
+};
+
+const DELIVERABLE_STATUS_CYCLE: Record<DeliverableStatus, DeliverableStatus> = {
+  draft: "in_review", in_review: "approved", approved: "delivered", delivered: "draft",
+};
+
+const DELIVERABLE_STATUS_META: Record<DeliverableStatus, { label: string; bg: string; text: string }> = {
+  draft:     { label: "Draft",     bg: "#F4F4F5", text: "#71717A" },
+  in_review: { label: "In Review", bg: "#FFF7ED", text: "#C2410C" },
+  approved:  { label: "Approved",  bg: "#F0FDF4", text: "#15803D" },
+  delivered: { label: "Delivered", bg: "#EFF6FF", text: "#1D4ED8" },
+};
+
 export default function ProjectDetailPage({ params }: { params: { id: string } }) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [taskStatuses,        setTaskStatuses]        = useState<Record<string, TaskStatus>>({});
+  const [deliverableStatuses, setDeliverableStatuses] = useState<Record<string, DeliverableStatus>>({});
 
   const project = MOCK_PROJECTS.find((p) => p.id === params.id);
   if (!project) notFound();
@@ -65,15 +65,33 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   const agents       = MOCK_AGENTS.filter((a) => project.assignedAgents.includes(a.id));
   const stageIndex   = PIPELINE_STAGES.indexOf(project.stage);
   const stageColor   = STAGE_COLORS[project.stage] ?? "#A1A1AA";
-  const tasksDone    = tasks.filter((t) => t.status === "done").length;
+
+  function getTaskStatus(id: string, orig: TaskStatus): TaskStatus {
+    return taskStatuses[id] ?? orig;
+  }
+  function cycleTask(id: string, orig: TaskStatus) {
+    const current = getTaskStatus(id, orig);
+    setTaskStatuses((prev) => ({ ...prev, [id]: TASK_STATUS_CYCLE[current] }));
+  }
+
+  function getDeliverableStatus(id: string, orig: DeliverableStatus): DeliverableStatus {
+    return deliverableStatuses[id] ?? orig;
+  }
+  function cycleDeliverable(id: string, orig: DeliverableStatus) {
+    const current = getDeliverableStatus(id, orig);
+    setDeliverableStatuses((prev) => ({ ...prev, [id]: DELIVERABLE_STATUS_CYCLE[current] }));
+  }
+
+  const tasksDone    = tasks.filter((t) => getTaskStatus(t.id, t.status) === "done").length;
+  const tasksTotal   = tasks.length;
+  const progressPct  = tasksTotal > 0 ? (tasksDone / tasksTotal) * 100 : 0;
 
   return (
     <div className="flex min-h-full flex-col" style={{ backgroundColor: "#F5F5F3" }}>
 
-      {/* ── Project Header ────────────────────────────────────────── */}
+      {/* ── Project Header ─────────────────────────────────────────── */}
       <div className="border-b border-[#E5E5E2] bg-white">
         <div className="px-8 pt-5 pb-0">
-          {/* Back */}
           <Link
             href="/agency/projects"
             className="mb-4 flex items-center gap-1.5 text-[11px] font-medium text-[#A1A1AA] transition-colors hover:text-[#52525B]"
@@ -82,31 +100,24 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
             Projects
           </Link>
 
-          {/* Title row */}
           <div className="flex items-start justify-between gap-6">
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                <h1
-                  className="text-[20px] font-bold text-[#0A0A0A]"
-                  style={{ letterSpacing: "-0.02em" }}
-                >
+            <div className="min-w-0 flex-1">
+              <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                <h1 className="text-[20px] font-bold text-[#0A0A0A]" style={{ letterSpacing: "-0.02em" }}>
                   {project.name}
                 </h1>
                 <Badge variant={project.status} />
                 <Badge variant={project.priority} />
               </div>
-              <p className="text-[13px] text-[#71717A] leading-snug">{project.goal}</p>
+              <p className="text-[13px] leading-snug text-[#71717A]">{project.goal}</p>
               <div className="mt-2.5 flex flex-wrap items-center gap-4 text-[12px] text-[#A1A1AA]">
+                <span className="font-medium text-[#52525B]">{project.clientName}</span>
                 <span className="flex items-center gap-1.5">
-                  <span className="font-medium text-[#52525B]">{project.clientName}</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Calendar size={11} />
-                  Due {project.deadline}
+                  <Calendar size={11} /> Due {project.deadline}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <CheckSquare size={11} />
-                  {tasksDone}/{tasks.length} tasks
+                  <span className="mono-num">{tasksDone}/{tasksTotal}</span> tasks
                 </span>
               </div>
             </div>
@@ -115,13 +126,12 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 Edit
               </button>
               <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3.5 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#4848C2]">
-                <Plus size={13} />
-                Add Task
+                <Plus size={13} /> Add Task
               </button>
             </div>
           </div>
 
-          {/* Pipeline progress track */}
+          {/* Pipeline progress */}
           <div className="mt-6 flex items-end gap-0">
             {PIPELINE_STAGES.map((stage, i) => {
               const isPast    = i < stageIndex;
@@ -130,19 +140,11 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 <div key={stage} className="flex flex-1 flex-col items-start">
                   <div
                     className="mb-1.5 h-[3px] w-full rounded-sm"
-                    style={{
-                      backgroundColor: isPast
-                        ? "#5B5BD6"
-                        : isCurrent
-                        ? stageColor
-                        : "#EDEDED",
-                    }}
+                    style={{ backgroundColor: isPast ? "#5B5BD6" : isCurrent ? stageColor : "#EDEDED" }}
                   />
                   <span
-                    className="text-[9px] font-semibold uppercase tracking-[0.06em] pb-1"
-                    style={{
-                      color: isCurrent ? stageColor : isPast ? "#5B5BD6" : "#C0C0BC",
-                    }}
+                    className="pb-1 text-[9px] font-semibold uppercase tracking-[0.06em]"
+                    style={{ color: isCurrent ? stageColor : isPast ? "#5B5BD6" : "#C0C0BC" }}
                   >
                     {stage}
                   </span>
@@ -171,7 +173,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         </div>
       </div>
 
-      {/* ── Tab Content ───────────────────────────────────────────── */}
+      {/* ── Tab Content ────────────────────────────────────────────── */}
       <div className="flex-1 px-8 py-6">
 
         {/* OVERVIEW */}
@@ -179,112 +181,110 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
           <div className="grid grid-cols-3 gap-5">
             <div className="col-span-2 space-y-4">
 
-              {/* Goal card */}
-              <div
-                className="rounded-xl border border-[#E5E5E2] bg-white p-5"
-                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-              >
-                <div className="flex items-center gap-2 mb-3">
+              {/* Goal */}
+              <div className="rounded-xl border border-[#E5E5E2] bg-white p-5" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
+                <div className="mb-3 flex items-center gap-2">
                   <Target size={13} className="text-[#5B5BD6]" />
-                  <h3 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-[#A1A1AA]">
-                    Objective
-                  </h3>
+                  <h3 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-[#A1A1AA]">Objective</h3>
                 </div>
-                <p className="text-[13px] text-[#52525B] leading-relaxed">{project.description}</p>
+                <p className="text-[13px] leading-relaxed text-[#52525B]">{project.description}</p>
               </div>
 
               {/* Tasks snapshot */}
-              <div
-                className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
-                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-              >
+              <div className="overflow-hidden rounded-xl border border-[#E5E5E2] bg-white" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
                 <div className="flex items-center justify-between border-b border-[#F0F0EE] px-5 py-3.5">
                   <h3 className="text-[13px] font-semibold text-[#0A0A0A]">Tasks</h3>
                   <div className="flex items-center gap-3">
-                    <span className="text-[11px] text-[#A1A1AA]">
-                      {tasksDone} of {tasks.length} done
-                    </span>
-                    <button
-                      onClick={() => setActiveTab("tasks")}
-                      className="text-[11px] font-medium text-[#5B5BD6] hover:underline"
-                    >
+                    <span className="mono-num text-[11px] text-[#A1A1AA]">{tasksDone} of {tasksTotal} done</span>
+                    <button onClick={() => setActiveTab("tasks")} className="text-[11px] font-medium text-[#5B5BD6] hover:underline">
                       View all
                     </button>
                   </div>
                 </div>
-
-                {/* Progress bar */}
-                {tasks.length > 0 && (
+                {tasksTotal > 0 && (
                   <div className="h-[3px] bg-[#F0F0EE]">
-                    <div
-                      className="h-full bg-[#5B5BD6] transition-all"
-                      style={{ width: `${(tasksDone / tasks.length) * 100}%` }}
-                    />
+                    <div className="h-full bg-[#5B5BD6] transition-all duration-500" style={{ width: `${progressPct}%` }} />
                   </div>
                 )}
-
                 <div>
-                  {tasks.slice(0, 4).map((task, i) => (
-                    <div
-                      key={task.id}
-                      className="flex items-center gap-3 px-5 py-3.5"
-                      style={{ borderBottom: i < Math.min(tasks.length, 4) - 1 ? "1px solid #F5F5F3" : "none" }}
-                    >
+                  {tasks.slice(0, 4).map((task, i) => {
+                    const status   = getTaskStatus(task.id, task.status);
+                    const isDone   = status === "done";
+                    const isBlocked = status === "blocked";
+                    const isInProg  = status === "in_progress";
+                    return (
                       <div
-                        className="h-[14px] w-[14px] flex-none rounded-[3px] border-[1.5px]"
-                        style={{
-                          borderColor:
-                            task.status === "done" ? "#16A34A"
-                            : task.status === "blocked" ? "#DC2626"
-                            : task.status === "in_progress" ? "#5B5BD6"
-                            : "#D0D0CC",
-                          backgroundColor: task.status === "done" ? "#DCFCE7" : "transparent",
-                        }}
-                      />
-                      <p
-                        className="flex-1 text-[13px] font-medium text-[#0A0A0A]"
-                        style={{ opacity: task.status === "done" ? 0.45 : 1 }}
+                        key={task.id}
+                        className="flex items-center gap-3 px-5 py-3.5"
+                        style={{ borderBottom: i < Math.min(tasksTotal, 4) - 1 ? "1px solid #F5F5F3" : "none" }}
                       >
-                        {task.title}
-                      </p>
-                      <Badge variant={task.status} />
+                        <button onClick={() => cycleTask(task.id, task.status)} className="flex-none">
+                          <div
+                            className="flex h-[14px] w-[14px] items-center justify-center rounded-[3px] border-[1.5px] transition-all hover:opacity-70"
+                            style={{
+                              borderColor: isBlocked ? "#DC2626" : isDone ? "#16A34A" : isInProg ? "#5B5BD6" : "#D0D0CC",
+                              backgroundColor: isDone ? "#DCFCE7" : isBlocked ? "#FEE2E2" : isInProg ? "#EEEEFD" : "transparent",
+                            }}
+                          >
+                            {isDone    && <CheckCircle2 size={9} style={{ color: "#16A34A" }} strokeWidth={2.5} />}
+                            {isInProg  && <span className="h-[5px] w-[5px] rounded-full bg-[#5B5BD6]" />}
+                            {isBlocked && <AlertCircle  size={9} style={{ color: "#DC2626" }} strokeWidth={2.5} />}
+                          </div>
+                        </button>
+                        <p
+                          className="flex-1 text-[13px] font-medium text-[#0A0A0A] transition-all"
+                          style={{ opacity: isDone ? 0.4 : 1, textDecoration: isDone ? "line-through" : "none" }}
+                        >
+                          {task.title}
+                        </p>
+                        <Badge variant={status} />
+                      </div>
+                    );
+                  })}
+                  {tasksTotal === 0 && (
+                    <div className="flex flex-col items-center justify-center px-5 py-10">
+                      <CheckSquare size={20} className="mb-2 text-[#E5E5E2]" />
+                      <p className="text-[12px] text-[#A1A1AA]">No tasks yet for this project.</p>
+                      <p className="mt-0.5 text-[11px] text-[#C0C0BC]">Tasks will appear here once the Orchestrator assigns them.</p>
                     </div>
-                  ))}
-                  {tasks.length === 0 && (
-                    <p className="px-5 py-5 text-[12px] text-[#A1A1AA]">No tasks yet.</p>
                   )}
                 </div>
               </div>
 
               {/* Deliverables snapshot */}
               {deliverables.length > 0 && (
-                <div
-                  className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
-                  style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-                >
+                <div className="overflow-hidden rounded-xl border border-[#E5E5E2] bg-white" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
                   <div className="flex items-center justify-between border-b border-[#F0F0EE] px-5 py-3.5">
                     <h3 className="text-[13px] font-semibold text-[#0A0A0A]">Deliverables</h3>
-                    <button
-                      onClick={() => setActiveTab("deliverables")}
-                      className="text-[11px] font-medium text-[#5B5BD6] hover:underline"
-                    >
+                    <button onClick={() => setActiveTab("deliverables")} className="text-[11px] font-medium text-[#5B5BD6] hover:underline">
                       View all
                     </button>
                   </div>
-                  {deliverables.map((d, i) => (
-                    <div
-                      key={d.id}
-                      className="flex items-center gap-3 px-5 py-3.5"
-                      style={{ borderBottom: i < deliverables.length - 1 ? "1px solid #F5F5F3" : "none" }}
-                    >
-                      <div className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-[#EEEEFD]">
-                        <FileDown size={12} className="text-[#5B5BD6]" />
+                  {deliverables.map((d, i) => {
+                    const dStatus = getDeliverableStatus(d.id, d.status);
+                    const dMeta   = DELIVERABLE_STATUS_META[dStatus];
+                    return (
+                      <div
+                        key={d.id}
+                        className="flex items-center gap-3 px-5 py-3.5"
+                        style={{ borderBottom: i < deliverables.length - 1 ? "1px solid #F5F5F3" : "none" }}
+                      >
+                        <div className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-[#EEEEFD]">
+                          <FileDown size={12} className="text-[#5B5BD6]" />
+                        </div>
+                        <p className="flex-1 text-[13px] font-medium text-[#0A0A0A]">{d.name}</p>
+                        <span className="text-[11px] text-[#A1A1AA]">{d.type}</span>
+                        <button
+                          onClick={() => cycleDeliverable(d.id, d.status)}
+                          className="rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold transition-all hover:opacity-75"
+                          style={{ backgroundColor: dMeta.bg, color: dMeta.text }}
+                          title="Click to advance status"
+                        >
+                          {dMeta.label}
+                        </button>
                       </div>
-                      <p className="flex-1 text-[13px] font-medium text-[#0A0A0A]">{d.name}</p>
-                      <span className="text-[11px] text-[#A1A1AA]">{d.type}</span>
-                      <Badge variant={d.status} />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -292,54 +292,53 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
             {/* Sidebar */}
             <div className="space-y-4">
               {/* Agents */}
-              <div
-                className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
-                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-              >
+              <div className="overflow-hidden rounded-xl border border-[#E5E5E2] bg-white" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
                 <div className="border-b border-[#F0F0EE] px-5 py-3.5">
                   <h3 className="text-[13px] font-semibold text-[#0A0A0A]">Assigned Agents</h3>
                 </div>
-                <div>
-                  {agents.map((agent, i) => (
-                    <div
-                      key={agent.id}
-                      className="flex items-center gap-3 px-5 py-3"
-                      style={{ borderBottom: i < agents.length - 1 ? "1px solid #F5F5F3" : "none" }}
-                    >
+                {agents.length === 0 ? (
+                  <div className="px-5 py-8 text-center">
+                    <Bot size={20} className="mx-auto mb-2 text-[#E5E5E2]" />
+                    <p className="text-[12px] text-[#A1A1AA]">No agents assigned yet.</p>
+                  </div>
+                ) : (
+                  <div>
+                    {agents.map((agent, i) => (
                       <div
-                        className="flex h-7 w-7 flex-none items-center justify-center rounded-lg"
-                        style={{ backgroundColor: `${agent.color}15` }}
+                        key={agent.id}
+                        className="flex items-center gap-3 px-5 py-3"
+                        style={{ borderBottom: i < agents.length - 1 ? "1px solid #F5F5F3" : "none" }}
                       >
-                        <Bot size={12} style={{ color: agent.color }} />
+                        <div
+                          className="flex h-7 w-7 flex-none items-center justify-center rounded-lg"
+                          style={{ backgroundColor: `${agent.color}15` }}
+                        >
+                          <Bot size={12} style={{ color: agent.color }} />
+                        </div>
+                        <div>
+                          <p className="text-[12px] font-semibold text-[#0A0A0A]">{agent.name}</p>
+                          <p className="text-[10px] text-[#A1A1AA]">{agent.role}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[12px] font-semibold text-[#0A0A0A]">{agent.name}</p>
-                        <p className="text-[10px] text-[#A1A1AA]">{agent.role}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Stats */}
-              <div
-                className="rounded-xl border border-[#E5E5E2] bg-white p-5"
-                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-              >
-                <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-[#A1A1AA]">
-                  At a Glance
-                </h3>
+              <div className="rounded-xl border border-[#E5E5E2] bg-white p-5" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
+                <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-[#A1A1AA]">At a Glance</h3>
                 <div className="space-y-2.5">
                   {[
-                    { label: "Tasks total",    value: tasks.length },
-                    { label: "Tasks done",     value: tasksDone },
-                    { label: "Blocked",        value: tasks.filter((t) => t.status === "blocked").length },
-                    { label: "Deliverables",   value: deliverables.length },
-                    { label: "Agents active",  value: agents.length },
+                    { label: "Tasks total",   value: tasksTotal },
+                    { label: "Tasks done",    value: tasksDone },
+                    { label: "Blocked",       value: tasks.filter((t) => getTaskStatus(t.id, t.status) === "blocked").length },
+                    { label: "Deliverables",  value: deliverables.length },
+                    { label: "Agents active", value: agents.length },
                   ].map((s) => (
                     <div key={s.label} className="flex items-center justify-between">
                       <span className="text-[12px] text-[#71717A]">{s.label}</span>
-                      <span className="text-[13px] font-bold text-[#0A0A0A] mono-num">{s.value}</span>
+                      <span className="mono-num text-[13px] font-bold text-[#0A0A0A]">{s.value}</span>
                     </div>
                   ))}
                 </div>
@@ -350,10 +349,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
         {/* PIPELINE */}
         {activeTab === "pipeline" && (
-          <div
-            className="rounded-xl border border-[#E5E5E2] bg-white p-6"
-            style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-          >
+          <div className="rounded-xl border border-[#E5E5E2] bg-white p-6" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
             <h3 className="mb-1 text-[14px] font-semibold text-[#0A0A0A]">Execution Pipeline</h3>
             <p className="mb-6 text-[12px] text-[#A1A1AA]">
               Current stage: <span className="font-semibold capitalize" style={{ color: stageColor }}>{project.stage}</span>
@@ -379,21 +375,13 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                       {isPast ? "✓" : i + 1}
                     </div>
                     <div className="flex-1">
-                      <p
-                        className="text-[13px] font-semibold capitalize"
-                        style={{ color: isCurrent ? stageColor : isPast ? "#0A0A0A" : "#A1A1AA" }}
-                      >
+                      <p className="text-[13px] font-semibold capitalize" style={{ color: isCurrent ? stageColor : isPast ? "#0A0A0A" : "#A1A1AA" }}>
                         {stage}
                       </p>
-                      {isCurrent && (
-                        <p className="text-[11px]" style={{ color: stageColor }}>In progress</p>
-                      )}
+                      {isCurrent && <p className="text-[11px]" style={{ color: stageColor }}>In progress</p>}
                     </div>
                     {isCurrent && (
-                      <span
-                        className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold text-white"
-                        style={{ backgroundColor: stageColor }}
-                      >
+                      <span className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: stageColor }}>
                         Active
                       </span>
                     )}
@@ -406,101 +394,131 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
         {/* TASKS */}
         {activeTab === "tasks" && (
-          <div
-            className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
-            style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-          >
+          <div className="overflow-hidden rounded-xl border border-[#E5E5E2] bg-white" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
             <div className="flex items-center justify-between border-b border-[#F0F0EE] px-5 py-4">
               <div>
                 <h3 className="text-[13px] font-semibold text-[#0A0A0A]">Tasks</h3>
-                <p className="text-[11px] text-[#A1A1AA]">{tasksDone} of {tasks.length} completed</p>
+                <p className="mono-num text-[11px] text-[#A1A1AA]">{tasksDone} of {tasksTotal} completed</p>
               </div>
-              <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#4848C2] transition-colors">
+              <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-[#4848C2]">
                 <Plus size={12} /> Add task
               </button>
             </div>
-            {tasks.length === 0 ? (
-              <div className="px-5 py-14 text-center">
-                <p className="text-[13px] text-[#A1A1AA]">No tasks yet for this project.</p>
+
+            {/* Progress */}
+            {tasksTotal > 0 && (
+              <div className="h-[3px] bg-[#F0F0EE]">
+                <div className="h-full bg-[#5B5BD6] transition-all duration-500" style={{ width: `${progressPct}%` }} />
+              </div>
+            )}
+
+            {tasksTotal === 0 ? (
+              <div className="flex flex-col items-center justify-center px-5 py-14">
+                <CheckSquare size={24} className="mb-3 text-[#E5E5E2]" />
+                <p className="text-[13px] font-medium text-[#52525B]">No tasks yet</p>
+                <p className="mt-1 text-[11px] text-[#A1A1AA]">Use the Orchestrator to generate a task breakdown for this project.</p>
               </div>
             ) : (
-              tasks.map((task, i) => (
-                <div
-                  key={task.id}
-                  className="flex items-start gap-4 px-5 py-4"
-                  style={{ borderBottom: i < tasks.length - 1 ? "1px solid #F5F5F3" : "none" }}
-                >
+              tasks.map((task, i) => {
+                const status   = getTaskStatus(task.id, task.status);
+                const isDone   = status === "done";
+                const isBlocked = status === "blocked";
+                const isInProg  = status === "in_progress";
+                return (
                   <div
-                    className="mt-0.5 h-[14px] w-[14px] flex-none rounded-[3px] border-[1.5px]"
-                    style={{
-                      borderColor: task.status === "done" ? "#16A34A" : task.status === "blocked" ? "#DC2626" : "#D0D0CC",
-                      backgroundColor: task.status === "done" ? "#DCFCE7" : "transparent",
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className="text-[13px] font-medium text-[#0A0A0A]"
-                      style={{ opacity: task.status === "done" ? 0.45 : 1 }}
-                    >
-                      {task.title}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-[#71717A]">{task.description}</p>
-                    <div className="mt-1.5 flex items-center gap-2.5">
-                      <span className="text-[11px] text-[#A1A1AA]">{task.agentName}</span>
-                      {task.status === "blocked" && (
-                        <span className="flex items-center gap-1 text-[11px] font-medium text-[#DC2626]">
-                          <AlertCircle size={10} /> Blocked
-                        </span>
-                      )}
+                    key={task.id}
+                    className="flex items-start gap-4 px-5 py-4 transition-colors hover:bg-[#FAFAF9]"
+                    style={{ borderBottom: i < tasksTotal - 1 ? "1px solid #F5F5F3" : "none" }}
+                  >
+                    <button onClick={() => cycleTask(task.id, task.status)} className="mt-0.5 flex-none">
+                      <div
+                        className="flex h-[14px] w-[14px] items-center justify-center rounded-[3px] border-[1.5px] transition-all hover:opacity-70"
+                        style={{
+                          borderColor: isBlocked ? "#DC2626" : isDone ? "#16A34A" : isInProg ? "#5B5BD6" : "#D0D0CC",
+                          backgroundColor: isDone ? "#DCFCE7" : isBlocked ? "#FEE2E2" : isInProg ? "#EEEEFD" : "transparent",
+                        }}
+                      >
+                        {isDone    && <CheckCircle2 size={9} style={{ color: "#16A34A" }} strokeWidth={2.5} />}
+                        {isInProg  && <span className="h-[5px] w-[5px] rounded-full bg-[#5B5BD6]" />}
+                        {isBlocked && <AlertCircle  size={9} style={{ color: "#DC2626" }} strokeWidth={2.5} />}
+                      </div>
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className="text-[13px] font-medium text-[#0A0A0A] transition-all"
+                        style={{ opacity: isDone ? 0.4 : 1, textDecoration: isDone ? "line-through" : "none" }}
+                      >
+                        {task.title}
+                      </p>
+                      <p className="mt-0.5 text-[12px] text-[#71717A]">{task.description}</p>
+                      <div className="mt-1.5 flex items-center gap-2.5">
+                        <span className="text-[11px] text-[#A1A1AA]">{task.agentName}</span>
+                        {isBlocked && (
+                          <span className="flex items-center gap-1 text-[11px] font-medium text-[#DC2626]">
+                            <AlertCircle size={10} /> Blocked
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={status} />
+                      <Badge variant={task.priority} />
+                      <span className="mono-num text-[11px] text-[#A1A1AA]">{task.dueDate.slice(5)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={task.status} />
-                    <Badge variant={task.priority} />
-                    <span className="text-[11px] text-[#A1A1AA] mono-num">{task.dueDate.slice(5)}</span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
 
         {/* DELIVERABLES */}
         {activeTab === "deliverables" && (
-          <div
-            className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
-            style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-          >
+          <div className="overflow-hidden rounded-xl border border-[#E5E5E2] bg-white" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
             <div className="flex items-center justify-between border-b border-[#F0F0EE] px-5 py-4">
               <div>
                 <h3 className="text-[13px] font-semibold text-[#0A0A0A]">Deliverables</h3>
                 <p className="text-[11px] text-[#A1A1AA]">{deliverables.length} produced for this project</p>
               </div>
-              <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#4848C2] transition-colors">
+              <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-[#4848C2]">
                 <Plus size={12} /> Log deliverable
               </button>
             </div>
             {deliverables.length === 0 ? (
-              <div className="px-5 py-14 text-center">
-                <p className="text-[13px] text-[#A1A1AA]">No deliverables logged yet.</p>
+              <div className="flex flex-col items-center justify-center px-5 py-14">
+                <FileDown size={24} className="mb-3 text-[#E5E5E2]" />
+                <p className="text-[13px] font-medium text-[#52525B]">No deliverables yet</p>
+                <p className="mt-1 text-[11px] text-[#A1A1AA]">Outputs produced by agents will be logged here as the project progresses.</p>
               </div>
             ) : (
-              deliverables.map((d, i) => (
-                <div
-                  key={d.id}
-                  className="flex items-center gap-4 px-5 py-4"
-                  style={{ borderBottom: i < deliverables.length - 1 ? "1px solid #F5F5F3" : "none" }}
-                >
-                  <div className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-[#EEEEFD]">
-                    <FileDown size={14} className="text-[#5B5BD6]" />
+              deliverables.map((d, i) => {
+                const dStatus = getDeliverableStatus(d.id, d.status);
+                const dMeta   = DELIVERABLE_STATUS_META[dStatus];
+                return (
+                  <div
+                    key={d.id}
+                    className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[#FAFAF9]"
+                    style={{ borderBottom: i < deliverables.length - 1 ? "1px solid #F5F5F3" : "none" }}
+                  >
+                    <div className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-[#EEEEFD]">
+                      <FileDown size={14} className="text-[#5B5BD6]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-[#0A0A0A]">{d.name}</p>
+                      <p className="text-[11px] text-[#A1A1AA]">{d.type} · {d.agentName} · {d.producedAt}</p>
+                    </div>
+                    <button
+                      onClick={() => cycleDeliverable(d.id, d.status)}
+                      className="flex items-center gap-1.5 rounded-[5px] px-[7px] py-[2px] transition-all hover:opacity-75"
+                      title="Click to advance status"
+                      style={{ backgroundColor: dMeta.bg, color: dMeta.text }}
+                    >
+                      <span className="text-[11px] font-semibold">{dMeta.label}</span>
+                      <RefreshCw size={9} className="flex-none opacity-50" />
+                    </button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-[#0A0A0A]">{d.name}</p>
-                    <p className="text-[11px] text-[#A1A1AA]">{d.type} · {d.agentName} · {d.producedAt}</p>
-                  </div>
-                  <Badge variant={d.status} />
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
@@ -509,37 +527,21 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         {activeTab === "strategy" && (
           <div className="grid grid-cols-2 gap-4">
             {[
-              {
-                title: "Business Objective",
-                content: project.goal,
-                color: "#5B5BD6",
-                label: "Goal",
-              },
-              {
-                title: "Project Scope",
-                content: project.description,
-                color: "#8B5CF6",
-                label: "Scope",
-              },
+              { title: "Business Objective", content: project.goal,        color: "#5B5BD6", label: "Goal" },
+              { title: "Project Scope",       content: project.description, color: "#8B5CF6", label: "Scope" },
               {
                 title: "Success Criteria",
                 content: "To be defined during the diagnosis and planning stages with the Marketing Strategist Agent.",
-                color: "#0D9488",
-                label: "Success",
+                color: "#0D9488", label: "Success",
               },
               {
                 title: "Risks & Dependencies",
                 content: "No risks currently flagged. Orchestrator analysis will surface blockers as the project progresses.",
-                color: "#D97706",
-                label: "Risks",
+                color: "#D97706", label: "Risks",
               },
             ].map((card) => (
-              <div
-                key={card.title}
-                className="rounded-xl border border-[#E5E5E2] bg-white p-5"
-                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-              >
-                <div className="flex items-center gap-2 mb-3">
+              <div key={card.title} className="rounded-xl border border-[#E5E5E2] bg-white p-5" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
+                <div className="mb-3">
                   <span
                     className="inline-flex rounded-[5px] px-[7px] py-[2px] text-[10px] font-semibold uppercase tracking-[0.06em]"
                     style={{ backgroundColor: `${card.color}12`, color: card.color }}
@@ -548,7 +550,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                   </span>
                 </div>
                 <h3 className="mb-2 text-[13px] font-semibold text-[#0A0A0A]">{card.title}</h3>
-                <p className="text-[13px] text-[#52525B] leading-relaxed">{card.content}</p>
+                <p className="text-[13px] leading-relaxed text-[#52525B]">{card.content}</p>
               </div>
             ))}
           </div>
@@ -556,10 +558,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
         {/* ASSETS */}
         {activeTab === "assets" && (
-          <div
-            className="rounded-xl border border-[#E5E5E2] bg-white p-6"
-            style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-          >
+          <div className="rounded-xl border border-[#E5E5E2] bg-white p-6" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
             <h3 className="mb-1 text-[14px] font-semibold text-[#0A0A0A]">Brand Assets</h3>
             <p className="mb-5 text-[12px] text-[#A1A1AA]">
               Brand assets for {project.clientName} are managed in the client profile.
@@ -575,10 +574,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
         {/* HISTORY */}
         {activeTab === "history" && (
-          <div
-            className="rounded-xl border border-[#E5E5E2] bg-white p-6"
-            style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-          >
+          <div className="rounded-xl border border-[#E5E5E2] bg-white p-6" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
             <h3 className="mb-5 text-[14px] font-semibold text-[#0A0A0A]">Project History</h3>
             <div className="space-y-0">
               {[
@@ -589,17 +585,12 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               ].map((event, i, arr) => (
                 <div key={i} className="flex gap-4">
                   <div className="flex flex-col items-center">
-                    <div
-                      className="h-2.5 w-2.5 flex-none rounded-full mt-1"
-                      style={{ backgroundColor: event.color }}
-                    />
-                    {i < arr.length - 1 && (
-                      <div className="w-px flex-1 bg-[#F0F0EE] my-1" />
-                    )}
+                    <div className="mt-1 h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: event.color }} />
+                    {i < arr.length - 1 && <div className="my-1 w-px flex-1 bg-[#F0F0EE]" />}
                   </div>
                   <div className="pb-5">
                     <p className="text-[13px] font-medium text-[#0A0A0A]">{event.label}</p>
-                    <p className="mt-0.5 text-[11px] text-[#A1A1AA] mono-num">{event.date}</p>
+                    <p className="mono-num mt-0.5 text-[11px] text-[#A1A1AA]">{event.date}</p>
                   </div>
                 </div>
               ))}

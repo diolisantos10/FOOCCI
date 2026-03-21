@@ -2,16 +2,13 @@
 
 import { useState } from "react";
 import {
-  Cpu,
-  Zap,
-  Bot,
-  GitBranch,
-  AlertTriangle,
-  CheckCircle2,
-  Loader2,
-  Circle,
+  Cpu, Zap, Bot, GitBranch, AlertTriangle,
+  CheckCircle2, Loader2, Circle, Check,
 } from "lucide-react";
 import { MOCK_AGENTS } from "@/lib/agency/mock-data";
+import Link from "next/link";
+
+type OrchestratorState = "idle" | "analyzing" | "plan_ready" | "approved";
 
 const MOCK_OUTPUT = {
   pipeline: [
@@ -36,28 +33,45 @@ const MOCK_OUTPUT = {
 };
 
 const FIELD_LABEL = "text-[10px] font-semibold uppercase tracking-[0.08em] text-[#71717A]";
-const INPUT_BASE  =
-  "w-full rounded-lg border border-[#E5E5E2] bg-[#FAFAF9] px-3 py-2.5 text-[13px] text-[#0A0A0A] outline-none transition-colors focus:border-[#5B5BD6] focus:bg-white";
+const INPUT_BASE  = "w-full rounded-lg border border-[#E5E5E2] bg-[#FAFAF9] px-3 py-2.5 text-[13px] text-[#0A0A0A] outline-none transition-colors focus:border-[#5B5BD6] focus:bg-white";
+
+const STEPS = [
+  { n: "01", label: "Submit brief",        state: ["analyzing", "plan_ready", "approved"] },
+  { n: "02", label: "Orchestrator analyzes", state: ["analyzing", "plan_ready", "approved"] },
+  { n: "03", label: "Pipeline generated",  state: ["plan_ready", "approved"] },
+  { n: "04", label: "Agents assigned",     state: ["plan_ready", "approved"] },
+  { n: "05", label: "Approve & activate",  state: ["approved"] },
+];
 
 export default function OrchestratorPage() {
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showOutput,  setShowOutput]  = useState(false);
+  const [orchState, setOrchState] = useState<OrchestratorState>("idle");
   const [form, setForm] = useState({
     client: "", type: "", goal: "", deadline: "", budget: "", notes: "",
   });
 
+  const canRun     = !!form.goal.trim() && !!form.type && !!form.client;
+  const isAnalyzing = orchState === "analyzing";
+  const showOutput  = orchState === "plan_ready" || orchState === "approved";
+  const isApproved  = orchState === "approved";
+
   function handleAnalyze() {
-    setIsAnalyzing(true);
-    setShowOutput(false);
-    setTimeout(() => { setIsAnalyzing(false); setShowOutput(true); }, 1800);
+    setOrchState("analyzing");
+    setTimeout(() => setOrchState("plan_ready"), 1800);
   }
 
-  const canRun = form.goal.trim() && form.type && form.client;
+  function handleApprove() {
+    setOrchState("approved");
+  }
+
+  function handleReset() {
+    setOrchState("idle");
+    setForm({ client: "", type: "", goal: "", deadline: "", budget: "", notes: "" });
+  }
 
   return (
     <div className="min-h-full" style={{ backgroundColor: "#F5F5F3" }}>
 
-      {/* ── Orchestrator Header ──────────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="border-b border-[#E5E5E2] bg-white px-8 py-5">
         <div className="flex items-start gap-4">
           <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-[#EEEEFD]">
@@ -73,34 +87,44 @@ export default function OrchestratorPage() {
           </div>
         </div>
 
-        {/* How it works strip */}
+        {/* Step strip */}
         <div className="mt-5 flex items-center gap-0 border-t border-[#F0F0EE] pt-4">
-          {[
-            { n: "01", label: "Submit brief" },
-            { n: "02", label: "Orchestrator analyzes" },
-            { n: "03", label: "Pipeline generated" },
-            { n: "04", label: "Agents assigned" },
-            { n: "05", label: "Approve & activate" },
-          ].map((step, i, arr) => (
-            <div key={step.n} className="flex items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-[#5B5BD6] mono-num">{step.n}</span>
-                <span className="text-[11px] font-medium text-[#71717A]">{step.label}</span>
+          {STEPS.map((step, i, arr) => {
+            const isActive   = step.state.includes(orchState);
+            const isRunning  = orchState === "analyzing" && step.n === "02";
+            return (
+              <div key={step.n} className="flex items-center">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="mono-num text-[10px] font-bold transition-colors"
+                    style={{ color: isActive ? "#5B5BD6" : "#D0D0CC" }}
+                  >
+                    {isRunning ? (
+                      <Loader2 size={10} className="animate-spin text-[#5B5BD6]" />
+                    ) : step.n}
+                  </span>
+                  <span
+                    className="text-[11px] font-medium transition-colors"
+                    style={{ color: isActive ? "#0A0A0A" : "#C0C0BC" }}
+                  >
+                    {step.label}
+                  </span>
+                </div>
+                {i < arr.length - 1 && (
+                  <span className="mx-3" style={{ color: isActive ? "#A1A1AA" : "#E5E5E2" }}>→</span>
+                )}
               </div>
-              {i < arr.length - 1 && (
-                <span className="mx-3 text-[#D0D0CC]">→</span>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       <div className="grid grid-cols-5 gap-6 px-8 py-7">
 
-        {/* ── Left: Input Form ─────────────────────────────────────── */}
+        {/* ── Left: Input Form ───────────────────────────────────────── */}
         <div className="col-span-2">
           <div
-            className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
+            className="overflow-hidden rounded-xl border border-[#E5E5E2] bg-white"
             style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
           >
             <div className="border-b border-[#F0F0EE] px-5 py-4">
@@ -116,6 +140,7 @@ export default function OrchestratorPage() {
                 <select
                   value={form.client}
                   onChange={(e) => setForm({ ...form, client: e.target.value })}
+                  disabled={isApproved}
                   className={INPUT_BASE}
                 >
                   <option value="">Select client...</option>
@@ -131,12 +156,13 @@ export default function OrchestratorPage() {
                 <select
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  disabled={isApproved}
                   className={INPUT_BASE}
                 >
                   <option value="">Select type...</option>
                   <option>Paid Media Campaign</option>
                   <option>Brand Identity / Rebrand</option>
-                  <option>SEO & Content</option>
+                  <option>SEO &amp; Content</option>
                   <option>Social Media</option>
                   <option>Landing Page</option>
                   <option>Full Marketing Strategy</option>
@@ -151,6 +177,7 @@ export default function OrchestratorPage() {
                   rows={3}
                   value={form.goal}
                   onChange={(e) => setForm({ ...form, goal: e.target.value })}
+                  disabled={isApproved}
                   placeholder="What does this project need to achieve? Be specific."
                   className={`${INPUT_BASE} resize-none placeholder-[#D0D0CC]`}
                 />
@@ -164,6 +191,7 @@ export default function OrchestratorPage() {
                     type="date"
                     value={form.deadline}
                     onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+                    disabled={isApproved}
                     className={INPUT_BASE}
                   />
                 </div>
@@ -173,6 +201,7 @@ export default function OrchestratorPage() {
                     type="text"
                     value={form.budget}
                     onChange={(e) => setForm({ ...form, budget: e.target.value })}
+                    disabled={isApproved}
                     placeholder="e.g. R$ 15,000"
                     className={`${INPUT_BASE} placeholder-[#D0D0CC]`}
                   />
@@ -186,53 +215,55 @@ export default function OrchestratorPage() {
                   rows={2}
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  disabled={isApproved}
                   placeholder="Constraints, references, dependencies..."
                   className={`${INPUT_BASE} resize-none placeholder-[#D0D0CC]`}
                 />
               </div>
 
-              {/* Run button */}
-              <button
-                onClick={handleAnalyze}
-                disabled={!canRun || isAnalyzing}
-                className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-[13px] font-semibold text-white transition-all"
-                style={{
-                  backgroundColor: canRun && !isAnalyzing ? "#5B5BD6" : "#E5E5E2",
-                  color: canRun && !isAnalyzing ? "#FFFFFF" : "#A1A1AA",
-                  cursor: canRun && !isAnalyzing ? "pointer" : "not-allowed",
-                }}
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Zap size={14} />
-                    Run Orchestrator
-                  </>
-                )}
-              </button>
+              {/* CTA */}
+              {!isApproved ? (
+                <button
+                  onClick={handleAnalyze}
+                  disabled={!canRun || isAnalyzing}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-[13px] font-semibold transition-all"
+                  style={{
+                    backgroundColor: canRun && !isAnalyzing ? "#5B5BD6" : "#E5E5E2",
+                    color: canRun && !isAnalyzing ? "#FFFFFF" : "#A1A1AA",
+                    cursor: canRun && !isAnalyzing ? "pointer" : "not-allowed",
+                  }}
+                >
+                  {isAnalyzing ? (
+                    <><Loader2 size={14} className="animate-spin" /> Analyzing...</>
+                  ) : (
+                    <><Zap size={14} /> Run Orchestrator</>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={handleReset}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#E5E5E2] py-3 text-[13px] font-medium text-[#52525B] transition-colors hover:border-[#D0D0CC]"
+                >
+                  Start new brief
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* ── Right: Output Panel ──────────────────────────────────── */}
+        {/* ── Right: Output Panel ────────────────────────────────────── */}
         <div className="col-span-3 space-y-4">
 
-          {/* Empty state */}
-          {!showOutput && !isAnalyzing && (
-            <div
-              className="flex h-full min-h-[460px] items-center justify-center rounded-xl border-2 border-dashed border-[#E5E5E2]"
-            >
-              <div className="text-center max-w-xs">
+          {/* Idle empty state */}
+          {orchState === "idle" && (
+            <div className="flex min-h-[460px] items-center justify-center rounded-xl border-2 border-dashed border-[#E5E5E2]">
+              <div className="max-w-xs text-center">
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#EEEEFD]">
                   <Cpu size={22} className="text-[#5B5BD6]" />
                 </div>
                 <p className="text-[14px] font-semibold text-[#0A0A0A]">Orchestrator ready</p>
-                <p className="mt-1.5 text-[12px] text-[#A1A1AA] leading-relaxed">
-                  Fill in the project brief and run the analysis to receive your execution plan.
+                <p className="mt-1.5 text-[12px] leading-relaxed text-[#A1A1AA]">
+                  Fill in the project brief on the left and run the analysis to generate your execution plan.
                 </p>
               </div>
             </div>
@@ -246,32 +277,45 @@ export default function OrchestratorPage() {
                   <Loader2 size={22} className="animate-spin text-[#5B5BD6]" />
                 </div>
                 <p className="text-[14px] font-semibold text-[#0A0A0A]">Analyzing project...</p>
-                <p className="mt-1 text-[12px] text-[#A1A1AA]">
-                  Defining pipeline · Selecting agents · Mapping tasks
-                </p>
+                <p className="mt-1 text-[12px] text-[#A1A1AA]">Defining pipeline · Selecting agents · Mapping tasks</p>
               </div>
             </div>
           )}
 
-          {/* Output */}
+          {/* Plan output */}
           {showOutput && (
             <>
-              {/* Success bar */}
-              <div
-                className="flex items-center gap-2.5 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-5 py-3"
-              >
-                <CheckCircle2 size={14} className="text-[#16A34A]" />
-                <p className="text-[12px] font-semibold text-[#166534]">
-                  Execution plan generated
-                </p>
-                <span className="ml-auto text-[11px] text-[#A1A1AA]">
-                  Review and approve to create the project
-                </span>
-              </div>
+              {/* Status banner */}
+              {isApproved ? (
+                <div className="flex items-center gap-3 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-5 py-4">
+                  <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#DCFCE7]">
+                    <Check size={14} className="text-[#16A34A]" strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-[#166534]">Project created and added to pipeline</p>
+                    <p className="text-[11px] text-[#15803D]">
+                      Visit{" "}
+                      <Link href="/agency/projects" className="font-semibold underline underline-offset-2">
+                        Projects
+                      </Link>
+                      {" "}to view the new project.
+                    </p>
+                  </div>
+                  <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.06em] text-[#15803D]">
+                    Approved
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-5 py-3">
+                  <CheckCircle2 size={14} className="text-[#16A34A]" />
+                  <p className="text-[12px] font-semibold text-[#166534]">Execution plan generated</p>
+                  <span className="ml-auto text-[11px] text-[#A1A1AA]">Review and approve to create the project</span>
+                </div>
+              )}
 
-              {/* Pipeline */}
+              {/* Suggested pipeline */}
               <div
-                className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
+                className="overflow-hidden rounded-xl border border-[#E5E5E2] bg-white"
                 style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
               >
                 <div className="flex items-center gap-2 border-b border-[#F0F0EE] px-5 py-3.5">
@@ -280,26 +324,13 @@ export default function OrchestratorPage() {
                 </div>
                 <div className="divide-y divide-[#F5F5F3]">
                   {MOCK_OUTPUT.pipeline.map((step, i) => {
-                    const Icon =
-                      step.status === "complete" ? CheckCircle2
-                      : step.status === "current"  ? Zap
-                      : Circle;
-                    const color =
-                      step.status === "complete" ? "#16A34A"
-                      : step.status === "current"  ? "#5B5BD6"
-                      : "#D0D0CC";
+                    const Icon  = step.status === "complete" ? CheckCircle2 : step.status === "current" ? Zap : Circle;
+                    const color = step.status === "complete" ? "#16A34A" : step.status === "current" ? "#5B5BD6" : "#D0D0CC";
                     return (
                       <div key={i} className="flex items-center gap-3.5 px-5 py-3.5">
-                        <Icon
-                          size={14}
-                          strokeWidth={step.status === "complete" ? 2.5 : 1.75}
-                          style={{ color, flexShrink: 0 }}
-                        />
+                        <Icon size={14} strokeWidth={step.status === "complete" ? 2.5 : 1.75} style={{ color, flexShrink: 0 }} />
                         <div className="flex-1">
-                          <p
-                            className="text-[12.5px] font-semibold"
-                            style={{ color: step.status === "upcoming" ? "#A1A1AA" : "#0A0A0A" }}
-                          >
+                          <p className="text-[12.5px] font-semibold" style={{ color: step.status === "upcoming" ? "#A1A1AA" : "#0A0A0A" }}>
                             {step.stage}
                           </p>
                           <p className="text-[11px] text-[#A1A1AA]">{step.note}</p>
@@ -317,11 +348,7 @@ export default function OrchestratorPage() {
 
               {/* Agents + Tasks */}
               <div className="grid grid-cols-2 gap-4">
-                {/* Agents */}
-                <div
-                  className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
-                  style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-                >
+                <div className="overflow-hidden rounded-xl border border-[#E5E5E2] bg-white" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
                   <div className="flex items-center gap-2 border-b border-[#F0F0EE] px-4 py-3">
                     <Bot size={12} className="text-[#8B5CF6]" />
                     <p className="text-[12px] font-semibold text-[#0A0A0A]">Agents Selected</p>
@@ -345,11 +372,7 @@ export default function OrchestratorPage() {
                   </div>
                 </div>
 
-                {/* Tasks */}
-                <div
-                  className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
-                  style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
-                >
+                <div className="overflow-hidden rounded-xl border border-[#E5E5E2] bg-white" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}>
                   <div className="flex items-center gap-2 border-b border-[#F0F0EE] px-4 py-3">
                     <CheckCircle2 size={12} className="text-[#0D9488]" />
                     <p className="text-[12px] font-semibold text-[#0A0A0A]">Task Breakdown</p>
@@ -357,11 +380,9 @@ export default function OrchestratorPage() {
                   <div className="divide-y divide-[#F5F5F3]">
                     {MOCK_OUTPUT.tasks.map((t) => (
                       <div key={t.seq} className="flex items-start gap-3 px-4 py-3">
-                        <span className="mt-0.5 text-[10px] font-bold text-[#D0D0CC] mono-num">{t.seq}</span>
+                        <span className="mono-num mt-0.5 text-[10px] font-bold text-[#D0D0CC]">{t.seq}</span>
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#A1A1AA]">
-                            {t.agent}
-                          </p>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#A1A1AA]">{t.agent}</p>
                           <p className="text-[12px] text-[#0A0A0A]">{t.task}</p>
                         </div>
                       </div>
@@ -371,10 +392,7 @@ export default function OrchestratorPage() {
               </div>
 
               {/* Risks */}
-              <div
-                className="rounded-xl border border-[#FEF08A] bg-[#FEFCE8] overflow-hidden"
-                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.03)" }}
-              >
+              <div className="overflow-hidden rounded-xl border border-[#FEF08A] bg-[#FEFCE8]" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.03)" }}>
                 <div className="flex items-center gap-2 border-b border-[#FEF9C3] px-5 py-3">
                   <AlertTriangle size={12} className="text-[#CA8A04]" />
                   <p className="text-[12px] font-semibold text-[#92400E]">Risk Flags</p>
@@ -392,16 +410,26 @@ export default function OrchestratorPage() {
                       >
                         {risk.level}
                       </span>
-                      <p className="text-[12px] text-[#78350F] leading-relaxed">{risk.text}</p>
+                      <p className="text-[12px] leading-relaxed text-[#78350F]">{risk.text}</p>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* Approve CTA */}
-              <button className="w-full rounded-xl bg-[#0A0A0A] py-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#1A1A1A]">
-                Approve Plan & Create Project →
-              </button>
+              {!isApproved ? (
+                <button
+                  onClick={handleApprove}
+                  className="w-full rounded-xl bg-[#0A0A0A] py-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#1A1A1A]"
+                >
+                  Approve Plan &amp; Create Project →
+                </button>
+              ) : (
+                <div className="flex items-center justify-center gap-2 rounded-xl border border-[#E5E5E2] bg-[#FAFAF9] py-3.5 text-[13px] font-medium text-[#A1A1AA]">
+                  <Check size={14} className="text-[#16A34A]" strokeWidth={2.5} />
+                  Plan approved — project is live
+                </div>
+              )}
             </>
           )}
         </div>
