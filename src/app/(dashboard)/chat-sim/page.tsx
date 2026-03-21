@@ -158,6 +158,38 @@ function nextUpsellStage(
   return "CONFIRM_ORDER";
 }
 
+interface NextStep { stage: Stage; message: string; }
+
+/**
+ * Single source of truth for all confirm / finalize routing.
+ * Priority order: sales coverage → checkout stages.
+ * Menu-aware: skips drink/dessert if no matching category exists.
+ */
+function resolveNextStage(
+  uncovered: Array<"main" | "drink" | "dessert">,
+  menuSnap: MenuCategory[],
+  dm: "delivery" | "pickup" | null,
+  addrConf: boolean,
+  name: string,
+  pmt: string | null,
+): NextStep {
+  if (uncovered.includes("main"))
+    return { stage: "SELECT_MAIN",    message: "continuar" };
+  if (uncovered.includes("drink") && findBeverageCat(menuSnap))
+    return { stage: "SELECT_DRINK",   message: "continuar" };
+  if (uncovered.includes("dessert") && findDessertCat(menuSnap))
+    return { stage: "SELECT_DESSERT", message: "continuar" };
+  if (!dm)
+    return { stage: "DELIVERY_TYPE",  message: "Confirmar pedido" };
+  if (dm === "delivery" && !addrConf)
+    return { stage: "ADDRESS_INPUT",  message: "Informar endereço de entrega" };
+  if (!name)
+    return { stage: "ASK_NAME",       message: "Informar nome para o pedido" };
+  if (!pmt)
+    return { stage: "PAYMENT",        message: "Escolher forma de pagamento" };
+  return { stage: "DONE",             message: "" };
+}
+
 /** Parses "Rua X, 123" into { street, number }. */
 function parseStreetLine(raw: string): { street: string; number: string } {
   const m = raw.trim().match(/^(.*?),?\s*(\d+\S*)\s*$/);
@@ -807,6 +839,17 @@ export default function ChatSimPage() {
       return;
     }
 
+    if (stage === "ADDRESS_CONFIRM") {
+      // Text confirmation of address — treat affirmative as button confirm, else as edit request
+      const v = val.toLowerCase();
+      if (v.includes("confirm") || v === "sim" || v === "ok" || v === "certo" || v === "correto" || v === "pode") {
+        handleAddressConfirm();
+      } else {
+        handleAddressEdit();
+      }
+      return;
+    }
+
     if (stage === "ASK_NAME") {
       setCustomerName(val);
       setStage("PAYMENT");
@@ -823,6 +866,22 @@ export default function ChatSimPage() {
         : null;
       if (method) { handlePayment(method); return; }
       // Unrecognised — let AI guide back to buttons
+    }
+
+    // Intercept confirm/finalize intents in navigable (non-checkout) stages
+    if (
+      stage === "SELECT_MAIN" || stage === "SELECT_DRINK" ||
+      stage === "SELECT_DESSERT" || stage === "CONFIRM_ORDER"
+    ) {
+      const v = val.toLowerCase();
+      if (
+        v.includes("confirm") || v.includes("finaliz") || v.includes("concluir") ||
+        v.includes("fechar pedido") || v.includes("quero confirmar") ||
+        v.includes("pode confirmar") || v.includes("tá bom") || v.includes("ta bom")
+      ) {
+        handleConfirmIntent();
+        return;
+      }
     }
 
     sendText(val, cart, visitedCategories, promo);
@@ -869,11 +928,12 @@ export default function ChatSimPage() {
   function handleBack() { setCurrentCategory(null); }
 
   function handleFinalize() {
-    setUncoveredCategories((prev) => prev.filter((c) => c !== "main"));
-    const nextStage = nextUpsellStage(menu, cart, refusals);
-    setStage(nextStage);
+    const newUncovered = uncoveredCategories.filter((c) => c !== "main");
+    setUncoveredCategories(newUncovered);
+    const next = resolveNextStage(newUncovered, menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
+    setStage(next.stage);
     setCurrentCategory(null);
-    sendText("Continuar pedido", cart, visitedCategories, promo, nextStage);
+    sendText(next.message, cart, visitedCategories, null, next.stage);
   }
 
   function handleUpsellDecline() {
@@ -927,17 +987,24 @@ export default function ChatSimPage() {
     sendText("pode finalizar sem a promoção", cart, visitedCategories, null, "CONFIRM_ORDER");
   }
 
-  function handleConfirmOrder() {
-    if (uncoveredCategories.length > 0) {
-      // Upsell stages still pending — redirect with AI guidance (never silently fail)
-      const nextStage = nextUpsellStage(menu, cart, refusals);
-      setStage(nextStage);
-      sendText("quero confirmar o pedido", cart, visitedCategories, null, nextStage);
-      return;
-    }
-    setStage("DELIVERY_TYPE");
-    sendText("Confirmar pedido", cart, visitedCategories, null, "DELIVERY_TYPE");
+  /**
+   * Single entry point for all confirmation / finalization intents —
+   * button clicks AND text input ("confirmar", "finalizar", etc.).
+   * Uses resolveNextStage to determine the correct next step, then
+   * advances. If the stage would not change, it is a no-op (loop prevention).
+   */
+  function handleConfirmIntent() {
+    const next = resolveNextStage(
+      uncoveredCategories, menu, deliveryMethod, addressConfirmed, customerName, paymentMethod
+    );
+    if (next.stage === "DONE") return; // reached only through handlePayment after full collection
+    if (next.stage === stage) { setInput(""); return; } // already at right stage — no-op, no loop
+    setStage(next.stage);
+    setCurrentCategory(null);
+    sendText(next.message, cart, visitedCategories, null, next.stage);
   }
+
+  function handleConfirmOrder() { handleConfirmIntent(); }
 
   function handleBackToExploration() {
     setStage("SELECT_MAIN");
