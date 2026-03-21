@@ -8,11 +8,14 @@ import {
   CheckSquare,
   FileDown,
   GitBranch,
-  BarChart2,
+  Layers,
+  Lightbulb,
   Palette,
   Clock,
   Plus,
   AlertCircle,
+  Calendar,
+  Target,
 } from "lucide-react";
 import {
   MOCK_PROJECTS,
@@ -24,14 +27,14 @@ import { Badge } from "@/components/agency/ui/Badge";
 import Link from "next/link";
 
 const STAGE_COLORS: Record<string, string> = {
-  briefing: "#A1A1AA",
-  diagnosis: "#CA8A04",
-  planning: "#2563EB",
-  production: "#7C3AED",
-  review: "#EA580C",
-  delivery: "#0D9488",
-  ongoing: "#16A34A",
-  completed: "#E8E8E5",
+  briefing:   "#A1A1AA",
+  diagnosis:  "#D97706",
+  planning:   "#3B82F6",
+  production: "#8B5CF6",
+  review:     "#F97316",
+  delivery:   "#0D9488",
+  ongoing:    "#16A34A",
+  completed:  "#A1A1AA",
 };
 
 const PIPELINE_STAGES = [
@@ -42,13 +45,13 @@ const PIPELINE_STAGES = [
 type Tab = "overview" | "pipeline" | "tasks" | "deliverables" | "strategy" | "assets" | "history";
 
 const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
-  { key: "overview", label: "Overview", icon: BarChart2 },
-  { key: "pipeline", label: "Pipeline", icon: GitBranch },
-  { key: "tasks", label: "Tasks", icon: CheckSquare },
+  { key: "overview",     label: "Overview",     icon: Layers },
+  { key: "pipeline",     label: "Pipeline",     icon: GitBranch },
+  { key: "tasks",        label: "Tasks",        icon: CheckSquare },
   { key: "deliverables", label: "Deliverables", icon: FileDown },
-  { key: "strategy", label: "Strategy", icon: BarChart2 },
-  { key: "assets", label: "Assets", icon: Palette },
-  { key: "history", label: "History", icon: Clock },
+  { key: "strategy",     label: "Strategy",     icon: Lightbulb },
+  { key: "assets",       label: "Assets",       icon: Palette },
+  { key: "history",      label: "History",      icon: Clock },
 ];
 
 export default function ProjectDetailPage({ params }: { params: { id: string } }) {
@@ -57,172 +60,260 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   const project = MOCK_PROJECTS.find((p) => p.id === params.id);
   if (!project) notFound();
 
-  const tasks = MOCK_TASKS.filter((t) => t.projectId === project.id);
+  const tasks        = MOCK_TASKS.filter((t) => t.projectId === project.id);
   const deliverables = MOCK_DELIVERABLES.filter((d) => d.projectId === project.id);
-  const agents = MOCK_AGENTS.filter((a) => project.assignedAgents.includes(a.id));
-
-  const stageIndex = PIPELINE_STAGES.indexOf(project.stage);
-  const currentColor = STAGE_COLORS[project.stage];
+  const agents       = MOCK_AGENTS.filter((a) => project.assignedAgents.includes(a.id));
+  const stageIndex   = PIPELINE_STAGES.indexOf(project.stage);
+  const stageColor   = STAGE_COLORS[project.stage] ?? "#A1A1AA";
+  const tasksDone    = tasks.filter((t) => t.status === "done").length;
 
   return (
-    <div className="min-h-full" style={{ backgroundColor: "#F8F8F7" }}>
-      {/* Header */}
-      <div className="border-b border-[#E8E8E5] bg-white px-8 py-5">
-        <Link
-          href="/agency/projects"
-          className="mb-3 flex items-center gap-1.5 text-[12px] text-[#71717A] hover:text-[#0A0A0A] transition-colors"
-        >
-          <ArrowLeft size={13} />
-          Back to Projects
-        </Link>
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-[20px] font-bold text-[#0A0A0A]">{project.name}</h1>
-              <Badge variant={project.status} />
-              <Badge variant={project.priority} />
-            </div>
-            <p className="mt-1.5 text-[13px] text-[#71717A]">{project.goal}</p>
-            <div className="mt-2 flex items-center gap-4 text-[12px] text-[#A1A1AA]">
-              <span>Client: <span className="font-medium text-[#52525B]">{project.clientName}</span></span>
-              <span>Deadline: <span className="font-medium text-[#52525B]">{project.deadline}</span></span>
-              <span>Started: <span className="font-medium text-[#52525B]">{project.createdAt}</span></span>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button className="rounded-lg border border-[#E8E8E5] bg-white px-3.5 py-2 text-[13px] font-medium text-[#0A0A0A] hover:border-[#D4D4D0] transition-colors">
-              Edit
-            </button>
-            <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3.5 py-2 text-[13px] font-medium text-white hover:bg-[#4C4CB8] transition-colors">
-              <Plus size={14} />
-              Add Task
-            </button>
-          </div>
-        </div>
+    <div className="flex min-h-full flex-col" style={{ backgroundColor: "#F5F5F3" }}>
 
-        {/* Pipeline progress bar */}
-        <div className="mt-5">
-          <div className="flex items-center gap-0">
+      {/* ── Project Header ────────────────────────────────────────── */}
+      <div className="border-b border-[#E5E5E2] bg-white">
+        <div className="px-8 pt-5 pb-0">
+          {/* Back */}
+          <Link
+            href="/agency/projects"
+            className="mb-4 flex items-center gap-1.5 text-[11px] font-medium text-[#A1A1AA] transition-colors hover:text-[#52525B]"
+          >
+            <ArrowLeft size={12} />
+            Projects
+          </Link>
+
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                <h1
+                  className="text-[20px] font-bold text-[#0A0A0A]"
+                  style={{ letterSpacing: "-0.02em" }}
+                >
+                  {project.name}
+                </h1>
+                <Badge variant={project.status} />
+                <Badge variant={project.priority} />
+              </div>
+              <p className="text-[13px] text-[#71717A] leading-snug">{project.goal}</p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-4 text-[12px] text-[#A1A1AA]">
+                <span className="flex items-center gap-1.5">
+                  <span className="font-medium text-[#52525B]">{project.clientName}</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Calendar size={11} />
+                  Due {project.deadline}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckSquare size={11} />
+                  {tasksDone}/{tasks.length} tasks
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-none gap-2">
+              <button className="rounded-lg border border-[#E5E5E2] bg-white px-3.5 py-2 text-[12px] font-medium text-[#52525B] transition-colors hover:border-[#D0D0CC]">
+                Edit
+              </button>
+              <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3.5 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#4848C2]">
+                <Plus size={13} />
+                Add Task
+              </button>
+            </div>
+          </div>
+
+          {/* Pipeline progress track */}
+          <div className="mt-6 flex items-end gap-0">
             {PIPELINE_STAGES.map((stage, i) => {
-              const isPast = i < stageIndex;
+              const isPast    = i < stageIndex;
               const isCurrent = i === stageIndex;
-              const isFuture = i > stageIndex;
               return (
-                <div key={stage} className="flex items-center flex-1">
-                  <div className="flex flex-col items-center gap-1 flex-1">
-                    <div
-                      className="h-1.5 w-full rounded-full transition-colors"
-                      style={{
-                        backgroundColor: isPast
-                          ? "#5B5BD6"
-                          : isCurrent
-                          ? currentColor
-                          : "#E8E8E5",
-                      }}
-                    />
-                    <span
-                      className="text-[9px] font-medium uppercase tracking-wide"
-                      style={{
-                        color: isCurrent ? currentColor : isPast ? "#5B5BD6" : "#A1A1AA",
-                      }}
-                    >
-                      {stage}
-                    </span>
-                  </div>
-                  {i < PIPELINE_STAGES.length - 1 && <div className="w-1" />}
+                <div key={stage} className="flex flex-1 flex-col items-start">
+                  <div
+                    className="mb-1.5 h-[3px] w-full rounded-sm"
+                    style={{
+                      backgroundColor: isPast
+                        ? "#5B5BD6"
+                        : isCurrent
+                        ? stageColor
+                        : "#EDEDED",
+                    }}
+                  />
+                  <span
+                    className="text-[9px] font-semibold uppercase tracking-[0.06em] pb-1"
+                    style={{
+                      color: isCurrent ? stageColor : isPast ? "#5B5BD6" : "#C0C0BC",
+                    }}
+                  >
+                    {stage}
+                  </span>
                 </div>
               );
             })}
           </div>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="border-b border-[#E8E8E5] bg-white px-8">
-        <div className="flex gap-0">
+        {/* Tabs */}
+        <div className="flex gap-0 px-8">
           {TABS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className="flex items-center gap-1.5 border-b-2 px-4 py-3 text-[13px] font-medium transition-colors"
+              className="flex items-center gap-1.5 border-b-2 px-3.5 py-3 text-[12.5px] font-medium transition-colors"
               style={{
                 borderBottomColor: activeTab === key ? "#5B5BD6" : "transparent",
-                color: activeTab === key ? "#5B5BD6" : "#71717A",
+                color: activeTab === key ? "#5B5BD6" : "#A1A1AA",
               }}
             >
-              <Icon size={13} />
+              <Icon size={12} strokeWidth={activeTab === key ? 2 : 1.75} />
               {label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Tab content */}
-      <div className="px-8 py-6">
+      {/* ── Tab Content ───────────────────────────────────────────── */}
+      <div className="flex-1 px-8 py-6">
+
         {/* OVERVIEW */}
         {activeTab === "overview" && (
-          <div className="grid grid-cols-3 gap-6">
-            <div className="col-span-2 space-y-5">
-              {/* Description */}
-              <div className="rounded-xl border border-[#E8E8E5] bg-white p-5 shadow-card">
-                <h3 className="mb-2 text-[13px] font-semibold text-[#0A0A0A]">Project Description</h3>
+          <div className="grid grid-cols-3 gap-5">
+            <div className="col-span-2 space-y-4">
+
+              {/* Goal card */}
+              <div
+                className="rounded-xl border border-[#E5E5E2] bg-white p-5"
+                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Target size={13} className="text-[#5B5BD6]" />
+                  <h3 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-[#A1A1AA]">
+                    Objective
+                  </h3>
+                </div>
                 <p className="text-[13px] text-[#52525B] leading-relaxed">{project.description}</p>
               </div>
 
               {/* Tasks snapshot */}
-              <div className="rounded-xl border border-[#E8E8E5] bg-white shadow-card">
-                <div className="border-b border-[#E8E8E5] px-5 py-4 flex items-center justify-between">
+              <div
+                className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
+                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+              >
+                <div className="flex items-center justify-between border-b border-[#F0F0EE] px-5 py-3.5">
                   <h3 className="text-[13px] font-semibold text-[#0A0A0A]">Tasks</h3>
-                  <button
-                    onClick={() => setActiveTab("tasks")}
-                    className="text-[12px] text-[#5B5BD6] hover:underline"
-                  >
-                    View all
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-[#A1A1AA]">
+                      {tasksDone} of {tasks.length} done
+                    </span>
+                    <button
+                      onClick={() => setActiveTab("tasks")}
+                      className="text-[11px] font-medium text-[#5B5BD6] hover:underline"
+                    >
+                      View all
+                    </button>
+                  </div>
                 </div>
-                <div className="divide-y divide-[#F4F4F4]">
-                  {tasks.slice(0, 3).map((task) => (
-                    <div key={task.id} className="flex items-center gap-3 px-5 py-3.5">
+
+                {/* Progress bar */}
+                {tasks.length > 0 && (
+                  <div className="h-[3px] bg-[#F0F0EE]">
+                    <div
+                      className="h-full bg-[#5B5BD6] transition-all"
+                      style={{ width: `${(tasksDone / tasks.length) * 100}%` }}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  {tasks.slice(0, 4).map((task, i) => (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-3 px-5 py-3.5"
+                      style={{ borderBottom: i < Math.min(tasks.length, 4) - 1 ? "1px solid #F5F5F3" : "none" }}
+                    >
                       <div
-                        className="h-4 w-4 rounded border-2 flex-none"
+                        className="h-[14px] w-[14px] flex-none rounded-[3px] border-[1.5px]"
                         style={{
                           borderColor:
-                            task.status === "done"
-                              ? "#16A34A"
-                              : task.status === "blocked"
-                              ? "#DC2626"
-                              : "#D4D4D0",
+                            task.status === "done" ? "#16A34A"
+                            : task.status === "blocked" ? "#DC2626"
+                            : task.status === "in_progress" ? "#5B5BD6"
+                            : "#D0D0CC",
                           backgroundColor: task.status === "done" ? "#DCFCE7" : "transparent",
                         }}
                       />
-                      <p className="flex-1 text-[13px] text-[#0A0A0A]">{task.title}</p>
+                      <p
+                        className="flex-1 text-[13px] font-medium text-[#0A0A0A]"
+                        style={{ opacity: task.status === "done" ? 0.45 : 1 }}
+                      >
+                        {task.title}
+                      </p>
                       <Badge variant={task.status} />
                     </div>
                   ))}
                   {tasks.length === 0 && (
-                    <p className="px-5 py-4 text-[12px] text-[#A1A1AA]">No tasks yet.</p>
+                    <p className="px-5 py-5 text-[12px] text-[#A1A1AA]">No tasks yet.</p>
                   )}
                 </div>
               </div>
+
+              {/* Deliverables snapshot */}
+              {deliverables.length > 0 && (
+                <div
+                  className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
+                  style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+                >
+                  <div className="flex items-center justify-between border-b border-[#F0F0EE] px-5 py-3.5">
+                    <h3 className="text-[13px] font-semibold text-[#0A0A0A]">Deliverables</h3>
+                    <button
+                      onClick={() => setActiveTab("deliverables")}
+                      className="text-[11px] font-medium text-[#5B5BD6] hover:underline"
+                    >
+                      View all
+                    </button>
+                  </div>
+                  {deliverables.map((d, i) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center gap-3 px-5 py-3.5"
+                      style={{ borderBottom: i < deliverables.length - 1 ? "1px solid #F5F5F3" : "none" }}
+                    >
+                      <div className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-[#EEEEFD]">
+                        <FileDown size={12} className="text-[#5B5BD6]" />
+                      </div>
+                      <p className="flex-1 text-[13px] font-medium text-[#0A0A0A]">{d.name}</p>
+                      <span className="text-[11px] text-[#A1A1AA]">{d.type}</span>
+                      <Badge variant={d.status} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div className="space-y-5">
-              {/* Assigned agents */}
-              <div className="rounded-xl border border-[#E8E8E5] bg-white shadow-card">
-                <div className="border-b border-[#E8E8E5] px-5 py-4">
+            {/* Sidebar */}
+            <div className="space-y-4">
+              {/* Agents */}
+              <div
+                className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
+                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+              >
+                <div className="border-b border-[#F0F0EE] px-5 py-3.5">
                   <h3 className="text-[13px] font-semibold text-[#0A0A0A]">Assigned Agents</h3>
                 </div>
-                <div className="divide-y divide-[#F4F4F4]">
-                  {agents.map((agent) => (
-                    <div key={agent.id} className="flex items-center gap-3 px-5 py-3">
+                <div>
+                  {agents.map((agent, i) => (
+                    <div
+                      key={agent.id}
+                      className="flex items-center gap-3 px-5 py-3"
+                      style={{ borderBottom: i < agents.length - 1 ? "1px solid #F5F5F3" : "none" }}
+                    >
                       <div
-                        className="flex h-7 w-7 items-center justify-center rounded-lg flex-none"
-                        style={{ backgroundColor: `${agent.color}20` }}
+                        className="flex h-7 w-7 flex-none items-center justify-center rounded-lg"
+                        style={{ backgroundColor: `${agent.color}15` }}
                       >
-                        <Bot size={13} style={{ color: agent.color }} />
+                        <Bot size={12} style={{ color: agent.color }} />
                       </div>
                       <div>
-                        <p className="text-[12px] font-medium text-[#0A0A0A]">{agent.name}</p>
+                        <p className="text-[12px] font-semibold text-[#0A0A0A]">{agent.name}</p>
                         <p className="text-[10px] text-[#A1A1AA]">{agent.role}</p>
                       </div>
                     </div>
@@ -230,65 +321,79 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 </div>
               </div>
 
-              {/* Quick stats */}
-              <div className="rounded-xl border border-[#E8E8E5] bg-white p-5 shadow-card space-y-3">
-                {[
-                  { label: "Total Tasks", value: tasks.length },
-                  { label: "Completed", value: tasks.filter((t) => t.status === "done").length },
-                  { label: "Blocked", value: tasks.filter((t) => t.status === "blocked").length },
-                  { label: "Deliverables", value: deliverables.length },
-                ].map((stat) => (
-                  <div key={stat.label} className="flex items-center justify-between">
-                    <span className="text-[12px] text-[#71717A]">{stat.label}</span>
-                    <span className="text-[13px] font-semibold text-[#0A0A0A]">{stat.value}</span>
-                  </div>
-                ))}
+              {/* Stats */}
+              <div
+                className="rounded-xl border border-[#E5E5E2] bg-white p-5"
+                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+              >
+                <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-[#A1A1AA]">
+                  At a Glance
+                </h3>
+                <div className="space-y-2.5">
+                  {[
+                    { label: "Tasks total",    value: tasks.length },
+                    { label: "Tasks done",     value: tasksDone },
+                    { label: "Blocked",        value: tasks.filter((t) => t.status === "blocked").length },
+                    { label: "Deliverables",   value: deliverables.length },
+                    { label: "Agents active",  value: agents.length },
+                  ].map((s) => (
+                    <div key={s.label} className="flex items-center justify-between">
+                      <span className="text-[12px] text-[#71717A]">{s.label}</span>
+                      <span className="text-[13px] font-bold text-[#0A0A0A] mono-num">{s.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* PIPELINE tab */}
+        {/* PIPELINE */}
         {activeTab === "pipeline" && (
-          <div className="rounded-xl border border-[#E8E8E5] bg-white p-6 shadow-card">
-            <h3 className="mb-5 text-[14px] font-semibold text-[#0A0A0A]">Project Pipeline</h3>
-            <div className="space-y-3">
+          <div
+            className="rounded-xl border border-[#E5E5E2] bg-white p-6"
+            style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+          >
+            <h3 className="mb-1 text-[14px] font-semibold text-[#0A0A0A]">Execution Pipeline</h3>
+            <p className="mb-6 text-[12px] text-[#A1A1AA]">
+              Current stage: <span className="font-semibold capitalize" style={{ color: stageColor }}>{project.stage}</span>
+            </p>
+            <div className="space-y-2">
               {PIPELINE_STAGES.map((stage, i) => {
-                const isPast = i < stageIndex;
+                const isPast    = i < stageIndex;
                 const isCurrent = i === stageIndex;
+                const color     = isCurrent ? stageColor : isPast ? "#5B5BD6" : "#E5E5E2";
                 return (
                   <div
                     key={stage}
-                    className="flex items-center gap-4 rounded-xl border p-4 transition-colors"
+                    className="flex items-center gap-4 rounded-xl border px-5 py-4"
                     style={{
-                      borderColor: isCurrent ? currentColor : "#E8E8E5",
-                      backgroundColor: isCurrent ? `${currentColor}08` : "#FAFAF9",
+                      borderColor: isCurrent ? stageColor : "#E5E5E2",
+                      backgroundColor: isCurrent ? `${stageColor}06` : "#FAFAF9",
                     }}
                   >
                     <div
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-bold flex-none"
-                      style={{
-                        backgroundColor: isPast ? "#5B5BD6" : isCurrent ? currentColor : "#E8E8E5",
-                        color: isPast || isCurrent ? "white" : "#A1A1AA",
-                      }}
+                      className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[11px] font-bold"
+                      style={{ backgroundColor: color, color: isPast || isCurrent ? "white" : "#A1A1AA" }}
                     >
                       {isPast ? "✓" : i + 1}
                     </div>
                     <div className="flex-1">
                       <p
                         className="text-[13px] font-semibold capitalize"
-                        style={{ color: isCurrent ? currentColor : isPast ? "#0A0A0A" : "#A1A1AA" }}
+                        style={{ color: isCurrent ? stageColor : isPast ? "#0A0A0A" : "#A1A1AA" }}
                       >
                         {stage}
                       </p>
                       {isCurrent && (
-                        <p className="mt-0.5 text-[11px]" style={{ color: currentColor }}>
-                          Current stage — In progress
-                        </p>
+                        <p className="text-[11px]" style={{ color: stageColor }}>In progress</p>
                       )}
                     </div>
                     {isCurrent && (
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: currentColor }}>
+                      <span
+                        className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold text-white"
+                        style={{ backgroundColor: stageColor }}
+                      >
                         Active
                       </span>
                     )}
@@ -299,149 +404,202 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
           </div>
         )}
 
-        {/* TASKS tab */}
+        {/* TASKS */}
         {activeTab === "tasks" && (
-          <div className="rounded-xl border border-[#E8E8E5] bg-white shadow-card">
-            <div className="flex items-center justify-between border-b border-[#E8E8E5] px-5 py-4">
-              <h3 className="text-[14px] font-semibold text-[#0A0A0A]">Tasks</h3>
-              <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#4C4CB8] transition-colors">
-                <Plus size={12} />
-                Add task
+          <div
+            className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
+            style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+          >
+            <div className="flex items-center justify-between border-b border-[#F0F0EE] px-5 py-4">
+              <div>
+                <h3 className="text-[13px] font-semibold text-[#0A0A0A]">Tasks</h3>
+                <p className="text-[11px] text-[#A1A1AA]">{tasksDone} of {tasks.length} completed</p>
+              </div>
+              <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#4848C2] transition-colors">
+                <Plus size={12} /> Add task
               </button>
             </div>
             {tasks.length === 0 ? (
-              <div className="px-5 py-12 text-center">
-                <p className="text-[13px] text-[#A1A1AA]">No tasks yet. Add the first task.</p>
+              <div className="px-5 py-14 text-center">
+                <p className="text-[13px] text-[#A1A1AA]">No tasks yet for this project.</p>
               </div>
             ) : (
-              <div className="divide-y divide-[#F4F4F4]">
-                {tasks.map((task) => (
-                  <div key={task.id} className="flex items-start gap-4 px-5 py-4">
-                    <div
-                      className="mt-0.5 h-4 w-4 rounded border-2 flex-none"
-                      style={{
-                        borderColor: task.status === "done" ? "#16A34A" : task.status === "blocked" ? "#DC2626" : "#D4D4D0",
-                        backgroundColor: task.status === "done" ? "#DCFCE7" : "transparent",
-                      }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-[#0A0A0A]">{task.title}</p>
-                      <p className="mt-0.5 text-[12px] text-[#71717A]">{task.description}</p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-[11px] text-[#A1A1AA]">Agent: {task.agentName}</span>
-                        {task.status === "blocked" && (
-                          <span className="flex items-center gap-1 text-[11px] text-[#DC2626]">
-                            <AlertCircle size={10} />
-                            Blocked
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={task.status} />
-                      <Badge variant={task.priority} />
-                      <span className="text-[11px] text-[#A1A1AA]">{task.dueDate}</span>
+              tasks.map((task, i) => (
+                <div
+                  key={task.id}
+                  className="flex items-start gap-4 px-5 py-4"
+                  style={{ borderBottom: i < tasks.length - 1 ? "1px solid #F5F5F3" : "none" }}
+                >
+                  <div
+                    className="mt-0.5 h-[14px] w-[14px] flex-none rounded-[3px] border-[1.5px]"
+                    style={{
+                      borderColor: task.status === "done" ? "#16A34A" : task.status === "blocked" ? "#DC2626" : "#D0D0CC",
+                      backgroundColor: task.status === "done" ? "#DCFCE7" : "transparent",
+                    }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="text-[13px] font-medium text-[#0A0A0A]"
+                      style={{ opacity: task.status === "done" ? 0.45 : 1 }}
+                    >
+                      {task.title}
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-[#71717A]">{task.description}</p>
+                    <div className="mt-1.5 flex items-center gap-2.5">
+                      <span className="text-[11px] text-[#A1A1AA]">{task.agentName}</span>
+                      {task.status === "blocked" && (
+                        <span className="flex items-center gap-1 text-[11px] font-medium text-[#DC2626]">
+                          <AlertCircle size={10} /> Blocked
+                        </span>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={task.status} />
+                    <Badge variant={task.priority} />
+                    <span className="text-[11px] text-[#A1A1AA] mono-num">{task.dueDate.slice(5)}</span>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}
 
-        {/* DELIVERABLES tab */}
+        {/* DELIVERABLES */}
         {activeTab === "deliverables" && (
-          <div className="rounded-xl border border-[#E8E8E5] bg-white shadow-card">
-            <div className="flex items-center justify-between border-b border-[#E8E8E5] px-5 py-4">
-              <h3 className="text-[14px] font-semibold text-[#0A0A0A]">Deliverables</h3>
-              <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#4C4CB8] transition-colors">
-                <Plus size={12} />
-                Log deliverable
+          <div
+            className="rounded-xl border border-[#E5E5E2] bg-white overflow-hidden"
+            style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+          >
+            <div className="flex items-center justify-between border-b border-[#F0F0EE] px-5 py-4">
+              <div>
+                <h3 className="text-[13px] font-semibold text-[#0A0A0A]">Deliverables</h3>
+                <p className="text-[11px] text-[#A1A1AA]">{deliverables.length} produced for this project</p>
+              </div>
+              <button className="flex items-center gap-1.5 rounded-lg bg-[#5B5BD6] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#4848C2] transition-colors">
+                <Plus size={12} /> Log deliverable
               </button>
             </div>
             {deliverables.length === 0 ? (
-              <div className="px-5 py-12 text-center">
+              <div className="px-5 py-14 text-center">
                 <p className="text-[13px] text-[#A1A1AA]">No deliverables logged yet.</p>
               </div>
             ) : (
-              <div className="divide-y divide-[#F4F4F4]">
-                {deliverables.map((d) => (
-                  <div key={d.id} className="flex items-center gap-4 px-5 py-4">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#EEF2FF] flex-none">
-                      <FileDown size={15} className="text-[#5B5BD6]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-[#0A0A0A]">{d.name}</p>
-                      <p className="text-[11px] text-[#A1A1AA]">{d.type} · {d.agentName} · {d.producedAt}</p>
-                    </div>
-                    <Badge variant={d.status} />
+              deliverables.map((d, i) => (
+                <div
+                  key={d.id}
+                  className="flex items-center gap-4 px-5 py-4"
+                  style={{ borderBottom: i < deliverables.length - 1 ? "1px solid #F5F5F3" : "none" }}
+                >
+                  <div className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-[#EEEEFD]">
+                    <FileDown size={14} className="text-[#5B5BD6]" />
                   </div>
-                ))}
-              </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-[#0A0A0A]">{d.name}</p>
+                    <p className="text-[11px] text-[#A1A1AA]">{d.type} · {d.agentName} · {d.producedAt}</p>
+                  </div>
+                  <Badge variant={d.status} />
+                </div>
+              ))
             )}
           </div>
         )}
 
-        {/* STRATEGY tab */}
+        {/* STRATEGY */}
         {activeTab === "strategy" && (
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 gap-4">
             {[
-              { title: "Business Goal", content: project.goal, color: "#5B5BD6" },
-              { title: "Project Description", content: project.description, color: "#7C3AED" },
-              { title: "Success Criteria", content: "To be defined after strategy session.", color: "#0D9488" },
-              { title: "Risks & Dependencies", content: "No risks flagged by Orchestrator yet.", color: "#CA8A04" },
+              {
+                title: "Business Objective",
+                content: project.goal,
+                color: "#5B5BD6",
+                label: "Goal",
+              },
+              {
+                title: "Project Scope",
+                content: project.description,
+                color: "#8B5CF6",
+                label: "Scope",
+              },
+              {
+                title: "Success Criteria",
+                content: "To be defined during the diagnosis and planning stages with the Marketing Strategist Agent.",
+                color: "#0D9488",
+                label: "Success",
+              },
+              {
+                title: "Risks & Dependencies",
+                content: "No risks currently flagged. Orchestrator analysis will surface blockers as the project progresses.",
+                color: "#D97706",
+                label: "Risks",
+              },
             ].map((card) => (
-              <div key={card.title} className="rounded-xl border border-[#E8E8E5] bg-white p-5 shadow-card">
+              <div
+                key={card.title}
+                className="rounded-xl border border-[#E5E5E2] bg-white p-5"
+                style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+              >
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="h-1 w-4 rounded-full" style={{ backgroundColor: card.color }} />
-                  <h3 className="text-[13px] font-semibold text-[#0A0A0A]">{card.title}</h3>
+                  <span
+                    className="inline-flex rounded-[5px] px-[7px] py-[2px] text-[10px] font-semibold uppercase tracking-[0.06em]"
+                    style={{ backgroundColor: `${card.color}12`, color: card.color }}
+                  >
+                    {card.label}
+                  </span>
                 </div>
+                <h3 className="mb-2 text-[13px] font-semibold text-[#0A0A0A]">{card.title}</h3>
                 <p className="text-[13px] text-[#52525B] leading-relaxed">{card.content}</p>
               </div>
             ))}
           </div>
         )}
 
-        {/* ASSETS tab */}
+        {/* ASSETS */}
         {activeTab === "assets" && (
-          <div className="rounded-xl border border-[#E8E8E5] bg-white p-6 shadow-card">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-[14px] font-semibold text-[#0A0A0A]">Brand Assets</h3>
-              <button className="text-[12px] text-[#5B5BD6] hover:underline">
-                View full library →
-              </button>
-            </div>
-            <p className="text-[13px] text-[#71717A]">
-              Brand assets for {project.clientName} are available in the client&apos;s Brand Asset Library.
+          <div
+            className="rounded-xl border border-[#E5E5E2] bg-white p-6"
+            style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+          >
+            <h3 className="mb-1 text-[14px] font-semibold text-[#0A0A0A]">Brand Assets</h3>
+            <p className="mb-5 text-[12px] text-[#A1A1AA]">
+              Brand assets for {project.clientName} are managed in the client profile.
             </p>
             <Link
               href={`/agency/clients/${project.clientId}`}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-[#E8E8E5] px-3.5 py-2 text-[13px] font-medium text-[#0A0A0A] hover:border-[#5B5BD6] hover:text-[#5B5BD6] transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E5E2] px-3.5 py-2 text-[12px] font-medium text-[#52525B] transition-colors hover:border-[#5B5BD6] hover:text-[#5B5BD6]"
             >
-              Go to {project.clientName} profile →
+              Open {project.clientName} profile →
             </Link>
           </div>
         )}
 
-        {/* HISTORY tab */}
+        {/* HISTORY */}
         {activeTab === "history" && (
-          <div className="rounded-xl border border-[#E8E8E5] bg-white p-6 shadow-card">
+          <div
+            className="rounded-xl border border-[#E5E5E2] bg-white p-6"
+            style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" }}
+          >
             <h3 className="mb-5 text-[14px] font-semibold text-[#0A0A0A]">Project History</h3>
-            <div className="space-y-4">
+            <div className="space-y-0">
               {[
-                { date: project.createdAt, label: "Project created", color: "#5B5BD6" },
-                { date: "2026-02-05", label: "Briefing submitted and analyzed", color: "#CA8A04" },
-                { date: "2026-02-10", label: "Orchestrator generated pipeline and agent assignments", color: "#7C3AED" },
-                { date: "2026-03-01", label: `Project advanced to ${project.stage}`, color: STAGE_COLORS[project.stage] },
-              ].map((event, i) => (
-                <div key={i} className="flex items-start gap-3">
+                { date: project.createdAt, label: "Project created and registered in OS", color: "#5B5BD6" },
+                { date: "2026-02-05", label: "Briefing submitted and analyzed by Orchestrator", color: "#D97706" },
+                { date: "2026-02-10", label: "Pipeline defined and agents assigned", color: "#8B5CF6" },
+                { date: "2026-03-01", label: `Advanced to ${project.stage} stage`, color: STAGE_COLORS[project.stage] ?? "#A1A1AA" },
+              ].map((event, i, arr) => (
+                <div key={i} className="flex gap-4">
                   <div className="flex flex-col items-center">
-                    <div className="h-2.5 w-2.5 rounded-full mt-1" style={{ backgroundColor: event.color }} />
-                    {i < 3 && <div className="w-px flex-1 mt-1 bg-[#E8E8E5]" style={{ height: "24px" }} />}
+                    <div
+                      className="h-2.5 w-2.5 flex-none rounded-full mt-1"
+                      style={{ backgroundColor: event.color }}
+                    />
+                    {i < arr.length - 1 && (
+                      <div className="w-px flex-1 bg-[#F0F0EE] my-1" />
+                    )}
                   </div>
-                  <div>
+                  <div className="pb-5">
                     <p className="text-[13px] font-medium text-[#0A0A0A]">{event.label}</p>
-                    <p className="text-[11px] text-[#A1A1AA]">{event.date}</p>
+                    <p className="mt-0.5 text-[11px] text-[#A1A1AA] mono-num">{event.date}</p>
                   </div>
                 </div>
               ))}

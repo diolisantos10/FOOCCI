@@ -14,7 +14,6 @@ import {
   FileDown,
   FileText,
   Settings,
-  ChevronRight,
 } from "lucide-react";
 
 type NavItem = {
@@ -76,36 +75,44 @@ export function AgencySidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-56 flex-none flex-col" style={{ backgroundColor: "#111111" }}>
-      {/* Logo */}
-      <div className="flex h-14 items-center px-5 border-b" style={{ borderColor: "#1E1E1E" }}>
-        <div className="flex items-center gap-2.5">
+    <aside
+      className="flex h-screen w-[220px] flex-none flex-col"
+      style={{ backgroundColor: "#0E0E0E", borderRight: "1px solid #1C1C1C" }}
+    >
+      {/* Logo mark */}
+      <div className="flex h-[52px] flex-none items-center px-5" style={{ borderBottom: "1px solid #1C1C1C" }}>
+        <div className="flex items-center gap-3">
           <div
-            className="flex h-6 w-6 items-center justify-center rounded"
+            className="flex h-[28px] w-[28px] flex-none items-center justify-center rounded-[6px]"
             style={{ backgroundColor: "#5B5BD6" }}
           >
-            <span className="text-white text-[10px] font-bold tracking-wide">D</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <rect x="1" y="1" width="4" height="4" rx="1" fill="white" fillOpacity="0.9" />
+              <rect x="7" y="1" width="4" height="4" rx="1" fill="white" fillOpacity="0.5" />
+              <rect x="1" y="7" width="4" height="4" rx="1" fill="white" fillOpacity="0.5" />
+              <rect x="7" y="7" width="4" height="4" rx="1" fill="white" fillOpacity="0.9" />
+            </svg>
           </div>
-          <div>
-            <p className="text-[13px] font-semibold text-white leading-tight">Dioli Agency</p>
-            <p className="text-[10px] leading-tight" style={{ color: "#555555" }}>
-              OS v1.0
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold leading-none text-white">Dioli Agency</p>
+            <p className="mt-[3px] text-[10px] leading-none" style={{ color: "#404040" }}>
+              Operating System
             </p>
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 scrollbar-thin" style={{ scrollbarColor: "#2A2A2A transparent" }}>
+      <nav className="flex-1 overflow-y-auto py-4 scrollbar-thin">
         {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="mb-5">
+          <div key={group.label} className="mb-[18px]">
             <p
-              className="mb-1 px-5 text-[10px] font-semibold uppercase tracking-widest"
-              style={{ color: "#3A3A3A" }}
+              className="mb-1 px-5 text-[10px] font-semibold uppercase tracking-[0.1em]"
+              style={{ color: "#303030" }}
             >
               {group.label}
             </p>
-            <ul className="space-y-0.5 px-2">
+            <ul className="space-y-px px-2">
               {group.items.map((item) => {
                 const active = isActive(item);
                 const Icon = item.icon;
@@ -113,33 +120,37 @@ export function AgencySidebar() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className="group flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-all duration-150"
+                      className="relative flex items-center gap-2.5 rounded-[7px] px-3 py-[7px] text-[13px] font-medium transition-colors duration-100"
                       style={{
-                        backgroundColor: active ? "#1E1E2E" : "transparent",
-                        color: active ? "#FFFFFF" : "#777777",
+                        backgroundColor: active ? "#1A1A1A" : "transparent",
+                        color: active ? "#FFFFFF" : "#5A5A5A",
                       }}
                       onMouseEnter={(e) => {
                         if (!active) {
-                          e.currentTarget.style.backgroundColor = "#1A1A1A";
-                          e.currentTarget.style.color = "#CCCCCC";
+                          e.currentTarget.style.backgroundColor = "#161616";
+                          e.currentTarget.style.color = "#999999";
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (!active) {
                           e.currentTarget.style.backgroundColor = "transparent";
-                          e.currentTarget.style.color = "#777777";
+                          e.currentTarget.style.color = "#5A5A5A";
                         }
                       }}
                     >
+                      {/* Active left bar */}
+                      {active && (
+                        <span
+                          className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full"
+                          style={{ backgroundColor: "#5B5BD6" }}
+                        />
+                      )}
                       <Icon
                         size={14}
-                        style={{ color: active ? "#5B5BD6" : "currentColor" }}
-                        strokeWidth={active ? 2.5 : 1.75}
+                        strokeWidth={active ? 2 : 1.75}
+                        style={{ color: active ? "#5B5BD6" : "currentColor", flexShrink: 0 }}
                       />
-                      {item.label}
-                      {active && (
-                        <ChevronRight size={10} className="ml-auto" style={{ color: "#5B5BD6" }} />
-                      )}
+                      <span className="truncate">{item.label}</span>
                     </Link>
                   </li>
                 );
@@ -149,35 +160,39 @@ export function AgencySidebar() {
         ))}
       </nav>
 
-      {/* Settings + User footer */}
-      <div className="border-t px-2 py-3 space-y-0.5" style={{ borderColor: "#1E1E1E" }}>
+      {/* Footer */}
+      <div className="flex-none px-2 pb-3 pt-2" style={{ borderTop: "1px solid #1C1C1C" }}>
         <Link
           href="/agency/settings"
-          className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-all"
-          style={{ color: "#555555" }}
+          className="flex items-center gap-2.5 rounded-[7px] px-3 py-[7px] text-[13px] font-medium transition-colors"
+          style={{ color: "#404040" }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#1A1A1A";
-            e.currentTarget.style.color = "#CCCCCC";
+            e.currentTarget.style.backgroundColor = "#161616";
+            e.currentTarget.style.color = "#999999";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = "#555555";
+            e.currentTarget.style.color = "#404040";
           }}
         >
-          <Settings size={14} strokeWidth={1.75} />
+          <Settings size={14} strokeWidth={1.75} style={{ flexShrink: 0 }} />
           Settings
         </Link>
-        <div className="flex items-center gap-2.5 rounded-md px-3 py-2">
+
+        {/* User chip */}
+        <div className="mt-1 flex items-center gap-2.5 rounded-[7px] px-3 py-[7px]">
           <div
-            className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white flex-none"
-            style={{ backgroundColor: "#2D2D2D" }}
+            className="flex h-[24px] w-[24px] flex-none items-center justify-center rounded-full text-[10px] font-semibold text-white"
+            style={{ backgroundColor: "#2A2A2A", letterSpacing: "0.02em" }}
           >
-            D
+            DS
           </div>
           <div className="min-w-0">
-            <p className="truncate text-[12px] font-medium text-white">Dioli Santos</p>
-            <p className="truncate text-[10px]" style={{ color: "#444444" }}>
-              Agency Owner
+            <p className="truncate text-[12px] font-medium leading-tight" style={{ color: "#888888" }}>
+              Dioli Santos
+            </p>
+            <p className="truncate text-[10px] leading-tight" style={{ color: "#303030" }}>
+              Owner
             </p>
           </div>
         </div>

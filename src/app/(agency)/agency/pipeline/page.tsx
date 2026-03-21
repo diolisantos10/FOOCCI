@@ -1,55 +1,62 @@
-import { GitBranch, AlertCircle, Clock } from "lucide-react";
-import { PageHeader } from "@/components/agency/ui/PageHeader";
+import { GitBranch, AlertCircle, Clock, Plus } from "lucide-react";
 import { MOCK_PROJECTS, PipelineStage, Project } from "@/lib/agency/mock-data";
 import Link from "next/link";
 
 export const metadata = { title: "Pipeline" };
 
-const COLUMNS: { key: PipelineStage; label: string; color: string; bg: string }[] = [
-  { key: "briefing",   label: "Briefing",   color: "#A1A1AA", bg: "#F4F4F5" },
-  { key: "diagnosis",  label: "Diagnosis",  color: "#CA8A04", bg: "#FEF9C3" },
-  { key: "planning",   label: "Planning",   color: "#2563EB", bg: "#DBEAFE" },
-  { key: "production", label: "Production", color: "#7C3AED", bg: "#EDE9FE" },
-  { key: "review",     label: "Review",     color: "#EA580C", bg: "#FFEDD5" },
-  { key: "delivery",   label: "Delivery",   color: "#0D9488", bg: "#CCFBF1" },
-  { key: "ongoing",    label: "Ongoing",    color: "#16A34A", bg: "#DCFCE7" },
-  { key: "completed",  label: "Completed",  color: "#71717A", bg: "#F4F4F5" },
+const COLUMNS: { key: PipelineStage; label: string; color: string; dot: string }[] = [
+  { key: "briefing",   label: "Briefing",   color: "#8E8E9A", dot: "#C0C0BC" },
+  { key: "diagnosis",  label: "Diagnosis",  color: "#D97706", dot: "#D97706" },
+  { key: "planning",   label: "Planning",   color: "#3B82F6", dot: "#3B82F6" },
+  { key: "production", label: "Production", color: "#8B5CF6", dot: "#8B5CF6" },
+  { key: "review",     label: "Review",     color: "#F97316", dot: "#F97316" },
+  { key: "delivery",   label: "Delivery",   color: "#0D9488", dot: "#0D9488" },
+  { key: "ongoing",    label: "Ongoing",    color: "#16A34A", dot: "#16A34A" },
+  { key: "completed",  label: "Completed",  color: "#A1A1AA", dot: "#D0D0CC" },
 ];
 
-const STATUS_INDICATOR: Record<string, { color: string; label: string }> = {
+const STATUS_META: Record<string, { color: string; label: string }> = {
   active:    { color: "#16A34A", label: "Active" },
   at_risk:   { color: "#CA8A04", label: "At Risk" },
   blocked:   { color: "#DC2626", label: "Blocked" },
-  completed: { color: "#71717A", label: "Done" },
-  paused:    { color: "#A1A1AA", label: "Paused" },
+  completed: { color: "#A1A1AA", label: "Done" },
+  paused:    { color: "#C0C0BC", label: "Paused" },
 };
 
-function PipelineCard({ project, stageColor }: { project: Project; stageColor: string }) {
-  const indicator = STATUS_INDICATOR[project.status] ?? { color: "#A1A1AA", label: project.status };
+function KanbanCard({ project }: { project: Project }) {
+  const status    = STATUS_META[project.status] ?? { color: "#A1A1AA", label: project.status };
+  const isCritical = project.priority === "critical";
+  const isHighRisk = project.status === "at_risk" || project.status === "blocked";
+
   return (
     <Link
       href={`/agency/projects/${project.id}`}
-      className="block rounded-lg border border-[#E8E8E5] bg-white p-3.5 shadow-card hover:shadow-card-hover hover:border-[#5B5BD6] transition-all group"
+      className="group block rounded-xl border bg-white p-4 transition-all hover:border-[#5B5BD6]"
+      style={{
+        borderColor: isHighRisk ? "#FECACA" : "#E5E5E2",
+        boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)",
+      }}
     >
-      {/* Status bar */}
-      <div className="mb-2.5 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide">
-          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: indicator.color }} />
-          <span style={{ color: indicator.color }}>{indicator.label}</span>
+      {/* Top row: status + priority */}
+      <div className="mb-3 flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em]" style={{ color: status.color }}>
+          <span className="h-[5px] w-[5px] flex-none rounded-full" style={{ backgroundColor: status.color }} />
+          {status.label}
         </span>
-        <span
-          className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-          style={{
-            backgroundColor: project.priority === "critical" ? "#FEE2E2" : project.priority === "high" ? "#FFEDD5" : "#F4F4F5",
-            color: project.priority === "critical" ? "#B91C1C" : project.priority === "high" ? "#C2410C" : "#71717A",
-          }}
-        >
-          {project.priority}
-        </span>
+        {isCritical && (
+          <span className="rounded-[4px] bg-[#FEE2E2] px-[5px] py-[2px] text-[9px] font-bold uppercase tracking-wide text-[#991B1B]">
+            Critical
+          </span>
+        )}
+        {!isCritical && project.priority === "high" && (
+          <span className="rounded-[4px] bg-[#FFF0E8] px-[5px] py-[2px] text-[9px] font-semibold uppercase tracking-wide text-[#9A3412]">
+            High
+          </span>
+        )}
       </div>
 
       {/* Project name */}
-      <p className="text-[12px] font-semibold text-[#0A0A0A] leading-snug group-hover:text-[#5B5BD6] transition-colors line-clamp-2">
+      <p className="text-[12.5px] font-semibold leading-snug text-[#0A0A0A] transition-colors group-hover:text-[#5B5BD6] line-clamp-2">
         {project.name}
       </p>
 
@@ -57,16 +64,16 @@ function PipelineCard({ project, stageColor }: { project: Project; stageColor: s
       <p className="mt-1 text-[11px] text-[#A1A1AA]">{project.clientName}</p>
 
       {/* Footer */}
-      <div className="mt-3 flex items-center justify-between border-t border-[#F4F4F4] pt-2.5">
-        <div className="flex items-center gap-1 text-[10px] text-[#A1A1AA]">
+      <div className="mt-3.5 flex items-center justify-between border-t border-[#F5F5F3] pt-3">
+        <div className="flex items-center gap-1 text-[10px] text-[#C0C0BC]">
           <Clock size={9} />
-          {project.deadline}
+          <span className="mono-num">{project.deadline.slice(5)}</span>
         </div>
-        {project.status === "at_risk" && (
-          <AlertCircle size={12} className="text-[#CA8A04]" />
-        )}
-        {project.status === "blocked" && (
-          <AlertCircle size={12} className="text-[#DC2626]" />
+        {isHighRisk && (
+          <AlertCircle
+            size={12}
+            style={{ color: project.status === "blocked" ? "#DC2626" : "#CA8A04" }}
+          />
         )}
       </div>
     </Link>
@@ -74,67 +81,86 @@ function PipelineCard({ project, stageColor }: { project: Project; stageColor: s
 }
 
 export default function PipelinePage() {
+  const total = MOCK_PROJECTS.length;
+
   return (
-    <div className="min-h-full" style={{ backgroundColor: "#F8F8F7" }}>
+    <div className="min-h-full" style={{ backgroundColor: "#F5F5F3" }}>
       <div className="px-8 py-7">
-        <PageHeader
-          title="Pipeline"
-          subtitle="All projects organized by stage"
-          icon={GitBranch}
-          iconColor="#2563EB"
-        >
-          <div className="flex items-center gap-2 text-[12px] text-[#71717A]">
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-[#16A34A]" /> Active
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-[#CA8A04]" /> At Risk
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-[#DC2626]" /> Blocked
-            </span>
+
+        {/* Page header */}
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EEF6FF]">
+              <GitBranch size={15} strokeWidth={1.75} className="text-[#3B82F6]" />
+            </div>
+            <div>
+              <h1 className="text-[18px] font-bold text-[#0A0A0A]" style={{ letterSpacing: "-0.01em" }}>
+                Pipeline
+              </h1>
+              <p className="text-[12px] text-[#A1A1AA]">{total} projects across 8 stages</p>
+            </div>
           </div>
-        </PageHeader>
+
+          {/* Legend */}
+          <div className="flex items-center gap-4 text-[11px] text-[#A1A1AA]">
+            {[
+              { color: "#16A34A", label: "Active" },
+              { color: "#CA8A04", label: "At Risk" },
+              { color: "#DC2626", label: "Blocked" },
+            ].map((l) => (
+              <span key={l.label} className="flex items-center gap-1.5">
+                <span className="h-[6px] w-[6px] rounded-full" style={{ backgroundColor: l.color }} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        </div>
 
         {/* Kanban board */}
-        <div className="flex gap-3 overflow-x-auto pb-4">
+        <div className="flex gap-3 overflow-x-auto pb-6" style={{ scrollbarWidth: "none" }}>
           {COLUMNS.map((col) => {
             const colProjects = MOCK_PROJECTS.filter((p) => p.stage === col.key);
             return (
-              <div key={col.key} className="flex-none w-52">
+              <div key={col.key} className="w-[216px] flex-none">
                 {/* Column header */}
-                <div
-                  className="mb-2.5 flex items-center justify-between rounded-lg px-3 py-2"
-                  style={{ backgroundColor: col.bg }}
-                >
+                <div className="mb-3 flex items-center justify-between px-1">
                   <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: col.color }} />
-                    <span className="text-[12px] font-semibold" style={{ color: col.color }}>
+                    <span className="h-[6px] w-[6px] rounded-full" style={{ backgroundColor: col.dot }} />
+                    <span
+                      className="text-[11px] font-semibold uppercase tracking-[0.07em]"
+                      style={{ color: col.color }}
+                    >
                       {col.label}
                     </span>
                   </div>
                   <span
-                    className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold"
-                    style={{ backgroundColor: col.color, color: "white" }}
+                    className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-bold"
+                    style={{
+                      backgroundColor: colProjects.length > 0 ? `${col.dot}18` : "#F0F0EE",
+                      color: colProjects.length > 0 ? col.color : "#C0C0BC",
+                    }}
                   >
                     {colProjects.length}
                   </span>
                 </div>
 
                 {/* Cards */}
-                <div className="space-y-2 min-h-24">
+                <div className="space-y-2 min-h-[100px]">
                   {colProjects.map((project) => (
-                    <PipelineCard key={project.id} project={project} stageColor={col.color} />
+                    <KanbanCard key={project.id} project={project} />
                   ))}
                   {colProjects.length === 0 && (
-                    <div className="rounded-lg border-2 border-dashed border-[#E8E8E5] py-6 flex items-center justify-center">
-                      <span className="text-[11px] text-[#D4D4D0]">Empty</span>
+                    <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-[#EAEAE8] py-8">
+                      <span className="text-[10px] font-medium text-[#D0D0CC]">Empty</span>
                     </div>
                   )}
                 </div>
               </div>
             );
           })}
+
+          {/* Add column spacer */}
+          <div className="w-4 flex-none" />
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type BadgeVariant =
+export type BadgeVariant =
   | "default"
   | "active"
   | "at_risk"
@@ -23,35 +23,36 @@ type BadgeVariant =
   | "pending_analysis"
   | "analyzed";
 
-const VARIANT_STYLES: Record<BadgeVariant, string> = {
-  default: "bg-[#F4F4F5] text-[#52525B]",
-  active: "bg-[#DCFCE7] text-[#15803D]",
-  at_risk: "bg-[#FEF9C3] text-[#A16207]",
-  blocked: "bg-[#FEE2E2] text-[#B91C1C]",
-  completed: "bg-[#F4F4F5] text-[#52525B]",
-  paused: "bg-[#F4F4F5] text-[#52525B]",
-  draft: "bg-[#F4F4F5] text-[#52525B]",
-  in_review: "bg-[#DBEAFE] text-[#1D4ED8]",
-  approved: "bg-[#DCFCE7] text-[#15803D]",
-  delivered: "bg-[#EDE9FE] text-[#6D28D9]",
-  pending: "bg-[#F4F4F5] text-[#52525B]",
-  in_progress: "bg-[#DBEAFE] text-[#1D4ED8]",
-  done: "bg-[#DCFCE7] text-[#15803D]",
-  critical: "bg-[#FEE2E2] text-[#B91C1C]",
-  high: "bg-[#FFEDD5] text-[#C2410C]",
-  medium: "bg-[#FEF9C3] text-[#A16207]",
-  low: "bg-[#F4F4F5] text-[#52525B]",
-  onboarding: "bg-[#DBEAFE] text-[#1D4ED8]",
-  inactive: "bg-[#F4F4F5] text-[#52525B]",
-  pending_analysis: "bg-[#FEF9C3] text-[#A16207]",
-  analyzed: "bg-[#DBEAFE] text-[#1D4ED8]",
+/* Refined palette: less saturated, more premium */
+const STYLES: Record<BadgeVariant, { bg: string; text: string }> = {
+  default:          { bg: "#F4F4F5", text: "#52525B" },
+  active:           { bg: "#DCFCE7", text: "#166534" },
+  at_risk:          { bg: "#FEF3C7", text: "#92400E" },
+  blocked:          { bg: "#FEE2E2", text: "#991B1B" },
+  completed:        { bg: "#F4F4F5", text: "#52525B" },
+  paused:           { bg: "#F4F4F5", text: "#71717A" },
+  draft:            { bg: "#F4F4F5", text: "#71717A" },
+  in_review:        { bg: "#EEF2FF", text: "#3730A3" },
+  approved:         { bg: "#DCFCE7", text: "#166534" },
+  delivered:        { bg: "#F3E8FF", text: "#6B21A8" },
+  pending:          { bg: "#F4F4F5", text: "#71717A" },
+  in_progress:      { bg: "#EEF2FF", text: "#3730A3" },
+  done:             { bg: "#DCFCE7", text: "#166534" },
+  critical:         { bg: "#FEE2E2", text: "#991B1B" },
+  high:             { bg: "#FFF0E8", text: "#9A3412" },
+  medium:           { bg: "#FEFCE8", text: "#854D0E" },
+  low:              { bg: "#F4F4F5", text: "#71717A" },
+  onboarding:       { bg: "#EEF2FF", text: "#3730A3" },
+  inactive:         { bg: "#F4F4F5", text: "#A1A1AA" },
+  pending_analysis: { bg: "#FEF3C7", text: "#92400E" },
+  analyzed:         { bg: "#EEF2FF", text: "#3730A3" },
 };
 
-const VARIANT_LABELS: Partial<Record<BadgeVariant, string>> = {
-  at_risk: "At Risk",
-  in_review: "In Review",
-  in_progress: "In Progress",
-  pending_analysis: "Pending Analysis",
+const DISPLAY_LABELS: Partial<Record<BadgeVariant, string>> = {
+  at_risk:          "At Risk",
+  in_review:        "In Review",
+  in_progress:      "In Progress",
+  pending_analysis: "Pending",
 };
 
 interface BadgeProps {
@@ -61,46 +62,48 @@ interface BadgeProps {
 }
 
 export function Badge({ variant = "default", label, className }: BadgeProps) {
-  const displayLabel = label ?? VARIANT_LABELS[variant] ?? variant.replace(/_/g, " ");
+  const { bg, text } = STYLES[variant] ?? STYLES.default;
+  const display = label ?? DISPLAY_LABELS[variant] ?? variant.replace(/_/g, " ");
+
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium capitalize",
-        VARIANT_STYLES[variant],
+        "inline-flex items-center rounded-[5px] px-[7px] py-[2px] text-[11px] font-medium capitalize leading-[16px]",
         className
       )}
+      style={{ backgroundColor: bg, color: text }}
     >
-      {displayLabel}
+      {display}
     </span>
   );
 }
 
+/* Dot badge — used for status in tables */
 interface DotBadgeProps {
   variant?: BadgeVariant;
   label?: string;
 }
 
+const DOT_COLORS: Partial<Record<BadgeVariant, string>> = {
+  active:      "#16A34A",
+  at_risk:     "#CA8A04",
+  blocked:     "#DC2626",
+  completed:   "#A1A1AA",
+  paused:      "#A1A1AA",
+  in_progress: "#5B5BD6",
+  done:        "#16A34A",
+  pending:     "#D0D0CC",
+};
+
 export function DotBadge({ variant = "default", label }: DotBadgeProps) {
-  const displayLabel = label ?? VARIANT_LABELS[variant] ?? variant.replace(/_/g, " ");
-
-  const dotColors: Partial<Record<BadgeVariant, string>> = {
-    active: "#16A34A",
-    at_risk: "#CA8A04",
-    blocked: "#DC2626",
-    completed: "#71717A",
-    paused: "#71717A",
-    in_progress: "#2563EB",
-    done: "#16A34A",
-    pending: "#71717A",
-  };
-
+  const display = label ?? DISPLAY_LABELS[variant] ?? variant.replace(/_/g, " ");
   return (
     <span className="inline-flex items-center gap-1.5 text-[12px] text-[#52525B]">
       <span
-        className="h-1.5 w-1.5 rounded-full flex-none"
-        style={{ backgroundColor: dotColors[variant] ?? "#A1A1AA" }}
+        className="h-[6px] w-[6px] flex-none rounded-full"
+        style={{ backgroundColor: DOT_COLORS[variant] ?? "#D0D0CC" }}
       />
-      <span className="capitalize">{displayLabel}</span>
+      <span className="capitalize">{display}</span>
     </span>
   );
 }
