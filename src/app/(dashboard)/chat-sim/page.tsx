@@ -815,6 +815,13 @@ export default function ChatSimPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, uiState, stage]);
 
+  // Stage is the single source of truth — clear stale currentCategory on upsell stages
+  useEffect(() => {
+    if (stage === "SELECT_DRINK" || stage === "SELECT_DESSERT") {
+      setCurrentCategory(null);
+    }
+  }, [stage]);
+
   // ── core AI call ─────────────────────────────────────────
 
   const callAI = useCallback(async (
@@ -1149,12 +1156,14 @@ export default function ChatSimPage() {
       if (calculated) {
         setPromo(calculated);
         setPromoShown(true);
+        setCurrentCategory(null);
         setStage("PROMO");
         return;
       }
     }
 
     const nextStage = nextUpsellStage(menu, cart, newRefusals);
+    setCurrentCategory(null);
     setStage(nextStage);
     const text = catLabel ? `não quero ${catLabel.toLowerCase()}, obrigado` : "pode continuar";
     sendText(text, cart, visitedCategories, null, nextStage, newRefusals);
