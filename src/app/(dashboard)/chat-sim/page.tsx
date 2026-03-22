@@ -1065,6 +1065,21 @@ export default function ChatSimPage() {
   /** "+ Adicionar mais" — stays in current upsell category, no stage change. */
   function handleUpsellAddMore() { setInput(""); }
 
+  /**
+   * Persistent "Finalizar pedido" — always available in the bottom bar.
+   * Skips optional upsell categories and routes directly to the next
+   * mandatory checkout step (delivery → address → name → payment → review).
+   * At DONE/REVIEW_ORDER the button is disabled so this is never reached.
+   */
+  function handlePersistentFinalize() {
+    if (cart.length === 0) return;
+    const next = resolveNextStage([], menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
+    setUncoveredCategories([]);
+    setCurrentCategory(null);
+    setStage(next.stage);
+    sendText("Quero finalizar o pedido", cart, visitedCategories, null, next.stage);
+  }
+
   function handleBack() { setCurrentCategory(null); }
 
   function handleFinalize() {
@@ -1337,6 +1352,30 @@ export default function ChatSimPage() {
         onSubmit={handleSubmit}
         className="shrink-0 border-t border-gray-200 bg-white px-4 py-3"
       >
+        {/* ── Persistent shortcuts — always visible at every stage ── */}
+        <div className="mb-2 flex gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={handleBackToExploration}
+            className="shrink-0 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+          >
+            📋 Ver cardápio
+          </button>
+          <button
+            type="button"
+            disabled={busy || cart.length === 0 || stage === "DONE" || stage === "REVIEW_ORDER"}
+            onClick={handlePersistentFinalize}
+            className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium disabled:opacity-40 transition-colors ${
+              cart.length > 0 && stage !== "DONE" && stage !== "REVIEW_ORDER"
+                ? "border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]"
+                : "border-gray-200 bg-gray-50 text-gray-400"
+            }`}
+          >
+            ✅ Finalizar pedido
+          </button>
+        </div>
+
         {stage !== "PROMO" && (
           <div className="mb-2.5">
             <ChipBar
