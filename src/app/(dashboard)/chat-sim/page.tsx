@@ -97,7 +97,7 @@ interface Address {
   complement:   string;
 }
 
-interface Refusals { drink: boolean; dessert: boolean; }
+interface Refusals { drink: number; dessert: number; }
 
 type ChipBarMode =
   | { type: "categories"; categories: MenuCategory[] }
@@ -155,9 +155,9 @@ function nextUpsellStage(
 ): Stage {
   const names = new Set(cart.map((c) => c.name));
   const bev = findBeverageCat(menu);
-  if (bev && !bev.items.some((i) => names.has(i.name)) && !refusals.drink) return "SELECT_DRINK";
+  if (bev && !bev.items.some((i) => names.has(i.name)) && refusals.drink < 2) return "SELECT_DRINK";
   const des = findDessertCat(menu);
-  if (des && !des.items.some((i) => names.has(i.name)) && !refusals.dessert) return "SELECT_DESSERT";
+  if (des && !des.items.some((i) => names.has(i.name)) && refusals.dessert < 2) return "SELECT_DESSERT";
   return "CONFIRM_ORDER";
 }
 
@@ -644,10 +644,6 @@ function ChipBar({
             {categoryEmoji(cat.name)} {cat.name}
           </button>
         ))}
-        <button type="button" disabled={disabled} onClick={onFinalize}
-          className={`${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}>
-          ✅ Finalizar pedido
-        </button>
       </div>
     );
   }
@@ -688,22 +684,16 @@ function ChipBar({
               className={`${chip} border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100`}>
               + Adicionar mais
             </button>
-            <button type="button" disabled={disabled} onClick={onFinalize}
+            <button type="button" disabled={disabled} onClick={onBack}
               className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}>
               ✅ Continuar pedido
             </button>
           </>
         ) : (
-          <>
-            <button type="button" disabled={disabled} onClick={onBack}
-              className={`${chip} border-gray-300 bg-white text-gray-600 hover:bg-gray-50`}>
-              Continuar pedido
-            </button>
-            <button type="button" disabled={disabled} onClick={onFinalize}
-              className={`${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}>
-              ✅ Finalizar pedido
-            </button>
-          </>
+          <button type="button" disabled={disabled} onClick={onBack}
+            className={`${chip} border-gray-300 bg-white text-gray-600 hover:bg-gray-50`}>
+            Continuar pedido
+          </button>
         )}
       </div>
       {/* Card grid */}
@@ -744,7 +734,7 @@ export default function ChatSimPage() {
   const [visitedCategories,setVisitedCategories]= useState<string[]>([]);
   const [stage,            setStage]            = useState<Stage>("SELECT_MAIN");
   const [currentCategory,  setCurrentCategory]  = useState<string | null>(null);
-  const [refusals,         setRefusals]         = useState<Refusals>({ drink: false, dessert: false });
+  const [refusals,         setRefusals]         = useState<Refusals>({ drink: 0, dessert: 0 });
   const [refusalCount,     setRefusalCount]     = useState(0);
   const [promo,            setPromo]            = useState<Promo | null>(null);
   const [deliveryMethod,   setDeliveryMethod]   = useState<"delivery" | "pickup" | null>(null);
@@ -836,7 +826,7 @@ export default function ChatSimPage() {
     isGreeting = false,
     currentStage: Stage = "SELECT_MAIN",
     currentUncovered: Array<"main" | "drink" | "dessert"> = ["main", "drink", "dessert"],
-    currentRefusals: { drink: boolean; dessert: boolean } = { drink: false, dessert: false },
+    currentRefusals: { drink: number; dessert: number } = { drink: 0, dessert: 0 },
     currentDeliveryMethod: "delivery" | "pickup" | null = null
   ) => {
     setUiState("thinking");
@@ -914,7 +904,8 @@ export default function ChatSimPage() {
     cartSnap: CartItem[],
     visitedSnap: string[],
     promoSnap: Promo | null,
-    stageSnap: Stage = stage
+    stageSnap: Stage = stage,
+    refusalsSnap: Refusals = refusals  // explicit snapshot beats stale closure in decline handlers
   ) {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
@@ -922,7 +913,7 @@ export default function ChatSimPage() {
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
     const userMsg: ChatMessage = { id: uid(), role: "user", content: trimmed, ts: new Date() };
     setMessages((prev) => [...prev, userMsg]);
-    await callAI(history, trimmed, cartSnap, visitedSnap, promoSnap, false, stageSnap, uncoveredCategories, refusals, deliveryMethod);
+    await callAI(history, trimmed, cartSnap, visitedSnap, promoSnap, false, stageSnap, uncoveredCategories, refusalsSnap, deliveryMethod);
   }
 
   function handleSubmit(e?: FormEvent) {
@@ -1067,15 +1058,41 @@ export default function ChatSimPage() {
 
   /**
    * Persistent "Finalizar pedido" — always available in the bottom bar.
-   * Skips optional upsell categories and routes directly to the next
-   * mandatory checkout step (delivery → address → name → payment → review).
+   * Does NOT bypass upsell. Enforces the full sequence:
+   *   1. Mark main as done (user is explicitly exiting item browsing)
+   *   2. If drink is still pending and not yet refused twice → SELECT_DRINK
+   *   3. If dessert is still pending and not yet refused twice → SELECT_DESSERT
+   *   4. Only after all categories are covered OR refused → checkout
    * At DONE/REVIEW_ORDER the button is disabled so this is never reached.
    */
   function handlePersistentFinalize() {
     if (cart.length === 0) return;
-    const next = resolveNextStage([], menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
+
+    // Step 1: close SELECT_MAIN — user has made their choice to advance
+    const withoutMain = uncoveredCategories.filter((c) => c !== "main");
+
+    // Step 2: force drink upsell if not yet covered or fully refused
+    if (withoutMain.includes("drink") && findBeverageCat(menu) && refusals.drink < 2) {
+      setUncoveredCategories(withoutMain);
+      setCurrentCategory(null);
+      setStage("SELECT_DRINK");
+      sendText("Quero finalizar o pedido", cart, visitedCategories, null, "SELECT_DRINK");
+      return;
+    }
+
+    // Step 3: force dessert upsell if not yet covered or fully refused
+    if (withoutMain.includes("dessert") && findDessertCat(menu) && refusals.dessert < 2) {
+      setUncoveredCategories(withoutMain.filter((c) => c !== "drink"));
+      setCurrentCategory(null);
+      setStage("SELECT_DESSERT");
+      sendText("Quero finalizar o pedido", cart, visitedCategories, null, "SELECT_DESSERT");
+      return;
+    }
+
+    // Step 4: everything covered/refused → proceed to checkout
     setUncoveredCategories([]);
     setCurrentCategory(null);
+    const next = resolveNextStage([], menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
     setStage(next.stage);
     sendText("Quero finalizar o pedido", cart, visitedCategories, null, next.stage);
   }
@@ -1092,25 +1109,42 @@ export default function ChatSimPage() {
   }
 
   function handleUpsellDecline() {
-    const isDrink   = stage === "SELECT_DRINK";
-    const isDesert  = stage === "SELECT_DESSERT";
-    const catLabel  = isDrink ? (findBeverageCat(menu)?.name ?? "bebidas")
-                    : isDesert ? (findDessertCat(menu)?.name ?? "sobremesas")
-                    : "";
+    const isDrink  = stage === "SELECT_DRINK";
+    const isDesert = stage === "SELECT_DESSERT";
+    const catLabel = isDrink  ? (findBeverageCat(menu)?.name ?? "bebidas")
+                   : isDesert ? (findDessertCat(menu)?.name ?? "sobremesas")
+                   : "";
+
+    // Per-category refusal count: max 2 attempts before marking refused
+    const prevCatCount = isDrink ? refusals.drink : refusals.dessert;
+    const newCatCount  = prevCatCount + 1;
 
     const newRefusals: Refusals = {
-      drink:   isDrink   ? true : refusals.drink,
-      dessert: isDesert  ? true : refusals.dessert,
+      drink:   isDrink  ? newCatCount : refusals.drink,
+      dessert: isDesert ? newCatCount : refusals.dessert,
     };
     setRefusals(newRefusals);
+
+    const newTotalCount = refusalCount + 1;
+    setRefusalCount(newTotalCount);
+
+    if (newCatCount < 2) {
+      // First refusal — stay in the same category; AI sends reinforcement copy.
+      // Pass newRefusals so the AI sees refusals.drink/dessert > 0 and uses the
+      // "já recusada" sales-intelligence copy instead of the first-approach copy.
+      const text = catLabel
+        ? `não quero ${catLabel.toLowerCase()} por enquanto`
+        : "não quero, obrigado";
+      sendText(text, cart, visitedCategories, null, stage, newRefusals);
+      return;
+    }
+
+    // Second refusal — mark category as fully refused and advance
     if (isDrink)  setUncoveredCategories((prev) => prev.filter((c) => c !== "drink"));
     if (isDesert) setUncoveredCategories((prev) => prev.filter((c) => c !== "dessert"));
 
-    const newCount = refusalCount + 1;
-    setRefusalCount(newCount);
-
-    // After 2 refusals → PROMO stage (once per session)
-    if (newCount >= 2 && !promoShown) {
+    // After 2 total decline events → PROMO (once per session)
+    if (newTotalCount >= 2 && !promoShown) {
       const calculated = calculatePromo(cart, menu);
       if (calculated) {
         setPromo(calculated);
@@ -1120,12 +1154,10 @@ export default function ChatSimPage() {
       }
     }
 
-    // Advance: never re-offer refused category
     const nextStage = nextUpsellStage(menu, cart, newRefusals);
     setStage(nextStage);
-
     const text = catLabel ? `não quero ${catLabel.toLowerCase()}, obrigado` : "pode continuar";
-    sendText(text, cart, visitedCategories, null, nextStage);
+    sendText(text, cart, visitedCategories, null, nextStage, newRefusals);
   }
 
   function handleAcceptPromo() {
@@ -1240,7 +1272,7 @@ export default function ChatSimPage() {
     setVisitedCategories([]);
     setStage("SELECT_MAIN");
     setCurrentCategory(null);
-    setRefusals({ drink: false, dessert: false });
+    setRefusals({ drink: 0, dessert: 0 });
     setRefusalCount(0);
     setPromo(null);
     setDeliveryMethod(null);

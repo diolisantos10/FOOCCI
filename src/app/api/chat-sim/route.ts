@@ -58,7 +58,7 @@ interface ChatSimRequest {
   promo?: PromoContext | null;
   stage?: OrderStage;
   uncoveredCategories?: Array<"main" | "drink" | "dessert">;
-  refusals?: { drink: boolean; dessert: boolean };
+  refusals?: { drink: number; dessert: number };
   deliveryMethod?: "delivery" | "pickup" | null;
 }
 
@@ -88,7 +88,7 @@ function buildSystemPrompt(
   promo: PromoContext | null,
   stage: OrderStage,
   uncoveredCategories: Array<"main" | "drink" | "dessert">,
-  refusals: { drink: boolean; dessert: boolean },
+  refusals: { drink: number; dessert: number },
   deliveryMethod: "delivery" | "pickup" | null,
 ): string {
   const active = categories.filter((c) => c.items.length > 0);
@@ -441,7 +441,7 @@ export async function POST(req: NextRequest) {
       promo = null,
       stage = "SELECT_MAIN",
       uncoveredCategories = ["main", "drink", "dessert"],
-      refusals = { drink: false, dessert: false },
+      refusals = { drink: 0, dessert: 0 },
       deliveryMethod = null,
     } = body;
     if (!message?.trim())        return badRequest("message is required.");
