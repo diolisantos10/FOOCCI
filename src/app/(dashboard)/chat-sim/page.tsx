@@ -206,11 +206,9 @@ function parseNeighborhoodLine(raw: string): { neighborhood: string; complement:
 }
 
 function formatAddress(addr: Address): string {
-  const parts = [
-    addr.street && addr.number ? `${addr.street}, ${addr.number}` : addr.street,
-    addr.neighborhood,
-    addr.complement,
-  ].filter(Boolean);
+  // Build street part from whichever of street/number are present — never lose one if the other is empty
+  const streetPart = [addr.street, addr.number].filter(Boolean).join(", ");
+  const parts = [streetPart, addr.neighborhood, addr.complement].filter(Boolean);
   return parts.join(" — ");
 }
 
@@ -690,7 +688,7 @@ function ChipBar({
               className={`${chip} border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100`}>
               + Adicionar mais
             </button>
-            <button type="button" disabled={disabled} onClick={onBack}
+            <button type="button" disabled={disabled} onClick={onFinalize}
               className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}>
               ✅ Continuar pedido
             </button>
@@ -1042,17 +1040,10 @@ export default function ChatSimPage() {
       sendText(`Quero ${item.name}`, newCart, visitedCategories, null, "SELECT_DESSERT");
 
     } else {
-      // SELECT_MAIN exploration — detect category for uncovered tracking
-      const bevCat = findBeverageCat(menu);
-      const desCat = findDessertCat(menu);
-      const categoryToClear: "main" | "drink" | "dessert" =
-        (bevCat && currentCategory === bevCat.name) ? "drink"
-        : (desCat && currentCategory === desCat.name) ? "dessert"
-        : "main";
-
-      const newUncovered = uncoveredCategories.filter((c) => c !== categoryToClear);
-      setUncoveredCategories(newUncovered);
-      // Stay in current category (user must click "Continuar pedido" to go back)
+      // SELECT_MAIN — adding an item does NOT close the category.
+      // uncoveredCategories is only updated when user explicitly clicks "Continuar pedido"
+      // (which calls handleFinalize). Until then, keep "main" in uncoveredCategories so
+      // the AI and resolveNextStage don't advance to drinks prematurely.
       sendText(`Quero ${item.name}`, newCart, visitedCategories, null, "SELECT_MAIN");
     }
   }
