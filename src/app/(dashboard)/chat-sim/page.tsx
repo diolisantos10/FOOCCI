@@ -101,7 +101,7 @@ interface Refusals { drink: boolean; dessert: boolean; }
 
 type ChipBarMode =
   | { type: "categories"; categories: MenuCategory[] }
-  | { type: "items";   category: string; categoryImage: string | null; items: MenuItem[] }
+  | { type: "items";   category: string; categoryImage: string | null; items: MenuItem[]; itemAdded: boolean }
   | { type: "upsell";  category: string; categoryImage: string | null; items: MenuItem[]; itemAdded: boolean }
   | { type: "CONFIRM_ORDER" }
   | { type: "DELIVERY_TYPE" }
@@ -435,6 +435,7 @@ function ChipBar({
   onFinalConfirm,
   onEditOrder,
   onUpsellContinue,
+  onUpsellAddMore,
 }: {
   mode: ChipBarMode;
   disabled: boolean;
@@ -452,6 +453,7 @@ function ChipBar({
   onFinalConfirm: () => void;
   onEditOrder: () => void;
   onUpsellContinue: () => void;
+  onUpsellAddMore: () => void;
 }) {
   const chip = "shrink-0 rounded-full border px-3 py-1 text-xs font-medium disabled:opacity-40 transition-colors";
 
@@ -654,37 +656,56 @@ function ChipBar({
 
   // ── Items or Upsell — full visual card grid ───────────────
   // Both "items" (exploration) and "upsell" (drink/dessert) use the same card grid.
-  // Upsell: before any item added → "Não quero, obrigado"; after → "Continuar pedido".
+  // Upsell: before any item added → "Não quero, obrigado"; after → two-button row.
+  // Items (SELECT_MAIN): before any item added → back + finalize; after → two-button row.
   const isUpsell = mode.type === "upsell";
   const upsellItemAdded = mode.type === "upsell" && mode.itemAdded;
+  const mainItemAdded = mode.type === "items" && mode.itemAdded;
   const emoji = categoryEmoji(mode.category);
   return (
     <div className="flex flex-col gap-2">
       {/* Nav row */}
       <div className="flex gap-1.5">
-        {!isUpsell && (
-          <button type="button" disabled={disabled} onClick={onBack}
-            className={`${chip} border-gray-300 bg-white text-gray-600 hover:bg-gray-50`}>
-            Continuar pedido
-          </button>
-        )}
         {isUpsell ? (
           upsellItemAdded ? (
-            <button type="button" disabled={disabled} onClick={onUpsellContinue}
-              className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}>
-              ✅ Continuar pedido
-            </button>
+            <>
+              <button type="button" disabled={disabled} onClick={onUpsellAddMore}
+                className={`${chip} border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100`}>
+                + Adicionar mais
+              </button>
+              <button type="button" disabled={disabled} onClick={onUpsellContinue}
+                className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}>
+                ✅ Continuar pedido
+              </button>
+            </>
           ) : (
             <button type="button" disabled={disabled} onClick={onUpsellDecline}
               className={`${chip} border-gray-300 bg-white text-gray-500 hover:bg-gray-50`}>
               Não quero, obrigado
             </button>
           )
+        ) : mainItemAdded ? (
+          <>
+            <button type="button" disabled={disabled} onClick={onUpsellAddMore}
+              className={`${chip} border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100`}>
+              + Adicionar mais
+            </button>
+            <button type="button" disabled={disabled} onClick={onBack}
+              className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}>
+              ✅ Continuar pedido
+            </button>
+          </>
         ) : (
-          <button type="button" disabled={disabled} onClick={onFinalize}
-            className={`${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}>
-            ✅ Finalizar pedido
-          </button>
+          <>
+            <button type="button" disabled={disabled} onClick={onBack}
+              className={`${chip} border-gray-300 bg-white text-gray-600 hover:bg-gray-50`}>
+              Continuar pedido
+            </button>
+            <button type="button" disabled={disabled} onClick={onFinalize}
+              className={`${chip} border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100`}>
+              ✅ Finalizar pedido
+            </button>
+          </>
         )}
       </div>
       {/* Card grid */}
@@ -749,7 +770,8 @@ export default function ChatSimPage() {
 
   function addToCart(item: MenuItem) {
     setCart((prev) => {
-      if (prev.some((c) => c.name === item.name)) return prev;
+      const existing = prev.find((c) => c.name === item.name);
+      if (existing) return prev.map((c) => c.name === item.name ? { ...c, qty: c.qty + 1 } : c);
       return [...prev, { name: item.name, price: item.price, qty: 1 }];
     });
   }
@@ -791,7 +813,9 @@ export default function ChatSimPage() {
     // SELECT_MAIN — exploration
     if (curCat) {
       const cat = menu.find((c) => c.name === curCat);
-      return { type: "items", category: curCat, categoryImage: cat?.imageUrl ?? null, items: cat?.items ?? [] };
+      const catNames = new Set(cat?.items.map((i) => i.name) ?? []);
+      const itemAdded = cartSnap.some((c) => catNames.has(c.name));
+      return { type: "items", category: curCat, categoryImage: cat?.imageUrl ?? null, items: cat?.items ?? [], itemAdded };
     }
     // Always show the full menu — uncoveredCategories controls flow guards, not visibility
     return { type: "categories", categories: menu };
@@ -1003,8 +1027,10 @@ export default function ChatSimPage() {
   }
 
   function handleItemSelect(item: MenuItem) {
+    // Mirror addToCart logic synchronously so sendText gets the correct snapshot
     const newCart = cart.some((c) => c.name === item.name)
-      ? cart : [...cart, { name: item.name, price: item.price, qty: 1 }];
+      ? cart.map((c) => c.name === item.name ? { ...c, qty: c.qty + 1 } : c)
+      : [...cart, { name: item.name, price: item.price, qty: 1 }];
     addToCart(item);
 
     if (stage === "SELECT_DRINK") {
@@ -1044,6 +1070,9 @@ export default function ChatSimPage() {
     setCurrentCategory(null);
     sendText("continuar", cart, visitedCategories, null, next.stage);
   }
+
+  /** "+ Adicionar mais" — stays in current upsell category, no stage change. */
+  function handleUpsellAddMore() { setInput(""); }
 
   function handleBack() { setCurrentCategory(null); }
 
@@ -1143,6 +1172,13 @@ export default function ChatSimPage() {
   }
 
   function handleAddressConfirm() {
+    if (!address.street || !address.number || !address.neighborhood) {
+      // Incomplete address — redirect back to collect missing fields
+      const missingStep = !address.street || !address.number ? "ADDRESS_INPUT" : "ADDRESS_DETAILS";
+      setStage(missingStep);
+      sendText("Endereço incompleto", cart, visitedCategories, null, missingStep);
+      return;
+    }
     setAddressConfirmed(true);
     setStage("ASK_NAME");
     sendText(
@@ -1329,6 +1365,7 @@ export default function ChatSimPage() {
               onFinalConfirm={handleFinalConfirm}
               onEditOrder={handleEditOrder}
               onUpsellContinue={handleUpsellContinue}
+              onUpsellAddMore={handleUpsellAddMore}
             />
           </div>
         )}
