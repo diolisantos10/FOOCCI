@@ -905,6 +905,7 @@ export default function ChatSimPage() {
     e?.preventDefault();
     const val = input.trim();
     if (!val) return;
+    if (stage === "DONE") return; // flow terminated — no further input
 
     if (stage === "ADDRESS_INPUT") {
       if (!/\d/.test(val)) {
@@ -1401,28 +1402,39 @@ export default function ChatSimPage() {
         className="shrink-0 border-t border-gray-200 bg-white px-4 py-3"
       >
         {/* ── Persistent shortcuts — always visible at every stage ── */}
-        <div className="mb-2 flex gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={handleBackToExploration}
-            className="shrink-0 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
-          >
-            📋 Ver cardápio
-          </button>
-          <button
-            type="button"
-            disabled={busy || cart.length === 0 || stage === "DONE" || stage === "REVIEW_ORDER"}
-            onClick={handlePersistentFinalize}
-            className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium disabled:opacity-40 transition-colors ${
-              cart.length > 0 && stage !== "DONE" && stage !== "REVIEW_ORDER"
-                ? "border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]"
-                : "border-gray-200 bg-gray-50 text-gray-400"
-            }`}
-          >
-            ✅ Finalizar pedido
-          </button>
-        </div>
+        {/* Both buttons are locked once checkout starts (DELIVERY_TYPE → DONE) */}
+        {(() => {
+          const inCheckout = (
+            stage === "DELIVERY_TYPE" || stage === "ADDRESS_INPUT" ||
+            stage === "ADDRESS_DETAILS" || stage === "ADDRESS_CONFIRM" ||
+            stage === "ASK_NAME" || stage === "PAYMENT" ||
+            stage === "REVIEW_ORDER" || stage === "DONE"
+          );
+          return (
+            <div className="mb-2 flex gap-2">
+              <button
+                type="button"
+                disabled={busy || inCheckout}
+                onClick={handleBackToExploration}
+                className="shrink-0 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              >
+                📋 Ver cardápio
+              </button>
+              <button
+                type="button"
+                disabled={busy || cart.length === 0 || inCheckout}
+                onClick={handlePersistentFinalize}
+                className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium disabled:opacity-40 transition-colors ${
+                  cart.length > 0 && !inCheckout
+                    ? "border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]"
+                    : "border-gray-200 bg-gray-50 text-gray-400"
+                }`}
+              >
+                ✅ Finalizar pedido
+              </button>
+            </div>
+          );
+        })()}
 
         {stage !== "PROMO" && (
           <div className="mb-2.5">
@@ -1459,12 +1471,12 @@ export default function ChatSimPage() {
               "Mensagem…"
             }
             rows={1}
-            disabled={busy}
+            disabled={busy || stage === "DONE"}
             className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#25d366] disabled:opacity-60"
           />
           <button
             type="submit"
-            disabled={!input.trim() || busy}
+            disabled={!input.trim() || busy || stage === "DONE"}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#128c7e] text-white shadow hover:bg-[#0f7a6f] disabled:opacity-40"
             title="Enviar"
           >

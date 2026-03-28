@@ -367,23 +367,12 @@ ${stage === "REVIEW_ORDER" ? `REVISÃO DO PEDIDO (REVIEW_ORDER) — o resumo com
                "Perfeito! O resumo está pronto — só confirmar 👇"
                "Que pedido! 😍 Revisa e confirma ali embaixo 👇"` : ""}
 
-${stage === "DONE" ? `PEDIDO CONCLUÍDO (DONE) — pedido já confirmado. NÃO liste itens, preços ou endereço — tudo já está na UI.
-  Sua mensagem: APENAS 3 linhas emocionais. Sem listas. Sem repetição de itens.
-  FORMATO OBRIGATÓRIO:
-    Linha 1: confirmação calorosa com nome — "Perfeito, [nome]! 🚀"
-    Linha 2: pedido entrou na cozinha — "Seu pedido já entrou na cozinha 👨‍🍳🔥"
-    Linha 3: ${deliveryMethod === "pickup"
-      ? `RETIRADA → "Assim que estiver pronto te avisamos 👨‍🍳" / "Pode vir buscar em breve! 😊🙌"`
-      : `ENTREGA  → "Seu pedido já está a caminho 🚀" / "Já vai chegar aí — vai valer a espera! 😍🚀"`
-    }
-  Exemplos completos:
-    ${deliveryMethod === "pickup"
-      ? `"Perfeito, [nome]! 🎉\\nSeu pedido já entrou na cozinha 👨‍🍳🔥\\nAssim que estiver pronto te avisamos 👨‍🍳"
-    "Anotado, [nome]! 🎉\\nTá sendo preparado com carinho 🍕✨\\nPode vir buscar em breve! 😊"`
-      : `"Perfeito, [nome]! 🎉\\nSeu pedido já entrou na cozinha 👨‍🍳🔥\\nSeu pedido já está a caminho 🚀"
-    "Anotado, [nome]! 🎉\\nA equipe já começou — tudo com carinho 🍕✨\\nJá vai chegar aí — vai valer a espera! 😍"`
-    }
-  NÃO liste itens. NÃO repita preços. Use o nome SEMPRE.` : ""}
+${stage === "DONE" ? `PEDIDO CONCLUÍDO (DONE) — envie APENAS UMA ÚNICA linha. Nada mais.
+  ${deliveryMethod === "pickup"
+    ? `RETIRADA — USE EXATAMENTE: "Perfeito! Assim que estiver pronto te avisamos 👨‍🍳"`
+    : `ENTREGA  — USE EXATAMENTE: "Perfeito! Seu pedido já entrou na cozinha 🚀 Já já chega aí!"`
+  }
+  PROIBIDO ABSOLUTO: múltiplas linhas, listas, itens, preços, endereço, saudações extras, "ok", qualquer texto além da linha acima.` : ""}
 
 FALLBACK: "✅ [Item] adicionado! (R$ X,XX)"
 
