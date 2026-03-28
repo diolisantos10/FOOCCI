@@ -147,21 +147,41 @@ function buildSystemPrompt(
   // ── Sales Intelligence block ──────────────────────────────────
   const lastItem = cart.at(-1)?.name ?? null;
 
+  // Detect whether the client has already added items from each upsell category.
+  // This switches the AI from "entry copy" to "same-category continuation copy".
+  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const hasDrinkInCart = active.some((cat) => {
+    const n = norm(cat.name);
+    return (n.includes("bebida") || n.includes("drink") || n.includes("suco") || n.includes("refri"))
+      && cat.items.some((i) => cartNames.has(i.name));
+  });
+  const hasDessertInCart = active.some((cat) => {
+    const n = norm(cat.name);
+    return (n.includes("sobremesa") || n.includes("doce"))
+      && cat.items.some((i) => cartNames.has(i.name));
+  });
+
   const salesPushLines: string[] = [];
   if (uncoveredCategories.includes("main")) {
     salesPushLines.push(`→ PUSH PRATO PRINCIPAL (antecipação): "O principal do seu pedido está esperando 👇" / "Vamos começar pelo prato principal — vai ficar incrível 👇"`);
   }
   if (uncoveredCategories.includes("drink")) {
-    if (!refusals.drink) {
+    if (hasDrinkInCart) {
+      // Client already added a drink — use ONLY same-category continuation copy
+      salesPushLines.push(`→ CONTINUAÇÃO BEBIDA (já adicionou uma bebida): PERGUNTE APENAS: "Vai incluir mais alguma bebida ou podemos continuar o pedido?" — PROIBIDO qualquer copy de entrada ("fica melhor com", "pede uma bebida", "tá quase lá", etc.).`);
+    } else if (!refusals.drink) {
       const itemRef = lastItem ?? "essa escolha";
-      salesPushLines.push(`→ PUSH BEBIDA (desejo + sensorial, use o item "${itemRef}"): "Essa ${itemRef} fica ainda melhor com uma bebida bem gelada 🧊👇" / "Tá quase perfeito — só falta a bebida pra completar 😏👇" / "Pra combinar direitinho com ${itemRef}, a bebida está esperando 🥤👇"`);
+      salesPushLines.push(`→ ENTRADA BEBIDA (primeira abordagem, nenhuma bebida no carrinho): "Essa ${itemRef} fica ainda melhor com uma bebida bem gelada 🧊👇" / "Tá quase perfeito — só falta a bebida pra completar 😏👇" / "Pra combinar direitinho com ${itemRef}, a bebida está esperando 🥤👇"`);
     } else {
       salesPushLines.push(`→ BEBIDA JÁ RECUSADA (insistência leve, não pergunte): "Uma bebida gelada vai combinar muito bem — só dá uma olhada 🧊👇"`);
     }
   }
   if (uncoveredCategories.includes("dessert")) {
-    if (!refusals.dessert) {
-      salesPushLines.push(`→ PUSH SOBREMESA (prazer + conclusão emocional): "Falta só a melhor parte 😏 A sobremesa vai fechar com chave de ouro 🍰👇" / "O melhor ainda tá por vir 😋 A sobremesa está esperando 👇"`);
+    if (hasDessertInCart) {
+      // Client already added a dessert — use ONLY same-category continuation copy
+      salesPushLines.push(`→ CONTINUAÇÃO SOBREMESA (já adicionou uma sobremesa): PERGUNTE APENAS: "Vai incluir mais alguma sobremesa ou podemos continuar o pedido?" — PROIBIDO qualquer copy de entrada ("falta só a melhor parte", "a sobremesa está esperando", etc.).`);
+    } else if (!refusals.dessert) {
+      salesPushLines.push(`→ ENTRADA SOBREMESA (primeira abordagem, nenhuma sobremesa no carrinho): "Falta só a melhor parte 😏 A sobremesa vai fechar com chave de ouro 🍰👇" / "O melhor ainda tá por vir 😋 A sobremesa está esperando 👇"`);
     } else {
       salesPushLines.push(`→ SOBREMESA JÁ RECUSADA (urgência suave, não pergunte): "Pra fechar perfeito, vale muito dar uma olhada nas sobremesas 🍰👇"`);
     }
@@ -276,26 +296,32 @@ ${stage === "SELECT_MAIN" ? `EXPLORAÇÃO (SELECT_MAIN) — cliente está montan
   SEMPRE aponte para o chip bar com 👇 — as opções estão lá.` : ""}
 
 ${stage === "SELECT_DRINK" ? `UPSELL BEBIDA (SELECT_DRINK) — crie desejo pela bebida, use o item do carrinho, nunca pergunte.
-  SE NENHUMA BEBIDA NO CARRINHO (primeira abordagem):
+  SE NENHUMA BEBIDA NO CARRINHO (primeira abordagem — copy de entrada):
     USE o item já selecionado: "Essa [item] pede uma bebida bem gelada 🧊👇"
     Varie entre: "Uma bebida bem gelada pra acompanhar — vai ficar perfeito 🧊👇"
                  "Tá quase lá 😏 A bebida certa vai deixar o pedido ainda melhor 👇"
                  "Fica ainda melhor com uma boa bebida gelada — dá uma olhada 🥤👇"
                  "Pra combinar direitinho, a bebida está esperando 🥤👇"
-  SE BEBIDA JÁ NO CARRINHO (item acabou de ser adicionado — cliente pode querer mais):
-    USE EXATAMENTE: "✅ [Item] adicionado! 👇 Vai incluir mais alguma bebida ou podemos continuar o pedido?"
-  PROIBIDO: "que tal?", "quer?", "quer continuar?", "quer adicionar", "quer mais alguma coisa?", "Se quiser", "gostaria", "deseja".
+  SE ALGUMA BEBIDA JÁ NO CARRINHO (cliente já escolheu — loop de categoria ativo):
+    ⚠️ OBRIGATÓRIO — USE APENAS UMA DESTAS FORMAS:
+      • Após item adicionado: "✅ [Item] adicionado! 👇 Vai incluir mais alguma bebida ou podemos continuar o pedido?"
+      • Em qualquer outra interação dentro da categoria: "Vai incluir mais alguma bebida ou podemos continuar o pedido?"
+    ⚠️ PROIBIDO após o primeiro item: qualquer copy de entrada ("Essa pizza pede uma bebida", "Fica ainda melhor com", "Tá quase lá 😏", "A bebida está esperando", etc.)
+  PROIBIDO em qualquer caso: "que tal?", "quer?", "quer continuar?", "quer adicionar", "Se quiser", "gostaria", "deseja".
   NÃO liste itens. Cards aparecem abaixo automaticamente.` : ""}
 
 ${stage === "SELECT_DESSERT" ? `UPSELL SOBREMESA (SELECT_DESSERT) — feche com emoção e prazer, nunca pergunte.
-  SE NENHUMA SOBREMESA NO CARRINHO (primeira abordagem):
+  SE NENHUMA SOBREMESA NO CARRINHO (primeira abordagem — copy de entrada):
     "Falta só a melhor parte 😏 A sobremesa vai fechar com chave de ouro 🍰👇"
     "Pra fechar perfeito, a sobremesa vai valer muito — dá uma olhada 👇"
     "O melhor ainda tá por vir 😋 A sobremesa está esperando 🍰👇"
     "Vai fechar com estilo? A sobremesa faz toda a diferença 😍👇"
-  SE SOBREMESA JÁ NO CARRINHO (item acabou de ser adicionado — cliente pode querer mais):
-    USE EXATAMENTE: "✅ [Item] adicionado! 👇 Vai incluir mais alguma sobremesa ou podemos continuar o pedido?"
-  PROIBIDO: "Deseja?", "Quer?", "Quer continuar?", "Que tal?", "Quer mais alguma coisa?", "Se quiser", "gostaria".
+  SE ALGUMA SOBREMESA JÁ NO CARRINHO (cliente já escolheu — loop de categoria ativo):
+    ⚠️ OBRIGATÓRIO — USE APENAS UMA DESTAS FORMAS:
+      • Após item adicionado: "✅ [Item] adicionado! 👇 Vai incluir mais alguma sobremesa ou podemos continuar o pedido?"
+      • Em qualquer outra interação dentro da categoria: "Vai incluir mais alguma sobremesa ou podemos continuar o pedido?"
+    ⚠️ PROIBIDO após o primeiro item: qualquer copy de entrada ("Falta só a melhor parte", "A sobremesa está esperando", "O melhor ainda tá por vir", etc.)
+  PROIBIDO em qualquer caso: "Deseja?", "Quer?", "Quer continuar?", "Que tal?", "Quer mais alguma coisa?", "Se quiser", "gostaria".
   NÃO liste itens. Cards aparecem abaixo automaticamente.` : ""}
 
 ${stage === "PROMO" ? `PROMO — bundle especial após recusas. Destaque o valor da oferta.
@@ -373,6 +399,8 @@ REGRAS ABSOLUTAS
 • NUNCA invente itens ou preços fora do cardápio.
 • NUNCA diga "Como posso ajudar?", "Em que posso te ajudar?" ou variações.
 • NUNCA use linguagem de conclusão de pedido ("Pedido feito!", "Estamos preparando", "a caminho", "confirmado") antes do stage DONE.
+• DURANTE CHECKOUT (DELIVERY_TYPE → ADDRESS_INPUT → ADDRESS_DETAILS → ADDRESS_CONFIRM → ASK_NAME → PAYMENT → REVIEW_ORDER): guie brevemente em 1 linha. A UI já mostra resumo, endereço e itens — NUNCA repita essas informações no chat.
+• NUNCA liste itens do carrinho, preços, endereço ou forma de pagamento durante o checkout — a UI é a fonte de verdade. O chat só orienta o próximo passo.
 • NUNCA use linguagem passiva ou de abertura: "Explore mais", "Se quiser", "quando estiver pronto", "O que mais?", "Que tal?", "Deseja?", "Gostaria?", "Quer adicionar?", "Quer incluir?".
 • NUNCA use transições genéricas sem emoção: "Escolha...", "Selecione..." — sempre contextual + sensorial.
 • "Agora vamos para as [categoria] [emoji]" É PERMITIDO ao transitar entre categorias — nunca como abertura vazia.

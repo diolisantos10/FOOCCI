@@ -789,7 +789,8 @@ export default function ChatSimPage() {
     if (stg === "ADDRESS_INPUT")   return { type: "ADDRESS_INPUT" };
     if (stg === "DELIVERY_TYPE")   return { type: "DELIVERY_TYPE" };
     if (stg === "CONFIRM_ORDER")   return { type: "CONFIRM_ORDER" };
-    // PROMO handled by PromoCard rendered separately — chip bar hidden when stage === "PROMO"
+    // PROMO: chip bar is hidden by the outer render condition; explicit return prevents fallthrough
+    if (stg === "PROMO")           return { type: "categories", categories: menu };
 
     // SELECT_DRINK / SELECT_DESSERT — stage is the ONLY driver; currentCategory is never consulted
     if (stg === "SELECT_DRINK" || stg === "SELECT_DESSERT") {
@@ -802,14 +803,14 @@ export default function ChatSimPage() {
       return { type: "CONFIRM_ORDER" };
     }
 
-    // SELECT_MAIN — exploration
-    if (curCat) {
+    // SELECT_MAIN — the ONLY stage where currentCategory may drive item cards
+    if (stg === "SELECT_MAIN" && curCat) {
       const cat = menu.find((c) => c.name === curCat);
       const catNames = new Set(cat?.items.map((i) => i.name) ?? []);
       const itemAdded = cartSnap.some((c) => catNames.has(c.name));
       return { type: "items", category: curCat, categoryImage: cat?.imageUrl ?? null, items: cat?.items ?? [], itemAdded };
     }
-    // Always show the full menu — uncoveredCategories controls flow guards, not visibility
+    // Default: full category grid (SELECT_MAIN without selection, or any unhandled stage)
     return { type: "categories", categories: menu };
   }
 
@@ -948,6 +949,11 @@ export default function ChatSimPage() {
 
     if (stage === "ADDRESS_DETAILS") {
       const { neighborhood, complement } = parseNeighborhoodLine(val);
+      if (!neighborhood) {
+        // Empty neighborhood — stay in ADDRESS_DETAILS and let AI ask again
+        sendText(val, cart, visitedCategories, null, "ADDRESS_DETAILS");
+        return;
+      }
       setAddress((a) => ({ ...a, neighborhood, complement }));
       setStage("ADDRESS_CONFIRM");
       // Don't call AI here — ADDRESS_CONFIRM chip bar shows the address for visual confirmation
@@ -1267,6 +1273,23 @@ export default function ChatSimPage() {
   }
 
   function handleFinalConfirm() {
+    // Hard guard: ALL checkout conditions must be satisfied before DONE
+    if (deliveryMethod === "delivery" && (!address.street || !address.number || !address.neighborhood || !addressConfirmed)) {
+      const missingStep = (!address.street || !address.number) ? "ADDRESS_INPUT" : "ADDRESS_DETAILS";
+      setStage(missingStep);
+      sendText("Endereço incompleto, vamos corrigir", cart, visitedCategories, null, missingStep);
+      return;
+    }
+    if (!customerName) {
+      setStage("ASK_NAME");
+      sendText("Informe o nome para continuar", cart, visitedCategories, null, "ASK_NAME");
+      return;
+    }
+    if (!paymentMethod) {
+      setStage("PAYMENT");
+      sendText("Informe a forma de pagamento", cart, visitedCategories, null, "PAYMENT");
+      return;
+    }
     setStage("DONE");
     const deliveryCtx = deliveryMethod === "pickup" ? "retirada no local" : "entrega";
     sendText(`Confirmar pedido — ${deliveryCtx}`, cart, visitedCategories, null, "DONE");
