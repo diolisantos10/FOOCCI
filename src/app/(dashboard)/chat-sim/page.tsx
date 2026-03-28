@@ -800,6 +800,21 @@ export default function ChatSimPage() {
     }
   }, [stage]);
 
+  // Auto-open first main category when entering SELECT_MAIN so items are immediately visible
+  // Fires only when stage changes TO SELECT_MAIN or when menu first loads.
+  // Does NOT re-fire when user clicks "Continuar pedido" back to category grid (stage unchanged).
+  useEffect(() => {
+    if (stage !== "SELECT_MAIN" || menu.length === 0) return;
+    const n = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const mainCats = menu.filter((c) => {
+      const cn = n(c.name);
+      return !cn.includes("bebida") && !cn.includes("drink") && !cn.includes("suco") &&
+             !cn.includes("refri") && !cn.includes("sobremesa") && !cn.includes("doce");
+    });
+    const first = mainCats[0] ?? menu[0];
+    if (first) setCurrentCategory(first.name);
+  }, [stage, menu]);
+
   // ── core AI call ─────────────────────────────────────────
 
   const callAI = useCallback(async (
