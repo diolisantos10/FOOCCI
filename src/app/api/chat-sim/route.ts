@@ -160,11 +160,13 @@ function buildSystemPrompt(
       && cat.items.some((i) => cartNames.has(i.name));
   });
 
+  // salesPushLines are STAGE-GATED — each push only fires when the current stage matches.
+  // This prevents the AI from pitching drinks while the UI is still showing pizza cards, etc.
   const salesPushLines: string[] = [];
-  if (uncoveredCategories.includes("main")) {
+  if (stage === "SELECT_MAIN" && uncoveredCategories.includes("main")) {
     salesPushLines.push(`→ PUSH PRATO PRINCIPAL (antecipação): "O principal do seu pedido está esperando 👇" / "Vamos começar pelo prato principal — vai ficar incrível 👇"`);
   }
-  if (uncoveredCategories.includes("drink")) {
+  if (stage === "SELECT_DRINK" && uncoveredCategories.includes("drink")) {
     if (hasDrinkInCart) {
       // Client already added a drink — use ONLY same-category continuation copy
       salesPushLines.push(`→ CONTINUAÇÃO BEBIDA (já adicionou uma bebida): PERGUNTE APENAS: "Vai incluir mais alguma bebida ou podemos continuar o pedido?" — PROIBIDO qualquer copy de entrada ("fica melhor com", "pede uma bebida", "tá quase lá", etc.).`);
@@ -175,7 +177,7 @@ function buildSystemPrompt(
       salesPushLines.push(`→ BEBIDA JÁ RECUSADA (insistência leve, não pergunte): "Uma bebida gelada vai combinar muito bem — só dá uma olhada 🧊👇"`);
     }
   }
-  if (uncoveredCategories.includes("dessert")) {
+  if (stage === "SELECT_DESSERT" && uncoveredCategories.includes("dessert")) {
     if (hasDessertInCart) {
       // Client already added a dessert — use ONLY same-category continuation copy
       salesPushLines.push(`→ CONTINUAÇÃO SOBREMESA (já adicionou uma sobremesa): PERGUNTE APENAS: "Vai incluir mais alguma sobremesa ou podemos continuar o pedido?" — PROIBIDO qualquer copy de entrada ("falta só a melhor parte", "a sobremesa está esperando", etc.).`);
