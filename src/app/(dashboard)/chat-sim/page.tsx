@@ -671,7 +671,7 @@ function ChipBar({
               className={`${chip} border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100`}>
               + Adicionar mais
             </button>
-            <button type="button" disabled={disabled} onClick={onBack}
+            <button type="button" disabled={disabled} onClick={onFinalize}
               className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}>
               ✅ Continuar pedido
             </button>
