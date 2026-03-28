@@ -145,6 +145,19 @@ const findDessertCat  = (menu: MenuCategory[]) =>
   findMenuCat(menu, "sobremesa", "doce");
 
 /**
+ * Strict stage → category mapping.
+ * Stage is the SINGLE source of truth for which category is visible.
+ * SELECT_DRINK  → beverage category
+ * SELECT_DESSERT → dessert category
+ * All other stages → null (no upsell category forced)
+ */
+function getCategoryFromStage(stg: Stage, menuSnap: MenuCategory[]): MenuCategory | null {
+  if (stg === "SELECT_DRINK")   return findBeverageCat(menuSnap);
+  if (stg === "SELECT_DESSERT") return findDessertCat(menuSnap);
+  return null;
+}
+
+/**
  * Returns the first uncovered upsell stage the user has not yet refused,
  * or "CONFIRM_ORDER" if everything is covered / refused.
  */
@@ -778,18 +791,9 @@ export default function ChatSimPage() {
     if (stg === "CONFIRM_ORDER")   return { type: "CONFIRM_ORDER" };
     // PROMO handled by PromoCard rendered separately — chip bar hidden when stage === "PROMO"
 
-    if (stg === "SELECT_DRINK") {
-      const cat = findBeverageCat(menu);
-      if (cat) {
-        const catNames = new Set(cat.items.map((i) => i.name));
-        const itemAdded = cartSnap.some((c) => catNames.has(c.name));
-        return { type: "upsell", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items, itemAdded };
-      }
-      return { type: "CONFIRM_ORDER" };
-    }
-
-    if (stg === "SELECT_DESSERT") {
-      const cat = findDessertCat(menu);
+    // SELECT_DRINK / SELECT_DESSERT — stage is the ONLY driver; currentCategory is never consulted
+    if (stg === "SELECT_DRINK" || stg === "SELECT_DESSERT") {
+      const cat = getCategoryFromStage(stg, menu);
       if (cat) {
         const catNames = new Set(cat.items.map((i) => i.name));
         const itemAdded = cartSnap.some((c) => catNames.has(c.name));
@@ -1420,6 +1424,7 @@ export default function ChatSimPage() {
         {stage !== "PROMO" && (
           <div className="mb-2.5">
             <ChipBar
+              key={stage}
               mode={chipMode}
               disabled={busy}
               onCategorySelect={handleCategorySelect}
