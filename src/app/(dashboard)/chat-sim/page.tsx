@@ -65,7 +65,6 @@ type UIState = "idle" | "thinking" | "error";
  *   SELECT_DRINK     → drink upsell (if no drink in cart and not refused)
  *   SELECT_DESSERT   → dessert upsell (if no dessert in cart and not refused)
  *   PROMO            → bundle promo card (after 2 refusals)
- *   CONFIRM_ORDER    → cart summary + confirm button
  *   DELIVERY_TYPE    → delivery or pickup
  *   ADDRESS_INPUT    → collect street + number
  *   ADDRESS_DETAILS  → collect neighborhood + complement
@@ -80,7 +79,6 @@ type Stage =
   | "SELECT_DRINK"
   | "SELECT_DESSERT"
   | "PROMO"
-  | "CONFIRM_ORDER"
   | "DELIVERY_TYPE"
   | "ADDRESS_INPUT"
   | "ADDRESS_DETAILS"
@@ -103,7 +101,6 @@ type ChipBarMode =
   | { type: "categories"; categories: MenuCategory[] }
   | { type: "items";   category: string; categoryImage: string | null; items: MenuItem[]; itemAdded: boolean }
   | { type: "upsell";  category: string; categoryImage: string | null; items: MenuItem[]; itemAdded: boolean }
-  | { type: "CONFIRM_ORDER" }
   | { type: "DELIVERY_TYPE" }
   | { type: "ADDRESS_INPUT" }
   | { type: "ADDRESS_DETAILS" }
@@ -158,8 +155,8 @@ function getCategoryFromStage(stg: Stage, menuSnap: MenuCategory[]): MenuCategor
 }
 
 /**
- * Returns the first uncovered upsell stage the user has not yet refused,
- * or "CONFIRM_ORDER" if everything is covered / refused.
+ * Returns the next pending upsell stage, or "DELIVERY_TYPE" when all upsell is done.
+ * Used only in handleUpsellDecline to determine next stage after a refusal.
  */
 function nextUpsellStage(
   menu: MenuCategory[],
@@ -171,7 +168,7 @@ function nextUpsellStage(
   if (bev && !bev.items.some((i) => names.has(i.name)) && refusals.drink < 2) return "SELECT_DRINK";
   const des = findDessertCat(menu);
   if (des && !des.items.some((i) => names.has(i.name)) && refusals.dessert < 2) return "SELECT_DESSERT";
-  return "CONFIRM_ORDER";
+  return "DELIVERY_TYPE";
 }
 
 interface NextStep { stage: Stage; message: string; }
@@ -437,8 +434,6 @@ function ChipBar({
   onBack,
   onFinalize,
   onUpsellDecline,
-  onConfirmOrder,
-  onBackToExploration,
   onDeliveryMethod,
   onAddressConfirm,
   onAddressEdit,
@@ -455,8 +450,6 @@ function ChipBar({
   onBack: () => void;
   onFinalize: () => void;
   onUpsellDecline: () => void;
-  onConfirmOrder: () => void;
-  onBackToExploration: () => void;
   onDeliveryMethod: (type: "delivery" | "pickup") => void;
   onAddressConfirm: () => void;
   onAddressEdit: () => void;
@@ -627,25 +620,6 @@ function ChipBar({
     );
   }
 
-  // ── Confirm order ─────────────────────────────────────────
-  if (mode.type === "CONFIRM_ORDER") {
-    return (
-      <div className="flex flex-col gap-2">
-        <p className="text-center text-xs font-semibold text-green-700">Pedido montado! Confirme abaixo 👇</p>
-        <div className="flex gap-2">
-          <button type="button" disabled={disabled} onClick={onConfirmOrder}
-            className="flex-1 rounded-xl bg-[#25d366] py-2.5 text-sm font-bold text-white hover:bg-[#20b857] disabled:opacity-40 transition-colors">
-            ✅ Confirmar pedido
-          </button>
-          <button type="button" disabled={disabled} onClick={onBackToExploration}
-            className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
-            📋 Ver cardápio
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // ── Category chips ────────────────────────────────────────
   if (mode.type === "categories") {
     return (
@@ -788,7 +762,6 @@ export default function ChatSimPage() {
     if (stg === "ADDRESS_DETAILS") return { type: "ADDRESS_DETAILS" };
     if (stg === "ADDRESS_INPUT")   return { type: "ADDRESS_INPUT" };
     if (stg === "DELIVERY_TYPE")   return { type: "DELIVERY_TYPE" };
-    if (stg === "CONFIRM_ORDER")   return { type: "CONFIRM_ORDER" };
     // PROMO: chip bar is hidden by the outer render condition; explicit return prevents fallthrough
     if (stg === "PROMO")           return { type: "categories", categories: menu };
 
@@ -800,7 +773,7 @@ export default function ChatSimPage() {
         const itemAdded = cartSnap.some((c) => catNames.has(c.name));
         return { type: "upsell", category: cat.name, categoryImage: cat.imageUrl ?? null, items: cat.items, itemAdded };
       }
-      return { type: "CONFIRM_ORDER" };
+      return { type: "DELIVERY_TYPE" }; // no category found — skip to checkout
     }
 
     // SELECT_MAIN — the ONLY stage where currentCategory may drive item cards
@@ -999,10 +972,10 @@ export default function ChatSimPage() {
       }
     }
 
-    // Intercept confirm/finalize intents in navigable (non-checkout) stages
+    // Intercept confirm/finalize intents in browsing stages
     if (
       stage === "SELECT_MAIN" || stage === "SELECT_DRINK" ||
-      stage === "SELECT_DESSERT" || stage === "CONFIRM_ORDER"
+      stage === "SELECT_DESSERT"
     ) {
       const v = val.toLowerCase();
       if (
@@ -1156,9 +1129,12 @@ export default function ChatSimPage() {
       return;
     }
 
-    // Second refusal — mark category as fully refused and advance
-    if (isDrink)  setUncoveredCategories((prev) => prev.filter((c) => c !== "drink"));
-    if (isDesert) setUncoveredCategories((prev) => prev.filter((c) => c !== "dessert"));
+    // Second refusal — mark category as fully refused and advance.
+    // Compute new uncoveredCategories synchronously so resolveNextStage gets current value.
+    const newUncovered = uncoveredCategories.filter(
+      (c) => !(isDrink && c === "drink") && !(isDesert && c === "dessert")
+    );
+    setUncoveredCategories(newUncovered);
 
     // After 2 total decline events → PROMO (once per session)
     if (newTotalCount >= 2 && !promoShown) {
@@ -1172,11 +1148,12 @@ export default function ChatSimPage() {
       }
     }
 
-    const nextStage = nextUpsellStage(menu, cart, newRefusals);
+    // Use resolveNextStage so delivery/name/payment state is respected
+    const next = resolveNextStage(newUncovered, menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
     setCurrentCategory(null);
-    setStage(nextStage);
+    setStage(next.stage);
     const text = catLabel ? `não quero ${catLabel.toLowerCase()}, obrigado` : "pode continuar";
-    sendText(text, cart, visitedCategories, null, nextStage, newRefusals);
+    sendText(text, cart, visitedCategories, null, next.stage, newRefusals);
   }
 
   function handleAcceptPromo() {
@@ -1184,13 +1161,17 @@ export default function ChatSimPage() {
     const newCart = cart.some((c) => c.name === promo.item.name)
       ? cart : [...cart, { name: promo.item.name, price: promo.item.price, qty: 1 }];
     addToCart(promo.item);
-    setStage("CONFIRM_ORDER");
-    sendText("Quero aproveitar a promoção!", newCart, visitedCategories, promo, "CONFIRM_ORDER");
+    // All upsell done — advance to checkout via resolveNextStage
+    const next = resolveNextStage([], menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
+    setStage(next.stage);
+    sendText("Quero aproveitar a promoção!", newCart, visitedCategories, promo, next.stage);
   }
 
   function handleDeclinePromo() {
-    setStage("CONFIRM_ORDER");
-    sendText("pode finalizar sem a promoção", cart, visitedCategories, null, "CONFIRM_ORDER");
+    // All upsell done — advance to checkout via resolveNextStage
+    const next = resolveNextStage([], menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
+    setStage(next.stage);
+    sendText("pode finalizar sem a promoção", cart, visitedCategories, null, next.stage);
   }
 
   /**
@@ -1209,8 +1190,6 @@ export default function ChatSimPage() {
     setCurrentCategory(null);
     sendText(next.message, cart, visitedCategories, null, next.stage);
   }
-
-  function handleConfirmOrder() { handleConfirmIntent(); }
 
   function handleBackToExploration() {
     setStage("SELECT_MAIN");
@@ -1296,7 +1275,8 @@ export default function ChatSimPage() {
   }
 
   function handleEditOrder() {
-    setStage("CONFIRM_ORDER");
+    // Return to SELECT_MAIN so user can modify cart; finalizing again re-enters checkout
+    setStage("SELECT_MAIN");
     setCurrentCategory(null);
   }
 
@@ -1349,9 +1329,9 @@ export default function ChatSimPage() {
               Upsell
             </span>
           )}
-          {(stage === "CONFIRM_ORDER" || stage === "DELIVERY_TYPE" || stage === "ADDRESS_INPUT" ||
+          {(stage === "DELIVERY_TYPE" || stage === "ADDRESS_INPUT" ||
             stage === "ADDRESS_DETAILS" || stage === "ADDRESS_CONFIRM" || stage === "ASK_NAME" ||
-            stage === "PAYMENT") && (
+            stage === "PAYMENT" || stage === "REVIEW_ORDER") && (
             <span className="rounded-full bg-green-400/30 px-2.5 py-0.5 text-[10px] font-semibold text-green-100">
               Finalizando
             </span>
@@ -1455,8 +1435,6 @@ export default function ChatSimPage() {
               onBack={handleBack}
               onFinalize={handleFinalize}
               onUpsellDecline={handleUpsellDecline}
-              onConfirmOrder={handleConfirmOrder}
-              onBackToExploration={handleBackToExploration}
               onDeliveryMethod={handleDeliveryMethod}
               onAddressConfirm={handleAddressConfirm}
               onAddressEdit={handleAddressEdit}

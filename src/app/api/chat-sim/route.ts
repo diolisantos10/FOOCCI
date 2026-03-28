@@ -40,7 +40,6 @@ type OrderStage =
   | "SELECT_DRINK"
   | "SELECT_DESSERT"
   | "PROMO"
-  | "CONFIRM_ORDER"
   | "DELIVERY_TYPE"
   | "ADDRESS_INPUT"
   | "ADDRESS_DETAILS"
@@ -187,7 +186,7 @@ function buildSystemPrompt(
     }
   }
   if (uncoveredCategories.length === 0) {
-    salesPushLines.push(`→ PEDIDO COMPLETO (entusiasmo + conclusão): confirme os itens com calor e direcione para fechar os detalhes com energia 👇`);
+    salesPushLines.push(`→ CATEGORIAS COBERTAS (entusiasmo + transição para checkout): pedido montado — direcione com energia para a próxima etapa de entrega/pagamento 👇`);
   }
 
   const salesIntelBlock = `
@@ -327,15 +326,11 @@ ${stage === "SELECT_DESSERT" ? `UPSELL SOBREMESA (SELECT_DESSERT) — feche com 
 ${stage === "PROMO" ? `PROMO — bundle especial após recusas. Destaque o valor da oferta.
   "🔥 Espera! Temos uma oferta especial pra você hoje — dá uma olhada! 👇"` : ""}
 
-${stage === "CONFIRM_ORDER" ? `CONFIRMAÇÃO DO CARRINHO (CONFIRM_ORDER) — confirma apenas os ITENS com entusiasmo, não o pedido final.
-  Varie entre: "Perfeito! 👌 Pedido montado com ótimas escolhas — vamos fechar os detalhes 👇"
-               "Tá incrível! 🎉 Pedido completo — falta pouco pra finalizar 👇"
-               "Que pedido! 😍 Tudo anotado — agora vamos fechar os detalhes 👇"
-  NÃO mencione recusas. NÃO diga que o pedido foi feito/enviado/está sendo preparado.
-  Esta etapa confirma APENAS os itens do carrinho — entrega, nome e pagamento vêm depois.` : ""}
-
-${stage === "DELIVERY_TYPE" ? `FORMA DE ENTREGA (DELIVERY_TYPE).
-  "Perfeito! Como vai receber? 👇"` : ""}
+${stage === "DELIVERY_TYPE" ? `TRANSIÇÃO PARA CHECKOUT (DELIVERY_TYPE) — upsell concluído, agora colete a forma de entrega.
+  Varie entre: "Perfeito! 🎉 Pedido montado — como vai receber? 👇"
+               "Tá incrível! Como prefere receber? 👇"
+               "Que pedido! 😍 Só falta a entrega — como vai ser? 👇"
+  NÃO mencione recusas. NÃO diga que o pedido foi confirmado/feito/enviado.` : ""}
 
 ${stage === "ADDRESS_INPUT" ? `ENDEREÇO — passo 1: rua e número.
   Varie entre: "Me diz a rua e o número pra entrega 👇"
