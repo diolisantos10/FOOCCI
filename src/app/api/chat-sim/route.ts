@@ -316,16 +316,18 @@ export async function GET(req: NextRequest) {
         items: {
           where: { isActive: true },
           orderBy: { sortOrder: "asc" },
-          select: { name: true, price: true, description: true, imageUrl: true },
+          select: { id: true, name: true, price: true, description: true, imageUrl: true },
         },
       },
     });
 
     return ok({
       categories: categories.map((c) => ({
+        id: c.id,
         name: c.name,
         imageUrl: c.imageUrl ?? null,
         items: c.items.map((i) => ({
+          id: i.id,
           name: i.name,
           price: Number(i.price),
           description: i.description,

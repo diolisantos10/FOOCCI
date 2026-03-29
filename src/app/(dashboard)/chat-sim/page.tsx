@@ -550,7 +550,8 @@ export default function ChatSimPage() {
       .then((data) => {
         const cats: MenuCategory[] = data?.data?.categories ?? [];
         setMenu(cats);
-        if (cats.length > 0) setSelectedCategory(cats[0].name);
+        const first = cats[0];
+        if (first) setSelectedCategory(first.name);
       })
       .catch(() => {});
   }, []);
