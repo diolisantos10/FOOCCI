@@ -905,7 +905,8 @@ export default function ChatSimPage() {
     visitedSnap: string[],
     promoSnap: Promo | null,
     stageSnap: Stage = stage,
-    refusalsSnap: Refusals = refusals  // explicit snapshot beats stale closure in decline handlers
+    refusalsSnap: Refusals = refusals,          // explicit snapshot beats stale closure in decline handlers
+    uncoveredSnap: Array<"main" | "drink" | "dessert"> = uncoveredCategories  // explicit snapshot beats stale closure after setUncoveredCategories
   ) {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
@@ -913,7 +914,7 @@ export default function ChatSimPage() {
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
     const userMsg: ChatMessage = { id: uid(), role: "user", content: trimmed, ts: new Date() };
     setMessages((prev) => [...prev, userMsg]);
-    await callAI(history, trimmed, cartSnap, visitedSnap, promoSnap, false, stageSnap, uncoveredCategories, refusalsSnap, deliveryMethod);
+    await callAI(history, trimmed, cartSnap, visitedSnap, promoSnap, false, stageSnap, uncoveredSnap, refusalsSnap, deliveryMethod);
   }
 
   function handleSubmit(e?: FormEvent) {
@@ -1056,7 +1057,7 @@ export default function ChatSimPage() {
     const next = resolveNextStage(newUncovered, menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
     setStage(next.stage);
     setCurrentCategory(null);
-    sendText("continuar", cart, visitedCategories, null, next.stage);
+    sendText("continuar", cart, visitedCategories, null, next.stage, refusals, newUncovered);
   }
 
   /** "+ Adicionar mais" — stays in current upsell category, no stage change. */
@@ -1082,16 +1083,17 @@ export default function ChatSimPage() {
       setUncoveredCategories(withoutMain);
       setCurrentCategory(null);
       setStage("SELECT_DRINK");
-      sendText("Quero finalizar o pedido", cart, visitedCategories, null, "SELECT_DRINK");
+      sendText("Quero finalizar o pedido", cart, visitedCategories, null, "SELECT_DRINK", refusals, withoutMain);
       return;
     }
 
     // Step 3: force dessert upsell if not yet covered or fully refused
     if (withoutMain.includes("dessert") && findDessertCat(menu) && refusals.dessert < 2) {
-      setUncoveredCategories(withoutMain.filter((c) => c !== "drink"));
+      const uncoveredForDessert = withoutMain.filter((c) => c !== "drink");
+      setUncoveredCategories(uncoveredForDessert);
       setCurrentCategory(null);
       setStage("SELECT_DESSERT");
-      sendText("Quero finalizar o pedido", cart, visitedCategories, null, "SELECT_DESSERT");
+      sendText("Quero finalizar o pedido", cart, visitedCategories, null, "SELECT_DESSERT", refusals, uncoveredForDessert);
       return;
     }
 
@@ -1100,7 +1102,7 @@ export default function ChatSimPage() {
     setCurrentCategory(null);
     const next = resolveNextStage([], menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
     setStage(next.stage);
-    sendText("Quero finalizar o pedido", cart, visitedCategories, null, next.stage);
+    sendText("Quero finalizar o pedido", cart, visitedCategories, null, next.stage, refusals, []);
   }
 
   function handleBack() { setCurrentCategory(null); }
@@ -1111,7 +1113,7 @@ export default function ChatSimPage() {
     const next = resolveNextStage(newUncovered, menu, deliveryMethod, addressConfirmed, customerName, paymentMethod);
     setStage(next.stage);
     setCurrentCategory(null);
-    sendText(next.message, cart, visitedCategories, null, next.stage);
+    sendText(next.message, cart, visitedCategories, null, next.stage, refusals, newUncovered);
   }
 
   function handleUpsellDecline() {
@@ -1138,10 +1140,11 @@ export default function ChatSimPage() {
       // First refusal — stay in the same category; AI sends reinforcement copy.
       // Pass newRefusals so the AI sees refusals.drink/dessert > 0 and uses the
       // "já recusada" sales-intelligence copy instead of the first-approach copy.
+      // uncoveredCategories is unchanged here — pass explicitly to avoid closure reliance.
       const text = catLabel
         ? `não quero ${catLabel.toLowerCase()} por enquanto`
         : "não quero, obrigado";
-      sendText(text, cart, visitedCategories, null, stage, newRefusals);
+      sendText(text, cart, visitedCategories, null, stage, newRefusals, uncoveredCategories);
       return;
     }
 
@@ -1169,7 +1172,7 @@ export default function ChatSimPage() {
     setCurrentCategory(null);
     setStage(next.stage);
     const text = catLabel ? `não quero ${catLabel.toLowerCase()}, obrigado` : "pode continuar";
-    sendText(text, cart, visitedCategories, null, next.stage, newRefusals);
+    sendText(text, cart, visitedCategories, null, next.stage, newRefusals, newUncovered);
   }
 
   function handleAcceptPromo() {
