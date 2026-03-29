@@ -19,6 +19,7 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
   FormEvent,
   KeyboardEvent,
 } from "react";
@@ -33,6 +34,7 @@ interface ChatMessage {
 }
 
 interface MenuItem {
+  id: string;
   name: string;
   price: number;
   description: string | null;
@@ -40,9 +42,27 @@ interface MenuItem {
 }
 
 interface MenuCategory {
+  id: string;
   name: string;
   imageUrl: string | null;
   items: MenuItem[];
+}
+
+// ─── Normalized menu types (sidebar + product grid) ───────────
+
+interface Category {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  image: string | null;
+  description: string | null;
+  categoryId: string;
 }
 
 interface CartItem {
@@ -203,27 +223,24 @@ function CartBar({ cart }: { cart: CartItem[] }) {
 
 function ProductCard({
   item,
-  categoryImage,
   emoji,
   qtyInCart,
   disabled,
   onAdd,
 }: {
-  item: MenuItem;
-  categoryImage: string | null;
+  item: Product;
   emoji: string;
   qtyInCart: number;
   disabled: boolean;
   onAdd: () => void;
 }) {
-  const imageUrl = item.imageUrl ?? categoryImage;
   return (
-    <div className="flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <div className="flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden transition-all duration-150 hover:shadow-md hover:-translate-y-0.5">
       <div className="relative h-24 bg-gray-100 flex items-center justify-center">
-        {imageUrl ? (
+        {item.image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={imageUrl}
+            src={item.image}
             alt={item.name}
             className="h-full w-full object-cover"
             onError={(e) => {
@@ -268,24 +285,24 @@ function ProductCard({
 // ─── Sidebar ──────────────────────────────────────────────────
 
 function Sidebar({
-  menu,
-  selectedCategory,
+  categories,
+  selectedCategoryId,
   onSelect,
 }: {
-  menu: MenuCategory[];
-  selectedCategory: string | null;
-  onSelect: (cat: MenuCategory) => void;
+  categories: Category[];
+  selectedCategoryId: string | null;
+  onSelect: (cat: Category) => void;
 }) {
   return (
     <div className="flex w-44 shrink-0 flex-col gap-1 overflow-y-auto border-r border-gray-200 bg-white p-2">
       <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">
         Cardápio
       </p>
-      {menu.map((cat) => {
-        const isSelected = selectedCategory === cat.name;
+      {categories.map((cat) => {
+        const isSelected = selectedCategoryId === cat.id;
         return (
           <button
-            key={cat.name}
+            key={cat.id}
             onClick={() => onSelect(cat)}
             className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-colors ${
               isSelected
@@ -503,11 +520,52 @@ function CheckoutBar({
   return null;
 }
 
+// ─── useMenuState — menu data only, no business logic ─────────
+
+function useMenuState() {
+  const [menu, setMenu] = useState<MenuCategory[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/chat-sim")
+      .then((r) => r.json())
+      .then((data) => {
+        const raw: MenuCategory[] = data?.data?.categories ?? [];
+        setMenu(raw);
+        const first = raw[0];
+        if (first) setSelectedCategoryId(first.id);
+      })
+      .catch(() => {});
+  }, []);
+
+  const categories = useMemo<Category[]>(
+    () => menu.map((c) => ({ id: c.id, name: c.name, imageUrl: c.imageUrl })),
+    [menu],
+  );
+
+  const products = useMemo<Product[]>(
+    () =>
+      menu.flatMap((c) =>
+        c.items.map((i) => ({
+          id: i.id,
+          name: i.name,
+          price: i.price,
+          image: i.imageUrl ?? c.imageUrl,
+          description: i.description,
+          categoryId: c.id,
+        })),
+      ),
+    [menu],
+  );
+
+  return { menu, categories, products, selectedCategoryId, setSelectedCategoryId };
+}
+
 // ─── Main page ────────────────────────────────────────────────
 
 export default function ChatSimPage() {
   // ── Menu ────────────────────────────────────────────────────
-  const [menu, setMenu] = useState<MenuCategory[]>([]);
+  const { menu, categories, products, selectedCategoryId, setSelectedCategoryId } = useMenuState();
 
   // ── Chat ────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -522,7 +580,6 @@ export default function ChatSimPage() {
 
   // ── Stage / flow ────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [finalizeAttemptCount, setFinalizeAttemptCount] = useState(0);
   const [upsellOffered, setUpsellOffered] = useState<"drink" | "dessert" | null>(null);
 
@@ -543,18 +600,6 @@ export default function ChatSimPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, ui]);
 
-  // ── Fetch menu + select first category ──────────────────────
-  useEffect(() => {
-    fetch("/api/chat-sim")
-      .then((r) => r.json())
-      .then((data) => {
-        const cats: MenuCategory[] = data?.data?.categories ?? [];
-        setMenu(cats);
-        const first = cats[0];
-        if (first) setSelectedCategory(first.name);
-      })
-      .catch(() => {});
-  }, []);
 
   // ─── sendText ────────────────────────────────────────────────
 
@@ -620,20 +665,20 @@ export default function ChatSimPage() {
   // ── Initial greeting ─────────────────────────────────────────
   const greetedRef = useRef(false);
   useEffect(() => {
-    if (menu.length === 0 || greetedRef.current) return;
+    if (categories.length === 0 || greetedRef.current) return;
     greetedRef.current = true;
     sendText("Olá!", [], "BROWSE", null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menu]);
+  }, [categories]);
 
   // ─── Handlers ────────────────────────────────────────────────
 
-  const handleCategoryClick = useCallback((cat: MenuCategory) => {
-    setSelectedCategory(cat.name);
-  }, []);
+  const handleCategoryClick = useCallback((cat: Category) => {
+    setSelectedCategoryId(cat.id);
+  }, [setSelectedCategoryId]);
 
   const handleItemAdd = useCallback(
-    (item: MenuItem) => {
+    (item: { name: string; price: number }) => {
       const existing = cart.find((c) => c.name === item.name);
       const newCart = existing
         ? cart.map((c) => c.name === item.name ? { ...c, qty: c.qty + 1 } : c)
@@ -681,7 +726,7 @@ export default function ChatSimPage() {
       const hasDrink = drinkCat?.items.some((i) => cartNames.has(i.name)) ?? false;
       if (drinkCat && !hasDrink) {
         setUpsellOffered("drink");
-        setSelectedCategory(drinkCat.name);
+        setSelectedCategoryId(drinkCat.id);
         sendText("Quero finalizar o pedido", cart, "BROWSE", "drink");
         return;
       }
@@ -689,7 +734,7 @@ export default function ChatSimPage() {
       const hasDessert = dessertCat?.items.some((i) => cartNames.has(i.name)) ?? false;
       if (dessertCat && !hasDessert) {
         setUpsellOffered("dessert");
-        setSelectedCategory(dessertCat.name);
+        setSelectedCategoryId(dessertCat.id);
         sendText("Quero finalizar o pedido", cart, "BROWSE", "dessert");
         return;
       }
@@ -705,7 +750,7 @@ export default function ChatSimPage() {
       const hasDessert = dessertCat?.items.some((i) => cartNames.has(i.name)) ?? false;
       if (dessertCat && !hasDessert) {
         setUpsellOffered("dessert");
-        setSelectedCategory(dessertCat.name);
+        setSelectedCategoryId(dessertCat.id);
         sendText("Quero finalizar o pedido", cart, "BROWSE", "dessert");
         return;
       }
@@ -855,8 +900,12 @@ export default function ChatSimPage() {
   // ─── Derived ─────────────────────────────────────────────────
 
   const isCheckoutStage = stage !== "BROWSE" && stage !== "DONE";
-  const selectedCat = menu.find((c) => c.name === selectedCategory) ?? null;
+  const selectedCat = categories.find((c) => c.id === selectedCategoryId) ?? null;
   const catEmoji = selectedCat ? categoryEmoji(selectedCat.name) : "🍽️";
+  const filteredProducts = useMemo(
+    () => products.filter((p) => p.categoryId === selectedCategoryId),
+    [products, selectedCategoryId],
+  );
 
   // Suppress addressConfirmed warning — used implicitly via setAddressConfirmed
   void addressConfirmed;
@@ -870,8 +919,8 @@ export default function ChatSimPage() {
 
         {/* ── Left Sidebar ────────────────────────────────────── */}
         <Sidebar
-          menu={menu}
-          selectedCategory={selectedCategory}
+          categories={categories}
+          selectedCategoryId={selectedCategoryId}
           onSelect={handleCategoryClick}
         />
 
@@ -894,17 +943,16 @@ export default function ChatSimPage() {
                 {catEmoji} {selectedCat.name}
               </p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {selectedCat.items.map((item) => {
-                  const qty = cart.find((c) => c.name === item.name)?.qty ?? 0;
+                {filteredProducts.map((product) => {
+                  const qty = cart.find((c) => c.name === product.name)?.qty ?? 0;
                   return (
                     <ProductCard
-                      key={item.name}
-                      item={item}
-                      categoryImage={selectedCat.imageUrl}
+                      key={product.id}
+                      item={product}
                       emoji={catEmoji}
                       qtyInCart={qty}
                       disabled={ui === "thinking"}
-                      onAdd={() => handleItemAdd(item)}
+                      onAdd={() => handleItemAdd(product)}
                     />
                   );
                 })}
