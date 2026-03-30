@@ -481,14 +481,24 @@ function CheckoutBar({
 
   if (stage === "ADDRESS_CONFIRM") {
     const summary = formatAddress(address);
+    const missing: string[] = [];
+    if (!address.street.trim())       missing.push("rua");
+    if (!address.number.trim())       missing.push("número");
+    if (!address.neighborhood.trim()) missing.push("bairro");
+    const isComplete = missing.length === 0;
     return (
       <div className="flex flex-col gap-2">
         <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
-          📍 {summary}
+          📍 {summary || "—"}
         </div>
+        {!isComplete && (
+          <p className="text-xs text-orange-500">
+            Faltando: {missing.join(", ")}
+          </p>
+        )}
         <div className="flex gap-2">
           <button
-            disabled={disabled}
+            disabled={disabled || !isComplete}
             onClick={onAddressConfirm}
             className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}
           >
@@ -917,6 +927,10 @@ export default function ChatSimPage() {
   const handleAddressDetails = useCallback(
     (text: string) => {
       const { neighborhood, complement } = parseNeighborhoodLine(text);
+      if (!neighborhood.trim()) {
+        sendText(text, cart, "ADDRESS_DETAILS", upsellOffered);
+        return;
+      }
       setAddress((prev) => ({ ...prev, neighborhood, complement }));
       setStage("ADDRESS_CONFIRM");
       sendText(text, cart, "ADDRESS_CONFIRM", upsellOffered);
@@ -1171,7 +1185,7 @@ export default function ChatSimPage() {
                     : stage === "ADDRESS_DETAILS"
                     ? "Ex: Centro, Apto 42"
                     : stage === "ASK_NAME"
-                    ? "Seu nome..."
+                    ? "Seu nome"
                     : "Digite uma mensagem..."
                 }
                 rows={1}
