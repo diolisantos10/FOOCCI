@@ -18,7 +18,6 @@ import type {
   Stage,
   DeliveryMethod,
   PaymentMethod,
-  UpsellOffered,
   MenuCategoryFixture,
   MenuItemFixture,
 } from "./types";
@@ -30,8 +29,11 @@ export function initialState(menu: MenuCategoryFixture[]): QAState {
   return {
     stage: "BROWSE",
     cart: [],
-    upsellOffered: null,
-    finalizeAttemptCount: 0,
+    offeredDrink:       false,
+    offeredDessert:     false,
+    refusedDrink:       false,
+    refusedDessert:     false,
+    lastUpsellCategory: null,
     deliveryMethod: null,
     address: { street: "", number: "", neighborhood: "", complement: "" },
     customerName: "",
@@ -158,7 +160,6 @@ export type TransitionEvent =
   | "ALREADY_IN_CHECKOUT_IGNORED"
   | "UPSELL_DRINK_TRIGGERED"
   | "UPSELL_DESSERT_TRIGGERED"
-  | "FAST_TRACK_CHECKOUT"
   | "CHECKOUT_STARTED"
   | "DELIVERY_SELECTED"
   | "ADDRESS_NUMBER_MISSING"
@@ -179,12 +180,27 @@ export interface Transition {
 // ─── State transitions (mirror page.tsx handlers) ─────────────
 
 /**
- * applyFinalize — mirrors handleFinalizeClick
+ * deriveUpsellOffered — maps new boolean upsell fields to the legacy
+ * UpsellOffered type so assert_upsell scenario actions stay compatible.
+ */
+export function deriveUpsellOffered(
+  state: QAState,
+): "drink" | "dessert" | null {
+  if (state.lastUpsellCategory === "drink"   && state.offeredDrink   && !state.refusedDrink)   return "drink";
+  if (state.lastUpsellCategory === "dessert" && state.offeredDessert && !state.refusedDessert) return "dessert";
+  return null;
+}
+
+/**
+ * applyFinalize — mirrors handleFinalizeClick in page.tsx.
  *
- * Upsell sequence (finalizeAttemptCount=0 path):
- *   null → try drink → try dessert → checkout
- * Fast-track:
- *   finalizeAttemptCount >= 1 → checkout immediately
+ * Gate sequence (each offered at most once, skipped if refused):
+ *   Gate 1: drink  — if no drink in cart AND not yet offered AND not refused
+ *   Gate 2: dessert — if no dessert in cart AND not yet offered AND not refused
+ *   Otherwise → proceed to checkout
+ *
+ * Refusal detection: only when the LAST category opened by the engine is
+ * still absent from the cart on the next applyFinalize call.
  */
 export function applyFinalize(
   state: QAState,
@@ -197,86 +213,55 @@ export function applyFinalize(
     return { state, event: "ALREADY_IN_CHECKOUT_IGNORED" };
   }
 
-  // Fast-track: user has been through upsell cycle at least once
-  if (state.finalizeAttemptCount >= 1) {
+  const cartIds    = new Set(state.cart.map((c) => c.id));
+  const drinkCat   = findBeverageCat(menu);
+  const dessertCat = findDessertCat(menu);
+  const hasDrink   = drinkCat   ? drinkCat.items.some((i)   => cartIds.has(i.id)) : false;
+  const hasDessert = dessertCat ? dessertCat.items.some((i) => cartIds.has(i.id)) : false;
+
+  // Refusal detection — only for the last category the engine explicitly opened
+  const justRefusedDrink   = state.lastUpsellCategory === "drink"   && !hasDrink;
+  const justRefusedDessert = state.lastUpsellCategory === "dessert" && !hasDessert;
+  const refusedDrink   = state.refusedDrink   || justRefusedDrink;
+  const refusedDessert = state.refusedDessert || justRefusedDessert;
+
+  // Gate 1: drink upsell
+  if (!hasDrink && !state.offeredDrink && !refusedDrink && drinkCat) {
     return {
       state: {
         ...state,
-        stage: "DELIVERY_TYPE",
-        finalizeAttemptCount: state.finalizeAttemptCount + 1,
-        isCheckoutVisible: true,
+        offeredDrink: true,
+        refusedDrink,
+        refusedDessert,
+        lastUpsellCategory: "drink",
+        visibleCategoryId: drinkCat.id,
       },
-      event: "FAST_TRACK_CHECKOUT",
+      event: "UPSELL_DRINK_TRIGGERED",
     };
   }
 
-  const cartNames = new Set(state.cart.map((c) => c.name));
-
-  if (state.upsellOffered === null) {
-    const drinkCat = findBeverageCat(menu);
-    const hasDrink = drinkCat?.items.some((i) => cartNames.has(i.name)) ?? false;
-    if (drinkCat && !hasDrink) {
-      return {
-        state: { ...state, upsellOffered: "drink", visibleCategoryId: drinkCat.id },
-        event: "UPSELL_DRINK_TRIGGERED",
-      };
-    }
-    const dessertCat = findDessertCat(menu);
-    const hasDessert =
-      dessertCat?.items.some((i) => cartNames.has(i.name)) ?? false;
-    if (dessertCat && !hasDessert) {
-      return {
-        state: {
-          ...state,
-          upsellOffered: "dessert",
-          visibleCategoryId: dessertCat.id,
-        },
-        event: "UPSELL_DESSERT_TRIGGERED",
-      };
-    }
+  // Gate 2: dessert upsell
+  if (!hasDessert && !state.offeredDessert && !refusedDessert && dessertCat) {
     return {
       state: {
         ...state,
-        stage: "DELIVERY_TYPE",
-        finalizeAttemptCount: 1,
-        isCheckoutVisible: true,
+        offeredDessert: true,
+        refusedDrink,
+        refusedDessert,
+        lastUpsellCategory: "dessert",
+        visibleCategoryId: dessertCat.id,
       },
-      event: "CHECKOUT_STARTED",
+      event: "UPSELL_DESSERT_TRIGGERED",
     };
   }
 
-  if (state.upsellOffered === "drink") {
-    const dessertCat = findDessertCat(menu);
-    const cartNames2 = new Set(state.cart.map((c) => c.name));
-    const hasDessert =
-      dessertCat?.items.some((i) => cartNames2.has(i.name)) ?? false;
-    if (dessertCat && !hasDessert) {
-      return {
-        state: {
-          ...state,
-          upsellOffered: "dessert",
-          visibleCategoryId: dessertCat.id,
-        },
-        event: "UPSELL_DESSERT_TRIGGERED",
-      };
-    }
-    return {
-      state: {
-        ...state,
-        stage: "DELIVERY_TYPE",
-        finalizeAttemptCount: 1,
-        isCheckoutVisible: true,
-      },
-      event: "CHECKOUT_STARTED",
-    };
-  }
-
-  // upsellOffered === "dessert" → proceed to checkout
+  // All gates passed or skipped → proceed to checkout
   return {
     state: {
       ...state,
+      refusedDrink,
+      refusedDessert,
       stage: "DELIVERY_TYPE",
-      finalizeAttemptCount: 1,
       isCheckoutVisible: true,
     },
     event: "CHECKOUT_STARTED",
@@ -381,7 +366,12 @@ export function applyBackToBrowse(state: QAState): Transition {
       deliveryMethod: null,
       paymentMethod: null,
       isCheckoutVisible: false,
-      // finalizeAttemptCount intentionally kept — mirrors page.tsx
+      // reset upsell — mirrors handleBackToBrowse / handleEditOrder in page.tsx
+      offeredDrink:       false,
+      offeredDessert:     false,
+      refusedDrink:       false,
+      refusedDessert:     false,
+      lastUpsellCategory: null,
     },
     event: "BACK_TO_BROWSE",
   };

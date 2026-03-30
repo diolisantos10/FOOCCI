@@ -31,6 +31,7 @@ import {
   applyConfirmOrder,
   applyBackToBrowse,
   syncUISnapshot,
+  deriveUpsellOffered,
 } from "./state";
 
 const MAX_ACTIONS = 100;
@@ -148,16 +149,15 @@ export function driveScenario(
         }
 
         case "accept_upsell": {
-          // 1. Add the first item from the upsell category
-          if (state.upsellOffered !== null) {
-            const catType = state.upsellOffered === "drink" ? "drink" : "dessert";
-            const cat = getCategoryByType(menu, catType);
+          // 1. Add the first item from the last engine-opened upsell category
+          if (state.lastUpsellCategory !== null) {
+            const cat = getCategoryByType(menu, state.lastUpsellCategory);
             if (cat && cat.items.length > 0) {
               const item = cat.items[0] as MenuCategoryFixture["items"][0];
               state = { ...state, cart: addToCart(state.cart, item) };
             }
           }
-          // 2. Call finalize — advances upsell sequence or goes to checkout
+          // 2. Call finalize — advances to next gate or checkout
           const { state: next } = applyFinalize(state, menu);
           state = next;
           break;
@@ -230,8 +230,9 @@ export function driveScenario(
         }
 
         case "assert_upsell": {
-          if (state.upsellOffered !== action.expected) {
-            assertionError = `Expected upsellOffered=${String(action.expected)}, got ${String(state.upsellOffered)}`;
+          const actual = deriveUpsellOffered(state);
+          if (actual !== action.expected) {
+            assertionError = `Expected upsellOffered=${String(action.expected)}, got ${String(actual)}`;
           }
           break;
         }

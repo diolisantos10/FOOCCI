@@ -69,13 +69,11 @@ export const stressFinalize: QAScenario = {
     },
     {
       id: "checkout-reached-once",
-      description: "Checkout was entered exactly once (finalizeAttemptCount = 1)",
+      description: "Both upsell gates were offered (and refused) before checkout was entered",
       severity: "high",
       validate: (s) => ({
-        // After reaching DELIVERY_TYPE the count is set to 1 and stays there
-        // (extra finalize clicks are ignored when not in BROWSE)
-        passed: s.finalizeAttemptCount === 1,
-        detail: `finalizeAttemptCount: ${s.finalizeAttemptCount}`,
+        passed: s.offeredDrink && s.offeredDessert,
+        detail: `offeredDrink: ${s.offeredDrink}, offeredDessert: ${s.offeredDessert}`,
       }),
     },
     {

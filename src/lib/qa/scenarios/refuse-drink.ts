@@ -64,11 +64,11 @@ export const refuseDrink: QAScenario = {
     },
     {
       id: "finalize-count-correct",
-      description: "finalizeAttemptCount reached 1 when proceeding to checkout",
+      description: "Drink refusal was recorded before proceeding to checkout",
       severity: "medium",
       validate: (s) => ({
-        passed: s.finalizeAttemptCount >= 1,
-        detail: `finalizeAttemptCount: ${s.finalizeAttemptCount}`,
+        passed: s.refusedDrink,
+        detail: `refusedDrink: ${s.refusedDrink}, refusedDessert: ${s.refusedDessert}`,
       }),
     },
   ],

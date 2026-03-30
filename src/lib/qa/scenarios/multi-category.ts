@@ -68,8 +68,8 @@ export const multiCategory: QAScenario = {
       description: "No upsell was triggered (all categories already covered)",
       severity: "high",
       validate: (s) => ({
-        passed: s.upsellOffered === null,
-        detail: `upsellOffered: ${s.upsellOffered}`,
+        passed: !s.offeredDrink && !s.offeredDessert,
+        detail: `offeredDrink: ${s.offeredDrink}, offeredDessert: ${s.offeredDessert}`,
       }),
     },
     {

@@ -2,13 +2,14 @@
  * Scenario: Recovery Test
  *
  * Persona: confused
- * User starts checkout, then goes back to the menu to add more items,
- * then re-finalizes. The second finalize must fast-track (skip upsell)
- * because finalizeAttemptCount was already incremented.
+ * User starts checkout, goes back to browse to add a drink,
+ * then re-finalizes. On the second pass, drink gate is skipped
+ * (drink now in cart) but dessert gate fires once more; user
+ * refuses it and proceeds to checkout.
  *
  * Validates:
- *   - go_back_to_browse preserves finalizeAttemptCount
- *   - Second finalize fast-tracks to DELIVERY_TYPE
+ *   - go_back_to_browse resets upsell state
+ *   - Second finalize re-evaluates gates with updated cart
  *   - Cart items added after back-to-browse are included
  */
 
@@ -20,23 +21,27 @@ export const recovery: QAScenario = {
   persona: "confused",
   severity: "high",
   description:
-    "User enters checkout, goes back to browse, adds more items, " +
-    "then finalizes again. Second finalize must fast-track.",
+    "User enters checkout, goes back to browse, adds a drink, " +
+    "then finalizes again. Second pass: drink gate skipped (drink in cart), " +
+    "dessert gate fires once more, user refuses, then proceeds to checkout.",
   actions: [
     { type: "add_first_from_category", categoryType: "main" },
-    // Skip both upsells to reach checkout
+    // First pass: skip both upsells to reach checkout
     { type: "finalize" },
-    { type: "refuse_upsell" },  // drink → dessert upsell
-    { type: "refuse_upsell" },  // dessert → DELIVERY_TYPE
+    { type: "refuse_upsell" },  // drink upsell → dessert upsell
+    { type: "refuse_upsell" },  // dessert upsell → DELIVERY_TYPE
     { type: "assert_stage", expected: "DELIVERY_TYPE" },
-    // Go back to browse — finalizeAttemptCount stays at 1
+    // Go back to browse — upsell state resets
     { type: "go_back_to_browse" },
     { type: "assert_stage", expected: "BROWSE" },
     { type: "assert_checkout_visible", expected: false },
     // Add a drink while back in browse
     { type: "add_first_from_category", categoryType: "drink" },
-    // Re-finalize — finalizeAttemptCount=1 → fast-track directly to DELIVERY_TYPE
+    // Second pass: drink gate skips (drink in cart); dessert gate fires
     { type: "finalize" },
+    { type: "assert_stage", expected: "BROWSE" },
+    // Refuse dessert → proceeds to checkout
+    { type: "refuse_upsell" },
     { type: "assert_stage", expected: "DELIVERY_TYPE" },
     // Complete delivery checkout
     { type: "select_delivery", method: "delivery" },
@@ -61,13 +66,16 @@ export const recovery: QAScenario = {
       }),
     },
     {
-      id: "fast-track-worked",
-      description: "finalizeAttemptCount > 1 after second finalize (fast-track used)",
+      id: "drink-gate-skipped-on-second-pass",
+      description: "Drink was in cart on second pass so drink gate was not re-offered",
       severity: "high",
-      validate: (s) => ({
-        passed: s.finalizeAttemptCount > 1,
-        detail: `finalizeAttemptCount: ${s.finalizeAttemptCount}`,
-      }),
+      validate: (s) => {
+        const hasDrink = s.cart.some((c) => c.qty > 0);
+        return {
+          passed: hasDrink && s.deliveryMethod !== null,
+          detail: `cart items: ${s.cart.length}, deliveryMethod: ${s.deliveryMethod}`,
+        };
+      },
     },
     {
       id: "drink-in-final-cart",

@@ -82,8 +82,8 @@ export const directBuyer: QAScenario = {
       description: "No upsell was triggered (all categories covered before finalize)",
       severity: "low",
       validate: (s) => ({
-        passed: s.finalizeAttemptCount === 1,
-        detail: `finalizeAttemptCount: ${s.finalizeAttemptCount}`,
+        passed: !s.offeredDrink && !s.offeredDessert,
+        detail: `offeredDrink: ${s.offeredDrink}, offeredDessert: ${s.offeredDessert}`,
       }),
     },
   ],

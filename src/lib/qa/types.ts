@@ -73,8 +73,11 @@ export interface QAState {
   // Business state (mirrors page.tsx)
   stage: Stage;
   cart: CartItem[];
-  upsellOffered: UpsellOffered;
-  finalizeAttemptCount: number;
+  offeredDrink:       boolean;
+  offeredDessert:     boolean;
+  refusedDrink:       boolean;
+  refusedDessert:     boolean;
+  lastUpsellCategory: "drink" | "dessert" | null;
   deliveryMethod: DeliveryMethod | null;
   address: Address;
   customerName: string;
