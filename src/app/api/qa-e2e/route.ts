@@ -74,7 +74,7 @@ function collectFailedTests(suites: PlaywrightSuite[], prefix = ""): string[] {
 }
 
 /** Run Playwright and resolve with its full stdout (JSON output). */
-function runPlaywright(cwd: string, timeoutMs: number): Promise<string> {
+function runPlaywright(cwd: string, timeoutMs: number, baseUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       child.kill("SIGTERM");
@@ -88,7 +88,7 @@ function runPlaywright(cwd: string, timeoutMs: number): Promise<string> {
         cwd,
         env: {
           ...process.env,
-          BASE_URL: process.env.BASE_URL ?? "http://localhost:3000",
+          BASE_URL: process.env.BASE_URL ?? baseUrl,
           // Suppress interactive prompts
           CI: "1",
         },
@@ -124,10 +124,11 @@ function runPlaywright(cwd: string, timeoutMs: number): Promise<string> {
 
 const TIMEOUT_MS = 90_000; // 90 seconds
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
-    const cwd    = process.cwd();
-    const stdout = await runPlaywright(cwd, TIMEOUT_MS);
+    const cwd     = process.cwd();
+    const baseUrl = new URL(req.url).origin;
+    const stdout  = await runPlaywright(cwd, TIMEOUT_MS, baseUrl);
 
     // Playwright JSON reporter may prefix stdout with non-JSON lines
     // (list reporter noise). Find the first '{' to locate the JSON blob.
