@@ -762,6 +762,15 @@ export default function ChatSimPage() {
   const [finalizeAttemptCount, setFinalizeAttemptCount] = useState(0);
   const [upsellOffered, setUpsellOffered] = useState<"drink" | "dessert" | null>(null);
 
+  // ── Upsell engine state ──────────────────────────────────────
+  const [upsellState, setUpsellState] = useState({
+    offeredDrink:       false,
+    offeredDessert:     false,
+    refusedDrink:       false,
+    refusedDessert:     false,
+    lastUpsellCategory: null as "drink" | "dessert" | null,
+  });
+
   // ── Checkout data ────────────────────────────────────────────
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup" | null>(null);
   const [address, setAddress] = useState<Address>({
@@ -960,6 +969,7 @@ export default function ChatSimPage() {
     setDeliveryMethod(null);
     setAddressConfirmed(false);
     setPaymentMethod(null);
+    setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
     sendText("Ver cardápio", cart, "BROWSE", upsellOffered);
   }, [cart, upsellOffered, sendText]);
 
@@ -1045,6 +1055,7 @@ export default function ChatSimPage() {
     setDeliveryMethod(null);
     setAddressConfirmed(false);
     setPaymentMethod(null);
+    setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
     sendText("Editar pedido", cart, "BROWSE", upsellOffered);
   }, [cart, upsellOffered, sendText]);
 
@@ -1180,6 +1191,7 @@ export default function ChatSimPage() {
     setPaymentMethod(null);
     setFinalizeAttemptCount(0);
     setUpsellOffered(null);
+    setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
     setSelectedProduct(null);
 
     const expanded = expandForReplay(scenario.actions);
