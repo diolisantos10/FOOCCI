@@ -66,6 +66,7 @@ interface Product {
 }
 
 interface CartItem {
+  id: string;
   name: string;
   price: number;
   qty: number;
@@ -194,7 +195,15 @@ function TypingIndicator() {
 
 // ─── CartBar ──────────────────────────────────────────────────
 
-function CartBar({ cart }: { cart: CartItem[] }) {
+function CartBar({
+  cart,
+  onDecrement,
+  onRemove,
+}: {
+  cart: CartItem[];
+  onDecrement: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
   if (cart.length === 0) return null;
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   return (
@@ -204,10 +213,27 @@ function CartBar({ cart }: { cart: CartItem[] }) {
         <div className="flex flex-1 flex-wrap gap-1">
           {cart.map((item) => (
             <span
-              key={item.name}
-              className="rounded-full bg-green-200 px-2 py-0.5 text-xs font-medium text-green-900"
+              key={item.id}
+              className="flex items-center gap-1 rounded-full bg-green-200 pl-2 pr-1 py-0.5 text-xs font-medium text-green-900"
             >
-              {item.qty > 1 ? `${item.qty}× ` : ""}{item.name}
+              {item.qty > 1 && (
+                <span className="font-bold">{item.qty}×</span>
+              )}
+              <span>{item.name}</span>
+              <button
+                onClick={() => onDecrement(item.id)}
+                className="flex h-4 w-4 items-center justify-center rounded-full bg-green-400 text-white hover:bg-green-600 text-[10px] font-bold leading-none transition-colors"
+                aria-label={`Remover 1 ${item.name}`}
+              >
+                −
+              </button>
+              <button
+                onClick={() => onRemove(item.id)}
+                className="flex h-4 w-4 items-center justify-center rounded-full bg-red-400 text-white hover:bg-red-600 text-[10px] font-bold leading-none transition-colors"
+                aria-label={`Remover ${item.name}`}
+              >
+                ×
+              </button>
             </span>
           ))}
         </div>
@@ -520,6 +546,26 @@ function CheckoutBar({
   return null;
 }
 
+// ─── useCartState — cart state only, no menu/AI logic ────────
+
+function useCartState() {
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  const decrementItem = useCallback((id: string) => {
+    setCart((prev) =>
+      prev
+        .map((c) => (c.id === id ? { ...c, qty: c.qty - 1 } : c))
+        .filter((c) => c.qty > 0),
+    );
+  }, []);
+
+  const removeItem = useCallback((id: string) => {
+    setCart((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  return { cart, setCart, decrementItem, removeItem };
+}
+
 // ─── useMenuState — menu data only, no business logic ─────────
 
 function useMenuState() {
@@ -576,7 +622,7 @@ export default function ChatSimPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // ── Cart ────────────────────────────────────────────────────
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const { cart, setCart, decrementItem, removeItem } = useCartState();
 
   // ── Stage / flow ────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
@@ -678,11 +724,11 @@ export default function ChatSimPage() {
   }, [setSelectedCategoryId]);
 
   const handleItemAdd = useCallback(
-    (item: { name: string; price: number }) => {
-      const existing = cart.find((c) => c.name === item.name);
+    (item: { id: string; name: string; price: number }) => {
+      const existing = cart.find((c) => c.id === item.id);
       const newCart = existing
-        ? cart.map((c) => c.name === item.name ? { ...c, qty: c.qty + 1 } : c)
-        : [...cart, { name: item.name, price: item.price, qty: 1 }];
+        ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
+        : [...cart, { id: item.id, name: item.name, price: item.price, qty: 1 }];
       setCart(newCart);
       sendText(`Adicionar ${item.name}`, newCart, stage, upsellOffered);
     },
@@ -944,7 +990,7 @@ export default function ChatSimPage() {
               </p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {filteredProducts.map((product) => {
-                  const qty = cart.find((c) => c.name === product.name)?.qty ?? 0;
+                  const qty = cart.find((c) => c.id === product.id)?.qty ?? 0;
                   return (
                     <ProductCard
                       key={product.id}
@@ -981,7 +1027,7 @@ export default function ChatSimPage() {
           )}
 
           {/* Cart bar */}
-          <CartBar cart={cart} />
+          <CartBar cart={cart} onDecrement={decrementItem} onRemove={removeItem} />
 
           {/* Persistent bottom bar — adjustment 2: always visible during checkout */}
           {stage !== "DONE" && (
