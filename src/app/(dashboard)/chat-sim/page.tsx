@@ -237,7 +237,7 @@ function CartBar({
             </span>
           ))}
         </div>
-        <span className="shrink-0 text-xs font-bold text-green-900">
+        <span data-testid="cart-badge" className="shrink-0 text-xs font-bold text-green-900">
           R$&nbsp;{total.toFixed(2)}
         </span>
       </div>
@@ -263,7 +263,7 @@ function ProductModal({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-white">
+    <div data-testid="modal-overlay" className="absolute inset-0 z-50 flex flex-col bg-white">
       {/* header */}
       <div className="shrink-0 flex items-center justify-between border-b border-gray-100 px-4 py-3">
         <button
@@ -337,6 +337,7 @@ function ProductCard({
 }) {
   return (
     <div
+      data-testid={`product-card-${item.id}`}
       onClick={onOpen}
       className="w-36 shrink-0 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden cursor-pointer transition-all duration-150 active:scale-[0.97]"
     >
@@ -492,12 +493,13 @@ function CheckoutBar({
           📍 {summary || "—"}
         </div>
         {!isComplete && (
-          <p className="text-xs text-orange-500">
+          <p data-testid="address-error" className="text-xs text-orange-500">
             Faltando: {missing.join(", ")}
           </p>
         )}
         <div className="flex gap-2">
           <button
+            data-testid="address-confirm-button"
             disabled={disabled || !isComplete}
             onClick={onAddressConfirm}
             className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2]`}
@@ -598,6 +600,7 @@ function CheckoutBar({
         </div>
         <div className="flex gap-2">
           <button
+            data-testid="checkout-confirm-btn"
             disabled={disabled}
             onClick={onFinalConfirm}
             className="flex-1 rounded-xl bg-[#25d366] py-2 text-xs font-bold text-white shadow-sm hover:bg-[#1dbd5a] disabled:opacity-50 transition-colors"
@@ -1044,7 +1047,11 @@ export default function ChatSimPage() {
     <div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-gray-200 p-4">
 
       {/* ── Phone frame ─────────────────────────────────────── */}
-      <div className="relative flex h-full w-full max-w-[390px] flex-col overflow-hidden bg-white sm:rounded-[2rem] sm:border-[6px] sm:border-gray-800 sm:shadow-2xl">
+      <div
+        data-testid="phone-frame"
+        data-stage={stage}
+        className="relative flex h-full w-full max-w-[390px] flex-col overflow-hidden bg-white sm:rounded-[2rem] sm:border-[6px] sm:border-gray-800 sm:shadow-2xl"
+      >
 
         {/* WhatsApp-style header */}
         <div className="shrink-0 flex items-center gap-3 bg-[#128c7e] px-4 py-2.5">
@@ -1075,6 +1082,7 @@ export default function ChatSimPage() {
               {categories.map((cat) => (
                 <button
                   key={cat.id}
+                  data-testid={`category-tab-${cat.id}`}
                   onClick={() => handleCategoryClick(cat)}
                   className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     selectedCategoryId === cat.id
@@ -1090,7 +1098,7 @@ export default function ChatSimPage() {
 
           {/* Product carousel — BROWSE + category selected */}
           {stage === "BROWSE" && selectedCat && (
-            <div className="border-t border-gray-100 py-2">
+            <div data-testid="browse-area" className="border-t border-gray-100 py-2">
               <div className="flex overflow-x-auto gap-3 px-3 pb-1">
                 {filteredProducts.map((product) => {
                   const qty = cart.find((c) => c.id === product.id)?.qty ?? 0;
@@ -1112,7 +1120,7 @@ export default function ChatSimPage() {
 
           {/* Checkout UI — checkout stages only */}
           {isCheckoutStage && (
-            <div className="border-t border-gray-100 px-4 py-3">
+            <div data-testid="checkout-area" className="border-t border-gray-100 px-4 py-3">
               <CheckoutBar
                 stage={stage}
                 address={address}
@@ -1137,6 +1145,7 @@ export default function ChatSimPage() {
           {stage === "BROWSE" && (
             <div className="border-t border-gray-100 px-3 py-2">
               <button
+                data-testid="finalize-button"
                 onClick={handleFinalizeClick}
                 disabled={ui === "thinking"}
                 className="w-full rounded-full bg-[#25d366] px-3 py-2 text-sm font-bold text-white hover:bg-[#1dbd5a] disabled:opacity-40 transition-colors"
@@ -1160,7 +1169,7 @@ export default function ChatSimPage() {
 
           {/* Done state */}
           {stage === "DONE" && (
-            <div className="border-t border-gray-100 px-4 py-3 text-center">
+            <div data-testid="stage-done" className="border-t border-gray-100 px-4 py-3 text-center">
               <p className="text-sm font-semibold text-green-700">
                 🎉 Pedido enviado com sucesso!
               </p>

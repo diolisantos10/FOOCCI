@@ -39,3 +39,7 @@ Thumbs.db
 next-env.d.ts
 qa-reports/*.json
 qa-reports/*.md
+
+# Playwright
+playwright-report/
+test-results/
