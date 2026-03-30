@@ -245,6 +245,79 @@ function CartBar({
   );
 }
 
+// ─── ProductModal ─────────────────────────────────────────────
+
+function ProductModal({
+  product,
+  emoji,
+  qtyInCart,
+  disabled,
+  onAdd,
+  onClose,
+}: {
+  product: Product;
+  emoji: string;
+  qtyInCart: number;
+  disabled: boolean;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-50 flex flex-col bg-white">
+      {/* header */}
+      <div className="shrink-0 flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          ← Voltar
+        </button>
+        {qtyInCart > 0 && (
+          <span className="rounded-full bg-[#25d366] px-2.5 py-0.5 text-xs font-bold text-white">
+            {qtyInCart} no carrinho
+          </span>
+        )}
+      </div>
+      {/* image */}
+      <div className="relative h-56 shrink-0 bg-gray-100 flex items-center justify-center">
+        {product.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.image}
+            alt={product.name}
+            className="h-full w-full object-cover"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <span className="text-6xl select-none">{emoji}</span>
+        )}
+      </div>
+      {/* info */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <p className="text-lg font-bold text-gray-900 leading-snug">{product.name}</p>
+        {product.description && (
+          <p className="mt-2 text-sm text-gray-500 leading-relaxed">{product.description}</p>
+        )}
+        <p className="mt-4 text-2xl font-bold text-gray-900">
+          R$&nbsp;{product.price.toFixed(2)}
+        </p>
+      </div>
+      {/* add button */}
+      <div className="shrink-0 border-t border-gray-100 px-4 py-3">
+        <button
+          onClick={() => { onAdd(); onClose(); }}
+          disabled={disabled}
+          className="w-full rounded-xl bg-[#25d366] py-3 text-sm font-bold text-white hover:bg-[#1dbd5a] disabled:opacity-40 transition-colors"
+        >
+          + Adicionar ao pedido
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── ProductCard ──────────────────────────────────────────────
 
 function ProductCard({
@@ -253,15 +326,20 @@ function ProductCard({
   qtyInCart,
   disabled,
   onAdd,
+  onOpen,
 }: {
   item: Product;
   emoji: string;
   qtyInCart: number;
   disabled: boolean;
   onAdd: () => void;
+  onOpen: () => void;
 }) {
   return (
-    <div className="flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden transition-all duration-150 hover:shadow-md hover:-translate-y-0.5">
+    <div
+      onClick={onOpen}
+      className="w-36 shrink-0 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden cursor-pointer transition-all duration-150 active:scale-[0.97]"
+    >
       <div className="relative h-24 bg-gray-100 flex items-center justify-center">
         {item.image ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -286,21 +364,16 @@ function ProductCard({
         <p className="text-xs font-semibold text-gray-900 leading-tight line-clamp-2">
           {item.name}
         </p>
-        {item.description && (
-          <p className="text-[10px] text-gray-500 leading-snug line-clamp-2">
-            {item.description}
-          </p>
-        )}
         <div className="mt-auto flex items-center justify-between pt-1">
           <span className="text-xs font-bold text-gray-800">
             R$&nbsp;{item.price.toFixed(2)}
           </span>
           <button
-            onClick={onAdd}
+            onClick={(e) => { e.stopPropagation(); onAdd(); }}
             disabled={disabled}
-            className="rounded-full bg-[#25d366] px-2.5 py-0.5 text-[11px] font-bold text-white hover:bg-[#1dbd5a] disabled:opacity-40 transition-colors"
+            className="rounded-full bg-[#25d366] w-6 h-6 flex items-center justify-center text-sm font-bold text-white hover:bg-[#1dbd5a] disabled:opacity-40 transition-colors"
           >
-            + Adicionar
+            +
           </button>
         </div>
       </div>
@@ -623,6 +696,9 @@ export default function ChatSimPage() {
 
   // ── Cart ────────────────────────────────────────────────────
   const { cart, setCart, decrementItem, removeItem } = useCartState();
+
+  // ── Product modal ────────────────────────────────────────────
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // ── Stage / flow ────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
@@ -1008,10 +1084,10 @@ export default function ChatSimPage() {
             </div>
           )}
 
-          {/* Product grid — BROWSE + category selected */}
+          {/* Product carousel — BROWSE + category selected */}
           {stage === "BROWSE" && selectedCat && (
-            <div className="max-h-48 overflow-y-auto border-t border-gray-100 px-3 py-2">
-              <div className="grid grid-cols-2 gap-2">
+            <div className="border-t border-gray-100 py-2">
+              <div className="flex overflow-x-auto gap-3 px-3 pb-1">
                 {filteredProducts.map((product) => {
                   const qty = cart.find((c) => c.id === product.id)?.qty ?? 0;
                   return (
@@ -1022,6 +1098,7 @@ export default function ChatSimPage() {
                       qtyInCart={qty}
                       disabled={ui === "thinking"}
                       onAdd={() => handleItemAdd(product)}
+                      onOpen={() => setSelectedProduct(product)}
                     />
                   );
                 })}
@@ -1052,22 +1129,27 @@ export default function ChatSimPage() {
           {/* Cart bar */}
           <CartBar cart={cart} onDecrement={decrementItem} onRemove={removeItem} />
 
-          {/* Action bar — Ver cardápio + Finalizar */}
-          {stage !== "DONE" && (
-            <div className="flex gap-2 border-t border-gray-100 px-3 py-2">
-              <button
-                onClick={handleBackToBrowse}
-                disabled={ui === "thinking" || stage === "BROWSE"}
-                className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 transition-colors"
-              >
-                📖 Ver cardápio
-              </button>
+          {/* Action bar */}
+          {stage === "BROWSE" && (
+            <div className="border-t border-gray-100 px-3 py-2">
               <button
                 onClick={handleFinalizeClick}
-                disabled={ui === "thinking" || stage !== "BROWSE"}
-                className="flex-1 rounded-full bg-[#25d366] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#1dbd5a] disabled:opacity-40 transition-colors"
+                disabled={ui === "thinking"}
+                className="w-full rounded-full bg-[#25d366] px-3 py-2 text-sm font-bold text-white hover:bg-[#1dbd5a] disabled:opacity-40 transition-colors"
               >
                 ✅ Finalizar pedido
+              </button>
+            </div>
+          )}
+          {/* Back to menu during checkout */}
+          {stage !== "BROWSE" && stage !== "DONE" && (
+            <div className="border-t border-gray-100 px-3 py-2">
+              <button
+                onClick={handleBackToBrowse}
+                disabled={ui === "thinking"}
+                className="text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
+              >
+                ← Voltar ao cardápio
               </button>
             </div>
           )}
@@ -1118,6 +1200,18 @@ export default function ChatSimPage() {
             </form>
           )}
         </div>
+
+        {/* Product detail modal — full-screen overlay inside phone frame */}
+        {selectedProduct && (
+          <ProductModal
+            product={selectedProduct}
+            emoji={catEmoji}
+            qtyInCart={cart.find((c) => c.id === selectedProduct.id)?.qty ?? 0}
+            disabled={ui === "thinking"}
+            onAdd={() => handleItemAdd(selectedProduct)}
+            onClose={() => setSelectedProduct(null)}
+          />
+        )}
       </div>
 
       <style jsx>{`
