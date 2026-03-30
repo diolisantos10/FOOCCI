@@ -16,6 +16,14 @@ import type { QARunLog, QAScenario, QAScenarioResult } from "@/lib/qa/types";
 
 type RunStatus = "idle" | "running" | "done" | "error";
 
+interface E2EResult {
+  total:       number;
+  passed:      number;
+  failed:      number;
+  durationMs:  number;
+  failedTests: string[];
+}
+
 interface QAPanelProps {
   scenarios: QAScenario[];
   criticalScenarioIds: readonly string[];
@@ -77,6 +85,12 @@ export function QAPanel({
   const [runProgress,       setRunProgress]        = useState(0);
   const [runTarget,         setRunTarget]          = useState(0);
 
+  // ── E2E (Playwright) state ───────────────────────────────────
+  const [e2eStatus,         setE2eStatus]          = useState<RunStatus>("idle");
+  const [e2eResult,         setE2eResult]          = useState<E2EResult | null>(null);
+  const [e2eError,          setE2eError]           = useState<string>("");
+  const [showE2eDetail,     setShowE2eDetail]      = useState(false);
+
   // ── Run trigger ─────────────────────────────────────────────
 
   const triggerRun = useCallback(
@@ -126,6 +140,28 @@ export function QAPanel({
     },
     [scenarios.length, criticalScenarioIds.length, selectedScenario],
   );
+
+  // ── E2E run trigger ─────────────────────────────────────────
+
+  const triggerE2E = useCallback(async () => {
+    setE2eStatus("running");
+    setE2eResult(null);
+    setE2eError("");
+    setShowE2eDetail(false);
+
+    try {
+      const res  = await fetch("/api/qa-e2e", { method: "POST" });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error ?? "Falha na execução E2E");
+
+      setE2eResult(data as E2EResult);
+      setE2eStatus("done");
+    } catch (err) {
+      setE2eError(err instanceof Error ? err.message : "Erro desconhecido");
+      setE2eStatus("error");
+    }
+  }, []);
 
   // ── UI helpers ───────────────────────────────────────────────
 
@@ -370,7 +406,113 @@ export function QAPanel({
             </button>
           </div>
         )}
+
+        {/* ── E2E (Playwright) section ─────────────────────────── */}
+        <div className="pt-1">
+          <div className="border-t border-gray-200 pt-3 space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+              🌐 Testes Visuais (E2E)
+            </p>
+
+            {/* Trigger button */}
+            <button
+              onClick={triggerE2E}
+              disabled={e2eStatus === "running"}
+              className="rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors shadow-sm"
+            >
+              {e2eStatus === "running" ? (
+                <span className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-white" />
+                  Rodando testes...
+                </span>
+              ) : (
+                "▶ Rodar testes visuais (E2E)"
+              )}
+            </button>
+
+            {/* Status / error */}
+            {e2eStatus === "error" && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                ❌ {e2eError}
+              </div>
+            )}
+
+            {/* Results summary */}
+            {e2eStatus === "done" && e2eResult && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                  E2E Tests
+                </p>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  {[
+                    { label: "Total",    value: e2eResult.total,    cls: "text-gray-900" },
+                    { label: "Passou",   value: e2eResult.passed,   cls: "text-green-700 font-bold" },
+                    { label: "Falhou",   value: e2eResult.failed,   cls: e2eResult.failed > 0 ? "text-red-600 font-bold" : "text-gray-900" },
+                    { label: "Duração",  value: `${Math.round(e2eResult.durationMs / 1000)}s`, cls: "text-gray-700" },
+                  ].map(({ label, value, cls }) => (
+                    <div key={label} className="rounded-lg bg-white border border-gray-200 px-2 py-1.5">
+                      <p className={`text-base leading-none ${cls}`}>{value}</p>
+                      <p className="mt-0.5 text-[10px] text-gray-500">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Failed test list */}
+                {e2eResult.failedTests.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-red-600">
+                      Falhas
+                    </p>
+                    {e2eResult.failedTests.map((title, i) => (
+                      <div key={i} className="rounded-lg bg-red-50 border border-red-200 px-2.5 py-1.5 text-[11px] text-red-700 font-mono break-all">
+                        • {title}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Detail toggle */}
+                <div className="pt-1">
+                  <button
+                    onClick={() => setShowE2eDetail(true)}
+                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    📄 Ver detalhes
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* ── E2E detail modal overlay ─────────────────────────── */}
+      {showE2eDetail && e2eResult && (
+        <div className="absolute inset-0 z-50 flex flex-col bg-white">
+          <div className="shrink-0 flex items-center justify-between border-b border-gray-200 px-4 py-3">
+            <p className="text-sm font-bold text-gray-800">🌐 E2E — Detalhes</p>
+            <button
+              onClick={() => setShowE2eDetail(false)}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors text-sm"
+            >
+              ✕
+            </button>
+          </div>
+          <pre className="flex-1 overflow-auto p-4 font-mono text-[11px] text-gray-700 leading-relaxed whitespace-pre-wrap">
+{`E2E Tests — Playwright
+${"─".repeat(40)}
+Total:    ${e2eResult.total}
+Passou:   ${e2eResult.passed}
+Falhou:   ${e2eResult.failed}
+Duração:  ${Math.round(e2eResult.durationMs / 1000)}s
+
+${e2eResult.failedTests.length === 0
+  ? "✅ Todos os testes passaram."
+  : `Testes com falha:\n${e2eResult.failedTests.map((t) => `  ✗ ${t}`).join("\n")}`
+}`}
+          </pre>
+        </div>
+      )}
 
       {/* ── Report modal overlay ─────────────────────────────── */}
       {showReport && (
