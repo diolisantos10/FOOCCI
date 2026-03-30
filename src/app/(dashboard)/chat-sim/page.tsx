@@ -888,7 +888,6 @@ export default function ChatSimPage() {
   );
 
   const handleFinalizeClick = useCallback(() => {
-    // Adjustment 1: empty cart → guide without AI call
     if (cart.length === 0) {
       setMessages((prev) => [
         ...prev,
@@ -903,66 +902,53 @@ export default function ChatSimPage() {
       return;
     }
 
-    // Already in checkout → ignore (button is disabled, but guard just in case)
     if (stage !== "BROWSE") return;
 
-    // Fast-track if user has already gone through upsell sequence once
-    if (finalizeAttemptCount >= 1) {
-      setFinalizeAttemptCount((n) => n + 1);
-      setStage("DELIVERY_TYPE");
-      sendText("Confirmar pedido", cart, "DELIVERY_TYPE", upsellOffered);
+    const cartIds    = new Set(cart.map((c) => c.id));
+    const drinkCat   = findBeverageCat(menu);
+    const dessertCat = findDessertCat(menu);
+    const hasDrink   = drinkCat   ? drinkCat.items.some((i)   => cartIds.has(i.id)) : false;
+    const hasDessert = dessertCat ? dessertCat.items.some((i) => cartIds.has(i.id)) : false;
+
+    // Refusal detection — only fires when the LAST category opened by the engine
+    // is still absent from the cart on the next Finalizar click.
+    const justRefusedDrink =
+      upsellState.lastUpsellCategory === "drink" && !hasDrink;
+    const justRefusedDessert =
+      upsellState.lastUpsellCategory === "dessert" && !hasDessert;
+
+    // Persist any new refusals before evaluating gates
+    if (justRefusedDrink || justRefusedDessert) {
+      setUpsellState((prev) => ({
+        ...prev,
+        refusedDrink:  prev.refusedDrink  || justRefusedDrink,
+        refusedDessert: prev.refusedDessert || justRefusedDessert,
+      }));
+    }
+
+    const refusedDrink   = upsellState.refusedDrink   || justRefusedDrink;
+    const refusedDessert = upsellState.refusedDessert || justRefusedDessert;
+
+    // Gate 1: drink upsell (offered at most once, skip if refused)
+    if (!hasDrink && !upsellState.offeredDrink && !refusedDrink && drinkCat) {
+      setSelectedCategoryId(drinkCat.id);
+      setUpsellState((prev) => ({ ...prev, offeredDrink: true, lastUpsellCategory: "drink" }));
+      sendText("Quero finalizar o pedido", cart, "BROWSE", "drink");
       return;
     }
 
-    const cartNames = new Set(cart.map((c) => c.name));
-
-    // Determine which upsell to offer next based on upsellOffered progression:
-    // null → try drink → try dessert → checkout
-
-    if (upsellOffered === null) {
-      const drinkCat = findBeverageCat(menu);
-      const hasDrink = drinkCat?.items.some((i) => cartNames.has(i.name)) ?? false;
-      if (drinkCat && !hasDrink) {
-        setUpsellOffered("drink");
-        setSelectedCategoryId(drinkCat.id);
-        sendText("Quero finalizar o pedido", cart, "BROWSE", "drink");
-        return;
-      }
-      const dessertCat = findDessertCat(menu);
-      const hasDessert = dessertCat?.items.some((i) => cartNames.has(i.name)) ?? false;
-      if (dessertCat && !hasDessert) {
-        setUpsellOffered("dessert");
-        setSelectedCategoryId(dessertCat.id);
-        sendText("Quero finalizar o pedido", cart, "BROWSE", "dessert");
-        return;
-      }
-      // All categories covered
-      setFinalizeAttemptCount(1);
-      setStage("DELIVERY_TYPE");
-      sendText("Confirmar pedido", cart, "DELIVERY_TYPE", null);
+    // Gate 2: dessert upsell (offered at most once, skip if refused)
+    if (!hasDessert && !upsellState.offeredDessert && !refusedDessert && dessertCat) {
+      setSelectedCategoryId(dessertCat.id);
+      setUpsellState((prev) => ({ ...prev, offeredDessert: true, lastUpsellCategory: "dessert" }));
+      sendText("Quero finalizar o pedido", cart, "BROWSE", "dessert");
       return;
     }
 
-    if (upsellOffered === "drink") {
-      const dessertCat = findDessertCat(menu);
-      const hasDessert = dessertCat?.items.some((i) => cartNames.has(i.name)) ?? false;
-      if (dessertCat && !hasDessert) {
-        setUpsellOffered("dessert");
-        setSelectedCategoryId(dessertCat.id);
-        sendText("Quero finalizar o pedido", cart, "BROWSE", "dessert");
-        return;
-      }
-      setFinalizeAttemptCount(1);
-      setStage("DELIVERY_TYPE");
-      sendText("Confirmar pedido", cart, "DELIVERY_TYPE", "drink");
-      return;
-    }
-
-    // upsellOffered === "dessert" → proceed to checkout
-    setFinalizeAttemptCount(1);
+    // All gates passed → proceed to checkout
     setStage("DELIVERY_TYPE");
-    sendText("Confirmar pedido", cart, "DELIVERY_TYPE", "dessert");
-  }, [cart, finalizeAttemptCount, menu, stage, upsellOffered, sendText]);
+    sendText("Confirmar pedido", cart, "DELIVERY_TYPE", null);
+  }, [cart, menu, stage, upsellState, sendText]);
 
   const handleBackToBrowse = useCallback(() => {
     setStage("BROWSE");
