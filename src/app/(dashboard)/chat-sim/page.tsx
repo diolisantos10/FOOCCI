@@ -960,35 +960,58 @@ export default function ChatSimPage() {
   // ─── Render ──────────────────────────────────────────────────
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col bg-gray-50">
-      <div className="flex flex-1 overflow-hidden">
+    /* Outer shell — centers the phone frame on the dashboard */
+    <div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-gray-200 p-4">
 
-        {/* ── Left Sidebar ────────────────────────────────────── */}
-        <Sidebar
-          categories={categories}
-          selectedCategoryId={selectedCategoryId}
-          onSelect={handleCategoryClick}
-        />
+      {/* ── Phone frame ─────────────────────────────────────── */}
+      <div className="relative flex h-full w-full max-w-[390px] flex-col overflow-hidden bg-white sm:rounded-[2rem] sm:border-[6px] sm:border-gray-800 sm:shadow-2xl">
 
-        {/* ── Main content ────────────────────────────────────── */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-
-          {/* Chat messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-            {messages.map((msg) => (
-              <Bubble key={msg.id} msg={msg} />
-            ))}
-            {ui === "thinking" && <TypingIndicator />}
-            <div ref={bottomRef} />
+        {/* WhatsApp-style header */}
+        <div className="shrink-0 flex items-center gap-3 bg-[#128c7e] px-4 py-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-lg leading-none">
+            🍕
           </div>
+          <div>
+            <p className="text-sm font-bold text-white">FOOCCI</p>
+            <p className="text-[10px] text-green-200">Simulador · Visão mobile</p>
+          </div>
+        </div>
 
-          {/* Product grid — BROWSE stage only */}
+        {/* ── Chat area — dominant (~80%) ──────────────────── */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#ece5dd]">
+          {messages.map((msg) => (
+            <Bubble key={msg.id} msg={msg} />
+          ))}
+          {ui === "thinking" && <TypingIndicator />}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* ── Bottom action zone (~20%) ────────────────────── */}
+        <div className="shrink-0 flex flex-col bg-white">
+
+          {/* Category tabs — horizontal scroll, BROWSE only */}
+          {stage === "BROWSE" && categories.length > 0 && (
+            <div className="flex overflow-x-auto gap-2 border-t border-gray-100 px-3 py-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => handleCategoryClick(cat)}
+                  className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    selectedCategoryId === cat.id
+                      ? "bg-[#25d366] text-white shadow-sm"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {categoryEmoji(cat.name)} {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Product grid — BROWSE + category selected */}
           {stage === "BROWSE" && selectedCat && (
-            <div className="shrink-0 border-t border-gray-200 bg-gray-50 px-3 py-3 max-h-64 overflow-y-auto">
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                {catEmoji} {selectedCat.name}
-              </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="max-h-48 overflow-y-auto border-t border-gray-100 px-3 py-2">
+              <div className="grid grid-cols-2 gap-2">
                 {filteredProducts.map((product) => {
                   const qty = cart.find((c) => c.id === product.id)?.qty ?? 0;
                   return (
@@ -1008,7 +1031,7 @@ export default function ChatSimPage() {
 
           {/* Checkout UI — checkout stages only */}
           {isCheckoutStage && (
-            <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+            <div className="border-t border-gray-100 px-4 py-3">
               <CheckoutBar
                 stage={stage}
                 address={address}
@@ -1029,9 +1052,9 @@ export default function ChatSimPage() {
           {/* Cart bar */}
           <CartBar cart={cart} onDecrement={decrementItem} onRemove={removeItem} />
 
-          {/* Persistent bottom bar — adjustment 2: always visible during checkout */}
+          {/* Action bar — Ver cardápio + Finalizar */}
           {stage !== "DONE" && (
-            <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-2 flex gap-2">
+            <div className="flex gap-2 border-t border-gray-100 px-3 py-2">
               <button
                 onClick={handleBackToBrowse}
                 disabled={ui === "thinking" || stage === "BROWSE"}
@@ -1048,8 +1071,10 @@ export default function ChatSimPage() {
               </button>
             </div>
           )}
+
+          {/* Done state */}
           {stage === "DONE" && (
-            <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3 text-center">
+            <div className="border-t border-gray-100 px-4 py-3 text-center">
               <p className="text-sm font-semibold text-green-700">
                 🎉 Pedido enviado com sucesso!
               </p>
@@ -1060,7 +1085,7 @@ export default function ChatSimPage() {
           {stage !== "DONE" && (
             <form
               onSubmit={handleSubmit}
-              className="shrink-0 border-t border-gray-200 bg-white px-3 py-2 flex gap-2 items-end"
+              className="flex gap-2 items-end border-t border-gray-200 bg-white px-3 py-2"
             >
               <textarea
                 ref={inputRef}
