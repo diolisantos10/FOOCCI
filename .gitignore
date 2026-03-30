@@ -37,3 +37,5 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+qa-reports/*.json
+qa-reports/*.md
