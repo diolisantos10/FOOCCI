@@ -759,8 +759,6 @@ export default function ChatSimPage() {
 
   // ── Stage / flow ────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
-  const [finalizeAttemptCount, setFinalizeAttemptCount] = useState(0);
-  const [upsellOffered, setUpsellOffered] = useState<"drink" | "dessert" | null>(null);
 
   // ── Upsell engine state ──────────────────────────────────────
   const [upsellState, setUpsellState] = useState({
@@ -791,6 +789,14 @@ export default function ChatSimPage() {
   const isReplayingRef        = useRef(false);
   const executeReplayStepRef  = useRef<((step: ReplayStep) => void) | null>(null);
 
+  // ── Active upsell (derived from upsellState) ─────────────────
+  const activeUpsell = useMemo((): "drink" | "dessert" | null => {
+    const { lastUpsellCategory, offeredDrink, refusedDrink, offeredDessert, refusedDessert } = upsellState;
+    if (lastUpsellCategory === "drink"   && offeredDrink   && !refusedDrink)   return "drink";
+    if (lastUpsellCategory === "dessert" && offeredDessert && !refusedDessert) return "dessert";
+    return null;
+  }, [upsellState]);
+
   // ── Auto-scroll ──────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -804,7 +810,7 @@ export default function ChatSimPage() {
       text: string,
       cartSnap: CartItem[],
       stageSnap: Stage = stage,
-      upsellOfferedSnap: "drink" | "dessert" | null = upsellOffered,
+      upsellOfferedSnap: "drink" | "dessert" | null = activeUpsell,
     ) => {
       // During replay: suppress all AI/network calls — state transitions only
       if (isReplayingRef.current) return;
@@ -857,7 +863,7 @@ export default function ChatSimPage() {
         setUi("idle");
       }
     },
-    [history, stage, upsellOffered],
+    [history, stage, activeUpsell],
   );
 
   // ── Initial greeting ─────────────────────────────────────────
@@ -882,9 +888,9 @@ export default function ChatSimPage() {
         ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
         : [...cart, { id: item.id, name: item.name, price: item.price, qty: 1 }];
       setCart(newCart);
-      sendText(`Adicionar ${item.name}`, newCart, stage, upsellOffered);
+      sendText(`Adicionar ${item.name}`, newCart, stage, activeUpsell);
     },
-    [cart, stage, upsellOffered, sendText],
+    [cart, stage, activeUpsell, sendText],
   );
 
   const handleFinalizeClick = useCallback(() => {
@@ -956,21 +962,21 @@ export default function ChatSimPage() {
     setAddressConfirmed(false);
     setPaymentMethod(null);
     setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
-    sendText("Ver cardápio", cart, "BROWSE", upsellOffered);
-  }, [cart, upsellOffered, sendText]);
+    sendText("Ver cardápio", cart, "BROWSE", activeUpsell);
+  }, [cart, activeUpsell, sendText]);
 
   const handleDeliveryMethod = useCallback(
     (type: "delivery" | "pickup") => {
       setDeliveryMethod(type);
       if (type === "pickup") {
         setStage("ASK_NAME");
-        sendText("Quero retirar no local", cart, "ASK_NAME", upsellOffered);
+        sendText("Quero retirar no local", cart, "ASK_NAME", activeUpsell);
       } else {
         setStage("ADDRESS_INPUT");
-        sendText("Quero entrega no endereço", cart, "ADDRESS_INPUT", upsellOffered);
+        sendText("Quero entrega no endereço", cart, "ADDRESS_INPUT", activeUpsell);
       }
     },
-    [cart, upsellOffered, sendText],
+    [cart, activeUpsell, sendText],
   );
 
   const handleAddressInput = useCallback(
@@ -978,47 +984,47 @@ export default function ChatSimPage() {
       const { street, number } = parseStreetLine(text);
       setAddress((prev) => ({ ...prev, street, number }));
       if (!number) {
-        sendText(text, cart, "ADDRESS_INPUT", upsellOffered);
+        sendText(text, cart, "ADDRESS_INPUT", activeUpsell);
         return;
       }
       setStage("ADDRESS_DETAILS");
-      sendText(text, cart, "ADDRESS_DETAILS", upsellOffered);
+      sendText(text, cart, "ADDRESS_DETAILS", activeUpsell);
     },
-    [cart, upsellOffered, sendText],
+    [cart, activeUpsell, sendText],
   );
 
   const handleAddressDetails = useCallback(
     (text: string) => {
       const { neighborhood, complement } = parseNeighborhoodLine(text);
       if (!neighborhood.trim()) {
-        sendText(text, cart, "ADDRESS_DETAILS", upsellOffered);
+        sendText(text, cart, "ADDRESS_DETAILS", activeUpsell);
         return;
       }
       setAddress((prev) => ({ ...prev, neighborhood, complement }));
       setStage("ADDRESS_CONFIRM");
-      sendText(text, cart, "ADDRESS_CONFIRM", upsellOffered);
+      sendText(text, cart, "ADDRESS_CONFIRM", activeUpsell);
     },
-    [cart, upsellOffered, sendText],
+    [cart, activeUpsell, sendText],
   );
 
   const handleAddressConfirm = useCallback(() => {
     setAddressConfirmed(true);
     setStage("ASK_NAME");
-    sendText("Confirmar endereço", cart, "ASK_NAME", upsellOffered);
-  }, [cart, upsellOffered, sendText]);
+    sendText("Confirmar endereço", cart, "ASK_NAME", activeUpsell);
+  }, [cart, activeUpsell, sendText]);
 
   const handleAddressEdit = useCallback(() => {
     setStage("ADDRESS_INPUT");
-    sendText("Editar endereço", cart, "ADDRESS_INPUT", upsellOffered);
-  }, [cart, upsellOffered, sendText]);
+    sendText("Editar endereço", cart, "ADDRESS_INPUT", activeUpsell);
+  }, [cart, activeUpsell, sendText]);
 
   const handleNameInput = useCallback(
     (text: string) => {
       setCustomerName(text.trim());
       setStage("PAYMENT");
-      sendText(text, cart, "PAYMENT", upsellOffered);
+      sendText(text, cart, "PAYMENT", activeUpsell);
     },
-    [cart, upsellOffered, sendText],
+    [cart, activeUpsell, sendText],
   );
 
   const handlePayment = useCallback(
@@ -1026,15 +1032,15 @@ export default function ChatSimPage() {
       setPaymentMethod(method);
       setStage("REVIEW_ORDER");
       const label = { dinheiro: "Dinheiro", cartao: "Cartão", pix: "Pix" }[method];
-      sendText(`Pagar com ${label}`, cart, "REVIEW_ORDER", upsellOffered);
+      sendText(`Pagar com ${label}`, cart, "REVIEW_ORDER", activeUpsell);
     },
-    [cart, upsellOffered, sendText],
+    [cart, activeUpsell, sendText],
   );
 
   const handleFinalConfirm = useCallback(() => {
     setStage("DONE");
-    sendText("Confirmar pedido final", cart, "DONE", upsellOffered);
-  }, [cart, upsellOffered, sendText]);
+    sendText("Confirmar pedido final", cart, "DONE", activeUpsell);
+  }, [cart, activeUpsell, sendText]);
 
   const handleEditOrder = useCallback(() => {
     setStage("BROWSE");
@@ -1042,8 +1048,8 @@ export default function ChatSimPage() {
     setAddressConfirmed(false);
     setPaymentMethod(null);
     setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
-    sendText("Editar pedido", cart, "BROWSE", upsellOffered);
-  }, [cart, upsellOffered, sendText]);
+    sendText("Editar pedido", cart, "BROWSE", activeUpsell);
+  }, [cart, activeUpsell, sendText]);
 
   // ── QA Replay ────────────────────────────────────────────────
   //
@@ -1175,8 +1181,6 @@ export default function ChatSimPage() {
     setAddressConfirmed(false);
     setCustomerName("");
     setPaymentMethod(null);
-    setFinalizeAttemptCount(0);
-    setUpsellOffered(null);
     setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
     setSelectedProduct(null);
 
@@ -1203,7 +1207,7 @@ export default function ChatSimPage() {
       } else if (stage === "ASK_NAME") {
         handleNameInput(text);
       } else {
-        sendText(text, cart, stage, upsellOffered);
+        sendText(text, cart, stage, activeUpsell);
       }
     },
     [
@@ -1211,7 +1215,7 @@ export default function ChatSimPage() {
       ui,
       stage,
       cart,
-      upsellOffered,
+      activeUpsell,
       sendText,
       handleAddressInput,
       handleAddressDetails,
