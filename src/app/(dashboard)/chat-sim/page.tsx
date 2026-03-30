@@ -472,19 +472,11 @@ function CheckoutBar({
   }
 
   if (stage === "ADDRESS_INPUT") {
-    return (
-      <p className="text-xs text-gray-500 italic">
-        Digite o endereço na caixa acima...
-      </p>
-    );
+    return null;
   }
 
   if (stage === "ADDRESS_DETAILS") {
-    return (
-      <p className="text-xs text-gray-500 italic">
-        Digite o bairro e complemento acima...
-      </p>
-    );
+    return null;
   }
 
   if (stage === "ADDRESS_CONFIRM") {
@@ -515,9 +507,7 @@ function CheckoutBar({
   }
 
   if (stage === "ASK_NAME") {
-    return (
-      <p className="text-xs text-gray-500 italic">Digite seu nome acima...</p>
-    );
+    return null;
   }
 
   if (stage === "PAYMENT") {
