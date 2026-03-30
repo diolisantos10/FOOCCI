@@ -24,6 +24,11 @@ import {
   KeyboardEvent,
 } from "react";
 
+import type { QAScenario, QAAction } from "@/lib/qa/types";
+import { allScenarios } from "@/lib/qa/scenarios";
+import { CRITICAL_SCENARIO_IDS } from "@/lib/qa/critical-scenarios";
+import { QAPanel } from "./QAPanel";
+
 // ─── types ────────────────────────────────────────────────────
 
 interface ChatMessage {
@@ -122,6 +127,55 @@ const findBeverageCat = (menu: MenuCategory[]) =>
   findMenuCat(menu, "bebida", "drink", "suco", "refri");
 const findDessertCat = (menu: MenuCategory[]) =>
   findMenuCat(menu, "sobremesa", "doce");
+const findMainCat = (menu: MenuCategory[]) => {
+  const d = findBeverageCat(menu);
+  const s = findDessertCat(menu);
+  return menu.find((c) => c !== d && c !== s) ?? menu[0] ?? null;
+};
+const findCatByType = (
+  menu: MenuCategory[],
+  type: "main" | "drink" | "dessert",
+): MenuCategory | null => {
+  if (type === "drink")   return findBeverageCat(menu);
+  if (type === "dessert") return findDessertCat(menu);
+  return findMainCat(menu);
+};
+
+function findReplayProduct(
+  products: Product[],
+  name: string,
+  fallbackCategoryId?: string,
+): Product | null {
+  const lc = name.toLowerCase();
+  const exact   = products.find((p) => p.name.toLowerCase() === lc);
+  if (exact) return exact;
+  const partial = products.find(
+    (p) => p.name.toLowerCase().includes(lc) || lc.includes(p.name.toLowerCase()),
+  );
+  if (partial) return partial;
+  if (fallbackCategoryId) {
+    return products.find((p) => p.categoryId === fallbackCategoryId) ?? null;
+  }
+  return products[0] ?? null;
+}
+
+// ─── Replay step type (internal to replay, never sent to server) ──
+
+type ReplayStep = QAAction | { type: "_address_details"; text: string };
+
+function expandForReplay(actions: QAAction[]): ReplayStep[] {
+  const steps: ReplayStep[] = [];
+  for (const action of actions) {
+    // Inline assertions are state-machine concepts — skip in DOM replay
+    if (action.type.startsWith("assert_")) continue;
+    steps.push(action);
+    // input_address bundles line1 + optional line2; expand to two steps
+    if (action.type === "input_address" && action.line2) {
+      steps.push({ type: "_address_details", text: action.line2 });
+    }
+  }
+  return steps;
+}
 
 function parseStreetLine(raw: string): { street: string; number: string } {
   const m = raw.trim().match(/^(.*?),?\s*(\d+\S*)\s*$/);
@@ -720,6 +774,14 @@ export default function ChatSimPage() {
   const [customerName, setCustomerName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"dinheiro" | "cartao" | "pix" | null>(null);
 
+  // ── App mode + QA replay ─────────────────────────────────────
+  const [appMode, setAppMode] = useState<"human" | "automatic">("human");
+  const [replayScenario,  setReplayScenario]  = useState<QAScenario | null>(null);
+  const [replayStep,      setReplayStep]      = useState(0);
+  const [replayActions,   setReplayActions]   = useState<ReplayStep[]>([]);
+  const isReplayingRef        = useRef(false);
+  const executeReplayStepRef  = useRef<((step: ReplayStep) => void) | null>(null);
+
   // ── Auto-scroll ──────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -735,6 +797,8 @@ export default function ChatSimPage() {
       stageSnap: Stage = stage,
       upsellOfferedSnap: "drink" | "dessert" | null = upsellOffered,
     ) => {
+      // During replay: suppress all AI/network calls — state transitions only
+      if (isReplayingRef.current) return;
       setUi("thinking");
       const trimmed = text.trim();
 
@@ -984,6 +1048,147 @@ export default function ChatSimPage() {
     sendText("Editar pedido", cart, "BROWSE", upsellOffered);
   }, [cart, upsellOffered, sendText]);
 
+  // ── QA Replay ────────────────────────────────────────────────
+  //
+  // executeReplayStepRef is re-assigned on every render so it always
+  // closes over the latest handlers and state — the "live ref" pattern.
+
+  executeReplayStepRef.current = (step: ReplayStep) => {
+    switch (step.type) {
+      case "add_product": {
+        const prod = findReplayProduct(products, step.productName);
+        if (prod) handleItemAdd(prod);
+        break;
+      }
+      case "add_first_from_category": {
+        const cat  = findCatByType(menu, step.categoryType);
+        const prod = cat ? products.find((p) => p.categoryId === cat.id) : null;
+        if (prod) handleItemAdd(prod);
+        break;
+      }
+      case "remove_product": {
+        const item = cart.find(
+          (c) => c.name.toLowerCase() === step.productName.toLowerCase(),
+        );
+        if (item) removeItem(item.id);
+        break;
+      }
+      case "switch_category": {
+        const cat = findCatByType(menu, step.categoryType);
+        if (cat) setSelectedCategoryId(cat.id);
+        break;
+      }
+      case "open_product_modal": {
+        const prod = findReplayProduct(products, step.productName);
+        if (prod) setSelectedProduct(prod);
+        break;
+      }
+      case "close_modal":
+        setSelectedProduct(null);
+        break;
+      case "finalize":
+        handleFinalizeClick();
+        break;
+      case "accept_upsell": {
+        // Add first product from the currently-highlighted upsell category,
+        // then advance the upsell sequence by calling finalize again.
+        const prod = products.find((p) => p.categoryId === selectedCategoryId) ?? products[0];
+        if (prod) handleItemAdd(prod);
+        setTimeout(() => handleFinalizeClick(), 380);
+        break;
+      }
+      case "refuse_upsell":
+        handleFinalizeClick();
+        break;
+      case "select_delivery":
+        handleDeliveryMethod(step.method);
+        break;
+      case "input_address":
+        handleAddressInput(step.line1);
+        break;
+      case "_address_details":
+        handleAddressDetails(step.text);
+        break;
+      case "confirm_address":
+        handleAddressConfirm();
+        break;
+      case "input_name":
+        handleNameInput(step.name);
+        break;
+      case "select_payment":
+        handlePayment(step.method);
+        break;
+      case "confirm_order":
+        handleFinalConfirm();
+        break;
+      case "go_back_to_browse":
+        handleBackToBrowse();
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Replay effect — fires one step every 700ms
+  useEffect(() => {
+    if (!replayScenario) return;
+
+    if (replayStep >= replayActions.length) {
+      // All steps done
+      isReplayingRef.current = false;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: "assistant" as const,
+          content: `✅ Replay concluído: "${replayScenario.name}"`,
+          ts: new Date(),
+        },
+      ]);
+      setReplayScenario(null);
+      return;
+    }
+
+    const step = replayActions[replayStep];
+    if (!step) return;
+
+    const timer = setTimeout(() => {
+      executeReplayStepRef.current?.(step);
+      setReplayStep((s) => s + 1);
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [replayScenario, replayStep, replayActions]);
+
+  const startReplay = useCallback((scenario: QAScenario) => {
+    // Full simulator reset
+    setCart([]);
+    setStage("BROWSE");
+    setMessages([
+      {
+        id: uid(),
+        role: "assistant" as const,
+        content: `🔄 Reproduzindo: "${scenario.name}"`,
+        ts: new Date(),
+      },
+    ]);
+    setHistory([]);
+    setDeliveryMethod(null);
+    setAddress({ street: "", number: "", neighborhood: "", complement: "" });
+    setAddressConfirmed(false);
+    setCustomerName("");
+    setPaymentMethod(null);
+    setFinalizeAttemptCount(0);
+    setUpsellOffered(null);
+    setSelectedProduct(null);
+
+    const expanded = expandForReplay(scenario.actions);
+    isReplayingRef.current = true;
+    setReplayActions(expanded);
+    setReplayStep(0);
+    setReplayScenario(scenario);
+  }, []);
+
   // ── Text input submission ─────────────────────────────────────
 
   const handleSubmit = useCallback(
@@ -1043,14 +1248,53 @@ export default function ChatSimPage() {
   // ─── Render ──────────────────────────────────────────────────
 
   return (
-    /* Outer shell — centers the phone frame on the dashboard */
-    <div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-gray-200 p-4">
+    /* Outer shell */
+    <div className="flex h-[calc(100vh-4rem)] flex-col bg-gray-200">
 
-      {/* ── Phone frame ─────────────────────────────────────── */}
+      {/* ── Mode toggle strip ──────────────────────────────── */}
+      <div className="shrink-0 flex items-center gap-1.5 border-b border-gray-300 bg-white px-4 py-2">
+        <span className="mr-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+          Modo
+        </span>
+        {(["human", "automatic"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setAppMode(m)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+              appMode === m
+                ? "bg-[#128c7e] text-white shadow-sm"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {m === "human" ? "👤 Humano" : "🤖 Automático"}
+          </button>
+        ))}
+        {replayScenario && (
+          <span className="ml-auto animate-pulse text-xs font-medium text-orange-600">
+            ▶ Reproduzindo {replayStep}/{replayActions.length}
+          </span>
+        )}
+      </div>
+
+      {/* ── Content area ───────────────────────────────────── */}
+      <div
+        className={`flex flex-1 gap-4 overflow-hidden p-4 ${
+          appMode === "human" ? "items-center justify-center" : ""
+        }`}
+      >
+
+      {/* ── Phone frame wrapper ─────────────────────────────── */}
+      <div
+        className={`flex h-full items-center ${
+          appMode === "automatic"
+            ? "w-[390px] shrink-0"
+            : "w-full max-w-[390px]"
+        }`}
+      >
       <div
         data-testid="phone-frame"
         data-stage={stage}
-        className="relative flex h-full w-full max-w-[390px] flex-col overflow-hidden bg-white sm:rounded-[2rem] sm:border-[6px] sm:border-gray-800 sm:shadow-2xl"
+        className="relative flex h-full w-full flex-col overflow-hidden bg-white sm:rounded-[2rem] sm:border-[6px] sm:border-gray-800 sm:shadow-2xl"
       >
 
         {/* WhatsApp-style header */}
@@ -1226,6 +1470,24 @@ export default function ChatSimPage() {
           />
         )}
       </div>
+
+      </div> {/* phone frame wrapper */}
+
+      {/* ── QA Panel — automatic mode only ─────────────────── */}
+      {appMode === "automatic" && (
+        <div className="flex-1 h-full overflow-y-auto">
+          <QAPanel
+            scenarios={allScenarios}
+            criticalScenarioIds={CRITICAL_SCENARIO_IDS}
+            onReplay={startReplay}
+            replayingScenarioId={replayScenario?.id ?? null}
+            replayStep={replayStep}
+            replayTotal={replayActions.length}
+          />
+        </div>
+      )}
+
+      </div> {/* content area */}
 
       <style jsx>{`
         @keyframes bounce {
