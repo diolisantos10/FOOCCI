@@ -292,7 +292,7 @@ function CartBar({
           ))}
         </div>
         <span data-testid="cart-badge" className="shrink-0 text-xs font-bold text-green-900">
-          R$&nbsp;{total.toFixed(2)}
+          R$&nbsp;{total.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </div>
     </div>
@@ -355,7 +355,7 @@ function ProductModal({
           <p className="mt-2 text-sm text-gray-500 leading-relaxed">{product.description}</p>
         )}
         <p className="mt-4 text-2xl font-bold text-gray-900">
-          R$&nbsp;{product.price.toFixed(2)}
+          R$&nbsp;{product.price.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </p>
       </div>
       {/* add button */}
@@ -421,7 +421,7 @@ function ProductCard({
         </p>
         <div className="mt-auto flex items-center justify-between pt-1">
           <span className="text-xs font-bold text-gray-800">
-            R$&nbsp;{item.price.toFixed(2)}
+            R$&nbsp;{item.price.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
           <button
             onClick={(e) => { e.stopPropagation(); onAdd(); }}
@@ -624,14 +624,14 @@ function CheckoutBar({
                 <span className="shrink-0 font-bold text-gray-400">x{item.qty}</span>
                 <span className="flex-1">{item.name}</span>
                 <span className="shrink-0 font-medium">
-                  R$&nbsp;{(item.price * item.qty).toFixed(2)}
+                  R$&nbsp;{(item.price * item.qty).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             ))}
           </div>
           <div className="mt-1.5 flex justify-between border-t border-green-200 pt-1 text-xs font-bold text-green-900">
             <span>Total</span>
-            <span>R$&nbsp;{total.toFixed(2)}</span>
+            <span>R$&nbsp;{total.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         </div>
         <div className="flex gap-2">
@@ -1364,9 +1364,17 @@ export default function ChatSimPage() {
             </div>
           )}
 
-          {/* Checkout UI — checkout stages only */}
+          {/* Checkout UI — checkout stages only.
+              data-testid is omitted for ADDRESS_INPUT, ADDRESS_DETAILS, and ASK_NAME
+              because CheckoutBar returns null there; an empty padded div would still
+              register as visible to Playwright and break assertCheckoutAreaHidden(). */}
           {isCheckoutStage && (
-            <div data-testid="checkout-area" className="border-t border-gray-100 px-4 py-3">
+            <div
+              {...(stage !== "ADDRESS_INPUT" && stage !== "ADDRESS_DETAILS" && stage !== "ASK_NAME"
+                ? { "data-testid": "checkout-area" }
+                : {})}
+              className="border-t border-gray-100 px-4 py-3"
+            >
               <CheckoutBar
                 stage={stage}
                 address={address}

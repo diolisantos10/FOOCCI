@@ -16,6 +16,15 @@ export class ChatSimPage {
     await this.page.waitForSelector(S.browseArea, { timeout: 20_000 });
   }
 
+  // ── Idle wait helper ────────────────────────────────────────
+  /**
+   * Wait until the textarea is enabled, which means ui !== "thinking".
+   * Use before every button click that can trigger an async AI call.
+   */
+  private async waitForIdle() {
+    await expect(this.page.locator("textarea")).toBeEnabled({ timeout: 10_000 });
+  }
+
   // ── Menu helpers ─────────────────────────────────────────────
 
   /** Returns all category tab locators currently in the DOM. */
@@ -68,6 +77,7 @@ export class ChatSimPage {
 
   /** Add a product via its card's + button (no modal). */
   async addProductById(productId: string) {
+    await this.waitForIdle();
     const card = this.page.locator(S.productCard(productId));
     // The + button is the last button inside the card
     await card.locator("button").last().click();
@@ -85,12 +95,14 @@ export class ChatSimPage {
 
   /** Click the Finalizar pedido button. */
   async clickFinalize() {
+    await this.waitForIdle();
     await this.page.locator(S.finalizeButton).click();
     await this.page.waitForTimeout(400);
   }
 
   /** Select delivery method (DELIVERY_TYPE stage). */
   async selectDelivery(type: "delivery" | "pickup") {
+    await this.waitForIdle();
     const label = type === "delivery" ? "🛵 Entrega" : "🏪 Retirada";
     await this.page.locator(S.checkoutArea).getByText(label).click();
     await this.page.waitForTimeout(300);
@@ -99,6 +111,10 @@ export class ChatSimPage {
   /** Type into the text input and submit. */
   async sendInput(text: string) {
     const textarea = this.page.locator("textarea");
+    // Wait for the textarea to be enabled (ui !== "thinking") before submitting.
+    // A fixed 300ms wait is not reliable: if a previous action triggered an async
+    // AI call, handleSubmit silently returns when ui === "thinking", dropping the input.
+    await expect(textarea).toBeEnabled({ timeout: 10_000 });
     await textarea.fill(text);
     await textarea.press("Enter");
     await this.page.waitForTimeout(300);
@@ -106,12 +122,14 @@ export class ChatSimPage {
 
   /** Click Confirmar endereço (ADDRESS_CONFIRM stage). */
   async confirmAddress() {
+    await this.waitForIdle();
     await this.page.locator(S.addressConfirmButton).click();
     await this.page.waitForTimeout(300);
   }
 
   /** Select payment method (PAYMENT stage). */
   async selectPayment(method: "pix" | "cartao" | "dinheiro") {
+    await this.waitForIdle();
     const labels = { pix: "📱 Pix", cartao: "💳 Cartão", dinheiro: "💵 Dinheiro" };
     await this.page.locator(S.checkoutArea).getByText(labels[method]).click();
     await this.page.waitForTimeout(300);
@@ -119,6 +137,7 @@ export class ChatSimPage {
 
   /** Click Confirmar pedido (REVIEW_ORDER stage). */
   async confirmOrder() {
+    await this.waitForIdle();
     await this.page.locator(S.checkoutConfirmBtn).click();
     await this.page.waitForTimeout(300);
   }
