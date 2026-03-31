@@ -189,6 +189,18 @@ function parseNeighborhoodLine(raw: string): { neighborhood: string; complement:
   return { neighborhood: parts[0] ?? "", complement: parts.slice(1).join(", ") };
 }
 
+/** Words that are NOT valid customer names — filler/confirmation words only. */
+const TRIVIAL_WORDS = new Set([
+  "ok", "sim", "não", "nao", "s", "n", "y", "yes", "no",
+  "ta", "tá", "certo", "pronto", "pode", "vou", "claro",
+]);
+
+function isValidName(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  // Must be at least 2 chars and not a filler word
+  return t.length >= 2 && !TRIVIAL_WORDS.has(t);
+}
+
 function formatAddress(addr: Address): string {
   const streetPart = [addr.street, addr.number].filter(Boolean).join(", ");
   const parts = [streetPart, addr.neighborhood, addr.complement].filter(Boolean);
@@ -1020,6 +1032,11 @@ export default function ChatSimPage() {
 
   const handleNameInput = useCallback(
     (text: string) => {
+      if (!isValidName(text)) {
+        // Invalid or trivial input — re-prompt, stay at ASK_NAME
+        sendText(text, cart, "ASK_NAME", activeUpsell);
+        return;
+      }
       setCustomerName(text.trim());
       setStage("PAYMENT");
       sendText(text, cart, "PAYMENT", activeUpsell);
@@ -1038,9 +1055,11 @@ export default function ChatSimPage() {
   );
 
   const handleFinalConfirm = useCallback(() => {
+    // Hard guard: all required fields must be present before reaching DONE.
+    if (!customerName.trim() || !paymentMethod || cart.length === 0) return;
     setStage("DONE");
     sendText("Confirmar pedido final", cart, "DONE", activeUpsell);
-  }, [cart, activeUpsell, sendText]);
+  }, [cart, customerName, paymentMethod, activeUpsell, sendText]);
 
   const handleEditOrder = useCallback(() => {
     setStage("BROWSE");
@@ -1245,7 +1264,6 @@ export default function ChatSimPage() {
 
   // Suppress addressConfirmed warning — used implicitly via setAddressConfirmed
   void addressConfirmed;
-  void customerName;
 
   // ─── Render ──────────────────────────────────────────────────
 
