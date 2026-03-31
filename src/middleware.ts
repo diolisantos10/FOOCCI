@@ -57,6 +57,22 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // ── Internal E2E bypass (chat-sim only) ──────────────────────
+  // Allows Playwright to access /chat-sim and its API without a real session.
+  // Only active when E2E_SECRET is set in the environment (never in production).
+  const e2eSecret = process.env.E2E_SECRET;
+  const isChatSimRoute =
+    pathname === "/chat-sim" || pathname.startsWith("/api/chat-sim");
+  if (
+    e2eSecret &&
+    isChatSimRoute &&
+    req.headers.get("x-e2e-token") === e2eSecret
+  ) {
+    const bypassHeaders = new Headers(req.headers);
+    bypassHeaders.set("x-e2e-bypass", "1");
+    return NextResponse.next({ request: { headers: bypassHeaders } });
+  }
+
   // Decode the JWT (reads from the cookie or Authorization header)
   const token = await getToken({
     req,

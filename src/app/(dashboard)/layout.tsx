@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 
@@ -8,15 +9,21 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  let session = null;
-  try {
-    session = await getServerSession(authOptions);
-  } catch {
-    // Throws when NEXTAUTH_SECRET is missing; treat as unauthenticated.
-  }
+  // Internal E2E bypass: middleware already validated the x-e2e-token and
+  // injected x-e2e-bypass. Skip the session check for those requests.
+  const isE2E = headers().get("x-e2e-bypass") === "1";
 
-  if (!session) {
-    redirect("/login");
+  if (!isE2E) {
+    let session = null;
+    try {
+      session = await getServerSession(authOptions);
+    } catch {
+      // Throws when NEXTAUTH_SECRET is missing; treat as unauthenticated.
+    }
+
+    if (!session) {
+      redirect("/login");
+    }
   }
 
   return (
