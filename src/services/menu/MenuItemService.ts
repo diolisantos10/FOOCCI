@@ -71,6 +71,9 @@ export class MenuItemService {
         imageUrl: input.imageUrl || null,
         sortOrder: input.sortOrder,
         isActive: input.isActive,
+        isAvailable: input.isAvailable ?? true,
+        showInDelivery: input.showInDelivery ?? true,
+        showInDineIn: input.showInDineIn ?? true,
       },
     });
 
@@ -100,6 +103,9 @@ export class MenuItemService {
         ...(input.imageUrl !== undefined && { imageUrl: input.imageUrl || null }),
         ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),
+        ...(input.isAvailable !== undefined && { isAvailable: input.isAvailable }),
+        ...(input.showInDelivery !== undefined && { showInDelivery: input.showInDelivery }),
+        ...(input.showInDineIn !== undefined && { showInDineIn: input.showInDineIn }),
       },
     });
 

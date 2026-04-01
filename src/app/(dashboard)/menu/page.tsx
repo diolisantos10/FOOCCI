@@ -35,6 +35,9 @@ export default async function MenuPage() {
       price: Number(item.price),
       isActive: item.isActive,
       sortOrder: item.sortOrder,
+      isAvailable: item.isAvailable,
+      showInDelivery: item.showInDelivery,
+      showInDineIn: item.showInDineIn,
     })),
   }));
 

@@ -14,6 +14,9 @@ type Item = {
   price: number;
   isActive: boolean;
   sortOrder: number;
+  isAvailable: boolean;
+  showInDelivery: boolean;
+  showInDineIn: boolean;
 };
 
 type Category = {
@@ -26,10 +29,24 @@ type Category = {
 };
 
 type CategoryFormState = { name: string; description: string };
-type ItemFormState = { name: string; description: string; price: string };
+type ItemFormState = {
+  name: string;
+  description: string;
+  price: string;
+  isAvailable: boolean;
+  showInDelivery: boolean;
+  showInDineIn: boolean;
+};
 
 const EMPTY_CAT: CategoryFormState = { name: "", description: "" };
-const EMPTY_ITEM: ItemFormState = { name: "", description: "", price: "" };
+const EMPTY_ITEM: ItemFormState = {
+  name: "",
+  description: "",
+  price: "",
+  isAvailable: true,
+  showInDelivery: true,
+  showInDineIn: true,
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -68,7 +85,7 @@ function ItemRow({
 }: {
   item: Item;
   categorySource: MenuSource;
-  onSave: (id: string, patch: Partial<ItemFormState & { isActive: boolean }>) => Promise<void>;
+  onSave: (id: string, patch: Partial<ItemFormState & { isActive: boolean; isAvailable: boolean; showInDelivery: boolean; showInDineIn: boolean }>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -76,6 +93,9 @@ function ItemRow({
     name: item.name,
     description: item.description ?? "",
     price: String(item.price),
+    isAvailable: item.isAvailable,
+    showInDelivery: item.showInDelivery,
+    showInDineIn: item.showInDineIn,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -136,6 +156,26 @@ function ItemRow({
           placeholder="Descrição (opcional)"
           className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
         />
+        <div className="flex flex-wrap gap-4 pt-1">
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+            <input type="checkbox" checked={form.isAvailable}
+              onChange={(e) => setForm((f) => ({ ...f, isAvailable: e.target.checked }))}
+              className="h-3.5 w-3.5 accent-orange-500" />
+            Disponível
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+            <input type="checkbox" checked={form.showInDelivery}
+              onChange={(e) => setForm((f) => ({ ...f, showInDelivery: e.target.checked }))}
+              className="h-3.5 w-3.5 accent-orange-500" />
+            Exibir no delivery
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+            <input type="checkbox" checked={form.showInDineIn}
+              onChange={(e) => setForm((f) => ({ ...f, showInDineIn: e.target.checked }))}
+              className="h-3.5 w-3.5 accent-orange-500" />
+            Exibir no cardápio (QR)
+          </label>
+        </div>
         {error && <InlineError message={error} />}
         <div className="flex gap-2">
           <button onClick={handleSave} disabled={busy}
@@ -164,6 +204,16 @@ function ItemRow({
         <span className="font-semibold text-gray-700">R$ {Number(item.price).toFixed(2)}</span>
         {editable && (
           <>
+            <button
+              onClick={() => onSave(item.id, { isAvailable: !item.isAvailable })}
+              title={item.isAvailable ? "Marcar como indisponível" : "Marcar como disponível"}
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium leading-none ${
+                item.isAvailable
+                  ? "bg-green-100 text-green-700 hover:bg-green-200"
+                  : "bg-red-100 text-red-500 hover:bg-red-200"
+              }`}>
+              {item.isAvailable ? "Disponível" : "Indisponível"}
+            </button>
             <button onClick={() => onSave(item.id, { isActive: !item.isActive })}
               title={item.isActive ? "Desativar" : "Ativar"}
               className="text-xs text-gray-400 hover:text-gray-700">
@@ -291,12 +341,15 @@ function CategoryCard({
     }
   }
 
-  async function saveItem(id: string, patch: Partial<ItemFormState & { isActive: boolean }>) {
+  async function saveItem(id: string, patch: Partial<ItemFormState & { isActive: boolean; isAvailable: boolean; showInDelivery: boolean; showInDineIn: boolean }>) {
     const body: Record<string, unknown> = {};
     if (patch.name !== undefined) body.name = patch.name.trim();
     if (patch.description !== undefined) body.description = patch.description.trim() || undefined;
-    if (patch.price !== undefined) body.price = parseFloat(patch.price);
+    if (patch.price !== undefined) body.price = parseFloat(patch.price as string);
     if (patch.isActive !== undefined) body.isActive = patch.isActive;
+    if (patch.isAvailable !== undefined) body.isAvailable = patch.isAvailable;
+    if (patch.showInDelivery !== undefined) body.showInDelivery = patch.showInDelivery;
+    if (patch.showInDineIn !== undefined) body.showInDineIn = patch.showInDineIn;
     const data = await apiFetch(`/api/menu/items/${id}`, "PATCH", body);
     onChange({
       ...category,

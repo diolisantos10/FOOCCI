@@ -24,6 +24,9 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/webhooks\/evolution$/,      // Evolution API webhook receiver (verified by HMAC)
   /^\/setup$/,                         // First-time browser setup (blocked after first restaurant exists)
   /^\/api\/setup$/,                    // Setup API
+  /^\/qr(\/.*)?$/,                     // Public QR dine-in menu pages
+  /^\/api\/qr(\/.*)?$/,                // Public QR dine-in menu API
+  /^\/api\/payments\/stone\/webhook$/, // Stone webhook (public, verified by HMAC)
 ];
 
 function isPublicPath(pathname: string): boolean {

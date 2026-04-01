@@ -34,6 +34,9 @@ export const createMenuItemSchema = z.object({
   imageUrl: z.string().url().optional().or(z.literal("")),
   sortOrder: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),
+  isAvailable: z.boolean().default(true),
+  showInDelivery: z.boolean().default(true),
+  showInDineIn: z.boolean().default(true),
 });
 
 export const updateMenuItemSchema = createMenuItemSchema.partial();

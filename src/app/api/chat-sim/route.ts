@@ -340,7 +340,8 @@ export async function GET(req: NextRequest) {
       orderBy: { sortOrder: "asc" },
       include: {
         items: {
-          where: { isActive: true },
+          // Delivery channel: only show items that are active, available, and enabled for delivery
+          where: { isActive: true, isAvailable: true, showInDelivery: true },
           orderBy: { sortOrder: "asc" },
           select: { id: true, name: true, price: true, description: true, imageUrl: true },
         },
@@ -409,7 +410,8 @@ export async function POST(req: NextRequest) {
         orderBy: { sortOrder: "asc" },
         include: {
           items: {
-            where: { isActive: true },
+            // Delivery channel filter applied for AI context too
+            where: { isActive: true, isAvailable: true, showInDelivery: true },
             orderBy: { sortOrder: "asc" },
             select: { name: true, price: true, description: true, imageUrl: true },
           },
