@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { QRCard } from "./QRCard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,24 +30,10 @@ type Category = {
 };
 
 type CategoryFormState = { name: string; description: string };
-type ItemFormState = {
-  name: string;
-  description: string;
-  price: string;
-  isAvailable: boolean;
-  showInDelivery: boolean;
-  showInDineIn: boolean;
-};
+type ItemFormState = { name: string; description: string; price: string };
 
 const EMPTY_CAT: CategoryFormState = { name: "", description: "" };
-const EMPTY_ITEM: ItemFormState = {
-  name: "",
-  description: "",
-  price: "",
-  isAvailable: true,
-  showInDelivery: true,
-  showInDineIn: true,
-};
+const EMPTY_ITEM: ItemFormState = { name: "", description: "", price: "" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -93,9 +80,6 @@ function ItemRow({
     name: item.name,
     description: item.description ?? "",
     price: String(item.price),
-    isAvailable: item.isAvailable,
-    showInDelivery: item.showInDelivery,
-    showInDineIn: item.showInDineIn,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -156,26 +140,6 @@ function ItemRow({
           placeholder="Descrição (opcional)"
           className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
         />
-        <div className="flex flex-wrap gap-4 pt-1">
-          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-            <input type="checkbox" checked={form.isAvailable}
-              onChange={(e) => setForm((f) => ({ ...f, isAvailable: e.target.checked }))}
-              className="h-3.5 w-3.5 accent-orange-500" />
-            Disponível
-          </label>
-          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-            <input type="checkbox" checked={form.showInDelivery}
-              onChange={(e) => setForm((f) => ({ ...f, showInDelivery: e.target.checked }))}
-              className="h-3.5 w-3.5 accent-orange-500" />
-            Exibir no delivery
-          </label>
-          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-            <input type="checkbox" checked={form.showInDineIn}
-              onChange={(e) => setForm((f) => ({ ...f, showInDineIn: e.target.checked }))}
-              className="h-3.5 w-3.5 accent-orange-500" />
-            Exibir no cardápio (QR)
-          </label>
-        </div>
         {error && <InlineError message={error} />}
         <div className="flex gap-2">
           <button onClick={handleSave} disabled={busy}
@@ -200,25 +164,47 @@ function ItemRow({
           <span className="hidden truncate text-xs text-gray-400 sm:inline">— {item.description}</span>
         )}
       </div>
-      <div className="flex items-center gap-3 ml-4 shrink-0">
+      <div className="flex items-center gap-3 ml-4 shrink-0 flex-wrap justify-end">
         <span className="font-semibold text-gray-700">R$ {Number(item.price).toFixed(2)}</span>
         {editable && (
           <>
-            <button
-              onClick={() => onSave(item.id, { isAvailable: !item.isAvailable })}
-              title={item.isAvailable ? "Marcar como indisponível" : "Marcar como disponível"}
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium leading-none ${
-                item.isAvailable
-                  ? "bg-green-100 text-green-700 hover:bg-green-200"
-                  : "bg-red-100 text-red-500 hover:bg-red-200"
-              }`}>
-              {item.isAvailable ? "Disponível" : "Indisponível"}
-            </button>
-            <button onClick={() => onSave(item.id, { isActive: !item.isActive })}
-              title={item.isActive ? "Desativar" : "Ativar"}
-              className="text-xs text-gray-400 hover:text-gray-700">
-              {item.isActive ? "●" : "○"}
-            </button>
+            <label className="flex cursor-pointer select-none items-center gap-1 text-xs text-gray-600">
+              <input
+                type="checkbox"
+                checked={item.isAvailable}
+                onChange={() => onSave(item.id, { isAvailable: !item.isAvailable })}
+                className="h-3.5 w-3.5 accent-orange-500"
+              />
+              Disponível
+            </label>
+            <label
+              className={`flex select-none items-center gap-1 text-xs ${
+                item.isAvailable ? "cursor-pointer text-gray-600" : "cursor-not-allowed opacity-40"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={item.showInDelivery}
+                disabled={!item.isAvailable}
+                onChange={() => onSave(item.id, { showInDelivery: !item.showInDelivery })}
+                className="h-3.5 w-3.5 accent-orange-500"
+              />
+              Delivery
+            </label>
+            <label
+              className={`flex select-none items-center gap-1 text-xs ${
+                item.isAvailable ? "cursor-pointer text-gray-600" : "cursor-not-allowed opacity-40"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={item.showInDineIn}
+                disabled={!item.isAvailable}
+                onChange={() => onSave(item.id, { showInDineIn: !item.showInDineIn })}
+                className="h-3.5 w-3.5 accent-orange-500"
+              />
+              Salão
+            </label>
             <button onClick={() => setEditing(true)} className="text-xs text-blue-500 hover:underline">
               Editar
             </button>
@@ -345,7 +331,7 @@ function CategoryCard({
     const body: Record<string, unknown> = {};
     if (patch.name !== undefined) body.name = patch.name.trim();
     if (patch.description !== undefined) body.description = patch.description.trim() || undefined;
-    if (patch.price !== undefined) body.price = parseFloat(patch.price as string);
+    if (patch.price !== undefined) body.price = parseFloat(patch.price);
     if (patch.isActive !== undefined) body.isActive = patch.isActive;
     if (patch.isAvailable !== undefined) body.isAvailable = patch.isAvailable;
     if (patch.showInDelivery !== undefined) body.showInDelivery = patch.showInDelivery;
@@ -510,7 +496,15 @@ function AddCategoryForm({ onAdded }: { onAdded: (cat: Category) => void }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function MenuManager({ initialCategories }: { initialCategories: Category[] }) {
+export function MenuManager({
+  initialCategories,
+  restaurantSlug,
+  qrUrl,
+}: {
+  initialCategories: Category[];
+  restaurantSlug: string;
+  qrUrl: string;
+}) {
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -536,6 +530,9 @@ export function MenuManager({ initialCategories }: { initialCategories: Category
 
   return (
     <div className="space-y-4">
+      {/* QR access card */}
+      {restaurantSlug && <QRCard url={qrUrl} slug={restaurantSlug} />}
+
       {/* Header actions */}
       <div className="flex items-center justify-between">
         <div>

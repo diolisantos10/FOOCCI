@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
@@ -11,15 +12,26 @@ export default async function MenuPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
-  const categories = await prisma.menuCategory.findMany({
-    where: { restaurantId: session.user.restaurantId },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    include: {
-      items: {
-        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  const headersList = await headers();
+  const host = headersList.get("host") ?? "localhost:3000";
+  const proto = headersList.get("x-forwarded-proto") ?? "http";
+  const appOrigin = `${proto}://${host}`;
+
+  const [restaurant, categories] = await Promise.all([
+    prisma.restaurant.findUnique({
+      where: { id: session.user.restaurantId },
+      select: { slug: true },
+    }),
+    prisma.menuCategory.findMany({
+      where: { restaurantId: session.user.restaurantId },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: {
+        items: {
+          orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        },
       },
-    },
-  });
+    }),
+  ]);
 
   // Normalise Decimal → number so the client component receives plain JSON
   const data = categories.map((cat) => ({
@@ -45,7 +57,11 @@ export default async function MenuPage() {
     <>
       <TopBar title="Cardápio" />
       <div className="p-6">
-        <MenuManager initialCategories={data} />
+        <MenuManager
+          initialCategories={data}
+          restaurantSlug={restaurant?.slug ?? ""}
+          qrUrl={`${appOrigin}/qr/${restaurant?.slug ?? ""}`}
+        />
       </div>
     </>
   );
