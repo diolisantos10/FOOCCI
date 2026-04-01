@@ -56,6 +56,9 @@ export class MenuCategoryService {
         imageUrl: input.imageUrl || null,
         sortOrder: input.sortOrder,
         isActive: input.isActive,
+        isAvailable: input.isAvailable ?? true,
+        showInDelivery: input.showInDelivery ?? true,
+        showInDineIn: input.showInDineIn ?? true,
       },
     });
 
@@ -76,6 +79,9 @@ export class MenuCategoryService {
       return serviceFail("Category not found", 404);
     }
 
+    // Category availability flags are stored on the category only.
+    // They act as an independent gate — item-level flags are never modified here,
+    // preserving any per-item overrides the operator has set.
     const updated = await prisma.menuCategory.update({
       where: { id: categoryId },
       data: {
@@ -84,6 +90,9 @@ export class MenuCategoryService {
         ...(input.imageUrl !== undefined && { imageUrl: input.imageUrl || null }),
         ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),
+        ...(input.isAvailable !== undefined && { isAvailable: input.isAvailable }),
+        ...(input.showInDelivery !== undefined && { showInDelivery: input.showInDelivery }),
+        ...(input.showInDineIn !== undefined && { showInDineIn: input.showInDineIn }),
       },
     });
 

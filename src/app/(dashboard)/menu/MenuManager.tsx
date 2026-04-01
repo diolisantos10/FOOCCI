@@ -1,8 +1,23 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { QRCard } from "./QRCard";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -13,6 +28,7 @@ type Item = {
   name: string;
   description: string | null;
   price: number;
+  imageUrl: string | null;
   isActive: boolean;
   sortOrder: number;
   isAvailable: boolean;
@@ -25,15 +41,29 @@ type Category = {
   name: string;
   description: string | null;
   isActive: boolean;
+  isAvailable: boolean;
+  showInDelivery: boolean;
+  showInDineIn: boolean;
+  sortOrder: number;
   source: MenuSource;
   items: Item[];
 };
 
 type CategoryFormState = { name: string; description: string };
-type ItemFormState = { name: string; description: string; price: string };
+type ItemFormState = {
+  name: string;
+  description: string;
+  price: string;
+  imageUrl: string | null;
+};
 
 const EMPTY_CAT: CategoryFormState = { name: "", description: "" };
-const EMPTY_ITEM: ItemFormState = { name: "", description: "", price: "" };
+const EMPTY_ITEM: ItemFormState = {
+  name: "",
+  description: "",
+  price: "",
+  imageUrl: null,
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,21 +80,127 @@ async function apiFetch(url: string, method: string, body?: object) {
   return res.status === 204 ? null : res.json();
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Primitives ────────────────────────────────────────────────────────────────
 
 function InlineError({ message }: { message: string }) {
   return (
-    <p className="mt-1 rounded bg-red-50 px-3 py-1.5 text-xs text-red-600">{message}</p>
+    <p className="mt-1 rounded bg-red-50 px-3 py-1.5 text-xs text-red-600">
+      {message}
+    </p>
   );
 }
 
 function Spinner() {
-  return <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-700" />;
+  return (
+    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-700" />
+  );
+}
+
+function DragHandle({
+  listeners,
+}: {
+  listeners?: Record<string, unknown>;
+}) {
+  return (
+    <button
+      type="button"
+      {...(listeners as React.HTMLAttributes<HTMLButtonElement>)}
+      className="cursor-grab touch-none select-none px-1 text-gray-300 hover:text-gray-500 active:cursor-grabbing"
+      aria-label="Reordenar"
+    >
+      ⠿
+    </button>
+  );
+}
+
+// ── Image upload ──────────────────────────────────────────────────────────────
+
+const UPLOAD_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const UPLOAD_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+
+function ImageUpload({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    if (!UPLOAD_ALLOWED_TYPES.includes(file.type)) {
+      setError("Tipo não permitido. Use JPG, PNG ou WebP.");
+      return;
+    }
+    if (file.size > UPLOAD_MAX_BYTES) {
+      setError("Arquivo muito grande. Máximo: 5 MB.");
+      return;
+    }
+    setError("");
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/menu/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erro no upload.");
+      onChange(data.data.url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao enviar imagem.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      {value && (
+        <div className="relative inline-block">
+          <img
+            src={value}
+            alt="Preview"
+            className="h-16 w-16 rounded object-cover border border-gray-200"
+          />
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white hover:bg-red-600"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      <div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFile(file);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+          className="text-xs text-orange-500 hover:text-orange-700 disabled:opacity-50"
+        >
+          {uploading ? <Spinner /> : value ? "Trocar imagem" : "Adicionar imagem"}
+        </button>
+      </div>
+      {error && <InlineError message={error} />}
+    </div>
+  );
 }
 
 // ── Item row ──────────────────────────────────────────────────────────────────
 
-function ItemRow({
+function SortableItemRow({
   item,
   categorySource,
   onSave,
@@ -72,18 +208,44 @@ function ItemRow({
 }: {
   item: Item;
   categorySource: MenuSource;
-  onSave: (id: string, patch: Partial<ItemFormState & { isActive: boolean; isAvailable: boolean; showInDelivery: boolean; showInDineIn: boolean }>) => Promise<void>;
+  onSave: (
+    id: string,
+    patch: Partial<
+      ItemFormState & {
+        isActive: boolean;
+        isAvailable: boolean;
+        showInDelivery: boolean;
+        showInDineIn: boolean;
+      }
+    >
+  ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ItemFormState>({
     name: item.name,
     description: item.description ?? "",
     price: String(item.price),
+    imageUrl: item.imageUrl ?? null,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const editable = categorySource === "MANUAL";
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
 
   async function handleSave() {
     const price = parseFloat(form.price);
@@ -116,7 +278,12 @@ function ItemRow({
 
   if (editing) {
     return (
-      <li className="bg-orange-50 px-5 py-3 space-y-2">
+      <li
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        className="bg-orange-50 px-5 py-3 space-y-2"
+      >
         <div className="flex gap-2">
           <input
             value={form.name}
@@ -126,7 +293,9 @@ function ItemRow({
           />
           <input
             value={form.price}
-            onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, price: e.target.value }))
+            }
             placeholder="Preço"
             type="number"
             step="0.01"
@@ -136,17 +305,29 @@ function ItemRow({
         </div>
         <input
           value={form.description}
-          onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, description: e.target.value }))
+          }
           placeholder="Descrição (opcional)"
           className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
         />
+        <ImageUpload
+          value={form.imageUrl}
+          onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+        />
         {error && <InlineError message={error} />}
         <div className="flex gap-2">
-          <button onClick={handleSave} disabled={busy}
-            className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50">
+          <button
+            onClick={handleSave}
+            disabled={busy}
+            className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+          >
             {busy ? <Spinner /> : "Salvar"}
           </button>
-          <button onClick={() => setEditing(false)} className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50">
+          <button
+            onClick={() => setEditing(false)}
+            className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+          >
             Cancelar
           </button>
         </div>
@@ -155,60 +336,100 @@ function ItemRow({
   }
 
   return (
-    <li className="flex items-center justify-between px-5 py-2.5 text-sm hover:bg-gray-50">
+    <li
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className="flex items-center justify-between px-3 py-2.5 text-sm hover:bg-gray-50"
+    >
       <div className="flex items-center gap-2 min-w-0">
-        <span className={`font-medium truncate ${!item.isActive ? "text-gray-400 line-through" : "text-gray-900"}`}>
+        {editable && <DragHandle listeners={listeners} />}
+        {item.imageUrl ? (
+          <img
+            src={item.imageUrl}
+            alt={item.name}
+            className="h-8 w-8 shrink-0 rounded object-cover"
+          />
+        ) : (
+          <div className="h-8 w-8 shrink-0 rounded bg-gray-100" />
+        )}
+        <span
+          className={`font-medium truncate ${
+            !item.isActive ? "text-gray-400 line-through" : "text-gray-900"
+          }`}
+        >
           {item.name}
         </span>
         {item.description && (
-          <span className="hidden truncate text-xs text-gray-400 sm:inline">— {item.description}</span>
+          <span className="hidden truncate text-xs text-gray-400 sm:inline">
+            — {item.description}
+          </span>
         )}
       </div>
       <div className="flex items-center gap-3 ml-4 shrink-0 flex-wrap justify-end">
-        <span className="font-semibold text-gray-700">R$ {Number(item.price).toFixed(2)}</span>
+        <span className="font-semibold text-gray-700">
+          R$ {Number(item.price).toFixed(2)}
+        </span>
         {editable && (
           <>
             <label className="flex cursor-pointer select-none items-center gap-1 text-xs text-gray-600">
               <input
                 type="checkbox"
                 checked={item.isAvailable}
-                onChange={() => onSave(item.id, { isAvailable: !item.isAvailable })}
+                onChange={() =>
+                  onSave(item.id, { isAvailable: !item.isAvailable })
+                }
                 className="h-3.5 w-3.5 accent-orange-500"
               />
               Disponível
             </label>
             <label
               className={`flex select-none items-center gap-1 text-xs ${
-                item.isAvailable ? "cursor-pointer text-gray-600" : "cursor-not-allowed opacity-40"
+                item.isAvailable
+                  ? "cursor-pointer text-gray-600"
+                  : "cursor-not-allowed opacity-40"
               }`}
             >
               <input
                 type="checkbox"
                 checked={item.showInDelivery}
                 disabled={!item.isAvailable}
-                onChange={() => onSave(item.id, { showInDelivery: !item.showInDelivery })}
+                onChange={() =>
+                  onSave(item.id, { showInDelivery: !item.showInDelivery })
+                }
                 className="h-3.5 w-3.5 accent-orange-500"
               />
               Delivery
             </label>
             <label
               className={`flex select-none items-center gap-1 text-xs ${
-                item.isAvailable ? "cursor-pointer text-gray-600" : "cursor-not-allowed opacity-40"
+                item.isAvailable
+                  ? "cursor-pointer text-gray-600"
+                  : "cursor-not-allowed opacity-40"
               }`}
             >
               <input
                 type="checkbox"
                 checked={item.showInDineIn}
                 disabled={!item.isAvailable}
-                onChange={() => onSave(item.id, { showInDineIn: !item.showInDineIn })}
+                onChange={() =>
+                  onSave(item.id, { showInDineIn: !item.showInDineIn })
+                }
                 className="h-3.5 w-3.5 accent-orange-500"
               />
               Salão
             </label>
-            <button onClick={() => setEditing(true)} className="text-xs text-blue-500 hover:underline">
+            <button
+              onClick={() => setEditing(true)}
+              className="text-xs text-blue-500 hover:underline"
+            >
               Editar
             </button>
-            <button onClick={handleDelete} disabled={busy} className="text-xs text-red-400 hover:underline">
+            <button
+              onClick={handleDelete}
+              disabled={busy}
+              className="text-xs text-red-400 hover:underline"
+            >
               {busy ? <Spinner /> : "Remover"}
             </button>
           </>
@@ -220,7 +441,13 @@ function ItemRow({
 
 // ── Add-item form ─────────────────────────────────────────────────────────────
 
-function AddItemForm({ categoryId, onAdded }: { categoryId: string; onAdded: (item: Item) => void }) {
+function AddItemForm({
+  categoryId,
+  onAdded,
+}: {
+  categoryId: string;
+  onAdded: (item: Item) => void;
+}) {
   const [form, setForm] = useState<ItemFormState>(EMPTY_ITEM);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -235,11 +462,16 @@ function AddItemForm({ categoryId, onAdded }: { categoryId: string; onAdded: (it
     setBusy(true);
     setError("");
     try {
-      const data = await apiFetch(`/api/menu/categories/${categoryId}/items`, "POST", {
-        name: form.name.trim(),
-        description: form.description.trim() || undefined,
-        price,
-      });
+      const data = await apiFetch(
+        `/api/menu/categories/${categoryId}/items`,
+        "POST",
+        {
+          name: form.name.trim(),
+          description: form.description.trim() || undefined,
+          price,
+          imageUrl: form.imageUrl || undefined,
+        }
+      );
       onAdded(data.data);
       setForm(EMPTY_ITEM);
     } catch (e: unknown) {
@@ -250,22 +482,48 @@ function AddItemForm({ categoryId, onAdded }: { categoryId: string; onAdded: (it
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-dashed border-gray-200 bg-gray-50 px-5 py-3 space-y-2">
+    <form
+      onSubmit={handleSubmit}
+      className="border-t border-dashed border-gray-200 bg-gray-50 px-5 py-3 space-y-2"
+    >
       <p className="text-xs font-medium text-gray-500">Novo item</p>
       <div className="flex gap-2">
-        <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          placeholder="Nome do item" required
-          className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
-        <input value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-          placeholder="Preço" type="number" step="0.01" min="0.01" required
-          className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+        <input
+          value={form.name}
+          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          placeholder="Nome do item"
+          required
+          className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+        />
+        <input
+          value={form.price}
+          onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+          placeholder="Preço"
+          type="number"
+          step="0.01"
+          min="0.01"
+          required
+          className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+        />
       </div>
-      <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+      <input
+        value={form.description}
+        onChange={(e) =>
+          setForm((f) => ({ ...f, description: e.target.value }))
+        }
         placeholder="Descrição (opcional)"
-        className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+        className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+      />
+      <ImageUpload
+        value={form.imageUrl}
+        onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+      />
       {error && <InlineError message={error} />}
-      <button type="submit" disabled={busy}
-        className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={busy}
+        className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+      >
         {busy ? <Spinner /> : "Adicionar item"}
       </button>
     </form>
@@ -276,10 +534,12 @@ function AddItemForm({ categoryId, onAdded }: { categoryId: string; onAdded: (it
 
 function CategoryCard({
   category,
+  dragListeners,
   onChange,
   onDelete,
 }: {
   category: Category;
+  dragListeners?: Record<string, unknown>;
   onChange: (updated: Category) => void;
   onDelete: (id: string) => void;
 }) {
@@ -293,30 +553,72 @@ function CategoryCard({
   const [error, setError] = useState("");
   const editable = category.source === "MANUAL";
 
+  const itemSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
   async function saveCat() {
-    if (!catForm.name.trim()) { setError("Nome obrigatório."); return; }
-    setBusy(true); setError("");
+    if (!catForm.name.trim()) {
+      setError("Nome obrigatório.");
+      return;
+    }
+    setBusy(true);
+    setError("");
     try {
-      const data = await apiFetch(`/api/menu/categories/${category.id}`, "PATCH", {
-        name: catForm.name.trim(),
-        description: catForm.description.trim() || undefined,
+      const data = await apiFetch(
+        `/api/menu/categories/${category.id}`,
+        "PATCH",
+        {
+          name: catForm.name.trim(),
+          description: catForm.description.trim() || undefined,
+        }
+      );
+      onChange({
+        ...category,
+        name: data.data.name,
+        description: data.data.description,
       });
-      onChange({ ...category, name: data.data.name, description: data.data.description });
       setEditingCat(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function toggleActive() {
     try {
-      await apiFetch(`/api/menu/categories/${category.id}`, "PATCH", { isActive: !category.isActive });
+      await apiFetch(`/api/menu/categories/${category.id}`, "PATCH", {
+        isActive: !category.isActive,
+      });
       onChange({ ...category, isActive: !category.isActive });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Category-level flags are saved directly on the category.
+  // They act as an independent gate — item flags are never modified here,
+  // so per-item overrides set by operators are always preserved.
+  async function saveCategoryFlag(
+    flag: "isAvailable" | "showInDelivery" | "showInDineIn",
+    value: boolean
+  ) {
+    try {
+      await apiFetch(`/api/menu/categories/${category.id}`, "PATCH", {
+        [flag]: value,
+      });
+      onChange({ ...category, [flag]: value });
+    } catch {
+      /* ignore */
+    }
   }
 
   async function deleteCat() {
-    if (!confirm(`Remover categoria "${category.name}" e todos os seus itens?`)) return;
+    if (
+      !confirm(`Remover categoria "${category.name}" e todos os seus itens?`)
+    )
+      return;
     setBusy(true);
     try {
       await apiFetch(`/api/menu/categories/${category.id}`, "DELETE");
@@ -327,25 +629,67 @@ function CategoryCard({
     }
   }
 
-  async function saveItem(id: string, patch: Partial<ItemFormState & { isActive: boolean; isAvailable: boolean; showInDelivery: boolean; showInDineIn: boolean }>) {
+  async function saveItem(
+    id: string,
+    patch: Partial<
+      ItemFormState & {
+        isActive: boolean;
+        isAvailable: boolean;
+        showInDelivery: boolean;
+        showInDineIn: boolean;
+      }
+    >
+  ) {
     const body: Record<string, unknown> = {};
     if (patch.name !== undefined) body.name = patch.name.trim();
-    if (patch.description !== undefined) body.description = patch.description.trim() || undefined;
+    if (patch.description !== undefined)
+      body.description = patch.description.trim() || undefined;
     if (patch.price !== undefined) body.price = parseFloat(patch.price);
+    if (patch.imageUrl !== undefined) body.imageUrl = patch.imageUrl ?? "";
     if (patch.isActive !== undefined) body.isActive = patch.isActive;
     if (patch.isAvailable !== undefined) body.isAvailable = patch.isAvailable;
-    if (patch.showInDelivery !== undefined) body.showInDelivery = patch.showInDelivery;
-    if (patch.showInDineIn !== undefined) body.showInDineIn = patch.showInDineIn;
+    if (patch.showInDelivery !== undefined)
+      body.showInDelivery = patch.showInDelivery;
+    if (patch.showInDineIn !== undefined)
+      body.showInDineIn = patch.showInDineIn;
     const data = await apiFetch(`/api/menu/items/${id}`, "PATCH", body);
     onChange({
       ...category,
-      items: category.items.map((it) => (it.id === id ? data.data : it)),
+      items: category.items.map((it) =>
+        it.id === id ? { ...it, ...data.data, price: Number(data.data.price) } : it
+      ),
     });
   }
 
   async function deleteItem(id: string) {
     await apiFetch(`/api/menu/items/${id}`, "DELETE");
-    onChange({ ...category, items: category.items.filter((it) => it.id !== id) });
+    onChange({
+      ...category,
+      items: category.items.filter((it) => it.id !== id),
+    });
+  }
+
+  async function handleItemDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = category.items.findIndex((i) => i.id === active.id);
+    const newIndex = category.items.findIndex((i) => i.id === over.id);
+    const reordered = arrayMove(category.items, oldIndex, newIndex);
+
+    // Optimistic update
+    onChange({ ...category, items: reordered });
+
+    try {
+      await apiFetch(
+        `/api/menu/items/${reordered[0]!.id}?action=reorder&categoryId=${category.id}`,
+        "PATCH",
+        { items: reordered.map((it, i) => ({ id: it.id, sortOrder: i })) }
+      );
+    } catch {
+      // Revert on failure
+      onChange({ ...category });
+    }
   }
 
   return (
@@ -353,48 +697,142 @@ function CategoryCard({
       {/* Category header */}
       {editingCat ? (
         <div className="space-y-2 border-b border-gray-100 bg-orange-50 px-5 py-3">
-          <input value={catForm.name} onChange={(e) => setCatForm((f) => ({ ...f, name: e.target.value }))}
+          <input
+            value={catForm.name}
+            onChange={(e) =>
+              setCatForm((f) => ({ ...f, name: e.target.value }))
+            }
             placeholder="Nome da categoria"
-            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-orange-400" />
-          <input value={catForm.description} onChange={(e) => setCatForm((f) => ({ ...f, description: e.target.value }))}
+            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-orange-400"
+          />
+          <input
+            value={catForm.description}
+            onChange={(e) =>
+              setCatForm((f) => ({ ...f, description: e.target.value }))
+            }
             placeholder="Descrição (opcional)"
-            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+          />
           {error && <InlineError message={error} />}
           <div className="flex gap-2">
-            <button onClick={saveCat} disabled={busy}
-              className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50">
+            <button
+              onClick={saveCat}
+              disabled={busy}
+              className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+            >
               {busy ? <Spinner /> : "Salvar"}
             </button>
-            <button onClick={() => setEditingCat(false)} className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50">
+            <button
+              onClick={() => setEditingCat(false)}
+              className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
               Cancelar
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-5 py-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <h2 className={`font-semibold truncate ${!category.isActive ? "text-gray-400" : "text-gray-900"}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-4 py-3">
+          {/* Left: drag handle + name */}
+          <div className="flex items-center gap-1 min-w-0">
+            {editable && <DragHandle listeners={dragListeners} />}
+            <h2
+              className={`font-semibold truncate ${
+                !category.isActive ? "text-gray-400" : "text-gray-900"
+              }`}
+            >
               {category.name}
             </h2>
             {!category.isActive && (
-              <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-500">inativo</span>
+              <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-500">
+                inativo
+              </span>
             )}
             {category.source === "EXTERNAL" && (
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600" title="Importado de integração externa — edição desativada">
+              <span
+                className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600"
+                title="Importado de integração externa — edição desativada"
+              >
                 Importado
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <span className="text-xs text-gray-400">{category.items.length} item{category.items.length !== 1 ? "s" : ""}</span>
+
+          {/* Right: category-level controls + actions */}
+          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            <span className="text-xs text-gray-400">
+              {category.items.length} item
+              {category.items.length !== 1 ? "s" : ""}
+            </span>
             {editable && (
               <>
-                <button onClick={toggleActive} title={category.isActive ? "Desativar" : "Ativar"}
-                  className="text-xs text-gray-400 hover:text-gray-700">
+                <label className="flex cursor-pointer select-none items-center gap-1 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={category.isAvailable}
+                    onChange={() =>
+                      saveCategoryFlag("isAvailable", !category.isAvailable)
+                    }
+                    className="h-3.5 w-3.5 accent-orange-500"
+                  />
+                  Disponível
+                </label>
+                <label
+                  className={`flex select-none items-center gap-1 text-xs ${
+                    category.isAvailable
+                      ? "cursor-pointer text-gray-600"
+                      : "cursor-not-allowed opacity-40"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={category.showInDelivery}
+                    disabled={!category.isAvailable}
+                    onChange={() =>
+                      saveCategoryFlag(
+                        "showInDelivery",
+                        !category.showInDelivery
+                      )
+                    }
+                    className="h-3.5 w-3.5 accent-orange-500"
+                  />
+                  Delivery
+                </label>
+                <label
+                  className={`flex select-none items-center gap-1 text-xs ${
+                    category.isAvailable
+                      ? "cursor-pointer text-gray-600"
+                      : "cursor-not-allowed opacity-40"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={category.showInDineIn}
+                    disabled={!category.isAvailable}
+                    onChange={() =>
+                      saveCategoryFlag("showInDineIn", !category.showInDineIn)
+                    }
+                    className="h-3.5 w-3.5 accent-orange-500"
+                  />
+                  Salão
+                </label>
+                <button
+                  onClick={toggleActive}
+                  title={category.isActive ? "Desativar" : "Ativar"}
+                  className="text-xs text-gray-400 hover:text-gray-700"
+                >
                   {category.isActive ? "●" : "○"}
                 </button>
-                <button onClick={() => setEditingCat(true)} className="text-xs text-blue-500 hover:underline">Editar</button>
-                <button onClick={deleteCat} disabled={busy} className="text-xs text-red-400 hover:underline">
+                <button
+                  onClick={() => setEditingCat(true)}
+                  className="text-xs text-blue-500 hover:underline"
+                >
+                  Editar
+                </button>
+                <button
+                  onClick={deleteCat}
+                  disabled={busy}
+                  className="text-xs text-red-400 hover:underline"
+                >
                   {busy ? <Spinner /> : "Remover"}
                 </button>
               </>
@@ -404,33 +842,86 @@ function CategoryCard({
       )}
       {error && !editingCat && <InlineError message={error} />}
 
-      {/* Items */}
+      {/* Items with per-category drag-and-drop */}
       {category.items.length === 0 && !addingItem && (
-        <p className="px-5 py-4 text-sm text-gray-400">Nenhum item. {editable && "Adicione um item abaixo."}</p>
+        <p className="px-5 py-4 text-sm text-gray-400">
+          Nenhum item. {editable && "Adicione um item abaixo."}
+        </p>
       )}
       {category.items.length > 0 && (
-        <ul className="divide-y divide-gray-100">
-          {category.items.map((item) => (
-            <ItemRow key={item.id} item={item} categorySource={category.source}
-              onSave={saveItem} onDelete={deleteItem} />
-          ))}
-        </ul>
+        <DndContext
+          sensors={itemSensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleItemDragEnd}
+        >
+          <SortableContext
+            items={category.items.map((i) => i.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <ul className="divide-y divide-gray-100">
+              {category.items.map((item) => (
+                <SortableItemRow
+                  key={item.id}
+                  item={item}
+                  categorySource={category.source}
+                  onSave={saveItem}
+                  onDelete={deleteItem}
+                />
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Add item */}
-      {editable && (
-        addingItem
-          ? <AddItemForm categoryId={category.id} onAdded={(item) => {
+      {editable &&
+        (addingItem ? (
+          <AddItemForm
+            categoryId={category.id}
+            onAdded={(item) => {
               onChange({ ...category, items: [...category.items, item] });
               setAddingItem(false);
-            }} />
-          : <div className="border-t border-dashed border-gray-100 px-5 py-2">
-              <button onClick={() => setAddingItem(true)}
-                className="text-xs font-medium text-orange-500 hover:text-orange-700">
-                + Adicionar item
-              </button>
-            </div>
-      )}
+            }}
+          />
+        ) : (
+          <div className="border-t border-dashed border-gray-100 px-5 py-2">
+            <button
+              onClick={() => setAddingItem(true)}
+              className="text-xs font-medium text-orange-500 hover:text-orange-700"
+            >
+              + Adicionar item
+            </button>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+// ── Sortable category wrapper ─────────────────────────────────────────────────
+
+function SortableCategoryCard(
+  props: Omit<React.ComponentProps<typeof CategoryCard>, "dragListeners">
+) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: props.category.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+      }}
+      {...attributes}
+    >
+      <CategoryCard {...props} dragListeners={listeners} />
     </div>
   );
 }
@@ -445,48 +936,81 @@ function AddCategoryForm({ onAdded }: { onAdded: (cat: Category) => void }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim()) { setError("Nome obrigatório."); return; }
-    setBusy(true); setError("");
+    if (!form.name.trim()) {
+      setError("Nome obrigatório.");
+      return;
+    }
+    setBusy(true);
+    setError("");
     try {
       const data = await apiFetch("/api/menu/categories", "POST", {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
       });
-      onAdded({ ...data.data, items: [], source: data.data.source ?? "MANUAL" });
+      onAdded({
+        ...data.data,
+        items: [],
+        source: data.data.source ?? "MANUAL",
+      });
       setForm(EMPTY_CAT);
       setOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao criar categoria.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)}
-        className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600">
+      <button
+        onClick={() => setOpen(true)}
+        className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
+      >
         + Nova categoria
       </button>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit}
-      className="rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-2">
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-2"
+    >
       <p className="text-sm font-semibold text-gray-700">Nova categoria</p>
-      <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        placeholder="Nome (ex: Pizzas, Bebidas)" required
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
-      <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+      <input
+        value={form.name}
+        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+        placeholder="Nome (ex: Pizzas, Bebidas)"
+        required
+        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+      />
+      <input
+        value={form.description}
+        onChange={(e) =>
+          setForm((f) => ({ ...f, description: e.target.value }))
+        }
         placeholder="Descrição (opcional)"
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+        className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+      />
       {error && <InlineError message={error} />}
       <div className="flex gap-2">
-        <button type="submit" disabled={busy}
-          className="rounded bg-orange-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded bg-orange-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+        >
           {busy ? <Spinner /> : "Criar categoria"}
         </button>
-        <button type="button" onClick={() => { setOpen(false); setForm(EMPTY_CAT); setError(""); }}
-          className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setForm(EMPTY_CAT);
+            setError("");
+          }}
+          className="rounded border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+        >
           Cancelar
         </button>
       </div>
@@ -509,12 +1033,18 @@ export function MenuManager({
   const [, startTransition] = useTransition();
   const router = useRouter();
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
   function refresh() {
     startTransition(() => router.refresh());
   }
 
   function updateCategory(updated: Category) {
-    setCategories((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setCategories((prev) =>
+      prev.map((c) => (c.id === updated.id ? updated : c))
+    );
     refresh();
   }
 
@@ -528,6 +1058,29 @@ export function MenuManager({
     refresh();
   }
 
+  async function handleCategoryDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = categories.findIndex((c) => c.id === active.id);
+    const newIndex = categories.findIndex((c) => c.id === over.id);
+    const reordered = arrayMove(categories, oldIndex, newIndex);
+
+    // Optimistic update
+    setCategories(reordered);
+
+    try {
+      await apiFetch(
+        `/api/menu/categories/${reordered[0]!.id}?action=reorder`,
+        "PATCH",
+        { items: reordered.map((c, i) => ({ id: c.id, sortOrder: i })) }
+      );
+    } catch {
+      // Revert on failure
+      setCategories(categories);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* QR access card */}
@@ -535,42 +1088,68 @@ export function MenuManager({
 
       {/* Header actions */}
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-gray-500">
-            {categories.length} categoria{categories.length !== 1 ? "s" : ""}
-            {" · "}
-            {categories.reduce((n, c) => n + c.items.length, 0)} item{categories.reduce((n, c) => n + c.items.length, 0) !== 1 ? "s" : ""}
-          </p>
-        </div>
+        <p className="text-xs text-gray-500">
+          {categories.length} categoria
+          {categories.length !== 1 ? "s" : ""}
+          {" · "}
+          {categories.reduce((n, c) => n + c.items.length, 0)} item
+          {categories.reduce((n, c) => n + c.items.length, 0) !== 1 ? "s" : ""}
+        </p>
         <AddCategoryForm onAdded={addCategory} />
       </div>
 
       {/* Empty state */}
       {categories.length === 0 && (
         <div className="rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-400 space-y-3">
-          <p>Nenhuma categoria criada ainda. Clique em <strong>+ Nova categoria</strong> para começar.</p>
+          <p>
+            Nenhuma categoria criada ainda. Clique em{" "}
+            <strong>+ Nova categoria</strong> para começar.
+          </p>
           <p>
             Ou{" "}
-            <a href="/seed-menu" className="font-medium text-orange-500 hover:underline">
+            <a
+              href="/seed-menu"
+              className="font-medium text-orange-500 hover:underline"
+            >
               popular com um cardápio de exemplo
-            </a>
-            {" "}(pizzaria, 4 categorias, 11 itens).
+            </a>{" "}
+            (pizzaria, 4 categorias, 11 itens).
           </p>
         </div>
       )}
 
-      {/* Category cards */}
-      {categories.map((cat) => (
-        <CategoryCard key={cat.id} category={cat}
-          onChange={updateCategory} onDelete={removeCategory} />
-      ))}
+      {/* Category cards with drag-and-drop */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleCategoryDragEnd}
+      >
+        <SortableContext
+          items={categories.map((c) => c.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-4">
+            {categories.map((cat) => (
+              <SortableCategoryCard
+                key={cat.id}
+                category={cat}
+                onChange={updateCategory}
+                onDelete={removeCategory}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       {/* Integration callout */}
       <div className="rounded-xl border border-dashed border-gray-200 p-4 text-xs text-gray-400">
-        <span className="font-medium text-gray-500">Integração futura:</span> categorias e itens
-        importados automaticamente de um sistema externo (POS, iFood, etc.) aparecerão aqui com a
-        badge <span className="rounded bg-blue-100 px-1 text-blue-600">Importado</span> e não
-        poderão ser editados manualmente.
+        <span className="font-medium text-gray-500">Integração futura:</span>{" "}
+        categorias e itens importados automaticamente de um sistema externo
+        (POS, iFood, etc.) aparecerão aqui com a badge{" "}
+        <span className="rounded bg-blue-100 px-1 text-blue-600">
+          Importado
+        </span>{" "}
+        e não poderão ser editados manualmente.
       </div>
     </div>
   );

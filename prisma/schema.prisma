@@ -163,9 +163,12 @@ model MenuCategory {
   name         String
   description  String?
   imageUrl     String?
-  sortOrder    Int        @default(0)
-  isActive     Boolean    @default(true)
-  source       MenuSource @default(MANUAL)  // tracks whether created manually or via external integration
+  sortOrder      Int        @default(0)
+  isActive       Boolean    @default(true)
+  isAvailable    Boolean    @default(true)   // false = category temporarily unavailable (does not modify item flags)
+  showInDelivery Boolean    @default(true)   // false = category hidden from delivery channel
+  showInDineIn   Boolean    @default(true)   // false = category hidden from QR dine-in menu
+  source         MenuSource @default(MANUAL) // tracks whether created manually or via external integration
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
