@@ -68,10 +68,18 @@ test.describe("Checkout Flow", () => {
     await sim.assertStage("PAYMENT");
     await sim.assertCheckoutAreaVisible();
 
+    await expect(page.locator(S.checkoutArea).getByText("🛵 Pagar na entrega")).toBeVisible();
+
+    // ── 8. Select payment mode (delivery) ────────────────────────────
+    await sim.selectPaymentMode("pay_on_delivery");
+
+    await sim.assertStage("PAYMENT_METHOD");
+    await sim.assertCheckoutAreaVisible();
+
     await expect(page.locator(S.checkoutArea).getByText("📱 Pix")).toBeVisible();
 
-    // ── 8. Select payment ────────────────────────────────────────────
-    await sim.selectPayment("pix");
+    // ── 8b. Select payment sub-method ───────────────────────────────
+    await sim.selectPaymentMethodSub("pix_in_person");
 
     await sim.assertStage("REVIEW_ORDER");
     await sim.assertCheckoutAreaVisible();

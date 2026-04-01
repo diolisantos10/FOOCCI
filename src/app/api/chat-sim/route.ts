@@ -38,6 +38,8 @@ type OrderStage =
   | "ADDRESS_CONFIRM"
   | "ASK_NAME"
   | "PAYMENT"
+  | "PAYMENT_METHOD"
+  | "PAYMENT_LINK"
   | "REVIEW_ORDER"
   | "DONE";
 
@@ -277,10 +279,20 @@ ${stage === "ASK_NAME" ? `NOME DO CLIENTE (ASK_NAME) — pedido quase pronto, s�
                "Só falta o nome pra fechar 😊 Como te chamo?"
   NUNCA use "acima ↑", "Digite", "Informe acima".` : ""}
 
-${stage === "PAYMENT" ? `PAGAMENTO (PAYMENT) — último passo antes do resumo.
-  Varie entre: "💳 Última etapa — como vai pagar? 👇"
-               "Tá quase pronto! Só falta a forma de pagamento 👇"
-               "Ótimo pedido! Como vai pagar? Quase lá 😊👇"` : ""}
+${stage === "PAYMENT" ? `PAGAMENTO (PAYMENT) — escolha do modo de pagamento.
+  Varie entre: "💳 Última etapa — como vai pagar? Agora ou na entrega? 👇"
+               "Tá quase pronto! Pagar agora pelo link ou na hora? 👇"
+               "Ótimo pedido! Prefere pagar agora ou quando chegar? 😊👇"` : ""}
+
+${stage === "PAYMENT_METHOD" ? `FORMA DE PAGAMENTO (PAYMENT_METHOD) — cliente escolheu pagar na entrega/retirada, agora escolhe como.
+  Varie entre: "Ótimo! 💳 Como prefere pagar? 👇"
+               "Perfeito! Qual a forma de pagamento? 👇"
+               "Show! 😊 Pix, cartão ou dinheiro? 👇"` : ""}
+
+${stage === "PAYMENT_LINK" ? `AGUARDANDO PAGAMENTO (PAYMENT_LINK) — link de pagamento gerado, aguardando confirmação.
+  Varie entre: "Link enviado! 🎉 Assim que confirmar o pagamento, seu pedido entra na fila 🍕"
+               "Quase lá! Pague pelo link e confirmamos na hora 👇"
+               "Link gerado! 💳 Aguardando confirmação — qualquer dúvida é só falar 😊"` : ""}
 
 ${stage === "REVIEW_ORDER" ? `REVISÃO DO PEDIDO (REVIEW_ORDER) — o resumo completo já está renderizado na UI abaixo.
   Sua mensagem: APENAS 1 linha curta, calorosa, apontando para a UI.

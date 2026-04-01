@@ -28,6 +28,8 @@ import {
   applyConfirmAddress,
   applyNameInput,
   applyPayment,
+  applyPaymentMode,
+  applyPaymentMethodSub,
   applyConfirmOrder,
   applyBackToBrowse,
   syncUISnapshot,
@@ -203,6 +205,18 @@ export function driveScenario(
 
         case "select_payment": {
           const { state: next } = applyPayment(state, action.method);
+          state = next;
+          break;
+        }
+
+        case "select_payment_mode": {
+          const { state: next } = applyPaymentMode(state, action.mode);
+          state = next;
+          break;
+        }
+
+        case "select_payment_method_sub": {
+          const { state: next } = applyPaymentMethodSub(state, action.method);
           state = next;
           break;
         }

@@ -314,6 +314,7 @@ model OrderItem {
 
 enum OrderStatus {
   PENDING
+  AWAITING_PAYMENT  // between PENDING and CONFIRMED for pay_now flows
   CONFIRMED
   PREPARING
   READY
@@ -333,18 +334,30 @@ enum OrderType {
 // ═══════════════════════════════════════════
 
 model Payment {
-  id        String        @id @default(cuid())
-  orderId   String        @unique
-  method    PaymentMethod
-  status    PaymentStatus @default(PENDING)
-  amount    Decimal       @db.Decimal(10, 2)
-  paidAt    DateTime?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id                String        @id @default(cuid())
+  orderId           String        @unique
+  method            PaymentMethod
+  status            PaymentStatus @default(PENDING)
+  amount            Decimal       @db.Decimal(10, 2)
+  paidAt            DateTime?
+  // Stone / hosted-link fields (all nullable — not used for cash/card-machine flows)
+  paymentMode       PaymentMode   @default(PAY_NOW)
+  providerName      String?       // "stone" | null
+  providerReference String?       // Stone payment ID
+  paymentUrl        String?       // hosted checkout URL
+  expiresAt         DateTime?     // Stone link expiry
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("payments")
+}
+
+enum PaymentMode {
+  PAY_NOW
+  PAY_ON_DELIVERY
+  PAY_ON_PICKUP
 }
 
 enum PaymentMethod {
@@ -353,6 +366,8 @@ enum PaymentMethod {
   DEBIT_CARD
   PIX
   ONLINE
+  CARD_MACHINE    // physical terminal (pay on delivery/pickup)
+  PIX_IN_PERSON   // QR code shown at door/counter
 }
 
 enum PaymentStatus {
@@ -360,6 +375,10 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
+  LINK_SENT       // Stone link sent, awaiting payment
+  PAY_ON_DELIVERY // collected at delivery
+  PAY_ON_PICKUP   // collected at counter
+  EXPIRED         // Stone link expired
 }
 
 // ═══════════════════════════════════════════

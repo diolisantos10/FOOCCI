@@ -127,12 +127,45 @@ export class ChatSimPage {
     await this.page.waitForTimeout(300);
   }
 
-  /** Select payment method (PAYMENT stage). */
-  async selectPayment(method: "pix" | "cartao" | "dinheiro") {
+  /** Select payment mode (PAYMENT stage). */
+  async selectPaymentMode(mode: "pay_now" | "pay_on_delivery" | "pay_on_pickup") {
     await this.waitForIdle();
-    const labels = { pix: "📱 Pix", cartao: "💳 Cartão", dinheiro: "💵 Dinheiro" };
+    const labels = {
+      pay_now: "💳 Pagar agora (link)",
+      pay_on_delivery: "🛵 Pagar na entrega",
+      pay_on_pickup: "🏪 Pagar na retirada",
+    };
+    await this.page.locator(S.checkoutArea).getByText(labels[mode]).click();
+    await this.page.waitForTimeout(300);
+  }
+
+  /** Select payment sub-method (PAYMENT_METHOD stage). */
+  async selectPaymentMethodSub(method: "pix_in_person" | "card_machine" | "cash") {
+    await this.waitForIdle();
+    const labels = {
+      pix_in_person: "📱 Pix",
+      card_machine: "💳 Cartão",
+      cash: "💵 Dinheiro",
+    };
     await this.page.locator(S.checkoutArea).getByText(labels[method]).click();
     await this.page.waitForTimeout(300);
+  }
+
+  /** @deprecated Use selectPaymentMode + selectPaymentMethodSub instead */
+  async selectPayment(method: "pix" | "cartao" | "dinheiro") {
+    const modeMap = {
+      pix: "pay_on_delivery" as const,
+      cartao: "pay_on_delivery" as const,
+      dinheiro: "pay_on_delivery" as const,
+    };
+    const subMap = {
+      pix: "pix_in_person" as const,
+      cartao: "card_machine" as const,
+      dinheiro: "cash" as const,
+    };
+    await this.selectPaymentMode(modeMap[method]);
+    await this.assertStage("PAYMENT_METHOD");
+    await this.selectPaymentMethodSub(subMap[method]);
   }
 
   /** Click Confirmar pedido (REVIEW_ORDER stage). */

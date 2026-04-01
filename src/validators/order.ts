@@ -44,6 +44,7 @@ export const confirmDraftSchema = z.object({
 
 export const updateOrderStatusSchema = z.object({
   status: z.enum([
+    "AWAITING_PAYMENT",
     "CONFIRMED",
     "PREPARING",
     "READY",
@@ -60,6 +61,7 @@ export const orderListQuerySchema = z.object({
   status: z
     .enum([
       "PENDING",
+      "AWAITING_PAYMENT",
       "CONFIRMED",
       "PREPARING",
       "READY",
@@ -76,12 +78,13 @@ export const orderListQuerySchema = z.object({
 // ─── Payment ──────────────────────────────────────────────────
 
 export const attachPaymentSchema = z.object({
-  method: z.enum(["CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX", "ONLINE"]),
+  method: z.enum(["CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX", "ONLINE", "CARD_MACHINE", "PIX_IN_PERSON"]),
   amount: z.number().positive().multipleOf(0.01),
+  paymentMode: z.enum(["PAY_NOW", "PAY_ON_DELIVERY", "PAY_ON_PICKUP"]).default("PAY_NOW"),
 });
 
 export const updatePaymentStatusSchema = z.object({
-  status: z.enum(["PAID", "FAILED", "REFUNDED"]),
+  status: z.enum(["PAID", "FAILED", "REFUNDED", "LINK_SENT", "PAY_ON_DELIVERY", "PAY_ON_PICKUP", "EXPIRED"]),
   paidAt: z.string().datetime().optional(),
 });
 

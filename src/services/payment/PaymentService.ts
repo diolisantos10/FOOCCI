@@ -4,6 +4,14 @@ import { serviceOk, serviceFail, ServiceResult } from "@/types";
 import type { AttachPaymentInput, UpdatePaymentStatusInput } from "@/validators/order";
 import type { Payment } from "@prisma/client";
 
+// Fields used when creating a payment with a Stone hosted link
+export interface StonePaymentFields {
+  providerName: "stone";
+  providerReference: string;
+  paymentUrl: string;
+  expiresAt: string; // ISO-8601
+}
+
 export class PaymentService {
   /**
    * Attach a payment record to an order.
@@ -12,7 +20,8 @@ export class PaymentService {
   static async attach(
     restaurantId: string,
     orderId: string,
-    input: AttachPaymentInput
+    input: AttachPaymentInput,
+    stoneFields?: StonePaymentFields
   ): Promise<ServiceResult<Payment>> {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -40,6 +49,13 @@ export class PaymentService {
         method: input.method,
         amount: new Decimal(input.amount),
         status: "PENDING",
+        paymentMode: input.paymentMode ?? "PAY_NOW",
+        ...(stoneFields && {
+          providerName: stoneFields.providerName,
+          providerReference: stoneFields.providerReference,
+          paymentUrl: stoneFields.paymentUrl,
+          expiresAt: new Date(stoneFields.expiresAt),
+        }),
       },
     });
 
@@ -47,7 +63,7 @@ export class PaymentService {
   }
 
   /**
-   * Update payment status (e.g. PENDING → PAID after PIX confirmation).
+   * Update payment status (e.g. LINK_SENT → PAID after Stone webhook).
    */
   static async updateStatus(
     restaurantId: string,
@@ -78,6 +94,16 @@ export class PaymentService {
     });
 
     return serviceOk(updated);
+  }
+
+  /**
+   * Mark a payment PAID by its providerReference (for Stone webhook idempotency).
+   * Returns null if not found.
+   */
+  static async getByProviderReference(
+    providerReference: string
+  ): Promise<Payment | null> {
+    return prisma.payment.findFirst({ where: { providerReference } });
   }
 
   static async getByOrderId(

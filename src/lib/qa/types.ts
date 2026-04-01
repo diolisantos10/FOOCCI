@@ -23,11 +23,16 @@ export type Stage =
   | "ADDRESS_CONFIRM"
   | "ASK_NAME"
   | "PAYMENT"
+  | "PAYMENT_METHOD"
+  | "PAYMENT_LINK"
   | "REVIEW_ORDER"
   | "DONE";
 
 export type DeliveryMethod = "delivery" | "pickup";
+/** @deprecated Use PaymentMode + PaymentMethodSub instead */
 export type PaymentMethod = "pix" | "cartao" | "dinheiro";
+export type PaymentMode = "pay_now" | "pay_on_delivery" | "pay_on_pickup";
+export type PaymentMethodSub = "card_machine" | "pix_in_person" | "cash";
 export type UpsellOffered = "drink" | "dessert" | null;
 export type CategoryType = "main" | "drink" | "dessert";
 
@@ -81,7 +86,9 @@ export interface QAState {
   deliveryMethod: DeliveryMethod | null;
   address: Address;
   customerName: string;
-  paymentMethod: PaymentMethod | null;
+  paymentMethod: PaymentMethod | null;  // legacy
+  paymentMode: PaymentMode | null;
+  paymentMethodSub: PaymentMethodSub | null;
 
   // Simulated UI snapshot
   visibleCategoryId: string | null;   // which category tab is active
@@ -105,7 +112,9 @@ export type QAAction =
   | { type: "input_address";           line1: string; line2?: string }
   | { type: "confirm_address" }
   | { type: "input_name";              name: string }
-  | { type: "select_payment";          method: PaymentMethod }
+  | { type: "select_payment";          method: PaymentMethod }  // legacy – maps to 2-step flow
+  | { type: "select_payment_mode";     mode: PaymentMode }
+  | { type: "select_payment_method_sub"; method: PaymentMethodSub }
   | { type: "confirm_order" }
   | { type: "go_back_to_browse" }
   // Inline assertions — fail-fast if state doesn't match

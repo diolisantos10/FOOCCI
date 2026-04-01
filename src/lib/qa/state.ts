@@ -18,6 +18,8 @@ import type {
   Stage,
   DeliveryMethod,
   PaymentMethod,
+  PaymentMode,
+  PaymentMethodSub,
   MenuCategoryFixture,
   MenuItemFixture,
 } from "./types";
@@ -38,6 +40,8 @@ export function initialState(menu: MenuCategoryFixture[]): QAState {
     address: { street: "", number: "", neighborhood: "", complement: "" },
     customerName: "",
     paymentMethod: null,
+    paymentMode: null,
+    paymentMethodSub: null,
     visibleCategoryId: first?.id ?? null,
     isCheckoutVisible: false,
     isModalOpen: false,
@@ -170,7 +174,9 @@ export type TransitionEvent =
   | "NAME_SET"
   | "PAYMENT_SELECTED"
   | "ORDER_CONFIRMED"
-  | "BACK_TO_BROWSE";
+  | "BACK_TO_BROWSE"
+  | "PAYMENT_MODE_SELECTED"
+  | "PAYMENT_METHOD_SUB_SELECTED";
 
 export interface Transition {
   state: QAState;
@@ -345,9 +351,47 @@ export function applyPayment(
   state: QAState,
   method: PaymentMethod,
 ): Transition {
+  // Legacy helper: maps old method to new 2-step flow (pay_on_delivery/pickup + sub)
+  const deliveryMode: PaymentMode = state.deliveryMethod === "pickup"
+    ? "pay_on_pickup"
+    : "pay_on_delivery";
+  const subMap: Record<PaymentMethod, PaymentMethodSub> = {
+    pix: "pix_in_person",
+    cartao: "card_machine",
+    dinheiro: "cash",
+  };
   return {
-    state: { ...state, paymentMethod: method, stage: "REVIEW_ORDER" },
+    state: {
+      ...state,
+      paymentMethod: method,
+      paymentMode: deliveryMode,
+      paymentMethodSub: subMap[method],
+      stage: "REVIEW_ORDER",
+    },
     event: "PAYMENT_SELECTED",
+  };
+}
+
+export function applyPaymentMode(state: QAState, mode: PaymentMode): Transition {
+  const nextStage: Stage = mode === "pay_now" ? "REVIEW_ORDER" : "PAYMENT_METHOD";
+  return {
+    state: {
+      ...state,
+      paymentMode: mode,
+      stage: nextStage,
+    },
+    event: "PAYMENT_MODE_SELECTED",
+  };
+}
+
+export function applyPaymentMethodSub(state: QAState, method: PaymentMethodSub): Transition {
+  return {
+    state: {
+      ...state,
+      paymentMethodSub: method,
+      stage: "REVIEW_ORDER",
+    },
+    event: "PAYMENT_METHOD_SUB_SELECTED",
   };
 }
 
@@ -365,6 +409,8 @@ export function applyBackToBrowse(state: QAState): Transition {
       stage: "BROWSE",
       deliveryMethod: null,
       paymentMethod: null,
+      paymentMode: null,
+      paymentMethodSub: null,
       isCheckoutVisible: false,
       // reset upsell — mirrors handleBackToBrowse / handleEditOrder in page.tsx
       offeredDrink:       false,

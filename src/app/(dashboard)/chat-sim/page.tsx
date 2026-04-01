@@ -88,8 +88,14 @@ type Stage =
   | "ADDRESS_CONFIRM"
   | "ASK_NAME"
   | "PAYMENT"
+  | "PAYMENT_METHOD"
+  | "PAYMENT_LINK"
   | "REVIEW_ORDER"
   | "DONE";
+
+type PaymentMode = "pay_now" | "pay_on_delivery" | "pay_on_pickup";
+type PaymentMethodSub = "card_machine" | "pix_in_person" | "cash";
+type PaymentLinkStatus = "loading" | "ready" | "paid" | "expired" | "error";
 
 interface Address {
   street: string;
@@ -491,26 +497,34 @@ function CheckoutBar({
   stage,
   address,
   deliveryMethod,
-  paymentMethod,
+  paymentMode,
+  paymentMethodSub,
+  paymentLinkStatus,
+  paymentUrl,
   cart,
   disabled,
   onDeliveryMethod,
   onAddressConfirm,
   onAddressEdit,
-  onPayment,
+  onPaymentMode,
+  onPaymentMethodSub,
   onFinalConfirm,
   onEditOrder,
 }: {
   stage: Stage;
   address: Address;
   deliveryMethod: "delivery" | "pickup" | null;
-  paymentMethod: "dinheiro" | "cartao" | "pix" | null;
+  paymentMode: PaymentMode | null;
+  paymentMethodSub: PaymentMethodSub | null;
+  paymentLinkStatus: PaymentLinkStatus;
+  paymentUrl: string | null;
   cart: CartItem[];
   disabled: boolean;
   onDeliveryMethod: (t: "delivery" | "pickup") => void;
   onAddressConfirm: () => void;
   onAddressEdit: () => void;
-  onPayment: (m: "dinheiro" | "cartao" | "pix") => void;
+  onPaymentMode: (mode: PaymentMode) => void;
+  onPaymentMethodSub: (method: PaymentMethodSub) => void;
   onFinalConfirm: () => void;
   onEditOrder: () => void;
 }) {
@@ -590,39 +604,124 @@ function CheckoutBar({
 
   if (stage === "PAYMENT") {
     return (
-      <div className="flex flex-wrap gap-2">
-        <button
-          disabled={disabled}
-          onClick={() => onPayment("pix")}
-          className={`${chip} border-purple-200 bg-purple-50 text-purple-800 hover:bg-purple-100`}
-        >
-          📱 Pix
-        </button>
-        <button
-          disabled={disabled}
-          onClick={() => onPayment("cartao")}
-          className={`${chip} border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100`}
-        >
-          💳 Cartão
-        </button>
-        <button
-          disabled={disabled}
-          onClick={() => onPayment("dinheiro")}
-          className={`${chip} border-green-200 bg-green-50 text-green-800 hover:bg-green-100`}
-        >
-          💵 Dinheiro
-        </button>
+      <div className="flex flex-col gap-2">
+        <p className="text-[11px] font-semibold text-gray-600">Como deseja pagar?</p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            disabled={disabled}
+            onClick={() => onPaymentMode("pay_now")}
+            className={`${chip} border-purple-200 bg-purple-50 text-purple-800 hover:bg-purple-100`}
+          >
+            💳 Pagar agora (link)
+          </button>
+          {deliveryMethod === "delivery" ? (
+            <button
+              disabled={disabled}
+              onClick={() => onPaymentMode("pay_on_delivery")}
+              className={`${chip} border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100`}
+            >
+              🛵 Pagar na entrega
+            </button>
+          ) : (
+            <button
+              disabled={disabled}
+              onClick={() => onPaymentMode("pay_on_pickup")}
+              className={`${chip} border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100`}
+            >
+              🏪 Pagar na retirada
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === "PAYMENT_METHOD") {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-[11px] font-semibold text-gray-600">Forma de pagamento</p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            disabled={disabled}
+            onClick={() => onPaymentMethodSub("pix_in_person")}
+            className={`${chip} border-purple-200 bg-purple-50 text-purple-800 hover:bg-purple-100`}
+          >
+            📱 Pix
+          </button>
+          <button
+            disabled={disabled}
+            onClick={() => onPaymentMethodSub("card_machine")}
+            className={`${chip} border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100`}
+          >
+            💳 Cartão
+          </button>
+          <button
+            disabled={disabled}
+            onClick={() => onPaymentMethodSub("cash")}
+            className={`${chip} border-green-200 bg-green-50 text-green-800 hover:bg-green-100`}
+          >
+            💵 Dinheiro
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === "PAYMENT_LINK") {
+    if (paymentLinkStatus === "loading") {
+      return (
+        <p className="text-xs text-gray-500 animate-pulse">⏳ Gerando link de pagamento...</p>
+      );
+    }
+    if (paymentLinkStatus === "paid") {
+      return (
+        <p className="text-xs font-semibold text-green-600">✅ Pagamento confirmado!</p>
+      );
+    }
+    if (paymentLinkStatus === "expired" || paymentLinkStatus === "error") {
+      return (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium text-red-500">⚠️ Link expirado ou inválido.</p>
+          <p className="text-xs text-gray-500">Volte ao início e tente novamente.</p>
+        </div>
+      );
+    }
+    // "ready"
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-gray-600">Clique no link abaixo para pagar. Confirmaremos automaticamente.</p>
+        {paymentUrl && (
+          <a
+            href={paymentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${chip} border-[#25d366] bg-[#e7fbe8] text-green-900 hover:bg-[#d0f5d2] text-center`}
+          >
+            💳 Ir para pagamento
+          </a>
+        )}
+        <p className="text-[10px] text-gray-400 animate-pulse">⏳ Aguardando confirmação...</p>
       </div>
     );
   }
 
   if (stage === "REVIEW_ORDER") {
     const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
-    const pmtLabel: Record<string, string> = {
-      dinheiro: "💵 Dinheiro",
-      cartao: "💳 Cartão",
-      pix: "📱 Pix",
+    const pmtModeLabel: Record<PaymentMode, string> = {
+      pay_now: "💳 Link (agora)",
+      pay_on_delivery: "🛵 Na entrega",
+      pay_on_pickup: "🏪 Na retirada",
     };
+    const pmtSubLabel: Record<PaymentMethodSub, string> = {
+      pix_in_person: "📱 Pix",
+      card_machine: "💳 Cartão",
+      cash: "💵 Dinheiro",
+    };
+    const pmtDisplay = paymentMode
+      ? paymentMethodSub
+        ? `${pmtModeLabel[paymentMode]} · ${pmtSubLabel[paymentMethodSub]}`
+        : pmtModeLabel[paymentMode]
+      : "-";
     return (
       <div className="flex flex-col gap-2">
         <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2.5">
@@ -660,7 +759,7 @@ function CheckoutBar({
           <div className="min-w-[90px] rounded-xl border border-purple-200 bg-purple-50 px-2.5 py-2">
             <p className="text-[10px] font-bold text-purple-800">Pagamento</p>
             <p className="mt-0.5 text-[11px] font-semibold text-purple-900">
-              {paymentMethod ? pmtLabel[paymentMethod] : "-"}
+              {pmtDisplay}
             </p>
           </div>
         </div>
@@ -791,7 +890,11 @@ export default function ChatSimPage() {
   });
   const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [customerName, setCustomerName] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"dinheiro" | "cartao" | "pix" | null>(null);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
+  const [paymentMethodSub, setPaymentMethodSub] = useState<PaymentMethodSub | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [paymentLinkStatus, setPaymentLinkStatus] = useState<PaymentLinkStatus>("loading");
 
   // ── App mode + QA replay ─────────────────────────────────────
   const [appMode, setAppMode] = useState<"human" | "automatic">("human");
@@ -813,7 +916,6 @@ export default function ChatSimPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, ui]);
-
 
   // ─── sendText ────────────────────────────────────────────────
 
@@ -886,6 +988,34 @@ export default function ChatSimPage() {
     sendText("Olá!", [], "BROWSE", null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories]);
+
+  // ── Payment link polling ──────────────────────────────────────
+  // Polls /api/chat-sim/payment-status every 3s while in PAYMENT_LINK stage.
+  // Advances to DONE when Stone confirms payment, or marks expired if link died.
+  useEffect(() => {
+    if (stage !== "PAYMENT_LINK" || !orderId || paymentLinkStatus === "paid") return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/chat-sim/payment-status?orderId=${orderId}`);
+        const data = await res.json();
+
+        if (data.paymentStatus === "PAID") {
+          clearInterval(interval);
+          setPaymentLinkStatus("paid");
+          setStage("DONE");
+          sendText("Pagamento confirmado!", cart, "DONE", null);
+        } else if (data.paymentStatus === "EXPIRED" || data.paymentStatus === "FAILED") {
+          clearInterval(interval);
+          setPaymentLinkStatus("expired");
+        }
+      } catch {
+        // ignore transient polling errors
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [stage, orderId, paymentLinkStatus, cart, sendText]);
 
   // ─── Handlers ────────────────────────────────────────────────
 
@@ -972,7 +1102,11 @@ export default function ChatSimPage() {
     setStage("BROWSE");
     setDeliveryMethod(null);
     setAddressConfirmed(false);
-    setPaymentMethod(null);
+    setPaymentMode(null);
+    setPaymentMethodSub(null);
+    setOrderId(null);
+    setPaymentUrl(null);
+    setPaymentLinkStatus("loading");
     setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
     sendText("Ver cardápio", cart, "BROWSE", activeUpsell);
   }, [cart, activeUpsell, sendText]);
@@ -1044,28 +1178,93 @@ export default function ChatSimPage() {
     [cart, activeUpsell, sendText],
   );
 
-  const handlePayment = useCallback(
-    (method: "dinheiro" | "cartao" | "pix") => {
-      setPaymentMethod(method);
-      setStage("REVIEW_ORDER");
-      const label = { dinheiro: "Dinheiro", cartao: "Cartão", pix: "Pix" }[method];
-      sendText(`Pagar com ${label}`, cart, "REVIEW_ORDER", activeUpsell);
+  const handlePaymentMode = useCallback(
+    (mode: PaymentMode) => {
+      setPaymentMode(mode);
+      if (mode === "pay_now") {
+        // pay_now → go directly to REVIEW_ORDER (no sub-method needed)
+        setStage("REVIEW_ORDER");
+        sendText("Pagar agora (link)", cart, "REVIEW_ORDER", activeUpsell);
+      } else {
+        // pay_on_delivery / pay_on_pickup → pick sub-method
+        setStage("PAYMENT_METHOD");
+        const label = mode === "pay_on_delivery" ? "Pagar na entrega" : "Pagar na retirada";
+        sendText(label, cart, "PAYMENT_METHOD", activeUpsell);
+      }
     },
     [cart, activeUpsell, sendText],
   );
 
-  const handleFinalConfirm = useCallback(() => {
-    // Hard guard: all required fields must be present before reaching DONE.
-    if (!customerName.trim() || !paymentMethod || cart.length === 0) return;
-    setStage("DONE");
-    sendText("Confirmar pedido final", cart, "DONE", activeUpsell);
-  }, [cart, customerName, paymentMethod, activeUpsell, sendText]);
+  const handlePaymentMethodSub = useCallback(
+    (method: PaymentMethodSub) => {
+      setPaymentMethodSub(method);
+      setStage("REVIEW_ORDER");
+      const labels: Record<PaymentMethodSub, string> = {
+        card_machine: "Cartão",
+        pix_in_person: "Pix",
+        cash: "Dinheiro",
+      };
+      sendText(`Pagar com ${labels[method]}`, cart, "REVIEW_ORDER", activeUpsell);
+    },
+    [cart, activeUpsell, sendText],
+  );
+
+  const handleFinalConfirm = useCallback(async () => {
+    // Hard guard: all required fields must be present.
+    if (!customerName.trim() || !paymentMode || cart.length === 0) return;
+    if (paymentMode !== "pay_now" && !paymentMethodSub) return;
+
+    setUi("thinking");
+    try {
+      const res = await fetch("/api/chat-sim/finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cart,
+          customerName,
+          deliveryMethod,
+          address,
+          paymentMode,
+          paymentMethodSub,
+        }),
+      });
+      const data = await res.json();
+
+      if (paymentMode === "pay_now") {
+        setOrderId(data.orderId);
+        setPaymentUrl(data.paymentUrl ?? null);
+        setPaymentLinkStatus("ready");
+        setStage("PAYMENT_LINK");
+        sendText("Link de pagamento gerado", cart, "PAYMENT_LINK", null);
+      } else {
+        setOrderId(data.orderId);
+        setStage("DONE");
+        sendText("Confirmar pedido final", cart, "DONE", activeUpsell);
+      }
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: "assistant" as const,
+          content: "Erro ao confirmar pedido. Tente novamente.",
+          ts: new Date(),
+        },
+      ]);
+    } finally {
+      setUi("idle");
+    }
+  }, [cart, customerName, deliveryMethod, address, paymentMode, paymentMethodSub, activeUpsell, sendText]);
 
   const handleEditOrder = useCallback(() => {
     setStage("BROWSE");
     setDeliveryMethod(null);
     setAddressConfirmed(false);
-    setPaymentMethod(null);
+    setPaymentMode(null);
+    setPaymentMethodSub(null);
+    setOrderId(null);
+    setPaymentUrl(null);
+    setPaymentLinkStatus("loading");
     setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
     sendText("Editar pedido", cart, "BROWSE", activeUpsell);
   }, [cart, activeUpsell, sendText]);
@@ -1137,8 +1336,26 @@ export default function ChatSimPage() {
       case "input_name":
         handleNameInput(step.name);
         break;
+      case "select_payment_mode":
+        handlePaymentMode(step.mode);
+        break;
+      case "select_payment_method_sub":
+        handlePaymentMethodSub(step.method);
+        break;
       case "select_payment":
-        handlePayment(step.method);
+        // Legacy action: map old method to new two-step flow
+        {
+          const legacyMode: PaymentMode =
+            deliveryMethod === "pickup" ? "pay_on_pickup" : "pay_on_delivery";
+          const legacySubMap: Record<string, PaymentMethodSub> = {
+            pix: "pix_in_person",
+            cartao: "card_machine",
+            dinheiro: "cash",
+          };
+          const legacySub = legacySubMap[step.method] ?? "cash";
+          handlePaymentMode(legacyMode);
+          setTimeout(() => handlePaymentMethodSub(legacySub), 380);
+        }
         break;
       case "confirm_order":
         handleFinalConfirm();
@@ -1199,7 +1416,11 @@ export default function ChatSimPage() {
     setAddress({ street: "", number: "", neighborhood: "", complement: "" });
     setAddressConfirmed(false);
     setCustomerName("");
-    setPaymentMethod(null);
+    setPaymentMode(null);
+    setPaymentMethodSub(null);
+    setOrderId(null);
+    setPaymentUrl(null);
+    setPaymentLinkStatus("loading");
     setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
     setSelectedProduct(null);
 
@@ -1397,13 +1618,17 @@ export default function ChatSimPage() {
                 stage={stage}
                 address={address}
                 deliveryMethod={deliveryMethod}
-                paymentMethod={paymentMethod}
+                paymentMode={paymentMode}
+                paymentMethodSub={paymentMethodSub}
+                paymentLinkStatus={paymentLinkStatus}
+                paymentUrl={paymentUrl}
                 cart={cart}
                 disabled={ui === "thinking"}
                 onDeliveryMethod={handleDeliveryMethod}
                 onAddressConfirm={handleAddressConfirm}
                 onAddressEdit={handleAddressEdit}
-                onPayment={handlePayment}
+                onPaymentMode={handlePaymentMode}
+                onPaymentMethodSub={handlePaymentMethodSub}
                 onFinalConfirm={handleFinalConfirm}
                 onEditOrder={handleEditOrder}
               />
@@ -1427,7 +1652,7 @@ export default function ChatSimPage() {
             </div>
           )}
           {/* Back to menu during checkout */}
-          {stage !== "BROWSE" && stage !== "DONE" && (
+          {stage !== "BROWSE" && stage !== "DONE" && stage !== "PAYMENT_LINK" && (
             <div className="border-t border-gray-100 px-3 py-2">
               <button
                 onClick={handleBackToBrowse}
@@ -1448,8 +1673,8 @@ export default function ChatSimPage() {
             </div>
           )}
 
-          {/* Text input */}
-          {stage !== "DONE" && (
+          {/* Text input — hidden at DONE and PAYMENT_LINK (no user input needed there) */}
+          {stage !== "DONE" && stage !== "PAYMENT_LINK" && (
             <form
               onSubmit={handleSubmit}
               className="flex gap-2 items-end border-t border-gray-200 bg-white px-3 py-2"

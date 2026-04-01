@@ -30,7 +30,8 @@ export type OrderWithDetails = Order & {
 
 // Legal forward transitions only
 const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  PENDING: ["CONFIRMED", "CANCELLED"],
+  PENDING: ["AWAITING_PAYMENT", "CONFIRMED", "CANCELLED"],
+  AWAITING_PAYMENT: ["CONFIRMED", "CANCELLED"],
   CONFIRMED: ["PREPARING", "CANCELLED"],
   PREPARING: ["READY", "CANCELLED"],
   READY: ["OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"],
