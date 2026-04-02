@@ -127,22 +127,30 @@ function ToggleSwitch({
   onChange: () => void;
 }) {
   return (
-    <label
-      className={`flex select-none items-center gap-1 text-xs ${
-        disabled
-          ? "cursor-not-allowed opacity-40"
-          : "cursor-pointer text-gray-600"
+    <span
+      className={`flex select-none items-center gap-1.5 text-xs ${
+        disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer text-gray-600"
       }`}
+      onClick={(e) => e.stopPropagation()}
     >
-      <input
-        type="checkbox"
-        checked={checked}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
         disabled={disabled}
-        onChange={onChange}
-        className="h-3.5 w-3.5 accent-orange-500"
-      />
+        onClick={onChange}
+        className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 ${
+          checked ? "bg-orange-500" : "bg-gray-300"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform duration-150 ${
+            checked ? "translate-x-3" : "translate-x-0"
+          }`}
+        />
+      </button>
       {label}
-    </label>
+    </span>
   );
 }
 
@@ -604,9 +612,9 @@ function CategoryCard({
     }
   }
 
-  // Category-level flags are saved directly on the category.
-  // They act as an independent gate — item flags are never modified here,
-  // so per-item overrides set by operators are always preserved.
+  // Category-level flags write only to the category, never to its items.
+  // isAvailable acts purely as a gate: when false it disables the channel
+  // toggles in the UI, but each item's own flags are untouched.
   async function saveCategoryFlag(
     flag: "isAvailable" | "showInDelivery" | "showInDineIn",
     value: boolean
