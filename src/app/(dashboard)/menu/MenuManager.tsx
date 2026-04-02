@@ -236,11 +236,13 @@ function ImageUpload({
 function SortableItemRow({
   item,
   categorySource,
+  filterActive,
   onSave,
   onDelete,
 }: {
   item: Item;
   categorySource: MenuSource;
+  filterActive?: boolean;
   onSave: (
     id: string,
     patch: Partial<
@@ -376,7 +378,7 @@ function SortableItemRow({
       className="flex items-center justify-between px-3 py-2.5 text-sm hover:bg-gray-50"
     >
       <div className="flex items-center gap-2 min-w-0">
-        {editable && <DragHandle listeners={listeners} />}
+        {editable && !filterActive && <DragHandle listeners={listeners} />}
         {item.imageUrl ? (
           <img
             src={item.imageUrl}
@@ -538,11 +540,13 @@ function AddItemForm({
 function CategoryCard({
   category,
   dragListeners,
+  filterActive,
   onChange,
   onDelete,
 }: {
   category: Category;
   dragListeners?: Record<string, unknown>;
+  filterActive?: boolean;
   onChange: (updated: Category) => void;
   onDelete: (id: string) => void;
 }) {
@@ -834,6 +838,7 @@ function CategoryCard({
                   key={item.id}
                   item={item}
                   categorySource={category.source}
+                  filterActive={filterActive}
                   onSave={saveItem}
                   onDelete={deleteItem}
                 />
@@ -870,8 +875,11 @@ function CategoryCard({
 // ── Sortable category wrapper ─────────────────────────────────────────────────
 
 function SortableCategoryCard(
-  props: Omit<React.ComponentProps<typeof CategoryCard>, "dragListeners">
+  props: Omit<React.ComponentProps<typeof CategoryCard>, "dragListeners"> & {
+    filterActive?: boolean;
+  }
 ) {
+  const { filterActive, ...rest } = props;
   const {
     attributes,
     listeners,
@@ -891,7 +899,11 @@ function SortableCategoryCard(
       }}
       {...attributes}
     >
-      <CategoryCard {...props} dragListeners={listeners} />
+      <CategoryCard
+        {...rest}
+        filterActive={filterActive}
+        dragListeners={filterActive ? undefined : listeners}
+      />
     </div>
   );
 }
@@ -1013,10 +1025,31 @@ function TopBar({
 }
 
 // ── CategoryFilter ────────────────────────────────────────────────────────────
-// Placeholder – filter/search bar will be wired up in a future step
 
-function CategoryFilter() {
-  return null;
+function CategoryFilter({
+  categories,
+  value,
+  onChange,
+}: {
+  categories: Category[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  if (categories.length === 0) return null;
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
+    >
+      <option value="">Todas categorias</option>
+      {categories.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.name}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 // ── EditItemModal ─────────────────────────────────────────────────────────────
@@ -1045,8 +1078,14 @@ export function MenuManager({
   qrUrl: string;
 }) {
   const [categories, setCategories] = useState<Category[]>(initialCategories);
+  const [filterQuery, setFilterQuery] = useState("");
   const [, startTransition] = useTransition();
   const router = useRouter();
+
+  const isFilterActive = filterQuery !== "";
+  const visibleCategories = isFilterActive
+    ? categories.filter((c) => c.id === filterQuery)
+    : categories;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -1105,7 +1144,11 @@ export function MenuManager({
       <TopBar categories={categories} onAdded={addCategory} />
 
       {/* Category filter */}
-      <CategoryFilter />
+      <CategoryFilter
+        categories={categories}
+        value={filterQuery}
+        onChange={setFilterQuery}
+      />
 
       {/* Empty state */}
       {categories.length === 0 && (
@@ -1134,14 +1177,15 @@ export function MenuManager({
         onDragEnd={handleCategoryDragEnd}
       >
         <SortableContext
-          items={categories.map((c) => c.id)}
+          items={visibleCategories.map((c) => c.id)}
           strategy={verticalListSortingStrategy}
         >
           <div className="space-y-4">
-            {categories.map((cat) => (
+            {visibleCategories.map((cat) => (
               <SortableCategoryCard
                 key={cat.id}
                 category={cat}
+                filterActive={isFilterActive}
                 onChange={updateCategory}
                 onDelete={removeCategory}
               />
