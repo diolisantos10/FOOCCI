@@ -298,17 +298,17 @@ function SortableItemRow({
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
+          {editable && !filterActive && (
+            <span onClick={(e) => e.stopPropagation()}>
+              <DragHandle listeners={listeners} />
+            </span>
+          )}
           {editable && (
             <ToggleSwitch
               label=""
               checked={item.isAvailable}
               onChange={() => onSave(item.id, { isAvailable: !item.isAvailable })}
             />
-          )}
-          {editable && !filterActive && (
-            <span onClick={(e) => e.stopPropagation()}>
-              <DragHandle listeners={listeners} />
-            </span>
           )}
           {item.imageUrl ? (
             <img
@@ -644,16 +644,16 @@ function CategoryCard({
         </div>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-4 py-3">
-          {/* Left: availability toggle + drag handle + name */}
+          {/* Left: drag handle + availability toggle + name */}
           <div className="flex items-center gap-2 min-w-0">
+            {editable && <DragHandle listeners={dragListeners} />}
             {editable && (
               <ToggleSwitch
-                label="Disponível"
+                label=""
                 checked={category.isAvailable}
                 onChange={() => saveCategoryFlag("isAvailable", !category.isAvailable)}
               />
             )}
-            {editable && <DragHandle listeners={dragListeners} />}
             <h2
               className={`font-semibold truncate ${
                 !category.isActive ? "text-gray-400" : "text-gray-900"
@@ -702,19 +702,6 @@ function CategoryCard({
                   className="text-xs text-gray-400 hover:text-gray-700"
                 >
                   {category.isActive ? "●" : "○"}
-                </button>
-                <button
-                  onClick={() => setEditingCat(true)}
-                  className="text-xs text-blue-500 hover:underline"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={deleteCat}
-                  disabled={busy}
-                  className="text-xs text-red-400 hover:underline"
-                >
-                  {busy ? <Spinner /> : "Remover"}
                 </button>
               </>
             )}
