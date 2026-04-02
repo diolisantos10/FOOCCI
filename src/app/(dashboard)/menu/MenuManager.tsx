@@ -23,6 +23,14 @@ import { CSS } from "@dnd-kit/utilities";
 
 type MenuSource = "MANUAL" | "EXTERNAL";
 
+type Variant = {
+  id: string;
+  name: string;
+  price: number;
+  isAvailable: boolean;
+  sortOrder: number;
+};
+
 type Item = {
   id: string;
   name: string;
@@ -34,6 +42,8 @@ type Item = {
   isAvailable: boolean;
   showInDelivery: boolean;
   showInDineIn: boolean;
+  hasVariants: boolean;
+  variants: Variant[];
 };
 
 type Category = {
@@ -403,7 +413,7 @@ function AddItemForm({
           imageUrl: form.imageUrl || undefined,
         }
       );
-      onAdded(data.data);
+      onAdded({ ...data.data, price: Number(data.data.price), hasVariants: data.data.hasVariants ?? false, variants: [] });
       setForm(EMPTY_ITEM);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao adicionar.");
@@ -580,7 +590,7 @@ function CategoryCard({
     onChange({
       ...category,
       items: category.items.map((it) =>
-        it.id === id ? { ...it, ...data.data, price: Number(data.data.price) } : it
+        it.id === id ? { ...it, ...data.data, price: Number(data.data.price), variants: it.variants } : it
       ),
     });
   }
@@ -968,6 +978,161 @@ function CategoryFilter({
   );
 }
 
+// ── SortableVariantRow ────────────────────────────────────────────────────────
+
+function SortableVariantRow({
+  variant,
+  onUpdated,
+  onDeleted,
+}: {
+  variant: Variant;
+  onUpdated: (v: Variant) => void;
+  onDeleted: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: variant.id });
+
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    name: variant.name,
+    price: String(variant.price),
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  async function handleSave() {
+    const price = parseFloat(form.price);
+    if (!form.name.trim() || isNaN(price) || price <= 0) {
+      setError("Nome e preço válido são obrigatórios.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const data = await apiFetch(`/api/menu/variants/${variant.id}`, "PATCH", {
+        name: form.name.trim(),
+        price,
+      });
+      onUpdated({ ...variant, name: data.data.name, price: Number(data.data.price) });
+      setEditing(false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao salvar.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm(`Remover variante "${variant.name}"?`)) return;
+    setBusy(true);
+    try {
+      await apiFetch(`/api/menu/variants/${variant.id}`, "DELETE");
+      onDeleted(variant.id);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao remover.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className="rounded-lg border border-gray-200 bg-white"
+    >
+      {editing ? (
+        <div className="space-y-2 p-3">
+          <div className="flex gap-2">
+            <input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Nome (ex: 350ml)"
+              className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+            />
+            <input
+              value={form.price}
+              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+              placeholder="Preço"
+              type="number"
+              step="0.01"
+              min="0.01"
+              className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+            />
+          </div>
+          {error && <InlineError message={error} />}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={busy}
+              className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+            >
+              {busy ? <Spinner /> : "Salvar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false);
+                setError("");
+                setForm({ name: variant.name, price: String(variant.price) });
+              }}
+              className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 px-3 py-2.5">
+          <DragHandle listeners={listeners} />
+          <span className="flex-1 truncate text-sm text-gray-800">
+            {variant.name}
+          </span>
+          <span className="shrink-0 text-sm font-semibold text-gray-700">
+            R$ {Number(variant.price).toFixed(2)}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setForm({ name: variant.name, price: String(variant.price) });
+              setEditing(true);
+            }}
+            className="shrink-0 text-xs text-blue-500 hover:underline"
+          >
+            Editar
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={busy}
+            className="shrink-0 text-xs text-red-400 hover:underline"
+          >
+            {busy ? <Spinner /> : "Remover"}
+          </button>
+        </div>
+      )}
+      {error && !editing && (
+        <div className="px-3 pb-2">
+          <InlineError message={error} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── EditItemModal ─────────────────────────────────────────────────────────────
 
 type EditModalForm = {
@@ -977,6 +1142,7 @@ type EditModalForm = {
   imageUrl: string | null;
   showInDelivery: boolean;
   showInDineIn: boolean;
+  hasVariants: boolean;
 };
 
 function EditItemModal({
@@ -995,11 +1161,23 @@ function EditItemModal({
     imageUrl: null,
     showInDelivery: false,
     showInDineIn: false,
+    hasVariants: false,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  // Sync form whenever a different item is opened
+  // Variants state — initialised from item.variants when modal opens
+  const [variants, setVariants] = useState<Variant[]>([]);
+  const [addingVariant, setAddingVariant] = useState(false);
+  const [newVariant, setNewVariant] = useState({ name: "", price: "" });
+  const [addBusy, setAddBusy] = useState(false);
+  const [addError, setAddError] = useState("");
+
+  const variantSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  // Sync form + variants whenever a different item is opened
   useEffect(() => {
     if (!item) return;
     setForm({
@@ -1009,8 +1187,13 @@ function EditItemModal({
       imageUrl: item.imageUrl ?? null,
       showInDelivery: item.showInDelivery,
       showInDineIn: item.showInDineIn,
+      hasVariants: item.hasVariants,
     });
+    setVariants(item.variants ?? []);
+    setAddingVariant(false);
+    setNewVariant({ name: "", price: "" });
     setError("");
+    setAddError("");
   }, [item?.id]);
 
   // Close on Escape
@@ -1040,6 +1223,53 @@ function EditItemModal({
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleAddVariant() {
+    const price = parseFloat(newVariant.price);
+    if (!newVariant.name.trim() || isNaN(price) || price <= 0) {
+      setAddError("Nome e preço válido são obrigatórios.");
+      return;
+    }
+    setAddBusy(true);
+    setAddError("");
+    try {
+      const data = await apiFetch(`/api/menu/items/${item.id}/variants`, "POST", {
+        name: newVariant.name.trim(),
+        price,
+        sortOrder: variants.length,
+      });
+      setVariants((vs) => [
+        ...vs,
+        { ...data.data, price: Number(data.data.price) },
+      ]);
+      setNewVariant({ name: "", price: "" });
+      setAddingVariant(false);
+    } catch (e: unknown) {
+      setAddError(e instanceof Error ? e.message : "Erro ao adicionar variante.");
+    } finally {
+      setAddBusy(false);
+    }
+  }
+
+  async function handleVariantDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = variants.findIndex((v) => v.id === active.id);
+    const newIndex = variants.findIndex((v) => v.id === over.id);
+    const reordered = arrayMove(variants, oldIndex, newIndex);
+
+    setVariants(reordered);
+    try {
+      await apiFetch(
+        `/api/menu/variants/${reordered[0]!.id}?action=reorder&itemId=${item.id}`,
+        "PATCH",
+        { items: reordered.map((v, i) => ({ id: v.id, sortOrder: i })) }
+      );
+    } catch {
+      setVariants(variants);
     }
   }
 
@@ -1144,6 +1374,112 @@ function EditItemModal({
             </div>
           </div>
 
+          {/* Variants toggle */}
+          <div className="border-t border-gray-100 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-gray-700">Variantes</p>
+              <ToggleSwitch
+                label="Ativar variantes"
+                checked={form.hasVariants}
+                onChange={() =>
+                  setForm((f) => ({ ...f, hasVariants: !f.hasVariants }))
+                }
+              />
+            </div>
+
+            {form.hasVariants && (
+              <div className="space-y-2">
+                {/* Variant list with DnD */}
+                {variants.length > 0 && (
+                  <DndContext
+                    sensors={variantSensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleVariantDragEnd}
+                  >
+                    <SortableContext
+                      items={variants.map((v) => v.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-1.5">
+                        {variants.map((v) => (
+                          <SortableVariantRow
+                            key={v.id}
+                            variant={v}
+                            onUpdated={(updated) =>
+                              setVariants((vs) =>
+                                vs.map((x) => (x.id === updated.id ? updated : x))
+                              )
+                            }
+                            onDeleted={(id) =>
+                              setVariants((vs) => vs.filter((x) => x.id !== id))
+                            }
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                )}
+
+                {/* Add variant form */}
+                {addingVariant ? (
+                  <div className="rounded-lg border border-dashed border-orange-200 bg-orange-50 p-3 space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        value={newVariant.name}
+                        onChange={(e) =>
+                          setNewVariant((f) => ({ ...f, name: e.target.value }))
+                        }
+                        placeholder="Nome (ex: 350ml)"
+                        className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      />
+                      <input
+                        value={newVariant.price}
+                        onChange={(e) =>
+                          setNewVariant((f) => ({ ...f, price: e.target.value }))
+                        }
+                        placeholder="Preço"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      />
+                    </div>
+                    {addError && <InlineError message={addError} />}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAddVariant}
+                        disabled={addBusy}
+                        className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                      >
+                        {addBusy ? <Spinner /> : "Adicionar"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddingVariant(false);
+                          setNewVariant({ name: "", price: "" });
+                          setAddError("");
+                        }}
+                        className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAddingVariant(true)}
+                    className="text-xs font-medium text-orange-500 hover:text-orange-700"
+                  >
+                    + Adicionar variante
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           {error && <InlineError message={error} />}
         </div>
 
@@ -1237,9 +1573,15 @@ export function MenuManager({
       imageUrl: patch.imageUrl ?? "",
       showInDelivery: patch.showInDelivery,
       showInDineIn: patch.showInDineIn,
+      hasVariants: patch.hasVariants,
     };
     const data = await apiFetch(`/api/menu/items/${item.id}`, "PATCH", body);
-    const updated: Item = { ...item, ...data.data, price: Number(data.data.price) };
+    const updated: Item = {
+      ...item,
+      ...data.data,
+      price: Number(data.data.price),
+      variants: item.variants,
+    };
     setCategories((prev) =>
       prev.map((c) =>
         c.id === categoryId
@@ -1347,7 +1689,7 @@ export function MenuManager({
       {/* Edit item drawer */}
       <EditItemModal
         item={editingItem?.item ?? null}
-        onClose={() => setEditingItem(null)}
+        onClose={() => { setEditingItem(null); refresh(); }}
         onSave={handleModalSave}
       />
     </div>
