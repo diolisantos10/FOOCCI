@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { QRCard } from "./QRCard";
 import {
@@ -247,22 +247,21 @@ function SortableItemRow({
   filterActive,
   onSave,
   onDelete,
+  onEdit,
 }: {
   item: Item;
   categorySource: MenuSource;
   filterActive?: boolean;
   onSave: (
     id: string,
-    patch: Partial<
-      ItemFormState & {
-        isActive: boolean;
-        isAvailable: boolean;
-        showInDelivery: boolean;
-        showInDineIn: boolean;
-      }
-    >
+    patch: Partial<{
+      isAvailable: boolean;
+      showInDelivery: boolean;
+      showInDineIn: boolean;
+    }>
   ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onEdit: (item: Item) => void;
 }) {
   const {
     attributes,
@@ -273,13 +272,6 @@ function SortableItemRow({
     isDragging,
   } = useSortable({ id: item.id });
 
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<ItemFormState>({
-    name: item.name,
-    description: item.description ?? "",
-    price: String(item.price),
-    imageUrl: item.imageUrl ?? null,
-  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const editable = categorySource === "MANUAL";
@@ -289,24 +281,6 @@ function SortableItemRow({
     transition,
     opacity: isDragging ? 0.4 : 1,
   };
-
-  async function handleSave() {
-    const price = parseFloat(form.price);
-    if (!form.name.trim() || isNaN(price) || price <= 0) {
-      setError("Nome e preço válido são obrigatórios.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      await onSave(item.id, { ...form, price: String(price) });
-      setEditing(false);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erro ao salvar.");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function handleDelete() {
     if (!confirm(`Remover "${item.name}"?`)) return;
@@ -319,135 +293,79 @@ function SortableItemRow({
     }
   }
 
-  if (editing) {
-    return (
-      <li
-        ref={setNodeRef}
-        style={style}
-        {...attributes}
-        className="bg-orange-50 px-5 py-3 space-y-2"
-      >
-        <div className="flex gap-2">
-          <input
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Nome do item"
-            className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-          />
-          <input
-            value={form.price}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, price: e.target.value }))
-            }
-            placeholder="Preço"
-            type="number"
-            step="0.01"
-            min="0"
-            className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-          />
-        </div>
-        <input
-          value={form.description}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, description: e.target.value }))
-          }
-          placeholder="Descrição (opcional)"
-          className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-        />
-        <ImageUpload
-          value={form.imageUrl}
-          onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
-        />
-        {error && <InlineError message={error} />}
-        <div className="flex gap-2">
-          <button
-            onClick={handleSave}
-            disabled={busy}
-            className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-          >
-            {busy ? <Spinner /> : "Salvar"}
-          </button>
-          <button
-            onClick={() => setEditing(false)}
-            className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-          >
-            Cancelar
-          </button>
-        </div>
-      </li>
-    );
-  }
-
   return (
     <li
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="flex items-center justify-between px-3 py-2.5 text-sm hover:bg-gray-50"
+      className="flex flex-col px-3 py-2.5 text-sm hover:bg-gray-50"
     >
-      <div className="flex items-center gap-2 min-w-0">
-        {editable && !filterActive && <DragHandle listeners={listeners} />}
-        {item.imageUrl ? (
-          <img
-            src={item.imageUrl}
-            alt={item.name}
-            className="h-8 w-8 shrink-0 rounded object-cover"
-          />
-        ) : (
-          <div className="h-8 w-8 shrink-0 rounded bg-gray-100" />
-        )}
-        <span
-          className={`font-medium truncate ${
-            !item.isActive ? "text-gray-400 line-through" : "text-gray-900"
-          }`}
-        >
-          {item.name}
-        </span>
-        {item.description && (
-          <span className="hidden truncate text-xs text-gray-400 sm:inline">
-            — {item.description}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          {editable && !filterActive && <DragHandle listeners={listeners} />}
+          {item.imageUrl ? (
+            <img
+              src={item.imageUrl}
+              alt={item.name}
+              className="h-8 w-8 shrink-0 rounded object-cover"
+            />
+          ) : (
+            <div className="h-8 w-8 shrink-0 rounded bg-gray-100" />
+          )}
+          <span
+            className={`font-medium truncate ${
+              !item.isActive ? "text-gray-400 line-through" : "text-gray-900"
+            }`}
+          >
+            {item.name}
           </span>
-        )}
+          {item.description && (
+            <span className="hidden truncate text-xs text-gray-400 sm:inline">
+              — {item.description}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 ml-4 shrink-0 flex-wrap justify-end">
+          <span className="font-semibold text-gray-700">
+            R$ {Number(item.price).toFixed(2)}
+          </span>
+          {editable && (
+            <>
+              <ToggleSwitch
+                label="Disponível"
+                checked={item.isAvailable}
+                onChange={() => onSave(item.id, { isAvailable: !item.isAvailable })}
+              />
+              <ToggleSwitch
+                label="Delivery"
+                checked={item.showInDelivery}
+                disabled={!item.isAvailable}
+                onChange={() => onSave(item.id, { showInDelivery: !item.showInDelivery })}
+              />
+              <ToggleSwitch
+                label="Salão"
+                checked={item.showInDineIn}
+                disabled={!item.isAvailable}
+                onChange={() => onSave(item.id, { showInDineIn: !item.showInDineIn })}
+              />
+              <button
+                onClick={() => onEdit(item)}
+                className="text-xs text-blue-500 hover:underline"
+              >
+                Editar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={busy}
+                className="text-xs text-red-400 hover:underline"
+              >
+                {busy ? <Spinner /> : "Remover"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-3 ml-4 shrink-0 flex-wrap justify-end">
-        <span className="font-semibold text-gray-700">
-          R$ {Number(item.price).toFixed(2)}
-        </span>
-        {editable && (
-          <>
-            <ToggleSwitch
-              label="Disponível"
-              checked={item.isAvailable}
-              onChange={() => onSave(item.id, { isAvailable: !item.isAvailable })}
-            />
-            <ToggleSwitch
-              label="Delivery"
-              checked={item.showInDelivery}
-              disabled={!item.isAvailable}
-              onChange={() => onSave(item.id, { showInDelivery: !item.showInDelivery })}
-            />
-            <ToggleSwitch
-              label="Salão"
-              checked={item.showInDineIn}
-              disabled={!item.isAvailable}
-              onChange={() => onSave(item.id, { showInDineIn: !item.showInDineIn })}
-            />
-            <button
-              onClick={() => setEditing(true)}
-              className="text-xs text-blue-500 hover:underline"
-            >
-              Editar
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={busy}
-              className="text-xs text-red-400 hover:underline"
-            >
-              {busy ? <Spinner /> : "Remover"}
-            </button>
-          </>
-        )}
-      </div>
+      {error && <InlineError message={error} />}
     </li>
   );
 }
@@ -551,12 +469,14 @@ function CategoryCard({
   filterActive,
   onChange,
   onDelete,
+  onEditItem,
 }: {
   category: Category;
   dragListeners?: Record<string, unknown>;
   filterActive?: boolean;
   onChange: (updated: Category) => void;
   onDelete: (id: string) => void;
+  onEditItem: (item: Item, categoryId: string) => void;
 }) {
   const [editingCat, setEditingCat] = useState(false);
   const [catForm, setCatForm] = useState<CategoryFormState>({
@@ -646,27 +566,16 @@ function CategoryCard({
 
   async function saveItem(
     id: string,
-    patch: Partial<
-      ItemFormState & {
-        isActive: boolean;
-        isAvailable: boolean;
-        showInDelivery: boolean;
-        showInDineIn: boolean;
-      }
-    >
+    patch: Partial<{
+      isAvailable: boolean;
+      showInDelivery: boolean;
+      showInDineIn: boolean;
+    }>
   ) {
     const body: Record<string, unknown> = {};
-    if (patch.name !== undefined) body.name = patch.name.trim();
-    if (patch.description !== undefined)
-      body.description = patch.description.trim() || undefined;
-    if (patch.price !== undefined) body.price = parseFloat(patch.price);
-    if (patch.imageUrl !== undefined) body.imageUrl = patch.imageUrl ?? "";
-    if (patch.isActive !== undefined) body.isActive = patch.isActive;
     if (patch.isAvailable !== undefined) body.isAvailable = patch.isAvailable;
-    if (patch.showInDelivery !== undefined)
-      body.showInDelivery = patch.showInDelivery;
-    if (patch.showInDineIn !== undefined)
-      body.showInDineIn = patch.showInDineIn;
+    if (patch.showInDelivery !== undefined) body.showInDelivery = patch.showInDelivery;
+    if (patch.showInDineIn !== undefined) body.showInDineIn = patch.showInDineIn;
     const data = await apiFetch(`/api/menu/items/${id}`, "PATCH", body);
     onChange({
       ...category,
@@ -849,6 +758,7 @@ function CategoryCard({
                   filterActive={filterActive}
                   onSave={saveItem}
                   onDelete={deleteItem}
+                  onEdit={(it) => onEditItem(it, category.id)}
                 />
               ))}
             </ul>
@@ -883,9 +793,7 @@ function CategoryCard({
 // ── Sortable category wrapper ─────────────────────────────────────────────────
 
 function SortableCategoryCard(
-  props: Omit<React.ComponentProps<typeof CategoryCard>, "dragListeners"> & {
-    filterActive?: boolean;
-  }
+  props: Omit<React.ComponentProps<typeof CategoryCard>, "dragListeners">
 ) {
   const { filterActive, ...rest } = props;
   const {
@@ -1061,10 +969,205 @@ function CategoryFilter({
 }
 
 // ── EditItemModal ─────────────────────────────────────────────────────────────
-// Placeholder – will replace inline item editing in a future step
 
-function EditItemModal() {
-  return null;
+type EditModalForm = {
+  name: string;
+  description: string;
+  price: string;
+  imageUrl: string | null;
+  showInDelivery: boolean;
+  showInDineIn: boolean;
+};
+
+function EditItemModal({
+  item,
+  onClose,
+  onSave,
+}: {
+  item: Item | null;
+  onClose: () => void;
+  onSave: (patch: EditModalForm) => Promise<void>;
+}) {
+  const [form, setForm] = useState<EditModalForm>({
+    name: "",
+    description: "",
+    price: "",
+    imageUrl: null,
+    showInDelivery: false,
+    showInDineIn: false,
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  // Sync form whenever a different item is opened
+  useEffect(() => {
+    if (!item) return;
+    setForm({
+      name: item.name,
+      description: item.description ?? "",
+      price: String(item.price),
+      imageUrl: item.imageUrl ?? null,
+      showInDelivery: item.showInDelivery,
+      showInDineIn: item.showInDineIn,
+    });
+    setError("");
+  }, [item?.id]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!item) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [item, onClose]);
+
+  if (!item) return null;
+
+  async function handleSave() {
+    const price = parseFloat(form.price);
+    if (!form.name.trim() || isNaN(price) || price <= 0) {
+      setError("Nome e preço válido são obrigatórios.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await onSave({ ...form, price: String(price) });
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao salvar.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+
+      {/* Drawer */}
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-white shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <h2 className="text-sm font-semibold text-gray-900">Editar item</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-lg leading-none text-gray-400 hover:text-gray-600"
+            aria-label="Fechar"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {/* Name */}
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-gray-700">
+              Nome <span className="text-red-500">*</span>
+            </label>
+            <input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Nome do item"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+            />
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-gray-700">
+              Descrição
+            </label>
+            <textarea
+              value={form.description}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, description: e.target.value }))
+              }
+              placeholder="Descrição (opcional)"
+              rows={3}
+              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+            />
+          </div>
+
+          {/* Price */}
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-gray-700">
+              Preço <span className="text-red-500">*</span>
+            </label>
+            <input
+              value={form.price}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, price: e.target.value }))
+              }
+              placeholder="0,00"
+              type="number"
+              step="0.01"
+              min="0.01"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+            />
+          </div>
+
+          {/* Image */}
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-gray-700">
+              Imagem
+            </label>
+            <ImageUpload
+              value={form.imageUrl}
+              onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+            />
+          </div>
+
+          {/* Channel toggles */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-gray-700">Canais</p>
+            <div className="flex gap-4">
+              <ToggleSwitch
+                label="Delivery"
+                checked={form.showInDelivery}
+                onChange={() =>
+                  setForm((f) => ({ ...f, showInDelivery: !f.showInDelivery }))
+                }
+              />
+              <ToggleSwitch
+                label="Salão"
+                checked={form.showInDineIn}
+                onChange={() =>
+                  setForm((f) => ({ ...f, showInDineIn: !f.showInDineIn }))
+                }
+              />
+            </div>
+          </div>
+
+          {error && <InlineError message={error} />}
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-2 border-t border-gray-100 px-5 py-4">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={busy}
+            className="flex-1 rounded-lg bg-orange-500 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+          >
+            {busy ? <Spinner /> : "Salvar"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </>
+  );
 }
 
 // ── BulkPriceModal ────────────────────────────────────────────────────────────
@@ -1087,6 +1190,10 @@ export function MenuManager({
 }) {
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [filterQuery, setFilterQuery] = useState("");
+  const [editingItem, setEditingItem] = useState<{
+    item: Item;
+    categoryId: string;
+  } | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -1117,6 +1224,29 @@ export function MenuManager({
 
   function addCategory(cat: Category) {
     setCategories((prev) => [...prev, cat]);
+    refresh();
+  }
+
+  async function handleModalSave(patch: EditModalForm) {
+    if (!editingItem) return;
+    const { item, categoryId } = editingItem;
+    const body: Record<string, unknown> = {
+      name: patch.name.trim(),
+      description: patch.description.trim() || undefined,
+      price: parseFloat(patch.price),
+      imageUrl: patch.imageUrl ?? "",
+      showInDelivery: patch.showInDelivery,
+      showInDineIn: patch.showInDineIn,
+    };
+    const data = await apiFetch(`/api/menu/items/${item.id}`, "PATCH", body);
+    const updated: Item = { ...item, ...data.data, price: Number(data.data.price) };
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === categoryId
+          ? { ...c, items: c.items.map((it) => (it.id === item.id ? updated : it)) }
+          : c
+      )
+    );
     refresh();
   }
 
@@ -1196,6 +1326,7 @@ export function MenuManager({
                 filterActive={isFilterActive}
                 onChange={updateCategory}
                 onDelete={removeCategory}
+                onEditItem={(item, categoryId) => setEditingItem({ item, categoryId })}
               />
             ))}
           </div>
@@ -1212,6 +1343,13 @@ export function MenuManager({
         </span>{" "}
         e não poderão ser editados manualmente.
       </div>
+
+      {/* Edit item drawer */}
+      <EditItemModal
+        item={editingItem?.item ?? null}
+        onClose={() => setEditingItem(null)}
+        onSave={handleModalSave}
+      />
     </div>
   );
 }
