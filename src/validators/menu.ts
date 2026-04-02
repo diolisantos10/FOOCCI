@@ -5,7 +5,7 @@ import { z } from "zod";
 export const createMenuCategorySchema = z.object({
   name: z.string().min(2).max(100),
   description: z.string().max(500).optional(),
-  imageUrl: z.string().url().optional().or(z.literal("")),
+  imageUrl: z.string().optional().or(z.literal("")),
   sortOrder: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),
   isAvailable: z.boolean().default(true),
@@ -33,7 +33,7 @@ export const createMenuItemSchema = z.object({
     .number()
     .positive("Price must be positive")
     .multipleOf(0.01, "Price must have at most 2 decimal places"),
-  imageUrl: z.string().url().optional().or(z.literal("")),
+  imageUrl: z.string().optional().or(z.literal("")),
   sortOrder: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),
   isAvailable: z.boolean().default(true),

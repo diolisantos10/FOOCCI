@@ -256,7 +256,6 @@ function SortableItemRow({
   categorySource,
   filterActive,
   onSave,
-  onDelete,
   onEdit,
 }: {
   item: Item;
@@ -270,7 +269,6 @@ function SortableItemRow({
       showInDineIn: boolean;
     }>
   ) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
   onEdit: (item: Item) => void;
 }) {
   const {
@@ -282,8 +280,6 @@ function SortableItemRow({
     isDragging,
   } = useSortable({ id: item.id });
 
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const editable = categorySource === "MANUAL";
 
   const style = {
@@ -292,27 +288,28 @@ function SortableItemRow({
     opacity: isDragging ? 0.4 : 1,
   };
 
-  async function handleDelete() {
-    if (!confirm(`Remover "${item.name}"?`)) return;
-    setBusy(true);
-    try {
-      await onDelete(item.id);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erro ao remover.");
-      setBusy(false);
-    }
-  }
-
   return (
     <li
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="flex flex-col px-3 py-2.5 text-sm hover:bg-gray-50"
+      className={`flex flex-col px-3 py-2.5 text-sm hover:bg-gray-50 ${editable ? "cursor-pointer" : ""}`}
+      onClick={() => editable && onEdit(item)}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
-          {editable && !filterActive && <DragHandle listeners={listeners} />}
+          {editable && (
+            <ToggleSwitch
+              label="Disponível"
+              checked={item.isAvailable}
+              onChange={() => onSave(item.id, { isAvailable: !item.isAvailable })}
+            />
+          )}
+          {editable && !filterActive && (
+            <span onClick={(e) => e.stopPropagation()}>
+              <DragHandle listeners={listeners} />
+            </span>
+          )}
           {item.imageUrl ? (
             <img
               src={item.imageUrl}
@@ -342,11 +339,6 @@ function SortableItemRow({
           {editable && (
             <>
               <ToggleSwitch
-                label="Disponível"
-                checked={item.isAvailable}
-                onChange={() => onSave(item.id, { isAvailable: !item.isAvailable })}
-              />
-              <ToggleSwitch
                 label="Delivery"
                 checked={item.showInDelivery}
                 disabled={!item.isAvailable}
@@ -358,24 +350,10 @@ function SortableItemRow({
                 disabled={!item.isAvailable}
                 onChange={() => onSave(item.id, { showInDineIn: !item.showInDineIn })}
               />
-              <button
-                onClick={() => onEdit(item)}
-                className="text-xs text-blue-500 hover:underline"
-              >
-                Editar
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={busy}
-                className="text-xs text-red-400 hover:underline"
-              >
-                {busy ? <Spinner /> : "Remover"}
-              </button>
             </>
           )}
         </div>
       </div>
-      {error && <InlineError message={error} />}
     </li>
   );
 }
@@ -666,8 +644,15 @@ function CategoryCard({
         </div>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-4 py-3">
-          {/* Left: drag handle + name */}
-          <div className="flex items-center gap-1 min-w-0">
+          {/* Left: availability toggle + drag handle + name */}
+          <div className="flex items-center gap-2 min-w-0">
+            {editable && (
+              <ToggleSwitch
+                label="Disponível"
+                checked={category.isAvailable}
+                onChange={() => saveCategoryFlag("isAvailable", !category.isAvailable)}
+              />
+            )}
             {editable && <DragHandle listeners={dragListeners} />}
             <h2
               className={`font-semibold truncate ${
@@ -691,7 +676,7 @@ function CategoryCard({
             )}
           </div>
 
-          {/* Right: category-level controls + actions */}
+          {/* Right: channel controls + actions */}
           <div className="flex items-center gap-3 shrink-0 flex-wrap">
             <span className="text-xs text-gray-400">
               {category.items.length} item
@@ -699,11 +684,6 @@ function CategoryCard({
             </span>
             {editable && (
               <>
-                <ToggleSwitch
-                  label="Disponível"
-                  checked={category.isAvailable}
-                  onChange={() => saveCategoryFlag("isAvailable", !category.isAvailable)}
-                />
                 <ToggleSwitch
                   label="Delivery"
                   checked={category.showInDelivery}
@@ -767,7 +747,6 @@ function CategoryCard({
                   categorySource={category.source}
                   filterActive={filterActive}
                   onSave={saveItem}
-                  onDelete={deleteItem}
                   onEdit={(it) => onEditItem(it, category.id)}
                 />
               ))}
@@ -1162,10 +1141,12 @@ function EditItemModal({
   item,
   onClose,
   onSave,
+  onDelete,
 }: {
   item: Item | null;
   onClose: () => void;
   onSave: (patch: EditModalForm) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const [form, setForm] = useState<EditModalForm>({
     name: "",
@@ -1239,6 +1220,21 @@ function EditItemModal({
     }
   }
 
+  async function handleDelete() {
+    if (!item) return;
+    if (!confirm(`Remover "${item.name}"?`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onDelete(item.id);
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao remover.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleAddVariant() {
     if (!item) {
       setAddError("Item não encontrado.");
@@ -1293,11 +1289,17 @@ function EditItemModal({
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
-
-      {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-white shadow-xl">
+      {/* Backdrop + centering container */}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={onClose}
+      >
+        {/* Modal panel */}
+        <div
+          className="relative flex w-full max-w-lg flex-col rounded-xl bg-white shadow-2xl"
+          style={{ maxHeight: "90vh" }}
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <h2 className="text-sm font-semibold text-gray-900">Editar item</h2>
@@ -1502,22 +1504,33 @@ function EditItemModal({
         </div>
 
         {/* Footer */}
-        <div className="flex gap-2 border-t border-gray-100 px-5 py-4">
+        <div className="flex items-center justify-between gap-2 border-t border-gray-100 px-5 py-4">
           <button
             type="button"
-            onClick={handleSave}
+            onClick={handleDelete}
             disabled={busy}
-            className="flex-1 rounded-lg bg-orange-500 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+            className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-500 hover:bg-red-50 disabled:opacity-50"
           >
-            {busy ? <Spinner /> : "Salvar"}
+            Excluir produto
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-          >
-            Cancelar
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={busy}
+              className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+            >
+              {busy ? <Spinner /> : "Salvar"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
         </div>
       </div>
     </>
@@ -1904,6 +1917,21 @@ export function MenuManager({
     refresh();
   }
 
+  async function handleModalDelete(itemId: string) {
+    if (!editingItem) return;
+    const { categoryId } = editingItem;
+    await apiFetch(`/api/menu/items/${itemId}`, "DELETE");
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === categoryId
+          ? { ...c, items: c.items.filter((it) => it.id !== itemId) }
+          : c
+      )
+    );
+    setEditingItem(null);
+    refresh();
+  }
+
   async function handleCategoryDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -2010,11 +2038,12 @@ export function MenuManager({
         onApplied={refresh}
       />
 
-      {/* Edit item drawer */}
+      {/* Edit item modal */}
       <EditItemModal
         item={editingItem?.item ?? null}
         onClose={() => { setEditingItem(null); refresh(); }}
         onSave={handleModalSave}
+        onDelete={handleModalDelete}
       />
     </div>
   );
