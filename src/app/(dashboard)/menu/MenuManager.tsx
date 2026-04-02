@@ -931,13 +931,15 @@ function AddCategoryForm({ onAdded }: { onAdded: (cat: Category) => void }) {
 function TopBar({
   categories,
   onAdded,
+  onBulkPrice,
 }: {
   categories: Category[];
   onAdded: (cat: Category) => void;
+  onBulkPrice: () => void;
 }) {
   const totalItems = categories.reduce((n, c) => n + c.items.length, 0);
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-xs text-gray-500">
         {categories.length} categoria
         {categories.length !== 1 ? "s" : ""}
@@ -945,7 +947,18 @@ function TopBar({
         {totalItems} item
         {totalItems !== 1 ? "s" : ""}
       </p>
-      <AddCategoryForm onAdded={onAdded} />
+      <div className="flex items-center gap-2">
+        {categories.length > 0 && (
+          <button
+            type="button"
+            onClick={onBulkPrice}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            Ajustar preços
+          </button>
+        )}
+        <AddCategoryForm onAdded={onAdded} />
+      </div>
     </div>
   );
 }
@@ -1507,10 +1520,303 @@ function EditItemModal({
 }
 
 // ── BulkPriceModal ────────────────────────────────────────────────────────────
-// Placeholder – bulk price update logic will be implemented in a future step
 
-function BulkPriceModal() {
-  return null;
+type BulkAction = "increase" | "decrease" | "set";
+
+const ACTION_LABELS: Record<BulkAction, string> = {
+  increase: "Aumentar em",
+  decrease: "Diminuir em",
+  set: "Definir como",
+};
+
+function BulkPriceModal({
+  categories,
+  open,
+  onClose,
+  onApplied,
+}: {
+  categories: Category[];
+  open: boolean;
+  onClose: () => void;
+  onApplied: () => void;
+}) {
+  const [step, setStep] = useState<"form" | "confirm" | "done">("form");
+  const [scope, setScope] = useState("");
+  const [action, setAction] = useState<BulkAction>("increase");
+  const [value, setValue] = useState("");
+  const [applyToVariants, setApplyToVariants] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<{
+    affected: number;
+    variantsAffected: number;
+  } | null>(null);
+
+  // Reset on open
+  useEffect(() => {
+    if (!open) return;
+    setStep("form");
+    setScope("");
+    setAction("increase");
+    setValue("");
+    setApplyToVariants(false);
+    setError("");
+    setResult(null);
+  }, [open]);
+
+  // Escape to close
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  // Live counts (mirrors backend: isActive items in scope)
+  const scopedCats = scope
+    ? categories.filter((c) => c.id === scope)
+    : categories;
+  const activeItems = scopedCats.flatMap((c) => c.items).filter((i) => i.isActive);
+  const itemCount = activeItems.length;
+  const variantCount = applyToVariants
+    ? activeItems.reduce((n, i) => n + i.variants.length, 0)
+    : 0;
+  const scopeLabel = scope
+    ? (categories.find((c) => c.id === scope)?.name ?? "")
+    : "Todo o cardápio";
+
+  function handlePreview() {
+    const v = parseFloat(value);
+    if (isNaN(v) || v <= 0) {
+      setError("Informe um valor positivo.");
+      return;
+    }
+    setError("");
+    setStep("confirm");
+  }
+
+  async function handleConfirm() {
+    setBusy(true);
+    setError("");
+    try {
+      const data = await apiFetch("/api/menu/bulk-price", "POST", {
+        action,
+        value: parseFloat(value),
+        ...(scope ? { categoryId: scope } : {}),
+        applyToVariants,
+      });
+      setResult(data.data);
+      setStep("done");
+      onApplied();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao aplicar ajuste.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+
+      {/* Dialog */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-gray-900">
+              {step === "done" ? "Ajuste aplicado" : "Ajustar preços em massa"}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-lg leading-none text-gray-400 hover:text-gray-600"
+              aria-label="Fechar"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* ── Step 1: form ── */}
+          {step === "form" && (
+            <div className="px-5 py-4 space-y-4">
+              {/* Scope */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">
+                  Escopo
+                </label>
+                <select
+                  value={scope}
+                  onChange={(e) => setScope(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                >
+                  <option value="">Todo o cardápio</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Action */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">
+                  Ação
+                </label>
+                <select
+                  value={action}
+                  onChange={(e) => setAction(e.target.value as BulkAction)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                >
+                  <option value="increase">Aumentar em</option>
+                  <option value="decrease">Diminuir em</option>
+                  <option value="set">Definir como</option>
+                </select>
+              </div>
+
+              {/* Value */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">
+                  Valor (R$) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="0,00"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                />
+              </div>
+
+              {/* Apply to variants */}
+              <ToggleSwitch
+                label="Incluir variantes"
+                checked={applyToVariants}
+                onChange={() => setApplyToVariants((v) => !v)}
+              />
+
+              {/* Live count hint */}
+              <p className="text-xs text-gray-500">
+                {itemCount} item{itemCount !== 1 ? "s" : ""}
+                {applyToVariants && variantCount > 0
+                  ? ` e ${variantCount} variante${variantCount !== 1 ? "s" : ""}`
+                  : ""}{" "}
+                {itemCount === 1 ? "será afetado" : "serão afetados"}.
+              </p>
+
+              {error && <InlineError message={error} />}
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handlePreview}
+                  disabled={!value || itemCount === 0}
+                  className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                >
+                  Pré-visualizar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 2: confirm ── */}
+          {step === "confirm" && (
+            <div className="px-5 py-4 space-y-4">
+              <div className="rounded-lg bg-gray-50 p-4 space-y-1 text-sm text-gray-700">
+                <p>
+                  <span className="font-medium">Ação:</span>{" "}
+                  {ACTION_LABELS[action]} R$ {parseFloat(value).toFixed(2)}
+                </p>
+                <p>
+                  <span className="font-medium">Escopo:</span> {scopeLabel}
+                </p>
+                {applyToVariants && (
+                  <p>
+                    <span className="font-medium">Variantes:</span> incluídas
+                  </p>
+                )}
+              </div>
+
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold text-orange-600">
+                  {itemCount}
+                </span>{" "}
+                item{itemCount !== 1 ? "s" : ""}{" "}
+                {itemCount === 1 ? "será afetado" : "serão afetados"}
+                {applyToVariants && variantCount > 0 && (
+                  <>
+                    , junto com{" "}
+                    <span className="font-semibold text-orange-600">
+                      {variantCount}
+                    </span>{" "}
+                    variante{variantCount !== 1 ? "s" : ""}
+                  </>
+                )}
+                .
+              </p>
+
+              {error && <InlineError message={error} />}
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setStep("form"); setError(""); }}
+                  disabled={busy}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  disabled={busy || itemCount === 0}
+                  className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                >
+                  {busy ? <Spinner /> : "Confirmar"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 3: done ── */}
+          {step === "done" && result && (
+            <div className="px-5 py-4 space-y-4">
+              <div className="rounded-lg bg-green-50 p-4 space-y-1 text-sm text-green-700">
+                <p>
+                  ✓ {result.affected} item{result.affected !== 1 ? "s" : ""}{" "}
+                  atualizado{result.affected !== 1 ? "s" : ""}.
+                </p>
+                {result.variantsAffected > 0 && (
+                  <p>
+                    ✓ {result.variantsAffected}{" "}
+                    variante{result.variantsAffected !== 1 ? "s" : ""}{" "}
+                    atualizada{result.variantsAffected !== 1 ? "s" : ""}.
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -1526,6 +1832,7 @@ export function MenuManager({
 }) {
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [filterQuery, setFilterQuery] = useState("");
+  const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<{
     item: Item;
     categoryId: string;
@@ -1621,7 +1928,11 @@ export function MenuManager({
       {restaurantSlug && <QRCard url={qrUrl} slug={restaurantSlug} />}
 
       {/* Header actions */}
-      <TopBar categories={categories} onAdded={addCategory} />
+      <TopBar
+        categories={categories}
+        onAdded={addCategory}
+        onBulkPrice={() => setBulkPriceOpen(true)}
+      />
 
       {/* Category filter */}
       <CategoryFilter
@@ -1685,6 +1996,14 @@ export function MenuManager({
         </span>{" "}
         e não poderão ser editados manualmente.
       </div>
+
+      {/* Bulk price dialog */}
+      <BulkPriceModal
+        categories={categories}
+        open={bulkPriceOpen}
+        onClose={() => setBulkPriceOpen(false)}
+        onApplied={refresh}
+      />
 
       {/* Edit item drawer */}
       <EditItemModal
