@@ -716,7 +716,7 @@ function CategoryCard({
           Nenhum item. {editable && "Adicione um item abaixo."}
         </p>
       )}
-      {category.items.length > 0 && category.isAvailable && (
+      {category.items.length > 0 && (
         <DndContext
           sensors={itemSensors}
           collisionDetection={closestCenter}
@@ -1846,9 +1846,11 @@ export function MenuManager({
   const router = useRouter();
 
   const isFilterActive = filterQuery !== "";
-  const visibleCategories = isFilterActive
-    ? categories.filter((c) => c.id === filterQuery)
-    : categories;
+  const visibleCategories = (
+    isFilterActive
+      ? categories.filter((c) => c.id === filterQuery)
+      : categories
+  ).filter((c) => c.isAvailable);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
