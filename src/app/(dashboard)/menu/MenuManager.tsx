@@ -300,7 +300,7 @@ function SortableItemRow({
         <div className="flex items-center gap-2 min-w-0">
           {editable && (
             <ToggleSwitch
-              label="Disponível"
+              label=""
               checked={item.isAvailable}
               onChange={() => onSave(item.id, { isAvailable: !item.isAvailable })}
             />
@@ -1895,7 +1895,7 @@ export function MenuManager({
       name: patch.name.trim(),
       description: patch.description.trim() || undefined,
       price: parseFloat(patch.price),
-      imageUrl: patch.imageUrl ?? "",
+      imageUrl: patch.imageUrl,
       showInDelivery: patch.showInDelivery,
       showInDineIn: patch.showInDineIn,
       hasVariants: patch.hasVariants,

@@ -33,7 +33,7 @@ export const createMenuItemSchema = z.object({
     .number()
     .positive("Price must be positive")
     .multipleOf(0.01, "Price must have at most 2 decimal places"),
-  imageUrl: z.string().optional().or(z.literal("")),
+  imageUrl: z.string().nullable().optional().or(z.literal("")),
   sortOrder: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),
   isAvailable: z.boolean().default(true),

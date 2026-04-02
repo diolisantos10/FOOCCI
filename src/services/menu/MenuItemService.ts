@@ -106,6 +106,7 @@ export class MenuItemService {
         ...(input.isAvailable !== undefined && { isAvailable: input.isAvailable }),
         ...(input.showInDelivery !== undefined && { showInDelivery: input.showInDelivery }),
         ...(input.showInDineIn !== undefined && { showInDineIn: input.showInDineIn }),
+        ...(input.hasVariants !== undefined && { hasVariants: input.hasVariants }),
       },
     });
 
