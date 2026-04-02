@@ -113,6 +113,39 @@ function DragHandle({
   );
 }
 
+// ── ToggleSwitch ──────────────────────────────────────────────────────────────
+
+function ToggleSwitch({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={`flex select-none items-center gap-1 text-xs ${
+        disabled
+          ? "cursor-not-allowed opacity-40"
+          : "cursor-pointer text-gray-600"
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        className="h-3.5 w-3.5 accent-orange-500"
+      />
+      {label}
+    </label>
+  );
+}
+
 // ── Image upload ──────────────────────────────────────────────────────────────
 
 const UPLOAD_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -372,53 +405,23 @@ function SortableItemRow({
         </span>
         {editable && (
           <>
-            <label className="flex cursor-pointer select-none items-center gap-1 text-xs text-gray-600">
-              <input
-                type="checkbox"
-                checked={item.isAvailable}
-                onChange={() =>
-                  onSave(item.id, { isAvailable: !item.isAvailable })
-                }
-                className="h-3.5 w-3.5 accent-orange-500"
-              />
-              Disponível
-            </label>
-            <label
-              className={`flex select-none items-center gap-1 text-xs ${
-                item.isAvailable
-                  ? "cursor-pointer text-gray-600"
-                  : "cursor-not-allowed opacity-40"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={item.showInDelivery}
-                disabled={!item.isAvailable}
-                onChange={() =>
-                  onSave(item.id, { showInDelivery: !item.showInDelivery })
-                }
-                className="h-3.5 w-3.5 accent-orange-500"
-              />
-              Delivery
-            </label>
-            <label
-              className={`flex select-none items-center gap-1 text-xs ${
-                item.isAvailable
-                  ? "cursor-pointer text-gray-600"
-                  : "cursor-not-allowed opacity-40"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={item.showInDineIn}
-                disabled={!item.isAvailable}
-                onChange={() =>
-                  onSave(item.id, { showInDineIn: !item.showInDineIn })
-                }
-                className="h-3.5 w-3.5 accent-orange-500"
-              />
-              Salão
-            </label>
+            <ToggleSwitch
+              label="Disponível"
+              checked={item.isAvailable}
+              onChange={() => onSave(item.id, { isAvailable: !item.isAvailable })}
+            />
+            <ToggleSwitch
+              label="Delivery"
+              checked={item.showInDelivery}
+              disabled={!item.isAvailable}
+              onChange={() => onSave(item.id, { showInDelivery: !item.showInDelivery })}
+            />
+            <ToggleSwitch
+              label="Salão"
+              checked={item.showInDineIn}
+              disabled={!item.isAvailable}
+              onChange={() => onSave(item.id, { showInDineIn: !item.showInDineIn })}
+            />
             <button
               onClick={() => setEditing(true)}
               className="text-xs text-blue-500 hover:underline"
@@ -765,56 +768,23 @@ function CategoryCard({
             </span>
             {editable && (
               <>
-                <label className="flex cursor-pointer select-none items-center gap-1 text-xs text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={category.isAvailable}
-                    onChange={() =>
-                      saveCategoryFlag("isAvailable", !category.isAvailable)
-                    }
-                    className="h-3.5 w-3.5 accent-orange-500"
-                  />
-                  Disponível
-                </label>
-                <label
-                  className={`flex select-none items-center gap-1 text-xs ${
-                    category.isAvailable
-                      ? "cursor-pointer text-gray-600"
-                      : "cursor-not-allowed opacity-40"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={category.showInDelivery}
-                    disabled={!category.isAvailable}
-                    onChange={() =>
-                      saveCategoryFlag(
-                        "showInDelivery",
-                        !category.showInDelivery
-                      )
-                    }
-                    className="h-3.5 w-3.5 accent-orange-500"
-                  />
-                  Delivery
-                </label>
-                <label
-                  className={`flex select-none items-center gap-1 text-xs ${
-                    category.isAvailable
-                      ? "cursor-pointer text-gray-600"
-                      : "cursor-not-allowed opacity-40"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={category.showInDineIn}
-                    disabled={!category.isAvailable}
-                    onChange={() =>
-                      saveCategoryFlag("showInDineIn", !category.showInDineIn)
-                    }
-                    className="h-3.5 w-3.5 accent-orange-500"
-                  />
-                  Salão
-                </label>
+                <ToggleSwitch
+                  label="Disponível"
+                  checked={category.isAvailable}
+                  onChange={() => saveCategoryFlag("isAvailable", !category.isAvailable)}
+                />
+                <ToggleSwitch
+                  label="Delivery"
+                  checked={category.showInDelivery}
+                  disabled={!category.isAvailable}
+                  onChange={() => saveCategoryFlag("showInDelivery", !category.showInDelivery)}
+                />
+                <ToggleSwitch
+                  label="Salão"
+                  checked={category.showInDineIn}
+                  disabled={!category.isAvailable}
+                  onChange={() => saveCategoryFlag("showInDineIn", !category.showInDineIn)}
+                />
                 <button
                   onClick={toggleActive}
                   title={category.isActive ? "Desativar" : "Ativar"}
@@ -1018,6 +988,51 @@ function AddCategoryForm({ onAdded }: { onAdded: (cat: Category) => void }) {
   );
 }
 
+// ── TopBar ────────────────────────────────────────────────────────────────────
+
+function TopBar({
+  categories,
+  onAdded,
+}: {
+  categories: Category[];
+  onAdded: (cat: Category) => void;
+}) {
+  const totalItems = categories.reduce((n, c) => n + c.items.length, 0);
+  return (
+    <div className="flex items-center justify-between">
+      <p className="text-xs text-gray-500">
+        {categories.length} categoria
+        {categories.length !== 1 ? "s" : ""}
+        {" · "}
+        {totalItems} item
+        {totalItems !== 1 ? "s" : ""}
+      </p>
+      <AddCategoryForm onAdded={onAdded} />
+    </div>
+  );
+}
+
+// ── CategoryFilter ────────────────────────────────────────────────────────────
+// Placeholder – filter/search bar will be wired up in a future step
+
+function CategoryFilter() {
+  return null;
+}
+
+// ── EditItemModal ─────────────────────────────────────────────────────────────
+// Placeholder – will replace inline item editing in a future step
+
+function EditItemModal() {
+  return null;
+}
+
+// ── BulkPriceModal ────────────────────────────────────────────────────────────
+// Placeholder – bulk price update logic will be implemented in a future step
+
+function BulkPriceModal() {
+  return null;
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function MenuManager({
@@ -1087,16 +1102,10 @@ export function MenuManager({
       {restaurantSlug && <QRCard url={qrUrl} slug={restaurantSlug} />}
 
       {/* Header actions */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">
-          {categories.length} categoria
-          {categories.length !== 1 ? "s" : ""}
-          {" · "}
-          {categories.reduce((n, c) => n + c.items.length, 0)} item
-          {categories.reduce((n, c) => n + c.items.length, 0) !== 1 ? "s" : ""}
-        </p>
-        <AddCategoryForm onAdded={addCategory} />
-      </div>
+      <TopBar categories={categories} onAdded={addCategory} />
+
+      {/* Category filter */}
+      <CategoryFilter />
 
       {/* Empty state */}
       {categories.length === 0 && (
