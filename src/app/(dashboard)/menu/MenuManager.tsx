@@ -1240,6 +1240,10 @@ function EditItemModal({
   }
 
   async function handleAddVariant() {
+    if (!item) {
+      setAddError("Item não encontrado.");
+      return;
+    }
     const price = parseFloat(newVariant.price);
     if (!newVariant.name.trim() || isNaN(price) || price <= 0) {
       setAddError("Nome e preço válido são obrigatórios.");
@@ -1267,6 +1271,7 @@ function EditItemModal({
   }
 
   async function handleVariantDragEnd(event: DragEndEvent) {
+    if (!item) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
