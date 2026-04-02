@@ -716,7 +716,7 @@ function CategoryCard({
           Nenhum item. {editable && "Adicione um item abaixo."}
         </p>
       )}
-      {category.items.length > 0 && (
+      {category.items.length > 0 && category.isAvailable && (
         <DndContext
           sensors={itemSensors}
           collisionDetection={closestCenter}
