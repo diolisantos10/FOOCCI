@@ -192,15 +192,33 @@ model MenuItem {
   isAvailable    Boolean @default(true)  // false = temporarily sold out (shown as Indisponível)
   showInDelivery Boolean @default(true)  // false = hidden from Foocci ordering channel
   showInDineIn   Boolean @default(true)  // false = hidden from QR dine-in menu
+  hasVariants    Boolean @default(false) // true = must select a variant before add-to-cart
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  category        MenuCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category        MenuCategory      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   orderItems      OrderItem[]
   orderDraftItems OrderDraftItem[]
+  variants        MenuItemVariant[]
 
   @@index([categoryId])
   @@map("menu_items")
+}
+
+model MenuItemVariant {
+  id          String   @id @default(cuid())
+  menuItemId  String
+  name        String                     // e.g. "350ml", "600ml", "2L"
+  price       Decimal  @db.Decimal(10, 2)
+  isAvailable Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([menuItemId])
+  @@map("menu_item_variants")
 }
 
 // ═══════════════════════════════════════════

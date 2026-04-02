@@ -28,6 +28,11 @@ export default async function MenuPage() {
       include: {
         items: {
           orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+          include: {
+            variants: {
+              orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+            },
+          },
         },
       },
     }),
@@ -55,13 +60,21 @@ export default async function MenuPage() {
       isAvailable: item.isAvailable,
       showInDelivery: item.showInDelivery,
       showInDineIn: item.showInDineIn,
+      hasVariants: item.hasVariants,
+      variants: item.variants.map((v) => ({
+        id: v.id,
+        name: v.name,
+        price: Number(v.price),
+        isAvailable: v.isAvailable,
+        sortOrder: v.sortOrder,
+      })),
     })),
   }));
 
   return (
     <>
       <TopBar title="Cardápio" />
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <MenuManager
           initialCategories={data}
           restaurantSlug={restaurant?.slug ?? ""}

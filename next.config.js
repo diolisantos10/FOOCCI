@@ -19,6 +19,7 @@ const nextConfig = {
     // Enable server actions for future use
     serverActions: {
       allowedOrigins: ["localhost:3000"],
+      bodySizeLimit: "10mb",
     },
   },
 };
