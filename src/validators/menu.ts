@@ -40,6 +40,7 @@ export const createMenuItemSchema = z.object({
   showInDelivery: z.boolean().default(true),
   showInDineIn: z.boolean().default(true),
   hasVariants: z.boolean().default(false),
+  code: z.string().max(100).optional(),
 });
 
 export const updateMenuItemSchema = createMenuItemSchema.partial();

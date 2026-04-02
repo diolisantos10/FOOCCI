@@ -43,6 +43,7 @@ type Item = {
   showInDelivery: boolean;
   showInDineIn: boolean;
   hasVariants: boolean;
+  code: string | null;
   variants: Variant[];
 };
 
@@ -1108,6 +1109,7 @@ type EditModalForm = {
   showInDelivery: boolean;
   showInDineIn: boolean;
   hasVariants: boolean;
+  code: string;
 };
 
 function EditItemModal({
@@ -1129,6 +1131,7 @@ function EditItemModal({
     showInDelivery: false,
     showInDineIn: false,
     hasVariants: false,
+    code: "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1155,6 +1158,7 @@ function EditItemModal({
       showInDelivery: item.showInDelivery,
       showInDineIn: item.showInDineIn,
       hasVariants: item.hasVariants,
+      code: item.code ?? "",
     });
     setVariants(item.variants ?? []);
     setAddingVariant(false);
@@ -1331,6 +1335,19 @@ function EditItemModal({
               type="number"
               step="0.01"
               min="0.01"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+            />
+          </div>
+
+          {/* Code */}
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-gray-700">
+              Código
+            </label>
+            <input
+              value={form.code}
+              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+              placeholder="Código do produto (opcional)"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
           </div>
@@ -1874,6 +1891,7 @@ export function MenuManager({
       showInDelivery: patch.showInDelivery,
       showInDineIn: patch.showInDineIn,
       hasVariants: patch.hasVariants,
+      code: patch.code.trim() || undefined,
     };
     const data = await apiFetch(`/api/menu/items/${item.id}`, "PATCH", body);
     const updated: Item = {
