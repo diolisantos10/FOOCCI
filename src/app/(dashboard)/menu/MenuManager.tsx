@@ -683,27 +683,13 @@ function CategoryCard({
               {category.items.length !== 1 ? "s" : ""}
             </span>
             {editable && (
-              <>
-                <ToggleSwitch
-                  label="Delivery"
-                  checked={category.showInDelivery}
-                  disabled={!category.isAvailable}
-                  onChange={() => saveCategoryFlag("showInDelivery", !category.showInDelivery)}
-                />
-                <ToggleSwitch
-                  label="Salão"
-                  checked={category.showInDineIn}
-                  disabled={!category.isAvailable}
-                  onChange={() => saveCategoryFlag("showInDineIn", !category.showInDineIn)}
-                />
-                <button
-                  onClick={toggleActive}
-                  title={category.isActive ? "Desativar" : "Ativar"}
-                  className="text-xs text-gray-400 hover:text-gray-700"
-                >
-                  {category.isActive ? "●" : "○"}
-                </button>
-              </>
+              <button
+                onClick={toggleActive}
+                title={category.isActive ? "Desativar" : "Ativar"}
+                className="text-xs text-gray-400 hover:text-gray-700"
+              >
+                {category.isActive ? "●" : "○"}
+              </button>
             )}
           </div>
         </div>
