@@ -698,57 +698,65 @@ function CategoryCard({
       {error && !editingCat && <InlineError message={error} />}
 
       {/* Items with per-category drag-and-drop */}
-      {category.items.length === 0 && !addingItem && (
-        <p className="px-5 py-4 text-sm text-gray-400">
-          Nenhum item. {editable && "Adicione um item abaixo."}
+      {!category.isAvailable ? (
+        <p className="px-5 py-4 text-sm text-gray-400 italic">
+          Categoria desativada — itens ocultos.
         </p>
-      )}
-      {category.items.length > 0 && (
-        <DndContext
-          sensors={itemSensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleItemDragEnd}
-        >
-          <SortableContext
-            items={category.items.map((i) => i.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <ul className="divide-y divide-gray-100">
-              {category.items.map((item) => (
-                <SortableItemRow
-                  key={item.id}
-                  item={item}
-                  categorySource={category.source}
-                  filterActive={filterActive}
-                  onSave={saveItem}
-                  onEdit={(it) => onEditItem(it, category.id)}
-                />
-              ))}
-            </ul>
-          </SortableContext>
-        </DndContext>
-      )}
-
-      {/* Add item */}
-      {editable &&
-        (addingItem ? (
-          <AddItemForm
-            categoryId={category.id}
-            onAdded={(item) => {
-              onChange({ ...category, items: [...category.items, item] });
-              setAddingItem(false);
-            }}
-          />
-        ) : (
-          <div className="border-t border-dashed border-gray-100 px-5 py-2">
-            <button
-              onClick={() => setAddingItem(true)}
-              className="text-xs font-medium text-orange-500 hover:text-orange-700"
+      ) : (
+        <>
+          {category.items.length === 0 && !addingItem && (
+            <p className="px-5 py-4 text-sm text-gray-400">
+              Nenhum item. {editable && "Adicione um item abaixo."}
+            </p>
+          )}
+          {category.items.length > 0 && (
+            <DndContext
+              sensors={itemSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleItemDragEnd}
             >
-              + Adicionar item
-            </button>
-          </div>
-        ))}
+              <SortableContext
+                items={category.items.map((i) => i.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <ul className="divide-y divide-gray-100">
+                  {category.items.map((item) => (
+                    <SortableItemRow
+                      key={item.id}
+                      item={item}
+                      categorySource={category.source}
+                      filterActive={filterActive}
+                      onSave={saveItem}
+                      onEdit={(it) => onEditItem(it, category.id)}
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+          )}
+
+          {/* Add item */}
+          {editable &&
+            (addingItem ? (
+              <AddItemForm
+                categoryId={category.id}
+                onAdded={(item) => {
+                  onChange({ ...category, items: [...category.items, item] });
+                  setAddingItem(false);
+                }}
+              />
+            ) : (
+              <div className="border-t border-dashed border-gray-100 px-5 py-2">
+                <button
+                  onClick={() => setAddingItem(true)}
+                  className="text-xs font-medium text-orange-500 hover:text-orange-700"
+                >
+                  + Adicionar item
+                </button>
+              </div>
+            ))}
+        </>
+      )}
     </div>
   );
 }

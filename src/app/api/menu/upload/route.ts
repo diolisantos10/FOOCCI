@@ -53,8 +53,13 @@ export async function POST(req: NextRequest) {
     try {
       url = await uploadToS3(buffer, key, file.type);
     } catch (s3Err) {
-      if (s3Err instanceof Error && s3Err.message.includes("not configured")) {
-        // Dev fallback: store in public/uploads
+      const msg = s3Err instanceof Error ? s3Err.message : "";
+      const fallback =
+        msg.includes("not configured") ||
+        msg.includes("AccessControlListNotSupported") ||
+        msg.includes("InvalidBucketAclWithObjectOwnership");
+      if (fallback) {
+        // S3 not configured or bucket blocks ACLs — store locally
         url = await saveLocally(buffer, file.type);
       } else {
         throw s3Err;
