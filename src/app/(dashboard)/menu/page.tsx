@@ -61,6 +61,7 @@ export default async function MenuPage() {
       showInDelivery: item.showInDelivery,
       showInDineIn: item.showInDineIn,
       hasVariants: item.hasVariants,
+      code: item.code ?? null,
       variants: item.variants.map((v) => ({
         id: v.id,
         name: v.name,

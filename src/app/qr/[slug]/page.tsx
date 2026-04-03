@@ -61,7 +61,7 @@ export default async function QRMenuPage({ params }: { params: { slug: string } 
   if (!restaurant) notFound();
 
   const rawCategories = await prisma.menuCategory.findMany({
-    where: { restaurantId: restaurant.id, isActive: true },
+    where: { restaurantId: restaurant.id, isActive: true, isAvailable: true },
     orderBy: { sortOrder: "asc" },
     include: {
       items: {

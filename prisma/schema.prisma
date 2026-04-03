@@ -193,6 +193,7 @@ model MenuItem {
   showInDelivery Boolean @default(true)  // false = hidden from Foocci ordering channel
   showInDineIn   Boolean @default(true)  // false = hidden from QR dine-in menu
   hasVariants    Boolean @default(false) // true = must select a variant before add-to-cart
+  code        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
