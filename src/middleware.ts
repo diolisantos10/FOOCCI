@@ -27,6 +27,7 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/qr(\/.*)?$/,                     // Public QR dine-in menu pages
   /^\/api\/qr(\/.*)?$/,                // Public QR dine-in menu API
   /^\/api\/payments\/stone\/webhook$/, // Stone webhook (public, verified by HMAC)
+  /^\/api\/media(\/.*)?$/,             // Public media (product images stored in DB)
 ];
 
 function isPublicPath(pathname: string): boolean {
