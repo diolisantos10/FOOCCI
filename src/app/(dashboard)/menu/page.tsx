@@ -32,6 +32,9 @@ export default async function MenuPage() {
             variants: {
               orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
             },
+            extras: {
+              orderBy: { name: "asc" },
+            },
           },
         },
       },
@@ -68,6 +71,12 @@ export default async function MenuPage() {
         price: Number(v.price),
         isAvailable: v.isAvailable,
         sortOrder: v.sortOrder,
+      })),
+      extras: item.extras.map((e) => ({
+        id: e.id,
+        name: e.name,
+        quantity: e.quantity,
+        price: Number(e.price),
       })),
     })),
   }));

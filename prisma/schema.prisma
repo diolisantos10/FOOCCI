@@ -201,6 +201,7 @@ model MenuItem {
   orderItems      OrderItem[]
   orderDraftItems OrderDraftItem[]
   variants        MenuItemVariant[]
+  extras          MenuItemExtra[]
 
   @@index([categoryId])
   @@map("menu_items")
@@ -713,6 +714,19 @@ model RestaurantBrandConfig {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("restaurant_brand_configs")
+}
+
+model MenuItemExtra {
+  id         String  @id @default(cuid())
+  menuItemId String
+  name       String
+  quantity   Int     @default(1)
+  price      Decimal @db.Decimal(10, 2)
+
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([menuItemId])
+  @@map("menu_item_extras")
 }
 
 model MediaUpload {
