@@ -46,6 +46,7 @@ model Restaurant {
   aiLogs           AIInteractionLog[]
   evolutionConfig  EvolutionConfig?
   brandConfig      RestaurantBrandConfig?
+  agentConfig      WhatsAppAgentConfig?
 
   @@map("restaurants")
 }
@@ -714,6 +715,43 @@ model RestaurantBrandConfig {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("restaurant_brand_configs")
+}
+
+// ═══════════════════════════════════════════
+//  WHATSAPP AGENT CONFIG
+// ═══════════════════════════════════════════
+
+model WhatsAppAgentConfig {
+  id              String   @id @default(cuid())
+  restaurantId    String   @unique
+
+  // Personality
+  agentName       String   @default("Agente")
+  tone            String   @default("informal")      // informal | neutral | premium
+  style           String   @default("sales_driven")  // direct | consultive | sales_driven
+
+  // Welcome message
+  welcomeMessage  String   @default("Olá! Bem-vindo! 😊 O que você deseja?")
+
+  // Entry option button labels
+  btn1Label       String   @default("Fazer pedido")
+  btn2Label       String   @default("Falar com atendente")
+  btn3Label       String   @default("Ver promoções")
+
+  // Order action
+  orderPreMessage String   @default("Ótimo! Aqui está nosso cardápio 👇")
+  menuUrl         String?
+
+  // Human handoff
+  handoffPhone    String?
+  handoffMessage  String   @default("Vou te conectar com um atendente. Um momento! 👋")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_agent_configs")
 }
 
 model MenuItemExtra {

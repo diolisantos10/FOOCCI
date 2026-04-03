@@ -11,8 +11,9 @@ const NAV_ITEMS = [
   { href: "/orders",             label: "Pedidos",   icon: "📋" },
   { href: "/conversations",      label: "Conversas", icon: "💬" },
   { href: "/chat-sim",           label: "Testar IA",  icon: "🧪" },
+  { href: "/settings/agent",     label: "Agente WA", icon: "🤖" },
   { href: "/settings/whatsapp",  label: "WhatsApp",  icon: "⚙️" },
-  { href: "/settings/ai",        label: "IA / Voz",  icon: "🤖" },
+  { href: "/settings/ai",        label: "IA / Voz",  icon: "🧠" },
 ];
 
 export function Sidebar() {
