@@ -26,4 +26,11 @@ body {
     background-color: theme("colors.gray.300");
     border-radius: 9999px;
   }
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
