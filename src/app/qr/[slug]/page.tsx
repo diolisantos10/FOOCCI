@@ -65,7 +65,7 @@ export default async function QRMenuPage({ params }: { params: { slug: string } 
     orderBy: { sortOrder: "asc" },
     include: {
       items: {
-        where: { isActive: true, showInDineIn: true },
+        where: { isActive: true, showInDineIn: true, isAvailable: true },
         orderBy: { sortOrder: "asc" },
         select: {
           id: true,
