@@ -1849,11 +1849,9 @@ export function MenuManager({
   const router = useRouter();
 
   const isFilterActive = filterQuery !== "";
-  const visibleCategories = (
-    isFilterActive
-      ? categories.filter((c) => c.id === filterQuery)
-      : categories
-  ).filter((c) => c.isAvailable);
+  const visibleCategories = isFilterActive
+    ? categories.filter((c) => c.id === filterQuery)
+    : categories;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
