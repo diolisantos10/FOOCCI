@@ -4,14 +4,20 @@
  * /dashboard/settings/agent
  *
  * WhatsApp agent configuration panel.
- * Controls the agent's personality, welcome flow, and handoff settings.
+ * Controls personality, welcome message, dynamic entry options, and flow settings.
  */
 
 import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
-import { AGENT_DEFAULTS } from "@/validators/whatsapp-agent";
+import {
+  AGENT_DEFAULTS,
+  DEFAULT_MENU_OPTIONS,
+  FLOW_TYPES,
+  type MenuOption,
+  type FlowType,
+} from "@/validators/whatsapp-agent";
 
-// ── Option maps ────────────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────────
 
 const TONE_OPTIONS = [
   { value: "informal", label: "Informal",  desc: "Você, sabe? Tranquilo" },
@@ -25,48 +31,74 @@ const STYLE_OPTIONS = [
   { value: "sales_driven", label: "Vendas",      desc: "Sugere, engaja, converte" },
 ];
 
+const FLOW_CONFIG: Record<FlowType, { label: string; desc: string; icon: string }> = {
+  order:      { icon: "🛒", label: "Fazer pedido",           desc: "Envia msg de pedido + link do cardápio" },
+  handoff:    { icon: "👤", label: "Falar com atendente",    desc: "Encaminha para o número configurado" },
+  menu:       { icon: "📋", label: "Ver cardápio",            desc: "Envia o link do cardápio" },
+  promotions: { icon: "🎁", label: "Ver promoções",           desc: "O agente lista as promoções ativas" },
+  custom:     { icon: "💬", label: "Mensagem personalizada",  desc: "Envia um texto livre definido aqui" },
+};
+
+// Preset chips shown at the bottom of the options list
+const PRESETS: Array<{ label: string; flow: FlowType; message?: string }> = [
+  { label: "Fazer pedido",        flow: "order"      },
+  { label: "Falar com atendente", flow: "handoff"    },
+  { label: "Ver promoções",       flow: "promotions" },
+  { label: "Ver cardápio",        flow: "menu"       },
+  { label: "Informações",         flow: "custom",    message: "Horário: ...\nEndereço: ..." },
+];
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function newId() {
+  return `opt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function parseMenuOptions(raw: unknown): MenuOption[] {
+  if (Array.isArray(raw) && raw.length > 0) return raw as MenuOption[];
+  return DEFAULT_MENU_OPTIONS.map((o) => ({ ...o, id: newId() }));
+}
+
 // ── Form state ─────────────────────────────────────────────────────────────────
 
 interface FormState {
-  agentName: string;
-  tone: string;
-  style: string;
-  welcomeMessage: string;
-  btn1Label: string;
-  btn2Label: string;
-  btn3Label: string;
+  agentName:       string;
+  tone:            string;
+  style:           string;
+  welcomeMessage:  string;
   orderPreMessage: string;
-  menuUrl: string;
-  handoffPhone: string;
-  handoffMessage: string;
+  menuUrl:         string;
+  handoffPhone:    string;
+  handoffMessage:  string;
 }
 
 function toForm(d: Record<string, unknown>): FormState {
+  const def = AGENT_DEFAULTS;
   return {
-    agentName:       String(d.agentName       ?? AGENT_DEFAULTS.agentName),
-    tone:            String(d.tone            ?? AGENT_DEFAULTS.tone),
-    style:           String(d.style           ?? AGENT_DEFAULTS.style),
-    welcomeMessage:  String(d.welcomeMessage  ?? AGENT_DEFAULTS.welcomeMessage),
-    btn1Label:       String(d.btn1Label       ?? AGENT_DEFAULTS.btn1Label),
-    btn2Label:       String(d.btn2Label       ?? AGENT_DEFAULTS.btn2Label),
-    btn3Label:       String(d.btn3Label       ?? AGENT_DEFAULTS.btn3Label),
-    orderPreMessage: String(d.orderPreMessage ?? AGENT_DEFAULTS.orderPreMessage),
+    agentName:       String(d.agentName       ?? def.agentName),
+    tone:            String(d.tone            ?? def.tone),
+    style:           String(d.style           ?? def.style),
+    welcomeMessage:  String(d.welcomeMessage  ?? def.welcomeMessage),
+    orderPreMessage: String(d.orderPreMessage ?? def.orderPreMessage),
     menuUrl:         String(d.menuUrl         ?? ""),
     handoffPhone:    String(d.handoffPhone    ?? ""),
-    handoffMessage:  String(d.handoffMessage  ?? AGENT_DEFAULTS.handoffMessage),
+    handoffMessage:  String(d.handoffMessage  ?? def.handoffMessage),
   };
 }
 
 const FORM_DEFAULTS: FormState = toForm({});
 
-// ── Component ──────────────────────────────────────────────────────────────────
+// ── Page component ─────────────────────────────────────────────────────────────
 
 export default function AgentSettingsPage() {
-  const [form, setForm]         = useState<FormState>(FORM_DEFAULTS);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [successMsg, setSuccess] = useState<string | null>(null);
-  const [errorMsg, setError]    = useState<string | null>(null);
+  const [form, setForm]           = useState<FormState>(FORM_DEFAULTS);
+  const [menuOptions, setOptions] = useState<MenuOption[]>(
+    DEFAULT_MENU_OPTIONS.map((o) => ({ ...o, id: newId() }))
+  );
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [successMsg, setSuccess]  = useState<string | null>(null);
+  const [errorMsg, setError]      = useState<string | null>(null);
 
   useEffect(() => { fetchConfig(); }, []);
 
@@ -77,6 +109,7 @@ export default function AgentSettingsPage() {
       if (res.ok) {
         const json = await res.json();
         setForm(toForm(json.data));
+        setOptions(parseMenuOptions(json.data.menuOptions));
       }
       // 404 = not configured yet, keep defaults
     } catch {
@@ -88,6 +121,10 @@ export default function AgentSettingsPage() {
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
+    if (menuOptions.some((o) => !o.label.trim())) {
+      setError("Todas as opções precisam ter um rótulo.");
+      return;
+    }
     setSaving(true);
     setSuccess(null);
     setError(null);
@@ -97,6 +134,7 @@ export default function AgentSettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          menuOptions,
           menuUrl:      form.menuUrl      || null,
           handoffPhone: form.handoffPhone || null,
         }),
@@ -116,6 +154,44 @@ export default function AgentSettingsPage() {
 
   function set(key: keyof FormState) {
     return (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  // ── Menu options CRUD ────────────────────────────────────────────────────────
+
+  function addOption(preset?: typeof PRESETS[number]) {
+    const opt: MenuOption = {
+      id:      newId(),
+      label:   preset?.label   ?? "",
+      flow:    preset?.flow    ?? "custom",
+      message: preset?.message ?? "",
+    };
+    setOptions((prev) => [...prev, opt]);
+  }
+
+  function updateOption(id: string, patch: Partial<MenuOption>) {
+    setOptions((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, ...patch } : o))
+    );
+  }
+
+  function removeOption(id: string) {
+    setOptions((prev) => prev.filter((o) => o.id !== id));
+  }
+
+  function moveOption(id: string, dir: -1 | 1) {
+    setOptions((prev) => {
+      const idx = prev.findIndex((o) => o.id === id);
+      if (idx < 0) return prev;
+      const next = idx + dir;
+      if (next < 0 || next >= prev.length) return prev;
+      const arr = [...prev];
+      [arr[idx], arr[next]] = [arr[next]!, arr[idx]!];
+      return arr;
+    });
+  }
+
+  function resetToDefaults() {
+    setOptions(DEFAULT_MENU_OPTIONS.map((o) => ({ ...o, id: newId() })));
   }
 
   if (loading) {
@@ -148,11 +224,7 @@ export default function AgentSettingsPage() {
       {errorMsg && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           {errorMsg}
-          <button
-            type="button"
-            className="ml-2 underline"
-            onClick={() => setError(null)}
-          >
+          <button type="button" className="ml-2 underline" onClick={() => setError(null)}>
             fechar
           </button>
         </div>
@@ -160,7 +232,6 @@ export default function AgentSettingsPage() {
 
       {/* ── 1. Personalidade ─────────────────────────────────────── */}
       <Section title="Personalidade do agente">
-        {/* Agent name */}
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">
             Nome do agente
@@ -177,20 +248,8 @@ export default function AgentSettingsPage() {
             Nome que o agente usa para se apresentar.
           </p>
         </div>
-
-        <RadioGroup
-          label="Tom de voz"
-          options={TONE_OPTIONS}
-          value={form.tone}
-          onChange={set("tone")}
-        />
-
-        <RadioGroup
-          label="Estilo de atendimento"
-          options={STYLE_OPTIONS}
-          value={form.style}
-          onChange={set("style")}
-        />
+        <RadioGroup label="Tom de voz" options={TONE_OPTIONS} value={form.tone} onChange={set("tone")} />
+        <RadioGroup label="Estilo de atendimento" options={STYLE_OPTIONS} value={form.style} onChange={set("style")} />
       </Section>
 
       {/* ── 2. Mensagem de boas-vindas ───────────────────────────── */}
@@ -211,48 +270,92 @@ export default function AgentSettingsPage() {
         </div>
         {/* Live preview */}
         <div className="rounded-xl bg-[#dcf8c6] px-4 py-3 text-sm text-gray-800 shadow-inner max-w-xs">
-          <p className="text-[11px] font-semibold text-gray-500 mb-1">
-            Pré-visualização
-          </p>
-          <p className="whitespace-pre-wrap leading-relaxed">
-            {form.welcomeMessage || "…"}
-          </p>
+          <p className="text-[11px] font-semibold text-gray-500 mb-1">Pré-visualização</p>
+          <p className="whitespace-pre-wrap leading-relaxed">{form.welcomeMessage || "…"}</p>
+          {menuOptions.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {menuOptions.map((o, i) => (
+                <div key={o.id} className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-gray-700">
+                  {i + 1}. {o.label || <span className="text-gray-400 italic">sem rótulo</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </Section>
 
       {/* ── 3. Opções de entrada ─────────────────────────────────── */}
       <Section title="Opções de entrada">
         <p className="text-xs text-gray-500">
-          Botões exibidos logo após a mensagem de boas-vindas.
+          Botões exibidos após a mensagem de boas-vindas. Cada opção aciona um fluxo.
+          Você pode editar, remover, reordenar e adicionar novas opções.
         </p>
-        <div className="space-y-3">
-          {(
-            [
-              { key: "btn1Label", icon: "🛒", hint: "Inicia fluxo de pedido" },
-              { key: "btn2Label", icon: "👤", hint: "Transfere para atendente" },
-              { key: "btn3Label", icon: "🎁", hint: "Mostra ofertas" },
-            ] as const
-          ).map(({ key, icon, hint }, i) => (
-            <div key={key} className="flex items-center gap-3">
-              <span className="text-xl w-7 text-center">{icon}</span>
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={form[key]}
-                  onChange={(e) => set(key)(e.target.value)}
-                  maxLength={60}
-                  placeholder={`Opção ${i + 1}`}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-                <p className="mt-0.5 text-xs text-gray-400">{hint}</p>
-              </div>
-            </div>
+
+        {/* Options list */}
+        <div className="space-y-2">
+          {menuOptions.length === 0 && (
+            <p className="rounded-lg border border-dashed border-gray-300 py-4 text-center text-xs text-gray-400">
+              Nenhuma opção configurada. Adicione abaixo.
+            </p>
+          )}
+          {menuOptions.map((opt, idx) => (
+            <OptionCard
+              key={opt.id}
+              option={opt}
+              index={idx}
+              total={menuOptions.length}
+              onChange={(patch) => updateOption(opt.id, patch)}
+              onRemove={() => removeOption(opt.id)}
+              onMoveUp={() => moveOption(opt.id, -1)}
+              onMoveDown={() => moveOption(opt.id, 1)}
+            />
           ))}
+        </div>
+
+        {/* Add controls */}
+        <div className="pt-1 space-y-3">
+          <button
+            type="button"
+            onClick={() => addOption()}
+            className="rounded-lg border border-dashed border-brand-300 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-600 hover:bg-brand-100 transition-colors"
+          >
+            + Nova opção em branco
+          </button>
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-gray-500">Adicionar predefinição:</p>
+            <div className="flex flex-wrap gap-2">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => addOption(p)}
+                  className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:border-brand-300 hover:text-brand-600 transition-colors"
+                >
+                  {FLOW_CONFIG[p.flow].icon} {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {menuOptions.length > 0 && (
+            <button
+              type="button"
+              onClick={resetToDefaults}
+              className="text-xs text-gray-400 underline hover:text-gray-600"
+            >
+              Restaurar padrões
+            </button>
+          )}
         </div>
       </Section>
 
-      {/* ── 4. Ação: Fazer pedido ────────────────────────────────── */}
-      <Section title='Ação — "Fazer pedido"'>
+      {/* ── 4. Fluxo: Fazer pedido ───────────────────────────────── */}
+      <Section title='Fluxo — "Fazer pedido"'>
+        <p className="text-xs text-gray-500">
+          Ativado quando o cliente escolhe uma opção com fluxo{" "}
+          <span className="font-semibold text-gray-700">Fazer pedido</span>.
+        </p>
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">
             Mensagem enviada ao iniciar pedido
@@ -279,13 +382,17 @@ export default function AgentSettingsPage() {
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           <p className="mt-1 text-xs text-gray-400">
-            Link enviado junto com a mensagem de pedido.
+            Enviado junto com a mensagem acima.
           </p>
         </div>
       </Section>
 
-      {/* ── 5. Transferência para humano ─────────────────────────── */}
-      <Section title="Transferência para atendente">
+      {/* ── 5. Fluxo: Transferência para humano ─────────────────── */}
+      <Section title='Fluxo — "Falar com atendente"'>
+        <p className="text-xs text-gray-500">
+          Ativado quando o cliente escolhe uma opção com fluxo{" "}
+          <span className="font-semibold text-gray-700">Falar com atendente</span>.
+        </p>
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">
             Telefone do atendente{" "}
@@ -334,10 +441,7 @@ export default function AgentSettingsPage() {
           </ul>
           <p className="text-xs text-blue-500 pt-1">
             Dados ficam disponíveis na seção{" "}
-            <Link
-              href="/customers"
-              className="underline font-medium hover:text-blue-700"
-            >
+            <Link href="/customers" className="underline font-medium hover:text-blue-700">
               Clientes
             </Link>
             .
@@ -359,15 +463,116 @@ export default function AgentSettingsPage() {
   );
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// ── OptionCard ─────────────────────────────────────────────────────────────────
 
-function Section({
-  title,
-  children,
+function OptionCard({
+  option,
+  index,
+  total,
+  onChange,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
 }: {
-  title: string;
-  children: React.ReactNode;
+  option: MenuOption;
+  index: number;
+  total: number;
+  onChange: (patch: Partial<MenuOption>) => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
 }) {
+  const flow = FLOW_CONFIG[option.flow];
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        {/* Position badge */}
+        <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+          {index + 1}
+        </span>
+
+        {/* Label input */}
+        <input
+          type="text"
+          value={option.label}
+          onChange={(e) => onChange({ label: e.target.value })}
+          maxLength={60}
+          placeholder="Ex: Fazer pedido"
+          className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+
+        {/* Flow selector */}
+        <select
+          value={option.flow}
+          onChange={(e) => onChange({ flow: e.target.value as FlowType })}
+          className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+        >
+          {FLOW_TYPES.map((f) => (
+            <option key={f} value={f}>
+              {FLOW_CONFIG[f].icon} {FLOW_CONFIG[f].label}
+            </option>
+          ))}
+        </select>
+
+        {/* Reorder buttons */}
+        <div className="flex flex-col gap-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={onMoveUp}
+            disabled={index === 0}
+            className="flex h-5 w-5 items-center justify-center rounded text-xs text-gray-400 hover:bg-gray-200 disabled:opacity-30"
+            aria-label="Mover para cima"
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            onClick={onMoveDown}
+            disabled={index === total - 1}
+            className="flex h-5 w-5 items-center justify-center rounded text-xs text-gray-400 hover:bg-gray-200 disabled:opacity-30"
+            aria-label="Mover para baixo"
+          >
+            ▼
+          </button>
+        </div>
+
+        {/* Remove */}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+          aria-label="Remover opção"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Flow description */}
+      <p className="pl-8 text-xs text-gray-500">
+        {flow.icon} {flow.desc}
+      </p>
+
+      {/* Custom message textarea — only when flow = 'custom' */}
+      {option.flow === "custom" && (
+        <div className="pl-8">
+          <textarea
+            value={option.message ?? ""}
+            onChange={(e) => onChange({ message: e.target.value })}
+            rows={2}
+            maxLength={500}
+            placeholder="Mensagem enviada ao cliente ao selecionar esta opção…"
+            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Shared sub-components ──────────────────────────────────────────────────────
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
       <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
@@ -419,11 +624,7 @@ function RadioGroup({
 function CharCount({ current, max }: { current: number; max: number }) {
   const near = current > max * 0.85;
   return (
-    <p
-      className={`mt-0.5 text-right text-xs ${
-        near ? "text-amber-500" : "text-gray-400"
-      }`}
-    >
+    <p className={`mt-0.5 text-right text-xs ${near ? "text-amber-500" : "text-gray-400"}`}>
       {current} / {max}
     </p>
   );

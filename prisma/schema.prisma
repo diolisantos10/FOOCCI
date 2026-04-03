@@ -733,10 +733,9 @@ model WhatsAppAgentConfig {
   // Welcome message
   welcomeMessage  String   @default("Olá! Bem-vindo! 😊 O que você deseja?")
 
-  // Entry option button labels
-  btn1Label       String   @default("Fazer pedido")
-  btn2Label       String   @default("Falar com atendente")
-  btn3Label       String   @default("Ver promoções")
+  // Entry menu options — JSON array of { id, label, flow, message? }
+  // flow: order | handoff | menu | promotions | custom
+  menuOptions     Json?
 
   // Order action
   orderPreMessage String   @default("Ótimo! Aqui está nosso cardápio 👇")
