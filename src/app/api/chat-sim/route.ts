@@ -336,7 +336,7 @@ export async function GET(req: NextRequest) {
     if (!ctx) return unauthorized();
 
     const categories = await prisma.menuCategory.findMany({
-      where: { restaurantId: ctx.restaurantId, isActive: true },
+      where: { restaurantId: ctx.restaurantId, isActive: true, isAvailable: true },
       orderBy: { sortOrder: "asc" },
       include: {
         items: {
@@ -406,7 +406,7 @@ export async function POST(req: NextRequest) {
         select: { name: true },
       }),
       prisma.menuCategory.findMany({
-        where: { restaurantId: ctx.restaurantId, isActive: true },
+        where: { restaurantId: ctx.restaurantId, isActive: true, isAvailable: true },
         orderBy: { sortOrder: "asc" },
         include: {
           items: {

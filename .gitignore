@@ -43,3 +43,7 @@ qa-reports/*.md
 # Playwright
 playwright-report/
 test-results/
+
+# User-uploaded files (runtime)
+public/uploads/*
+!public/uploads/.gitkeep

@@ -255,12 +255,14 @@ function ImageUpload({
 function SortableItemRow({
   item,
   categorySource,
+  categoryIsAvailable,
   filterActive,
   onSave,
   onEdit,
 }: {
   item: Item;
   categorySource: MenuSource;
+  categoryIsAvailable: boolean;
   filterActive?: boolean;
   onSave: (
     id: string,
@@ -294,7 +296,7 @@ function SortableItemRow({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className={`flex flex-col px-3 py-2.5 text-sm hover:bg-gray-50 ${editable ? "cursor-pointer" : ""}`}
+      className={`flex flex-col px-3 py-2.5 text-sm hover:bg-gray-50 ${editable ? "cursor-pointer" : ""} ${!categoryIsAvailable ? "opacity-50" : ""}`}
       onClick={() => editable && onEdit(item)}
     >
       <div className="flex items-center justify-between">
@@ -719,6 +721,7 @@ function CategoryCard({
                   key={item.id}
                   item={item}
                   categorySource={category.source}
+                  categoryIsAvailable={category.isAvailable}
                   filterActive={filterActive}
                   onSave={saveItem}
                   onEdit={(it) => onEditItem(it, category.id)}

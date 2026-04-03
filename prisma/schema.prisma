@@ -714,3 +714,14 @@ model RestaurantBrandConfig {
 
   @@map("restaurant_brand_configs")
 }
+
+model MediaUpload {
+  id           String   @id @default(cuid())
+  restaurantId String
+  mimeType     String
+  data         Bytes
+  createdAt    DateTime @default(now())
+
+  @@index([restaurantId])
+  @@map("media_uploads")
+}

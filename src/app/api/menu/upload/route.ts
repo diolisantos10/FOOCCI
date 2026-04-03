@@ -1,9 +1,8 @@
-import path from "path";
-import fs from "fs/promises";
 import crypto from "crypto";
 import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { uploadToS3 } from "@/lib/s3";
+import { prisma } from "@/lib/prisma";
 import { ok, badRequest, unauthorized, serverError } from "@/lib/api-response";
 
 const ALLOWED_TYPES: Record<string, string> = {
@@ -13,15 +12,26 @@ const ALLOWED_TYPES: Record<string, string> = {
 };
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
-/** Fallback: persist to /public/uploads/ when S3 is not configured. */
-async function saveLocally(buffer: Buffer, mimeType: string): Promise<string> {
-  const ext = ALLOWED_TYPES[mimeType]!;
-  // Unique filename: timestamp + 16 random hex chars + extension
-  const unique = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads");
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, unique), buffer);
-  return `/uploads/${unique}`;
+/**
+ * Fallback: store image binary in PostgreSQL when S3 is not configured.
+ * Returns a /api/media/[id] URL that is served by the public media route.
+ * This persists across container restarts (unlike local filesystem on Railway).
+ */
+async function saveToDatabase(
+  buffer: Buffer,
+  mimeType: string,
+  restaurantId: string
+): Promise<string> {
+  const record = await prisma.mediaUpload.create({
+    data: {
+      id: crypto.randomBytes(16).toString("hex"),
+      restaurantId,
+      mimeType,
+      data: buffer,
+    },
+    select: { id: true },
+  });
+  return `/api/media/${record.id}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -53,9 +63,20 @@ export async function POST(req: NextRequest) {
     try {
       url = await uploadToS3(buffer, key, file.type);
     } catch (s3Err) {
-      if (s3Err instanceof Error && s3Err.message.includes("not configured")) {
-        // Dev fallback: store in public/uploads
-        url = await saveLocally(buffer, file.type);
+      const msg = s3Err instanceof Error ? s3Err.message : "";
+      // AWS SDK v3 puts the error code in error.name, not error.message.
+      // e.g. name="AccessControlListNotSupported", message="The bucket does not allow ACLs"
+      const code = s3Err instanceof Error ? (s3Err.name ?? "") : "";
+      const fallback =
+        msg.includes("not configured") ||
+        code === "AccessControlListNotSupported" ||
+        code === "InvalidBucketAclWithObjectOwnership" ||
+        msg.includes("AccessControlListNotSupported") ||
+        msg.includes("InvalidBucketAclWithObjectOwnership");
+      if (fallback) {
+        // S3 not configured or bucket blocks ACLs — store in PostgreSQL DB.
+        // This persists across container restarts unlike local filesystem.
+        url = await saveToDatabase(buffer, file.type, ctx.restaurantId);
       } else {
         throw s3Err;
       }
