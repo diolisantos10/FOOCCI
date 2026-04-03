@@ -28,6 +28,7 @@ model Restaurant {
   email       String?
   logoUrl     String?
   address     String?
+  description String?
   timezone    String   @default("America/Sao_Paulo")
   isActive    Boolean  @default(true)
   plan        Plan     @default(STARTER)
@@ -47,6 +48,10 @@ model Restaurant {
   evolutionConfig  EvolutionConfig?
   brandConfig      RestaurantBrandConfig?
   agentConfig      WhatsAppAgentConfig?
+  deliveryConfig   DeliveryConfig?
+  businessHours    BusinessHours[]
+  paymentSettings  PaymentSettings?
+  storePolicies    StorePolicies?
 
   @@map("restaurants")
 }
@@ -775,4 +780,69 @@ model MediaUpload {
 
   @@index([restaurantId])
   @@map("media_uploads")
+}
+
+// ═══════════════════════════════════════════
+//  GENERAL SETTINGS
+// ═══════════════════════════════════════════
+
+model DeliveryConfig {
+  id               String   @id @default(cuid())
+  restaurantId     String   @unique
+  enabled          Boolean  @default(true)
+  fee              Decimal? @db.Decimal(10, 2)
+  estimatedMinutes Int?
+  areaDescription  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("delivery_configs")
+}
+
+model BusinessHours {
+  id           String   @id @default(cuid())
+  restaurantId String
+  dayOfWeek    Int      // 0 = Sunday … 6 = Saturday
+  isOpen       Boolean  @default(true)
+  openTime     String   @default("09:00")   // "HH:MM"
+  closeTime    String   @default("22:00")   // "HH:MM"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, dayOfWeek])
+  @@index([restaurantId])
+  @@map("business_hours")
+}
+
+model PaymentSettings {
+  id            String   @id @default(cuid())
+  restaurantId  String   @unique
+  acceptPix     Boolean  @default(true)
+  acceptCash    Boolean  @default(true)
+  acceptCard    Boolean  @default(true)
+  acceptLink    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("payment_settings")
+}
+
+model StorePolicies {
+  id                 String   @id @default(cuid())
+  restaurantId       String   @unique
+  termsOfUse         String?
+  privacyPolicy      String?
+  cancellationPolicy String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("store_policies")
 }

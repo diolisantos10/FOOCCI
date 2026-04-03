@@ -5,15 +5,16 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 const NAV_ITEMS = [
-  { href: "/dashboard",          label: "Dashboard", icon: "▦" },
-  { href: "/customers",          label: "Clientes",  icon: "👤" },
-  { href: "/menu",               label: "Cardápio",  icon: "🍽" },
-  { href: "/orders",             label: "Pedidos",   icon: "📋" },
-  { href: "/conversations",      label: "Conversas", icon: "💬" },
-  { href: "/chat-sim",           label: "Testar IA",  icon: "🧪" },
-  { href: "/settings/agent",     label: "Agente WA", icon: "🤖" },
-  { href: "/settings/whatsapp",  label: "WhatsApp",  icon: "⚙️" },
-  { href: "/settings/ai",        label: "IA / Voz",  icon: "🧠" },
+  { href: "/dashboard",          label: "Dashboard",    icon: "▦",  exact: true  },
+  { href: "/customers",          label: "Clientes",     icon: "👤", exact: false },
+  { href: "/menu",               label: "Cardápio",     icon: "🍽", exact: false },
+  { href: "/orders",             label: "Pedidos",      icon: "📋", exact: false },
+  { href: "/conversations",      label: "Conversas",    icon: "💬", exact: false },
+  { href: "/chat-sim",           label: "Testar IA",    icon: "🧪", exact: false },
+  { href: "/settings",           label: "Configurações",icon: "🏪", exact: true  },
+  { href: "/settings/agent",     label: "Agente WA",    icon: "🤖", exact: false },
+  { href: "/settings/whatsapp",  label: "WhatsApp",     icon: "⚙️", exact: false },
+  { href: "/settings/ai",        label: "IA / Voz",     icon: "🧠", exact: false },
 ];
 
 export function Sidebar() {
@@ -31,10 +32,9 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
-            const isActive =
-              item.href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname.startsWith(item.href);
+            const isActive = item.exact
+              ? pathname === item.href
+              : pathname.startsWith(item.href);
 
             return (
               <li key={item.href}>
