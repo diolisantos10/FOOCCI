@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       return new NextResponse(null, { status: 404 });
     }
 
-    return new NextResponse(record.data, {
+    return new NextResponse(new Uint8Array(record.data), {
       status: 200,
       headers: {
         "Content-Type": record.mimeType,
