@@ -40,7 +40,7 @@ export async function middleware(req: NextRequest) {
   if (
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/favicon") ||
-    pathname.match(/\.(ico|png|jpg|jpeg|svg|css|js|woff|woff2)$/)
+    pathname.match(/\.(ico|png|jpg|jpeg|webp|svg|css|js|woff|woff2)$/)
   ) {
     return NextResponse.next();
   }
