@@ -54,8 +54,13 @@ export async function POST(req: NextRequest) {
       url = await uploadToS3(buffer, key, file.type);
     } catch (s3Err) {
       const msg = s3Err instanceof Error ? s3Err.message : "";
+      // AWS SDK v3 puts the error code in error.name, not error.message.
+      // e.g. name="AccessControlListNotSupported", message="The bucket does not allow ACLs"
+      const code = s3Err instanceof Error ? (s3Err.name ?? "") : "";
       const fallback =
         msg.includes("not configured") ||
+        code === "AccessControlListNotSupported" ||
+        code === "InvalidBucketAclWithObjectOwnership" ||
         msg.includes("AccessControlListNotSupported") ||
         msg.includes("InvalidBucketAclWithObjectOwnership");
       if (fallback) {
