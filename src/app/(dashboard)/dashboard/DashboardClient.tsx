@@ -75,6 +75,47 @@ const MOCK_ALERTS = [
   },
 ];
 
+type InsightType = "warning" | "opportunity" | "info";
+
+const INSIGHT_STYLES: Record<
+  InsightType,
+  { bg: string; border: string; text: string; link: string }
+> = {
+  warning:     { bg: "bg-red-50",    border: "border-l-red-400",   text: "text-red-800",    link: "text-red-600"   },
+  opportunity: { bg: "bg-green-50",  border: "border-l-green-400", text: "text-green-800",  link: "text-green-600" },
+  info:        { bg: "bg-blue-50",   border: "border-l-blue-400",  text: "text-blue-800",   link: "text-blue-600"  },
+};
+
+const MOCK_INSIGHTS: Array<{
+  id: string;
+  type: InsightType;
+  icon: string;
+  message: string;
+  action: string;
+  href: string;
+}> = [
+  { id: "beverages", type: "warning",     icon: "🧃", message: "78% dos pedidos sem bebida",       action: "Ativar combo de bebida",  href: "/settings/experience" },
+  { id: "ticket",    type: "warning",     icon: "📉", message: "Ticket médio caiu 3% hoje",        action: "Revisar upsell",          href: "/settings/experience" },
+  { id: "dessert",   type: "warning",     icon: "🍰", message: "0 sobremesas vendidas hoje",       action: "Criar promoção",          href: "/marketing"           },
+  { id: "crm",       type: "opportunity", icon: "👥", message: "3 clientes inativos há 30 dias",  action: "Reativar clientes",       href: "/crm"                 },
+];
+
+type QuickActionColor = { iconBg: string; iconText: string; hoverBorder: string };
+
+const QUICK_ACTIONS: Array<{
+  id: string;
+  icon: string;
+  label: string;
+  desc: string;
+  href: string;
+  color: QuickActionColor;
+}> = [
+  { id: "promo",   icon: "🎁", label: "Criar promoção",    desc: "Aumentar vendas",     href: "/marketing",           color: { iconBg: "bg-orange-100", iconText: "text-orange-600", hoverBorder: "hover:border-orange-300" } },
+  { id: "upsell",  icon: "🚀", label: "Ativar upsell",     desc: "Configurar IA",       href: "/settings/experience", color: { iconBg: "bg-violet-100",  iconText: "text-violet-600",  hoverBorder: "hover:border-violet-300"  } },
+  { id: "clients", icon: "👥", label: "Reativar clientes", desc: "Enviar mensagens",    href: "/crm",                 color: { iconBg: "bg-emerald-100", iconText: "text-emerald-600", hoverBorder: "hover:border-emerald-300" } },
+  { id: "orders",  icon: "📋", label: "Ver pedidos",       desc: "Central ao vivo",     href: "/orders",              color: { iconBg: "bg-blue-100",    iconText: "text-blue-600",    hoverBorder: "hover:border-blue-300"    } },
+];
+
 const MOCK_CHART_TODAY = [
   { label: "08h", orders: 2, revenue: 142 },
   { label: "09h", orders: 4, revenue: 310 },
@@ -726,6 +767,90 @@ function PaymentMethods() {
 }
 
 // ─────────────────────────────────────────────────────────────
+//  9. AIInsightsPanel
+// ─────────────────────────────────────────────────────────────
+
+function AIInsightsPanel() {
+  const warningCount = MOCK_INSIGHTS.filter((i) => i.type === "warning").length;
+
+  return (
+    <Card className="flex h-full flex-col p-5">
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between">
+        <SectionTitle>Insights IA</SectionTitle>
+        {warningCount > 0 && (
+          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-600">
+            {warningCount} alertas
+          </span>
+        )}
+      </div>
+
+      {/* Insight rows */}
+      <div className="flex flex-col gap-2">
+        {MOCK_INSIGHTS.map((ins) => {
+          const s = INSIGHT_STYLES[ins.type];
+          return (
+            <div
+              key={ins.id}
+              className={`flex items-start gap-3 rounded-xl border-l-4 px-3 py-2.5 ${s.bg} ${s.border}`}
+            >
+              <span className="mt-0.5 shrink-0 text-base leading-none">{ins.icon}</span>
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm font-semibold leading-snug ${s.text}`}>
+                  {ins.message}
+                </p>
+                <Link
+                  href={ins.href}
+                  className={`mt-0.5 inline-block text-xs font-medium hover:underline ${s.link}`}
+                >
+                  {ins.action} →
+                </Link>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  10. ActionCenter
+// ─────────────────────────────────────────────────────────────
+
+function ActionCenter() {
+  return (
+    <div>
+      <div className="mb-3">
+        <SectionTitle>Central de ações</SectionTitle>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {QUICK_ACTIONS.map((a) => (
+          <Link
+            key={a.id}
+            href={a.href}
+            className={`group flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${a.color.hoverBorder}`}
+          >
+            <div
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ${a.color.iconBg} ${a.color.iconText}`}
+            >
+              {a.icon}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-800 leading-tight">{a.label}</p>
+              <p className="text-xs text-gray-400">{a.desc}</p>
+            </div>
+            <span className="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5">
+              →
+            </span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 //  Header components
 // ─────────────────────────────────────────────────────────────
 
@@ -869,13 +994,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
           </div>
 
           <div className="lg:col-span-1">
-            {/* TODO Step 3: AI Insights Panel */}
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-5 h-full flex flex-col gap-3">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">
-                Insights IA
-              </p>
-              <Alerts />
-            </div>
+            <AIInsightsPanel />
           </div>
 
           {/* ── PRODUCT PERFORMANCE (1 col) ── */}
@@ -895,24 +1014,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
 
           {/* ── ACTION CENTER (full width) ── */}
           <div className="lg:col-span-3">
-            {/* TODO Step 4: Action Center */}
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-3">
-                Central de ações
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {["Criar promoção", "Ativar upsell", "Reativar clientes", "Ver pedidos"].map(
-                  (label) => (
-                    <div
-                      key={label}
-                      className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-3 text-sm font-medium text-gray-400"
-                    >
-                      {label}
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
+            <ActionCenter />
           </div>
 
         </div>
