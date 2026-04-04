@@ -33,6 +33,18 @@ const MOCK_PERIOD_REVENUE: Record<Period, number> = {
   year:      1_254_600.00,
 };
 
+// KPI values per period
+const MOCK_PERIOD_KPIS: Record<
+  Period,
+  { orders: number; revenue: number; ticket: number; ordersChange: number; revenueChange: number; ticketChange: number }
+> = {
+  today:     { orders: 47,     revenue: 3_842.50,   ticket: 81.76, ordersChange: +12, revenueChange: +8,  ticketChange: -3 },
+  yesterday: { orders: 53,     revenue: 4_210.00,   ticket: 79.43, ordersChange: +5,  revenueChange: +14, ticketChange: +2 },
+  "7days":   { orders: 336,    revenue: 27_320.00,  ticket: 81.31, ordersChange: +7,  revenueChange: +11, ticketChange: +1 },
+  month:     { orders: 1_284,  revenue: 104_500.00, ticket: 81.39, ordersChange: +4,  revenueChange: +9,  ticketChange:  0 },
+  year:      { orders: 15_420, revenue: 1_254_600,  ticket: 81.36, ordersChange: +18, revenueChange: +23, ticketChange: +3 },
+};
+
 const MOCK_LIVE = {
   preparing: 8,
   delayed: 2,
@@ -237,7 +249,7 @@ function ToggleBtn({
     <button
       onClick={onClick}
       className={`px-3 py-1.5 font-medium transition-colors ${
-        active ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-50"
+        active ? "bg-orange-500 text-white" : "text-gray-500 hover:bg-gray-50"
       }`}
     >
       {children}
@@ -297,62 +309,51 @@ function BannerSection() {
 function KPICard({
   label,
   value,
-  icon,
+  change,
   accent = false,
 }: {
   label: string;
   value: string;
-  icon: string;
+  change?: number;
   accent?: boolean;
 }) {
+  const trendColor =
+    change === undefined ? ""
+    : change > 0  ? (accent ? "text-orange-100" : "text-green-600")
+    : change < 0  ? (accent ? "text-orange-200" : "text-red-500")
+    :               (accent ? "text-orange-200" : "text-gray-400");
+
   return (
     <div
       className={`rounded-2xl p-6 ${
         accent
-          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
+          ? "bg-orange-500 text-white shadow-lg shadow-orange-200"
           : "border border-gray-100 bg-white shadow-sm"
       }`}
     >
-      <div className="mb-3 flex items-center justify-between">
-        <span
-          className={`text-xs font-semibold uppercase tracking-wide ${
-            accent ? "text-indigo-200" : "text-gray-400"
-          }`}
-        >
-          {label}
-        </span>
-        <span className="text-xl">{icon}</span>
-      </div>
-      <p
-        className={`text-3xl font-bold leading-none sm:text-4xl ${
-          accent ? "text-white" : "text-gray-900"
-        }`}
-      >
+      <p className={`text-xs font-semibold uppercase tracking-wide ${accent ? "text-orange-100" : "text-gray-400"}`}>
+        {label}
+      </p>
+      <p className={`mt-3 text-3xl font-bold leading-none sm:text-4xl ${accent ? "text-white" : "text-gray-900"}`}>
         {value}
       </p>
+      {change !== undefined && (
+        <p className={`mt-2 flex items-center gap-1 text-xs font-medium ${trendColor}`}>
+          <span>{change > 0 ? "↑" : change < 0 ? "↓" : "→"}</span>
+          <span>{change > 0 ? "+" : ""}{change}% vs anterior</span>
+        </p>
+      )}
     </div>
   );
 }
 
-function KPISection() {
+function KPISection({ period }: { period: Period }) {
+  const k = MOCK_PERIOD_KPIS[period];
   return (
     <>
-      <KPICard
-        label="Pedidos hoje"
-        value={String(MOCK_KPIS.ordersToday)}
-        icon="📋"
-      />
-      <KPICard
-        label="Receita hoje"
-        value={fmtCurrency(MOCK_KPIS.revenueToday)}
-        icon="💰"
-        accent
-      />
-      <KPICard
-        label="Ticket médio"
-        value={fmtCurrency(MOCK_KPIS.avgTicket)}
-        icon="🎯"
-      />
+      <KPICard label="Pedidos"     value={k.orders.toLocaleString("pt-BR")} change={k.ordersChange}  />
+      <KPICard label="Receita"     value={fmtCurrency(k.revenue)}           change={k.revenueChange} accent />
+      <KPICard label="Ticket médio" value={fmtCurrency(k.ticket)}            change={k.ticketChange}  />
     </>
   );
 }
@@ -448,58 +449,48 @@ function Alerts() {
 
 type ChartPoint = { label: string; orders: number; revenue: number };
 
-function BarChart({
-  data,
-  metric,
-}: {
-  data: ChartPoint[];
-  metric: "orders" | "revenue";
-}) {
-  const values = data.map((d) => (metric === "revenue" ? d.revenue : d.orders));
-  const max = Math.max(...values, 1);
+function BarChart({ data }: { data: ChartPoint[] }) {
+  const maxRevenue = Math.max(...data.map((d) => d.revenue), 1);
+  const maxOrders  = Math.max(...data.map((d) => d.orders),  1);
   const BAR_W = 28;
-  const GAP = 6;
-  const H = 110;
+  const GAP   = 8;
+  const H     = 150;
   const totalW = data.length * (BAR_W + GAP) - GAP;
+
+  const pts = data.map((d, i) => ({
+    x: i * (BAR_W + GAP) + BAR_W / 2,
+    y: H - (d.orders / maxOrders) * H,
+  }));
+  const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
 
   return (
     <div className="overflow-x-auto">
-      <svg
-        viewBox={`0 0 ${totalW} ${H + 22}`}
-        className="w-full"
-        style={{ minWidth: totalW }}
-      >
+      <svg viewBox={`0 0 ${totalW} ${H + 24}`} className="w-full" style={{ minWidth: totalW }}>
         {data.map((d, i) => {
-          const val = metric === "revenue" ? d.revenue : d.orders;
-          const barH = Math.max((val / max) * H, 2);
+          const barH = Math.max((d.revenue / maxRevenue) * H, 2);
           const x = i * (BAR_W + GAP);
-          const y = H - barH;
           const isLast = i === data.length - 1;
           return (
             <g key={i}>
-              <title>
-                {d.label}: {metric === "revenue" ? fmtCurrency(val) : `${val} pedidos`}
-              </title>
+              <title>{d.label}: {fmtCurrency(d.revenue)} · {d.orders} pedidos</title>
               <rect
-                x={x}
-                y={y}
-                width={BAR_W}
-                height={barH}
+                x={x} y={H - barH}
+                width={BAR_W} height={barH}
                 rx={5}
-                fill={isLast ? "#6366f1" : "#a5b4fc"}
+                fill={isLast ? "#ea580c" : "#fed7aa"}
               />
-              <text
-                x={x + BAR_W / 2}
-                y={H + 14}
-                textAnchor="middle"
-                fontSize={9}
-                fill="#9ca3af"
-              >
+              <text x={x + BAR_W / 2} y={H + 16} textAnchor="middle" fontSize={9} fill="#9ca3af">
                 {d.label}
               </text>
             </g>
           );
         })}
+
+        {/* Orders line */}
+        <path d={linePath} stroke="#1f2937" strokeWidth={1.5} fill="none" strokeLinejoin="round" />
+        {pts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={3} fill="white" stroke="#1f2937" strokeWidth={1.5} />
+        ))}
       </svg>
     </div>
   );
@@ -507,49 +498,40 @@ function BarChart({
 
 function SalesChart() {
   const [view, setView] = useState<"today" | "week">("today");
-  const [metric, setMetric] = useState<"revenue" | "orders">("revenue");
   const data = view === "today" ? MOCK_CHART_TODAY : MOCK_CHART_WEEK;
 
-  const totalOrders = data.reduce((s, d) => s + d.orders, 0);
   const totalRevenue = data.reduce((s, d) => s + d.revenue, 0);
+  const totalOrders  = data.reduce((s, d) => s + d.orders,  0);
 
   return (
     <Card className="p-5">
-      <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <SectionTitle>Vendas</SectionTitle>
-          <p className="text-lg font-bold text-gray-900">
-            {metric === "revenue"
-              ? fmtCurrency(totalRevenue)
-              : `${totalOrders} pedidos`}
-          </p>
+          <SectionTitle>Pedidos &amp; Receita</SectionTitle>
+          <div className="mt-1 flex items-baseline gap-3">
+            <p className="text-2xl font-bold text-gray-900">{fmtCurrency(totalRevenue)}</p>
+            <p className="text-sm text-gray-500">{totalOrders} pedidos</p>
+          </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <ToggleGroup>
-            <ToggleBtn
-              active={metric === "revenue"}
-              onClick={() => setMetric("revenue")}
-            >
-              Receita
-            </ToggleBtn>
-            <ToggleBtn
-              active={metric === "orders"}
-              onClick={() => setMetric("orders")}
-            >
-              Pedidos
-            </ToggleBtn>
-          </ToggleGroup>
-          <ToggleGroup>
-            <ToggleBtn active={view === "today"} onClick={() => setView("today")}>
-              Hoje
-            </ToggleBtn>
-            <ToggleBtn active={view === "week"} onClick={() => setView("week")}>
-              7 dias
-            </ToggleBtn>
-          </ToggleGroup>
-        </div>
+        <ToggleGroup>
+          <ToggleBtn active={view === "today"} onClick={() => setView("today")}>Hoje</ToggleBtn>
+          <ToggleBtn active={view === "week"}  onClick={() => setView("week")}>7 dias</ToggleBtn>
+        </ToggleGroup>
       </div>
-      <BarChart data={data} metric={metric} />
+
+      <BarChart data={data} />
+
+      {/* Legend */}
+      <div className="mt-3 flex items-center gap-5 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-orange-300" />
+          Receita
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-px w-5 border-t-2 border-gray-800" />
+          Pedidos
+        </span>
+      </div>
     </Card>
   );
 }
@@ -873,14 +855,13 @@ export default function DashboardClient({ userName }: { userName: string }) {
         {/* ── 3-COLUMN GRID ── */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
 
-          {/* ── BANNER CARDS (full width, 3-col inner grid) ── */}
+          {/* ── BANNER CARDS ── */}
           <div className="lg:col-span-3">
-            {/* TODO Step 2: replace with 3 large horizontal cards */}
             <BannerSection />
           </div>
 
-          {/* ── KPI CARDS (each spans 1 col → 3 total) ── */}
-          <KPISection />
+          {/* ── KPI CARDS ── */}
+          <KPISection period={period} />
 
           {/* ── MAIN CHART (2 cols) + AI INSIGHTS PANEL (1 col) ── */}
           <div className="lg:col-span-2">
