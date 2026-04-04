@@ -374,16 +374,16 @@ function KPICard({
 
   return (
     <div
-      className={`rounded-2xl p-6 ${
+      className={`rounded-2xl p-5 ${
         accent
-          ? "bg-orange-500 text-white shadow-lg shadow-orange-200"
+          ? "bg-orange-500 text-white shadow-sm shadow-orange-100"
           : "border border-gray-100 bg-white shadow-sm"
       }`}
     >
       <p className={`text-xs font-semibold uppercase tracking-wide ${accent ? "text-orange-100" : "text-gray-400"}`}>
         {label}
       </p>
-      <p className={`mt-3 text-3xl font-bold leading-none sm:text-4xl ${accent ? "text-white" : "text-gray-900"}`}>
+      <p className={`mt-2 text-2xl font-bold leading-none sm:text-3xl ${accent ? "text-white" : "text-gray-900"}`}>
         {value}
       </p>
       {change !== undefined && (
@@ -503,7 +503,7 @@ function BarChart({ data }: { data: ChartPoint[] }) {
   const maxOrders  = Math.max(...data.map((d) => d.orders),  1);
   const BAR_W = 28;
   const GAP   = 8;
-  const H     = 150;
+  const H     = 90;
   const totalW = data.length * (BAR_W + GAP) - GAP;
 
   const pts = data.map((d, i) => ({
@@ -526,7 +526,7 @@ function BarChart({ data }: { data: ChartPoint[] }) {
                 x={x} y={H - barH}
                 width={BAR_W} height={barH}
                 rx={5}
-                fill={isLast ? "#ea580c" : "#fed7aa"}
+                fill={isLast ? "#f97316" : "#fde8c4"}
               />
               <text x={x + BAR_W / 2} y={H + 16} textAnchor="middle" fontSize={9} fill="#9ca3af">
                 {d.label}
@@ -536,9 +536,9 @@ function BarChart({ data }: { data: ChartPoint[] }) {
         })}
 
         {/* Orders line */}
-        <path d={linePath} stroke="#1f2937" strokeWidth={1.5} fill="none" strokeLinejoin="round" />
+        <path d={linePath} stroke="#6b7280" strokeWidth={1} fill="none" strokeLinejoin="round" />
         {pts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={3} fill="white" stroke="#1f2937" strokeWidth={1.5} />
+          <circle key={i} cx={p.x} cy={p.y} r={2} fill="white" stroke="#6b7280" strokeWidth={1} />
         ))}
       </svg>
     </div>
@@ -941,54 +941,41 @@ function TimeFilter({
 }
 
 const PERIOD_HEADLINES: Record<Period, (r: string) => string> = {
-  today:     (r) => `Hoje seu restaurante já faturou ${r} 👇`,
+  today:     (r) => `Hoje seu restaurante já faturou ${r}`,
   yesterday: (r) => `Ontem você faturou ${r} no total`,
   "7days":   (r) => `Nos últimos 7 dias você faturou ${r}`,
   month:     (r) => `Este mês seu restaurante faturou ${r}`,
   year:      (r) => `Este ano o faturamento chegou a ${r}`,
 };
 
-function DashboardHeader({
-  userName,
-  period,
-  onPeriodChange,
-}: {
-  userName: string;
-  period: Period;
-  onPeriodChange: (p: Period) => void;
-}) {
+// ─── Greeting (standalone, simple) ───────────────────────────
+
+function GreetingSection({ userName }: { userName: string }) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
-
-  const revenue = MOCK_PERIOD_REVENUE[period];
-  const revFormatted = fmtCurrency(revenue);
-  const buildHeadline = PERIOD_HEADLINES[period];
-  const headline = buildHeadline(revFormatted);
-  // Split headline so the currency figure gets the orange accent
-  const [before, after] = headline.split(revFormatted);
-
   return (
-    <div className="flex flex-col gap-4">
-      {/* Greeting row */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-            {greeting}, {userName}
-          </p>
-          <h2 className="mt-1 text-2xl font-bold leading-snug text-gray-900">
-            {before}
-            <span className="text-orange-500">{revFormatted}</span>
-            {after}
-          </h2>
-        </div>
-        <div className="shrink-0 sm:mt-1">
-          <StoreStatusBadge />
-        </div>
-      </div>
-
-      {/* Time filter */}
-      <TimeFilter period={period} onChange={onPeriodChange} />
+    <div className="flex items-center justify-between">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        {greeting}, {userName}
+      </p>
+      <StoreStatusBadge />
     </div>
+  );
+}
+
+// ─── Revenue headline (below time filter) ────────────────────
+
+function RevenueHeadline({ period }: { period: Period }) {
+  const revenue      = MOCK_PERIOD_REVENUE[period];
+  const revFormatted = fmtCurrency(revenue);
+  const headline     = PERIOD_HEADLINES[period]!(revFormatted);
+  const [before, after] = headline.split(revFormatted);
+  return (
+    <h2 className="text-xl font-bold leading-snug text-gray-900 sm:text-2xl">
+      {before}
+      <span className="text-orange-500">{revFormatted}</span>
+      {after}
+    </h2>
   );
 }
 
@@ -1001,22 +988,22 @@ export default function DashboardClient({ userName }: { userName: string }) {
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
-      <div className="mx-auto max-w-7xl px-4 py-6 pb-12 sm:px-6 space-y-5">
+      <div className="mx-auto max-w-7xl px-4 py-6 pb-12 sm:px-6 space-y-6">
 
-        {/* ── HEADER ── */}
-        <DashboardHeader
-          userName={userName}
-          period={period}
-          onPeriodChange={setPeriod}
-        />
+        {/* ── 1. GREETING ── */}
+        <GreetingSection userName={userName} />
 
-        {/* ── 3-COLUMN GRID ── */}
+        {/* ── 2. BANNERS ── */}
+        <BannerSection />
+
+        {/* ── 3. TIME FILTER — below banners ── */}
+        <TimeFilter period={period} onChange={setPeriod} />
+
+        {/* ── 4. REVENUE HEADLINE ── */}
+        <RevenueHeadline period={period} />
+
+        {/* ── 5. GRID ── */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-
-          {/* ── BANNER CARDS ── */}
-          <div className="lg:col-span-3">
-            <BannerSection />
-          </div>
 
           {/* ── KPI CARDS ── */}
           <KPISection period={period} />

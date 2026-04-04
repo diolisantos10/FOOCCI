@@ -19,22 +19,28 @@ type NavGroup = {
   items: NavItem[];
 };
 
+// Standalone home item — always first, most prominent
+const HOME_ITEM: NavItem = {
+  href:  "/dashboard",
+  label: "Início",
+  icon:  "▦",
+  exact: true,
+};
+
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "Vendas",
     items: [
-      { href: "/menu",           label: "Cardápio",   icon: "🍽",  exact: false },
-      { href: "/orders",         label: "Pedidos",    icon: "📋",  exact: false },
-      { href: "/web-menu",       label: "Web Menu",   icon: "🌐",  exact: true  },
-      { href: "/conversations",  label: "Conversas",  icon: "💬",  exact: false },
+      { href: "/menu",          label: "Cardápio",  icon: "🍽",  exact: false },
+      { href: "/orders",        label: "Pedidos",   icon: "📋",  exact: false },
+      { href: "/conversations", label: "Conversas", icon: "💬",  exact: false },
     ],
   },
   {
     label: "Operação",
     items: [
-      { href: "/dashboard",  label: "Dashboard",      icon: "▦",  exact: true  },
-      { href: "/settings",   label: "Configurações",  icon: "⚙️",  exact: false },
-      { href: "/chat-sim",   label: "Testar IA",      icon: "🧪",  exact: false },
+      { href: "/settings",  label: "Configurações",  icon: "⚙️",  exact: false },
+      { href: "/chat-sim",  label: "Testar IA",      icon: "🧪",  exact: false },
     ],
   },
   {
@@ -49,7 +55,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Plataforma",
     items: [
       { href: "/personalizacao",  label: "Personalização",  icon: "🎨",  exact: false, soon: true },
-      { href: "/integracoes",     label: "Integrações",      icon: "🔌",  exact: false, soon: true },
+      { href: "/integracoes",     label: "Integrações",     icon: "🔌",  exact: false, soon: true },
     ],
   },
 ];
@@ -72,11 +78,31 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-3 scrollbar-thin">
+        {/* ── Standalone home item ── */}
+        <div className="mb-3">
+          {(() => {
+            const isActive = pathname === HOME_ITEM.href;
+            return (
+              <Link
+                href={HOME_ITEM.href}
+                className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-brand-50 text-brand-600"
+                    : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                }`}
+              >
+                <span className="text-[15px] leading-none">{HOME_ITEM.icon}</span>
+                {HOME_ITEM.label}
+              </Link>
+            );
+          })()}
+        </div>
+
         <ul className="space-y-4">
           {NAV_GROUPS.map((group, groupIdx) => (
             <li key={group.label}>
-              {/* Divider above (not first group) */}
-              {groupIdx > 0 && <div className="mb-3 border-t border-gray-100" />}
+              {/* Divider above every group */}
+              {<div className="mb-3 border-t border-gray-100" />}
 
               {/* Group label */}
               <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
