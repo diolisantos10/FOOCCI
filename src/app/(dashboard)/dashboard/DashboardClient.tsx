@@ -115,33 +115,64 @@ const MOCK_PAYMENTS = [
   { method: "Dinheiro", count: 2, amount: 182 },
 ];
 
-const BANNERS = [
+type BannerVariant = "opportunity" | "warning" | "info";
+
+const BANNER_VARIANT_STYLES: Record<
+  BannerVariant,
+  { iconBg: string; iconText: string; btn: string }
+> = {
+  opportunity: {
+    iconBg:   "bg-orange-50",
+    iconText: "text-orange-500",
+    btn:      "bg-orange-500 hover:bg-orange-600 text-white",
+  },
+  warning: {
+    iconBg:   "bg-amber-50",
+    iconText: "text-amber-600",
+    btn:      "bg-amber-500 hover:bg-amber-600 text-white",
+  },
+  info: {
+    iconBg:   "bg-blue-50",
+    iconText: "text-blue-600",
+    btn:      "bg-blue-600 hover:bg-blue-700 text-white",
+  },
+};
+
+const BANNERS: Array<{
+  id: string;
+  variant: BannerVariant;
+  icon: string;
+  title: string;
+  description: string;
+  cta: string;
+  href: string;
+}> = [
   {
-    id: "combo",
-    gradient: "from-indigo-600 to-violet-600",
-    icon: "🚀",
-    title: "Aumente seu ticket médio com combos",
-    subtitle: "Clientes que adicionam bebida gastam em média 23% mais",
+    id: "ticket",
+    variant: "opportunity",
+    icon: "🎯",
+    title: "Aumente seu ticket médio",
+    description: "Clientes que adicionam bebida gastam em média 23% a mais por pedido.",
     cta: "Ver estratégia",
     href: "/marketing",
   },
   {
     id: "dessert",
-    gradient: "from-amber-500 to-orange-500",
-    icon: "⚠️",
-    title: "Nenhuma sobremesa vendida hoje",
-    subtitle: "Ative uma promoção relâmpago para recuperar as vendas",
+    variant: "warning",
+    icon: "🍰",
+    title: "Você está perdendo vendas de sobremesa",
+    description: "Nenhuma sobremesa vendida hoje. Ative uma promoção relâmpago agora.",
     cta: "Criar promoção",
     href: "/marketing",
   },
   {
-    id: "crm",
-    gradient: "from-emerald-500 to-teal-500",
-    icon: "💡",
-    title: "Recupere clientes inativos com o CRM",
-    subtitle: "2 clientes não compram há mais de 30 dias",
-    cta: "Ativar CRM",
-    href: "/crm",
+    id: "feature",
+    variant: "info",
+    icon: "✨",
+    title: "Nova funcionalidade disponível",
+    description: "Configure o comportamento da IA e personalize a experiência do cliente.",
+    cta: "Explorar",
+    href: "/settings/experience",
   },
 ];
 
@@ -220,25 +251,41 @@ function ToggleBtn({
 
 function BannerSection() {
   return (
-    <div className="space-y-2.5">
-      {BANNERS.map((b) => (
-        <Link
-          key={b.id}
-          href={b.href}
-          className={`flex items-center justify-between gap-4 rounded-2xl bg-gradient-to-r ${b.gradient} p-4 text-white transition-opacity hover:opacity-95`}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="shrink-0 text-2xl">{b.icon}</span>
-            <div className="min-w-0">
-              <p className="font-semibold leading-snug">{b.title}</p>
-              <p className="hidden text-sm opacity-80 sm:block">{b.subtitle}</p>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {BANNERS.map((b) => {
+        const v = BANNER_VARIANT_STYLES[b.variant];
+        return (
+          <div
+            key={b.id}
+            className="flex flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
+          >
+            {/* Icon */}
+            <div
+              className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl ${v.iconBg} ${v.iconText}`}
+            >
+              {b.icon}
+            </div>
+
+            {/* Text */}
+            <p className="mt-3 font-semibold leading-snug text-gray-900">
+              {b.title}
+            </p>
+            <p className="mt-1 flex-1 text-sm leading-relaxed text-gray-500">
+              {b.description}
+            </p>
+
+            {/* CTA */}
+            <div className="mt-4">
+              <Link
+                href={b.href}
+                className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${v.btn}`}
+              >
+                {b.cta} →
+              </Link>
             </div>
           </div>
-          <span className="shrink-0 rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium backdrop-blur-sm hover:bg-white/30">
-            {b.cta} →
-          </span>
-        </Link>
-      ))}
+        );
+      })}
     </div>
   );
 }
