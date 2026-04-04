@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import CustomerProfileClient from "./CustomerProfileClient";
-import type { Classification, BehaviorData, InsightItem } from "./CustomerProfileClient";
+import type { Classification, BehaviorData, InsightItem, OrderHistoryItem } from "./CustomerProfileClient";
 
 export const metadata = { title: "Perfil do Cliente" };
 
@@ -260,6 +260,7 @@ export default async function CustomerDetailPage({
       orders: {
         orderBy: { createdAt: "asc" },
         select: {
+          id:        true,
           status:    true,
           createdAt: true,
           total:     true,
@@ -284,6 +285,17 @@ export default async function CustomerDetailPage({
 
   const totalSpend   = Number(customer.totalSpend);
   const classification = classify(totalSpend);
+  const serializedOrders: OrderHistoryItem[] = [...customer.orders]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .map((o) => ({
+      id:        o.id,
+      status:    o.status,
+      total:     Number(o.total),
+      createdAt: o.createdAt.toISOString(),
+      items:     o.items.map((i) => ({ name: i.name, quantity: i.quantity })),
+      payment:   o.payment?.method ?? null,
+    }));
+
   const { purchaseFrequencyDays, favoriteProduct } = computeHeader(customer.orders as OrderRow[]);
   const behavior  = computeBehavior(customer.orders as OrderRow[]);
   const insights  = computeInsights({
@@ -312,6 +324,7 @@ export default async function CustomerDetailPage({
         favoriteProduct={favoriteProduct}
         behavior={behavior}
         insights={insights}
+        orders={serializedOrders}
       />
     </>
   );

@@ -29,6 +29,16 @@ interface Props {
   favoriteProduct: string | null;
   behavior: BehaviorData;
   insights: InsightItem[];
+  orders: OrderHistoryItem[];
+}
+
+export interface OrderHistoryItem {
+  id: string;
+  status: string;
+  total: number;
+  createdAt: string;
+  items: Array<{ name: string; quantity: number }>;
+  payment: string | null;
 }
 
 export interface InsightItem {
@@ -52,6 +62,17 @@ export interface BehaviorData {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const STATUS_META: Record<string, { dot: string; badge: string; label: string }> = {
+  PENDING:          { dot: "bg-amber-400",  badge: "bg-amber-100 text-amber-700",   label: "Pendente"      },
+  AWAITING_PAYMENT: { dot: "bg-yellow-400", badge: "bg-yellow-100 text-yellow-700", label: "Ag. pagamento" },
+  CONFIRMED:        { dot: "bg-blue-400",   badge: "bg-blue-100 text-blue-700",     label: "Confirmado"    },
+  PREPARING:        { dot: "bg-orange-400", badge: "bg-orange-100 text-orange-700", label: "Preparando"    },
+  READY:            { dot: "bg-teal-400",   badge: "bg-teal-100 text-teal-700",     label: "Pronto"        },
+  OUT_FOR_DELIVERY: { dot: "bg-purple-400", badge: "bg-purple-100 text-purple-700", label: "Em entrega"    },
+  DELIVERED:        { dot: "bg-green-500",  badge: "bg-green-100 text-green-700",   label: "Entregue"      },
+  CANCELLED:        { dot: "bg-gray-300",   badge: "bg-gray-100 text-gray-400",     label: "Cancelado"     },
+};
 
 const INSIGHT_STYLES: Record<InsightItem["type"], { bg: string; border: string; iconBg: string; title: string; action: string }> = {
   churn:       { bg: "bg-red-50",     border: "border-red-100",     iconBg: "bg-red-100",     title: "text-red-800",     action: "text-red-600"     },
@@ -538,16 +559,134 @@ function OverviewTab({ behavior, insights }: { behavior: BehaviorData; insights:
   );
 }
 
+// ─── OrderHistory helpers ─────────────────────────────────────────────────────
+
+function localDateKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function dateGroupLabel(key: string): string {
+  const now = new Date();
+  const todayKey = localDateKey(now.toISOString());
+  const yestKey  = localDateKey(new Date(now.getTime() - 86_400_000).toISOString());
+  if (key === todayKey) return "Hoje";
+  if (key === yestKey)  return "Ontem";
+  return new Date(`${key}T12:00:00`).toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+
+function groupOrdersByDate(
+  orders: OrderHistoryItem[]
+): Array<{ key: string; label: string; orders: OrderHistoryItem[] }> {
+  const map: Record<string, OrderHistoryItem[]> = {};
+  for (const o of orders) {
+    const k = localDateKey(o.createdAt);
+    if (!map[k]) map[k] = [];
+    map[k]!.push(o);
+  }
+  return Object.keys(map)
+    .sort((a, b) => b.localeCompare(a))
+    .map((key) => ({ key, label: dateGroupLabel(key), orders: map[key]! }));
+}
+
+// ─── OrderHistory component ───────────────────────────────────────────────────
+
+function OrderHistory({ orders }: { orders: OrderHistoryItem[] }) {
+  if (orders.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white py-16">
+        <span className="text-3xl">📭</span>
+        <p className="mt-2 text-sm text-gray-400">Nenhum pedido encontrado</p>
+      </div>
+    );
+  }
+
+  const groups  = groupOrdersByDate(orders);
+  let globalIdx = 0;
+
+  return (
+    <div className="space-y-6">
+      {groups.map((group) => (
+        <div key={group.key}>
+          {/* Date separator */}
+          <div className="mb-3 flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-100" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              {group.label}
+            </span>
+            <div className="h-px flex-1 bg-gray-100" />
+          </div>
+
+          <div className="space-y-2">
+            {group.orders.map((order) => {
+              const isLatest = globalIdx++ === 0;
+              const meta     = STATUS_META[order.status] ?? STATUS_META["PENDING"]!;
+              const shown    = order.items.slice(0, 3);
+              const extra    = order.items.length - shown.length;
+              const itemsStr = shown
+                .map((i) => (i.quantity > 1 ? `${i.name} ×${i.quantity}` : i.name))
+                .join(", ");
+              const time = new Date(order.createdAt).toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+
+              return (
+                <div
+                  key={order.id}
+                  className={`flex items-center gap-3 rounded-xl border bg-white px-4 py-3 transition-colors ${
+                    isLatest
+                      ? "border-orange-200 ring-1 ring-orange-100"
+                      : "border-gray-100 hover:border-gray-200"
+                  }`}
+                >
+                  {/* Status dot */}
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`} />
+
+                  {/* Time */}
+                  <span className="w-10 shrink-0 font-mono text-xs text-gray-400">
+                    {time}
+                  </span>
+
+                  {/* Items */}
+                  <span className="min-w-0 flex-1 truncate text-sm text-gray-700">
+                    {itemsStr || "—"}
+                    {extra > 0 && (
+                      <span className="ml-1 text-xs text-gray-400">+{extra}</span>
+                    )}
+                  </span>
+
+                  {/* Total */}
+                  <span className="shrink-0 text-sm font-semibold text-gray-900">
+                    {order.total.toLocaleString("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    })}
+                  </span>
+
+                  {/* Status badge */}
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${meta.badge}`}>
+                    {meta.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── History tab ──────────────────────────────────────────────────────────────
 
-function HistoryTab() {
+function HistoryTab({ orders }: { orders: OrderHistoryItem[] }) {
   return (
     <div className="space-y-5">
       <Section title="Histórico de Pedidos">
-        <Placeholder
-          label="Timeline de pedidos com valores e padrões de frequência"
-          height="h-96"
-        />
+        <OrderHistory orders={orders} />
       </Section>
     </div>
   );
@@ -614,6 +753,7 @@ export default function CustomerProfileClient({
   favoriteProduct,
   behavior,
   insights,
+  orders,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
@@ -640,7 +780,7 @@ export default function CustomerProfileClient({
       {/* Tab content */}
       <div className="p-6">
         {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} />}
-        {activeTab === "history"      && <HistoryTab />}
+        {activeTab === "history"      && <HistoryTab orders={orders} />}
         {activeTab === "interactions" && <InteractionsTab />}
         {activeTab === "actions"      && <ActionsTab />}
       </div>
