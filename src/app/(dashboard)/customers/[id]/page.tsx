@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import CustomerProfileClient from "./CustomerProfileClient";
-import type { Classification, BehaviorData } from "./CustomerProfileClient";
+import type { Classification, BehaviorData, InsightItem } from "./CustomerProfileClient";
 
 export const metadata = { title: "Perfil do Cliente" };
 
@@ -160,6 +160,80 @@ function computeBehavior(orders: OrderRow[]): BehaviorData {
   };
 }
 
+// ─── Insights computation ─────────────────────────────────────────────────────
+
+function computeInsights(params: {
+  totalOrders: number;
+  totalSpend: number;
+  lastOrderAt: Date | null;
+  purchaseFrequencyDays: number;
+  behavior: BehaviorData;
+}): InsightItem[] {
+  const { totalOrders, totalSpend, lastOrderAt, purchaseFrequencyDays, behavior } = params;
+  const fmtBRL = (n: number) =>
+    n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  const daysSinceLast = lastOrderAt
+    ? Math.floor((Date.now() - lastOrderAt.getTime()) / 86_400_000)
+    : 999;
+
+  const avgOrderValue = totalOrders > 0 ? totalSpend / totalOrders : 0;
+  const topCat = behavior.favoriteCategories[0]?.name ?? null;
+  const topDays = behavior.preferredDays.slice(0, 2).join(" e ");
+
+  const insights: InsightItem[] = [];
+
+  if (daysSinceLast > 30 && totalOrders > 2) {
+    insights.push({
+      id: "churn",
+      type: "churn",
+      icon: "⚠️",
+      title: "Risco de churn",
+      message: `Último pedido há ${daysSinceLast} dias. Frequência habitual: ${
+        purchaseFrequencyDays > 0 ? `a cada ${purchaseFrequencyDays} dias` : "irregular"
+      }.`,
+      action: "Envie uma oferta de reativação com 10% de desconto no próximo pedido.",
+    });
+  }
+
+  if (avgOrderValue > 0 && topCat) {
+    insights.push({
+      id: "upsell",
+      type: "opportunity",
+      icon: "📈",
+      title: "Oportunidade de upsell",
+      message: `Ticket médio de ${fmtBRL(avgOrderValue)}. Categoria principal: ${topCat}.`,
+      action: `Sugira combos ou complementos de ${topCat} no próximo atendimento.`,
+    });
+  }
+
+  if (topDays) {
+    insights.push({
+      id: "contact-time",
+      type: "info",
+      icon: "📱",
+      title: "Melhor horário para contato",
+      message: `Costuma pedir à ${behavior.preferredTime.toLowerCase()}${
+        topDays ? `, principalmente ${topDays}` : ""
+      }.`,
+      action: `Agende campanhas para a ${behavior.preferredTime.toLowerCase()} nesses dias.`,
+    });
+  }
+
+  if (purchaseFrequencyDays >= 3) {
+    insights.push({
+      id: "pattern",
+      type: "info",
+      icon: "🔄",
+      title: "Padrão de compra regular",
+      message: `Realiza pedidos a cada ${purchaseFrequencyDays} dias em média.`,
+      action: `Configure lembrete automático ${Math.max(1, purchaseFrequencyDays - 2)} dias após o último pedido.`,
+    });
+  }
+
+  return insights.slice(0, 4);
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function CustomerDetailPage({
@@ -211,7 +285,14 @@ export default async function CustomerDetailPage({
   const totalSpend   = Number(customer.totalSpend);
   const classification = classify(totalSpend);
   const { purchaseFrequencyDays, favoriteProduct } = computeHeader(customer.orders as OrderRow[]);
-  const behavior = computeBehavior(customer.orders as OrderRow[]);
+  const behavior  = computeBehavior(customer.orders as OrderRow[]);
+  const insights  = computeInsights({
+    totalOrders: customer.totalOrders,
+    totalSpend,
+    lastOrderAt: customer.lastOrderAt,
+    purchaseFrequencyDays,
+    behavior,
+  });
 
   return (
     <>
@@ -230,6 +311,7 @@ export default async function CustomerDetailPage({
         purchaseFrequencyDays={purchaseFrequencyDays}
         favoriteProduct={favoriteProduct}
         behavior={behavior}
+        insights={insights}
       />
     </>
   );

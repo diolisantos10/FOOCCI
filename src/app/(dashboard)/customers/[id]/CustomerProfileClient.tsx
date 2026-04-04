@@ -28,6 +28,16 @@ interface Props {
   purchaseFrequencyDays: number;
   favoriteProduct: string | null;
   behavior: BehaviorData;
+  insights: InsightItem[];
+}
+
+export interface InsightItem {
+  id: string;
+  type: "churn" | "opportunity" | "info";
+  icon: string;
+  title: string;
+  message: string;
+  action: string;
 }
 
 export interface BehaviorData {
@@ -42,6 +52,12 @@ export interface BehaviorData {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const INSIGHT_STYLES: Record<InsightItem["type"], { bg: string; border: string; iconBg: string; title: string; action: string }> = {
+  churn:       { bg: "bg-red-50",     border: "border-red-100",     iconBg: "bg-red-100",     title: "text-red-800",     action: "text-red-600"     },
+  opportunity: { bg: "bg-emerald-50", border: "border-emerald-100", iconBg: "bg-emerald-100", title: "text-emerald-800", action: "text-emerald-700" },
+  info:        { bg: "bg-blue-50",    border: "border-blue-100",    iconBg: "bg-blue-100",    title: "text-blue-800",    action: "text-blue-600"    },
+};
 
 const PAYMENT_LABELS: Record<string, string> = {
   CASH:           "Dinheiro",
@@ -120,6 +136,42 @@ function Section({
         {title}
       </h2>
       {children}
+    </div>
+  );
+}
+
+// ─── AIInsights ───────────────────────────────────────────────────────────────
+
+function AIInsights({ insights }: { insights: InsightItem[] }) {
+  if (insights.length === 0) {
+    return (
+      <div className="flex items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white py-10">
+        <p className="text-sm text-gray-300">Dados insuficientes para gerar insights</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {insights.map((ins) => {
+        const s = INSIGHT_STYLES[ins.type];
+        return (
+          <div key={ins.id} className={`rounded-xl border ${s.border} ${s.bg} px-5 py-4`}>
+            <div className="flex items-start gap-3">
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm ${s.iconBg}`}>
+                {ins.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm font-semibold ${s.title}`}>{ins.title}</p>
+                <p className="mt-0.5 text-sm text-gray-600">{ins.message}</p>
+                <p className={`mt-2 text-xs font-medium ${s.action}`}>
+                  💡 {ins.action}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -450,7 +502,7 @@ function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 
-function OverviewTab({ behavior }: { behavior: BehaviorData }) {
+function OverviewTab({ behavior, insights }: { behavior: BehaviorData; insights: InsightItem[] }) {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
       {/* Left column — 2/3 */}
@@ -464,10 +516,7 @@ function OverviewTab({ behavior }: { behavior: BehaviorData }) {
         </Section>
 
         <Section title="IA — Insights">
-          <Placeholder
-            label="Padrões de compra · Upsell · Risco de churn · Melhor horário para contato"
-            height="h-48"
-          />
+          <AIInsights insights={insights} />
         </Section>
       </div>
 
@@ -564,6 +613,7 @@ export default function CustomerProfileClient({
   purchaseFrequencyDays,
   favoriteProduct,
   behavior,
+  insights,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
@@ -589,7 +639,7 @@ export default function CustomerProfileClient({
 
       {/* Tab content */}
       <div className="p-6">
-        {activeTab === "overview"     && <OverviewTab behavior={behavior} />}
+        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} />}
         {activeTab === "history"      && <HistoryTab />}
         {activeTab === "interactions" && <InteractionsTab />}
         {activeTab === "actions"      && <ActionsTab />}
