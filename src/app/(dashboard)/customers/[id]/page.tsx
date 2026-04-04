@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import CustomerProfileClient from "./CustomerProfileClient";
-import type { Classification, BehaviorData, InsightItem, OrderHistoryItem, InteractionItem } from "./CustomerProfileClient";
+import type { Classification, BehaviorData, InsightItem, OrderHistoryItem, InteractionItem, CustomerTag } from "./CustomerProfileClient";
 
 export const metadata = { title: "Perfil do Cliente" };
 
@@ -287,6 +287,49 @@ function computeInsights(params: {
   return insights.slice(0, 4);
 }
 
+// ─── Tags computation ─────────────────────────────────────────────────────────
+
+function computeTags(params: {
+  totalSpend: number;
+  totalOrders: number;
+  lastOrderAt: Date | null;
+  purchaseFrequencyDays: number;
+}): CustomerTag[] {
+  const { totalSpend, totalOrders, lastOrderAt, purchaseFrequencyDays } = params;
+
+  const daysSinceLast = lastOrderAt
+    ? Math.floor((Date.now() - lastOrderAt.getTime()) / 86_400_000)
+    : 999;
+
+  const tags: CustomerTag[] = [];
+
+  if (totalSpend >= 800) {
+    tags.push({ id: "high-value", label: "Alto valor", color: "amber" });
+  }
+
+  if (totalOrders >= 10) {
+    tags.push({ id: "loyal", label: "Cliente fiel", color: "purple" });
+  }
+
+  if (purchaseFrequencyDays > 0 && purchaseFrequencyDays <= 14) {
+    tags.push({ id: "frequent", label: "Comprador frequente", color: "green" });
+  }
+
+  if (daysSinceLast > 30 && totalOrders > 2) {
+    tags.push({ id: "at-risk", label: "Em risco", color: "red" });
+  }
+
+  if (totalOrders <= 2) {
+    tags.push({ id: "new", label: "Novo cliente", color: "blue" });
+  }
+
+  if (purchaseFrequencyDays >= 15 && purchaseFrequencyDays <= 30) {
+    tags.push({ id: "regular", label: "Pedidos regulares", color: "teal" });
+  }
+
+  return tags;
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function CustomerDetailPage({
@@ -377,6 +420,12 @@ export default async function CustomerDetailPage({
     purchaseFrequencyDays,
     behavior,
   });
+  const tags = computeTags({
+    totalSpend,
+    totalOrders: customer.totalOrders,
+    lastOrderAt: customer.lastOrderAt,
+    purchaseFrequencyDays,
+  });
 
   return (
     <>
@@ -398,6 +447,7 @@ export default async function CustomerDetailPage({
         insights={insights}
         orders={serializedOrders}
         interactions={interactions}
+        tags={tags}
       />
     </>
   );

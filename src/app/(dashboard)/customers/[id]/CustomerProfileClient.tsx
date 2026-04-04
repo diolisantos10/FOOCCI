@@ -31,6 +31,7 @@ interface Props {
   insights: InsightItem[];
   orders: OrderHistoryItem[];
   interactions: InteractionItem[];
+  tags: CustomerTag[];
 }
 
 export interface InteractionItem {
@@ -69,6 +70,12 @@ export interface BehaviorData {
   preferredPayment: string | null;
 }
 
+export interface CustomerTag {
+  id: string;
+  label: string;
+  color: "amber" | "green" | "red" | "blue" | "purple" | "teal" | "orange" | "rose";
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const INTERACTION_META: Record<InteractionItem["type"], { icon: string; iconBg: string; textColor: string }> = {
@@ -104,6 +111,17 @@ const PAYMENT_LABELS: Record<string, string> = {
   ONLINE:         "Online",
   CARD_MACHINE:   "Maquininha",
   PIX_IN_PERSON:  "PIX Presencial",
+};
+
+const TAG_STYLES: Record<CustomerTag["color"], { chip: string }> = {
+  amber:  { chip: "bg-amber-50 text-amber-700 border border-amber-200"   },
+  green:  { chip: "bg-green-50 text-green-700 border border-green-200"   },
+  red:    { chip: "bg-red-50 text-red-700 border border-red-200"         },
+  blue:   { chip: "bg-blue-50 text-blue-700 border border-blue-200"      },
+  purple: { chip: "bg-purple-50 text-purple-700 border border-purple-200"},
+  teal:   { chip: "bg-teal-50 text-teal-700 border border-teal-200"      },
+  orange: { chip: "bg-orange-50 text-orange-700 border border-orange-200"},
+  rose:   { chip: "bg-rose-50 text-rose-700 border border-rose-200"      },
 };
 
 const TIER_STYLES: Record<Classification["tier"], { badge: string; avatarRing: string }> = {
@@ -368,6 +386,32 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
   );
 }
 
+// ─── TagsPanel ────────────────────────────────────────────────────────────────
+
+function TagsPanel({ tags }: { tags: CustomerTag[] }) {
+  if (tags.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-5 flex items-center justify-center">
+        <p className="text-xs text-gray-300">Sem tags atribuídas</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white px-4 py-4">
+      <div className="flex flex-wrap gap-2">
+        {tags.map((tag) => (
+          <span
+            key={tag.id}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${TAG_STYLES[tag.color].chip}`}
+          >
+            {tag.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Header section ───────────────────────────────────────────────────────────
 
 type HeaderProps = Pick<
@@ -539,7 +583,15 @@ function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 
-function OverviewTab({ behavior, insights }: { behavior: BehaviorData; insights: InsightItem[] }) {
+function OverviewTab({
+  behavior,
+  insights,
+  tags,
+}: {
+  behavior: BehaviorData;
+  insights: InsightItem[];
+  tags: CustomerTag[];
+}) {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
       {/* Left column — 2/3 */}
@@ -560,7 +612,7 @@ function OverviewTab({ behavior, insights }: { behavior: BehaviorData; insights:
       {/* Right column — 1/3 */}
       <div className="space-y-5">
         <Section title="Tags">
-          <Placeholder label="Alto valor · Frequente · Em risco · Preço sensível" height="h-20" />
+          <TagsPanel tags={tags} />
         </Section>
 
         <Section title="Preferências">
@@ -774,26 +826,75 @@ function InteractionsTab({ interactions }: { interactions: InteractionItem[] }) 
 
 // ─── Actions tab ──────────────────────────────────────────────────────────────
 
+const ACTION_CARDS = [
+  {
+    id:      "message",
+    icon:    "💬",
+    iconBg:  "bg-green-100",
+    title:   "Enviar mensagem",
+    desc:    "Inicie uma conversa direta com o cliente via WhatsApp.",
+    btn:     "Abrir WhatsApp",
+    btnCls:  "bg-green-500 hover:bg-green-600 text-white",
+  },
+  {
+    id:      "campaign",
+    icon:    "📣",
+    iconBg:  "bg-blue-100",
+    title:   "Criar campanha",
+    desc:    "Adicione este cliente a uma campanha de marketing segmentada.",
+    btn:     "Nova campanha",
+    btnCls:  "bg-blue-500 hover:bg-blue-600 text-white",
+  },
+  {
+    id:      "discount",
+    icon:    "🎁",
+    iconBg:  "bg-orange-100",
+    title:   "Oferecer desconto",
+    desc:    "Envie um cupom ou promoção exclusiva para este cliente.",
+    btn:     "Criar cupom",
+    btnCls:  "bg-orange-500 hover:bg-orange-600 text-white",
+  },
+  {
+    id:      "reactivate",
+    icon:    "🔔",
+    iconBg:  "bg-rose-100",
+    title:   "Reativar cliente",
+    desc:    "Envie uma oferta de reativação personalizada para reconquistar o cliente.",
+    btn:     "Reativar",
+    btnCls:  "bg-rose-500 hover:bg-rose-600 text-white",
+  },
+] as const;
+
 function ActionsTab() {
   return (
     <div className="space-y-5">
       <Section title="Central de Ações">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {[
-            { label: "Enviar mensagem",   desc: "Inicie uma conversa via WhatsApp"              },
-            { label: "Criar campanha",    desc: "Adicione a uma campanha de marketing"          },
-            { label: "Oferecer desconto", desc: "Envie um cupom ou promoção exclusiva"         },
-            { label: "Reativar cliente",  desc: "Envie uma oferta de reativação personalizada" },
-          ].map((a) => (
+          {ACTION_CARDS.map((card) => (
             <div
-              key={a.label}
-              className="flex items-center justify-between rounded-xl border-2 border-dashed border-gray-200 bg-white p-4"
+              key={card.id}
+              className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
             >
-              <div>
-                <p className="font-semibold text-gray-300">{a.label}</p>
-                <p className="text-xs text-gray-200 mt-0.5">{a.desc}</p>
+              {/* Icon + title row */}
+              <div className="flex items-center gap-3">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl ${card.iconBg}`}>
+                  {card.icon}
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">{card.title}</p>
+                </div>
               </div>
-              <div className="h-9 w-20 rounded-lg bg-gray-100" />
+
+              {/* Description */}
+              <p className="text-sm text-gray-500 leading-relaxed">{card.desc}</p>
+
+              {/* Action button */}
+              <button
+                type="button"
+                className={`mt-auto w-full rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${card.btnCls}`}
+              >
+                {card.btn}
+              </button>
             </div>
           ))}
         </div>
@@ -820,6 +921,7 @@ export default function CustomerProfileClient({
   insights,
   orders,
   interactions,
+  tags,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
@@ -845,7 +947,7 @@ export default function CustomerProfileClient({
 
       {/* Tab content */}
       <div className="p-6">
-        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} />}
+        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} tags={tags} />}
         {activeTab === "history"      && <HistoryTab orders={orders} />}
         {activeTab === "interactions" && <InteractionsTab interactions={interactions} />}
         {activeTab === "actions"      && <ActionsTab />}
