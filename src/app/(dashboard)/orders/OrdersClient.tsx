@@ -518,7 +518,7 @@ function DetailPanel({
   const delayed    = order ? isDelayed(order) : false;
 
   return (
-    <div className="hidden lg:flex w-[420px] shrink-0 flex-col border-l border-gray-200 bg-white">
+    <div className="hidden lg:flex w-[420px] shrink-0 flex-col border-l border-[#E5E5E5] bg-white">
       {order ? (
         <>
           {/* Header */}
@@ -713,13 +713,13 @@ export default function OrdersClient() {
   }
 
   return (
-    <div className="flex flex-col bg-gray-50" style={{ height: "calc(100vh - 64px)" }}>
+    <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "calc(100vh - 56px)" }}>
 
       {/* Alert strip — hidden when no alerts */}
       <AlertStrip orders={filtered} />
 
       {/* Controls row */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-2.5">
+      <div className="flex shrink-0 items-center gap-3 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
         <TimeFilter period={period} onChange={setPeriod} />
         <InsightsRow orders={filtered} />
       </div>

@@ -1000,7 +1000,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
   const [period, setPeriod] = useState<Period>("today");
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F5F5F5]">
       <div className="mx-auto max-w-7xl px-4 py-6 pb-12 sm:px-6 space-y-5">
 
         {/* ── HEADER ── */}

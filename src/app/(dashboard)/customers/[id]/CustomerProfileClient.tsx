@@ -124,11 +124,11 @@ const TAG_STYLES: Record<CustomerTag["color"], { chip: string }> = {
   rose:   { chip: "bg-rose-50 text-rose-700 border border-rose-200"      },
 };
 
-const TIER_STYLES: Record<Classification["tier"], { badge: string; avatarRing: string }> = {
-  Diamond: { badge: "bg-cyan-50 text-cyan-700 border border-cyan-200",         avatarRing: "ring-2 ring-cyan-300"   },
-  Gold:    { badge: "bg-amber-50 text-amber-700 border border-amber-200",       avatarRing: "ring-2 ring-amber-300"  },
-  Silver:  { badge: "bg-gray-100 text-gray-600 border border-gray-300",         avatarRing: "ring-2 ring-gray-300"   },
-  Bronze:  { badge: "bg-orange-50 text-orange-700 border border-orange-200",    avatarRing: "ring-2 ring-orange-300" },
+const TIER_STYLES: Record<Classification["tier"], { badge: string; avatarRing: string; avatarBg: string }> = {
+  Diamond: { badge: "bg-cyan-50 text-cyan-700 border border-cyan-200",         avatarRing: "ring-2 ring-cyan-300",   avatarBg: "bg-cyan-500"   },
+  Gold:    { badge: "bg-amber-50 text-amber-700 border border-amber-200",       avatarRing: "ring-2 ring-amber-300",  avatarBg: "bg-amber-500"  },
+  Silver:  { badge: "bg-gray-100 text-gray-600 border border-gray-300",         avatarRing: "ring-2 ring-gray-300",   avatarBg: "bg-gray-400"   },
+  Bronze:  { badge: "bg-orange-50 text-orange-700 border border-orange-200",    avatarRing: "ring-2 ring-orange-300", avatarBg: "bg-orange-500" },
 };
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -467,7 +467,7 @@ function HeaderSection({
   ];
 
   return (
-    <div className="border-b border-gray-200 bg-white px-6 py-5">
+    <div className="border-b border-[#E5E5E5] bg-white px-6 py-5">
       {/* Breadcrumb */}
       <div className="mb-4 flex items-center gap-2 text-sm text-gray-400">
         <Link href="/customers" className="hover:text-gray-600 transition-colors">
@@ -486,8 +486,7 @@ function HeaderSection({
       <div className="flex items-start gap-4">
         {/* Tier-colored avatar */}
         <div
-          className={`h-14 w-14 shrink-0 rounded-2xl bg-gradient-to-br ${classification.gradient}
-            flex items-center justify-center text-white text-xl font-bold shadow-md ${ts.avatarRing}`}
+          className={`h-14 w-14 shrink-0 rounded-2xl ${ts.avatarBg} flex items-center justify-center text-white text-xl font-bold shadow-sm ${ts.avatarRing}`}
         >
           {name.charAt(0).toUpperCase()}
         </div>
@@ -554,7 +553,7 @@ function HeaderSection({
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
             <div
-              className={`h-full rounded-full bg-gradient-to-r ${classification.gradient} transition-all duration-700`}
+              className="h-full rounded-full bg-orange-500 transition-all duration-700"
               style={{ width: `${classification.progressPercent}%` }}
             />
           </div>
@@ -568,7 +567,7 @@ function HeaderSection({
 
 function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   return (
-    <div className="border-b border-gray-200 bg-white px-6">
+    <div className="border-b border-[#E5E5E5] bg-white px-6">
       <div className="flex">
         {TABS.map((t) => (
           <button
@@ -928,7 +927,7 @@ export default function CustomerProfileClient({
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F5F5F5]">
       {/* Header */}
       <HeaderSection
         name={name}

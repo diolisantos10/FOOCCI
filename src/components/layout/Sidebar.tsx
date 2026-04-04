@@ -61,10 +61,10 @@ export function Sidebar() {
   const { data: session } = useSession();
 
   return (
-    <aside className="flex h-screen w-56 flex-col border-r border-gray-200 bg-white">
+    <aside className="flex h-screen w-56 flex-col border-r border-[#E5E5E5] bg-white">
       {/* Brand */}
-      <div className="flex h-14 items-center border-b border-gray-100 px-4">
-        <span className="text-base font-bold tracking-tight text-gray-900">Foocci</span>
+      <div className="flex h-14 items-center border-b border-[#E5E5E5] px-4">
+        <span className="text-base font-bold tracking-tight text-[#0B0B0B]">Foocci</span>
         <span className="ml-1.5 rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-600">
           beta
         </span>
@@ -96,7 +96,7 @@ export function Sidebar() {
                         href={item.href}
                         className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors ${
                           isActive
-                            ? "bg-brand-50 text-brand-700"
+                            ? "bg-brand-50 font-semibold text-brand-600"
                             : item.soon
                               ? "text-gray-400 hover:bg-gray-50 hover:text-gray-500"
                               : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
@@ -122,7 +122,7 @@ export function Sidebar() {
       </nav>
 
       {/* User badge */}
-      <div className="border-t border-gray-100 px-3 py-3">
+      <div className="border-t border-[#E5E5E5] px-3 py-3">
         <p className="truncate text-xs font-semibold text-gray-800">
           {session?.user?.name ?? "—"}
         </p>
