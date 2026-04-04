@@ -3,7 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface Classification {
+  tier: "Bronze" | "Silver" | "Gold" | "Diamond";
+  icon: string;
+  gradient: string;
+  nextTier: string | null;
+  nextThreshold: number | null;
+  progressPercent: number;
+}
 
 interface Props {
   id: string;
@@ -15,6 +24,34 @@ interface Props {
   lastOrderAt: string | null;
   createdAt: string;
   isActive: boolean;
+  classification: Classification;
+  purchaseFrequencyDays: number;
+  favoriteProduct: string | null;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const TIER_STYLES: Record<Classification["tier"], { badge: string; avatarRing: string }> = {
+  Diamond: { badge: "bg-cyan-50 text-cyan-700 border border-cyan-200",         avatarRing: "ring-2 ring-cyan-300"   },
+  Gold:    { badge: "bg-amber-50 text-amber-700 border border-amber-200",       avatarRing: "ring-2 ring-amber-300"  },
+  Silver:  { badge: "bg-gray-100 text-gray-600 border border-gray-300",         avatarRing: "ring-2 ring-gray-300"   },
+  Bronze:  { badge: "bg-orange-50 text-orange-700 border border-orange-200",    avatarRing: "ring-2 ring-orange-300" },
+};
+
+// ─── Formatters ───────────────────────────────────────────────────────────────
+
+function fmtCurrency(n: number) {
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function fmtRelative(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days === 0) return "hoje";
+  if (days === 1) return "ontem";
+  if (days <  7)  return `há ${days} dias`;
+  if (days < 30)  return `há ${Math.floor(days / 7)} sem.`;
+  if (days < 365) return `há ${Math.floor(days / 30)} meses`;
+  return `há ${Math.floor(days / 365)} ano${Math.floor(days / 365) > 1 ? "s" : ""}`;
 }
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
@@ -67,7 +104,51 @@ function Section({
 
 // ─── Header section ───────────────────────────────────────────────────────────
 
-function HeaderSection({ name, phone, email, isActive, createdAt }: Pick<Props, "name" | "phone" | "email" | "isActive" | "createdAt">) {
+type HeaderProps = Pick<
+  Props,
+  | "name" | "phone" | "email" | "isActive" | "createdAt"
+  | "totalOrders" | "totalSpend" | "lastOrderAt"
+  | "classification" | "purchaseFrequencyDays" | "favoriteProduct"
+>;
+
+function HeaderSection({
+  name, phone, email, isActive, createdAt,
+  totalOrders, totalSpend, lastOrderAt,
+  classification, purchaseFrequencyDays, favoriteProduct,
+}: HeaderProps) {
+  const ts = TIER_STYLES[classification.tier];
+
+  const stats = [
+    {
+      label: "Pedidos",
+      value: String(totalOrders),
+      sub:   totalOrders === 1 ? "pedido realizado" : "pedidos realizados",
+    },
+    {
+      label: "Total gasto",
+      value: fmtCurrency(totalSpend),
+      sub:   "acumulado",
+    },
+    {
+      label: "Último pedido",
+      value: lastOrderAt ? fmtRelative(lastOrderAt) : "—",
+      sub:   lastOrderAt
+        ? new Date(lastOrderAt).toLocaleDateString("pt-BR")
+        : "sem pedidos",
+    },
+    {
+      label: "Frequência",
+      value: purchaseFrequencyDays > 0 ? `${purchaseFrequencyDays}d` : "—",
+      sub:   purchaseFrequencyDays > 0 ? "entre pedidos" : "dados insuficientes",
+    },
+    {
+      label: "Produto favorito",
+      value: favoriteProduct ?? "—",
+      sub:   favoriteProduct ? "mais pedido" : "sem dados",
+      truncate: true,
+    },
+  ];
+
   return (
     <div className="border-b border-gray-200 bg-white px-6 py-5">
       {/* Breadcrumb */}
@@ -85,65 +166,83 @@ function HeaderSection({ name, phone, email, isActive, createdAt }: Pick<Props, 
       </div>
 
       {/* Identity row */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
-          {/* Avatar placeholder */}
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-md">
-            {name.charAt(0).toUpperCase()}
+      <div className="flex items-start gap-4">
+        {/* Tier-colored avatar */}
+        <div
+          className={`h-14 w-14 shrink-0 rounded-2xl bg-gradient-to-br ${classification.gradient}
+            flex items-center justify-center text-white text-xl font-bold shadow-md ${ts.avatarRing}`}
+        >
+          {name.charAt(0).toUpperCase()}
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900">{name}</h1>
+
+            {/* CRM tier badge */}
+            <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-sm font-semibold ${ts.badge}`}>
+              {classification.icon} {classification.tier}
+            </span>
           </div>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-gray-900">{name}</h1>
-              {/* CRM tier badge — placeholder */}
-              <span className="rounded-full border border-dashed border-gray-300 px-2.5 py-0.5 text-xs font-medium text-gray-300">
-                Classificação CRM
-              </span>
-            </div>
-            <div className="mt-0.5 flex items-center gap-3 text-sm text-gray-400">
-              <span>{phone}</span>
-              {email && <><span>·</span><span>{email}</span></>}
-              <span>·</span>
-              <span>
-                desde{" "}
-                {new Date(createdAt).toLocaleDateString("pt-BR", {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </span>
-            </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-gray-400">
+            <span>{phone}</span>
+            {email && <><span>·</span><span>{email}</span></>}
+            <span>·</span>
+            <span>
+              cliente desde{" "}
+              {new Date(createdAt).toLocaleDateString("pt-BR", {
+                month: "long",
+                year:  "numeric",
+              })}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Stats row — placeholders */}
+      {/* Stats row */}
       <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5">
-        {[
-          "Total pedidos",
-          "Total gasto",
-          "Ticket médio",
-          "Último pedido",
-          "Frequência",
-        ].map((label) => (
-          <div key={label} className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-300">
-              {label}
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-xl bg-gray-50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              {s.label}
             </p>
-            <p className="mt-1 h-5 w-16 rounded bg-gray-100" />
+            <p
+              className={`mt-1 text-lg font-bold leading-tight text-gray-900 ${s.truncate ? "truncate" : ""}`}
+              title={s.truncate ? (s.value ?? "") : undefined}
+            >
+              {s.value}
+            </p>
+            <p className="truncate text-[11px] text-gray-400">{s.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Tier progress — placeholder */}
-      <div className="mt-4">
-        <div className="mb-1.5 flex justify-between text-xs text-gray-300">
-          <span>Progresso para próximo nível</span>
-          <span>—%</span>
+      {/* Tier progress bar */}
+      {classification.nextTier && classification.nextThreshold && (
+        <div className="mt-4 pb-1">
+          <div className="mb-1.5 flex items-center justify-between text-xs">
+            <span className="text-gray-400">
+              Progresso para{" "}
+              <strong className="font-semibold text-gray-600">
+                {classification.nextTier}
+              </strong>
+            </span>
+            <span className="text-gray-400">
+              {classification.progressPercent}%{" "}
+              <span className="text-gray-300">
+                — falta {fmtCurrency(classification.nextThreshold - totalSpend)}
+              </span>
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+            <div
+              className={`h-full rounded-full bg-gradient-to-r ${classification.gradient} transition-all duration-700`}
+              style={{ width: `${classification.progressPercent}%` }}
+            />
+          </div>
         </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-          <div className="h-full w-1/3 rounded-full bg-gray-200" />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -284,6 +383,12 @@ export default function CustomerProfileClient({
   email,
   isActive,
   createdAt,
+  totalOrders,
+  totalSpend,
+  lastOrderAt,
+  classification,
+  purchaseFrequencyDays,
+  favoriteProduct,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
@@ -296,6 +401,12 @@ export default function CustomerProfileClient({
         email={email}
         isActive={isActive}
         createdAt={createdAt}
+        totalOrders={totalOrders}
+        totalSpend={totalSpend}
+        lastOrderAt={lastOrderAt}
+        classification={classification}
+        purchaseFrequencyDays={purchaseFrequencyDays}
+        favoriteProduct={favoriteProduct}
       />
 
       {/* Tab navigation */}
