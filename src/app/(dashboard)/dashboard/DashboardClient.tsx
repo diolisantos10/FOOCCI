@@ -51,6 +51,14 @@ const MOCK_LIVE = {
   cancelled: 1,
 };
 
+const MOCK_OPERATION = {
+  preparing:        8,
+  delayed:          2,
+  cancelled:        1,
+  avgPrepTime:      22,   // minutes
+  cancellationRate: 2.1,  // percent
+};
+
 const MOCK_ALERTS = [
   {
     id: "beverages",
@@ -583,73 +591,56 @@ function SalesChart() {
 
 type ProductRow = { name: string; sales: number; revenue: number };
 
-function ProductList({
-  items,
-  color,
-}: {
-  items: ProductRow[];
-  color: string;
-}) {
-  const maxSales = Math.max(...items.map((i) => i.sales), 1);
-
-  return (
-    <ol className="space-y-3">
-      {items.map((item, i) => (
-        <li key={i} className="flex items-center gap-2">
-          <span className="w-4 shrink-0 text-center text-[10px] font-bold text-gray-300">
-            {i + 1}
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="truncate text-sm font-medium text-gray-800">
-                {item.name}
-              </span>
-              <div className="shrink-0 text-right">
-                <span className="text-xs font-semibold text-gray-700">
-                  {item.sales}×
-                </span>
-                <span className="ml-1.5 text-xs text-gray-400">
-                  {fmtCurrency(item.revenue)}
-                </span>
-              </div>
-            </div>
-            <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-gray-100">
-              <div
-                className={`h-full rounded-full ${color}`}
-                style={{ width: `${(item.sales / maxSales) * 100}%` }}
-              />
-            </div>
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 function ProductPerformance() {
+  const [tab, setTab] = useState<"top" | "low">("top");
+  const items   = tab === "top" ? MOCK_TOP_ITEMS : MOCK_WORST_ITEMS;
+  const maxSales = Math.max(...items.map((i) => i.sales), 1);
+  const barColor = tab === "top" ? "bg-orange-400" : "bg-rose-300";
+
   return (
     <Card className="flex flex-col p-5">
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <SectionTitle>Produtos</SectionTitle>
+        <div className="flex overflow-hidden rounded-lg border border-gray-200 text-[11px]">
+          <button
+            onClick={() => setTab("top")}
+            className={`px-2.5 py-1 font-semibold transition-colors ${tab === "top" ? "bg-orange-500 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+          >
+            🔥 Top
+          </button>
+          <button
+            onClick={() => setTab("low")}
+            className={`px-2.5 py-1 font-semibold transition-colors ${tab === "low" ? "bg-rose-500 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+          >
+            🧊 Baixos
+          </button>
+        </div>
       </div>
 
-      <div className="mb-5">
-        <div className="mb-3 flex items-center gap-1.5">
-          <span>🔥</span>
-          <span className="text-sm font-semibold text-gray-800">Mais vendidos</span>
-        </div>
-        <ProductList items={MOCK_TOP_ITEMS} color="bg-indigo-400" />
-      </div>
-
-      <div className="border-t border-gray-100 pt-5">
-        <div className="mb-3 flex items-center gap-1.5">
-          <span>🧊</span>
-          <span className="text-sm font-semibold text-gray-800">
-            Menos vendidos
-          </span>
-        </div>
-        <ProductList items={MOCK_WORST_ITEMS} color="bg-rose-300" />
-      </div>
+      <ol className="space-y-3">
+        {items.map((item, i) => (
+          <li key={i} className="flex items-center gap-2">
+            <span className="w-4 shrink-0 text-center text-[10px] font-bold text-gray-300">
+              {i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="truncate text-sm font-medium text-gray-800">{item.name}</span>
+                <div className="shrink-0 text-right">
+                  <span className="text-xs font-semibold text-gray-700">{item.sales}×</span>
+                  <span className="ml-1.5 text-xs text-gray-400">{fmtCurrency(item.revenue)}</span>
+                </div>
+              </div>
+              <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                  style={{ width: `${(item.sales / maxSales) * 100}%` }}
+                />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
     </Card>
   );
 }
@@ -660,44 +651,49 @@ function ProductPerformance() {
 
 function CustomerSummary() {
   const { total, newToday, returningToday } = MOCK_CUSTOMERS;
-  const todayTotal = newToday + returningToday;
-  const newPct = todayTotal > 0 ? (newToday / todayTotal) * 100 : 50;
+  const todayTotal  = newToday + returningToday;
+  const newPct      = todayTotal > 0 ? Math.round((newToday      / todayTotal) * 100) : 50;
+  const returnPct   = todayTotal > 0 ? Math.round((returningToday / todayTotal) * 100) : 50;
 
   return (
     <Card className="p-5">
       <SectionTitle>Clientes</SectionTitle>
 
       {/* Total */}
-      <div className="mt-3 mb-5 flex items-end gap-2">
+      <div className="mt-3 mb-4 flex items-end gap-2">
         <span className="text-4xl font-bold text-gray-900">{total}</span>
-        <span className="mb-0.5 text-sm text-gray-400">clientes ativos</span>
+        <span className="mb-1 text-sm text-gray-400">ativos</span>
       </div>
 
-      {/* New vs returning today */}
-      <div className="space-y-3">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Novos hoje</span>
+      {/* Rows */}
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between text-sm">
+          <span className="flex items-center gap-1.5 text-gray-500">
+            <span className="h-2 w-2 rounded-full bg-orange-400" />
+            Novos hoje
+          </span>
           <span className="font-semibold text-gray-900">{newToday}</span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Recorrentes hoje</span>
+        <div className="flex items-center justify-between text-sm">
+          <span className="flex items-center gap-1.5 text-gray-500">
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            Recorrentes
+          </span>
           <span className="font-semibold text-gray-900">{returningToday}</span>
         </div>
+      </div>
 
-        {/* Split bar */}
-        <div className="mt-1 overflow-hidden rounded-full h-2.5 bg-gray-100 flex">
-          <div
-            className="h-full bg-indigo-500 rounded-l-full transition-all duration-500"
-            style={{ width: `${newPct}%` }}
-          />
-          <div className="h-full flex-1 bg-emerald-400 rounded-r-full" />
-        </div>
-        <div className="flex justify-between text-[10px] font-medium">
-          <span className="text-indigo-500">Novos ({Math.round(newPct)}%)</span>
-          <span className="text-emerald-500">
-            Recorrentes ({Math.round(100 - newPct)}%)
-          </span>
-        </div>
+      {/* Split bar */}
+      <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-gray-100">
+        <div
+          className="h-full bg-orange-400 transition-all duration-500"
+          style={{ width: `${newPct}%` }}
+        />
+        <div className="h-full flex-1 bg-emerald-400" />
+      </div>
+      <div className="mt-1.5 flex justify-between text-[10px] font-semibold">
+        <span className="text-orange-500">Novos {newPct}%</span>
+        <span className="text-emerald-600">Retorno {returnPct}%</span>
       </div>
     </Card>
   );
@@ -707,55 +703,45 @@ function CustomerSummary() {
 //  8. PaymentMethods
 // ─────────────────────────────────────────────────────────────
 
-const PAYMENT_COLORS = [
-  "bg-indigo-500",
-  "bg-violet-500",
-  "bg-emerald-500",
-  "bg-amber-500",
-];
+const PAYMENT_META: Record<string, { icon: string; bar: string }> = {
+  "PIX":            { icon: "⚡", bar: "bg-orange-400" },
+  "Cartão Crédito": { icon: "💳", bar: "bg-violet-400" },
+  "Cartão Débito":  { icon: "💳", bar: "bg-blue-400"   },
+  "Dinheiro":       { icon: "💵", bar: "bg-emerald-400" },
+};
 
 function PaymentMethods() {
-  const sorted = [...MOCK_PAYMENTS].sort((a, b) => b.amount - a.amount);
-  const maxAmount = sorted[0]?.amount ?? 1;
+  const sorted      = [...MOCK_PAYMENTS].sort((a, b) => b.amount - a.amount);
   const totalAmount = sorted.reduce((s, d) => s + d.amount, 0);
 
   return (
     <Card className="p-5">
-      <div className="mb-4 flex items-start justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <SectionTitle>Pagamentos</SectionTitle>
-        <span className="text-sm font-semibold text-gray-700">
-          {fmtCurrency(totalAmount)} total
-        </span>
+        <span className="text-sm font-semibold text-gray-800">{fmtCurrency(totalAmount)}</span>
       </div>
 
-      <div className="space-y-4">
-        {sorted.map((d, i) => {
-          const pct = Math.round((d.amount / totalAmount) * 100);
+      <div className="space-y-3.5">
+        {sorted.map((d) => {
+          const meta = PAYMENT_META[d.method] ?? { icon: "💰", bar: "bg-gray-400" };
+          const pct  = Math.round((d.amount / totalAmount) * 100);
           return (
             <div key={d.method}>
-              <div className="mb-1.5 flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-block h-2 w-2 rounded-full ${
-                      PAYMENT_COLORS[i] ?? "bg-gray-300"
-                    }`}
-                  />
-                  <span className="font-medium text-gray-800">{d.method}</span>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-gray-500">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <span className="text-base leading-none">{meta.icon}</span>
+                  {d.method}
+                </span>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
                   <span>{d.count} pedidos</span>
-                  <span className="font-semibold text-gray-700">
-                    {fmtCurrency(d.amount)}
-                  </span>
-                  <span className="w-8 text-right text-gray-400">{pct}%</span>
+                  <span className="font-semibold text-gray-800">{fmtCurrency(d.amount)}</span>
+                  <span className="w-7 text-right font-semibold text-gray-400">{pct}%</span>
                 </div>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+              <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
                 <div
-                  className={`h-full rounded-full ${
-                    PAYMENT_COLORS[i] ?? "bg-gray-300"
-                  } transition-all duration-500`}
-                  style={{ width: `${(d.amount / maxAmount) * 100}%` }}
+                  className={`h-full rounded-full transition-all duration-500 ${meta.bar}`}
+                  style={{ width: `${pct}%` }}
                 />
               </div>
             </div>
@@ -767,7 +753,54 @@ function PaymentMethods() {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  9. AIInsightsPanel
+//  9. OperationSummary
+// ─────────────────────────────────────────────────────────────
+
+function OperationSummary() {
+  const { preparing, delayed, cancelled, avgPrepTime, cancellationRate } = MOCK_OPERATION;
+
+  const stats: Array<{
+    label: string;
+    value: string | number;
+    sub?: string;
+    urgent?: boolean;
+  }> = [
+    { label: "Preparando",       value: preparing,              sub: "pedidos" },
+    { label: "Atrasados",        value: delayed,                sub: "pedidos",    urgent: delayed > 0 },
+    { label: "Cancelados",       value: cancelled,              sub: "hoje"  },
+    { label: "Tempo médio",      value: `${avgPrepTime} min`,   sub: "de preparo" },
+    { label: "Taxa cancelamento", value: `${cancellationRate}%`, sub: "dos pedidos" },
+  ];
+
+  return (
+    <Card className="p-5">
+      <div className="mb-4">
+        <SectionTitle>Operação</SectionTitle>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {stats.map((s) => (
+          <div
+            key={s.label}
+            className={`rounded-xl p-3 ${s.urgent ? "bg-red-50" : "bg-gray-50"}`}
+          >
+            <div className="flex items-center gap-1.5">
+              {s.urgent && (
+                <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-red-500" />
+              )}
+              <p className={`text-xl font-bold leading-none ${s.urgent ? "text-red-600" : "text-gray-900"}`}>
+                {s.value}
+              </p>
+            </div>
+            <p className="mt-1 text-[11px] font-medium text-gray-400">{s.label}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  10. AIInsightsPanel
 // ─────────────────────────────────────────────────────────────
 
 function AIInsightsPanel() {
@@ -1010,6 +1043,11 @@ export default function DashboardClient({ userName }: { userName: string }) {
           {/* ── PAYMENT METHODS (1 col) ── */}
           <div className="lg:col-span-1">
             <PaymentMethods />
+          </div>
+
+          {/* ── OPERATION SUMMARY (full width) ── */}
+          <div className="lg:col-span-3">
+            <OperationSummary />
           </div>
 
           {/* ── ACTION CENTER (full width) ── */}
