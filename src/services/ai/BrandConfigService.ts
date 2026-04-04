@@ -5,38 +5,33 @@ import { DEFAULT_BRAND_CONFIG } from "@/validators/brand-config";
 import type { RestaurantBrandConfig } from "@prisma/client";
 
 export class BrandConfigService {
-  /**
-   * Upsert brand voice configuration for a restaurant.
-   */
   static async upsert(
     restaurantId: string,
     input: UpsertBrandConfigInput
   ): Promise<ServiceResult<RestaurantBrandConfig>> {
+    const data = {
+      tone: input.tone,
+      formality: input.formality,
+      emojiUsage: input.emojiUsage,
+      communicationStyle: input.communicationStyle,
+      upsellStyle: input.upsellStyle,
+      greetingTemplate: input.greetingTemplate ?? null,
+      systemPromptOverride: input.systemPromptOverride ?? null,
+      aiModel: input.aiModel,
+      maxHistoryMessages: input.maxHistoryMessages,
+      // Experience fields
+      personalityPreset: input.personalityPreset,
+      upsellIntensity: input.upsellIntensity,
+      salesFocus: input.salesFocus,
+      salesPriority: input.salesPriority,
+      brandPrimaryColor: input.brandPrimaryColor ?? null,
+      brandSecondaryColor: input.brandSecondaryColor ?? null,
+    };
+
     const config = await prisma.restaurantBrandConfig.upsert({
       where: { restaurantId },
-      create: {
-        restaurantId,
-        tone: input.tone,
-        formality: input.formality,
-        emojiUsage: input.emojiUsage,
-        communicationStyle: input.communicationStyle,
-        upsellStyle: input.upsellStyle,
-        greetingTemplate: input.greetingTemplate ?? null,
-        systemPromptOverride: input.systemPromptOverride ?? null,
-        aiModel: input.aiModel,
-        maxHistoryMessages: input.maxHistoryMessages,
-      },
-      update: {
-        tone: input.tone,
-        formality: input.formality,
-        emojiUsage: input.emojiUsage,
-        communicationStyle: input.communicationStyle,
-        upsellStyle: input.upsellStyle,
-        greetingTemplate: input.greetingTemplate ?? null,
-        systemPromptOverride: input.systemPromptOverride ?? null,
-        aiModel: input.aiModel,
-        maxHistoryMessages: input.maxHistoryMessages,
-      },
+      create: { restaurantId, ...data },
+      update: data,
     });
 
     return serviceOk(config);
@@ -64,13 +59,24 @@ export class BrandConfigService {
 
     if (config) return config;
 
-    // Return a synthetic default — not persisted, just for the current turn.
     return {
       id: "",
       restaurantId,
-      ...DEFAULT_BRAND_CONFIG,
+      tone: DEFAULT_BRAND_CONFIG.tone,
+      formality: DEFAULT_BRAND_CONFIG.formality,
+      emojiUsage: DEFAULT_BRAND_CONFIG.emojiUsage,
+      communicationStyle: DEFAULT_BRAND_CONFIG.communicationStyle,
+      upsellStyle: DEFAULT_BRAND_CONFIG.upsellStyle,
       greetingTemplate: null,
       systemPromptOverride: null,
+      aiModel: DEFAULT_BRAND_CONFIG.aiModel,
+      maxHistoryMessages: DEFAULT_BRAND_CONFIG.maxHistoryMessages,
+      personalityPreset: DEFAULT_BRAND_CONFIG.personalityPreset,
+      upsellIntensity: DEFAULT_BRAND_CONFIG.upsellIntensity,
+      salesFocus: DEFAULT_BRAND_CONFIG.salesFocus,
+      salesPriority: DEFAULT_BRAND_CONFIG.salesPriority,
+      brandPrimaryColor: null,
+      brandSecondaryColor: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

@@ -714,6 +714,20 @@ model RestaurantBrandConfig {
   maxHistoryMessages   Int      @default(20)
   // how many recent messages to include in the prompt
 
+  // ── Experience / behavioral config (Phase 5) ─────────────────
+  personalityPreset    String   @default("traditional")
+  // traditional | fast | premium | young | aggressive
+  upsellIntensity      String   @default("medium")
+  // low | medium | high
+  salesFocus           String   @default("balanced")
+  // balanced | ticket | volume
+  salesPriority        String   @default("bestsellers")
+  // bestsellers | high_margin | promotions
+
+  // ── Visual identity ──────────────────────────────────────────
+  brandPrimaryColor    String?  // hex e.g. #6366f1
+  brandSecondaryColor  String?  // hex e.g. #8b5cf6
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
