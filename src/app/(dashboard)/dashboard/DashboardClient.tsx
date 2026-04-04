@@ -1,6 +1,17 @@
 "use client";
 
 import { useState } from "react";
+
+// ─── Time-filter types (used by the new header) ───────────────
+type Period = "today" | "yesterday" | "7days" | "month" | "year";
+
+const PERIOD_OPTIONS: Array<{ id: Period; label: string }> = [
+  { id: "today",     label: "Hoje" },
+  { id: "yesterday", label: "Ontem" },
+  { id: "7days",     label: "Últ. 7 dias" },
+  { id: "month",     label: "Mês atual" },
+  { id: "year",      label: "Ano atual" },
+];
 import Link from "next/link";
 
 // ─────────────────────────────────────────────────────────────
@@ -681,59 +692,120 @@ function PaymentMethods() {
 // ─────────────────────────────────────────────────────────────
 
 export default function DashboardClient({ userName }: { userName: string }) {
+  const [period, setPeriod] = useState<Period>("today");
+
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-7xl px-4 py-6 pb-12 sm:px-6">
-        {/* Greeting */}
-        <p className="mb-6 text-sm text-gray-500">
-          {greeting},{" "}
-          <span className="font-semibold text-gray-900">{userName}</span> —
-          aqui está o que está acontecendo agora.
-        </p>
+      <div className="mx-auto max-w-7xl px-4 py-6 pb-12 sm:px-6 space-y-5">
 
+        {/* ── HEADER: greeting + time filter + store status ── */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {/* Greeting / headline */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              {greeting}, {userName}
+            </p>
+            <h2 className="mt-0.5 text-2xl font-bold text-gray-900">
+              Hoje seu restaurante já faturou{" "}
+              <span className="text-orange-500">
+                {fmtCurrency(MOCK_KPIS.revenueToday)}
+              </span>{" "}
+              👇
+            </h2>
+          </div>
+
+          {/* Store status badge — placeholder */}
+          <div className="flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1.5">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+            <span className="text-xs font-semibold text-green-700">Aberto · Pico</span>
+          </div>
+        </div>
+
+        {/* ── TIME FILTER ── */}
+        <div className="flex overflow-x-auto gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm w-fit">
+          {PERIOD_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => setPeriod(opt.id)}
+              className={`rounded-lg px-4 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
+                period === opt.id
+                  ? "bg-orange-500 text-white shadow-sm"
+                  : "text-gray-500 hover:bg-gray-100"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── 3-COLUMN GRID ── */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          {/* ── 1. Banners (full width) ── */}
+
+          {/* ── BANNER CARDS (full width, 3-col inner grid) ── */}
           <div className="lg:col-span-3">
+            {/* TODO Step 2: replace with 3 large horizontal cards */}
             <BannerSection />
           </div>
 
-          {/* ── 2. KPIs (3 columns) ── */}
+          {/* ── KPI CARDS (each spans 1 col → 3 total) ── */}
           <KPISection />
 
-          {/* ── 3. Live status (full width) ── */}
-          <div className="lg:col-span-3">
-            <LiveStatus />
-          </div>
-
-          {/* ── 4. Alerts (full width) ── */}
-          <div className="lg:col-span-3">
-            <SectionTitle>Alertas inteligentes</SectionTitle>
-            <Alerts />
-          </div>
-
-          {/* ── 5. Sales chart (2 cols) ── */}
+          {/* ── MAIN CHART (2 cols) + AI INSIGHTS PANEL (1 col) ── */}
           <div className="lg:col-span-2">
             <SalesChart />
           </div>
 
-          {/* ── 6. Product performance (1 col) ── */}
+          <div className="lg:col-span-1">
+            {/* TODO Step 3: AI Insights Panel */}
+            <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-5 h-full flex flex-col gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+                Insights IA
+              </p>
+              <Alerts />
+            </div>
+          </div>
+
+          {/* ── PRODUCT PERFORMANCE (1 col) ── */}
           <div className="lg:col-span-1">
             <ProductPerformance />
           </div>
 
-          {/* ── 7. Customer summary (1 col) ── */}
+          {/* ── CUSTOMER SUMMARY (1 col) ── */}
           <div className="lg:col-span-1">
             <CustomerSummary />
           </div>
 
-          {/* ── 8. Payment methods (2 cols) ── */}
-          <div className="lg:col-span-2">
+          {/* ── PAYMENT METHODS (1 col) ── */}
+          <div className="lg:col-span-1">
             <PaymentMethods />
           </div>
+
+          {/* ── ACTION CENTER (full width) ── */}
+          <div className="lg:col-span-3">
+            {/* TODO Step 4: Action Center */}
+            <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-3">
+                Central de ações
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {["Criar promoção", "Ativar upsell", "Reativar clientes", "Ver pedidos"].map(
+                  (label) => (
+                    <div
+                      key={label}
+                      className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-3 text-sm font-medium text-gray-400"
+                    >
+                      {label}
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
