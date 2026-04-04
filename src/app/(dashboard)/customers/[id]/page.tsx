@@ -36,13 +36,29 @@ type OrderRow = {
 function computeHeader(orders: OrderRow[]) {
   const delivered = orders.filter((o) => o.status === "DELIVERED");
 
+  const sorted = [...delivered].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
   let purchaseFrequencyDays = 0;
-  if (delivered.length >= 2) {
-    const sorted = [...delivered].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  if (sorted.length >= 2) {
     const gaps: number[] = [];
-    for (let i = 1; i < sorted.length; i++)
-      gaps.push((sorted[i]!.createdAt.getTime() - sorted[i - 1]!.createdAt.getTime()) / 86_400_000);
-    purchaseFrequencyDays = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+
+    for (let i = 1; i < sorted.length; i++) {
+      const current  = sorted[i];
+      const previous = sorted[i - 1];
+
+      if (!current || !previous) continue;
+
+      gaps.push(
+        (current.createdAt.getTime() - previous.createdAt.getTime()) / 86_400_000
+      );
+    }
+
+    if (gaps.length > 0) {
+      purchaseFrequencyDays = Math.round(
+        gaps.reduce((a, b) => a + b, 0) / gaps.length
+      );
+    }
   }
 
   const counts: Record<string, number> = {};
