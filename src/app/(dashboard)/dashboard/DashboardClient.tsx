@@ -87,11 +87,11 @@ type InsightType = "warning" | "opportunity" | "info";
 
 const INSIGHT_STYLES: Record<
   InsightType,
-  { bg: string; border: string; text: string; link: string }
+  { bg: string; border: string; text: string }
 > = {
-  warning:     { bg: "bg-red-50",    border: "border-l-red-400",   text: "text-red-800",    link: "text-red-600"   },
-  opportunity: { bg: "bg-green-50",  border: "border-l-green-400", text: "text-green-800",  link: "text-green-600" },
-  info:        { bg: "bg-blue-50",   border: "border-l-blue-400",  text: "text-blue-800",   link: "text-blue-600"  },
+  warning:     { bg: "bg-gray-50",  border: "border-l-gray-300", text: "text-gray-800" },
+  opportunity: { bg: "bg-gray-50",  border: "border-l-gray-300", text: "text-gray-800" },
+  info:        { bg: "bg-gray-50",  border: "border-l-gray-200", text: "text-gray-700" },
 };
 
 const MOCK_INSIGHTS: Array<{
@@ -102,10 +102,10 @@ const MOCK_INSIGHTS: Array<{
   action: string;
   href: string;
 }> = [
-  { id: "beverages", type: "warning",     icon: "🧃", message: "78% dos pedidos sem bebida",       action: "Ativar combo de bebida",  href: "/settings/experience" },
-  { id: "ticket",    type: "warning",     icon: "📉", message: "Ticket médio caiu 3% hoje",        action: "Revisar upsell",          href: "/settings/experience" },
-  { id: "dessert",   type: "warning",     icon: "🍰", message: "0 sobremesas vendidas hoje",       action: "Criar promoção",          href: "/marketing"           },
-  { id: "crm",       type: "opportunity", icon: "👥", message: "3 clientes inativos há 30 dias",  action: "Reativar clientes",       href: "/crm"                 },
+  { id: "beverages", type: "opportunity", icon: "🧃", message: "Bebidas podem aumentar seu ticket em +23% por pedido",      action: "Ativar combo agora",      href: "/settings/experience" },
+  { id: "ticket",    type: "opportunity", icon: "📈", message: "Ative upsell e recupere os 3% no ticket médio",             action: "Configurar upsell",       href: "/settings/experience" },
+  { id: "dessert",   type: "info",        icon: "🍰", message: "Sobremesas com 0 vendas — uma promoção rápida muda isso",   action: "Criar promoção",          href: "/marketing"           },
+  { id: "crm",       type: "opportunity", icon: "👥", message: "3 clientes inativos prontos para reativar",                 action: "Reativar agora",          href: "/crm"                 },
 ];
 
 type QuickActionColor = { iconBg: string; iconText: string; hoverBorder: string };
@@ -503,7 +503,7 @@ function BarChart({ data }: { data: ChartPoint[] }) {
   const maxOrders  = Math.max(...data.map((d) => d.orders),  1);
   const BAR_W = 28;
   const GAP   = 8;
-  const H     = 90;
+  const H     = 65;
   const totalW = data.length * (BAR_W + GAP) - GAP;
 
   const pts = data.map((d, i) => ({
@@ -526,7 +526,7 @@ function BarChart({ data }: { data: ChartPoint[] }) {
                 x={x} y={H - barH}
                 width={BAR_W} height={barH}
                 rx={5}
-                fill={isLast ? "#f97316" : "#fde8c4"}
+                fill={isLast ? "#f97316" : "#f3e8d8"}
               />
               <text x={x + BAR_W / 2} y={H + 16} textAnchor="middle" fontSize={9} fill="#9ca3af">
                 {d.label}
@@ -573,11 +573,11 @@ function SalesChart() {
       {/* Legend */}
       <div className="mt-3 flex items-center gap-5 text-xs text-gray-500">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-orange-300" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-orange-200" />
           Receita
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-px w-5 border-t-2 border-gray-800" />
+          <span className="inline-block h-px w-5 border-t border-gray-400" />
           Pedidos
         </span>
       </div>
@@ -595,7 +595,7 @@ function ProductPerformance() {
   const [tab, setTab] = useState<"top" | "low">("top");
   const items   = tab === "top" ? MOCK_TOP_ITEMS : MOCK_WORST_ITEMS;
   const maxSales = Math.max(...items.map((i) => i.sales), 1);
-  const barColor = tab === "top" ? "bg-orange-400" : "bg-rose-300";
+  const barColor = tab === "top" ? "bg-gray-700" : "bg-gray-300";
 
   return (
     <Card className="flex flex-col p-5">
@@ -669,14 +669,14 @@ function CustomerSummary() {
       <div className="space-y-2.5">
         <div className="flex items-center justify-between text-sm">
           <span className="flex items-center gap-1.5 text-gray-500">
-            <span className="h-2 w-2 rounded-full bg-orange-400" />
+            <span className="h-2 w-2 rounded-full bg-gray-700" />
             Novos hoje
           </span>
           <span className="font-semibold text-gray-900">{newToday}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="flex items-center gap-1.5 text-gray-500">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="h-2 w-2 rounded-full bg-gray-300" />
             Recorrentes
           </span>
           <span className="font-semibold text-gray-900">{returningToday}</span>
@@ -684,16 +684,16 @@ function CustomerSummary() {
       </div>
 
       {/* Split bar */}
-      <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-gray-100">
+      <div className="mt-4 flex h-1.5 overflow-hidden rounded-full bg-gray-100">
         <div
-          className="h-full bg-orange-400 transition-all duration-500"
+          className="h-full bg-gray-700 transition-all duration-500"
           style={{ width: `${newPct}%` }}
         />
-        <div className="h-full flex-1 bg-emerald-400" />
+        <div className="h-full flex-1 bg-gray-200" />
       </div>
-      <div className="mt-1.5 flex justify-between text-[10px] font-semibold">
-        <span className="text-orange-500">Novos {newPct}%</span>
-        <span className="text-emerald-600">Retorno {returnPct}%</span>
+      <div className="mt-1.5 flex justify-between text-[10px] font-medium text-gray-400">
+        <span>Novos {newPct}%</span>
+        <span>Retorno {returnPct}%</span>
       </div>
     </Card>
   );
@@ -804,40 +804,33 @@ function OperationSummary() {
 // ─────────────────────────────────────────────────────────────
 
 function AIInsightsPanel() {
-  const warningCount = MOCK_INSIGHTS.filter((i) => i.type === "warning").length;
-
   return (
     <Card className="flex h-full flex-col p-5">
-      {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <SectionTitle>Insights IA</SectionTitle>
-        {warningCount > 0 && (
-          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-600">
-            {warningCount} alertas
-          </span>
-        )}
+      <div className="mb-4">
+        <SectionTitle>Oportunidades</SectionTitle>
       </div>
 
-      {/* Insight rows */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2.5">
         {MOCK_INSIGHTS.map((ins) => {
           const s = INSIGHT_STYLES[ins.type];
           return (
             <div
               key={ins.id}
-              className={`flex items-start gap-3 rounded-xl border-l-4 px-3 py-2.5 ${s.bg} ${s.border}`}
+              className={`rounded-xl border-l-[3px] px-3 py-3 ${s.bg} ${s.border}`}
             >
-              <span className="mt-0.5 shrink-0 text-base leading-none">{ins.icon}</span>
-              <div className="min-w-0 flex-1">
-                <p className={`text-sm font-semibold leading-snug ${s.text}`}>
-                  {ins.message}
-                </p>
-                <Link
-                  href={ins.href}
-                  className={`mt-0.5 inline-block text-xs font-medium hover:underline ${s.link}`}
-                >
-                  {ins.action} →
-                </Link>
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 shrink-0 text-base leading-none">{ins.icon}</span>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-medium leading-snug ${s.text}`}>
+                    {ins.message}
+                  </p>
+                  <Link
+                    href={ins.href}
+                    className="mt-2 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
+                  >
+                    {ins.action} →
+                  </Link>
+                </div>
               </div>
             </div>
           );
@@ -901,7 +894,7 @@ function StoreStatusBadge() {
   const cfg: Record<StoreState, { dot: string; badge: string; text: string; label: string }> = {
     open:   { dot: "bg-green-500",  badge: "border-green-200 bg-green-50",   text: "text-green-700",  label: "Aberto" },
     closed: { dot: "bg-gray-400",   badge: "border-gray-200 bg-gray-50",     text: "text-gray-500",   label: "Fechado" },
-    peak:   { dot: "bg-orange-500", badge: "border-orange-200 bg-orange-50", text: "text-orange-700", label: "Aberto · Pico" },
+    peak:   { dot: "bg-amber-500",  badge: "border-amber-200 bg-amber-50",  text: "text-amber-700",  label: "Aberto · Pico" },
   };
 
   const { dot, badge, text, label } = cfg[state];
@@ -971,11 +964,13 @@ function RevenueHeadline({ period }: { period: Period }) {
   const headline     = PERIOD_HEADLINES[period]!(revFormatted);
   const [before, after] = headline.split(revFormatted);
   return (
-    <h2 className="text-xl font-bold leading-snug text-gray-900 sm:text-2xl">
-      {before}
-      <span className="text-orange-500">{revFormatted}</span>
-      {after}
-    </h2>
+    <div className="py-2">
+      <h2 className="text-3xl font-bold leading-tight text-[#0B0B0B] sm:text-4xl">
+        {before}
+        <span className="text-orange-500">{revFormatted}</span>
+        {after}
+      </h2>
+    </div>
   );
 }
 

@@ -9,16 +9,8 @@ interface TopBarProps {
 export function TopBar({ title }: TopBarProps) {
   return (
     <header className="flex h-14 items-center justify-between border-b border-[#E5E5E5] bg-white px-6">
-      {/* Left: brand + page context */}
-      <div className="flex items-center gap-2.5">
-        <span className="text-sm font-bold tracking-tight text-[#0B0B0B]">Foocci</span>
-        {title && (
-          <>
-            <span className="text-gray-200 select-none">/</span>
-            <span className="text-sm font-medium text-gray-400">{title}</span>
-          </>
-        )}
-      </div>
+      {/* Left: brand */}
+      <span className="text-sm font-bold tracking-tight text-[#0B0B0B]">Foocci</span>
 
       {/* Right: user action */}
       <button
