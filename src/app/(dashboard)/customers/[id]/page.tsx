@@ -41,7 +41,7 @@ function computeHeader(orders: OrderRow[]) {
     const sorted = [...delivered].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     const gaps: number[] = [];
     for (let i = 1; i < sorted.length; i++)
-      gaps.push((sorted[i].createdAt.getTime() - sorted[i - 1].createdAt.getTime()) / 86_400_000);
+      gaps.push((sorted[i]!.createdAt.getTime() - sorted[i - 1]!.createdAt.getTime()) / 86_400_000);
     purchaseFrequencyDays = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
   }
 
@@ -82,7 +82,7 @@ function computeBehavior(orders: OrderRow[]): BehaviorData {
   const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
   const dayCounts: Record<string, number> = {};
   orders.forEach((o) => {
-    const d = DAY_NAMES[o.createdAt.getDay()];
+    const d = DAY_NAMES[o.createdAt.getDay()]!;
     dayCounts[d] = (dayCounts[d] ?? 0) + 1;
   });
   const maxDay = Math.max(...DAY_NAMES.map((d) => dayCounts[d] ?? 0), 1);
