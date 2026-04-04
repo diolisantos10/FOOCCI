@@ -239,42 +239,180 @@ function TimeFilter({
   );
 }
 
-// ─── KPIRow ───────────────────────────────────────────────────
+// ─── StatusFilter type ────────────────────────────────────────
 
-function KPIRow({ orders }: { orders: MockOrder[] }) {
+type StatusFilter = "PENDING" | "PREPARING" | "READY" | "DELAYED" | null;
+
+// ─── OperationalBar helpers ───────────────────────────────────
+
+function computePerformance(orders: MockOrder[]) {
+  const active   = orders.filter((o) => !TERMINAL.includes(o.status));
+  const delayed  = orders.filter(isDelayed);
+  const pctDelayed = active.length > 0
+    ? Math.round((delayed.length / active.length) * 100)
+    : 0;
+  return {
+    avgConfirmTime: "3 min",
+    avgPrepTime:    "18 min",
+    avgCycleTime:   "28 min",
+    pctDelayed,
+  };
+}
+
+function computeHealth(orders: MockOrder[]) {
+  const cancelled      = orders.filter((o) => o.status === "CANCELLED").length;
+  const active         = orders.filter((o) => !TERMINAL.includes(o.status));
+  const isPeak         = active.length >= 4;
+  const preparing      = orders.filter((o) => o.status === "PREPARING");
+  const slowPrep       = preparing.filter((o) => minutesSince(o.createdAt) > 15);
+  const prepAboveNormal = slowPrep.length > 0 && preparing.length > 0;
+  const delayedCount   = orders.filter(isDelayed).length;
+  const serviceLevel   = delayedCount === 0 ? "Excelente" : delayedCount <= 2 ? "Atenção" : "Crítico";
+  return { cancelled, isPeak, prepAboveNormal, serviceLevel };
+}
+
+// ─── OperationalBar ───────────────────────────────────────────
+
+const PERF_THRESHOLD: Record<string, [number, number]> = {
+  // [warn, critical] thresholds in minutes
+  avgConfirmTime: [5, 10],
+  avgPrepTime:    [20, 30],
+  avgCycleTime:   [35, 50],
+};
+
+function perfColor(key: string, value: string): string {
+  const mins = parseInt(value);
+  if (isNaN(mins)) return "bg-gray-300";
+  const [warn, crit] = PERF_THRESHOLD[key] ?? [999, 9999];
+  if (mins >= crit) return "bg-red-500";
+  if (mins >= warn) return "bg-amber-400";
+  return "bg-green-500";
+}
+
+function pctDelayedColor(pct: number): string {
+  if (pct >= 30) return "bg-red-500";
+  if (pct >= 15) return "bg-amber-400";
+  return "bg-green-500";
+}
+
+const SERVICE_LEVEL_STYLE: Record<string, string> = {
+  Excelente: "bg-green-100 text-green-700",
+  Atenção:   "bg-amber-100 text-amber-700",
+  Crítico:   "bg-red-100 text-red-700",
+};
+
+function OperationalBar({
+  orders,
+  statusFilter,
+  onFilterChange,
+}: {
+  orders: MockOrder[];
+  statusFilter: StatusFilter;
+  onFilterChange: (f: StatusFilter) => void;
+}) {
   const pending   = orders.filter((o) => o.status === "PENDING").length;
-  const confirmed = orders.filter((o) => o.status === "CONFIRMED").length;
   const preparing = orders.filter((o) => o.status === "PREPARING").length;
+  const ready     = orders.filter((o) => o.status === "READY").length;
   const delayed   = orders.filter(isDelayed).length;
 
-  const kpis = [
-    { label: "Novos pedidos",       value: String(pending),   urgent: pending > 0,  blink: pending > 0  },
-    { label: "Confirmados",         value: String(confirmed), urgent: false,         blink: false         },
-    { label: "Em preparo",          value: String(preparing), urgent: false,         blink: false         },
-    { label: "Atrasados",           value: String(delayed),   urgent: delayed > 0,  blink: delayed > 0  },
-    { label: "Tempo médio",         value: "22 min",          urgent: false,         blink: false         },
-  ];
+  const perf   = computePerformance(orders);
+  const health = computeHealth(orders);
+
+  function toggleFilter(f: StatusFilter) {
+    onFilterChange(statusFilter === f ? null : f);
+  }
 
   return (
-    <div className="grid grid-cols-5 gap-2 shrink-0 border-b border-gray-200 bg-white px-4 py-3">
-      {kpis.map((k) => (
-        <div
-          key={k.label}
-          className={`rounded-xl px-3 py-2.5 ${k.urgent ? "bg-red-50" : "bg-gray-50"}`}
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-            {k.label}
-          </p>
-          <div className="mt-1 flex items-center gap-1.5">
-            {k.blink && (
-              <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-red-500" />
-            )}
-            <p className={`text-2xl font-bold leading-none ${k.urgent ? "text-red-600" : "text-gray-900"}`}>
-              {k.value}
-            </p>
-          </div>
+    <div className="shrink-0 border-b border-[#E5E5E5] bg-white">
+      <div className="flex items-stretch divide-x divide-gray-100 overflow-x-auto">
+
+        {/* ── Group A: Status filters ─────────────────────────── */}
+        <div className="flex items-center gap-1.5 px-4 py-2.5 shrink-0">
+          <span className="mr-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 shrink-0">
+            Filtrar
+          </span>
+
+          {([
+            { id: "PENDING"  as StatusFilter, label: "Novos",      count: pending,   active: "bg-amber-500 text-white",  inactive: "bg-amber-50 text-amber-700 hover:bg-amber-100"  },
+            { id: "PREPARING"as StatusFilter, label: "Preparando", count: preparing, active: "bg-orange-500 text-white", inactive: "bg-orange-50 text-orange-700 hover:bg-orange-100"},
+            { id: "READY"    as StatusFilter, label: "Pronto",     count: ready,     active: "bg-teal-600 text-white",   inactive: "bg-teal-50 text-teal-700 hover:bg-teal-100"      },
+            { id: "DELAYED"  as StatusFilter, label: "Atrasados",  count: delayed,   active: "bg-red-600 text-white",    inactive: "bg-red-50 text-red-700 hover:bg-red-100"         },
+          ] as const).map((btn) => (
+            <button
+              key={String(btn.id)}
+              onClick={() => toggleFilter(btn.id)}
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors shrink-0
+                ${statusFilter === btn.id ? btn.active : btn.inactive}`}
+            >
+              <span>{btn.label}</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none
+                ${statusFilter === btn.id ? "bg-white/30 text-inherit" : "bg-white/70"}`}>
+                {btn.count}
+              </span>
+            </button>
+          ))}
         </div>
-      ))}
+
+        {/* ── Group B: Performance KPIs ───────────────────────── */}
+        <div className="flex items-center gap-4 px-4 py-2.5 shrink-0">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 shrink-0">
+            Performance
+          </span>
+
+          {([
+            { key: "avgConfirmTime", label: "Conf.",   value: perf.avgConfirmTime, colorFn: () => perfColor("avgConfirmTime", perf.avgConfirmTime) },
+            { key: "avgPrepTime",    label: "Preparo", value: perf.avgPrepTime,    colorFn: () => perfColor("avgPrepTime", perf.avgPrepTime)        },
+            { key: "avgCycleTime",   label: "Ciclo",   value: perf.avgCycleTime,   colorFn: () => perfColor("avgCycleTime", perf.avgCycleTime)      },
+            { key: "pctDelayed",     label: "Atraso",  value: `${perf.pctDelayed}%`, colorFn: () => pctDelayedColor(perf.pctDelayed)               },
+          ]).map((m) => (
+            <div key={m.key} className="flex items-center gap-1.5 shrink-0">
+              <span className={`h-2 w-2 shrink-0 rounded-full ${m.colorFn()}`} />
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 leading-none">
+                  {m.label}
+                </p>
+                <p className="text-sm font-bold text-gray-800 leading-tight">{m.value}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Group C: Health indicators ──────────────────────── */}
+        <div className="flex items-center gap-3 px-4 py-2.5 shrink-0">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 shrink-0">
+            Saúde
+          </span>
+
+          <div className="flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-full shrink-0 ${health.cancelled > 0 ? "bg-red-500" : "bg-green-500"}`} />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 leading-none">Cancelados</p>
+              <p className="text-sm font-bold text-gray-800 leading-tight">{health.cancelled}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`h-2 w-2 rounded-full shrink-0 ${health.isPeak ? "bg-amber-400" : "bg-green-500"}`} />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 leading-none">Pico</p>
+              <p className="text-sm font-bold text-gray-800 leading-tight">{health.isPeak ? "Ativo" : "Normal"}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`h-2 w-2 rounded-full shrink-0 ${health.prepAboveNormal ? "bg-amber-400" : "bg-green-500"}`} />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 leading-none">Preparo</p>
+              <p className="text-sm font-bold text-gray-800 leading-tight">{health.prepAboveNormal ? "Alto" : "Normal"}</p>
+            </div>
+          </div>
+
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${SERVICE_LEVEL_STYLE[health.serviceLevel]}`}>
+            {health.serviceLevel}
+          </span>
+        </div>
+
+      </div>
     </div>
   );
 }
@@ -656,11 +794,12 @@ function DetailPanel({
 // ─── Root ─────────────────────────────────────────────────────
 
 export default function OrdersClient() {
-  const [orders,     setOrders]     = useState<MockOrder[]>(INITIAL_ORDERS);
-  const [period,     setPeriod]     = useState<TimePeriod>("30min");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  const [,           setTick]       = useState(0);
+  const [orders,       setOrders]       = useState<MockOrder[]>(INITIAL_ORDERS);
+  const [period,       setPeriod]       = useState<TimePeriod>("30min");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
+  const [selectedId,   setSelectedId]   = useState<string | null>(null);
+  const [checkedIds,   setCheckedIds]   = useState<Set<string>>(new Set());
+  const [,             setTick]         = useState(0);
 
   // Re-render every 30 s so elapsed times and delayed flags stay current
   useEffect(() => {
@@ -668,7 +807,12 @@ export default function OrdersClient() {
     return () => clearInterval(id);
   }, []);
 
-  const filtered      = useMemo(() => filterOrders(orders, period), [orders, period]);
+  const filtered  = useMemo(() => filterOrders(orders, period), [orders, period]);
+  const displayed = useMemo(() => {
+    if (!statusFilter) return filtered;
+    if (statusFilter === "DELAYED") return filtered.filter(isDelayed);
+    return filtered.filter((o) => o.status === statusFilter);
+  }, [filtered, statusFilter]);
   const selectedOrder = orders.find((o) => o.id === selectedId) ?? null;
 
   function handleAction(id: string, next: OrderStatus) {
@@ -724,13 +868,17 @@ export default function OrdersClient() {
         <InsightsRow orders={filtered} />
       </div>
 
-      {/* KPI row */}
-      <KPIRow orders={filtered} />
+      {/* Operational bar */}
+      <OperationalBar
+        orders={filtered}
+        statusFilter={statusFilter}
+        onFilterChange={setStatusFilter}
+      />
 
       {/* Split view */}
       <div className="flex flex-1 overflow-hidden">
         <OrderListPane
-          orders={filtered}
+          orders={displayed}
           selectedId={selectedId}
           checkedIds={checkedIds}
           onSelect={handleSelect}
