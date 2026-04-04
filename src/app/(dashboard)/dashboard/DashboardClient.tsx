@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
-// ─── Time-filter types (used by the new header) ───────────────
+// ─── Time-filter types ────────────────────────────────────────
 type Period = "today" | "yesterday" | "7days" | "month" | "year";
 
 const PERIOD_OPTIONS: Array<{ id: Period; label: string }> = [
@@ -12,7 +13,6 @@ const PERIOD_OPTIONS: Array<{ id: Period; label: string }> = [
   { id: "month",     label: "Mês atual" },
   { id: "year",      label: "Ano atual" },
 ];
-import Link from "next/link";
 
 // ─────────────────────────────────────────────────────────────
 //  Mock data — swap for real API calls when ready
@@ -22,6 +22,15 @@ const MOCK_KPIS = {
   ordersToday: 47,
   revenueToday: 3_842.5,
   avgTicket: 81.76,
+};
+
+// Revenue headline per period (drives the dynamic header)
+const MOCK_PERIOD_REVENUE: Record<Period, number> = {
+  today:     3_842.50,
+  yesterday: 4_210.00,
+  "7days":   27_320.00,
+  month:     104_500.00,
+  year:      1_254_600.00,
 };
 
 const MOCK_LIVE = {
@@ -688,59 +697,131 @@ function PaymentMethods() {
 }
 
 // ─────────────────────────────────────────────────────────────
+//  Header components
+// ─────────────────────────────────────────────────────────────
+
+type StoreState = "open" | "closed" | "peak";
+
+function getStoreState(hour: number): StoreState {
+  if (hour < 10 || hour >= 23) return "closed";
+  if ((hour >= 11 && hour < 14) || (hour >= 18 && hour < 21)) return "peak";
+  return "open";
+}
+
+function StoreStatusBadge() {
+  const state = getStoreState(new Date().getHours());
+
+  const cfg: Record<StoreState, { dot: string; badge: string; text: string; label: string }> = {
+    open:   { dot: "bg-green-500",  badge: "border-green-200 bg-green-50",   text: "text-green-700",  label: "Aberto" },
+    closed: { dot: "bg-gray-400",   badge: "border-gray-200 bg-gray-50",     text: "text-gray-500",   label: "Fechado" },
+    peak:   { dot: "bg-orange-500", badge: "border-orange-200 bg-orange-50", text: "text-orange-700", label: "Aberto · Pico" },
+  };
+
+  const { dot, badge, text, label } = cfg[state];
+
+  return (
+    <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 ${badge}`}>
+      <span className={`h-2 w-2 rounded-full ${dot} ${state !== "closed" ? "animate-pulse" : ""}`} />
+      <span className={`text-xs font-semibold ${text}`}>{label}</span>
+    </div>
+  );
+}
+
+function TimeFilter({
+  period,
+  onChange,
+}: {
+  period: Period;
+  onChange: (p: Period) => void;
+}) {
+  return (
+    <div className="flex overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 shadow-sm w-fit gap-1">
+      {PERIOD_OPTIONS.map((opt) => (
+        <button
+          key={opt.id}
+          onClick={() => onChange(opt.id)}
+          className={`rounded-lg px-4 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
+            period === opt.id
+              ? "bg-orange-500 text-white shadow-sm"
+              : "text-gray-500 hover:bg-gray-100"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const PERIOD_HEADLINES: Record<Period, (r: string) => string> = {
+  today:     (r) => `Hoje seu restaurante já faturou ${r} 👇`,
+  yesterday: (r) => `Ontem você faturou ${r} no total`,
+  "7days":   (r) => `Nos últimos 7 dias você faturou ${r}`,
+  month:     (r) => `Este mês seu restaurante faturou ${r}`,
+  year:      (r) => `Este ano o faturamento chegou a ${r}`,
+};
+
+function DashboardHeader({
+  userName,
+  period,
+  onPeriodChange,
+}: {
+  userName: string;
+  period: Period;
+  onPeriodChange: (p: Period) => void;
+}) {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+
+  const revenue = MOCK_PERIOD_REVENUE[period];
+  const revFormatted = fmtCurrency(revenue);
+  const buildHeadline = PERIOD_HEADLINES[period];
+  const headline = buildHeadline(revFormatted);
+  // Split headline so the currency figure gets the orange accent
+  const [before, after] = headline.split(revFormatted);
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Greeting row */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            {greeting}, {userName}
+          </p>
+          <h2 className="mt-1 text-2xl font-bold leading-snug text-gray-900">
+            {before}
+            <span className="text-orange-500">{revFormatted}</span>
+            {after}
+          </h2>
+        </div>
+        <div className="shrink-0 sm:mt-1">
+          <StoreStatusBadge />
+        </div>
+      </div>
+
+      {/* Time filter */}
+      <TimeFilter period={period} onChange={onPeriodChange} />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 //  Root export
 // ─────────────────────────────────────────────────────────────
 
 export default function DashboardClient({ userName }: { userName: string }) {
   const [period, setPeriod] = useState<Period>("today");
 
-  const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-7xl px-4 py-6 pb-12 sm:px-6 space-y-5">
 
-        {/* ── HEADER: greeting + time filter + store status ── */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Greeting / headline */}
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-              {greeting}, {userName}
-            </p>
-            <h2 className="mt-0.5 text-2xl font-bold text-gray-900">
-              Hoje seu restaurante já faturou{" "}
-              <span className="text-orange-500">
-                {fmtCurrency(MOCK_KPIS.revenueToday)}
-              </span>{" "}
-              👇
-            </h2>
-          </div>
-
-          {/* Store status badge — placeholder */}
-          <div className="flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1.5">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-            <span className="text-xs font-semibold text-green-700">Aberto · Pico</span>
-          </div>
-        </div>
-
-        {/* ── TIME FILTER ── */}
-        <div className="flex overflow-x-auto gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm w-fit">
-          {PERIOD_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              onClick={() => setPeriod(opt.id)}
-              className={`rounded-lg px-4 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
-                period === opt.id
-                  ? "bg-orange-500 text-white shadow-sm"
-                  : "text-gray-500 hover:bg-gray-100"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        {/* ── HEADER ── */}
+        <DashboardHeader
+          userName={userName}
+          period={period}
+          onPeriodChange={setPeriod}
+        />
 
         {/* ── 3-COLUMN GRID ── */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
