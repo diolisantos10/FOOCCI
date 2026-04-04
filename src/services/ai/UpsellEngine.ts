@@ -15,6 +15,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import type { SalesPriority } from "@/validators/brand-config";
 
 const MAX_SUGGESTIONS = 3;
 
@@ -33,7 +34,8 @@ export class UpsellEngine {
    */
   static async suggest(
     restaurantId: string,
-    draftId: string | null
+    draftId: string | null,
+    salesPriority: SalesPriority = "bestsellers"
   ): Promise<UpsellSuggestion[]> {
     if (!draftId) return [];
 
@@ -59,6 +61,14 @@ export class UpsellEngine {
     // Items already in cart
     const cartItemIds = new Set(draft.items.map((item) => item.menuItemId));
 
+    // Item ordering based on sales priority
+    const itemOrderBy =
+      salesPriority === "high_margin"
+        ? { price: "desc" as const }
+        : salesPriority === "promotions"
+        ? { price: "asc" as const }
+        : { sortOrder: "asc" as const }; // bestsellers — follow manual sort order
+
     // Find all other active categories for this restaurant
     const otherCategories = await prisma.menuCategory.findMany({
       where: {
@@ -70,7 +80,7 @@ export class UpsellEngine {
       include: {
         items: {
           where: { isActive: true, id: { notIn: Array.from(cartItemIds) } },
-          orderBy: { price: "desc" }, // highest price first
+          orderBy: itemOrderBy,
           take: 1,
           select: { id: true, name: true, price: true },
         },
