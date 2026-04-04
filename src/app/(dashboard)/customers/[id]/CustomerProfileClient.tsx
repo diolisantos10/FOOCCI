@@ -169,7 +169,7 @@ function Placeholder({
 }) {
   return (
     <div
-      className={`${height} flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-white`}
+      className={`${height} flex items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-white`}
     >
       <span className="text-sm font-medium text-gray-300">{label}</span>
     </div>
@@ -180,14 +180,17 @@ function Placeholder({
 
 function Section({
   title,
+  icon,
   children,
 }: {
   title: string;
+  icon?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-3">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+      <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-gray-400">
+        {icon && <span className="text-sm leading-none">{icon}</span>}
         {title}
       </h2>
       {children}
@@ -200,8 +203,10 @@ function Section({
 function AIInsights({ insights }: { insights: InsightItem[] }) {
   if (insights.length === 0) {
     return (
-      <div className="flex items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white py-10">
-        <p className="text-sm text-gray-300">Dados insuficientes para gerar insights</p>
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white py-12">
+        <span className="text-2xl">🤔</span>
+        <p className="mt-2 text-sm font-medium text-gray-400">Dados insuficientes para gerar insights</p>
+        <p className="mt-0.5 text-xs text-gray-300">Mais pedidos geram análises automáticas</p>
       </div>
     );
   }
@@ -211,15 +216,15 @@ function AIInsights({ insights }: { insights: InsightItem[] }) {
       {insights.map((ins) => {
         const s = INSIGHT_STYLES[ins.type];
         return (
-          <div key={ins.id} className={`rounded-xl border ${s.border} ${s.bg} px-5 py-4`}>
+          <div key={ins.id} className={`rounded-2xl border ${s.border} ${s.bg} px-5 py-4 shadow-sm`}>
             <div className="flex items-start gap-3">
-              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm ${s.iconBg}`}>
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base ${s.iconBg}`}>
                 {ins.icon}
               </span>
               <div className="min-w-0 flex-1">
-                <p className={`text-sm font-semibold ${s.title}`}>{ins.title}</p>
+                <p className={`text-sm font-bold ${s.title}`}>{ins.title}</p>
                 <p className="mt-0.5 text-sm text-gray-600">{ins.message}</p>
-                <p className={`mt-2 text-xs font-medium ${s.action}`}>
+                <p className={`mt-2 text-xs font-semibold ${s.action}`}>
                   💡 {ins.action}
                 </p>
               </div>
@@ -237,7 +242,7 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
   const maxTime = Math.max(...behavior.timeSlots.map((t) => t.count), 1);
 
   return (
-    <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+    <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
 
       {/* ── Preferred time ── */}
       <div className="px-5 py-4">
@@ -345,7 +350,7 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-gray-300">Sem dados de categorias</p>
+          <p className="py-3 text-center text-xs text-gray-300">Nenhum pedido entregue ainda</p>
         )}
       </div>
 
@@ -379,7 +384,7 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
             })}
           </div>
         ) : (
-          <p className="text-xs text-gray-300">Sem dados de pagamento</p>
+          <p className="py-3 text-center text-xs text-gray-300">Nenhum pagamento registrado ainda</p>
         )}
       </div>
     </div>
@@ -391,18 +396,20 @@ function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
 function TagsPanel({ tags }: { tags: CustomerTag[] }) {
   if (tags.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-5 flex items-center justify-center">
-        <p className="text-xs text-gray-300">Sem tags atribuídas</p>
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6">
+        <span className="text-xl">🏷️</span>
+        <p className="mt-2 text-xs font-medium text-gray-400">Sem tags atribuídas</p>
+        <p className="mt-0.5 text-xs text-gray-300">Tags são geradas automaticamente</p>
       </div>
     );
   }
   return (
-    <div className="rounded-xl border border-gray-200 bg-white px-4 py-4">
+    <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm">
       <div className="flex flex-wrap gap-2">
         {tags.map((tag) => (
           <span
             key={tag.id}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${TAG_STYLES[tag.color].chip}`}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${TAG_STYLES[tag.color].chip}`}
           >
             {tag.label}
           </span>
@@ -513,7 +520,7 @@ function HeaderSection({
       {/* Stats row */}
       <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {stats.map((s) => (
-          <div key={s.label} className="rounded-xl bg-gray-50 px-4 py-3">
+          <div key={s.label} className="rounded-2xl bg-gray-50 px-4 py-3.5">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
               {s.label}
             </p>
@@ -586,40 +593,30 @@ function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 function OverviewTab({
   behavior,
   insights,
-  tags,
 }: {
   behavior: BehaviorData;
   insights: InsightItem[];
-  tags: CustomerTag[];
 }) {
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Left column — 2/3 */}
-      <div className="lg:col-span-2 space-y-5">
-        <Section title="Classificação CRM">
-          <Placeholder label="Bronze / Silver / Gold / Diamond — em breve" height="h-24" />
-        </Section>
-
-        <Section title="Perfil de Comportamento">
-          <BehaviorProfile behavior={behavior} />
-        </Section>
-
-        <Section title="IA — Insights">
+      <div className="lg:col-span-2 space-y-6">
+        <Section title="IA — Insights" icon="✨">
           <AIInsights insights={insights} />
+        </Section>
+
+        <Section title="Perfil de Comportamento" icon="📊">
+          <BehaviorProfile behavior={behavior} />
         </Section>
       </div>
 
       {/* Right column — 1/3 */}
-      <div className="space-y-5">
-        <Section title="Tags">
-          <TagsPanel tags={tags} />
-        </Section>
-
-        <Section title="Preferências">
+      <div className="space-y-6">
+        <Section title="Preferências" icon="❤️">
           <Placeholder label="Restrições · Alergias · Prato favorito" height="h-24" />
         </Section>
 
-        <Section title="Endereços">
+        <Section title="Endereços" icon="📍">
           <Placeholder label="Endereços cadastrados" height="h-28" />
         </Section>
       </div>
@@ -664,9 +661,10 @@ function groupOrdersByDate(
 function OrderHistory({ orders }: { orders: OrderHistoryItem[] }) {
   if (orders.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white py-16">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white py-16">
         <span className="text-3xl">📭</span>
-        <p className="mt-2 text-sm text-gray-400">Nenhum pedido encontrado</p>
+        <p className="mt-2 text-sm font-medium text-gray-400">Nenhum pedido encontrado</p>
+        <p className="mt-0.5 text-xs text-gray-300">Os pedidos aparecerão aqui após a primeira compra</p>
       </div>
     );
   }
@@ -704,10 +702,10 @@ function OrderHistory({ orders }: { orders: OrderHistoryItem[] }) {
               return (
                 <div
                   key={order.id}
-                  className={`flex items-center gap-3 rounded-xl border bg-white px-4 py-3 transition-colors ${
+                  className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 transition-colors ${
                     isLatest
-                      ? "border-orange-200 ring-1 ring-orange-100"
-                      : "border-gray-100 hover:border-gray-200"
+                      ? "border-orange-200 shadow-sm ring-1 ring-orange-100"
+                      : "border-gray-100 hover:border-gray-200 hover:shadow-sm"
                   }`}
                 >
                   {/* Status dot */}
@@ -752,8 +750,8 @@ function OrderHistory({ orders }: { orders: OrderHistoryItem[] }) {
 
 function HistoryTab({ orders }: { orders: OrderHistoryItem[] }) {
   return (
-    <div className="space-y-5">
-      <Section title="Histórico de Pedidos">
+    <div className="space-y-6">
+      <Section title="Histórico de Pedidos" icon="🧾">
         <OrderHistory orders={orders} />
       </Section>
     </div>
@@ -765,15 +763,16 @@ function HistoryTab({ orders }: { orders: OrderHistoryItem[] }) {
 function InteractionTimeline({ interactions }: { interactions: InteractionItem[] }) {
   if (interactions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white py-16">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white py-16">
         <span className="text-3xl">💬</span>
-        <p className="mt-2 text-sm text-gray-400">Nenhuma interação registrada</p>
+        <p className="mt-2 text-sm font-medium text-gray-400">Nenhuma interação registrada</p>
+        <p className="mt-0.5 text-xs text-gray-300">Pedidos e mensagens aparecerão aqui</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+    <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4 shadow-sm">
       <div className="relative">
         {/* Vertical connecting line */}
         <div className="absolute left-3 top-3 bottom-3 w-px bg-gray-100" />
@@ -816,8 +815,8 @@ function InteractionTimeline({ interactions }: { interactions: InteractionItem[]
 
 function InteractionsTab({ interactions }: { interactions: InteractionItem[] }) {
   return (
-    <div className="space-y-5">
-      <Section title="Histórico de Interações">
+    <div className="space-y-6">
+      <Section title="Histórico de Interações" icon="🔔">
         <InteractionTimeline interactions={interactions} />
       </Section>
     </div>
@@ -865,24 +864,27 @@ const ACTION_CARDS = [
   },
 ] as const;
 
-function ActionsTab() {
+function ActionsTab({ tags }: { tags: CustomerTag[] }) {
   return (
-    <div className="space-y-5">
-      <Section title="Central de Ações">
+    <div className="space-y-8">
+      {/* Tags + Action Center together — hierarchy #6 */}
+      <Section title="Tags do Cliente" icon="🏷️">
+        <TagsPanel tags={tags} />
+      </Section>
+
+      <Section title="Central de Ações" icon="⚡">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {ACTION_CARDS.map((card) => (
             <div
               key={card.id}
-              className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+              className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
             >
               {/* Icon + title row */}
               <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl ${card.iconBg}`}>
+                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl ${card.iconBg}`}>
                   {card.icon}
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-900">{card.title}</p>
-                </div>
+                <p className="text-base font-bold text-gray-900">{card.title}</p>
               </div>
 
               {/* Description */}
@@ -891,7 +893,7 @@ function ActionsTab() {
               {/* Action button */}
               <button
                 type="button"
-                className={`mt-auto w-full rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${card.btnCls}`}
+                className={`mt-auto w-full rounded-xl px-4 py-2.5 text-sm font-bold transition-colors ${card.btnCls}`}
               >
                 {card.btn}
               </button>
@@ -946,11 +948,11 @@ export default function CustomerProfileClient({
       <TabNav active={activeTab} onChange={setActiveTab} />
 
       {/* Tab content */}
-      <div className="p-6">
-        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} tags={tags} />}
+      <div className="p-6 max-w-7xl mx-auto">
+        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} />}
         {activeTab === "history"      && <HistoryTab orders={orders} />}
         {activeTab === "interactions" && <InteractionsTab interactions={interactions} />}
-        {activeTab === "actions"      && <ActionsTab />}
+        {activeTab === "actions"      && <ActionsTab tags={tags} />}
       </div>
     </div>
   );
