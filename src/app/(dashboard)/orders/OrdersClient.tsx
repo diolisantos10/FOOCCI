@@ -63,6 +63,11 @@ const NEXT_ACTION: Partial<Record<OrderStatus, { label: string; next: OrderStatu
 
 const TERMINAL: OrderStatus[] = ["DELIVERED", "CANCELLED"];
 
+const STATUS_PROGRESS: Record<OrderStatus, number> = {
+  PENDING: 10, CONFIRMED: 25, PREPARING: 50,
+  READY: 75, OUT_FOR_DELIVERY: 90, DELIVERED: 100, CANCELLED: 0,
+};
+
 // ─── Mock orders ──────────────────────────────────────────────
 
 const _now = Date.now();
@@ -130,6 +135,32 @@ function filterOrders(orders: MockOrder[], period: TimePeriod): MockOrder[] {
   return result.sort((a, b) => priorityScore(a) - priorityScore(b));
 }
 
+// ─── Insights ─────────────────────────────────────────────────
+
+interface Insight {
+  id: string;
+  icon: string;
+  label: string;
+  type: "peak" | "warning" | "info";
+}
+
+function computeInsights(orders: MockOrder[]): Insight[] {
+  const insights: Insight[] = [];
+  const active   = orders.filter((o) => !TERMINAL.includes(o.status));
+  const delayed  = orders.filter(isDelayed);
+  const preparing = orders.filter((o) => o.status === "PREPARING");
+  const slowPrep  = preparing.filter((o) => minutesSince(o.createdAt) > 15);
+
+  if (active.length >= 4)
+    insights.push({ id: "peak",       icon: "🔥", label: `Pico ativo — ${active.length} pedidos em curso`,           type: "peak"    });
+  if (delayed.length >= 2)
+    insights.push({ id: "bottleneck", icon: "⚠️", label: `Gargalo: ${delayed.length} pedidos atrasados`,             type: "warning" });
+  if (slowPrep.length > 0 && preparing.length > 0)
+    insights.push({ id: "slowprep",   icon: "⏱️", label: "Tempo de preparo acima do normal",                         type: "info"    });
+
+  return insights;
+}
+
 // ─── AlertStrip ───────────────────────────────────────────────
 
 function AlertStrip({ orders }: { orders: MockOrder[] }) {
@@ -152,6 +183,28 @@ function AlertStrip({ orders }: { orders: MockOrder[] }) {
         <span key={i} className="flex items-center gap-2 text-sm text-red-700">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500 shrink-0" />
           {a}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ─── InsightsRow ──────────────────────────────────────────────
+
+const INSIGHT_CHIP: Record<Insight["type"], string> = {
+  peak:    "bg-orange-50 text-orange-700",
+  warning: "bg-red-50 text-red-700",
+  info:    "bg-blue-50 text-blue-700",
+};
+
+function InsightsRow({ orders }: { orders: MockOrder[] }) {
+  const insights = computeInsights(orders);
+  if (insights.length === 0) return null;
+  return (
+    <div className="ml-auto hidden sm:flex items-center gap-2 flex-wrap">
+      {insights.map((ins) => (
+        <span key={ins.id} className={`rounded-full px-3 py-1 text-xs font-medium ${INSIGHT_CHIP[ins.type]}`}>
+          {ins.icon} {ins.label}
         </span>
       ))}
     </div>
@@ -231,15 +284,19 @@ function KPIRow({ orders }: { orders: MockOrder[] }) {
 function OrderCard({
   order,
   active,
+  checked,
   onClick,
   onAction,
   onCancel,
+  onCheck,
 }: {
   order: MockOrder;
   active: boolean;
+  checked: boolean;
   onClick: () => void;
   onAction: (id: string, next: OrderStatus) => void;
   onCancel: (id: string) => void;
+  onCheck: (id: string, v: boolean) => void;
 }) {
   const delayed    = isDelayed(order);
   const cfg        = STATUS_CONFIG[order.status];
@@ -257,8 +314,15 @@ function OrderCard({
         ${delayed    ? "bg-red-50/30" : ""}`}
     >
       <div className="p-4">
-        {/* Row 1: num + badges + elapsed */}
+        {/* Row 1: checkbox + num + badges + elapsed */}
         <div className="mb-2 flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => { e.stopPropagation(); onCheck(order.id, e.target.checked); }}
+            onClick={(e) => e.stopPropagation()}
+            className="h-3.5 w-3.5 shrink-0 accent-orange-500"
+          />
           <span className="font-mono text-sm font-bold text-gray-500">
             #{String(order.num).padStart(3, "0")}
           </span>
@@ -321,27 +385,95 @@ function OrderCard({
   );
 }
 
+// ─── BulkBar ──────────────────────────────────────────────────
+
+function BulkBar({
+  count,
+  selectedOrders,
+  onConfirm,
+  onDispatch,
+  onClear,
+}: {
+  count: number;
+  selectedOrders: MockOrder[];
+  onConfirm: () => void;
+  onDispatch: () => void;
+  onClear: () => void;
+}) {
+  const canConfirm  = selectedOrders.some((o) => o.status === "PENDING");
+  const canDispatch = selectedOrders.some((o) => o.status === "READY");
+
+  return (
+    <div className="flex shrink-0 items-center gap-3 border-b border-orange-200 bg-orange-50 px-4 py-2">
+      <span className="text-sm font-semibold text-orange-700">
+        {count} selecionado{count > 1 ? "s" : ""}
+      </span>
+      <div className="ml-auto flex gap-2">
+        {canConfirm && (
+          <button
+            onClick={onConfirm}
+            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+          >
+            Confirmar todos
+          </button>
+        )}
+        {canDispatch && (
+          <button
+            onClick={onDispatch}
+            className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 transition-colors"
+          >
+            Despachar todos
+          </button>
+        )}
+        <button
+          onClick={onClear}
+          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
+        >
+          Limpar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── OrderListPane ────────────────────────────────────────────
 
 function OrderListPane({
   orders,
   selectedId,
+  checkedIds,
   onSelect,
   onAction,
   onCancel,
+  onCheck,
+  onBulkConfirm,
+  onBulkDispatch,
+  onBulkClear,
 }: {
   orders: MockOrder[];
   selectedId: string | null;
+  checkedIds: Set<string>;
   onSelect: (id: string) => void;
   onAction: (id: string, next: OrderStatus) => void;
   onCancel: (id: string) => void;
+  onCheck: (id: string, v: boolean) => void;
+  onBulkConfirm: () => void;
+  onBulkDispatch: () => void;
+  onBulkClear: () => void;
 }) {
+  const selectedOrders = orders.filter((o) => checkedIds.has(o.id));
+
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      {/* Bulk actions placeholder — Step 3 */}
-      <div className="shrink-0 border-b border-gray-100 bg-gray-50 px-4 py-2">
-        <p className="text-xs text-gray-400">Ações em lote — próxima etapa</p>
-      </div>
+      {checkedIds.size > 0 ? (
+        <BulkBar
+          count={checkedIds.size}
+          selectedOrders={selectedOrders}
+          onConfirm={onBulkConfirm}
+          onDispatch={onBulkDispatch}
+          onClear={onBulkClear}
+        />
+      ) : null}
 
       <div className="flex-1 space-y-2 overflow-y-auto p-3">
         {orders.length === 0 ? (
@@ -355,9 +487,11 @@ function OrderListPane({
               key={order.id}
               order={order}
               active={order.id === selectedId}
+              checked={checkedIds.has(order.id)}
               onClick={() => onSelect(order.id)}
               onAction={onAction}
               onCancel={onCancel}
+              onCheck={onCheck}
             />
           ))
         )}
@@ -414,7 +548,23 @@ function DetailPanel({
 
           {/* Body */}
           <div className="flex-1 space-y-4 overflow-y-auto p-5">
-            {/* Timeline placeholder — detailed in Step 3 */}
+            {/* Progress bar */}
+            {!isTerminal && (
+              <div>
+                <div className="mb-1.5 flex justify-between text-xs text-gray-400">
+                  <span>Progresso</span>
+                  <span className="font-semibold text-orange-600">{STATUS_PROGRESS[order.status]}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                    style={{ width: `${STATUS_PROGRESS[order.status]}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Timeline */}
             <div className="rounded-xl bg-gray-50 p-4">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Timeline
@@ -509,6 +659,7 @@ export default function OrdersClient() {
   const [orders,     setOrders]     = useState<MockOrder[]>(INITIAL_ORDERS);
   const [period,     setPeriod]     = useState<TimePeriod>("30min");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [,           setTick]       = useState(0);
 
   // Re-render every 30 s so elapsed times and delayed flags stay current
@@ -535,6 +686,32 @@ export default function OrdersClient() {
     setSelectedId((prev) => (prev === id ? null : id));
   }
 
+  function handleCheck(id: string, v: boolean) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (v) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+
+  function handleBulkConfirm() {
+    setOrders((prev) =>
+      prev.map((o) =>
+        checkedIds.has(o.id) && o.status === "PENDING" ? { ...o, status: "CONFIRMED" as OrderStatus } : o
+      )
+    );
+    setCheckedIds(new Set());
+  }
+
+  function handleBulkDispatch() {
+    setOrders((prev) =>
+      prev.map((o) =>
+        checkedIds.has(o.id) && o.status === "READY" ? { ...o, status: "OUT_FOR_DELIVERY" as OrderStatus } : o
+      )
+    );
+    setCheckedIds(new Set());
+  }
+
   return (
     <div className="flex flex-col bg-gray-50" style={{ height: "calc(100vh - 64px)" }}>
 
@@ -544,12 +721,7 @@ export default function OrdersClient() {
       {/* Controls row */}
       <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-2.5">
         <TimeFilter period={period} onChange={setPeriod} />
-        {/* Operational insights badge — Step 4 */}
-        <div className="ml-auto hidden sm:flex items-center gap-2">
-          <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-600">
-            🔥 Pico de pedidos detectado
-          </span>
-        </div>
+        <InsightsRow orders={filtered} />
       </div>
 
       {/* KPI row */}
@@ -560,9 +732,14 @@ export default function OrdersClient() {
         <OrderListPane
           orders={filtered}
           selectedId={selectedId}
+          checkedIds={checkedIds}
           onSelect={handleSelect}
           onAction={handleAction}
           onCancel={handleCancel}
+          onCheck={handleCheck}
+          onBulkConfirm={handleBulkConfirm}
+          onBulkDispatch={handleBulkDispatch}
+          onBulkClear={() => setCheckedIds(new Set())}
         />
         <DetailPanel
           order={selectedOrder}
