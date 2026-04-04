@@ -27,14 +27,13 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/orders",         label: "Pedidos",    icon: "📋",  exact: false },
       { href: "/web-menu",       label: "Web Menu",   icon: "🌐",  exact: true  },
       { href: "/conversations",  label: "Conversas",  icon: "💬",  exact: false },
-      { href: "/settings/agent", label: "Agente WA",  icon: "🤖",  exact: false },
     ],
   },
   {
     label: "Operação",
     items: [
       { href: "/dashboard",  label: "Dashboard",      icon: "▦",  exact: true  },
-      { href: "/settings",   label: "Configurações",  icon: "⚙️",  exact: true  },
+      { href: "/settings",   label: "Configurações",  icon: "⚙️",  exact: false },
       { href: "/chat-sim",   label: "Testar IA",      icon: "🧪",  exact: false },
     ],
   },
