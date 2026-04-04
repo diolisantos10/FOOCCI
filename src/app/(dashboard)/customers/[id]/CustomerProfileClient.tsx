@@ -30,6 +30,14 @@ interface Props {
   behavior: BehaviorData;
   insights: InsightItem[];
   orders: OrderHistoryItem[];
+  interactions: InteractionItem[];
+}
+
+export interface InteractionItem {
+  id: string;
+  type: "order_placed" | "order_delivered" | "order_cancelled" | "message_in" | "message_out";
+  description: string;
+  date: string;
 }
 
 export interface OrderHistoryItem {
@@ -62,6 +70,14 @@ export interface BehaviorData {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const INTERACTION_META: Record<InteractionItem["type"], { icon: string; iconBg: string; textColor: string }> = {
+  order_placed:    { icon: "🛒", iconBg: "bg-blue-50",    textColor: "text-blue-700"   },
+  order_delivered: { icon: "✅", iconBg: "bg-green-50",   textColor: "text-green-700"  },
+  order_cancelled: { icon: "✕",  iconBg: "bg-red-50",     textColor: "text-red-700"    },
+  message_in:      { icon: "💬", iconBg: "bg-gray-100",   textColor: "text-gray-700"   },
+  message_out:     { icon: "📤", iconBg: "bg-orange-50",  textColor: "text-orange-700" },
+};
 
 const STATUS_META: Record<string, { dot: string; badge: string; label: string }> = {
   PENDING:          { dot: "bg-amber-400",  badge: "bg-amber-100 text-amber-700",   label: "Pendente"      },
@@ -692,16 +708,65 @@ function HistoryTab({ orders }: { orders: OrderHistoryItem[] }) {
   );
 }
 
+// ─── InteractionTimeline ─────────────────────────────────────────────────────
+
+function InteractionTimeline({ interactions }: { interactions: InteractionItem[] }) {
+  if (interactions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white py-16">
+        <span className="text-3xl">💬</span>
+        <p className="mt-2 text-sm text-gray-400">Nenhuma interação registrada</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+      <div className="relative">
+        {/* Vertical connecting line */}
+        <div className="absolute left-3 top-3 bottom-3 w-px bg-gray-100" />
+
+        <div className="space-y-0">
+          {interactions.map((item) => {
+            const meta = INTERACTION_META[item.type];
+            const d    = new Date(item.date);
+            const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+            const date = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+
+            return (
+              <div key={item.id} className="relative flex items-start gap-3 py-2.5">
+                {/* Icon */}
+                <div
+                  className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs ${meta.iconBg}`}
+                >
+                  {meta.icon}
+                </div>
+
+                {/* Content */}
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <p className={`truncate text-sm font-medium leading-snug ${meta.textColor}`}>
+                    {item.description}
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-400">
+                    {time} · {date}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Interactions tab ─────────────────────────────────────────────────────────
 
-function InteractionsTab() {
+function InteractionsTab({ interactions }: { interactions: InteractionItem[] }) {
   return (
     <div className="space-y-5">
       <Section title="Histórico de Interações">
-        <Placeholder
-          label="Timeline unificada: WhatsApp · Pedidos · Cancelamentos · Reclamações"
-          height="h-96"
-        />
+        <InteractionTimeline interactions={interactions} />
       </Section>
     </div>
   );
@@ -754,6 +819,7 @@ export default function CustomerProfileClient({
   behavior,
   insights,
   orders,
+  interactions,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
@@ -781,7 +847,7 @@ export default function CustomerProfileClient({
       <div className="p-6">
         {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} />}
         {activeTab === "history"      && <HistoryTab orders={orders} />}
-        {activeTab === "interactions" && <InteractionsTab />}
+        {activeTab === "interactions" && <InteractionsTab interactions={interactions} />}
         {activeTab === "actions"      && <ActionsTab />}
       </div>
     </div>

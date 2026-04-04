@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import CustomerProfileClient from "./CustomerProfileClient";
-import type { Classification, BehaviorData, InsightItem, OrderHistoryItem } from "./CustomerProfileClient";
+import type { Classification, BehaviorData, InsightItem, OrderHistoryItem, InteractionItem } from "./CustomerProfileClient";
 
 export const metadata = { title: "Perfil do Cliente" };
 
@@ -160,6 +160,59 @@ function computeBehavior(orders: OrderRow[]): BehaviorData {
   };
 }
 
+// ─── Interaction builder ──────────────────────────────────────────────────────
+
+function buildInteractions(
+  orders: Array<{ id: string; status: string; total: { toString(): string }; createdAt: Date }>,
+  conversations: Array<{ id: string; messages: Array<{ id: string; content: string; direction: string; sentAt: Date }> }>
+): InteractionItem[] {
+  const fmtBRL = (n: number) =>
+    n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  const items: InteractionItem[] = [];
+
+  for (const o of orders) {
+    const total = Number(o.total);
+    const type: InteractionItem["type"] =
+      o.status === "DELIVERED" ? "order_delivered"
+      : o.status === "CANCELLED" ? "order_cancelled"
+      : "order_placed";
+    const label =
+      type === "order_delivered" ? "Pedido entregue"
+      : type === "order_cancelled" ? "Pedido cancelado"
+      : "Pedido realizado";
+    items.push({
+      id:          `order-${o.id}`,
+      type,
+      description: `${label} — ${fmtBRL(total)}`,
+      date:        o.createdAt.toISOString(),
+    });
+  }
+
+  for (const conv of conversations) {
+    for (const msg of conv.messages) {
+      const preview =
+        msg.content.length > 55
+          ? `${msg.content.slice(0, 55)}…`
+          : msg.content;
+      const type: InteractionItem["type"] =
+        msg.direction === "INBOUND" ? "message_in" : "message_out";
+      const label =
+        type === "message_in" ? "Mensagem recebida" : "Mensagem enviada";
+      items.push({
+        id:          `msg-${msg.id}`,
+        type,
+        description: `${label} — "${preview}"`,
+        date:        msg.sentAt.toISOString(),
+      });
+    }
+  }
+
+  return items
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 50);
+}
+
 // ─── Insights computation ─────────────────────────────────────────────────────
 
 function computeInsights(params: {
@@ -276,6 +329,21 @@ export default async function CustomerDetailPage({
           payment: { select: { method: true } },
         },
       },
+      conversations: {
+        select: {
+          id: true,
+          messages: {
+            orderBy: { sentAt: "desc" },
+            take: 20,
+            select: {
+              id:        true,
+              content:   true,
+              direction: true,
+              sentAt:    true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -297,7 +365,11 @@ export default async function CustomerDetailPage({
     }));
 
   const { purchaseFrequencyDays, favoriteProduct } = computeHeader(customer.orders as OrderRow[]);
-  const behavior  = computeBehavior(customer.orders as OrderRow[]);
+  const behavior      = computeBehavior(customer.orders as OrderRow[]);
+  const interactions  = buildInteractions(
+    customer.orders as Array<{ id: string; status: string; total: { toString(): string }; createdAt: Date }>,
+    customer.conversations
+  );
   const insights  = computeInsights({
     totalOrders: customer.totalOrders,
     totalSpend,
@@ -325,6 +397,7 @@ export default async function CustomerDetailPage({
         behavior={behavior}
         insights={insights}
         orders={serializedOrders}
+        interactions={interactions}
       />
     </>
   );
