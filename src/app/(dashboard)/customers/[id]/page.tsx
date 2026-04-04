@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import CustomerProfileClient from "./CustomerProfileClient";
-import type { Classification } from "./CustomerProfileClient";
+import type { Classification, BehaviorData } from "./CustomerProfileClient";
 
 export const metadata = { title: "Perfil do Cliente" };
 
@@ -17,12 +17,25 @@ function classify(spend: number): Classification {
   return                    { tier: "Bronze",  icon: "🥉", gradient: "from-orange-400 to-orange-700",nextTier: "Silver",  nextThreshold: 300,  progressPercent: Math.round((spend / 300)            * 100) };
 }
 
-// ─── Header Analytics ─────────────────────────────────────────────────────────
+// ─── Order row type (inferred from Prisma select) ────────────────────────────
 
-function computeHeader(orders: Array<{ createdAt: Date; total: { toString(): string }; items: Array<{ name: string; quantity: number }> }>) {
-  const delivered = orders.filter((_, i) => i >= 0); // all passed orders are pre-filtered
+type OrderRow = {
+  status: string;
+  createdAt: Date;
+  total: { toString(): string };
+  items: Array<{
+    name: string;
+    quantity: number;
+    menuItem: { category: { name: string } };
+  }>;
+  payment: { method: string } | null;
+};
 
-  /* Purchase frequency: avg days between consecutive orders */
+// ─── Header analytics ─────────────────────────────────────────────────────────
+
+function computeHeader(orders: OrderRow[]) {
+  const delivered = orders.filter((o) => o.status === "DELIVERED");
+
   let purchaseFrequencyDays = 0;
   if (delivered.length >= 2) {
     const sorted = [...delivered].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
@@ -32,16 +45,103 @@ function computeHeader(orders: Array<{ createdAt: Date; total: { toString(): str
     purchaseFrequencyDays = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
   }
 
-  /* Favorite product: most-ordered item by cumulative quantity */
   const counts: Record<string, number> = {};
   delivered.forEach((o) =>
     o.items.forEach((item) => {
       counts[item.name] = (counts[item.name] ?? 0) + item.quantity;
     })
   );
-  const favoriteProduct = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const favoriteProduct =
+    Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 
   return { purchaseFrequencyDays, favoriteProduct };
+}
+
+// ─── Behavior analytics ───────────────────────────────────────────────────────
+
+function computeBehavior(orders: OrderRow[]): BehaviorData {
+  const delivered = orders.filter((o) => o.status === "DELIVERED");
+
+  /* ── Time slots (all orders) ── */
+  let morning = 0, afternoon = 0, evening = 0;
+  orders.forEach((o) => {
+    const h = o.createdAt.getHours();
+    if (h >= 6 && h < 12) morning++;
+    else if (h >= 12 && h < 18) afternoon++;
+    else evening++;
+  });
+  const timeTotal = orders.length || 1;
+  const timeSlots: BehaviorData["timeSlots"] = [
+    { id: "morning",   label: "Manhã", icon: "🌅", range: "6h–12h",  count: morning,   pct: Math.round((morning   / timeTotal) * 100) },
+    { id: "afternoon", label: "Tarde", icon: "☀️",  range: "12h–18h", count: afternoon, pct: Math.round((afternoon / timeTotal) * 100) },
+    { id: "evening",   label: "Noite", icon: "🌙", range: "18h–0h",  count: evening,   pct: Math.round((evening   / timeTotal) * 100) },
+  ];
+  const preferredTime = (timeSlots.reduce((a, b) => (b.count > a.count ? b : a)).label) as BehaviorData["preferredTime"];
+
+  /* ── Day distribution (all orders) ── */
+  const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  const dayCounts: Record<string, number> = {};
+  orders.forEach((o) => {
+    const d = DAY_NAMES[o.createdAt.getDay()];
+    dayCounts[d] = (dayCounts[d] ?? 0) + 1;
+  });
+  const maxDay = Math.max(...DAY_NAMES.map((d) => dayCounts[d] ?? 0), 1);
+  const dayDistribution: BehaviorData["dayDistribution"] = DAY_NAMES.map((d) => ({
+    day:   d,
+    count: dayCounts[d] ?? 0,
+    pct:   Math.round(((dayCounts[d] ?? 0) / maxDay) * 100),
+  }));
+  const preferredDays = [...dayDistribution]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3)
+    .filter((d) => d.count > 0)
+    .map((d) => d.day);
+
+  /* ── Categories (delivered orders) ── */
+  const catCounts: Record<string, number> = {};
+  delivered.forEach((o) =>
+    o.items.forEach((item) => {
+      const cat = item.menuItem?.category?.name ?? "Outros";
+      catCounts[cat] = (catCounts[cat] ?? 0) + item.quantity;
+    })
+  );
+  const catTotal = Object.values(catCounts).reduce((a, b) => a + b, 0) || 1;
+  const sortedCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]);
+  const favoriteCategories = sortedCats.slice(0, 4).map(([name, count]) => ({
+    name,
+    count,
+    pct: Math.round((count / catTotal) * 100),
+  }));
+  const leastCategories = sortedCats.length > 4
+    ? sortedCats.slice(-2).map(([name, count]) => ({ name, count }))
+    : [];
+
+  /* ── Payment (delivered orders) ── */
+  const payCounts: Record<string, number> = {};
+  delivered.forEach((o) => {
+    if (o.payment?.method)
+      payCounts[o.payment.method] = (payCounts[o.payment.method] ?? 0) + 1;
+  });
+  const payTotal = Object.values(payCounts).reduce((a, b) => a + b, 0) || 1;
+  const paymentDistribution = Object.entries(payCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([method, count]) => ({
+      method,
+      count,
+      pct: Math.round((count / payTotal) * 100),
+    }));
+  const preferredPayment = paymentDistribution[0]?.method ?? null;
+
+  return {
+    timeSlots,
+    preferredTime,
+    dayDistribution,
+    preferredDays,
+    favoriteCategories,
+    leastCategories,
+    paymentDistribution,
+    preferredPayment,
+  };
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -68,12 +168,21 @@ export default async function CustomerDetailPage({
       isActive:     true,
       restaurantId: true,
       orders: {
-        where:   { status: "DELIVERED" },
-        orderBy: { createdAt: "asc"    },
-        select:  {
+        orderBy: { createdAt: "asc" },
+        select: {
+          status:    true,
           createdAt: true,
           total:     true,
-          items: { select: { name: true, quantity: true } },
+          items: {
+            select: {
+              name:     true,
+              quantity: true,
+              menuItem: {
+                select: { category: { select: { name: true } } },
+              },
+            },
+          },
+          payment: { select: { method: true } },
         },
       },
     },
@@ -83,9 +192,10 @@ export default async function CustomerDetailPage({
     notFound();
   }
 
-  const totalSpend = Number(customer.totalSpend);
+  const totalSpend   = Number(customer.totalSpend);
   const classification = classify(totalSpend);
-  const { purchaseFrequencyDays, favoriteProduct } = computeHeader(customer.orders);
+  const { purchaseFrequencyDays, favoriteProduct } = computeHeader(customer.orders as OrderRow[]);
+  const behavior = computeBehavior(customer.orders as OrderRow[]);
 
   return (
     <>
@@ -103,6 +213,7 @@ export default async function CustomerDetailPage({
         classification={classification}
         purchaseFrequencyDays={purchaseFrequencyDays}
         favoriteProduct={favoriteProduct}
+        behavior={behavior}
       />
     </>
   );

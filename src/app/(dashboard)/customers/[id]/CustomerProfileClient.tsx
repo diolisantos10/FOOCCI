@@ -27,9 +27,31 @@ interface Props {
   classification: Classification;
   purchaseFrequencyDays: number;
   favoriteProduct: string | null;
+  behavior: BehaviorData;
+}
+
+export interface BehaviorData {
+  timeSlots: Array<{ id: string; label: string; icon: string; range: string; count: number; pct: number }>;
+  preferredTime: "Manhã" | "Tarde" | "Noite";
+  dayDistribution: Array<{ day: string; count: number; pct: number }>;
+  preferredDays: string[];
+  favoriteCategories: Array<{ name: string; count: number; pct: number }>;
+  leastCategories: Array<{ name: string; count: number }>;
+  paymentDistribution: Array<{ method: string; count: number; pct: number }>;
+  preferredPayment: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAYMENT_LABELS: Record<string, string> = {
+  CASH:           "Dinheiro",
+  CREDIT_CARD:    "Cartão Crédito",
+  DEBIT_CARD:     "Cartão Débito",
+  PIX:            "PIX",
+  ONLINE:         "Online",
+  CARD_MACHINE:   "Maquininha",
+  PIX_IN_PERSON:  "PIX Presencial",
+};
 
 const TIER_STYLES: Record<Classification["tier"], { badge: string; avatarRing: string }> = {
   Diamond: { badge: "bg-cyan-50 text-cyan-700 border border-cyan-200",         avatarRing: "ring-2 ring-cyan-300"   },
@@ -98,6 +120,161 @@ function Section({
         {title}
       </h2>
       {children}
+    </div>
+  );
+}
+
+// ─── BehaviorProfile ─────────────────────────────────────────────────────────
+
+function BehaviorProfile({ behavior }: { behavior: BehaviorData }) {
+  const maxTime = Math.max(...behavior.timeSlots.map((t) => t.count), 1);
+
+  return (
+    <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+
+      {/* ── Preferred time ── */}
+      <div className="px-5 py-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          Horário preferido
+        </p>
+        <div className="flex gap-2">
+          {behavior.timeSlots.map((slot) => {
+            const active = slot.label === behavior.preferredTime;
+            const barH   = Math.round((slot.count / maxTime) * 28);
+            return (
+              <div
+                key={slot.id}
+                className={`flex flex-1 flex-col items-center rounded-lg px-2 py-2.5 ${
+                  active ? "border border-orange-200 bg-orange-50" : "bg-gray-50"
+                }`}
+              >
+                <span className="text-base leading-none">{slot.icon}</span>
+                <span className={`mt-1 text-xs font-semibold ${active ? "text-orange-700" : "text-gray-500"}`}>
+                  {slot.label}
+                </span>
+                <span className="text-[10px] text-gray-400">{slot.range}</span>
+                {/* Mini bar */}
+                <div className="mt-2 flex h-7 w-8 items-end justify-center rounded-sm bg-gray-100">
+                  <div
+                    className={`w-full rounded-sm ${active ? "bg-orange-400" : "bg-gray-300"}`}
+                    style={{ height: `${barH}px` }}
+                  />
+                </div>
+                <span className={`mt-1 text-xs font-bold ${active ? "text-orange-600" : "text-gray-400"}`}>
+                  {slot.count}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Days of week ── */}
+      <div className="px-5 py-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            Dias preferidos
+          </p>
+          <div className="flex gap-1">
+            {behavior.preferredDays.map((d) => (
+              <span key={d} className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                {d}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-end gap-1">
+          {behavior.dayDistribution.map((d) => {
+            const active = behavior.preferredDays.includes(d.day);
+            return (
+              <div key={d.day} className="flex flex-1 flex-col items-center gap-1">
+                <div className="flex w-full items-end" style={{ height: "28px" }}>
+                  <div
+                    className={`w-full rounded-t-sm ${active ? "bg-orange-400" : "bg-gray-200"}`}
+                    style={{ height: `${Math.max(d.pct, 4)}%` }}
+                  />
+                </div>
+                <span className="text-[9px] leading-none text-gray-400">{d.day}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Categories ── */}
+      <div className="px-5 py-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            Categorias
+          </p>
+          {behavior.leastCategories.length > 0 && (
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-gray-300">menos pedidas:</span>
+              {behavior.leastCategories.map((c) => (
+                <span key={c.name} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-400">
+                  {c.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        {behavior.favoriteCategories.length > 0 ? (
+          <div className="space-y-2">
+            {behavior.favoriteCategories.map((cat) => (
+              <div key={cat.name} className="flex items-center gap-2.5">
+                <span className="w-24 shrink-0 truncate text-xs text-gray-700" title={cat.name}>
+                  {cat.name}
+                </span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-orange-400 transition-all duration-500"
+                    style={{ width: `${cat.pct}%` }}
+                  />
+                </div>
+                <span className="w-8 text-right text-xs font-medium text-gray-400">
+                  {cat.pct}%
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-300">Sem dados de categorias</p>
+        )}
+      </div>
+
+      {/* ── Payment ── */}
+      <div className="px-5 py-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          Pagamento preferido
+        </p>
+        {behavior.paymentDistribution.length > 0 ? (
+          <div className="space-y-2">
+            {behavior.paymentDistribution.map((p) => {
+              const preferred = p.method === behavior.preferredPayment;
+              return (
+                <div key={p.method} className="flex items-center gap-2.5">
+                  <span className="w-28 shrink-0 truncate text-xs text-gray-700">
+                    {PAYMENT_LABELS[p.method] ?? p.method}
+                  </span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        preferred ? "bg-orange-400" : "bg-gray-300"
+                      }`}
+                      style={{ width: `${p.pct}%` }}
+                    />
+                  </div>
+                  <span className={`w-8 text-right text-xs font-medium ${preferred ? "text-orange-600" : "text-gray-400"}`}>
+                    {p.pct}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-300">Sem dados de pagamento</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -273,7 +450,7 @@ function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 
-function OverviewTab() {
+function OverviewTab({ behavior }: { behavior: BehaviorData }) {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
       {/* Left column — 2/3 */}
@@ -283,10 +460,7 @@ function OverviewTab() {
         </Section>
 
         <Section title="Perfil de Comportamento">
-          <Placeholder
-            label="Horário preferido · Dias favoritos · Categorias · Pagamento"
-            height="h-40"
-          />
+          <BehaviorProfile behavior={behavior} />
         </Section>
 
         <Section title="IA — Insights">
@@ -389,6 +563,7 @@ export default function CustomerProfileClient({
   classification,
   purchaseFrequencyDays,
   favoriteProduct,
+  behavior,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
@@ -414,7 +589,7 @@ export default function CustomerProfileClient({
 
       {/* Tab content */}
       <div className="p-6">
-        {activeTab === "overview"     && <OverviewTab />}
+        {activeTab === "overview"     && <OverviewTab behavior={behavior} />}
         {activeTab === "history"      && <HistoryTab />}
         {activeTab === "interactions" && <InteractionsTab />}
         {activeTab === "actions"      && <ActionsTab />}
