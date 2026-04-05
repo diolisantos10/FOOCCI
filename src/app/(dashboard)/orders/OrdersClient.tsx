@@ -19,13 +19,21 @@ interface OrderItem {
   name: string;
   qty: number;
   price: number;
+  note?: string;
+  addons?: string[];
 }
 
 interface MockOrder {
   id: string;
   num: number;
   customer: string;
+  phone: string;
+  email?: string;
+  channel: string;
   total: number;
+  subtotal: number;
+  deliveryFee?: number;
+  changeFor?: number;
   status: OrderStatus;
   type: "DELIVERY" | "PICKUP" | "TABLE";
   createdAt: Date;
@@ -67,58 +75,117 @@ const ago  = (m: number) => new Date(_now - m * 60_000);
 
 const INITIAL_ORDERS: MockOrder[] = [
   {
-    id: "o1", num: 1, customer: "Maria Silva", total: 87.50, status: "PREPARING",
-    type: "DELIVERY", createdAt: ago(28), itemCount: 3, payment: "PIX",
-    address: "Rua das Flores, 142 — Jardim Paulista",
-    items: [{ name: "Parmegiana de Frango", qty: 1, price: 42.00 }, { name: "Arroz + Feijão", qty: 1, price: 18.50 }, { name: "Refrigerante Lata", qty: 2, price: 8.50 }],
+    id: "o1", num: 1, customer: "Maria Silva",
+    phone: "(11) 99234-5678", email: "maria.silva@gmail.com", channel: "WhatsApp",
+    status: "PREPARING", type: "DELIVERY", createdAt: ago(28),
+    itemCount: 3, payment: "PIX",
+    address: "Rua das Flores, 142, Apto 3B — Jardim Paulista, São Paulo/SP",
+    subtotal: 77.50, deliveryFee: 10.00, total: 87.50,
+    items: [
+      { name: "Parmegiana de Frango", qty: 1, price: 42.00, note: "Sem cebola" },
+      { name: "Arroz + Feijão", qty: 1, price: 18.50 },
+      { name: "Refrigerante Lata", qty: 2, price: 8.50, addons: ["Coca-Cola", "Guaraná"] },
+    ],
   },
   {
-    id: "o2", num: 2, customer: "João Santos", total: 45.00, status: "PENDING",
-    type: "PICKUP", createdAt: ago(25), itemCount: 2, payment: "Cartão Crédito",
+    id: "o2", num: 2, customer: "João Santos",
+    phone: "(11) 98765-4321", channel: "Telefone",
+    status: "PENDING", type: "PICKUP", createdAt: ago(25),
+    itemCount: 2, payment: "Cartão Crédito",
     address: "Retirada no local",
-    items: [{ name: "X-Bacon Duplo", qty: 1, price: 32.00 }, { name: "Batata Frita M", qty: 1, price: 13.00 }],
+    subtotal: 45.00, total: 45.00,
+    items: [
+      { name: "X-Bacon Duplo", qty: 1, price: 32.00, addons: ["+ Queijo extra", "+ Bacon extra"] },
+      { name: "Batata Frita M", qty: 1, price: 13.00 },
+    ],
   },
   {
-    id: "o3", num: 3, customer: "Ana Oliveira", total: 124.00, status: "PENDING",
-    type: "DELIVERY", createdAt: ago(5), itemCount: 4, payment: "PIX",
-    address: "Av. Brasil, 890 — Centro",
-    items: [{ name: "Frango Grelhado", qty: 2, price: 38.00 }, { name: "Salada Caesar", qty: 1, price: 24.00 }, { name: "Suco Natural 500ml", qty: 2, price: 12.00 }],
+    id: "o3", num: 3, customer: "Ana Oliveira",
+    phone: "(11) 91234-0000", email: "ana@outlook.com", channel: "App",
+    status: "PENDING", type: "DELIVERY", createdAt: ago(5),
+    itemCount: 4, payment: "PIX",
+    address: "Av. Brasil, 890, Casa — Centro, São Paulo/SP — CEP 01310-100",
+    subtotal: 116.00, deliveryFee: 8.00, total: 124.00,
+    items: [
+      { name: "Frango Grelhado", qty: 2, price: 38.00 },
+      { name: "Salada Caesar", qty: 1, price: 24.00, note: "Molho à parte" },
+      { name: "Suco Natural 500ml", qty: 2, price: 8.00 },
+    ],
   },
   {
-    id: "o4", num: 4, customer: "Carlos Mendes", total: 38.50, status: "PENDING",
-    type: "TABLE", createdAt: ago(2), itemCount: 1, payment: "Dinheiro",
+    id: "o4", num: 4, customer: "Carlos Mendes",
+    phone: "(11) 97777-2233", channel: "WhatsApp",
+    status: "PENDING", type: "TABLE", createdAt: ago(2),
+    itemCount: 1, payment: "Dinheiro",
     address: "Mesa 4",
-    items: [{ name: "Marmita Fitness", qty: 1, price: 38.50 }],
+    subtotal: 38.50, total: 38.50, changeFor: 50.00,
+    items: [
+      { name: "Marmita Fitness", qty: 1, price: 38.50, note: "Sem sal na salada" },
+    ],
   },
   {
-    id: "o5", num: 5, customer: "Lúcia Ferreira", total: 67.00, status: "CONFIRMED",
-    type: "DELIVERY", createdAt: ago(10), itemCount: 3, payment: "PIX",
-    address: "Rua Pinheiros, 33 — Pinheiros",
-    items: [{ name: "Pizza Margherita M", qty: 1, price: 45.00 }, { name: "Água Mineral 500ml", qty: 2, price: 5.00 }, { name: "Sobremesa do Dia", qty: 1, price: 12.00 }],
+    id: "o5", num: 5, customer: "Lúcia Ferreira",
+    phone: "(11) 94455-6677", email: "lucia.ferreira@empresa.com.br", channel: "WhatsApp",
+    status: "CONFIRMED", type: "DELIVERY", createdAt: ago(10),
+    itemCount: 3, payment: "PIX",
+    address: "Rua dos Pinheiros, 33, Bloco B Ap. 12 — Pinheiros, São Paulo/SP",
+    subtotal: 57.00, deliveryFee: 10.00, total: 67.00,
+    items: [
+      { name: "Pizza Margherita M", qty: 1, price: 45.00, addons: ["+ Borda recheada"] },
+      { name: "Água Mineral 500ml", qty: 2, price: 4.00 },
+      { name: "Sobremesa do Dia", qty: 1, price: 12.00 },
+    ],
   },
   {
-    id: "o6", num: 6, customer: "Roberto Lima", total: 92.00, status: "PREPARING",
-    type: "DELIVERY", createdAt: ago(12), itemCount: 2, payment: "Cartão Débito",
-    address: "Rua Augusta, 512 — Consolação",
-    items: [{ name: "Costela na Brasa 400g", qty: 1, price: 68.00 }, { name: "Farofa Especial", qty: 1, price: 14.00 }, { name: "Refrigerante 600ml", qty: 1, price: 10.00 }],
+    id: "o6", num: 6, customer: "Roberto Lima",
+    phone: "(11) 93300-8899", channel: "App",
+    status: "PREPARING", type: "DELIVERY", createdAt: ago(12),
+    itemCount: 3, payment: "Cartão Débito",
+    address: "Rua Augusta, 512, Cj 74 — Consolação, São Paulo/SP — CEP 01305-000",
+    subtotal: 84.00, deliveryFee: 8.00, total: 92.00,
+    items: [
+      { name: "Costela na Brasa 400g", qty: 1, price: 68.00 },
+      { name: "Farofa Especial", qty: 1, price: 14.00 },
+      { name: "Refrigerante 600ml", qty: 1, price: 10.00 },
+    ],
   },
   {
-    id: "o7", num: 7, customer: "Patrícia Souza", total: 55.00, status: "READY",
-    type: "TABLE", createdAt: ago(18), itemCount: 3, payment: "PIX",
+    id: "o7", num: 7, customer: "Patrícia Souza",
+    phone: "(11) 96611-2233", email: "pati.souza@gmail.com", channel: "WhatsApp",
+    status: "READY", type: "TABLE", createdAt: ago(18),
+    itemCount: 4, payment: "PIX",
     address: "Mesa 7",
-    items: [{ name: "Bowl Açaí 500ml", qty: 1, price: 28.00 }, { name: "Granola Extra", qty: 1, price: 8.00 }, { name: "Suco de Laranja", qty: 1, price: 10.00 }, { name: "Tapioca Recheada", qty: 1, price: 9.00 }],
+    subtotal: 55.00, total: 55.00,
+    items: [
+      { name: "Bowl Açaí 500ml", qty: 1, price: 28.00 },
+      { name: "Granola Extra", qty: 1, price: 8.00 },
+      { name: "Suco de Laranja", qty: 1, price: 10.00 },
+      { name: "Tapioca Recheada", qty: 1, price: 9.00, note: "Sem queijo" },
+    ],
   },
   {
-    id: "o8", num: 8, customer: "Fernando Costa", total: 141.00, status: "DELIVERED",
-    type: "DELIVERY", createdAt: ago(35), itemCount: 5, payment: "Cartão Crédito",
-    address: "Al. Santos, 1200 — Jardins",
-    items: [{ name: "Salmão Grelhado", qty: 2, price: 54.00 }, { name: "Risoto de Cogumelos", qty: 1, price: 38.00 }, { name: "Vinho Tinto 375ml", qty: 1, price: 45.00 }],
+    id: "o8", num: 8, customer: "Fernando Costa",
+    phone: "(11) 92200-4455", email: "fernando@costa.net", channel: "App",
+    status: "DELIVERED", type: "DELIVERY", createdAt: ago(35),
+    itemCount: 3, payment: "Cartão Crédito",
+    address: "Al. Santos, 1200, Apto 101 — Jardins, São Paulo/SP — CEP 01419-002",
+    subtotal: 133.00, deliveryFee: 8.00, total: 141.00,
+    items: [
+      { name: "Salmão Grelhado", qty: 1, price: 54.00 },
+      { name: "Risoto de Cogumelos", qty: 1, price: 38.00 },
+      { name: "Vinho Tinto 375ml", qty: 1, price: 41.00 },
+    ],
   },
   {
-    id: "o9", num: 9, customer: "Beatriz Alves", total: 29.00, status: "CANCELLED",
-    type: "PICKUP", createdAt: ago(40), itemCount: 1, payment: "PIX",
+    id: "o9", num: 9, customer: "Beatriz Alves",
+    phone: "(11) 95544-3322", channel: "WhatsApp",
+    status: "CANCELLED", type: "PICKUP", createdAt: ago(40),
+    itemCount: 1, payment: "PIX",
     address: "Retirada no local",
-    items: [{ name: "Combo Kids", qty: 1, price: 29.00 }],
+    subtotal: 29.00, total: 29.00,
+    items: [
+      { name: "Combo Kids", qty: 1, price: 29.00 },
+    ],
   },
 ];
 
@@ -524,6 +591,23 @@ function OrderListPane({
 
 // ─── DetailPanel (Order Ticket) ───────────────────────────────
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+      {children}
+    </p>
+  );
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4 text-sm">
+      <span className="shrink-0 text-gray-400">{label}</span>
+      <span className="text-right font-medium text-gray-800">{value}</span>
+    </div>
+  );
+}
+
 function DetailPanel({
   order,
   onClose,
@@ -531,70 +615,140 @@ function DetailPanel({
   order: MockOrder | null;
   onClose: () => void;
 }) {
+  if (!order) {
+    return (
+      <div className="hidden lg:flex w-[380px] shrink-0 flex-col items-center justify-center gap-3 border-l border-[#E5E5E5] bg-white text-gray-300">
+        <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+          <path strokeLinecap="round" d="M9 12h6M3 7l2-2h14l2 2v14l-2 2H5l-2-2V7z" />
+        </svg>
+        <p className="text-sm">Selecione um pedido</p>
+      </div>
+    );
+  }
+
+  const isDelivery = order.type === "DELIVERY";
+  const isCash     = order.payment === "Dinheiro";
+  const troco      = isCash && order.changeFor ? order.changeFor - order.total : null;
+
   return (
     <div className="hidden lg:flex w-[380px] shrink-0 flex-col border-l border-[#E5E5E5] bg-white">
-      {order ? (
-        <>
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-            <div>
-              <p className="font-mono text-xs text-gray-400">Pedido #{String(order.num).padStart(3, "0")}</p>
-              <h3 className="mt-0.5 text-base font-bold text-gray-900">{order.customer}</h3>
-              <p className="mt-0.5 text-xs text-gray-400">{order.address}</p>
-            </div>
-            <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-              <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path d="M4 4l8 8M12 4l-8 8" />
-              </svg>
-            </button>
+
+      {/* Header */}
+      <div className="flex items-start justify-between border-b border-gray-100 px-5 py-4">
+        <div>
+          <p className="font-mono text-xs text-gray-400">
+            Pedido #{String(order.num).padStart(3, "0")}
+          </p>
+          <h3 className="mt-0.5 text-base font-bold text-gray-900">{order.customer}</h3>
+        </div>
+        <button onClick={onClose} className="mt-0.5 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
+          <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M4 4l8 8M12 4l-8 8" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Scrollable body */}
+      <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+
+        {/* 1. Cliente */}
+        <div>
+          <SectionLabel>Cliente</SectionLabel>
+          <div className="space-y-1.5">
+            <Row label="Telefone" value={order.phone} />
+            {order.email && <Row label="E-mail" value={order.email} />}
           </div>
+        </div>
 
-          {/* Body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        {/* 2. Pedido context */}
+        <div>
+          <SectionLabel>Pedido</SectionLabel>
+          <div className="space-y-1.5">
+            <Row label="Canal" value={order.channel} />
+            <Row label="Modalidade" value={
+              order.type === "DELIVERY" ? "Delivery"
+              : order.type === "TABLE"  ? `Mesa — ${order.address}`
+              : "Retirada"
+            } />
+          </div>
+        </div>
 
-            {/* Items */}
-            <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">Itens</p>
-              <div className="space-y-2">
-                {order.items.map((item, i) => (
-                  <div key={i} className="flex items-baseline justify-between">
-                    <span className="text-sm text-gray-800">
-                      <span className="mr-2 font-semibold text-gray-500">{item.qty}×</span>
-                      {item.name}
-                    </span>
-                    <span className="ml-4 shrink-0 text-sm font-medium text-gray-700">
-                      {fmtCurrency(item.price * item.qty)}
-                    </span>
-                  </div>
+        {/* 3. Entrega (delivery only) */}
+        {isDelivery && (
+          <div>
+            <SectionLabel>Entrega</SectionLabel>
+            <div className="space-y-1.5">
+              <div className="text-sm text-gray-800 leading-snug">{order.address}</div>
+              {order.deliveryFee != null && (
+                <Row label="Taxa de entrega" value={fmtCurrency(order.deliveryFee)} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 4. Itens */}
+        <div>
+          <SectionLabel>Itens</SectionLabel>
+          <div className="space-y-3">
+            {order.items.map((item, i) => (
+              <div key={i}>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm text-gray-800">
+                    <span className="mr-2 font-semibold text-gray-500">{item.qty}×</span>
+                    {item.name}
+                  </span>
+                  <span className="ml-4 shrink-0 text-sm font-medium text-gray-700">
+                    {fmtCurrency(item.price * item.qty)}
+                  </span>
+                </div>
+                {item.note && (
+                  <p className="mt-0.5 pl-6 text-xs italic text-gray-400">{item.note}</p>
+                )}
+                {item.addons?.map((addon, j) => (
+                  <p key={j} className="mt-0.5 pl-6 text-xs text-gray-500">+ {addon}</p>
                 ))}
               </div>
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-dashed border-gray-200" />
-
-            {/* Payment + Total */}
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Pagamento</span>
-                <span className="font-medium text-gray-800">{order.payment}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-semibold text-gray-700">Total</span>
-                <span className="font-bold text-gray-900">{fmtCurrency(order.total)}</span>
-              </div>
-            </div>
-
+            ))}
           </div>
-        </>
-      ) : (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-gray-300">
-          <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-            <path strokeLinecap="round" d="M9 12h6M3 7l2-2h14l2 2v14l-2 2H5l-2-2V7z" />
-          </svg>
-          <p className="text-sm">Selecione um pedido</p>
         </div>
-      )}
+
+        {/* 5. Pagamento */}
+        <div>
+          <SectionLabel>Pagamento</SectionLabel>
+          <div className="space-y-1.5">
+            <Row label="Forma" value={order.payment} />
+            {isCash && order.changeFor && (
+              <Row label="Troco para" value={fmtCurrency(order.changeFor)} />
+            )}
+            {troco != null && troco > 0 && (
+              <Row label="Valor do troco" value={
+                <span className="text-green-700">{fmtCurrency(troco)}</span>
+              } />
+            )}
+          </div>
+        </div>
+
+        {/* 6. Resumo */}
+        <div className="border-t border-dashed border-gray-200 pt-4">
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Subtotal</span>
+              <span className="text-gray-700">{fmtCurrency(order.subtotal)}</span>
+            </div>
+            {isDelivery && order.deliveryFee != null && (
+              <div className="flex justify-between">
+                <span className="text-gray-400">Entrega</span>
+                <span className="text-gray-700">{fmtCurrency(order.deliveryFee)}</span>
+              </div>
+            )}
+            <div className="flex justify-between pt-1">
+              <span className="font-semibold text-gray-700">Total</span>
+              <span className="font-bold text-gray-900">{fmtCurrency(order.total)}</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
