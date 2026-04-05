@@ -120,6 +120,9 @@ export function AtendimentoClient({ userId }: { userId: string }) {
   const [thread, setThread] = useState<ConvDetail | null>(null);
   const [loadingThread, setLoadingThread] = useState(false);
 
+  // Mobile navigation: "list" shows the conversation list, "thread" shows the active thread
+  const [mobileView, setMobileView] = useState<"list" | "thread">("list");
+
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -253,14 +256,29 @@ export function AtendimentoClient({ userId }: { userId: string }) {
     setSearch(searchInput);
   }
 
+  function handleSelectConv(id: string) {
+    setSelectedId(id);
+    setMobileView("thread");
+  }
+
+  function handleMobileBack() {
+    setMobileView("list");
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div
       className="flex overflow-hidden"
       style={{ height: "calc(100vh - 56px)" }}
     >
-      {/* ── LEFT PANEL: conversation list ─────────────────────────────────── */}
-      <aside className="flex w-80 shrink-0 flex-col border-r border-gray-200 bg-white">
+      {/* ── LEFT PANEL: conversation list
+            Mobile: full width, shown when mobileView === "list"
+            Desktop: fixed 320px side panel, always visible ─────────────── */}
+      <aside className={`
+        flex-col border-r border-gray-200 bg-white
+        ${mobileView === "list" ? "flex w-full" : "hidden"}
+        lg:flex lg:w-80 lg:shrink-0
+      `}>
         {/* Search */}
         <div className="border-b border-gray-100 px-3 pt-3 pb-2">
           <form onSubmit={handleSearchSubmit} className="flex gap-2">
@@ -327,7 +345,7 @@ export function AtendimentoClient({ userId }: { userId: string }) {
                   <li key={conv.id}>
                     <button
                       type="button"
-                      onClick={() => setSelectedId(conv.id)}
+                      onClick={() => handleSelectConv(conv.id)}
                       className={`w-full px-3 py-3 text-left transition-colors ${
                         isSelected
                           ? "bg-orange-50 border-l-2 border-orange-500"
@@ -397,8 +415,14 @@ export function AtendimentoClient({ userId }: { userId: string }) {
         </div>
       </aside>
 
-      {/* ── RIGHT PANEL: conversation thread ──────────────────────────────── */}
-      <section className="flex flex-1 flex-col overflow-hidden">
+      {/* ── RIGHT PANEL: conversation thread
+            Mobile: full width, shown when mobileView === "thread"
+            Desktop: flex-1 always visible ──────────────────────────────── */}
+      <section className={`
+        flex-col overflow-hidden
+        ${mobileView === "thread" ? "flex w-full" : "hidden"}
+        lg:flex lg:flex-1
+      `}>
         {!selectedId ? (
           // Empty state
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-gray-400">
@@ -426,6 +450,7 @@ export function AtendimentoClient({ userId }: { userId: string }) {
             sendError={sendError}
             onSend={handleSend}
             bottomRef={bottomRef}
+            onBack={handleMobileBack}
           />
         ) : null}
       </section>
@@ -446,6 +471,7 @@ interface ThreadPanelProps {
   sendError: string | null;
   onSend: (e: FormEvent) => void;
   bottomRef: React.RefObject<HTMLDivElement>;
+  onBack?: () => void;
 }
 
 function ThreadPanel({
@@ -458,6 +484,7 @@ function ThreadPanel({
   sendError,
   onSend,
   bottomRef,
+  onBack,
 }: ThreadPanelProps) {
   const badge = getHandlerBadge(thread);
   const channel = CHANNEL_META[thread.channel] ?? { label: thread.channel, icon: "💬" };
@@ -468,81 +495,89 @@ function ThreadPanel({
   return (
     <>
       {/* ── Thread header ─────────────────────────────────────────────── */}
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-        {/* Customer info */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-700">
-            {initials(thread.customer.name)}
+      <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-3">
+
+        {/* Row 1: back button (mobile) + customer info + badges */}
+        <div className="flex items-center gap-2">
+          {/* Back button — mobile only */}
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Voltar"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 lg:hidden"
+            >
+              ←
+            </button>
+          )}
+
+          {/* Avatar + name */}
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
+              {initials(thread.customer.name)}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-gray-900">
+                {thread.customer.name}
+              </p>
+              <p className="text-xs text-gray-500">{thread.customer.phone}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-bold text-gray-900">
-              {thread.customer.name}
-            </p>
-            <p className="text-xs text-gray-500">{thread.customer.phone}</p>
+
+          {/* Badges — hidden on very small screens, shown sm+ */}
+          <div className="hidden items-center gap-1.5 sm:flex">
+            <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+              <span>{channel.icon}</span>
+              <span className="hidden md:inline">{channel.label}</span>
+            </span>
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${badge.cls}`}>
+              {badge.label}
+            </span>
           </div>
         </div>
 
-        {/* Badges + actions */}
-        <div className="flex items-center gap-2">
-          {/* Channel badge */}
-          <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-            <span>{channel.icon}</span>
-            <span>{channel.label}</span>
-          </span>
-
-          {/* Handler badge */}
-          <span
-            className={`rounded-full border px-2.5 py-1 text-xs font-bold ${badge.cls}`}
-          >
-            {badge.label}
-          </span>
-
-          {/* Action buttons */}
-          <div className="ml-1 flex items-center gap-1.5">
-            {canTakeOver && (
-              <button
-                type="button"
-                onClick={() => onAction("assign")}
-                disabled={actionLoading}
-                className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 transition-colors"
-              >
-                Assumir atendimento
-              </button>
-            )}
-
-            {isHuman && (
-              <button
-                type="button"
-                onClick={() => onAction("unassign")}
-                disabled={actionLoading}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-              >
-                Devolver para fila
-              </button>
-            )}
-
-            {!isResolved && (
-              <button
-                type="button"
-                onClick={() => onAction("resolve")}
-                disabled={actionLoading}
-                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-              >
-                Resolver
-              </button>
-            )}
-
-            {isResolved && (
-              <button
-                type="button"
-                onClick={() => onAction("reopen")}
-                disabled={actionLoading}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-              >
-                Reabrir
-              </button>
-            )}
-          </div>
+        {/* Row 2: action buttons — full-width row, scrollable on mobile */}
+        <div className="mt-2 flex gap-1.5 overflow-x-auto scrollbar-hide">
+          {canTakeOver && (
+            <button
+              type="button"
+              onClick={() => onAction("assign")}
+              disabled={actionLoading}
+              className="shrink-0 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 transition-colors"
+            >
+              Assumir atendimento
+            </button>
+          )}
+          {isHuman && (
+            <button
+              type="button"
+              onClick={() => onAction("unassign")}
+              disabled={actionLoading}
+              className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              Devolver para fila
+            </button>
+          )}
+          {!isResolved && (
+            <button
+              type="button"
+              onClick={() => onAction("resolve")}
+              disabled={actionLoading}
+              className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              Resolver
+            </button>
+          )}
+          {isResolved && (
+            <button
+              type="button"
+              onClick={() => onAction("reopen")}
+              disabled={actionLoading}
+              className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              Reabrir
+            </button>
+          )}
         </div>
       </div>
 

@@ -55,20 +55,22 @@ export default async function CustomersPage({
   return (
     <>
       <TopBar title="Clientes" />
-      <div className="p-6">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="p-4 sm:p-6">
+        {/* Header row: count + search */}
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           <p className="text-sm text-gray-500">{total} cliente{total !== 1 ? "s" : ""}</p>
-          <form method="GET">
+          <form method="GET" className="ml-auto">
             <input
               name="search"
               defaultValue={search}
-              placeholder="Buscar por nome ou telefone…"
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              placeholder="Nome ou telefone…"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 sm:w-auto"
             />
           </form>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        {/* Desktop table — hidden on mobile */}
+        <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white sm:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
@@ -106,11 +108,45 @@ export default async function CustomersPage({
           </table>
         </div>
 
+        {/* Mobile card list — hidden on sm+ */}
+        <div className="space-y-2 sm:hidden">
+          {customers.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-400">Nenhum cliente encontrado.</p>
+          ) : (
+            customers.map((c) => (
+              <Link
+                key={c.id}
+                href={`/customers/${c.id}`}
+                className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 hover:bg-gray-50 active:bg-gray-100"
+              >
+                {/* Avatar */}
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700">
+                  {c.name.charAt(0).toUpperCase()}
+                </div>
+                {/* Info */}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-gray-900">{c.name}</p>
+                  <p className="truncate text-xs text-gray-500">{c.phone}</p>
+                </div>
+                {/* Stats */}
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-semibold text-gray-700">{c.totalOrders} ped.</p>
+                  <p className="text-xs text-gray-400">
+                    {c.lastOrderAt
+                      ? new Date(c.lastOrderAt).toLocaleDateString("pt-BR")
+                      : "—"}
+                  </p>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
             <span>Página {page} de {totalPages}</span>
-            <div className="flex gap-2">
+            <div className="flex gap-2 text-sm">
               {page > 1 && (
                 <Link
                   href={`?page=${page - 1}${search ? `&search=${search}` : ""}`}

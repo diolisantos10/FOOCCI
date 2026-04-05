@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useSidebar } from "./SidebarContext";
 
 // ── Nav structure ──────────────────────────────────────────────────────────────
 
@@ -19,7 +20,6 @@ type NavGroup = {
   items: NavItem[];
 };
 
-// Standalone home item — always first, most prominent
 const HOME_ITEM: NavItem = {
   href:  "/dashboard",
   label: "Início",
@@ -31,10 +31,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Vendas",
     items: [
-      { href: "/menu",          label: "Cardápio",     icon: "🍽",  exact: false },
-      { href: "/orders",        label: "Pedidos",      icon: "📋",  exact: false },
-      { href: "/atendimento",   label: "Atendimento",  icon: "🎧",  exact: false },
-      { href: "/conversations", label: "Conversas",    icon: "💬",  exact: false },
+      { href: "/menu",          label: "Cardápio",    icon: "🍽",  exact: false },
+      { href: "/orders",        label: "Pedidos",     icon: "📋",  exact: false },
+      { href: "/atendimento",   label: "Atendimento", icon: "🎧",  exact: false },
+      { href: "/conversations", label: "Conversas",   icon: "💬",  exact: false },
     ],
   },
   {
@@ -47,7 +47,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Crescimento",
     items: [
-      { href: "/customers",  label: "Clientes",   icon: "👤",  exact: false            },
+      { href: "/customers",  label: "Clientes",   icon: "👤",  exact: false             },
       { href: "/crm",        label: "CRM",        icon: "📊",  exact: false, soon: true },
       { href: "/marketing",  label: "Marketing",  icon: "📢",  exact: false, soon: true },
     ],
@@ -66,97 +66,130 @@ const NAV_GROUPS: NavGroup[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const { open, close } = useSidebar();
 
   return (
-    <aside className="flex h-screen w-56 flex-col border-r border-[#E5E5E5] bg-white">
-      {/* Brand */}
-      <div className="flex h-14 items-center border-b border-[#E5E5E5] px-4">
-        <span className="text-base font-bold tracking-tight text-[#0B0B0B]">Foocci</span>
-        <span className="ml-1.5 rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-600">
-          beta
-        </span>
-      </div>
+    <>
+      {/* Mobile overlay — tap outside to close */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={close}
+          aria-hidden="true"
+        />
+      )}
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-2 py-3 scrollbar-thin">
-        {/* ── Standalone home item ── */}
-        <div className="mb-3">
-          {(() => {
-            const isActive = pathname === HOME_ITEM.href;
-            return (
-              <Link
-                href={HOME_ITEM.href}
-                className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors ${
-                  isActive
-                    ? "bg-brand-50 text-brand-600"
-                    : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                }`}
-              >
-                <span className="text-[15px] leading-none">{HOME_ITEM.icon}</span>
-                {HOME_ITEM.label}
-              </Link>
-            );
-          })()}
+      {/* Sidebar panel
+          Mobile: fixed drawer, slides in from left (z-50)
+          Desktop: static, always visible (lg:static, lg:translate-x-0) */}
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 flex h-screen w-56 shrink-0 flex-col
+          border-r border-[#E5E5E5] bg-white
+          transition-transform duration-200 ease-in-out
+          lg:static lg:z-auto lg:translate-x-0
+          ${open ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        {/* Brand */}
+        <div className="flex h-14 items-center justify-between border-b border-[#E5E5E5] px-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-base font-bold tracking-tight text-[#0B0B0B]">
+              Foocci
+            </span>
+            <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-600">
+              beta
+            </span>
+          </div>
+          {/* Close button — mobile only */}
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Fechar menu"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden"
+          >
+            ✕
+          </button>
         </div>
 
-        <ul className="space-y-4">
-          {NAV_GROUPS.map((group, groupIdx) => (
-            <li key={group.label}>
-              {/* Divider above every group */}
-              {<div className="mb-3 border-t border-gray-100" />}
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto px-2 py-3 scrollbar-thin">
+          {/* Standalone home item */}
+          <div className="mb-3">
+            {(() => {
+              const isActive = pathname === HOME_ITEM.href;
+              return (
+                <Link
+                  href={HOME_ITEM.href}
+                  onClick={close}
+                  className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors ${
+                    isActive
+                      ? "bg-brand-50 text-brand-600"
+                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                  }`}
+                >
+                  <span className="text-[15px] leading-none">{HOME_ITEM.icon}</span>
+                  {HOME_ITEM.label}
+                </Link>
+              );
+            })()}
+          </div>
 
-              {/* Group label */}
-              <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-                {group.label}
-              </p>
+          <ul className="space-y-4">
+            {NAV_GROUPS.map((group) => (
+              <li key={group.label}>
+                <div className="mb-3 border-t border-gray-100" />
+                <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                  {group.label}
+                </p>
+                <ul className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const isActive = item.exact
+                      ? pathname === item.href
+                      : pathname.startsWith(item.href);
 
-              {/* Items */}
-              <ul className="space-y-0.5">
-                {group.items.map((item) => {
-                  const isActive = item.exact
-                    ? pathname === item.href
-                    : pathname.startsWith(item.href);
-
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors ${
-                          isActive
-                            ? "bg-brand-50 font-semibold text-brand-600"
-                            : item.soon
-                              ? "text-gray-400 hover:bg-gray-50 hover:text-gray-500"
-                              : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                        }`}
-                      >
-                        <span className="flex items-center gap-2.5">
-                          <span className="text-[15px] leading-none">{item.icon}</span>
-                          {item.label}
-                        </span>
-                        {item.soon && (
-                          <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-gray-400 leading-none">
-                            breve
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          onClick={close}
+                          className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors ${
+                            isActive
+                              ? "bg-brand-50 font-semibold text-brand-600"
+                              : item.soon
+                                ? "text-gray-400 hover:bg-gray-50 hover:text-gray-500"
+                                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2.5">
+                            <span className="text-[15px] leading-none">{item.icon}</span>
+                            {item.label}
                           </span>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      </nav>
+                          {item.soon && (
+                            <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[8px] font-bold uppercase leading-none tracking-wide text-gray-400">
+                              breve
+                            </span>
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-      {/* User badge */}
-      <div className="border-t border-[#E5E5E5] px-3 py-3">
-        <p className="truncate text-xs font-semibold text-gray-800">
-          {session?.user?.name ?? "—"}
-        </p>
-        <p className="truncate text-[10px] text-gray-400 uppercase tracking-wide">
-          {session?.user?.role}
-        </p>
-      </div>
-    </aside>
+        {/* User badge */}
+        <div className="border-t border-[#E5E5E5] px-3 py-3">
+          <p className="truncate text-xs font-semibold text-gray-800">
+            {session?.user?.name ?? "—"}
+          </p>
+          <p className="truncate text-[10px] uppercase tracking-wide text-gray-400">
+            {session?.user?.role}
+          </p>
+        </div>
+      </aside>
+    </>
   );
 }

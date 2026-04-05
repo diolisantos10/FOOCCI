@@ -242,35 +242,44 @@ function SearchBar({
   onClear: () => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
-      <input
-        type="date"
-        value={dateFrom}
-        onChange={(e) => onDateFromChange(e.target.value)}
-        className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-shadow"
-      />
-      <input
-        type="date"
-        value={dateTo}
-        onChange={(e) => onDateToChange(e.target.value)}
-        className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-shadow"
-      />
-      <input
-        type="text"
-        value={searchQuery}
-        onChange={(e) => onSearchChange(e.target.value)}
-        placeholder="Busque por cliente, pedido, telefone, email..."
-        className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-shadow"
-      />
-      <button className="shrink-0 rounded-lg bg-orange-500 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600">
-        Filtrar
-      </button>
-      <button
-        onClick={onClear}
-        className="shrink-0 rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50"
-      >
-        Limpar filtro
-      </button>
+    <div className="shrink-0 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
+      <div className="flex flex-wrap gap-2">
+        {/* Date inputs — side-by-side on all sizes */}
+        <div className="flex min-w-0 flex-1 gap-2">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => onDateFromChange(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+          />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => onDateToChange(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+          />
+        </div>
+        {/* Text search — full-width on mobile, flex-1 on wider screens */}
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Busque por cliente ou pedido…"
+          className="w-full min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200 sm:w-auto"
+        />
+        {/* Action buttons */}
+        <div className="flex w-full gap-2 sm:w-auto">
+          <button className="flex-1 rounded-lg bg-orange-500 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600 sm:flex-none">
+            Filtrar
+          </button>
+          <button
+            onClick={onClear}
+            className="flex-1 rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50 sm:flex-none"
+          >
+            Limpar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -304,14 +313,14 @@ function StatusRow({
   ];
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
+    <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-[#E5E5E5] bg-white px-4 py-2.5 scrollbar-hide">
       {BTNS.map((btn) => {
         const isActive = statusFilter === btn.id;
         return (
           <button
             key={String(btn.id)}
             onClick={() => onFilterChange(btn.id)}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+            className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
               isActive ? btn.on : btn.off
             }`}
           >
@@ -340,7 +349,7 @@ function PerformanceBar({ orders }: { orders: MockOrder[] }) {
   const table    = orders.filter((o) => o.type === "TABLE").length;
 
   return (
-    <div className="flex shrink-0 items-center gap-6 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
+    <div className="hidden shrink-0 items-center gap-6 border-b border-[#E5E5E5] bg-white px-4 py-2.5 sm:flex">
       {/* Label */}
       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 shrink-0">
         Performance
@@ -695,10 +704,25 @@ function DetailPanel({
   const troco      = isCash && order.changeFor ? order.changeFor - order.total : null;
 
   return (
-    <div className="hidden lg:flex w-[380px] shrink-0 flex-col border-l border-[#E5E5E5] bg-white">
+    // Mobile: fixed full-screen overlay (z-30)
+    // Desktop: static side panel (lg:relative, lg:w-[380px])
+    <div className="fixed inset-0 z-30 flex flex-col bg-white lg:relative lg:inset-auto lg:z-auto lg:w-[380px] lg:shrink-0 lg:border-l lg:border-[#E5E5E5]">
 
-      {/* Header */}
-      <div className="flex items-start justify-between border-b border-gray-100 px-5 py-4">
+      {/* Mobile back button row */}
+      <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3 lg:hidden">
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1.5 rounded-lg py-1 pr-2 text-sm font-medium text-gray-600 hover:text-gray-900"
+        >
+          ← Voltar
+        </button>
+        <span className="font-mono text-xs text-gray-400">
+          Pedido #{String(order.num).padStart(3, "0")}
+        </span>
+      </div>
+
+      {/* Desktop header */}
+      <div className="hidden items-start justify-between border-b border-gray-100 px-5 py-4 lg:flex">
         <div>
           <p className="font-mono text-xs text-gray-400">
             Pedido #{String(order.num).padStart(3, "0")}
@@ -712,13 +736,18 @@ function DetailPanel({
         </button>
       </div>
 
+      {/* Customer name — mobile only (since desktop header above has it) */}
+      <div className="border-b border-gray-100 px-4 py-2 lg:hidden">
+        <h3 className="text-base font-bold text-gray-900">{order.customer}</h3>
+      </div>
+
       {/* Status timeline */}
-      <div className="border-b border-[#E5E5E5] px-5 py-3">
+      <div className="border-b border-[#E5E5E5] px-4 py-3 lg:px-5">
         <StatusTimeline order={order} />
       </div>
 
       {/* Scrollable body */}
-      <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 lg:px-5">
 
         {/* 1. Cliente */}
         <div>

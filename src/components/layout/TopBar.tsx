@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import type { NotificationItem, NotifType, NotifPriority } from "@/app/api/notifications/route";
+import { useSidebar } from "./SidebarContext";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ interface TopBarProps {
 
 export function TopBar({ title }: TopBarProps) {
   const router = useRouter();
+  const { toggle: toggleSidebar } = useSidebar();
 
   // Panel open/close
   const [open, setOpen] = useState(false);
@@ -153,15 +155,27 @@ export function TopBar({ title }: TopBarProps) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <header className="flex h-14 items-center justify-between border-b border-[#E5E5E5] bg-white px-6">
-      {/* Left: brand / page breadcrumb */}
+      {/* Left: hamburger (mobile) + brand / page breadcrumb */}
       <div className="flex items-center gap-2">
+        {/* Hamburger — mobile only */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Abrir menu"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 lg:hidden"
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
         <span className="text-sm font-bold tracking-tight text-[#0B0B0B]">
           Foocci
         </span>
         {title && (
           <>
-            <span className="text-gray-300 text-sm">/</span>
-            <span className="text-sm text-gray-500">{title}</span>
+            <span className="hidden text-sm text-gray-300 sm:inline">/</span>
+            <span className="hidden text-sm text-gray-500 sm:inline">{title}</span>
           </>
         )}
       </div>
