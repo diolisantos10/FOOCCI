@@ -293,7 +293,10 @@ function StatusRow({
     DELAYED:   orders.filter(isDelayed).length,
   };
 
+  const total = orders.length;
+
   const BTNS: Array<{ id: StatusFilter; label: string; count: number; on: string; off: string }> = [
+    { id: null,        label: "Todos",      count: total,            on: "bg-gray-700 text-white",   off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
     { id: "PENDING",   label: "Novos",      count: counts.PENDING,   on: "bg-amber-500 text-white",  off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
     { id: "PREPARING", label: "Preparando", count: counts.PREPARING, on: "bg-orange-500 text-white", off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
     { id: "READY",     label: "Pronto",     count: counts.READY,     on: "bg-teal-600 text-white",   off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
@@ -302,22 +305,25 @@ function StatusRow({
 
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
-      {BTNS.map((btn) => (
-        <button
-          key={String(btn.id)}
-          onClick={() => onFilterChange(statusFilter === btn.id ? null : btn.id)}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-            statusFilter === btn.id ? btn.on : btn.off
-          }`}
-        >
-          {btn.label}
-          <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
-            statusFilter === btn.id ? "bg-white/25 text-inherit" : "bg-white/80 text-gray-500"
-          }`}>
-            {btn.count}
-          </span>
-        </button>
-      ))}
+      {BTNS.map((btn) => {
+        const isActive = statusFilter === btn.id;
+        return (
+          <button
+            key={String(btn.id)}
+            onClick={() => onFilterChange(btn.id)}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+              isActive ? btn.on : btn.off
+            }`}
+          >
+            {btn.label}
+            <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
+              isActive ? "bg-white/25 text-inherit" : "bg-white/80 text-gray-500"
+            }`}>
+              {btn.count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -425,8 +431,8 @@ function OrderCard({
         ${active  ? "ring-2 ring-orange-400 ring-offset-1" : "hover:shadow-md"}
         ${delayed ? "bg-red-50/40" : ""}`}
     >
-      <div className="p-3.5">
-        {/* Row 1: checkbox + num + single badge + elapsed */}
+      <div className="p-3">
+        {/* Row 1: checkbox + num (prominent) + badge + elapsed */}
         <div className="flex items-center gap-2">
           <input
             type="checkbox"
@@ -435,19 +441,19 @@ function OrderCard({
             onClick={(e) => e.stopPropagation()}
             className="h-3.5 w-3.5 shrink-0 accent-orange-500"
           />
-          <span className="font-mono text-xs font-bold text-gray-400">
+          <span className="font-mono text-sm font-bold text-gray-700">
             #{String(order.num).padStart(3, "0")}
           </span>
           {badge}
-          <span className={`ml-auto text-sm font-bold tabular-nums ${delayed ? "text-red-600" : "text-gray-500"}`}>
+          <span className={`ml-auto text-xs font-semibold tabular-nums ${delayed ? "text-red-600" : "text-gray-400"}`}>
             {mins < 1 ? "agora" : `${mins} min`}
           </span>
         </div>
 
-        {/* Row 2: customer + total */}
-        <div className="mt-2 flex items-baseline justify-between">
-          <span className="font-semibold text-gray-900">{order.customer}</span>
-          <span className="font-bold text-gray-900">{fmtCurrency(order.total)}</span>
+        {/* Row 2: customer (prominent) + total (secondary) */}
+        <div className="mt-1.5 flex items-baseline justify-between">
+          <span className="text-base font-bold text-gray-900">{order.customer}</span>
+          <span className="text-xs font-semibold text-gray-500">{fmtCurrency(order.total)}</span>
         </div>
 
         {/* Row 3: meta */}
@@ -461,7 +467,7 @@ function OrderCard({
 
         {/* Row 4: actions */}
         {!isTerminal && (
-          <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
+          <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
             {nextAction && (
               <button
                 onClick={() => onAction(order.id, nextAction.next)}
@@ -592,7 +598,6 @@ function OrderListPane({
 // ─── StatusTimeline ───────────────────────────────────────────
 
 const FLOW_ALL: Array<{ status: OrderStatus; label: string }> = [
-  { status: "PENDING",          label: "Novo"        },
   { status: "CONFIRMED",        label: "Confirmado"  },
   { status: "PREPARING",        label: "Preparando"  },
   { status: "READY",            label: "Pronto"      },
