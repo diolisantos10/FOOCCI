@@ -130,17 +130,41 @@ function filterOrders(orders: MockOrder[], period: TimePeriod): MockOrder[] {
   return result.sort((a, b) => priorityScore(a) - priorityScore(b));
 }
 
-// ─── ControlsRow ──────────────────────────────────────────────
+// ─── PeriodRow ────────────────────────────────────────────────
 
-function ControlsRow({
+function PeriodRow({
   period,
   onPeriodChange,
+}: {
+  period: TimePeriod;
+  onPeriodChange: (p: TimePeriod) => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-1 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
+      {PERIOD_OPTIONS.map((opt) => (
+        <button
+          key={opt.id}
+          onClick={() => onPeriodChange(opt.id)}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
+            period === opt.id
+              ? "bg-orange-500 text-white shadow-sm"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── StatusRow ────────────────────────────────────────────────
+
+function StatusRow({
   orders,
   statusFilter,
   onFilterChange,
 }: {
-  period: TimePeriod;
-  onPeriodChange: (p: TimePeriod) => void;
   orders: MockOrder[];
   statusFilter: StatusFilter;
   onFilterChange: (f: StatusFilter) => void;
@@ -152,59 +176,31 @@ function ControlsRow({
     DELAYED:   orders.filter(isDelayed).length,
   };
 
-  const STATUS_BTNS: Array<{
-    id: StatusFilter;
-    label: string;
-    count: number;
-    on: string;
-    off: string;
-  }> = [
-    { id: "PENDING",   label: "Novos",      count: counts.PENDING,   on: "bg-amber-500 text-white",  off: "bg-gray-100 text-gray-600 hover:bg-gray-200" },
-    { id: "PREPARING", label: "Preparando", count: counts.PREPARING, on: "bg-orange-500 text-white", off: "bg-gray-100 text-gray-600 hover:bg-gray-200" },
-    { id: "READY",     label: "Pronto",     count: counts.READY,     on: "bg-teal-600 text-white",   off: "bg-gray-100 text-gray-600 hover:bg-gray-200" },
+  const BTNS: Array<{ id: StatusFilter; label: string; count: number; on: string; off: string }> = [
+    { id: "PENDING",   label: "Novos",      count: counts.PENDING,   on: "bg-amber-500 text-white",  off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
+    { id: "PREPARING", label: "Preparando", count: counts.PREPARING, on: "bg-orange-500 text-white", off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
+    { id: "READY",     label: "Pronto",     count: counts.READY,     on: "bg-teal-600 text-white",   off: "bg-gray-100 text-gray-600 hover:bg-gray-200"                                    },
     { id: "DELAYED",   label: "Atrasados",  count: counts.DELAYED,   on: "bg-red-600 text-white",    off: counts.DELAYED > 0 ? "bg-red-50 text-red-700 hover:bg-red-100" : "bg-gray-100 text-gray-400" },
   ];
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
-      {/* Period */}
-      <div className="flex gap-1">
-        {PERIOD_OPTIONS.map((opt) => (
-          <button
-            key={opt.id}
-            onClick={() => onPeriodChange(opt.id)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
-              period === opt.id
-                ? "bg-orange-500 text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mx-1 h-5 w-px bg-gray-200 shrink-0" />
-
-      {/* Status filters */}
-      <div className="flex gap-1">
-        {STATUS_BTNS.map((btn) => (
-          <button
-            key={String(btn.id)}
-            onClick={() => onFilterChange(statusFilter === btn.id ? null : btn.id)}
-            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-              statusFilter === btn.id ? btn.on : btn.off
-            }`}
-          >
-            {btn.label}
-            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
-              statusFilter === btn.id ? "bg-white/25 text-inherit" : "bg-white/80 text-gray-500"
-            }`}>
-              {btn.count}
-            </span>
-          </button>
-        ))}
-      </div>
+    <div className="flex shrink-0 items-center gap-2 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
+      {BTNS.map((btn) => (
+        <button
+          key={String(btn.id)}
+          onClick={() => onFilterChange(statusFilter === btn.id ? null : btn.id)}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+            statusFilter === btn.id ? btn.on : btn.off
+          }`}
+        >
+          {btn.label}
+          <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
+            statusFilter === btn.id ? "bg-white/25 text-inherit" : "bg-white/80 text-gray-500"
+          }`}>
+            {btn.count}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -642,15 +638,15 @@ export default function OrdersClient() {
   return (
     <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "100vh" }}>
 
-      <ControlsRow
-        period={period}
-        onPeriodChange={setPeriod}
+      <KPIStrip orders={filtered} />
+
+      <PeriodRow period={period} onPeriodChange={setPeriod} />
+
+      <StatusRow
         orders={filtered}
         statusFilter={statusFilter}
         onFilterChange={setStatusFilter}
       />
-
-      <KPIStrip orders={filtered} />
 
       <div className="flex flex-1 overflow-hidden">
         <OrderListPane
