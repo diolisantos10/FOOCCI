@@ -61,13 +61,19 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // ── Internal E2E bypass (chat-sim only) ──────────────────────
+  // ── Internal E2E bypass (chat-sim only) ──────────────────────────────────
   // Allows Playwright to access /chat-sim and its API without a real session.
-  // Only active when E2E_SECRET is set in the environment (never in production).
+  //
+  // Guards:
+  //   1. NODE_ENV must NOT be "production" — bypass is never active in prod
+  //      even if E2E_SECRET is accidentally present in the environment.
+  //   2. E2E_SECRET must be set.
+  //   3. The x-e2e-token header must exactly match E2E_SECRET.
   const e2eSecret = process.env.E2E_SECRET;
   const isChatSimRoute =
     pathname === "/chat-sim" || pathname.startsWith("/api/chat-sim");
   if (
+    process.env.NODE_ENV !== "production" &&
     e2eSecret &&
     isChatSimRoute &&
     req.headers.get("x-e2e-token") === e2eSecret
@@ -103,8 +109,11 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Inject tenant context as request headers so handlers don't parse JWT
+  // Inject tenant context as request headers so handlers don't parse JWT.
+  // Explicitly strip x-e2e-bypass: clients must not be able to spoof the
+  // internal E2E bypass signal by sending it in their own request headers.
   const requestHeaders = new Headers(req.headers);
+  requestHeaders.delete("x-e2e-bypass");
   requestHeaders.set(TENANT_HEADER, token.restaurantId as string);
   requestHeaders.set(USER_HEADER, token.id as string);
   requestHeaders.set(ROLE_HEADER, token.role as string);
