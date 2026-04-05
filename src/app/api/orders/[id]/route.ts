@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { updateOrderStatusSchema } from "@/validators/order";
 import { OrderService } from "@/services/order/OrderService";
+import { auditLog } from "@/lib/audit";
 import { ok, badRequest, unauthorized, notFound, serverError } from "@/lib/api-response";
 
 type Params = { params: { id: string } };
@@ -35,6 +36,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (result.status === 404) return notFound(result.error);
       return badRequest(result.error);
     }
+
+    auditLog({
+      action: "order.status_change",
+      restaurantId: ctx.restaurantId,
+      userId: ctx.userId,
+      targetId: params.id,
+      meta: { status: parsed.data.status },
+    });
 
     return ok(result.data);
   } catch (err) {

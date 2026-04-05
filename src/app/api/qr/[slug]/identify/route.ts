@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 /**
  * Produce a list of phone string candidates to match against E.164 stored values.
@@ -56,6 +57,11 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { slug: string } }
 ) {
+  // Rate limit: 10 identify attempts / minute per IP
+  const ip = getClientIp(req);
+  const rl = rateLimit({ key: `qr-identify:${ip}`, limit: 10, windowMs: 60_000 });
+  if (rl.limited) return rateLimitResponse(rl.retryAfter) as NextResponse;
+
   try {
     const body = await req.json().catch(() => ({}));
     const rawPhone = String(body.phone ?? "").trim();

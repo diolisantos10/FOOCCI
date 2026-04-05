@@ -13,18 +13,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyWebhookSignature } from "@/lib/stone";
+import { auditLog } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const signature = req.headers.get("x-stone-signature") ?? "";
 
-  // Verify signature when secret is configured.
-  // If STONE_WEBHOOK_SECRET is not set (dev/test), we skip verification.
+  // Enforce signature verification when secret is configured.
+  // In dev (no secret), skip — but warn loudly so it's never silently skipped in prod.
   const secret = process.env.STONE_WEBHOOK_SECRET;
-  if (secret) {
-    if (!verifyWebhookSignature(rawBody, signature)) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "[webhook/stone] CRITICAL: STONE_WEBHOOK_SECRET is not set in production. " +
+          "All webhook events are being accepted without signature verification."
+      );
+    } else {
+      console.warn("[webhook/stone] Signature verification skipped (STONE_WEBHOOK_SECRET not set).");
     }
+  } else if (!verifyWebhookSignature(rawBody, signature)) {
+    console.warn("[webhook/stone] Invalid signature — request rejected.");
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   let payload: Record<string, unknown>;
@@ -54,7 +63,7 @@ export async function POST(req: NextRequest) {
 
   const payment = await prisma.payment.findFirst({
     where: { providerReference },
-    include: { order: { select: { id: true, status: true } } },
+    include: { order: { select: { id: true, status: true, restaurantId: true } } },
   });
 
   if (!payment) {
@@ -78,6 +87,18 @@ export async function POST(req: NextRequest) {
       data: { status: "CONFIRMED" },
     }),
   ]);
+
+  auditLog({
+    action: "payment.status_change",
+    restaurantId: payment.order.restaurantId,
+    targetId: payment.orderId,
+    meta: {
+      paymentId: payment.id,
+      providerReference,
+      eventType: eventType ?? "unknown",
+      newStatus: "PAID",
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }

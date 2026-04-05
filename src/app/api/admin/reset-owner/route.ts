@@ -6,12 +6,34 @@
  *
  * Only intended for broken initialization states where no valid owner
  * credentials exist. After this call, /recover becomes available again.
+ *
+ * SECURITY: Requires the x-admin-secret header to match ADMIN_SECRET env var.
+ * Without ADMIN_SECRET configured this endpoint is completely disabled.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auditLog } from "@/lib/audit";
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  // Require ADMIN_SECRET — endpoint is disabled if the env var is not set.
+  const adminSecret = process.env.ADMIN_SECRET;
+  if (!adminSecret) {
+    return NextResponse.json(
+      { error: "This endpoint is disabled. Set ADMIN_SECRET to enable it." },
+      { status: 403 }
+    );
+  }
+
+  const providedSecret = req.headers.get("x-admin-secret") ?? "";
+  if (providedSecret !== adminSecret) {
+    auditLog({
+      action: "auth.login_failure",
+      meta: { route: "POST /api/admin/reset-owner", reason: "invalid_secret" },
+    });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const restaurant = await prisma.restaurant.findFirst({
       where: { isActive: true },
@@ -27,6 +49,12 @@ export async function POST() {
 
     const { count } = await prisma.user.deleteMany({
       where: { restaurantId: restaurant.id },
+    });
+
+    auditLog({
+      action: "user.delete",
+      restaurantId: restaurant.id,
+      meta: { route: "reset-owner", deletedCount: count },
     });
 
     return NextResponse.json({

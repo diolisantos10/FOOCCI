@@ -58,21 +58,26 @@ export function conflict(error: string): NextResponse<ApiError> {
 
 export function serverError(
   error = "Internal server error",
+  // details is intentionally NOT forwarded to the response —
+  // it is only used for server-side logging to avoid leaking internals.
   details?: unknown
 ): NextResponse<ApiError> {
-  return NextResponse.json({ success: false, error, details }, { status: 500 });
+  if (details !== undefined) {
+    // Log the detail server-side only; never expose to client.
+    console.error("[serverError detail]", details);
+  }
+  return NextResponse.json({ success: false, error }, { status: 500 });
 }
 
 /**
  * Wraps a route handler to catch unhandled errors and return 500.
+ * Internal error messages are logged but never sent to the client.
  */
 export function withErrorHandler<T>(
   handler: () => Promise<NextResponse<T>>
 ): Promise<NextResponse<T | ApiError>> {
   return handler().catch((err: unknown) => {
     console.error("[API Error]", err);
-    const message =
-      err instanceof Error ? err.message : "Internal server error";
-    return serverError(message);
+    return serverError();
   });
 }
