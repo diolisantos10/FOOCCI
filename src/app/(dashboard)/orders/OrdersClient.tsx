@@ -130,26 +130,6 @@ function filterOrders(orders: MockOrder[], period: TimePeriod): MockOrder[] {
   return result.sort((a, b) => priorityScore(a) - priorityScore(b));
 }
 
-// ─── AlertBar ─────────────────────────────────────────────────
-
-function AlertBar({ orders }: { orders: MockOrder[] }) {
-  const pending = orders.filter((o) => o.status === "PENDING").length;
-  const delayed = orders.filter(isDelayed).length;
-
-  const parts: string[] = [];
-  if (pending > 0) parts.push(`${pending} aguardando confirmação`);
-  if (delayed > 0) parts.push(`${delayed} atrasado${delayed > 1 ? "s" : ""}`);
-
-  if (parts.length === 0) return null;
-
-  return (
-    <div className="flex shrink-0 items-center gap-2.5 border-b border-red-200 bg-red-50 px-4 py-2">
-      <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-red-500" />
-      <p className="text-sm font-medium text-red-700">{parts.join(" • ")}</p>
-    </div>
-  );
-}
-
 // ─── ControlsRow ──────────────────────────────────────────────
 
 function ControlsRow({
@@ -237,20 +217,23 @@ function KPIStrip({ orders }: { orders: MockOrder[] }) {
   const pctDelayed = active.length > 0 ? Math.round((delayed / active.length) * 100) : 0;
 
   return (
-    <div className="flex shrink-0 items-center gap-8 border-b border-[#E5E5E5] bg-white px-4 py-2">
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tempo médio</p>
-        <p className="text-xl font-bold leading-tight text-gray-800">22 min</p>
-      </div>
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Atrasados</p>
-        <p className={`text-xl font-bold leading-tight ${pctDelayed >= 20 ? "text-red-600" : "text-gray-800"}`}>
-          {pctDelayed}%
-        </p>
-      </div>
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total hoje</p>
-        <p className="text-xl font-bold leading-tight text-gray-800">{orders.length}</p>
+    <div className="shrink-0 border-b border-[#E5E5E5] bg-white px-4 py-3">
+      <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">Performance</p>
+      <div className="flex items-center gap-8">
+        <div>
+          <p className="text-[10px] font-medium text-gray-400">Tempo médio</p>
+          <p className="text-xl font-bold leading-tight text-gray-800">22 min</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-medium text-gray-400">Atrasados</p>
+          <p className={`text-xl font-bold leading-tight ${pctDelayed >= 20 ? "text-red-600" : "text-gray-800"}`}>
+            {pctDelayed}%
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] font-medium text-gray-400">Total hoje</p>
+          <p className="text-xl font-bold leading-tight text-gray-800">{orders.length}</p>
+        </div>
       </div>
     </div>
   );
@@ -657,9 +640,7 @@ export default function OrdersClient() {
   }
 
   return (
-    <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "calc(100vh - 56px)" }}>
-
-      <AlertBar orders={filtered} />
+    <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "100vh" }}>
 
       <ControlsRow
         period={period}
