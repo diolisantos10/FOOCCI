@@ -45,13 +45,14 @@ model Restaurant {
   offers           Offer[]
   customerSegments CustomerSegment[]
   aiLogs           AIInteractionLog[]
-  evolutionConfig  EvolutionConfig?
-  brandConfig      RestaurantBrandConfig?
-  agentConfig      WhatsAppAgentConfig?
-  deliveryConfig   DeliveryConfig?
-  businessHours    BusinessHours[]
-  paymentSettings  PaymentSettings?
-  storePolicies    StorePolicies?
+  evolutionConfig    EvolutionConfig?
+  brandConfig        RestaurantBrandConfig?
+  agentConfig        WhatsAppAgentConfig?
+  deliveryConfig     DeliveryConfig?
+  businessHours      BusinessHours[]
+  paymentSettings    PaymentSettings?
+  storePolicies      StorePolicies?
+  integrationConfigs IntegrationConfig[]
 
   @@map("restaurants")
 }
@@ -675,6 +676,32 @@ model EvolutionConfig {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("evolution_configs")
+}
+
+// ═══════════════════════════════════════════
+//  GENERIC INTEGRATION CONFIG
+//  Stores per-restaurant credentials for external integrations
+//  (Stone, Mercado Pago, Tipos, etc.).
+//  WhatsApp credentials live in EvolutionConfig above.
+//  configBlob is AES-256-GCM encrypted JSON containing all fields.
+// ═══════════════════════════════════════════
+
+model IntegrationConfig {
+  id           String    @id @default(cuid())
+  restaurantId String
+  provider     String    // "stone" | "mercadopago" | "tipos"
+  configBlob   String    // AES-256-GCM encrypted JSON
+  isActive     Boolean   @default(false)
+  lastTestedAt DateTime?
+  lastError    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, provider])
+  @@index([restaurantId])
+  @@map("integration_configs")
 }
 
 // ═══════════════════════════════════════════

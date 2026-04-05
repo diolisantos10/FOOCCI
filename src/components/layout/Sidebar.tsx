@@ -56,7 +56,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Plataforma",
     items: [
       { href: "/personalizacao",  label: "Personalização",  icon: "🎨",  exact: false, soon: true },
-      { href: "/integracoes",     label: "Integrações",     icon: "🔌",  exact: false, soon: true },
+      { href: "/integracoes",     label: "Integrações",     icon: "🔌",  exact: false },
     ],
   },
 ];

@@ -1,20 +1,19 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
+import { TopBar } from "@/components/layout/TopBar";
+import { IntegrationsCenterClient } from "./IntegrationsCenterClient";
 
-export const metadata = { title: "Integrações" };
+export const metadata = { title: "Integrações — Foocci" };
 
-export default function IntegracoesPage() {
+export default async function IntegracoesPage() {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+
   return (
-    <ComingSoon
-      icon="🔌"
-      title="Integrações"
-      description="Conecte o Foocci ao seu sistema de PDV, plataformas de delivery, gateways de pagamento e outras ferramentas do seu negócio."
-      features={[
-        "iFood e Rappi (importação de cardápio)",
-        "Mercado Pago e PagSeguro",
-        "PDVs via API",
-        "Google Meu Negócio",
-        "Webhooks e API pública",
-      ]}
-    />
+    <>
+      <TopBar title="Integrações" />
+      <IntegrationsCenterClient userRole={session.user.role} />
+    </>
   );
 }
