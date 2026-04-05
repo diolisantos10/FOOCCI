@@ -31,9 +31,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Vendas",
     items: [
-      { href: "/menu",          label: "Cardápio",  icon: "🍽",  exact: false },
-      { href: "/orders",        label: "Pedidos",   icon: "📋",  exact: false },
-      { href: "/conversations", label: "Conversas", icon: "💬",  exact: false },
+      { href: "/menu",          label: "Cardápio",     icon: "🍽",  exact: false },
+      { href: "/orders",        label: "Pedidos",      icon: "📋",  exact: false },
+      { href: "/atendimento",   label: "Atendimento",  icon: "🎧",  exact: false },
+      { href: "/conversations", label: "Conversas",    icon: "💬",  exact: false },
     ],
   },
   {
