@@ -31,6 +31,7 @@ type Props = {
   restaurant: { name: string; logoUrl: string | null };
   categories: Category[];
   featured: Item[];
+  promoBanner?: Item | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -159,6 +160,50 @@ function ProductModal({
   );
 }
 
+// ── Promo Banner ─────────────────────────────────────────────────────────────
+
+function PromoBanner({
+  item,
+  onClick,
+}: {
+  item: Item;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative w-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+    >
+      {item.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={item.imageUrl}
+          alt={item.name}
+          className="w-full h-52 object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <div className="w-full h-52 bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-7xl">
+          🍽️
+        </div>
+      )}
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+      {/* Text */}
+      <div className="absolute bottom-0 left-0 right-0 px-4 py-4 text-left">
+        <span className="mb-1.5 inline-block rounded-full bg-orange-500 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+          Promoção do dia
+        </span>
+        <p className="text-lg font-bold text-white leading-tight">{item.name}</p>
+        <p className="mt-0.5 text-sm font-bold text-orange-300">
+          R$&nbsp;{formatPrice(item.price)}
+        </p>
+      </div>
+    </button>
+  );
+}
+
 // ── Featured Carousel Card ────────────────────────────────────────────────────
 
 function FeaturedCard({
@@ -172,9 +217,9 @@ function FeaturedCard({
     <button
       type="button"
       onClick={onClick}
-      className="snap-start shrink-0 w-36 rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden text-left hover:shadow-md hover:border-orange-100 transition-all"
+      className="snap-start shrink-0 w-40 rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden text-left hover:shadow-md hover:border-orange-100 transition-all"
     >
-      <div className="h-28 bg-gray-100 overflow-hidden">
+      <div className="h-36 bg-gray-100 overflow-hidden">
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -221,7 +266,7 @@ function ProductCard({
       >
         <div className="flex gap-3 p-3">
           {/* Info */}
-          <div className="flex-1 min-w-0 flex flex-col justify-between min-h-[96px]">
+          <div className="flex-1 min-w-0 flex flex-col justify-between min-h-[128px]">
             <div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <p className="text-sm font-semibold text-gray-900 leading-tight">
@@ -240,18 +285,15 @@ function ProductCard({
               )}
             </div>
 
-            <div className="mt-3 flex items-center justify-between">
+            <div className="mt-3">
               <span className="text-base font-bold text-orange-500">
                 R$&nbsp;{formatPrice(item.price)}
-              </span>
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500 text-lg font-bold text-white shadow-sm">
-                +
               </span>
             </div>
           </div>
 
           {/* Thumbnail */}
-          <div className="shrink-0 w-24 h-24 rounded-xl overflow-hidden bg-gray-100">
+          <div className="shrink-0 w-32 h-32 rounded-xl overflow-hidden bg-gray-100">
             {item.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -274,7 +316,7 @@ function ProductCard({
 
 // ── Main Client Component ─────────────────────────────────────────────────────
 
-export function QRMenuClient({ restaurant, categories, featured }: Props) {
+export function QRMenuClient({ restaurant, categories, featured, promoBanner }: Props) {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>(
     categories[0]?.id ?? ""
@@ -349,11 +391,21 @@ export function QRMenuClient({ restaurant, categories, featured }: Props) {
             <p className="mt-1 text-xs text-gray-400">Cardápio digital</p>
           </div>
 
+          {/* Promo banner */}
+          {promoBanner && (
+            <div className="mx-auto max-w-2xl px-4 pb-5">
+              <PromoBanner
+                item={promoBanner}
+                onClick={() => setSelectedItem(promoBanner)}
+              />
+            </div>
+          )}
+
           {/* Featured carousel */}
           {featured.length > 0 && (
-            <div className="mx-auto max-w-2xl px-4 pb-5">
+            <div className="mx-auto max-w-2xl px-4 pb-6">
               <p className="mb-3 text-sm font-bold text-gray-700">
-                ⭐ Os mais pedidos hoje
+                ⭐ Mais pedidos
               </p>
               <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-hide">
                 {featured.map((item) => (
@@ -366,36 +418,6 @@ export function QRMenuClient({ restaurant, categories, featured }: Props) {
               </div>
             </div>
           )}
-
-          {/* Quick action buttons */}
-          <div className="mx-auto max-w-2xl px-4 pb-6 flex flex-wrap justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => categories[0] && scrollToCategory(categories[0].id)}
-              className="rounded-full bg-orange-500 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-orange-600 transition-colors"
-            >
-              Ver cardápio
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                heroRef.current?.scrollIntoView({ behavior: "smooth" })
-              }
-              className="rounded-full border border-orange-200 bg-orange-50 px-5 py-2 text-sm font-bold text-orange-600 hover:bg-orange-100 transition-colors"
-            >
-              Mais pedidos
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const last = categories[categories.length - 1];
-                if (last) scrollToCategory(last.id);
-              }}
-              className="rounded-full border border-gray-200 bg-white px-5 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              Promoções
-            </button>
-          </div>
         </div>
 
         {/* ── STICKY CATEGORY NAV ───────────────────────────────── */}

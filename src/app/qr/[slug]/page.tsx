@@ -84,14 +84,26 @@ export default async function QRMenuPage({
       })),
     }));
 
-  // Featured: first 8 items across all categories for the hero carousel
-  const featured = categories.flatMap((c) => c.items).slice(0, 8);
+  // Promotions category surfaces first if present
+  const isPromo = (name: string) => name.toLowerCase().includes("promo");
+  const sortedCategories = [
+    ...categories.filter((c) => isPromo(c.name)),
+    ...categories.filter((c) => !isPromo(c.name)),
+  ];
+
+  // Promo banner: first item of the first promotions category
+  const promoCategory = sortedCategories.find((c) => isPromo(c.name));
+  const promoBanner = promoCategory?.items[0] ?? null;
+
+  // Best sellers: first 8 items across all categories
+  const featured = sortedCategories.flatMap((c) => c.items).slice(0, 8);
 
   return (
     <QRMenuClient
       restaurant={{ name: restaurant.name, logoUrl: restaurant.logoUrl ?? null }}
-      categories={categories}
+      categories={sortedCategories}
       featured={featured}
+      promoBanner={promoBanner}
     />
   );
 }
