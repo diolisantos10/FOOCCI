@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, FormEvent } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,6 +28,7 @@ type Category = {
 };
 
 type Props = {
+  slug: string;
   restaurant: { name: string; logoUrl: string | null };
   categories: Category[];
   featured: Item[];
@@ -41,6 +42,103 @@ function formatPrice(n: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+// ── Welcome / CRM Identify Block ──────────────────────────────────────────────
+
+type WelcomePhase = "form" | "loading" | "done";
+
+function WelcomeBlock({
+  slug,
+  restaurantName,
+}: {
+  slug: string;
+  restaurantName: string;
+}) {
+  const [phase, setPhase] = useState<WelcomePhase>("form");
+  const [phone, setPhone] = useState("");
+  const [greeting, setGreeting] = useState("");
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!phone.trim() || phase === "loading") return;
+    setPhase("loading");
+
+    try {
+      const res = await fetch(`/api/qr/${slug}/identify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const data: { found: boolean; name?: string } = await res.json();
+      setGreeting(data.found && data.name ? `Olá, ${data.name}! 👋` : "Bem-vindo! 👋");
+    } catch {
+      setGreeting("Bem-vindo! 👋");
+    }
+
+    setPhase("done");
+  }
+
+  // ── Greeting chip (after identification) ────────────────────────────────────
+  if (phase === "done") {
+    return (
+      <div className="mx-auto max-w-2xl px-4 pb-4">
+        <div className="flex items-center justify-between rounded-full bg-orange-50 border border-orange-100 px-4 py-2.5">
+          <span className="text-sm font-semibold text-orange-700">{greeting}</span>
+          <button
+            type="button"
+            onClick={() => setDismissed(true)}
+            className="ml-3 text-orange-300 hover:text-orange-500 transition-colors text-xs leading-none"
+            aria-label="Fechar"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Identification form ──────────────────────────────────────────────────────
+  return (
+    <div className="mx-auto max-w-2xl px-4 pb-4">
+      <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+        <p className="text-sm font-semibold text-gray-800">
+          Bem-vindo ao {restaurantName}! 👋
+        </p>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Informe seu número para uma experiência personalizada.
+        </p>
+        <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
+          <input
+            type="tel"
+            inputMode="numeric"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="(11) 99999-9999"
+            disabled={phase === "loading"}
+            className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={phase === "loading" || !phone.trim()}
+            className="shrink-0 rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-orange-600 disabled:opacity-50"
+          >
+            {phase === "loading" ? "..." : "Entrar"}
+          </button>
+        </form>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          className="mt-2.5 text-xs text-gray-400 transition-colors hover:text-gray-600"
+        >
+          Pular
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ── Product Modal ─────────────────────────────────────────────────────────────
@@ -316,7 +414,7 @@ function ProductCard({
 
 // ── Main Client Component ─────────────────────────────────────────────────────
 
-export function QRMenuClient({ restaurant, categories, featured, promoBanner }: Props) {
+export function QRMenuClient({ slug, restaurant, categories, featured, promoBanner }: Props) {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>(
     categories[0]?.id ?? ""
@@ -390,6 +488,9 @@ export function QRMenuClient({ restaurant, categories, featured, promoBanner }: 
             <h1 className="text-2xl font-bold text-gray-900">{restaurant.name}</h1>
             <p className="mt-1 text-xs text-gray-400">Cardápio digital</p>
           </div>
+
+          {/* CRM soft capture */}
+          <WelcomeBlock slug={slug} restaurantName={restaurant.name} />
 
           {/* Promo banner */}
           {promoBanner && (

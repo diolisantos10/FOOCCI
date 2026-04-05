@@ -100,6 +100,7 @@ export default async function QRMenuPage({
 
   return (
     <QRMenuClient
+      slug={params.slug}
       restaurant={{ name: restaurant.name, logoUrl: restaurant.logoUrl ?? null }}
       categories={sortedCategories}
       featured={featured}
