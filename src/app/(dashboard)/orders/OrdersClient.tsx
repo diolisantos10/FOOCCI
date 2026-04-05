@@ -589,6 +589,65 @@ function OrderListPane({
   );
 }
 
+// ─── StatusTimeline ───────────────────────────────────────────
+
+const FLOW_ALL: Array<{ status: OrderStatus; label: string }> = [
+  { status: "PENDING",          label: "Novo"        },
+  { status: "CONFIRMED",        label: "Confirmado"  },
+  { status: "PREPARING",        label: "Preparando"  },
+  { status: "READY",            label: "Pronto"      },
+  { status: "OUT_FOR_DELIVERY", label: "Saiu"        },
+  { status: "DELIVERED",        label: "Entregue"    },
+];
+
+const STATUS_ORDER: OrderStatus[] = [
+  "PENDING","CONFIRMED","PREPARING","READY","OUT_FOR_DELIVERY","DELIVERED","CANCELLED",
+];
+
+function StatusTimeline({ order }: { order: MockOrder }) {
+  const flow = order.type === "DELIVERY"
+    ? FLOW_ALL
+    : FLOW_ALL.filter((s) => s.status !== "OUT_FOR_DELIVERY");
+
+  const currentIdx = STATUS_ORDER.indexOf(order.status);
+
+  return (
+    <div className="flex items-start">
+      {flow.map((step, i) => {
+        const stepIdx = STATUS_ORDER.indexOf(step.status);
+        const done    = stepIdx < currentIdx;
+        const current = step.status === order.status;
+        const isLast  = i === flow.length - 1;
+
+        return (
+          <div key={step.status} className="flex flex-1 flex-col items-center">
+            {/* Connector + dot row */}
+            <div className="flex w-full items-center">
+              <div className={`h-px flex-1 transition-colors ${i === 0 ? "invisible" : done || current ? "bg-orange-400" : "bg-gray-200"}`} />
+              <div className={`h-4 w-4 shrink-0 rounded-full flex items-center justify-center text-[9px] font-bold transition-colors
+                ${done    ? "bg-orange-500 text-white"
+                : current ? "border-2 border-orange-500 bg-white"
+                :           "bg-gray-200"}`}
+              >
+                {done && "✓"}
+              </div>
+              <div className={`h-px flex-1 transition-colors ${isLast ? "invisible" : done ? "bg-orange-400" : "bg-gray-200"}`} />
+            </div>
+            {/* Label */}
+            <p className={`mt-1 text-center text-[9px] leading-tight ${
+              current ? "font-bold text-orange-600"
+              : done   ? "text-gray-500"
+              :          "text-gray-300"
+            }`}>
+              {step.label}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── DetailPanel (Order Ticket) ───────────────────────────────
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -646,6 +705,11 @@ function DetailPanel({
             <path d="M4 4l8 8M12 4l-8 8" />
           </svg>
         </button>
+      </div>
+
+      {/* Status timeline */}
+      <div className="border-b border-[#E5E5E5] px-5 py-3">
+        <StatusTimeline order={order} />
       </div>
 
       {/* Scrollable body */}
@@ -825,7 +889,7 @@ export default function OrdersClient() {
   }
 
   return (
-    <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "100vh" }}>
+    <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "calc(100vh - 56px)" }}>
 
       <PerformanceBar orders={orders} />
 
