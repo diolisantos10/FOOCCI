@@ -13,7 +13,6 @@ type OrderStatus =
   | "DELIVERED"
   | "CANCELLED";
 
-type TimePeriod = "now" | "30min" | "1h" | "today" | "peak";
 type StatusFilter = "PENDING" | "PREPARING" | "READY" | "DELAYED" | null;
 
 interface OrderItem {
@@ -28,7 +27,7 @@ interface MockOrder {
   customer: string;
   total: number;
   status: OrderStatus;
-  type: "DELIVERY" | "PICKUP";
+  type: "DELIVERY" | "PICKUP" | "TABLE";
   createdAt: Date;
   itemCount: number;
   payment: string;
@@ -40,13 +39,6 @@ interface MockOrder {
 
 const DELAY_THRESHOLD = 20;
 
-const PERIOD_OPTIONS: Array<{ id: TimePeriod; label: string }> = [
-  { id: "now",   label: "Agora"       },
-  { id: "30min", label: "Últ. 30min" },
-  { id: "1h",    label: "1h"         },
-  { id: "today", label: "Hoje"       },
-  { id: "peak",  label: "🔥 Pico"    },
-];
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; border: string; badge: string }> = {
   PENDING:          { label: "Novo",       border: "border-l-amber-400",  badge: "bg-amber-100 text-amber-800"   },
@@ -94,8 +86,8 @@ const INITIAL_ORDERS: MockOrder[] = [
   },
   {
     id: "o4", num: 4, customer: "Carlos Mendes", total: 38.50, status: "PENDING",
-    type: "PICKUP", createdAt: ago(2), itemCount: 1, payment: "Dinheiro",
-    address: "Retirada no local",
+    type: "TABLE", createdAt: ago(2), itemCount: 1, payment: "Dinheiro",
+    address: "Mesa 4",
     items: [{ name: "Marmita Fitness", qty: 1, price: 38.50 }],
   },
   {
@@ -112,8 +104,8 @@ const INITIAL_ORDERS: MockOrder[] = [
   },
   {
     id: "o7", num: 7, customer: "Patrícia Souza", total: 55.00, status: "READY",
-    type: "PICKUP", createdAt: ago(18), itemCount: 3, payment: "PIX",
-    address: "Retirada no local",
+    type: "TABLE", createdAt: ago(18), itemCount: 3, payment: "PIX",
+    address: "Mesa 7",
     items: [{ name: "Bowl Açaí 500ml", qty: 1, price: 28.00 }, { name: "Granola Extra", qty: 1, price: 8.00 }, { name: "Suco de Laranja", qty: 1, price: 10.00 }, { name: "Tapioca Recheada", qty: 1, price: 9.00 }],
   },
   {
@@ -162,46 +154,56 @@ function priorityScore(order: MockOrder): number {
   return scores[order.status];
 }
 
-function filterOrders(orders: MockOrder[], period: TimePeriod): MockOrder[] {
-  const cutoffs: Record<TimePeriod, number | null> = {
-    now: 15, "30min": 30, "1h": 60, today: null, peak: null,
-  };
-  let result = [...orders];
 
-  if (period === "peak") {
-    result = result.filter((o) => !TERMINAL.includes(o.status));
-  } else {
-    const mins = cutoffs[period];
-    if (mins !== null) result = result.filter((o) => minutesSince(o.createdAt) <= mins);
-  }
+// ─── SearchBar ────────────────────────────────────────────────
 
-  return result.sort((a, b) => priorityScore(a) - priorityScore(b));
-}
-
-// ─── PeriodRow ────────────────────────────────────────────────
-
-function PeriodRow({
-  period,
-  onPeriodChange,
+function SearchBar({
+  searchQuery,
+  dateFrom,
+  dateTo,
+  onSearchChange,
+  onDateFromChange,
+  onDateToChange,
+  onClear,
 }: {
-  period: TimePeriod;
-  onPeriodChange: (p: TimePeriod) => void;
+  searchQuery: string;
+  dateFrom: string;
+  dateTo: string;
+  onSearchChange: (v: string) => void;
+  onDateFromChange: (v: string) => void;
+  onDateToChange: (v: string) => void;
+  onClear: () => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-1 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
-      {PERIOD_OPTIONS.map((opt) => (
-        <button
-          key={opt.id}
-          onClick={() => onPeriodChange(opt.id)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
-            period === opt.id
-              ? "bg-orange-500 text-white shadow-sm"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="flex shrink-0 items-center gap-2 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
+      <input
+        type="date"
+        value={dateFrom}
+        onChange={(e) => onDateFromChange(e.target.value)}
+        className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-shadow"
+      />
+      <input
+        type="date"
+        value={dateTo}
+        onChange={(e) => onDateToChange(e.target.value)}
+        className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-shadow"
+      />
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => onSearchChange(e.target.value)}
+        placeholder="Busque por cliente, pedido, telefone, email..."
+        className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-shadow"
+      />
+      <button className="shrink-0 rounded-lg bg-orange-500 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600">
+        Filtrar
+      </button>
+      <button
+        onClick={onClear}
+        className="shrink-0 rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50"
+      >
+        Limpar filtro
+      </button>
     </div>
   );
 }
@@ -253,31 +255,62 @@ function StatusRow({
   );
 }
 
-// ─── KPIStrip ─────────────────────────────────────────────────
+// ─── PerformanceBar ───────────────────────────────────────────
 
-function KPIStrip({ orders }: { orders: MockOrder[] }) {
+function PerformanceBar({ orders }: { orders: MockOrder[] }) {
   const active     = orders.filter((o) => !TERMINAL.includes(o.status));
   const delayed    = orders.filter(isDelayed).length;
   const pctDelayed = active.length > 0 ? Math.round((delayed / active.length) * 100) : 0;
 
+  const delivery = orders.filter((o) => o.type === "DELIVERY").length;
+  const pickup   = orders.filter((o) => o.type === "PICKUP").length;
+  const table    = orders.filter((o) => o.type === "TABLE").length;
+
   return (
-    <div className="shrink-0 border-b border-[#E5E5E5] bg-white px-4 py-3">
-      <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">Performance</p>
-      <div className="flex items-center gap-8">
-        <div>
-          <p className="text-[10px] font-medium text-gray-400">Tempo médio</p>
-          <p className="text-xl font-bold leading-tight text-gray-800">22 min</p>
+    <div className="flex shrink-0 items-center gap-6 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
+      {/* Label */}
+      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 shrink-0">
+        Performance
+      </span>
+
+      {/* KPIs */}
+      <div className="flex items-center gap-6">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[10px] font-medium text-gray-400">Tempo médio</span>
+          <span className="text-sm font-bold text-gray-800">22 min</span>
         </div>
-        <div>
-          <p className="text-[10px] font-medium text-gray-400">Atrasados</p>
-          <p className={`text-xl font-bold leading-tight ${pctDelayed >= 20 ? "text-red-600" : "text-gray-800"}`}>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[10px] font-medium text-gray-400">Atrasados</span>
+          <span className={`text-sm font-bold ${pctDelayed >= 20 ? "text-red-600" : "text-gray-800"}`}>
             {pctDelayed}%
-          </p>
+          </span>
         </div>
-        <div>
-          <p className="text-[10px] font-medium text-gray-400">Total hoje</p>
-          <p className="text-xl font-bold leading-tight text-gray-800">{orders.length}</p>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[10px] font-medium text-gray-400">Total hoje</span>
+          <span className="text-sm font-bold text-gray-800">{orders.length}</span>
         </div>
+      </div>
+
+      {/* Divider */}
+      <div className="h-5 w-px bg-gray-200 shrink-0" />
+
+      {/* Modalidades */}
+      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 shrink-0">
+        Modalidades
+      </span>
+      <div className="flex items-center gap-2">
+        {[
+          { label: "Delivery",  count: delivery },
+          { label: "Retirada",  count: pickup   },
+          { label: "Mesa",      count: table    },
+        ].map(({ label, count }) => (
+          <span key={label} className="flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+            {label}
+            <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold leading-none text-gray-500">
+              {count}
+            </span>
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -354,7 +387,7 @@ function OrderCard({
         <p className="mt-0.5 text-xs text-gray-400">
           {order.itemCount} {order.itemCount === 1 ? "item" : "itens"}
           {" · "}
-          {order.type === "DELIVERY" ? "Delivery" : "Retirada"}
+          {order.type === "DELIVERY" ? "Delivery" : order.type === "TABLE" ? "Mesa" : "Retirada"}
           {" · "}
           {order.payment}
         </p>
@@ -570,10 +603,12 @@ function DetailPanel({
 
 export default function OrdersClient() {
   const [orders,       setOrders]       = useState<MockOrder[]>(INITIAL_ORDERS);
-  const [period,       setPeriod]       = useState<TimePeriod>("30min");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [checkedIds,   setCheckedIds]   = useState<Set<string>>(new Set());
+  const [searchQuery,  setSearchQuery]  = useState("");
+  const [dateFrom,     setDateFrom]     = useState("");
+  const [dateTo,       setDateTo]       = useState("");
   const [,             setTick]         = useState(0);
 
   useEffect(() => {
@@ -581,12 +616,23 @@ export default function OrdersClient() {
     return () => clearInterval(id);
   }, []);
 
-  const filtered  = useMemo(() => filterOrders(orders, period), [orders, period]);
+  const filtered  = useMemo(
+    () => [...orders].sort((a, b) => priorityScore(a) - priorityScore(b)),
+    [orders]
+  );
   const displayed = useMemo(() => {
-    if (!statusFilter) return filtered;
-    if (statusFilter === "DELAYED") return filtered.filter(isDelayed);
-    return filtered.filter((o) => o.status === statusFilter);
-  }, [filtered, statusFilter]);
+    let result = filtered;
+    if (statusFilter === "DELAYED") result = result.filter(isDelayed);
+    else if (statusFilter) result = result.filter((o) => o.status === statusFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((o) =>
+        o.customer.toLowerCase().includes(q) ||
+        String(o.num).includes(q)
+      );
+    }
+    return result;
+  }, [filtered, statusFilter, searchQuery]);
   const selectedOrder = orders.find((o) => o.id === selectedId) ?? null;
 
   function handleAction(id: string, next: OrderStatus) {
@@ -627,9 +673,17 @@ export default function OrdersClient() {
   return (
     <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "100vh" }}>
 
-      <KPIStrip orders={filtered} />
+      <PerformanceBar orders={orders} />
 
-      <PeriodRow period={period} onPeriodChange={setPeriod} />
+      <SearchBar
+        searchQuery={searchQuery}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onSearchChange={setSearchQuery}
+        onDateFromChange={setDateFrom}
+        onDateToChange={setDateTo}
+        onClear={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); }}
+      />
 
       <StatusRow
         orders={filtered}
