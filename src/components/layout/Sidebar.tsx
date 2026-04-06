@@ -8,11 +8,16 @@ import { useSidebar } from "./SidebarContext";
 // ── Nav structure ──────────────────────────────────────────────────────────────
 
 type NavItem = {
-  href:   string;
-  label:  string;
-  icon:   string;
-  exact?: boolean;
-  soon?:  boolean;
+  href:    string;
+  label:   string;
+  icon:    string;
+  exact?:  boolean;
+  soon?:   boolean;
+  /**
+   * Subpath prefixes that should NOT trigger this item's active state.
+   * Useful when a more specific sidebar item handles that subpath.
+   */
+  ignoreSubpaths?: string[];
 };
 
 type NavGroup = {
@@ -29,19 +34,13 @@ const HOME_ITEM: NavItem = {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Vendas",
+    label: "Principal",
     items: [
-      { href: "/menu",          label: "Cardápio",    icon: "🍽",  exact: false },
       { href: "/orders",        label: "Pedidos",     icon: "📋",  exact: false },
       { href: "/atendimento",   label: "Atendimento", icon: "🎧",  exact: false },
       { href: "/conversations", label: "Conversas",   icon: "💬",  exact: false },
-    ],
-  },
-  {
-    label: "Operação",
-    items: [
-      { href: "/settings",  label: "Configurações",  icon: "⚙️",  exact: false },
-      { href: "/chat-sim",  label: "Testar IA",      icon: "🧪",  exact: false },
+      { href: "/menu",          label: "Cardápio",    icon: "🍽",  exact: false },
+      { href: "/settings/agent", label: "Agente IA",  icon: "🤖",  exact: false },
     ],
   },
   {
@@ -55,8 +54,17 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Plataforma",
     items: [
-      { href: "/personalizacao",  label: "Personalização",  icon: "🎨",  exact: false, soon: true },
-      { href: "/integracoes",     label: "Integrações",     icon: "🔌",  exact: false },
+      {
+        href:            "/settings",
+        label:           "Configurações",
+        icon:            "⚙️",
+        exact:           false,
+        // Don't highlight "Configurações" when the user is on the Agente IA page
+        ignoreSubpaths:  ["/settings/agent"],
+      },
+      { href: "/integracoes",    label: "Integrações",    icon: "🔌",  exact: false },
+      { href: "/chat-sim",       label: "Testar IA",      icon: "🧪",  exact: false },
+      { href: "/personalizacao", label: "Personalização", icon: "🎨",  exact: false, soon: true },
     ],
   },
 ];
@@ -67,6 +75,13 @@ export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const { open, close } = useSidebar();
+
+  function isActive(item: NavItem): boolean {
+    if (item.exact) return pathname === item.href;
+    if (!pathname.startsWith(item.href)) return false;
+    if (item.ignoreSubpaths?.some((p) => pathname.startsWith(p))) return false;
+    return true;
+  }
 
   return (
     <>
@@ -117,13 +132,13 @@ export function Sidebar() {
           {/* Standalone home item */}
           <div className="mb-3">
             {(() => {
-              const isActive = pathname === HOME_ITEM.href;
+              const active = pathname === HOME_ITEM.href;
               return (
                 <Link
                   href={HOME_ITEM.href}
                   onClick={close}
                   className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors ${
-                    isActive
+                    active
                       ? "bg-brand-50 text-brand-600"
                       : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                   }`}
@@ -144,9 +159,7 @@ export function Sidebar() {
                 </p>
                 <ul className="space-y-0.5">
                   {group.items.map((item) => {
-                    const isActive = item.exact
-                      ? pathname === item.href
-                      : pathname.startsWith(item.href);
+                    const active = isActive(item);
 
                     return (
                       <li key={item.href}>
@@ -154,7 +167,7 @@ export function Sidebar() {
                           href={item.href}
                           onClick={close}
                           className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors ${
-                            isActive
+                            active
                               ? "bg-brand-50 font-semibold text-brand-600"
                               : item.soon
                                 ? "text-gray-400 hover:bg-gray-50 hover:text-gray-500"

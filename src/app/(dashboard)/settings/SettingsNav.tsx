@@ -26,10 +26,9 @@ const GROUPS: Group[] = [
     ],
   },
   {
-    title: "Marca & IA",
+    title: "Marca",
     items: [
       { href: "/settings/experience", label: "Experiência", icon: "✨" },
-      { href: "/settings/agent",      label: "Agente WA",   icon: "🤖" },
     ],
   },
   {

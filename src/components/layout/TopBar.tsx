@@ -12,6 +12,7 @@ const TYPE_ICON: Record<NotifType, string> = {
   atendimento: "💬",
   pedido:      "📋",
   pagamento:   "💳",
+  integracao:  "🔌",
   sistema:     "⚙️",
 };
 
@@ -19,6 +20,7 @@ const TYPE_LABEL: Record<NotifType, string> = {
   atendimento: "Atendimento",
   pedido:      "Pedido",
   pagamento:   "Pagamento",
+  integracao:  "Integração",
   sistema:     "Sistema",
 };
 
@@ -26,12 +28,13 @@ const TYPE_LABEL_COLOR: Record<NotifType, string> = {
   atendimento: "text-blue-600",
   pedido:      "text-orange-600",
   pagamento:   "text-purple-600",
+  integracao:  "text-teal-600",
   sistema:     "text-gray-500",
 };
 
 // Left border colors by priority
 const PRIORITY_BORDER: Record<NotifPriority, string> = {
-  urgent:    "border-l-red-500",
+  critical:  "border-l-red-500",
   important: "border-l-orange-400",
   normal:    "border-l-gray-200",
 };
@@ -131,6 +134,9 @@ export function TopBar({ title }: TopBarProps) {
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const unreadCount = notifs.filter((n) => !readIds.has(n.id)).length;
+  const hasCritical = notifs.some(
+    (n) => n.priority === "critical" && !readIds.has(n.id)
+  );
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function markRead(id: string) {
@@ -198,7 +204,11 @@ export function TopBar({ title }: TopBarProps) {
           >
             🔔
             {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
+              <span
+                className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none text-white ${
+                  hasCritical ? "bg-red-500" : "bg-orange-400"
+                }`}
+              >
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
@@ -217,7 +227,13 @@ export function TopBar({ title }: TopBarProps) {
                     Notificações
                   </span>
                   {unreadCount > 0 && (
-                    <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                        hasCritical
+                          ? "bg-red-100 text-red-600"
+                          : "bg-orange-100 text-orange-600"
+                      }`}
+                    >
                       {unreadCount} nova{unreadCount !== 1 ? "s" : ""}
                     </span>
                   )}
@@ -288,9 +304,9 @@ export function TopBar({ title }: TopBarProps) {
                                   >
                                     {TYPE_LABEL[notif.type]}
                                   </span>
-                                  {notif.priority === "urgent" && (
+                                  {notif.priority === "critical" && (
                                     <span className="text-[10px] font-bold uppercase tracking-wide text-red-600">
-                                      urgente
+                                      crítico
                                     </span>
                                   )}
                                   <span className="ml-auto text-[10px] text-gray-400">
@@ -306,22 +322,6 @@ export function TopBar({ title }: TopBarProps) {
                   </ul>
                 )}
               </div>
-
-              {/* Panel footer */}
-              {notifs.length > 0 && (
-                <div className="border-t border-gray-100 px-4 py-2.5 text-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpen(false);
-                      router.push("/atendimento");
-                    }}
-                    className="text-xs font-medium text-gray-400 transition-colors hover:text-gray-600"
-                  >
-                    Ver central de atendimento →
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>
