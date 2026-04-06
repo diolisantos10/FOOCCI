@@ -15,13 +15,50 @@ export type UpsertStoreInput = z.infer<typeof upsertStoreSchema>;
 // ── Delivery ───────────────────────────────────────────────────────────────────
 
 export const upsertDeliverySchema = z.object({
+  // Global toggles
   enabled:          z.boolean().default(true),
+  pickupEnabled:    z.boolean().default(true),
+
+  // UI mode
+  mode:             z.enum(["simple", "advanced"]).default("simple"),
+
+  // Simple-mode flat config
   fee:              z.number().min(0).nullable().optional(),
   estimatedMinutes: z.number().int().min(1).max(300).nullable().optional(),
   areaDescription:  z.string().max(500).nullable().optional(),
+
+  // Commercial rules
+  minOrderValue:      z.number().min(0).nullable().optional(),
+  freeDeliveryAbove:  z.number().min(0).nullable().optional(),
+
+  // Phase 3 hooks (accepted but not enforced)
+  peakHoursEnabled: z.boolean().default(false),
+  peakHoursConfig:  z.string().nullable().optional(),
+
+  // Phase 5 geo hooks
+  geoCenter:   z.string().nullable().optional(), // JSON string
+  geoRadiusKm: z.number().min(0).nullable().optional(),
 });
 
 export type UpsertDeliveryInput = z.infer<typeof upsertDeliverySchema>;
+
+// ── Delivery Zone ──────────────────────────────────────────────────────────────
+
+export const upsertDeliveryZoneSchema = z.object({
+  name:             z.string().min(1).max(100),
+  sortOrder:        z.number().int().min(0).optional(),
+  maxDistanceKm:    z.number().min(0.1).max(500),
+  fee:              z.number().min(0),
+  estimatedMinutes: z.number().int().min(1).max(300),
+  minOrderValue:    z.number().min(0).nullable().optional(),
+  isActive:         z.boolean().default(true),
+  // Phase 3 hook
+  peakFee:          z.number().min(0).nullable().optional(),
+  // Phase 5 hook
+  geoPolygon:       z.string().nullable().optional(),
+});
+
+export type UpsertDeliveryZoneInput = z.infer<typeof upsertDeliveryZoneSchema>;
 
 // ── Business hours ─────────────────────────────────────────────────────────────
 

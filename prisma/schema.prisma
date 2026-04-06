@@ -49,6 +49,7 @@ model Restaurant {
   brandConfig        RestaurantBrandConfig?
   agentConfig        WhatsAppAgentConfig?
   deliveryConfig     DeliveryConfig?
+  deliveryZones      DeliveryZone[]
   businessHours      BusinessHours[]
   paymentSettings    PaymentSettings?
   storePolicies      StorePolicies?
@@ -830,16 +831,69 @@ model MediaUpload {
 model DeliveryConfig {
   id               String   @id @default(cuid())
   restaurantId     String   @unique
+
+  // Global toggles
   enabled          Boolean  @default(true)
+  pickupEnabled    Boolean  @default(true)
+
+  // UI mode — "simple" uses flat fee; "advanced" delegates to DeliveryZone
+  mode             String   @default("simple")
+
+  // Simple-mode fields
   fee              Decimal? @db.Decimal(10, 2)
   estimatedMinutes Int?
   areaDescription  String?
+
+  // Commercial rules (apply in both modes)
+  minOrderValue    Decimal? @db.Decimal(10, 2)
+  freeDeliveryAbove Decimal? @db.Decimal(10, 2) // free delivery above this order value
+
+  // Phase 3 — dynamic pricing hooks (not yet active)
+  peakHoursEnabled Boolean  @default(false)
+  peakHoursConfig  String?  // JSON blob: [{ days, startTime, endTime, surchargePercent }]
+
+  // Phase 5 — map-ready geographic anchor
+  geoCenter        String?  // JSON: { lat: number, lng: number }
+  geoRadiusKm      Float?   // max delivery radius in km
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("delivery_configs")
+}
+
+// ── Delivery Zones (advanced mode) ─────────────────────────────────────────────
+//  Each zone represents a distance tier with its own fee and estimated time.
+//  Phase 3: peakFee field for future time-based surcharge.
+//  Phase 5: geoPolygon field for future map-drawn boundaries.
+
+model DeliveryZone {
+  id               String   @id @default(cuid())
+  restaurantId     String
+
+  name             String   // e.g. "Zona 1 — Centro", "Raio 5km"
+  sortOrder        Int      @default(0)
+  maxDistanceKm    Float    // upper bound for this tier (km)
+  fee              Decimal  @db.Decimal(10, 2)
+  estimatedMinutes Int
+  minOrderValue    Decimal? @db.Decimal(10, 2) // zone-level minimum (overrides global)
+  isActive         Boolean  @default(true)
+
+  // Phase 3 — time-based pricing hook
+  peakFee          Decimal? @db.Decimal(10, 2) // future: surge fee during peak hours
+
+  // Phase 5 — map-ready boundary
+  geoPolygon       String?  // future: JSON polygon [[lat,lng], …]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, sortOrder])
+  @@map("delivery_zones")
 }
 
 model BusinessHours {
