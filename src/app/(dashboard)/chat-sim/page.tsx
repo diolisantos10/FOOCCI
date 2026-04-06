@@ -28,6 +28,7 @@ import type { QAScenario, QAAction } from "@/lib/qa/types";
 import { allScenarios } from "@/lib/qa/scenarios";
 import { CRITICAL_SCENARIO_IDS } from "@/lib/qa/critical-scenarios";
 import { QAPanel } from "./QAPanel";
+import { ExternalTestPanel } from "./ExternalTestPanel";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -812,6 +813,7 @@ function useCartState() {
 function useMenuState() {
   const [menu, setMenu] = useState<MenuCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [slug, setSlug] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/chat-sim")
@@ -819,6 +821,7 @@ function useMenuState() {
       .then((data) => {
         const raw: MenuCategory[] = data?.data?.categories ?? [];
         setMenu(raw);
+        setSlug(data?.data?.slug ?? null);
         const first = raw[0];
         if (first) setSelectedCategoryId(first.id);
       })
@@ -845,14 +848,14 @@ function useMenuState() {
     [menu],
   );
 
-  return { menu, categories, products, selectedCategoryId, setSelectedCategoryId };
+  return { menu, categories, products, selectedCategoryId, setSelectedCategoryId, slug };
 }
 
 // ─── Main page ────────────────────────────────────────────────
 
 export default function ChatSimPage() {
   // ── Menu ────────────────────────────────────────────────────
-  const { menu, categories, products, selectedCategoryId, setSelectedCategoryId } = useMenuState();
+  const { menu, categories, products, selectedCategoryId, setSelectedCategoryId, slug } = useMenuState();
 
   // ── Chat ────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1544,8 +1547,8 @@ export default function ChatSimPage() {
 
       {/* ── Content area ───────────────────────────────────── */}
       <div
-        className={`flex flex-1 gap-4 overflow-hidden p-4 ${
-          appMode === "human" ? "items-center justify-center" : ""
+        className={`flex flex-1 gap-6 overflow-auto p-4 ${
+          appMode === "human" ? "items-start justify-center" : ""
         }`}
       >
 
@@ -1776,6 +1779,11 @@ export default function ChatSimPage() {
       </div>
 
       </div> {/* phone frame wrapper */}
+
+      {/* ── External test panel — human mode only ──────────── */}
+      {appMode === "human" && (
+        <ExternalTestPanel slug={slug} viewMode={viewMode} />
+      )}
 
       {/* ── QA Panel — automatic mode only ─────────────────── */}
       {appMode === "automatic" && (
