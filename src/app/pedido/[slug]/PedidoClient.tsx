@@ -177,6 +177,7 @@ function TypingIndicator() {
 }
 
 // ── Product card ──────────────────────────────────────────────────────────────
+// Thumbnail — image + name + price + add. No description (tap to expand).
 
 function ProductCard({
   item,
@@ -190,40 +191,39 @@ function ProductCard({
   onOpen: () => void;
 }) {
   return (
-    <div className="relative flex shrink-0 flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-      {item.imageUrl ? (
-        <button onClick={onOpen} className="block h-28 w-full overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
-        </button>
-      ) : (
-        <div className="flex h-20 w-full items-center justify-center bg-gray-50 text-3xl">
-          {categoryEmoji(item.name)}
-        </div>
-      )}
-      <div className="flex flex-1 flex-col gap-1 p-3">
+    <div className="relative flex shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <button onClick={onOpen} className="block overflow-hidden">
+        {item.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.imageUrl} alt={item.name} className="h-32 w-full object-cover" />
+        ) : (
+          <div className="flex h-24 w-full items-center justify-center bg-gray-50 text-4xl">
+            {categoryEmoji(item.name)}
+          </div>
+        )}
+      </button>
+
+      <div className="flex flex-1 flex-col p-3 pt-2.5">
         <p
           onClick={onOpen}
-          className="cursor-pointer text-xs font-semibold leading-tight text-gray-900 line-clamp-2"
+          className="cursor-pointer text-xs font-semibold leading-snug text-gray-900 line-clamp-2"
         >
           {item.name}
         </p>
-        {item.description && (
-          <p className="text-[10px] text-gray-500 line-clamp-2">{item.description}</p>
-        )}
+
         <div className="mt-auto flex items-center justify-between pt-2">
-          <span className="text-xs font-bold text-gray-800">
+          <span className="text-xs font-bold text-gray-900">
             R$ {item.price.toFixed(2).replace(".", ",")}
           </span>
           <button
             onClick={onAdd}
-            className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold transition-colors ${
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${
               qty > 0
                 ? "bg-[#25d366] text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-[#25d366] hover:text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-[#25d366] hover:text-white"
             }`}
           >
-            {qty > 0 ? `+${qty}` : "+"}
+            {qty > 0 ? qty : "+"}
           </button>
         </div>
       </div>
@@ -232,6 +232,7 @@ function ProductCard({
 }
 
 // ── Product modal ─────────────────────────────────────────────────────────────
+// Expanded card — image dominates, then name → description → price → CTA.
 
 function ProductModal({
   item,
@@ -246,31 +247,62 @@ function ProductModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md overflow-hidden rounded-t-3xl bg-white sm:rounded-3xl">
-        {item.imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt={item.name} className="h-52 w-full object-cover" />
-        )}
-        <div className="p-5">
-          <div className="mb-1 flex items-start justify-between gap-2">
-            <p className="text-base font-bold text-gray-900">{item.name}</p>
-            <button onClick={onClose} className="shrink-0 text-gray-400 hover:text-gray-600">✕</button>
-          </div>
-          {item.description && (
-            <p className="mb-3 text-sm text-gray-500">{item.description}</p>
+      <div className="w-full max-w-md overflow-hidden rounded-t-[2rem] bg-white sm:rounded-[2rem]">
+
+        {/* ── Image — dominant selling element ── */}
+        <div className="relative">
+          {item.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={item.imageUrl}
+              alt={item.name}
+              className="h-72 w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-48 w-full items-center justify-center bg-gray-100 text-6xl">
+              {categoryEmoji(item.name)}
+            </div>
           )}
-          <div className="flex items-center justify-between">
-            <span className="text-lg font-bold text-gray-900">
-              R$ {item.price.toFixed(2).replace(".", ",")}
-            </span>
+
+          {/* Close button — floating over image */}
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* ── Content ── */}
+        <div className="px-6 pb-8 pt-5">
+          {/* Name */}
+          <h2 className="text-xl font-bold leading-snug text-gray-900">
+            {item.name}
+          </h2>
+
+          {/* Description */}
+          {item.description && (
+            <p className="mt-2 text-sm leading-relaxed text-gray-500">
+              {item.description}
+            </p>
+          )}
+
+          {/* Price + CTA */}
+          <div className="mt-6 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Preço</p>
+              <p className="text-2xl font-bold text-gray-900">
+                R$ {item.price.toFixed(2).replace(".", ",")}
+              </p>
+            </div>
             <button
               onClick={onAdd}
-              className="rounded-full bg-[#25d366] px-5 py-2 text-sm font-bold text-white hover:bg-[#1ebe5a]"
+              className="flex-1 rounded-2xl bg-[#25d366] py-3.5 text-sm font-bold text-white shadow-sm hover:bg-[#1ebe5a] active:scale-95 transition-all"
             >
-              {qty > 0 ? `Adicionar mais (${qty} no carrinho)` : "Adicionar"}
+              {qty > 0 ? `+ Adicionar (${qty} no carrinho)` : "Adicionar ao pedido"}
             </button>
           </div>
         </div>
