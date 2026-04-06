@@ -836,7 +836,7 @@ model DeliveryConfig {
   enabled          Boolean  @default(true)
   pickupEnabled    Boolean  @default(true)
 
-  // UI mode — "simple" uses flat fee; "advanced" delegates to DeliveryZone
+  // UI mode — "simple" | "advanced" | "distance"
   mode             String   @default("simple")
 
   // Simple-mode fields
@@ -844,9 +844,17 @@ model DeliveryConfig {
   estimatedMinutes Int?
   areaDescription  String?
 
-  // Commercial rules (apply in both modes)
+  // Commercial rules (apply in all modes)
   minOrderValue    Decimal? @db.Decimal(10, 2)
   freeDeliveryAbove Decimal? @db.Decimal(10, 2) // free delivery above this order value
+
+  // Distance-mode fields: fee = baseFee + (distanceKm * pricePerKm), clamped to [minFee, maxFee]
+  distanceBaseFee      Decimal? @db.Decimal(10, 2)
+  distancePricePerKm   Decimal? @db.Decimal(10, 2)
+  distanceMaxKm        Float?
+  distanceMinFee       Decimal? @db.Decimal(10, 2)
+  distanceMaxFee       Decimal? @db.Decimal(10, 2)
+  distanceEstimatedBase Int?
 
   // Phase 3 — dynamic pricing hooks (not yet active)
   peakHoursEnabled Boolean  @default(false)

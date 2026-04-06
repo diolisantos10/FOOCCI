@@ -20,7 +20,7 @@ export const upsertDeliverySchema = z.object({
   pickupEnabled:    z.boolean().default(true),
 
   // UI mode
-  mode:             z.enum(["simple", "advanced"]).default("simple"),
+  mode:             z.enum(["simple", "advanced", "distance"]).default("simple"),
 
   // Simple-mode flat config
   fee:              z.number().min(0).nullable().optional(),
@@ -30,6 +30,14 @@ export const upsertDeliverySchema = z.object({
   // Commercial rules
   minOrderValue:      z.number().min(0).nullable().optional(),
   freeDeliveryAbove:  z.number().min(0).nullable().optional(),
+
+  // Distance-mode fields
+  distanceBaseFee:       z.number().min(0).nullable().optional(),
+  distancePricePerKm:    z.number().min(0).nullable().optional(),
+  distanceMaxKm:         z.number().min(0.1).nullable().optional(),
+  distanceMinFee:        z.number().min(0).nullable().optional(),
+  distanceMaxFee:        z.number().min(0).nullable().optional(),
+  distanceEstimatedBase: z.number().int().min(1).max(300).nullable().optional(),
 
   // Phase 3 hooks (accepted but not enforced)
   peakHoursEnabled: z.boolean().default(false),
