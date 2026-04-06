@@ -1529,13 +1529,13 @@ export default function ChatSimPage() {
         className={`flex h-full items-center ${
           appMode === "automatic"
             ? "w-[390px] shrink-0"
-            : "w-full max-w-[390px]"
+            : "w-full max-w-[390px] lg:max-w-[680px]"
         }`}
       >
       <div
         data-testid="phone-frame"
         data-stage={stage}
-        className="relative flex h-full w-full flex-col overflow-hidden bg-white sm:rounded-[2rem] sm:border-[6px] sm:border-gray-800 sm:shadow-2xl"
+        className="relative flex h-full w-full flex-col overflow-hidden bg-white sm:rounded-[2rem] sm:border-[6px] sm:border-gray-800 sm:shadow-2xl lg:rounded-2xl lg:border lg:border-gray-200 lg:shadow-xl"
       >
 
         {/* WhatsApp-style header */}

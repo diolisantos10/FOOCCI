@@ -30,7 +30,7 @@ export default async function QRMenuPage({
 }) {
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug: params.slug },
-    select: { id: true, name: true, logoUrl: true, phone: true },
+    select: { id: true, name: true, logoUrl: true },
   });
 
   if (!restaurant) notFound();
@@ -101,7 +101,7 @@ export default async function QRMenuPage({
   return (
     <QRMenuClient
       slug={params.slug}
-      restaurant={{ name: restaurant.name, logoUrl: restaurant.logoUrl ?? null, phone: restaurant.phone ?? null }}
+      restaurant={{ name: restaurant.name, logoUrl: restaurant.logoUrl ?? null }}
       categories={sortedCategories}
       featured={featured}
       promoBanner={promoBanner}
