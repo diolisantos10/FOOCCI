@@ -53,6 +53,238 @@ function fmtCurrency(v: string | number | null): string {
   return String(Number(v));
 }
 
+// ── Zone-bar color palettes ───────────────────────────────────────────────────
+
+const ZONE_BAR_COLORS = [
+  "bg-indigo-400",
+  "bg-violet-500",
+  "bg-purple-500",
+  "bg-fuchsia-500",
+  "bg-pink-400",
+];
+
+const ZONE_BG_COLORS = [
+  "bg-indigo-50",
+  "bg-violet-50",
+  "bg-purple-50",
+  "bg-fuchsia-50",
+  "bg-pink-50",
+];
+
+// ── CoverageOverview ──────────────────────────────────────────────────────────
+//  Visual summary of active delivery coverage.
+//  Simple mode: single full-width bar.
+//  Advanced mode: proportional bars per zone sorted by distance.
+
+function CoverageOverview({
+  mode,
+  form,
+  zones,
+}: {
+  mode: "simple" | "advanced";
+  form: DeliveryFormState;
+  zones: DeliveryZone[];
+}) {
+  const freeAbove = toNum(form.freeDeliveryAbove);
+
+  if (mode === "simple") {
+    const fee = toNum(form.fee);
+    const min = toNum(form.minOrderValue);
+    const minutes = form.estimatedMinutes ? parseInt(form.estimatedMinutes, 10) : null;
+
+    return (
+      <PageCard>
+        <SectionHeading
+          title="Visão da cobertura"
+          subtitle="Como o cliente verá sua entrega."
+        />
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-indigo-900">Toda a área de entrega</span>
+            <span className="text-sm font-bold text-indigo-700">
+              {fee == null || fee === 0
+                ? <span className="text-green-600">Grátis</span>
+                : `R$ ${fee.toFixed(2).replace(".", ",")}`}
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-indigo-100">
+            <div className="h-2 w-full rounded-full bg-indigo-400" />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {minutes != null && minutes > 0 && (
+              <Chip color="indigo">⏱ ~{minutes} min</Chip>
+            )}
+            {min != null && min > 0 && (
+              <Chip color="amber">📦 Pedido mínimo R$ {min.toFixed(2).replace(".", ",")}</Chip>
+            )}
+            {freeAbove != null && freeAbove > 0 && (
+              <Chip color="green">🎁 Grátis acima de R$ {freeAbove.toFixed(2).replace(".", ",")}</Chip>
+            )}
+          </div>
+        </div>
+      </PageCard>
+    );
+  }
+
+  // Advanced mode
+  const active = zones.filter((z) => z.isActive).sort((a, b) => a.maxDistanceKm - b.maxDistanceKm);
+  if (active.length === 0) return null;
+
+  const maxDist = active[active.length - 1]!.maxDistanceKm;
+
+  return (
+    <PageCard>
+      <SectionHeading
+        title="Visão da cobertura"
+        subtitle={`${active.length} zona${active.length !== 1 ? "s" : ""} ativa${active.length !== 1 ? "s" : ""} — do mais próximo ao mais distante.`}
+      />
+      <div className="space-y-2.5">
+        {active.map((zone, i) => {
+          const fee = Number(zone.fee);
+          const widthPct = Math.max(12, Math.round((zone.maxDistanceKm / maxDist) * 100));
+          const zoneMin = zone.minOrderValue != null ? Number(zone.minOrderValue) : null;
+          const barColor = ZONE_BAR_COLORS[i % ZONE_BAR_COLORS.length]!;
+          const bgColor  = ZONE_BG_COLORS[i % ZONE_BG_COLORS.length]!;
+
+          return (
+            <div key={zone.id} className={`rounded-xl border border-white/80 p-3.5 ${bgColor}`}>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-gray-900">{zone.name}</span>
+                <span className="shrink-0 text-sm font-bold text-gray-800">
+                  {fee === 0
+                    ? <span className="text-green-600">Grátis</span>
+                    : `R$ ${fee.toFixed(2).replace(".", ",")}`}
+                </span>
+              </div>
+
+              {/* Proportional distance bar */}
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10">
+                <div
+                  className={`h-1.5 rounded-full ${barColor} transition-all duration-500`}
+                  style={{ width: `${widthPct}%` }}
+                />
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="text-xs text-gray-600">
+                  até <strong>{zone.maxDistanceKm} km</strong>
+                </span>
+                <span className="text-xs text-gray-600">
+                  ~<strong>{zone.estimatedMinutes} min</strong>
+                </span>
+                {zoneMin != null && zoneMin > 0 && (
+                  <Chip color="amber">⚠ Mín. R$ {zoneMin.toFixed(2).replace(".", ",")}</Chip>
+                )}
+                {freeAbove != null && freeAbove > 0 && (
+                  <Chip color="green">🎁 Grátis acima de R$ {freeAbove.toFixed(2).replace(".", ",")}</Chip>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </PageCard>
+  );
+}
+
+// ── CommercialSummary ─────────────────────────────────────────────────────────
+//  Plain-language chips summarizing the commercial rules currently configured.
+//  Shows at the bottom of the commercial rules card, below the inputs.
+
+function CommercialSummary({
+  mode,
+  form,
+  zones,
+}: {
+  mode: "simple" | "advanced";
+  form: DeliveryFormState;
+  zones: DeliveryZone[];
+}) {
+  const freeAbove  = toNum(form.freeDeliveryAbove);
+  const globalMin  = toNum(form.minOrderValue);
+
+  type ChipColor = "indigo" | "green" | "amber" | "gray";
+  const chips: { label: string; color: ChipColor }[] = [];
+
+  if (mode === "simple") {
+    const fee = toNum(form.fee);
+    if (fee == null || fee === 0) {
+      chips.push({ label: "Frete grátis", color: "green" });
+    } else {
+      chips.push({ label: `Frete R$ ${fee.toFixed(2).replace(".", ",")}`, color: "indigo" });
+    }
+    if (globalMin != null && globalMin > 0) {
+      chips.push({ label: `Pedido mínimo R$ ${globalMin.toFixed(2).replace(".", ",")}`, color: "amber" });
+    }
+  } else {
+    const active = zones.filter((z) => z.isActive);
+    if (active.length > 0) {
+      const fees = active.map((z) => Number(z.fee));
+      const lo = Math.min(...fees);
+      const hi = Math.max(...fees);
+      chips.push({
+        label: lo === hi
+          ? (lo === 0 ? "Frete grátis" : `Frete R$ ${lo.toFixed(2).replace(".", ",")}`)
+          : `Frete R$ ${lo.toFixed(2).replace(".", ",")} – R$ ${hi.toFixed(2).replace(".", ",")}`,
+        color: "indigo",
+      });
+
+      const zonesWithMin = active.filter((z) => z.minOrderValue != null && Number(z.minOrderValue) > 0);
+      if (zonesWithMin.length > 0) {
+        chips.push({ label: `${zonesWithMin.length} zona${zonesWithMin.length !== 1 ? "s" : ""} com pedido mínimo`, color: "amber" });
+      }
+    } else {
+      chips.push({ label: "Nenhuma zona ativa", color: "gray" });
+    }
+
+    if (globalMin != null && globalMin > 0) {
+      chips.push({ label: `Mínimo global R$ ${globalMin.toFixed(2).replace(".", ",")}`, color: "amber" });
+    }
+  }
+
+  if (freeAbove != null && freeAbove > 0) {
+    chips.push({ label: `Grátis acima de R$ ${freeAbove.toFixed(2).replace(".", ",")}`, color: "green" });
+  }
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="mt-4 border-t border-gray-100 pt-4">
+      <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+        Resumo para o cliente
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {chips.map((c) => (
+          <Chip key={c.label} color={c.color}>{c.label}</Chip>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Chip ──────────────────────────────────────────────────────────────────────
+
+const CHIP_STYLES = {
+  indigo: "bg-indigo-100 text-indigo-700",
+  green:  "bg-green-100  text-green-700",
+  amber:  "bg-amber-100  text-amber-700",
+  gray:   "bg-gray-100   text-gray-500",
+} as const;
+
+function Chip({
+  color,
+  children,
+}: {
+  color: keyof typeof CHIP_STYLES;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${CHIP_STYLES[color]}`}>
+      {children}
+    </span>
+  );
+}
+
 // ── Zone card sub-component ────────────────────────────────────────────────────
 
 interface ZoneRowProps {
@@ -607,6 +839,12 @@ export default function DeliveryPage() {
               </PageCard>
             )}
 
+            {/* ── Coverage overview (Phase 6) ──────────────────────────────────── */}
+            {(form.mode === "simple" ||
+              (form.mode === "advanced" && zones.some((z) => z.isActive))) && (
+              <CoverageOverview mode={form.mode} form={form} zones={zones} />
+            )}
+
             {/* ── Commercial rules ─────────────────────────────────────────────── */}
             <PageCard>
               <SectionHeading
@@ -645,6 +883,9 @@ export default function DeliveryPage() {
                   </Field>
                 )}
               </div>
+
+              {/* Commercial clarity summary (Phase 8) */}
+              <CommercialSummary mode={form.mode} form={form} zones={zones} />
             </PageCard>
 
             {/* ── Phase 3 placeholder — peak hours ─────────────────────────────── */}
