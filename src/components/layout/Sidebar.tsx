@@ -18,6 +18,11 @@ type NavItem = {
    * Useful when a more specific sidebar item handles that subpath.
    */
   ignoreSubpaths?: string[];
+  /**
+   * Additional path prefixes that DO trigger this item's active state,
+   * even when the pathname does not start with item.href.
+   */
+  extraActivePaths?: string[];
 };
 
 type NavGroup = {
@@ -36,35 +41,36 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Principal",
     items: [
-      { href: "/orders",        label: "Pedidos",     icon: "📋",  exact: false },
-      { href: "/atendimento",   label: "Atendimento", icon: "🎧",  exact: false },
-      { href: "/conversations", label: "Conversas",   icon: "💬",  exact: false },
-      { href: "/menu",          label: "Cardápio",    icon: "🍽",  exact: false },
-      { href: "/settings/agent", label: "Agente IA",  icon: "🤖",  exact: false },
+      { href: "/orders",      label: "Pedidos",     icon: "📋" },
+      { href: "/atendimento", label: "Atendimento", icon: "🎧" },
+      { href: "/menu",        label: "Cardápio",    icon: "🍽" },
     ],
   },
   {
     label: "Crescimento",
     items: [
-      { href: "/customers",  label: "Clientes",   icon: "👤",  exact: false             },
-      { href: "/crm",        label: "CRM",        icon: "📊",  exact: false, soon: true },
-      { href: "/marketing",  label: "Marketing",  icon: "📢",  exact: false, soon: true },
+      {
+        href:             "/marketing",
+        label:            "Marketing",
+        icon:             "📢",
+        // Also highlight when browsing Marketing sub-pages that live under /settings
+        extraActivePaths: ["/settings/experience", "/settings/agent"],
+      },
     ],
   },
   {
     label: "Plataforma",
     items: [
+      { href: "/chat-sim", label: "Testar IA", icon: "🧪" },
       {
         href:            "/settings",
         label:           "Configurações",
         icon:            "⚙️",
-        exact:           false,
-        // Don't highlight "Configurações" when the user is on the Agente IA page
-        ignoreSubpaths:  ["/settings/agent"],
+        // Don't highlight Configurações when the user is on a Marketing sub-page
+        ignoreSubpaths:  ["/settings/experience", "/settings/agent"],
       },
-      { href: "/integracoes",    label: "Integrações",    icon: "🔌",  exact: false },
-      { href: "/chat-sim",       label: "Testar IA",      icon: "🧪",  exact: false },
-      { href: "/personalizacao", label: "Personalização", icon: "🎨",  exact: false, soon: true },
+      { href: "/integracoes",    label: "Integrações",    icon: "🔌" },
+      { href: "/personalizacao", label: "Personalização", icon: "🎨", soon: true },
     ],
   },
 ];
@@ -78,6 +84,8 @@ export function Sidebar() {
 
   function isActive(item: NavItem): boolean {
     if (item.exact) return pathname === item.href;
+    // Extra paths take precedence — always active regardless of href
+    if (item.extraActivePaths?.some((p) => pathname.startsWith(p))) return true;
     if (!pathname.startsWith(item.href)) return false;
     if (item.ignoreSubpaths?.some((p) => pathname.startsWith(p))) return false;
     return true;

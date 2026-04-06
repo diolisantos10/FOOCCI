@@ -17,31 +17,19 @@ interface Group {
 
 const GROUPS: Group[] = [
   {
-    title: "Como você vende",
+    title: "Operação",
     items: [
-      { href: "/settings/store",      label: "Loja",       icon: "🏪" },
-      { href: "/settings/delivery",   label: "Entrega",    icon: "🛵" },
-      { href: "/settings/operation",  label: "Operação",   icon: "⏰" },
-      { href: "/settings/payments",   label: "Pagamentos", icon: "💳" },
+      { href: "/settings/store",     label: "Loja",       icon: "🏪" },
+      { href: "/settings/delivery",  label: "Entrega",    icon: "🛵" },
+      { href: "/settings/operation", label: "Operação",   icon: "⏰" },
+      { href: "/settings/payments",  label: "Pagamentos", icon: "💳" },
     ],
   },
   {
-    title: "Marca",
+    title: "Gestão",
     items: [
-      { href: "/settings/experience", label: "Experiência", icon: "✨" },
-    ],
-  },
-  {
-    title: "Sistema",
-    items: [
-      { href: "/settings/team", label: "Equipe", icon: "👥" },
-    ],
-  },
-  {
-    title: "Outros",
-    items: [
-      { href: "/settings/marketing", label: "Marketing",  icon: "📣", soon: true },
-      { href: "/settings/policies",  label: "Políticas",  icon: "📄" },
+      { href: "/settings/team",     label: "Equipe",    icon: "👥" },
+      { href: "/settings/policies", label: "Políticas", icon: "📄" },
     ],
   },
 ];
