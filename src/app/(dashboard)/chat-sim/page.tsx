@@ -898,6 +898,7 @@ export default function ChatSimPage() {
 
   // ── App mode + QA replay ─────────────────────────────────────
   const [appMode, setAppMode] = useState<"human" | "automatic">("human");
+  const [viewMode, setViewMode] = useState<"mobile" | "desktop">("mobile");
   const [replayScenario,  setReplayScenario]  = useState<QAScenario | null>(null);
   const [replayStep,      setReplayStep]      = useState(0);
   const [replayActions,   setReplayActions]   = useState<ReplayStep[]>([]);
@@ -1510,6 +1511,30 @@ export default function ChatSimPage() {
             {m === "human" ? "👤 Humano" : "🤖 Automático"}
           </button>
         ))}
+
+        {/* View mode switcher — only in human mode */}
+        {appMode === "human" && (
+          <>
+            <span className="mx-2 h-4 w-px shrink-0 bg-gray-200" />
+            <span className="mr-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Visão
+            </span>
+            {(["mobile", "desktop"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setViewMode(v)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  viewMode === v
+                    ? "bg-[#128c7e] text-white shadow-sm"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {v === "mobile" ? "📱 Mobile" : "🖥️ Desktop"}
+              </button>
+            ))}
+          </>
+        )}
+
         {replayScenario && (
           <span className="ml-auto animate-pulse text-xs font-medium text-orange-600">
             ▶ Reproduzindo {replayStep}/{replayActions.length}
@@ -1524,19 +1549,39 @@ export default function ChatSimPage() {
         }`}
       >
 
-      {/* ── Phone frame wrapper ─────────────────────────────── */}
+      {/* ── Frame wrapper — width varies by view mode ──────── */}
       <div
         className={`flex h-full items-center ${
           appMode === "automatic"
             ? "w-[390px] shrink-0"
-            : "w-full max-w-[390px] lg:max-w-[680px]"
+            : viewMode === "desktop"
+            ? "w-full max-w-[960px]"
+            : "w-full max-w-[390px]"
         }`}
       >
       <div
         data-testid="phone-frame"
         data-stage={stage}
-        className="relative flex h-full w-full flex-col overflow-hidden bg-white sm:rounded-[2rem] sm:border-[6px] sm:border-gray-800 sm:shadow-2xl lg:rounded-2xl lg:border lg:border-gray-200 lg:shadow-xl"
+        className={`relative flex h-full w-full flex-col overflow-hidden bg-white ${
+          viewMode === "mobile" || appMode === "automatic"
+            ? "sm:rounded-[2rem] sm:border-[6px] sm:border-gray-800 sm:shadow-2xl"
+            : "rounded-2xl border border-gray-200 shadow-2xl"
+        }`}
       >
+
+        {/* Browser chrome — desktop preview only */}
+        {viewMode === "desktop" && appMode !== "automatic" && (
+          <div className="shrink-0 flex items-center gap-2.5 border-b border-gray-200 bg-gray-100 px-3 py-2">
+            <div className="flex gap-1.5 shrink-0">
+              <span className="h-3 w-3 rounded-full bg-red-400" />
+              <span className="h-3 w-3 rounded-full bg-yellow-400" />
+              <span className="h-3 w-3 rounded-full bg-green-400" />
+            </div>
+            <div className="flex-1 rounded-md border border-gray-200 bg-white px-3 py-1 text-[11px] font-mono text-gray-400 truncate">
+              foocci.app/pedido
+            </div>
+          </div>
+        )}
 
         {/* WhatsApp-style header */}
         <div className="shrink-0 flex items-center gap-3 bg-[#128c7e] px-4 py-2.5">
@@ -1545,7 +1590,9 @@ export default function ChatSimPage() {
           </div>
           <div>
             <p className="text-sm font-bold text-white">FOOCCI</p>
-            <p className="text-[10px] text-green-200">Simulador · Visão mobile</p>
+            <p className="text-[10px] text-green-200">
+              Simulador · Visão {viewMode === "desktop" && appMode !== "automatic" ? "desktop" : "mobile"}
+            </p>
           </div>
         </div>
 
@@ -1581,10 +1628,14 @@ export default function ChatSimPage() {
             </div>
           )}
 
-          {/* Product carousel — BROWSE + category selected */}
+          {/* Product carousel/grid — BROWSE + category selected */}
           {stage === "BROWSE" && selectedCat && (
             <div data-testid="browse-area" className="border-t border-gray-100 py-2">
-              <div className="flex overflow-x-auto gap-3 px-3 pb-1">
+              <div className={`px-3 pb-1 gap-3 ${
+                viewMode === "desktop" && appMode !== "automatic"
+                  ? "flex flex-wrap"
+                  : "flex overflow-x-auto"
+              }`}>
                 {filteredProducts.map((product) => {
                   const qty = cart.find((c) => c.id === product.id)?.qty ?? 0;
                   return (
