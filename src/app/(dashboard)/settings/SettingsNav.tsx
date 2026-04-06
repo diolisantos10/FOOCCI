@@ -35,8 +35,7 @@ const GROUPS: Group[] = [
   {
     title: "Sistema",
     items: [
-      { href: "/settings/team",         label: "Equipe",       icon: "👥" },
-      { href: "/settings/integrations", label: "Integrações",  icon: "🔌" },
+      { href: "/settings/team", label: "Equipe", icon: "👥" },
     ],
   },
   {
