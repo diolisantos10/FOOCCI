@@ -262,6 +262,205 @@ function CommercialSummary({
   );
 }
 
+// ── Delivery simulator ───────────────────────────────────────────────────────
+
+interface SimResult {
+  allowed: boolean;
+  blockedReason?: string;
+  zoneName?: string;
+  fee: number;
+  effectiveFee: number;
+  estimatedMinutes?: number;
+  freeDeliveryApplied: boolean;
+  minOrderBlocked: boolean;
+  minOrderRequired?: number;
+}
+
+function simulateDelivery(
+  distanceKm: number,
+  orderValue: number,
+  form: DeliveryFormState,
+  zones: DeliveryZone[]
+): SimResult {
+  if (!form.enabled) {
+    return { allowed: false, blockedReason: "Delivery está desativado.", fee: 0, effectiveFee: 0, freeDeliveryApplied: false, minOrderBlocked: false };
+  }
+
+  const freeAbove = toNum(form.freeDeliveryAbove);
+
+  if (form.mode === "simple") {
+    const fee     = toNum(form.fee) ?? 0;
+    const minOrder = toNum(form.minOrderValue) ?? 0;
+    const minutes  = form.estimatedMinutes ? parseInt(form.estimatedMinutes, 10) : undefined;
+
+    if (minOrder > 0 && orderValue < minOrder) {
+      return { allowed: false, blockedReason: `Pedido mínimo não atingido.`, zoneName: "Área de entrega", fee, effectiveFee: fee, estimatedMinutes: minutes, freeDeliveryApplied: false, minOrderBlocked: true, minOrderRequired: minOrder };
+    }
+
+    const freeDeliveryApplied = freeAbove != null && freeAbove > 0 && orderValue >= freeAbove;
+    return { allowed: true, zoneName: "Área de entrega", fee, effectiveFee: freeDeliveryApplied ? 0 : fee, estimatedMinutes: minutes, freeDeliveryApplied, minOrderBlocked: false };
+  }
+
+  // Advanced — find lowest zone that covers the distance
+  const active = zones.filter((z) => z.isActive).sort((a, b) => a.maxDistanceKm - b.maxDistanceKm);
+  const matched = active.find((z) => distanceKm <= z.maxDistanceKm);
+
+  if (!matched) {
+    const maxCoverage = active[active.length - 1]?.maxDistanceKm ?? 0;
+    return { allowed: false, blockedReason: `${distanceKm} km está fora da cobertura (máx. ${maxCoverage} km).`, fee: 0, effectiveFee: 0, freeDeliveryApplied: false, minOrderBlocked: false };
+  }
+
+  const fee      = Number(matched.fee);
+  const zoneMin  = matched.minOrderValue != null ? Number(matched.minOrderValue) : (toNum(form.minOrderValue) ?? 0);
+
+  if (zoneMin > 0 && orderValue < zoneMin) {
+    return { allowed: false, blockedReason: `Pedido mínimo para ${matched.name}: R$ ${zoneMin.toFixed(2).replace(".", ",")}.`, zoneName: matched.name, fee, effectiveFee: fee, estimatedMinutes: matched.estimatedMinutes, freeDeliveryApplied: false, minOrderBlocked: true, minOrderRequired: zoneMin };
+  }
+
+  const freeDeliveryApplied = freeAbove != null && freeAbove > 0 && orderValue >= freeAbove;
+  return { allowed: true, zoneName: matched.name, fee, effectiveFee: freeDeliveryApplied ? 0 : fee, estimatedMinutes: matched.estimatedMinutes, freeDeliveryApplied, minOrderBlocked: false };
+}
+
+function DeliverySimulator({
+  form,
+  zones,
+}: {
+  form: DeliveryFormState;
+  zones: DeliveryZone[];
+}) {
+  const [distanceKm, setDistanceKm] = useState("");
+  const [orderValue, setOrderValue]  = useState("");
+  const [result, setResult]          = useState<SimResult | null>(null);
+
+  function handleSimulate(e: FormEvent) {
+    e.preventDefault();
+    const dist = parseFloat(distanceKm);
+    const val  = parseFloat(orderValue);
+    if (isNaN(dist) || isNaN(val)) return;
+    setResult(simulateDelivery(dist, val, form, zones));
+  }
+
+  return (
+    <PageCard>
+      <SectionHeading
+        title="Simulador de entrega"
+        subtitle="Teste como suas regras se aplicam para um pedido específico."
+      />
+
+      <form onSubmit={handleSimulate}>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Distância do cliente (km)">
+            <input
+              className={INPUT}
+              type="number"
+              min="0"
+              step="0.1"
+              required
+              value={distanceKm}
+              onChange={(e) => { setDistanceKm(e.target.value); setResult(null); }}
+              placeholder="Ex: 3,5"
+            />
+          </Field>
+          <Field label="Valor do pedido (R$)">
+            <input
+              className={INPUT}
+              type="number"
+              min="0"
+              step="0.01"
+              required
+              value={orderValue}
+              onChange={(e) => { setOrderValue(e.target.value); setResult(null); }}
+              placeholder="Ex: 65,00"
+            />
+          </Field>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
+          <button
+            type="submit"
+            className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          >
+            Simular →
+          </button>
+          {result && (
+            <button
+              type="button"
+              onClick={() => { setResult(null); setDistanceKm(""); setOrderValue(""); }}
+              className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50"
+            >
+              Limpar
+            </button>
+          )}
+        </div>
+      </form>
+
+      {result && (
+        <div
+          className={`mt-5 rounded-xl border p-4 ${
+            result.allowed
+              ? "border-green-200 bg-green-50"
+              : "border-red-100 bg-red-50"
+          }`}
+        >
+          {/* Header */}
+          <div className="mb-3 flex items-center gap-2">
+            <span className={`text-lg leading-none ${result.allowed ? "text-green-500" : "text-red-400"}`}>
+              {result.allowed ? "✓" : "✕"}
+            </span>
+            <span className={`text-sm font-semibold ${result.allowed ? "text-green-800" : "text-red-700"}`}>
+              {result.allowed ? "Entrega disponível" : "Entrega não disponível"}
+            </span>
+          </div>
+
+          {!result.allowed && result.blockedReason && (
+            <p className="mb-3 rounded-lg bg-red-100 px-3 py-2 text-xs font-medium text-red-700">
+              {result.blockedReason}
+            </p>
+          )}
+
+          {/* Result grid */}
+          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-xs">
+            {result.zoneName && (
+              <>
+                <dt className="text-gray-500">Zona</dt>
+                <dd className="font-semibold text-gray-900">{result.zoneName}</dd>
+              </>
+            )}
+            {result.estimatedMinutes != null && (
+              <>
+                <dt className="text-gray-500">Prazo estimado</dt>
+                <dd className="font-semibold text-gray-900">~{result.estimatedMinutes} min</dd>
+              </>
+            )}
+            <>
+              <dt className="text-gray-500">Taxa de entrega</dt>
+              <dd className="font-semibold text-gray-900">
+                {result.fee === 0
+                  ? "Grátis"
+                  : `R$ ${result.fee.toFixed(2).replace(".", ",")}`}
+              </dd>
+            </>
+            {result.freeDeliveryApplied && (
+              <>
+                <dt className="text-gray-500">Frete cobrado</dt>
+                <dd className="font-semibold text-green-700">Grátis 🎁</dd>
+              </>
+            )}
+            {result.minOrderBlocked && result.minOrderRequired != null && (
+              <>
+                <dt className="text-gray-500">Pedido mínimo</dt>
+                <dd className="font-semibold text-red-600">
+                  R$ {result.minOrderRequired.toFixed(2).replace(".", ",")} — não atingido
+                </dd>
+              </>
+            )}
+          </dl>
+        </div>
+      )}
+    </PageCard>
+  );
+}
+
 // ── Chip ──────────────────────────────────────────────────────────────────────
 
 const CHIP_STYLES = {
@@ -651,12 +850,36 @@ export default function DeliveryPage() {
       <form onSubmit={handleSubmit} className="space-y-5">
         <Feedback success={success} error={error} onDismiss={() => setError(null)} />
 
-        {/* ── Fulfillment toggles ─────────────────────────────────────────────── */}
+        {/* ── Fulfillment toggles (Phase 9 — clarity) ──────────────────────────── */}
         <PageCard>
-          <SectionHeading
-            title="Modalidades de atendimento"
-            subtitle="Defina como seu restaurante recebe pedidos."
-          />
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Modalidades de atendimento</h2>
+              <p className="mt-0.5 text-sm text-gray-500">Defina como seu restaurante recebe pedidos.</p>
+            </div>
+            {/* Live status chips — read-only summary */}
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                  form.enabled
+                    ? "bg-green-100 text-green-700"
+                    : "bg-gray-100 text-gray-400"
+                }`}
+              >
+                {form.enabled ? "Delivery ativo" : "Delivery off"}
+              </span>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                  form.pickupEnabled
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-gray-100 text-gray-400"
+                }`}
+              >
+                {form.pickupEnabled ? "Retirada ativa" : "Retirada off"}
+              </span>
+            </div>
+          </div>
+
           <div className="space-y-4">
             <Toggle
               label="Delivery ativo"
@@ -672,6 +895,31 @@ export default function DeliveryPage() {
               onChange={(v) => setForm((f) => ({ ...f, pickupEnabled: v }))}
             />
           </div>
+
+          {/* Quick context: what the current delivery config means */}
+          {form.enabled && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <div className="flex flex-wrap gap-2">
+                {form.mode === "simple" && toNum(form.fee) === 0 && (
+                  <Chip color="green">Frete grátis</Chip>
+                )}
+                {form.mode === "simple" && (toNum(form.fee) ?? 0) > 0 && (
+                  <Chip color="indigo">Frete R$ {Number(toNum(form.fee)).toFixed(2).replace(".", ",")}</Chip>
+                )}
+                {form.mode === "advanced" && (
+                  <Chip color="indigo">
+                    {zones.filter(z => z.isActive).length} zona{zones.filter(z => z.isActive).length !== 1 ? "s" : ""} ativa{zones.filter(z => z.isActive).length !== 1 ? "s" : ""}
+                  </Chip>
+                )}
+                {form.estimatedMinutes && form.mode === "simple" && (
+                  <Chip color="gray">~{form.estimatedMinutes} min</Chip>
+                )}
+                {(toNum(form.freeDeliveryAbove) ?? 0) > 0 && (
+                  <Chip color="green">Grátis acima de R$ {Number(toNum(form.freeDeliveryAbove)).toFixed(2).replace(".", ",")}</Chip>
+                )}
+              </div>
+            </div>
+          )}
         </PageCard>
 
         {form.enabled && (
@@ -887,6 +1135,9 @@ export default function DeliveryPage() {
               {/* Commercial clarity summary (Phase 8) */}
               <CommercialSummary mode={form.mode} form={form} zones={zones} />
             </PageCard>
+
+            {/* ── Delivery simulator (Phase 7) ─────────────────────────────────── */}
+            <DeliverySimulator form={form} zones={zones} />
 
             {/* ── Phase 3 placeholder — peak hours ─────────────────────────────── */}
             <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/60 p-5">
