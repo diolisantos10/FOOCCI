@@ -1000,49 +1000,41 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
           </p>
         </div>
 
-        {/* Falar com humano — WhatsApp if phone exists, fallback future-ready */}
-        {phone ? (
-          <a
-            href={`https://wa.me/${phone.replace(/\D/g, "")}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Falar com humano via WhatsApp"
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm hover:bg-white/25 active:scale-95 transition-all"
-          >
-            <span>💬</span>
-            <span className="hidden sm:inline">Falar com humano</span>
-          </a>
-        ) : (
-          <button
-            aria-label="Falar com humano"
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm opacity-60 cursor-default"
-            disabled
-          >
-            <span>💬</span>
-          </button>
-        )}
+        {/* Cart button — top-right, always visible, badge shows item count */}
+        {(() => {
+          const count = cart.reduce((s, i) => s + i.qty, 0);
+          return (
+            <button
+              onClick={() => setCartOpen(true)}
+              aria-label={count > 0 ? `Ver carrinho — ${count} ${count === 1 ? "item" : "itens"}` : "Carrinho vazio"}
+              className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-xl text-white transition active:scale-90 hover:bg-white/30"
+            >
+              🧺
+              {count > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-[#128c7e] shadow">
+                  {count > 99 ? "99+" : count}
+                </span>
+              )}
+            </button>
+          );
+        })()}
       </div>
 
-      {/* Chat area — relative so FAB positions inside it */}
-      <div className="relative flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {/* Chat area */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.map((msg) => (
           <Bubble key={msg.id} msg={msg} />
         ))}
         {ui === "thinking" && <TypingIndicator />}
         <div ref={bottomRef} />
-
-        {/* Floating cart FAB — visible during BROWSE when cart has items */}
-        {stage === "BROWSE" && (
-          <CartFAB
-            count={cart.reduce((s, i) => s + i.qty, 0)}
-            onClick={() => setCartOpen(true)}
-          />
-        )}
       </div>
 
       {/* Category tabs — BROWSE only, larger and more prominent */}
       {stage === "BROWSE" && categories.length > 0 && (
-        <div className="shrink-0 flex overflow-x-auto gap-2 border-t border-gray-200 bg-white px-3 py-2.5">
+        <div
+          className="shrink-0 flex overflow-x-auto gap-2 border-t border-gray-200 bg-white px-3 py-2.5 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: "none" }}
+        >
           {categories.map((cat) => (
             <button
               key={cat.id}
@@ -1062,7 +1054,10 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
       {/* Product grid — BROWSE only */}
       {stage === "BROWSE" && currentCategoryItems.length > 0 && (
         <div className="shrink-0 border-t border-gray-100 bg-gray-50">
-          <div className="flex gap-3 overflow-x-auto px-3 py-3">
+          <div
+            className="flex gap-3 overflow-x-auto px-3 py-3 [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: "none" }}
+          >
             {currentCategoryItems.map((item) => (
               <ProductCard
                 key={item.id}
