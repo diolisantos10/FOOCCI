@@ -3,7 +3,7 @@ import { getTenantId } from "@/lib/tenant";
 import { TopBar } from "@/components/layout/TopBar";
 import { CRMClient } from "./CRMClient";
 import { CRMService, getTier } from "@/services/crm/CRMService";
-import type { CRMCustomer, Opportunity, AutomationRow } from "@/services/crm/CRMService";
+import type { CRMCustomer, Opportunity, AutomationRow, OverviewStats } from "@/services/crm/CRMService";
 
 export const metadata = { title: "CRM — Motor de Receita" };
 export const dynamic = "force-dynamic";
@@ -13,12 +13,16 @@ export default async function CRMPage() {
   let restaurantName = "Restaurante";
   try { restaurantId = getTenantId(); } catch { /* unauthenticated */ }
 
-  let customers:    CRMCustomer[]  = [];
-  let opportunities: Opportunity[] = [];
-  let automations:  AutomationRow[] = [];
+  let customers:     CRMCustomer[]  = [];
+  let opportunities: Opportunity[]  = [];
+  let automations:   AutomationRow[] = [];
+  let overviewStats: OverviewStats = {
+    totalCustomers: 0, activeCustomers: 0, inactiveCustomers: 0,
+    newThisMonth: 0, avgTicket: 0, segments: [],
+  };
 
   if (restaurantId) {
-    const [restaurant, rows, autoRows] = await Promise.all([
+    const [restaurant, rows, autoRows, opResult, statsResult] = await Promise.all([
       prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
       prisma.customer.findMany({
         where: { restaurantId },
@@ -34,6 +38,8 @@ export default async function CRMPage() {
         where: { restaurantId },
         orderBy: { trigger: "asc" },
       }),
+      CRMService.getOpportunities(restaurantId, restaurantName),
+      CRMService.getOverviewStats(restaurantId),
     ]);
 
     restaurantName = restaurant?.name ?? "Restaurante";
@@ -68,8 +74,8 @@ export default async function CRMPage() {
       discountValue:    r.discountValue != null ? Number(r.discountValue) : null,
     }));
 
-    const result = await CRMService.getOpportunities(restaurantId, restaurantName);
-    if (result.ok) opportunities = result.data;
+    if (opResult.ok) opportunities = opResult.data;
+    if (statsResult.ok) overviewStats = statsResult.data;
   }
 
   return (
@@ -80,6 +86,8 @@ export default async function CRMPage() {
         initialOpportunities={opportunities}
         initialAutomations={automations}
         restaurantName={restaurantName}
+        overviewStats={overviewStats}
+        opportunitiesCount={opportunities.length}
       />
     </>
   );

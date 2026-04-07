@@ -76,6 +76,17 @@ export type Opportunity = {
   customers: CRMCustomer[];
 };
 
+// ── Overview stats ────────────────────────────────────────────────────────────
+
+export type OverviewStats = {
+  totalCustomers:    number;
+  activeCustomers:   number;   // lastOrderAt within 30 days
+  inactiveCustomers: number;   // isActive but no order in 30+ days
+  newThisMonth:      number;   // created in current calendar month
+  avgTicket:         number;   // avg totalSpend where totalOrders > 0
+  segments: Array<{ tier: CustomerTier; count: number }>;
+};
+
 // ── Automation shape ──────────────────────────────────────────────────────────
 
 export type AutomationRow = {
@@ -339,5 +350,47 @@ export class CRMService {
       select: { name: true },
     });
     return r?.name ?? "nosso restaurante";
+  }
+
+  // ── Overview stats ─────────────────────────────────────────────────────────
+
+  static async getOverviewStats(restaurantId: string): Promise<ServiceResult<OverviewStats>> {
+    const now = new Date();
+    const thirtyDaysAgo  = new Date(now.getTime() - 30 * 86_400_000);
+    const startOfMonth   = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [
+      totalCustomers,
+      activeCustomers,
+      newThisMonth,
+      avgResult,
+      bronze, prata, ouro, diamante,
+    ] = await Promise.all([
+      prisma.customer.count({ where: { restaurantId } }),
+      prisma.customer.count({ where: { restaurantId, isActive: true, lastOrderAt: { gte: thirtyDaysAgo } } }),
+      prisma.customer.count({ where: { restaurantId, createdAt: { gte: startOfMonth } } }),
+      prisma.customer.aggregate({
+        where: { restaurantId, totalOrders: { gt: 0 } },
+        _avg: { totalSpend: true },
+      }),
+      prisma.customer.count({ where: { restaurantId, totalSpend: { lt:  300 } } }),
+      prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 300, lt:  800 } } }),
+      prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 800, lt: 2000 } } }),
+      prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 2000 } } }),
+    ]);
+
+    return serviceOk({
+      totalCustomers,
+      activeCustomers,
+      inactiveCustomers: Math.max(0, totalCustomers - activeCustomers),
+      newThisMonth,
+      avgTicket: Number(avgResult._avg.totalSpend ?? 0),
+      segments: [
+        { tier: "DIAMANTE" as CustomerTier, count: diamante },
+        { tier: "OURO"     as CustomerTier, count: ouro },
+        { tier: "PRATA"    as CustomerTier, count: prata },
+        { tier: "BRONZE"   as CustomerTier, count: bronze },
+      ],
+    });
   }
 }

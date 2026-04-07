@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { pickAutomationPlaceholder } from "@/lib/crm-messages";
-import type { CRMCustomer, Opportunity, AutomationRow, CustomerTier } from "@/services/crm/CRMService";
+import type { CRMCustomer, Opportunity, AutomationRow, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
 import { BrainPanel } from "./BrainPanel";
 import { ImportModal } from "./ImportModal";
+import { OverviewTab } from "./OverviewTab";
 
 // ── Label maps ─────────────────────────────────────────────────────────────────
 
@@ -219,14 +220,28 @@ function OpportunitiesTab({ opportunities }: { opportunities: Opportunity[] }) {
 
 function CustomersTab({
   initialCustomers,
+  initialFilter = "all",
   onImportOpen,
 }: {
   initialCustomers: CRMCustomer[];
+  initialFilter?: "all" | "inactive" | "vip" | "recent";
   onImportOpen: () => void;
 }) {
-  const [filter, setFilter] = useState<"all" | "inactive" | "vip" | "recent">("all");
-  const [customers, setCustomers] = useState<CRMCustomer[]>(initialCustomers);
-  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<"all" | "inactive" | "vip" | "recent">(initialFilter);
+  const [customers, setCustomers] = useState<CRMCustomer[]>(
+    initialFilter === "all" ? initialCustomers : []
+  );
+  const [loading, setLoading] = useState(initialFilter !== "all");
+
+  // Fetch on mount if a non-default filter was requested
+  useEffect(() => {
+    if (initialFilter !== "all") {
+      fetch(`/api/crm/customers?filter=${initialFilter}`)
+        .then((r) => r.json())
+        .then((json) => { setCustomers(json.data ?? []); setLoading(false); });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function applyFilter(f: "all" | "inactive" | "vip" | "recent") {
     setFilter(f);
@@ -554,48 +569,45 @@ function AutomationsTab({ initialAutomations }: { initialAutomations: Automation
 
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "opportunities" | "customers" | "automations";
+type Tab = "overview" | "opportunities" | "customers" | "automations";
 
 export function CRMClient({
   initialCustomers,
   initialOpportunities,
   initialAutomations,
+  overviewStats,
+  opportunitiesCount,
 }: {
-  initialCustomers:    CRMCustomer[];
+  initialCustomers:     CRMCustomer[];
   initialOpportunities: Opportunity[];
-  initialAutomations:  AutomationRow[];
-  restaurantName:      string;
+  initialAutomations:   AutomationRow[];
+  restaurantName:       string;
+  overviewStats:        OverviewStats;
+  opportunitiesCount:   number;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("opportunities");
+  const [tab, setTab] = useState<Tab>("overview");
   const [showImport, setShowImport] = useState(false);
+  const [customerFilter, setCustomerFilter] = useState<"all" | "inactive" | "vip" | "recent">("all");
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
-    {
-      id:    "opportunities",
-      label: "Oportunidades",
-      badge: initialOpportunities.length || undefined,
-    },
-    { id: "customers",   label: "Clientes" },
-    { id: "automations", label: "Automações" },
+    { id: "overview",       label: "Visão Geral" },
+    { id: "opportunities",  label: "Oportunidades", badge: initialOpportunities.length || undefined },
+    { id: "customers",      label: "Clientes" },
+    { id: "automations",    label: "Automações" },
   ];
+
+  function goToInactive() {
+    setCustomerFilter("inactive");
+    setTab("customers");
+  }
+
+  function goToOpportunities() {
+    setTab("opportunities");
+  }
 
   return (
     <div className="p-6 max-w-4xl">
-      {/* Summary strip */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "Total clientes",  value: initialCustomers.length },
-          { label: "Oportunidades",   value: initialOpportunities.length,                          highlight: true },
-          { label: "Inativos (+30d)", value: initialCustomers.filter((c) => (c.daysSinceLastOrder ?? 0) > 30).length },
-          { label: "VIPs (Ouro+)",    value: initialCustomers.filter((c) => c.tier === "OURO" || c.tier === "DIAMANTE").length },
-        ].map((s) => (
-          <div key={s.label} className={`rounded-2xl border p-4 ${s.highlight ? "border-brand-200 bg-brand-50" : "border-gray-100 bg-white"} shadow-sm`}>
-            <p className="text-2xl font-bold text-gray-900">{s.value}</p>
-            <p className={`text-xs mt-0.5 ${s.highlight ? "text-brand-600 font-semibold" : "text-gray-500"}`}>{s.label}</p>
-          </div>
-        ))}
-      </div>
 
       {/* Tabs */}
       <div className="mb-5 flex gap-1 rounded-xl bg-gray-100 p-1">
@@ -620,12 +632,23 @@ export function CRMClient({
       </div>
 
       {/* Tab content */}
+      {tab === "overview" && (
+        <OverviewTab
+          stats={overviewStats}
+          opportunitiesCount={opportunitiesCount}
+          onImportOpen={() => setShowImport(true)}
+          onGoToInactive={goToInactive}
+          onGoToOpportunities={goToOpportunities}
+        />
+      )}
       {tab === "opportunities" && (
         <OpportunitiesTab opportunities={initialOpportunities} />
       )}
       {tab === "customers" && (
         <CustomersTab
+          key={customerFilter}
           initialCustomers={initialCustomers}
+          initialFilter={customerFilter}
           onImportOpen={() => setShowImport(true)}
         />
       )}
