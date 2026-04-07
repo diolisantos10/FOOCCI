@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { pickAutomationPlaceholder } from "@/lib/crm-messages";
 import type { CRMCustomer, Opportunity, AutomationRow, CustomerTier } from "@/services/crm/CRMService";
 
 // ── Label maps ─────────────────────────────────────────────────────────────────
@@ -13,24 +14,21 @@ const TIER_CONFIG: Record<CustomerTier, { label: string; bg: string; text: strin
   BRONZE:   { label: "Bronze",   bg: "bg-orange-100", text: "text-orange-700", icon: "🥉" },
 };
 
-const TRIGGER_META: Record<string, { label: string; icon: string; description: string; placeholder: string }> = {
+const TRIGGER_META: Record<string, { label: string; icon: string; description: string }> = {
   REACTIVATION: {
     label:       "Reativação",
     icon:        "🔄",
     description: "Enviado para clientes que não pedem há X dias.",
-    placeholder: "Olá, {nome}! Sentimos sua falta. Que tal um desconto especial para voltar? Use o cupom VOLTAR10 e ganhe 10% no próximo pedido! 🎁",
   },
   BIRTHDAY: {
     label:       "Aniversário",
     icon:        "🎂",
     description: "Enviado automaticamente no aniversário do cliente.",
-    placeholder: "Feliz aniversário, {nome}! 🎉 Para comemorar com você, seu próximo pedido tem frete grátis. Aproveite! 🎁",
   },
   POST_ORDER: {
     label:       "Pós-pedido",
     icon:        "⭐",
     description: "Enviado X dias após a conclusão de um pedido.",
-    placeholder: "Olá, {nome}! Esperamos que tenha amado seu pedido 😊 Que tal repetir? Confira nosso cardápio e faça seu próximo pedido.",
   },
 };
 
@@ -351,6 +349,13 @@ function CustomersTab({ initialCustomers }: { initialCustomers: CRMCustomer[] })
 // ── Automations Tab ───────────────────────────────────────────────────────────
 
 function AutomationsTab({ initialAutomations }: { initialAutomations: AutomationRow[] }) {
+  // Dynamic placeholders — fresh every day, never the same text twice
+  const placeholders = useMemo(() => ({
+    REACTIVATION: pickAutomationPlaceholder("REACTIVATION"),
+    BIRTHDAY:     pickAutomationPlaceholder("BIRTHDAY"),
+    POST_ORDER:   pickAutomationPlaceholder("POST_ORDER"),
+  }), []);
+
   // Build a map: trigger → row (or defaults)
   const defaults: Record<string, AutomationRow> = {
     REACTIVATION: { id: "", trigger: "REACTIVATION", isEnabled: false, messageTemplate: "", triggerAfterDays: 30, discountType: null, discountValue: null },
@@ -474,10 +479,10 @@ function AutomationsTab({ initialAutomations }: { initialAutomations: Automation
                   </label>
                   <textarea
                     rows={4}
-                    value={a.messageTemplate || meta.placeholder}
+                    value={a.messageTemplate || placeholders[trigger as keyof typeof placeholders] || ""}
                     onChange={(e) => handleUpdate(trigger, { messageTemplate: e.target.value })}
                     className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none"
-                    placeholder={meta.placeholder}
+                    placeholder={placeholders[trigger as keyof typeof placeholders]}
                   />
                   <p className="mt-1 text-[10px] text-gray-400">
                     Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para o nome do cliente.

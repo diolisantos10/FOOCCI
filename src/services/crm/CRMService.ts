@@ -1,6 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, type ServiceResult } from "@/types";
+import { pickSuggestedMessage } from "@/lib/crm-messages";
 import type { AutomationTrigger } from "@prisma/client";
 
 // ── Tier thresholds (aligned with CustomerProfileClient) ──────────────────────
@@ -186,7 +187,7 @@ export class CRMService {
         description: `Clientes que não pedem há ${15}–${60} dias. Momento ideal para uma oferta de retorno.`,
         count: inactive.length,
         priority: inactive.length >= 5 ? "HIGH" : "MEDIUM",
-        suggestedMessage: `Olá, {nome}! 🍽️ Sentimos sua falta em ${restaurantName}. Que tal um desconto especial para o seu próximo pedido? Use o cupom VOLTAR e ganhe 10% de desconto. Válido hoje! 🎁`,
+        suggestedMessage: pickSuggestedMessage("REACTIVATION", restaurantName, inactive.length),
         customers: inactive.slice(0, 10),
       });
     }
@@ -220,7 +221,7 @@ export class CRMService {
         description: "Mensagem de aniversário com oferta especial. Clientes adoram ser lembrados!",
         count: birthdays.length,
         priority: "HIGH",
-        suggestedMessage: `Feliz aniversário, {nome}! 🎉 Toda a equipe de ${restaurantName} deseja um dia incrível. Preparamos uma surpresa: seu próximo pedido tem frete grátis! Aproveite hoje.`,
+        suggestedMessage: pickSuggestedMessage("BIRTHDAY", restaurantName, birthdays.length),
         customers: birthdays.slice(0, 10),
       });
     }
@@ -239,7 +240,7 @@ export class CRMService {
         description: `Clientes Ouro e Diamante que há mais de 14 dias não fazem um pedido. Alto potencial de receita.`,
         count: vipInactive.length,
         priority: "HIGH",
-        suggestedMessage: `Olá, {nome}! 👋 Você é um dos nossos clientes mais especiais em ${restaurantName} e queremos que volte logo. Preparamos algo exclusivo para você: frete grátis + sobremesa no próximo pedido. É só pedir! 🌟`,
+        suggestedMessage: pickSuggestedMessage("VIP_INACTIVE", restaurantName, vipInactive.length),
         customers: vipInactive.slice(0, 10),
       });
     }
@@ -256,7 +257,7 @@ export class CRMService {
         description: "Clientes que fizeram o primeiro pedido esta semana. Ótimo momento para criar um vínculo.",
         count: newCustomers.length,
         priority: "MEDIUM",
-        suggestedMessage: `Olá, {nome}! 😊 Que alegria ter você como cliente de ${restaurantName}! Esperamos que tenha adorado. Na próxima compra, ganhe 15% de desconto com o cupom BEMVINDO. Até breve! 🍕`,
+        suggestedMessage: pickSuggestedMessage("NEW_CUSTOMER", restaurantName, newCustomers.length),
         customers: newCustomers.slice(0, 10),
       });
     }
