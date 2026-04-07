@@ -1007,11 +1007,27 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
             <button
               onClick={() => setCartOpen(true)}
               aria-label={count > 0 ? `Ver carrinho — ${count} ${count === 1 ? "item" : "itens"}` : "Carrinho vazio"}
-              className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-xl text-white transition active:scale-90 hover:bg-white/30"
+              className="relative flex h-10 w-10 shrink-0 items-center justify-center text-white transition active:scale-90"
             >
-              🧺
+              {/* Shopping cart — outline SVG, white stroke */}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="26"
+                height="26"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+              </svg>
               {count > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-[#128c7e] shadow">
+                <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold leading-none text-white">
                   {count > 99 ? "99+" : count}
                 </span>
               )}
