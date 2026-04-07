@@ -44,29 +44,26 @@ function formatPrice(n: number) {
   });
 }
 
-// ── Welcome / CRM Identify Block ──────────────────────────────────────────────
+// ── Welcome Modal (popup) ─────────────────────────────────────────────────────
+// Appears once per session. Optional — can be skipped freely.
+// On submit: calls /api/qr/[slug]/identify and passes greeting back to parent.
 
-type WelcomePhase = "form" | "loading" | "done";
+type WelcomePhase = "idle" | "loading" | "done";
 
-function WelcomeBlock({
+function WelcomeModal({
   slug,
-  restaurantName,
+  onClose,
 }: {
   slug: string;
-  restaurantName: string;
+  onClose: (greeting: string | null) => void;
 }) {
-  const [phase, setPhase] = useState<WelcomePhase>("form");
   const [phone, setPhone] = useState("");
-  const [greeting, setGreeting] = useState("");
-  const [dismissed, setDismissed] = useState(false);
-
-  if (dismissed) return null;
+  const [phase, setPhase] = useState<WelcomePhase>("idle");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!phone.trim() || phase === "loading") return;
     setPhase("loading");
-
     try {
       const res = await fetch(`/api/qr/${slug}/identify`, {
         method: "POST",
@@ -74,68 +71,63 @@ function WelcomeBlock({
         body: JSON.stringify({ phone }),
       });
       const data: { found: boolean; name?: string } = await res.json();
-      setGreeting(data.found && data.name ? `Olá, ${data.name}! 👋` : "Bem-vindo! 👋");
+      onClose(data.found && data.name ? `Olá, ${data.name}! 👋` : "Bem-vindo! 👋");
     } catch {
-      setGreeting("Bem-vindo! 👋");
+      onClose("Bem-vindo! 👋");
     }
-
-    setPhase("done");
   }
 
-  // ── Greeting chip (after identification) ────────────────────────────────────
-  if (phase === "done") {
-    return (
-      <div className="mx-auto max-w-2xl px-4 pb-4">
-        <div className="flex items-center justify-between rounded-full bg-orange-50 border border-orange-100 px-4 py-2.5">
-          <span className="text-sm font-semibold text-orange-700">{greeting}</span>
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/50 backdrop-blur-sm">
+      <div
+        className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 sm:hidden">
+          <div className="h-1 w-10 rounded-full bg-gray-200" />
+        </div>
+
+        <div className="px-6 pb-8 pt-5">
+          {/* Header */}
+          <div className="mb-4 text-center">
+            <p className="text-2xl leading-none mb-2">👋</p>
+            <h2 className="text-lg font-bold text-gray-900">Bem-vindo!</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Digite seu número para uma experiência personalizada
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <input
+              type="tel"
+              inputMode="numeric"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="(11) 99999-9999"
+              disabled={phase === "loading"}
+              style={{ fontSize: "16px" }}
+              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={phase === "loading" || !phone.trim()}
+              className="w-full rounded-2xl bg-orange-500 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-orange-600 active:scale-[0.98] disabled:opacity-50"
+            >
+              {phase === "loading" ? "Verificando…" : "Continuar"}
+            </button>
+          </form>
+
+          {/* Skip */}
           <button
             type="button"
-            onClick={() => setDismissed(true)}
-            className="ml-3 text-orange-300 hover:text-orange-500 transition-colors text-xs leading-none"
-            aria-label="Fechar"
+            onClick={() => onClose(null)}
+            className="mt-3 w-full py-2 text-sm text-gray-400 transition-colors hover:text-gray-600"
           >
-            ✕
+            Pular
           </button>
         </div>
-      </div>
-    );
-  }
-
-  // ── Identification form ──────────────────────────────────────────────────────
-  return (
-    <div className="mx-auto max-w-2xl px-4 pb-4">
-      <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
-        <p className="text-sm font-semibold text-gray-800">
-          Bem-vindo ao {restaurantName}! 👋
-        </p>
-        <p className="mt-0.5 text-xs text-gray-500">
-          Informe seu número para uma experiência personalizada.
-        </p>
-        <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
-          <input
-            type="tel"
-            inputMode="numeric"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="(11) 99999-9999"
-            disabled={phase === "loading"}
-            className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:opacity-60"
-          />
-          <button
-            type="submit"
-            disabled={phase === "loading" || !phone.trim()}
-            className="shrink-0 rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-orange-600 disabled:opacity-50"
-          >
-            {phase === "loading" ? "..." : "Entrar"}
-          </button>
-        </form>
-        <button
-          type="button"
-          onClick={() => setDismissed(true)}
-          className="mt-2.5 text-xs text-gray-400 transition-colors hover:text-gray-600"
-        >
-          Pular
-        </button>
       </div>
     </div>
   );
@@ -412,6 +404,20 @@ function ProductCard({
   );
 }
 
+// ── Static Placeholder Banner ─────────────────────────────────────────────────
+
+function PlaceholderBanner() {
+  return (
+    <div className="mx-auto max-w-2xl px-4 pb-5">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-orange-500 to-red-500 px-5 py-6 shadow-sm">
+        <p className="text-xl font-bold text-white leading-snug">🔥 Combo do dia</p>
+        <p className="mt-1 text-sm text-orange-100">Pizza + bebida com desconto especial</p>
+        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-4xl opacity-30">🍕</span>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Client Component ─────────────────────────────────────────────────────
 
 export function QRMenuClient({ slug, restaurant, categories, featured, promoBanner }: Props) {
@@ -419,9 +425,25 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
   const [activeCategory, setActiveCategory] = useState<string>(
     categories[0]?.id ?? ""
   );
+  const [greeting, setGreeting] = useState<string | null>(null);
+  const [showWelcome, setShowWelcome] = useState<boolean>(false);
 
   const navRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
+
+  // Show welcome modal once per session
+  useEffect(() => {
+    const key = `qr-welcome-seen-${slug}`;
+    if (!sessionStorage.getItem(key)) {
+      setShowWelcome(true);
+    }
+  }, [slug]);
+
+  function handleWelcomeClose(g: string | null) {
+    setGreeting(g);
+    setShowWelcome(false);
+    sessionStorage.setItem(`qr-welcome-seen-${slug}`, "1");
+  }
 
   // IntersectionObserver: update active category chip as user scrolls
   useEffect(() => {
@@ -464,6 +486,10 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
 
   return (
     <>
+      {showWelcome && (
+        <WelcomeModal slug={slug} onClose={handleWelcomeClose} />
+      )}
+
       {selectedItem && (
         <ProductModal
           item={selectedItem}
@@ -489,10 +515,27 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
             <p className="mt-1 text-xs text-gray-400">Cardápio digital</p>
           </div>
 
-          {/* CRM soft capture */}
-          <WelcomeBlock slug={slug} restaurantName={restaurant.name} />
+          {/* Greeting chip — shown after welcome modal resolves */}
+          {greeting && (
+            <div className="mx-auto max-w-2xl px-4 pb-3">
+              <div className="flex items-center justify-between rounded-full bg-orange-50 border border-orange-100 px-4 py-2.5">
+                <span className="text-sm font-semibold text-orange-700">{greeting}</span>
+                <button
+                  type="button"
+                  onClick={() => setGreeting(null)}
+                  className="ml-3 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[10px] text-orange-500 hover:bg-orange-200 transition-colors"
+                  aria-label="Fechar saudação"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
 
-          {/* Promo banner */}
+          {/* Static promo banner */}
+          <PlaceholderBanner />
+
+          {/* DB-driven promo banner */}
           {promoBanner && (
             <div className="mx-auto max-w-2xl px-4 pb-5">
               <PromoBanner
