@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
+import { EntryModal, SuggestionButton, SuggestionSheet } from "./SuggestionMode";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -493,6 +494,19 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
   // ── Cart ──────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+
+  // ── Suggestion mode ───────────────────────────────────────────────
+  const [showEntryModal, setShowEntryModal] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !sessionStorage.getItem(`foocci-entry-${slug}`);
+  });
+  const [showSuggestion, setShowSuggestion] = useState(false);
+
+  function dismissEntry(mode: "menu" | "suggest") {
+    sessionStorage.setItem(`foocci-entry-${slug}`, "1");
+    setShowEntryModal(false);
+    if (mode === "suggest") setShowSuggestion(true);
+  }
 
   // ── Stage / flow ──────────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
@@ -1092,6 +1106,11 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
         <CartBar cart={cart} onFinalize={handleFinalizeClick} />
       )}
 
+      {/* Floating suggestion button — BROWSE only */}
+      {stage === "BROWSE" && (
+        <SuggestionButton onClick={() => setShowSuggestion(true)} />
+      )}
+
       {/* Checkout panels */}
       {renderCheckoutPanel()}
 
@@ -1157,6 +1176,25 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
           onRemove={(id) => setCart((prev) => prev.filter((c) => c.id !== id))}
           onFinalize={handleFinalizeClick}
           onClose={() => setCartOpen(false)}
+        />
+      )}
+
+      {/* Entry modal — shown once per session on first load */}
+      {showEntryModal && (
+        <EntryModal
+          restaurantName={restaurantName}
+          onMenu={() => dismissEntry("menu")}
+          onSuggest={() => dismissEntry("suggest")}
+        />
+      )}
+
+      {/* Suggestion sheet — guided 3-step recommendation flow */}
+      {showSuggestion && (
+        <SuggestionSheet
+          categories={categories}
+          onAdd={handleItemAdd}
+          onView={(item) => setSelectedProduct(item)}
+          onClose={() => setShowSuggestion(false)}
         />
       )}
 
