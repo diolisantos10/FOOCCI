@@ -68,7 +68,6 @@ export default async function CRMPage() {
       discountValue:    r.discountValue != null ? Number(r.discountValue) : null,
     }));
 
-    // Compute opportunities server-side
     const result = await CRMService.getOpportunities(restaurantId, restaurantName);
     if (result.ok) opportunities = result.data;
   }

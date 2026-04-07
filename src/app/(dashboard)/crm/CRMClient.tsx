@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { pickAutomationPlaceholder } from "@/lib/crm-messages";
 import type { CRMCustomer, Opportunity, AutomationRow, CustomerTier } from "@/services/crm/CRMService";
 import { BrainPanel } from "./BrainPanel";
+import { ImportModal } from "./ImportModal";
 
 // ── Label maps ─────────────────────────────────────────────────────────────────
 
@@ -215,7 +217,13 @@ function OpportunitiesTab({ opportunities }: { opportunities: Opportunity[] }) {
 
 // ── Customers Tab ─────────────────────────────────────────────────────────────
 
-function CustomersTab({ initialCustomers }: { initialCustomers: CRMCustomer[] }) {
+function CustomersTab({
+  initialCustomers,
+  onImportOpen,
+}: {
+  initialCustomers: CRMCustomer[];
+  onImportOpen: () => void;
+}) {
   const [filter, setFilter] = useState<"all" | "inactive" | "vip" | "recent">("all");
   const [customers, setCustomers] = useState<CRMCustomer[]>(initialCustomers);
   const [loading, setLoading] = useState(false);
@@ -235,8 +243,8 @@ function CustomersTab({ initialCustomers }: { initialCustomers: CRMCustomer[] })
 
   return (
     <div className="space-y-4">
-      {/* Filter pills */}
-      <div className="flex flex-wrap gap-2">
+      {/* Filter pills + import button */}
+      <div className="flex flex-wrap items-center gap-2">
         {(["all", "vip", "inactive", "recent"] as const).map((f) => (
           <button
             key={f}
@@ -250,9 +258,16 @@ function CustomersTab({ initialCustomers }: { initialCustomers: CRMCustomer[] })
             {CUSTOMER_FILTER_LABELS[f]}
           </button>
         ))}
-        <span className="ml-auto self-center text-xs text-gray-400">
-          {customers.length} clientes
-        </span>
+        <span className="text-xs text-gray-400">{customers.length} clientes</span>
+        <button
+          onClick={onImportOpen}
+          className="ml-auto flex items-center gap-1.5 rounded-full bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-700 transition-colors"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+          </svg>
+          Importar clientes
+        </button>
       </div>
 
       {/* Table */}
@@ -551,7 +566,9 @@ export function CRMClient({
   initialAutomations:  AutomationRow[];
   restaurantName:      string;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("opportunities");
+  const [showImport, setShowImport] = useState(false);
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     {
@@ -607,7 +624,10 @@ export function CRMClient({
         <OpportunitiesTab opportunities={initialOpportunities} />
       )}
       {tab === "customers" && (
-        <CustomersTab initialCustomers={initialCustomers} />
+        <CustomersTab
+          initialCustomers={initialCustomers}
+          onImportOpen={() => setShowImport(true)}
+        />
       )}
       {tab === "automations" && (
         <AutomationsTab initialAutomations={initialAutomations} />
@@ -617,6 +637,12 @@ export function CRMClient({
       <div className="mt-6">
         <BrainPanel />
       </div>
+
+      <ImportModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        onComplete={() => { setShowImport(false); router.refresh(); }}
+      />
     </div>
   );
 }
