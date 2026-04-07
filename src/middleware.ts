@@ -26,6 +26,8 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/setup$/,                    // Setup API
   /^\/qr(\/.*)?$/,                     // Public QR dine-in menu pages
   /^\/api\/qr(\/.*)?$/,                // Public QR dine-in menu API
+  /^\/pedido(\/.*)?$/,                 // Public AI ordering experience pages
+  /^\/api\/pedido(\/.*)?$/,            // Public AI ordering experience API
   /^\/api\/payments\/stone\/webhook$/, // Stone webhook (public, verified by HMAC)
   /^\/api\/media(\/.*)?$/,             // Public media (product images stored in DB)
 ];
