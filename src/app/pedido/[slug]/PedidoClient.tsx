@@ -74,6 +74,7 @@ interface Props {
   slug: string;
   restaurantName: string;
   logoUrl: string | null;
+  phone: string | null;
   categories: MenuCategory[];
 }
 
@@ -341,9 +342,140 @@ function CartBar({ cart, onFinalize }: { cart: CartItem[]; onFinalize: () => voi
   );
 }
 
+// ── Cart FAB (floating button) ────────────────────────────────────────────────
+// Visible in BROWSE stage. Shows total item count badge.
+
+function CartFAB({ count, onClick }: { count: number; onClick: () => void }) {
+  if (count === 0) return null;
+  return (
+    <button
+      onClick={onClick}
+      aria-label={`Ver carrinho — ${count} ${count === 1 ? "item" : "itens"}`}
+      className="absolute bottom-[5.5rem] right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-[#128c7e] shadow-lg transition active:scale-95"
+    >
+      <span className="text-2xl leading-none">🛒</span>
+      <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow">
+        {count > 99 ? "99+" : count}
+      </span>
+    </button>
+  );
+}
+
+// ── Cart drawer ───────────────────────────────────────────────────────────────
+// Slide-up sheet showing items, quantities, total, and a Finalizar CTA.
+
+function CartDrawer({
+  cart,
+  onIncrement,
+  onDecrement,
+  onRemove,
+  onFinalize,
+  onClose,
+}: {
+  cart: CartItem[];
+  onIncrement: (id: string) => void;
+  onDecrement: (id: string) => void;
+  onRemove: (id: string) => void;
+  onFinalize: () => void;
+  onClose: () => void;
+}) {
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const count = cart.reduce((s, i) => s + i.qty, 0);
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-end justify-center bg-black/50"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-md rounded-t-[2rem] bg-white" style={{ maxHeight: "80dvh" }}>
+
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="h-1 w-10 rounded-full bg-gray-200" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-3">
+          <div>
+            <p className="text-base font-bold text-gray-900">Seu pedido</p>
+            <p className="text-xs text-gray-400">{count} {count === 1 ? "item" : "itens"}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 active:scale-90 transition-transform"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Item list */}
+        <div className="overflow-y-auto px-6" style={{ maxHeight: "calc(80dvh - 12rem)" }}>
+          {cart.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-400">Carrinho vazio</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {cart.map((item) => (
+                <div key={item.id} className="flex items-center gap-3 py-3">
+                  {/* Name + price */}
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-900">{item.name}</p>
+                    <p className="text-xs text-gray-500">
+                      R$ {item.price.toFixed(2).replace(".", ",")} × {item.qty}
+                    </p>
+                  </div>
+
+                  {/* Qty controls */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => item.qty <= 1 ? onRemove(item.id) : onDecrement(item.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 active:scale-90 transition-transform text-base"
+                    >
+                      {item.qty <= 1 ? "🗑" : "−"}
+                    </button>
+                    <span className="w-5 text-center text-sm font-bold text-gray-900">{item.qty}</span>
+                    <button
+                      onClick={() => onIncrement(item.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-[#25d366] text-white hover:bg-[#1ebe5a] active:scale-90 transition-transform text-sm font-bold"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  {/* Subtotal */}
+                  <p className="w-16 shrink-0 text-right text-sm font-bold text-gray-800">
+                    R$ {(item.price * item.qty).toFixed(2).replace(".", ",")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer — total + CTA */}
+        {cart.length > 0 && (
+          <div className="border-t border-gray-100 px-6 pb-8 pt-4">
+            <div className="mb-3 flex justify-between">
+              <span className="text-sm font-semibold text-gray-600">Total</span>
+              <span className="text-lg font-bold text-gray-900">
+                R$ {total.toFixed(2).replace(".", ",")}
+              </span>
+            </div>
+            <button
+              onClick={() => { onClose(); onFinalize(); }}
+              className="w-full rounded-2xl bg-[#25d366] py-4 text-sm font-bold text-white shadow active:scale-[0.98] transition-all hover:bg-[#1ebe5a]"
+            >
+              Finalizar pedido 🎉
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Props) {
+export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories }: Props) {
   // ── Chat ─────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -360,6 +492,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Prop
 
   // ── Cart ──────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
 
   // ── Stage / flow ──────────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
@@ -860,34 +993,64 @@ export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Prop
             🍕
           </div>
         )}
-        <div>
-          <p className="text-sm font-bold text-white">{restaurantName}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-white truncate">{restaurantName}</p>
           <p className="text-[10px] text-green-200">
             {ui === "thinking" ? "digitando…" : "online"}
           </p>
         </div>
+
+        {/* Falar com humano — WhatsApp if phone exists, fallback future-ready */}
+        {phone ? (
+          <a
+            href={`https://wa.me/${phone.replace(/\D/g, "")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Falar com humano via WhatsApp"
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm hover:bg-white/25 active:scale-95 transition-all"
+          >
+            <span>💬</span>
+            <span className="hidden sm:inline">Falar com humano</span>
+          </a>
+        ) : (
+          <button
+            aria-label="Falar com humano"
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm opacity-60 cursor-default"
+            disabled
+          >
+            <span>💬</span>
+          </button>
+        )}
       </div>
 
-      {/* Chat area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {/* Chat area — relative so FAB positions inside it */}
+      <div className="relative flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.map((msg) => (
           <Bubble key={msg.id} msg={msg} />
         ))}
         {ui === "thinking" && <TypingIndicator />}
         <div ref={bottomRef} />
+
+        {/* Floating cart FAB — visible during BROWSE when cart has items */}
+        {stage === "BROWSE" && (
+          <CartFAB
+            count={cart.reduce((s, i) => s + i.qty, 0)}
+            onClick={() => setCartOpen(true)}
+          />
+        )}
       </div>
 
-      {/* Category tabs — BROWSE only */}
+      {/* Category tabs — BROWSE only, larger and more prominent */}
       {stage === "BROWSE" && categories.length > 0 && (
-        <div className="shrink-0 flex overflow-x-auto gap-2 border-t border-gray-200 bg-white px-3 py-2">
+        <div className="shrink-0 flex overflow-x-auto gap-2 border-t border-gray-200 bg-white px-3 py-2.5">
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setSelectedCategoryId(cat.id)}
-              className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all ${
                 selectedCategoryId === cat.id
-                  ? "bg-[#25d366] text-white shadow-sm"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  ? "bg-[#128c7e] text-white shadow-sm"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
               }`}
             >
               {categoryEmoji(cat.name)} {cat.name}
@@ -913,7 +1076,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Prop
         </div>
       )}
 
-      {/* Cart bar */}
+      {/* Cart bar — BROWSE only, still present as primary CTA when cart non-empty */}
       {stage === "BROWSE" && (
         <CartBar cart={cart} onFinalize={handleFinalizeClick} />
       )}
@@ -925,7 +1088,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Prop
       {showInput && (
         <form
           onSubmit={handleSubmit}
-          className="shrink-0 flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 safe-bottom"
+          className="shrink-0 flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2"
         >
           <textarea
             ref={inputRef}
@@ -967,6 +1130,22 @@ export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Prop
             setSelectedProduct(null);
           }}
           onClose={() => setSelectedProduct(null)}
+        />
+      )}
+
+      {/* Cart drawer */}
+      {cartOpen && (
+        <CartDrawer
+          cart={cart}
+          onIncrement={(id) =>
+            setCart((prev) => prev.map((c) => c.id === id ? { ...c, qty: c.qty + 1 } : c))
+          }
+          onDecrement={(id) =>
+            setCart((prev) => prev.map((c) => c.id === id ? { ...c, qty: Math.max(1, c.qty - 1) } : c))
+          }
+          onRemove={(id) => setCart((prev) => prev.filter((c) => c.id !== id))}
+          onFinalize={handleFinalizeClick}
+          onClose={() => setCartOpen(false)}
         />
       )}
 

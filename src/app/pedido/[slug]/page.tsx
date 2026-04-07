@@ -35,7 +35,7 @@ export default async function PedidoPage({
 
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug },
-    select: { id: true, name: true, logoUrl: true },
+    select: { id: true, name: true, logoUrl: true, phone: true },
   });
 
   if (!restaurant) notFound();
@@ -78,6 +78,7 @@ export default async function PedidoPage({
       slug={slug}
       restaurantName={restaurant.name}
       logoUrl={restaurant.logoUrl ?? null}
+      phone={restaurant.phone ?? null}
       categories={categories}
     />
   );
