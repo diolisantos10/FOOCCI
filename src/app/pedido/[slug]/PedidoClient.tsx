@@ -177,7 +177,9 @@ function TypingIndicator() {
 }
 
 // ── Product card ──────────────────────────────────────────────────────────────
-// Thumbnail — image + name + price + add. No description (tap to expand).
+// Thumbnail — uniform h-52 w-36. Image + name + price + add. No description.
+
+const CARD_IMG_H = "h-[88px]"; // fixed image zone — same with or without photo
 
 function ProductCard({
   item,
@@ -191,27 +193,31 @@ function ProductCard({
   onOpen: () => void;
 }) {
   return (
-    <div className="relative flex shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <button onClick={onOpen} className="block overflow-hidden">
+    /* Fixed outer size keeps the grid perfectly uniform regardless of name length */
+    <div className="flex h-52 w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+
+      {/* Image zone — fixed height, tappable */}
+      <button onClick={onOpen} className={`block w-full shrink-0 overflow-hidden ${CARD_IMG_H}`}>
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt={item.name} className="h-32 w-full object-cover" />
+          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-24 w-full items-center justify-center bg-gray-50 text-4xl">
+          <div className="flex h-full w-full items-center justify-center bg-gray-100 text-4xl">
             {categoryEmoji(item.name)}
           </div>
         )}
       </button>
 
-      <div className="flex flex-1 flex-col p-3 pt-2.5">
+      {/* Content zone — fills remaining height, price+button pinned to bottom */}
+      <div className="flex flex-1 flex-col px-3 pb-3 pt-2">
         <p
           onClick={onOpen}
-          className="cursor-pointer text-xs font-semibold leading-snug text-gray-900 line-clamp-2"
+          className="cursor-pointer text-[13px] font-semibold leading-snug text-gray-900 line-clamp-2"
         >
           {item.name}
         </p>
 
-        <div className="mt-auto flex items-center justify-between pt-2">
+        <div className="mt-auto flex items-center justify-between">
           <span className="text-xs font-bold text-gray-900">
             R$ {item.price.toFixed(2).replace(".", ",")}
           </span>
@@ -250,27 +256,28 @@ function ProductModal({
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md overflow-hidden rounded-t-[2rem] bg-white sm:rounded-[2rem]">
+      {/* Modal sheet — scrollable so tall content is always reachable */}
+      <div className="w-full max-w-md overflow-y-auto rounded-t-[2rem] bg-white sm:rounded-[2rem]" style={{ maxHeight: "90dvh" }}>
 
-        {/* ── Image — dominant selling element ── */}
-        <div className="relative">
+        {/* ── Image — square crop, dominant selling element ── */}
+        <div className="relative w-full overflow-hidden" style={{ aspectRatio: "1 / 1" }}>
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={item.imageUrl}
               alt={item.name}
-              className="h-72 w-full object-cover"
+              className="absolute inset-0 h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-48 w-full items-center justify-center bg-gray-100 text-6xl">
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-7xl">
               {categoryEmoji(item.name)}
             </div>
           )}
 
-          {/* Close button — floating over image */}
+          {/* Close — floating over image, easy tap target */}
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60 active:scale-90 transition-transform"
           >
             ✕
           </button>
@@ -663,6 +670,8 @@ export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Prop
     const text = inputText.trim();
     if (!text || ui === "thinking") return;
     setInputText("");
+    // Blur to dismiss keyboard after sending — prevents layout staying collapsed
+    inputRef.current?.blur();
 
     switch (stage) {
       case "ADDRESS_INPUT":   handleAddressInput(text);   break;
@@ -839,7 +848,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Prop
 
   // ── Render ────────────────────────────────────────────────────────
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-[#ece5dd]">
+    <div className="fixed inset-0 flex flex-col bg-[#ece5dd]">
 
       {/* Header */}
       <div className="shrink-0 flex items-center gap-3 bg-[#128c7e] px-4 py-3 shadow">
@@ -892,14 +901,13 @@ export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Prop
         <div className="shrink-0 border-t border-gray-100 bg-gray-50">
           <div className="flex gap-3 overflow-x-auto px-3 py-3">
             {currentCategoryItems.map((item) => (
-              <div key={item.id} className="w-36 shrink-0">
-                <ProductCard
-                  item={item}
-                  qty={cart.find((c) => c.id === item.id)?.qty ?? 0}
-                  onAdd={() => handleItemAdd(item)}
-                  onOpen={() => setSelectedProduct(item)}
-                />
-              </div>
+              <ProductCard
+                key={item.id}
+                item={item}
+                qty={cart.find((c) => c.id === item.id)?.qty ?? 0}
+                onAdd={() => handleItemAdd(item)}
+                onOpen={() => setSelectedProduct(item)}
+              />
             ))}
           </div>
         </div>
@@ -915,7 +923,10 @@ export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Prop
 
       {/* Text input */}
       {showInput && (
-        <form onSubmit={handleSubmit} className="shrink-0 flex items-end gap-2 border-t border-gray-200 bg-white px-3 py-2">
+        <form
+          onSubmit={handleSubmit}
+          className="shrink-0 flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 safe-bottom"
+        >
           <textarea
             ref={inputRef}
             rows={1}
@@ -923,12 +934,14 @@ export function PedidoClient({ slug, restaurantName, logoUrl, categories }: Prop
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={inputPlaceholder}
-            className="flex-1 resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
+            /* font-size 16px — prevents iOS Safari from zooming on focus */
+            style={{ fontSize: "16px" }}
+            className="flex-1 resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 leading-snug text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
           />
           <button
             type="submit"
             disabled={!inputText.trim() || ui === "thinking"}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-white disabled:opacity-40 hover:bg-[#1ebe5a] transition"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-lg text-white shadow disabled:opacity-40 hover:bg-[#1ebe5a] active:scale-95 transition-all"
           >
             ➤
           </button>
