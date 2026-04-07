@@ -362,6 +362,68 @@ function CartFAB({ count, onClick }: { count: number; onClick: () => void }) {
   );
 }
 
+// ── Desktop product card ──────────────────────────────────────────────────────
+// Used in the right-column CSS grid on lg+ screens. Fills its grid cell.
+
+function DesktopProductCard({
+  item,
+  qty,
+  onAdd,
+  onOpen,
+}: {
+  item: MenuItem;
+  qty: number;
+  onAdd: () => void;
+  onOpen: () => void;
+}) {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow">
+      {/* Image */}
+      <button
+        onClick={onOpen}
+        className="block w-full shrink-0 overflow-hidden h-40 bg-gray-100"
+      >
+        {item.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-5xl">
+            {categoryEmoji(item.name)}
+          </div>
+        )}
+      </button>
+
+      {/* Content */}
+      <div className="flex flex-1 flex-col p-4">
+        <p
+          onClick={onOpen}
+          className="cursor-pointer text-sm font-bold leading-snug text-gray-900 line-clamp-2"
+        >
+          {item.name}
+        </p>
+        {item.description && (
+          <p className="mt-1 text-xs text-gray-500 line-clamp-2">{item.description}</p>
+        )}
+        <div className="mt-auto flex items-center justify-between pt-3">
+          <span className="text-sm font-extrabold text-gray-900">
+            R$ {item.price.toFixed(2).replace(".", ",")}
+          </span>
+          <button
+            onClick={onAdd}
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition-colors ${
+              qty > 0
+                ? "bg-[#25d366] text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-[#25d366] hover:text-white"
+            }`}
+          >
+            {qty > 0 ? qty : "+"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Cart drawer ───────────────────────────────────────────────────────────────
 // Slide-up sheet showing items, quantities, total, and a Finalizar CTA.
 
@@ -994,159 +1056,276 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
     "Digite uma mensagem…";
 
   // ── Render ────────────────────────────────────────────────────────
-  return (
-    <div className="fixed inset-0 flex flex-col bg-[#ece5dd]">
+  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+  const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
 
-      {/* Header */}
-      <div className="shrink-0 flex items-center gap-3 bg-[#128c7e] px-4 py-3 shadow">
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt={restaurantName} className="h-9 w-9 rounded-full object-cover" />
-        ) : (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-xl leading-none">
-            🍕
+  // Extracted: header (shared between mobile and desktop — rendered once)
+  const header = (
+    <div className="shrink-0 flex items-center gap-3 bg-[#128c7e] px-4 py-3 shadow">
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logoUrl} alt={restaurantName} className="h-9 w-9 rounded-full object-cover" />
+      ) : (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-xl leading-none">
+          🍕
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-white truncate">{restaurantName}</p>
+        <p className="text-[10px] text-green-200">
+          {ui === "thinking" ? "digitando…" : "online"}
+        </p>
+      </div>
+      <button
+        onClick={() => setCartOpen(true)}
+        aria-label={cartCount > 0 ? `Ver carrinho — ${cartCount} ${cartCount === 1 ? "item" : "itens"}` : "Carrinho vazio"}
+        className="relative flex h-10 w-10 shrink-0 items-center justify-center text-white transition active:scale-90"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="9" cy="21" r="1" />
+          <circle cx="20" cy="21" r="1" />
+          <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+        </svg>
+        {cartCount > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold leading-none text-white">
+            {cartCount > 99 ? "99+" : cartCount}
+          </span>
+        )}
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 flex flex-col lg:flex-row bg-[#ece5dd]">
+
+      {/* ═══════════════════════════════════════════════════════════
+          LEFT PANEL — Chat
+          Mobile : flex-1 (full width, menu stacked below)
+          Desktop: fixed 420px–460px wide column
+      ═══════════════════════════════════════════════════════════ */}
+      <div className="flex-1 flex flex-col overflow-hidden
+                      lg:flex-none lg:w-[420px] xl:w-[460px] lg:shrink-0
+                      lg:border-r lg:border-gray-200
+                      lg:shadow-[2px_0_12px_rgba(0,0,0,0.07)]">
+
+        {header}
+
+        {/* Chat messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#ece5dd]">
+          {messages.map((msg) => (
+            <Bubble key={msg.id} msg={msg} />
+          ))}
+          {ui === "thinking" && <TypingIndicator />}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Desktop cart summary — below chat, above input, desktop + BROWSE + cart */}
+        {stage === "BROWSE" && cartCount > 0 && (
+          <div className="hidden lg:block shrink-0 border-t border-gray-100 bg-white px-4 py-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-bold text-gray-900">
+                Carrinho &middot; {cartCount} {cartCount === 1 ? "item" : "itens"}
+              </p>
+              <button
+                onClick={() => setCartOpen(true)}
+                className="text-xs font-medium text-green-600 hover:underline"
+              >
+                Editar
+              </button>
+            </div>
+            <div className="mb-3 max-h-[100px] space-y-1 overflow-y-auto">
+              {cart.map((item) => (
+                <div key={item.id} className="flex justify-between text-xs">
+                  <span className="min-w-0 truncate text-gray-700">
+                    {item.qty}&times; {item.name}
+                  </span>
+                  <span className="ml-2 shrink-0 font-medium text-gray-600">
+                    R$ {(item.price * item.qty).toFixed(2).replace(".", ",")}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={handleFinalizeClick}
+              className="flex w-full items-center justify-between rounded-2xl bg-[#25d366] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#1ebe5a]"
+            >
+              <span>Finalizar pedido</span>
+              <span>R$ {cartTotal.toFixed(2).replace(".", ",")}</span>
+            </button>
           </div>
         )}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-white truncate">{restaurantName}</p>
-          <p className="text-[10px] text-green-200">
-            {ui === "thinking" ? "digitando…" : "online"}
-          </p>
-        </div>
 
-        {/* Cart button — top-right, always visible, badge shows item count */}
-        {(() => {
-          const count = cart.reduce((s, i) => s + i.qty, 0);
-          return (
-            <button
-              onClick={() => setCartOpen(true)}
-              aria-label={count > 0 ? `Ver carrinho — ${count} ${count === 1 ? "item" : "itens"}` : "Carrinho vazio"}
-              className="relative flex h-10 w-10 shrink-0 items-center justify-center text-white transition active:scale-90"
-            >
-              {/* Shopping cart — outline SVG, white stroke */}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="26"
-                height="26"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="9" cy="21" r="1" />
-                <circle cx="20" cy="21" r="1" />
-                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-              </svg>
-              {count > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold leading-none text-white">
-                  {count > 99 ? "99+" : count}
-                </span>
-              )}
-            </button>
-          );
-        })()}
-      </div>
-
-      {/* Chat area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {messages.map((msg) => (
-          <Bubble key={msg.id} msg={msg} />
-        ))}
-        {ui === "thinking" && <TypingIndicator />}
-        <div ref={bottomRef} />
-      </div>
-
-      {/* Category tabs — BROWSE only, larger and more prominent */}
-      {stage === "BROWSE" && categories.length > 0 && (
-        <div
-          className="shrink-0 flex overflow-x-auto gap-3 border-t border-gray-200 bg-white px-3 py-2.5 [&::-webkit-scrollbar]:hidden"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategoryId(cat.id)}
-              className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-base font-semibold min-h-[44px] transition-all ${
-                selectedCategoryId === cat.id
-                  ? "bg-green-600 text-white shadow-sm"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
-              }`}
-            >
-              {categoryEmoji(cat.name)} {cat.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Product grid — BROWSE only */}
-      {stage === "BROWSE" && currentCategoryItems.length > 0 && (
-        <div className="shrink-0 border-t border-gray-100 bg-gray-50">
+        {/* Mobile-only: category tabs */}
+        {stage === "BROWSE" && categories.length > 0 && (
           <div
-            className="flex gap-3 overflow-x-auto px-3 py-3 [&::-webkit-scrollbar]:hidden"
+            className="lg:hidden shrink-0 flex overflow-x-auto gap-3 border-t border-gray-200 bg-white px-3 py-2.5 [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarWidth: "none" }}
           >
-            {currentCategoryItems.map((item) => (
-              <ProductCard
-                key={item.id}
-                item={item}
-                qty={cart.find((c) => c.id === item.id)?.qty ?? 0}
-                onAdd={() => handleItemAdd(item)}
-                onOpen={() => setSelectedProduct(item)}
-              />
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategoryId(cat.id)}
+                className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-base font-semibold min-h-[44px] transition-all ${
+                  selectedCategoryId === cat.id
+                    ? "bg-green-600 text-white shadow-sm"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
+                }`}
+              >
+                {categoryEmoji(cat.name)} {cat.name}
+              </button>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Cart bar — BROWSE only, still present as primary CTA when cart non-empty */}
-      {stage === "BROWSE" && (
-        <CartBar cart={cart} onFinalize={handleFinalizeClick} />
-      )}
+        {/* Mobile-only: product grid (horizontal scroll) */}
+        {stage === "BROWSE" && currentCategoryItems.length > 0 && (
+          <div className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
+            <div
+              className="flex gap-3 overflow-x-auto px-3 py-3 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {currentCategoryItems.map((item) => (
+                <ProductCard
+                  key={item.id}
+                  item={item}
+                  qty={cart.find((c) => c.id === item.id)?.qty ?? 0}
+                  onAdd={() => handleItemAdd(item)}
+                  onOpen={() => setSelectedProduct(item)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
-      {/* Floating suggestion button — BROWSE only */}
-      {stage === "BROWSE" && (
-        <SuggestionButton onClick={() => setShowSuggestion(true)} />
-      )}
+        {/* Mobile-only: CartBar */}
+        {stage === "BROWSE" && (
+          <div className="lg:hidden">
+            <CartBar cart={cart} onFinalize={handleFinalizeClick} />
+          </div>
+        )}
 
-      {/* Checkout panels */}
-      {renderCheckoutPanel()}
+        {/* Checkout panels (address / payment / review / done) */}
+        {renderCheckoutPanel()}
 
-      {/* Text input */}
-      {showInput && (
-        <form
-          onSubmit={handleSubmit}
-          className="shrink-0 flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2"
-        >
-          <textarea
-            ref={inputRef}
-            rows={1}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={inputPlaceholder}
-            /* font-size 16px — prevents iOS Safari from zooming on focus */
-            style={{ fontSize: "16px" }}
-            className="flex-1 resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 leading-snug text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={!inputText.trim() || ui === "thinking"}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-lg text-white shadow disabled:opacity-40 hover:bg-[#1ebe5a] active:scale-95 transition-all"
+        {/* Text input */}
+        {showInput && (
+          <form
+            onSubmit={handleSubmit}
+            className="shrink-0 flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2"
           >
-            ➤
-          </button>
-        </form>
-      )}
+            <textarea
+              ref={inputRef}
+              rows={1}
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={inputPlaceholder}
+              style={{ fontSize: "16px" }}
+              className="flex-1 resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 leading-snug text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={!inputText.trim() || ui === "thinking"}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-lg text-white shadow disabled:opacity-40 hover:bg-[#1ebe5a] active:scale-95 transition-all"
+            >
+              ➤
+            </button>
+          </form>
+        )}
 
-      {/* Back to browse link in non-BROWSE non-DONE stages */}
-      {stage !== "BROWSE" && stage !== "DONE" && (
-        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-1.5 text-center">
-          <button onClick={handleBackToBrowse} className="text-xs text-gray-400 hover:text-gray-600">
-            ← Voltar ao cardápio
-          </button>
+        {/* Back to browse */}
+        {stage !== "BROWSE" && stage !== "DONE" && (
+          <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-1.5 text-center">
+            <button onClick={handleBackToBrowse} className="text-xs text-gray-400 hover:text-gray-600">
+              ← Voltar ao cardápio
+            </button>
+          </div>
+        )}
+      </div>
+      {/* ═══════════════ end LEFT PANEL ═══════════════ */}
+
+      {/* ═══════════════════════════════════════════════════════════
+          RIGHT PANEL — Menu (desktop only, hidden on mobile)
+      ═══════════════════════════════════════════════════════════ */}
+      <div className="hidden lg:flex flex-1 flex-col overflow-hidden bg-gray-50">
+        {stage === "BROWSE" ? (
+          <>
+            {/* Category nav */}
+            <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-white px-5 py-3">
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategoryId(cat.id)}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                    selectedCategoryId === cat.id
+                      ? "bg-green-600 text-white shadow-sm"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
+                  }`}
+                >
+                  {categoryEmoji(cat.name)} {cat.name}
+                </button>
+              ))}
+              {/* Desktop suggestion entry */}
+              <button
+                onClick={() => setShowSuggestion(true)}
+                className="ml-auto shrink-0 flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-bold text-green-700 shadow-sm ring-1 ring-green-200 hover:shadow-md transition-shadow"
+              >
+                <span className="leading-none">✨</span>
+                Sugestão
+              </button>
+            </div>
+
+            {/* Product grid — CSS grid, fills available space */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {currentCategoryItems.length > 0 ? (
+                <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                  {currentCategoryItems.map((item) => (
+                    <DesktopProductCard
+                      key={item.id}
+                      item={item}
+                      qty={cart.find((c) => c.id === item.id)?.qty ?? 0}
+                      onAdd={() => handleItemAdd(item)}
+                      onOpen={() => setSelectedProduct(item)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-sm text-gray-400">Nenhum item nesta categoria.</p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* Checkout in progress — right panel shows context */
+          <div className="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-4xl">
+              🛒
+            </div>
+            <div>
+              <p className="text-base font-bold text-gray-800">Finalizando seu pedido</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Continue no chat ao lado para confirmar endereço e pagamento.
+              </p>
+            </div>
+            {stage !== "DONE" && (
+              <button
+                onClick={handleBackToBrowse}
+                className="rounded-xl border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                ← Voltar ao cardápio
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {/* ═══════════════ end RIGHT PANEL ═══════════════ */}
+
+      {/* Mobile-only floating suggestion button */}
+      {stage === "BROWSE" && (
+        <div className="lg:hidden">
+          <SuggestionButton onClick={() => setShowSuggestion(true)} />
         </div>
       )}
 
