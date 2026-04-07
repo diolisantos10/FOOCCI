@@ -56,6 +56,8 @@ model Restaurant {
   integrationConfigs IntegrationConfig[]
   promotions         Promotion[]
   crmAutomations     CRMAutomation[]
+  crmActionLogs      CRMActionLog[]
+  crmProfile         RestaurantCRMProfile?
 
   @@map("restaurants")
 }
@@ -1052,4 +1054,62 @@ model CRMAutomation {
   @@unique([restaurantId, trigger])
   @@index([restaurantId])
   @@map("crm_automations")
+}
+
+// ═══════════════════════════════════════════
+//  CRM ADAPTIVE BRAIN
+// ═══════════════════════════════════════════
+
+enum CRMMessageStyle {
+  FRIENDLY
+  PLAYFUL
+  DIRECT
+  EMOTIONAL
+  PREMIUM
+}
+
+/// Tone personality of the restaurant — biases style selection.
+enum CRMToneProfile {
+  CASUAL        // boosts PLAYFUL + FRIENDLY
+  PREMIUM_FEEL  // boosts PREMIUM + EMOTIONAL
+  FRIENDLY      // boosts FRIENDLY + EMOTIONAL
+  SALES_FORWARD // boosts DIRECT + PREMIUM
+}
+
+/// One row per CRM message dispatched. Outcomes updated asynchronously.
+model CRMActionLog {
+  id           String          @id @default(cuid())
+  restaurantId String
+  customerId   String?
+  actionType   String          // maps to MessageIntent values
+  messageStyle CRMMessageStyle
+  messageText  String
+  responded    Boolean         @default(false)
+  converted    Boolean         @default(false)
+  revenue      Decimal?        @db.Decimal(10, 2)
+  respondedAt  DateTime?
+  convertedAt  DateTime?
+  createdAt    DateTime        @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([restaurantId, messageStyle])
+  @@index([restaurantId, createdAt])
+  @@map("crm_action_logs")
+}
+
+/// One row per restaurant. Tone preference + cached style weights.
+model RestaurantCRMProfile {
+  id             String         @id @default(cuid())
+  restaurantId   String         @unique
+  toneProfile    CRMToneProfile @default(FRIENDLY)
+  styleWeights   Json           @default("{}") // { FRIENDLY: 0.3, PLAYFUL: 0.2, ... }
+  profileVersion Int            @default(0)    // bumped each time weights are recomputed
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("restaurant_crm_profiles")
 }

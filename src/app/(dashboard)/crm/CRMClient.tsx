@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { pickAutomationPlaceholder } from "@/lib/crm-messages";
 import type { CRMCustomer, Opportunity, AutomationRow, CustomerTier } from "@/services/crm/CRMService";
+import { BrainPanel } from "./BrainPanel";
 
 // ── Label maps ─────────────────────────────────────────────────────────────────
 
@@ -611,6 +612,11 @@ export function CRMClient({
       {tab === "automations" && (
         <AutomationsTab initialAutomations={initialAutomations} />
       )}
+
+      {/* Adaptive Brain — always visible below tabs */}
+      <div className="mt-6">
+        <BrainPanel />
+      </div>
     </div>
   );
 }
