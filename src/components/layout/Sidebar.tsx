@@ -56,6 +56,11 @@ const NAV_GROUPS: NavGroup[] = [
         // Also highlight when browsing Marketing sub-pages that live under /settings
         extraActivePaths: ["/settings/experience", "/settings/agent"],
       },
+      {
+        href:  "/promotions",
+        label: "Promoções",
+        icon:  "🎁",
+      },
     ],
   },
   {

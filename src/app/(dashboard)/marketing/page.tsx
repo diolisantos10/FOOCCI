@@ -5,6 +5,12 @@ export const metadata = { title: "Marketing" };
 
 const SECTIONS = [
   {
+    href:        "/promotions",
+    icon:        "🎁",
+    label:       "Promoções",
+    description: "Crie e gerencie promoções, cupons, combos e descontos para atrair e fidelizar clientes.",
+  },
+  {
     href:        "/settings/experience",
     icon:        "✨",
     label:       "Experiência",
@@ -56,7 +62,7 @@ export default function MarketingPage() {
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Em breve</p>
           <p className="text-sm font-medium text-gray-700">Campanhas e automações</p>
           <p className="mt-1 text-xs text-gray-400">
-            Envio em massa pelo WhatsApp, cupons, promoções e análise de conversão por campanha.
+            Envio em massa pelo WhatsApp e análise de conversão por campanha.
           </p>
         </div>
       </div>

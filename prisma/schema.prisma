@@ -54,6 +54,7 @@ model Restaurant {
   paymentSettings    PaymentSettings?
   storePolicies      StorePolicies?
   integrationConfigs IntegrationConfig[]
+  promotions         Promotion[]
 
   @@map("restaurants")
 }
@@ -948,4 +949,77 @@ model StorePolicies {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("store_policies")
+}
+
+// ═══════════════════════════════════════════
+//  PROMOTIONS  (Marketing Engine)
+// ═══════════════════════════════════════════
+
+enum PromotionType {
+  PERCENTAGE    // e.g. 10% off
+  FIXED         // e.g. R$5 off
+  COMBO         // bundled offer (configured via description/rules)
+  FREE_DELIVERY // zeroes delivery fee
+  COUPON        // code-gated discount
+}
+
+enum PromotionStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+}
+
+enum PromotionChannel {
+  QR_MENU
+  DELIVERY
+  WHATSAPP
+  ALL
+}
+
+enum PromotionTarget {
+  PRODUCT   // applies to specific products
+  CATEGORY  // applies to a whole category
+  ORDER     // applies to the whole order
+}
+
+model Promotion {
+  id                String           @id @default(cuid())
+  restaurantId      String
+  name              String
+  description       String?
+  type              PromotionType
+  status            PromotionStatus  @default(DRAFT)
+  discountValue     Decimal          @default(0) @db.Decimal(10, 2)
+
+  // Targeting
+  target            PromotionTarget  @default(ORDER)
+  targetProductIds  String[]         @default([])
+  targetCategoryIds String[]         @default([])
+  channel           PromotionChannel @default(ALL)
+
+  // Coupon
+  couponCode        String?
+
+  // Validity window
+  startsAt          DateTime?
+  endsAt            DateTime?
+  daysOfWeek        Int[]            @default([]) // 0=Sun … 6=Sat; empty = every day
+  timeFrom          String?          // "HH:MM" (local restaurant time)
+  timeTo            String?          // "HH:MM"
+
+  // Eligibility rules
+  minOrderValue     Decimal?         @db.Decimal(10, 2)
+  minQuantity       Int?
+  maxUses           Int?
+  usedCount         Int              @default(0)
+  oneTimePerUser    Boolean          @default(false)
+  combinable        Boolean          @default(false)
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@map("promotions")
 }
