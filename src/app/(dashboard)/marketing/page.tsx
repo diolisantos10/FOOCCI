@@ -5,6 +5,12 @@ export const metadata = { title: "Marketing" };
 
 const SECTIONS = [
   {
+    href:        "/crm",
+    icon:        "📊",
+    label:       "CRM",
+    description: "Motor de receita: veja oportunidades diárias, clientes inativos, VIPs e configure automações de WhatsApp.",
+  },
+  {
     href:        "/promotions",
     icon:        "🎁",
     label:       "Promoções",

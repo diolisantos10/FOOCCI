@@ -55,6 +55,7 @@ model Restaurant {
   storePolicies      StorePolicies?
   integrationConfigs IntegrationConfig[]
   promotions         Promotion[]
+  crmAutomations     CRMAutomation[]
 
   @@map("restaurants")
 }
@@ -1022,4 +1023,33 @@ model Promotion {
 
   @@index([restaurantId])
   @@map("promotions")
+}
+
+// ═══════════════════════════════════════════
+//  CRM AUTOMATIONS
+// ═══════════════════════════════════════════
+
+enum AutomationTrigger {
+  REACTIVATION // fires after X days of customer inactivity
+  BIRTHDAY     // fires on customer birthday
+  POST_ORDER   // fires X days after a completed order
+}
+
+model CRMAutomation {
+  id               String            @id @default(cuid())
+  restaurantId     String
+  trigger          AutomationTrigger
+  isEnabled        Boolean           @default(false)
+  messageTemplate  String            @default("")
+  triggerAfterDays Int               @default(30)
+  discountType     String?           // "PERCENTAGE" | "FIXED" | null
+  discountValue    Decimal?          @db.Decimal(10, 2)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, trigger])
+  @@index([restaurantId])
+  @@map("crm_automations")
 }

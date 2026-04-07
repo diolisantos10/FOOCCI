@@ -1,0 +1,611 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import Link from "next/link";
+import type { CRMCustomer, Opportunity, AutomationRow, CustomerTier } from "@/services/crm/CRMService";
+
+// ── Label maps ─────────────────────────────────────────────────────────────────
+
+const TIER_CONFIG: Record<CustomerTier, { label: string; bg: string; text: string; icon: string }> = {
+  DIAMANTE: { label: "Diamante", bg: "bg-cyan-100",   text: "text-cyan-700",   icon: "💎" },
+  OURO:     { label: "Ouro",     bg: "bg-amber-100",  text: "text-amber-700",  icon: "🥇" },
+  PRATA:    { label: "Prata",    bg: "bg-gray-200",   text: "text-gray-700",   icon: "🥈" },
+  BRONZE:   { label: "Bronze",   bg: "bg-orange-100", text: "text-orange-700", icon: "🥉" },
+};
+
+const TRIGGER_META: Record<string, { label: string; icon: string; description: string; placeholder: string }> = {
+  REACTIVATION: {
+    label:       "Reativação",
+    icon:        "🔄",
+    description: "Enviado para clientes que não pedem há X dias.",
+    placeholder: "Olá, {nome}! Sentimos sua falta. Que tal um desconto especial para voltar? Use o cupom VOLTAR10 e ganhe 10% no próximo pedido! 🎁",
+  },
+  BIRTHDAY: {
+    label:       "Aniversário",
+    icon:        "🎂",
+    description: "Enviado automaticamente no aniversário do cliente.",
+    placeholder: "Feliz aniversário, {nome}! 🎉 Para comemorar com você, seu próximo pedido tem frete grátis. Aproveite! 🎁",
+  },
+  POST_ORDER: {
+    label:       "Pós-pedido",
+    icon:        "⭐",
+    description: "Enviado X dias após a conclusão de um pedido.",
+    placeholder: "Olá, {nome}! Esperamos que tenha amado seu pedido 😊 Que tal repetir? Confira nosso cardápio e faça seu próximo pedido.",
+  },
+};
+
+const PRIORITY_CONFIG: Record<string, { label: string; dot: string }> = {
+  HIGH:   { label: "Alta",  dot: "bg-red-500"    },
+  MEDIUM: { label: "Média", dot: "bg-yellow-500"  },
+  LOW:    { label: "Baixa", dot: "bg-green-500"   },
+};
+
+const CUSTOMER_FILTER_LABELS: Record<string, string> = {
+  all:      "Todos",
+  inactive: "Inativos",
+  vip:      "VIPs",
+  recent:   "Recentes",
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function formatPhone(phone: string) {
+  const d = phone.replace(/\D/g, "");
+  if (d.length === 13) return `+${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4,9)}-${d.slice(9)}`;
+  return phone;
+}
+
+function formatCurrency(v: number) {
+  return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function relativeDate(iso: string | null): string {
+  if (!iso) return "—";
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days === 0) return "Hoje";
+  if (days === 1) return "Ontem";
+  if (days < 30)  return `${days}d atrás`;
+  if (days < 365) return `${Math.floor(days / 30)}m atrás`;
+  return `${Math.floor(days / 365)}a atrás`;
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+function TierBadge({ tier }: { tier: CustomerTier }) {
+  const cfg = TIER_CONFIG[tier];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${cfg.bg} ${cfg.text}`}>
+      {cfg.icon} {cfg.label}
+    </span>
+  );
+}
+
+// ── Opportunities Tab ─────────────────────────────────────────────────────────
+
+function OpportunitiesTab({ opportunities }: { opportunities: Opportunity[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [editingMsg, setEditingMsg] = useState<Record<string, string>>({});
+  const [copied, setCopied] = useState<string | null>(null);
+
+  function getMessage(opp: Opportunity) {
+    return editingMsg[opp.type] ?? opp.suggestedMessage;
+  }
+
+  function copyMessage(opp: Opportunity) {
+    navigator.clipboard.writeText(getMessage(opp));
+    setCopied(opp.type);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  if (opportunities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <span className="mb-3 text-5xl">🎉</span>
+        <p className="text-sm font-semibold text-gray-700">Nenhuma oportunidade identificada agora</p>
+        <p className="mt-1 text-xs text-gray-400">
+          Quando houver clientes inativos, aniversariantes ou VIPs em risco, eles aparecerão aqui.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500">
+        {opportunities.length} oportunidade{opportunities.length > 1 ? "s" : ""} identificada{opportunities.length > 1 ? "s" : ""} hoje
+      </p>
+
+      {opportunities.map((opp) => {
+        const pCfg = PRIORITY_CONFIG[opp.priority] ?? PRIORITY_CONFIG.MEDIUM!;
+        const isOpen = expanded === opp.type;
+        const msg = getMessage(opp);
+
+        return (
+          <div key={opp.type} className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+            {/* Header */}
+            <div className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className={`h-2 w-2 rounded-full ${pCfg.dot} shrink-0 mt-0.5`} />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                      Prioridade {pCfg.label}
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-900">{opp.title}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{opp.description}</p>
+                </div>
+                <span className="shrink-0 rounded-xl bg-brand-50 px-2.5 py-1 text-sm font-bold text-brand-700">
+                  {opp.count}
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => setExpanded(isOpen ? null : opp.type)}
+                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+                >
+                  {isOpen ? "Fechar" : "Ver mensagem + clientes"}
+                </button>
+                <button
+                  onClick={() => copyMessage(opp)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    copied === opp.type
+                      ? "bg-green-100 text-green-700"
+                      : "bg-brand-50 text-brand-700 hover:bg-brand-100"
+                  }`}
+                >
+                  {copied === opp.type ? "✓ Copiado!" : "Copiar mensagem"}
+                </button>
+              </div>
+            </div>
+
+            {/* Expanded: message editor + customer list */}
+            {isOpen && (
+              <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-4">
+                {/* Message editor */}
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold text-gray-600">
+                    Mensagem sugerida <span className="font-normal text-gray-400">(edite à vontade)</span>
+                  </p>
+                  <textarea
+                    rows={4}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none"
+                    value={msg}
+                    onChange={(e) =>
+                      setEditingMsg((prev) => ({ ...prev, [opp.type]: e.target.value }))
+                    }
+                  />
+                  <p className="mt-1 text-[10px] text-gray-400">
+                    Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para inserir o nome do cliente automaticamente.
+                  </p>
+                </div>
+
+                {/* Customer list */}
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-gray-600">
+                    Clientes ({opp.customers.length}{opp.count > opp.customers.length ? ` de ${opp.count}` : ""})
+                  </p>
+                  <div className="space-y-1.5">
+                    {opp.customers.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between rounded-xl bg-white border border-gray-100 px-3 py-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <TierBadge tier={c.tier} />
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
+                            <p className="text-[10px] text-gray-400">{formatPhone(c.phone)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          <p className="text-xs text-gray-500">{relativeDate(c.lastOrderAt)}</p>
+                          <p className="text-[10px] text-gray-400">R${formatCurrency(c.totalSpend)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Customers Tab ─────────────────────────────────────────────────────────────
+
+function CustomersTab({ initialCustomers }: { initialCustomers: CRMCustomer[] }) {
+  const [filter, setFilter] = useState<"all" | "inactive" | "vip" | "recent">("all");
+  const [customers, setCustomers] = useState<CRMCustomer[]>(initialCustomers);
+  const [loading, setLoading] = useState(false);
+
+  async function applyFilter(f: "all" | "inactive" | "vip" | "recent") {
+    setFilter(f);
+    setLoading(true);
+    const res = await fetch(`/api/crm/customers?filter=${f}`);
+    if (res.ok) {
+      const json = await res.json();
+      setCustomers(json.data ?? []);
+    }
+    setLoading(false);
+  }
+
+  const tierOrder: CustomerTier[] = ["DIAMANTE", "OURO", "PRATA", "BRONZE"];
+
+  return (
+    <div className="space-y-4">
+      {/* Filter pills */}
+      <div className="flex flex-wrap gap-2">
+        {(["all", "vip", "inactive", "recent"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => applyFilter(f)}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
+              filter === f
+                ? "bg-brand-600 text-white shadow-sm"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {CUSTOMER_FILTER_LABELS[f]}
+          </button>
+        ))}
+        <span className="ml-auto self-center text-xs text-gray-400">
+          {customers.length} clientes
+        </span>
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="py-12 text-center text-sm text-gray-400">Carregando…</div>
+      ) : customers.length === 0 ? (
+        <div className="py-12 text-center text-sm text-gray-400">Nenhum cliente neste filtro.</div>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Tier</th>
+                  <th className="px-4 py-3 text-right">Gasto total</th>
+                  <th className="px-4 py-3 text-right">Pedidos</th>
+                  <th className="px-4 py-3 text-right">Último pedido</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {customers.map((c) => (
+                  <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <Link href={`/customers/${c.id}`} className="hover:text-brand-600 transition-colors">
+                        <p className="font-semibold text-gray-900 text-sm">{c.name}</p>
+                        <p className="text-[11px] text-gray-400">{formatPhone(c.phone)}</p>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <TierBadge tier={c.tier} />
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                      R${formatCurrency(c.totalSpend)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-600">
+                      {c.totalOrders}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={c.daysSinceLastOrder != null && c.daysSinceLastOrder > 30
+                        ? "text-red-500 font-medium"
+                        : "text-gray-600"
+                      }>
+                        {relativeDate(c.lastOrderAt)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {/* Tier legend */}
+            <div className="border-t border-gray-50 px-4 py-3 flex flex-wrap gap-3">
+              {tierOrder.map((t) => {
+                const cfg = TIER_CONFIG[t];
+                const count = customers.filter((c) => c.tier === t).length;
+                return (
+                  <span key={t} className="text-[11px] text-gray-500">
+                    {cfg.icon} {cfg.label}: <strong>{count}</strong>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="sm:hidden space-y-2">
+            {customers.map((c) => (
+              <Link key={c.id} href={`/customers/${c.id}`}>
+                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">{c.name}</p>
+                      <p className="text-xs text-gray-400">{formatPhone(c.phone)}</p>
+                    </div>
+                    <TierBadge tier={c.tier} />
+                  </div>
+                  <div className="mt-2 flex gap-4 text-xs text-gray-500">
+                    <span>R${formatCurrency(c.totalSpend)}</span>
+                    <span>{c.totalOrders} pedido{c.totalOrders !== 1 ? "s" : ""}</span>
+                    <span className={c.daysSinceLastOrder != null && c.daysSinceLastOrder > 30 ? "text-red-500 font-medium" : ""}>
+                      {relativeDate(c.lastOrderAt)}
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Automations Tab ───────────────────────────────────────────────────────────
+
+function AutomationsTab({ initialAutomations }: { initialAutomations: AutomationRow[] }) {
+  // Build a map: trigger → row (or defaults)
+  const defaults: Record<string, AutomationRow> = {
+    REACTIVATION: { id: "", trigger: "REACTIVATION", isEnabled: false, messageTemplate: "", triggerAfterDays: 30, discountType: null, discountValue: null },
+    BIRTHDAY:     { id: "", trigger: "BIRTHDAY",     isEnabled: false, messageTemplate: "", triggerAfterDays: 0,  discountType: null, discountValue: null },
+    POST_ORDER:   { id: "", trigger: "POST_ORDER",   isEnabled: false, messageTemplate: "", triggerAfterDays: 1,  discountType: null, discountValue: null },
+  };
+
+  initialAutomations.forEach((a) => { defaults[a.trigger] = a; });
+
+  const [automations, setAutomations] = useState<Record<string, AutomationRow>>(defaults);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  const handleUpdate = useCallback(
+    (trigger: string, patch: Partial<AutomationRow>) => {
+      setAutomations((prev) => ({ ...prev, [trigger]: { ...prev[trigger]!, ...patch } }));
+    },
+    []
+  );
+
+  async function saveAutomation(trigger: string) {
+    const a = automations[trigger]!;
+    setSaving(trigger);
+    const res = await fetch(`/api/crm/automations/${trigger}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        isEnabled:        a.isEnabled,
+        messageTemplate:  a.messageTemplate,
+        triggerAfterDays: a.triggerAfterDays,
+        discountType:     a.discountType,
+        discountValue:    a.discountValue,
+      }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      setAutomations((prev) => ({ ...prev, [trigger]: json.data }));
+      setSaved(trigger);
+      setTimeout(() => setSaved(null), 2000);
+    }
+    setSaving(null);
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500">
+        Configure mensagens automáticas para aumentar o retorno dos seus clientes.
+        <span className="ml-1 text-orange-500 font-medium">Requer integração WhatsApp ativa.</span>
+      </p>
+
+      {(["REACTIVATION", "BIRTHDAY", "POST_ORDER"] as const).map((trigger) => {
+        const a = automations[trigger]!;
+        const meta = TRIGGER_META[trigger]!;
+        const isOpen = expanded === trigger;
+
+        return (
+          <div key={trigger} className={`rounded-2xl border bg-white shadow-sm overflow-hidden transition-all ${
+            a.isEnabled ? "border-green-200" : "border-gray-100"
+          }`}>
+            {/* Header row */}
+            <div className="flex items-center gap-4 px-4 py-4">
+              <span className="text-2xl">{meta.icon}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-900">{meta.label}</p>
+                <p className="text-xs text-gray-500">{meta.description}</p>
+              </div>
+
+              {/* Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  handleUpdate(trigger, { isEnabled: !a.isEnabled });
+                }}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  a.isEnabled ? "bg-green-500" : "bg-gray-200"
+                }`}
+                aria-label={a.isEnabled ? "Desativar" : "Ativar"}
+              >
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  a.isEnabled ? "translate-x-5" : "translate-x-0.5"
+                }`} />
+              </button>
+
+              <button
+                onClick={() => setExpanded(isOpen ? null : trigger)}
+                className="text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                {isOpen ? "▲" : "▼"}
+              </button>
+            </div>
+
+            {/* Config panel */}
+            {isOpen && (
+              <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-4">
+
+                {/* Trigger days (not for birthday) */}
+                {trigger !== "BIRTHDAY" && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      {trigger === "REACTIVATION"
+                        ? "Disparar após quantos dias sem pedido"
+                        : "Disparar quantos dias após o pedido"}
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={365}
+                      value={a.triggerAfterDays}
+                      onChange={(e) => handleUpdate(trigger, { triggerAfterDays: parseInt(e.target.value) || 0 })}
+                      className="w-32 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    />
+                    <span className="ml-2 text-xs text-gray-400">dias</span>
+                  </div>
+                )}
+
+                {/* Message template */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Mensagem
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={a.messageTemplate || meta.placeholder}
+                    onChange={(e) => handleUpdate(trigger, { messageTemplate: e.target.value })}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none"
+                    placeholder={meta.placeholder}
+                  />
+                  <p className="mt-1 text-[10px] text-gray-400">
+                    Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para o nome do cliente.
+                  </p>
+                </div>
+
+                {/* Optional discount */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">
+                    Desconto opcional
+                  </label>
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <select
+                      value={a.discountType ?? ""}
+                      onChange={(e) => handleUpdate(trigger, { discountType: e.target.value || null, discountValue: null })}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+                    >
+                      <option value="">Sem desconto</option>
+                      <option value="PERCENTAGE">% Desconto</option>
+                      <option value="FIXED">R$ Desconto</option>
+                    </select>
+                    {a.discountType && (
+                      <input
+                        type="number"
+                        min={0}
+                        step={a.discountType === "PERCENTAGE" ? 1 : 0.01}
+                        max={a.discountType === "PERCENTAGE" ? 100 : undefined}
+                        value={a.discountValue ?? ""}
+                        onChange={(e) => handleUpdate(trigger, { discountValue: parseFloat(e.target.value) || null })}
+                        className="w-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+                        placeholder={a.discountType === "PERCENTAGE" ? "10" : "5.00"}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Save */}
+                <button
+                  onClick={() => saveAutomation(trigger)}
+                  disabled={saving === trigger}
+                  className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white hover:bg-brand-700 transition-colors disabled:opacity-60 shadow-sm"
+                >
+                  {saving === trigger ? "Salvando…" : saved === trigger ? "✓ Salvo!" : "Salvar configuração"}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main CRM Component ────────────────────────────────────────────────────────
+
+type Tab = "opportunities" | "customers" | "automations";
+
+export function CRMClient({
+  initialCustomers,
+  initialOpportunities,
+  initialAutomations,
+}: {
+  initialCustomers:    CRMCustomer[];
+  initialOpportunities: Opportunity[];
+  initialAutomations:  AutomationRow[];
+  restaurantName:      string;
+}) {
+  const [tab, setTab] = useState<Tab>("opportunities");
+
+  const tabs: { id: Tab; label: string; badge?: number }[] = [
+    {
+      id:    "opportunities",
+      label: "Oportunidades",
+      badge: initialOpportunities.length || undefined,
+    },
+    { id: "customers",   label: "Clientes" },
+    { id: "automations", label: "Automações" },
+  ];
+
+  return (
+    <div className="p-6 max-w-4xl">
+      {/* Summary strip */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Total clientes",  value: initialCustomers.length },
+          { label: "Oportunidades",   value: initialOpportunities.length,                          highlight: true },
+          { label: "Inativos (+30d)", value: initialCustomers.filter((c) => (c.daysSinceLastOrder ?? 0) > 30).length },
+          { label: "VIPs (Ouro+)",    value: initialCustomers.filter((c) => c.tier === "OURO" || c.tier === "DIAMANTE").length },
+        ].map((s) => (
+          <div key={s.label} className={`rounded-2xl border p-4 ${s.highlight ? "border-brand-200 bg-brand-50" : "border-gray-100 bg-white"} shadow-sm`}>
+            <p className="text-2xl font-bold text-gray-900">{s.value}</p>
+            <p className={`text-xs mt-0.5 ${s.highlight ? "text-brand-600 font-semibold" : "text-gray-500"}`}>{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div className="mb-5 flex gap-1 rounded-xl bg-gray-100 p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-all ${
+              tab === t.id
+                ? "bg-white shadow-sm text-gray-900"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {t.label}
+            {t.badge != null && t.badge > 0 && (
+              <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
+                {t.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {tab === "opportunities" && (
+        <OpportunitiesTab opportunities={initialOpportunities} />
+      )}
+      {tab === "customers" && (
+        <CustomersTab initialCustomers={initialCustomers} />
+      )}
+      {tab === "automations" && (
+        <AutomationsTab initialAutomations={initialAutomations} />
+      )}
+    </div>
+  );
+}

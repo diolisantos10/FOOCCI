@@ -61,6 +61,11 @@ const NAV_GROUPS: NavGroup[] = [
         label: "Promoções",
         icon:  "🎁",
       },
+      {
+        href:  "/crm",
+        label: "CRM",
+        icon:  "📊",
+      },
     ],
   },
   {
