@@ -1048,16 +1048,16 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
       {/* Category tabs — BROWSE only, larger and more prominent */}
       {stage === "BROWSE" && categories.length > 0 && (
         <div
-          className="shrink-0 flex overflow-x-auto gap-2 border-t border-gray-200 bg-white px-3 py-2.5 [&::-webkit-scrollbar]:hidden"
+          className="shrink-0 flex overflow-x-auto gap-3 border-t border-gray-200 bg-white px-3 py-2.5 [&::-webkit-scrollbar]:hidden"
           style={{ scrollbarWidth: "none" }}
         >
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setSelectedCategoryId(cat.id)}
-              className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-base font-semibold min-h-[44px] transition-all ${
                 selectedCategoryId === cat.id
-                  ? "bg-[#128c7e] text-white shadow-sm"
+                  ? "bg-green-600 text-white shadow-sm"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
               }`}
             >

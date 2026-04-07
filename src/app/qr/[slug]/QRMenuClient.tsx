@@ -569,7 +569,7 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
           <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
             <div
               ref={navRef}
-              className="mx-auto max-w-2xl flex gap-2 overflow-x-auto px-4 py-3 scrollbar-hide"
+              className="mx-auto max-w-2xl flex gap-3 overflow-x-auto px-4 py-3 scrollbar-hide"
             >
               {categories.map((cat) => (
                 <button
@@ -577,10 +577,10 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
                   type="button"
                   data-cat={cat.id}
                   onClick={() => scrollToCategory(cat.id)}
-                  className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
+                  className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-base font-semibold min-h-[44px] transition-colors ${
                     activeCategory === cat.id
-                      ? "bg-orange-500 text-white shadow-sm"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      ? "bg-green-600 text-white shadow-sm"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
                   {cat.name}
