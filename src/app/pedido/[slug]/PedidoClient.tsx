@@ -13,7 +13,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
-import { SuggestionButton, SuggestionSheet } from "./SuggestionMode";
+import { SuggestionSheet } from "./SuggestionMode";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1241,7 +1241,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
           Desktop: fixed 420px–460px wide column
       ═══════════════════════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col overflow-hidden
-                      lg:flex-none lg:w-[420px] xl:w-[460px] lg:shrink-0
+                      lg:flex-none lg:w-1/2 lg:shrink-0
                       lg:border-r lg:border-gray-200
                       lg:shadow-[2px_0_12px_rgba(0,0,0,0.07)]">
 
@@ -1358,6 +1358,19 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
         {/* Checkout panels (address / payment / review / done) */}
         {renderCheckoutPanel()}
 
+        {/* Suggestion shortcut — above input, only when browsing */}
+        {stage === "BROWSE" && entryPhase === "browsing" && (
+          <div className="shrink-0 px-3 pt-2 bg-white">
+            <button
+              onClick={() => setShowSuggestion(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 py-2.5 text-sm font-semibold text-green-700 hover:bg-green-100 transition-colors"
+            >
+              <span className="leading-none">✨</span>
+              Me sugere algo
+            </button>
+          </div>
+        )}
+
         {/* Text input */}
         {showInput && (
           <form
@@ -1416,20 +1429,12 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
                   {categoryEmoji(cat.name)} {cat.name}
                 </button>
               ))}
-              {/* Desktop suggestion entry */}
-              <button
-                onClick={() => setShowSuggestion(true)}
-                className="ml-auto shrink-0 flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-bold text-green-700 shadow-sm ring-1 ring-green-200 hover:shadow-md transition-shadow"
-              >
-                <span className="leading-none">✨</span>
-                Sugestão
-              </button>
             </div>
 
             {/* Product grid — CSS grid, fills available space */}
             <div className="flex-1 overflow-y-auto p-5">
               {currentCategoryItems.length > 0 ? (
-                <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
                   {currentCategoryItems.map((item) => (
                     <DesktopProductCard
                       key={item.id}
@@ -1471,13 +1476,6 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
         )}
       </div>
       {/* ═══════════════ end RIGHT PANEL ═══════════════ */}
-
-      {/* Mobile-only floating suggestion button */}
-      {stage === "BROWSE" && entryPhase === "browsing" && (
-        <div className="lg:hidden">
-          <SuggestionButton onClick={() => setShowSuggestion(true)} />
-        </div>
-      )}
 
       {/* Product modal */}
       {selectedProduct && (
