@@ -13,7 +13,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
-import { EntryModal, SuggestionButton, SuggestionSheet } from "./SuggestionMode";
+import { SuggestionButton, SuggestionSheet } from "./SuggestionMode";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,6 +77,8 @@ interface Props {
   logoUrl: string | null;
   phone: string | null;
   categories: MenuCategory[];
+  knownCustomerPhone?: string | null;
+  knownCustomerName?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -536,9 +538,124 @@ function CartDrawer({
   );
 }
 
+// ── PhoneEntryCard ────────────────────────────────────────────────────────────
+// Shown to web (non-WhatsApp) users: lightweight phone input to identify them.
+
+function PhoneEntryCard({
+  slug,
+  onIdentified,
+  onSkip,
+}: {
+  slug: string;
+  onIdentified: (name: string | null) => void;
+  onSkip: () => void;
+}) {
+  const [phoneInput, setPhoneInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const ph = phoneInput.trim();
+    if (!ph) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/qr/${slug}/identify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: ph }),
+      });
+      const data: { found: boolean; name?: string } = await res.json();
+      onIdentified(data.found && data.name ? data.name : null);
+    } catch {
+      setError("Erro ao verificar. Tente novamente.");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100">
+      <p className="text-sm font-bold text-gray-900 mb-0.5">Olá! 👋</p>
+      <p className="text-xs text-gray-500 mb-4">
+        Informe seu WhatsApp para personalizarmos sua experiência.
+      </p>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+        <input
+          type="tel"
+          value={phoneInput}
+          onChange={(e) => setPhoneInput(e.target.value)}
+          placeholder="Ex: (11) 99999-9999"
+          style={{ fontSize: "16px" }}
+          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
+        />
+        {error && <p className="text-xs text-red-500">{error}</p>}
+        <button
+          type="submit"
+          disabled={!phoneInput.trim() || loading}
+          className="rounded-xl bg-[#25d366] py-2.5 text-sm font-bold text-white hover:bg-[#1ebe5a] disabled:opacity-40 transition-colors"
+        >
+          {loading ? "Verificando…" : "Continuar"}
+        </button>
+        <button
+          type="button"
+          onClick={onSkip}
+          className="py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          Pular
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ── ChoiceCard ────────────────────────────────────────────────────────────────
+// Entry decision: "Ver cardápio" vs "Me sugere algo". Inline, non-blocking.
+
+function ChoiceCard({
+  name,
+  onMenu,
+  onSuggest,
+}: {
+  name: string | null;
+  onMenu: () => void;
+  onSuggest: () => void;
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100">
+      <p className="text-sm font-bold text-gray-900 mb-1">
+        {name ? `Oi, ${name}! 👋` : "Olá! 👋"}
+      </p>
+      <p className="text-xs text-gray-500 mb-4">Como você prefere pedir hoje?</p>
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={onMenu}
+          className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+        >
+          <span className="text-xl leading-none">📋</span>
+          <div>
+            <p className="font-semibold">Ver cardápio</p>
+            <p className="text-xs font-normal text-gray-400">Navegar pelos itens</p>
+          </div>
+        </button>
+        <button
+          onClick={onSuggest}
+          className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-left text-sm font-semibold text-green-700 hover:bg-green-100 transition-colors"
+        >
+          <span className="text-xl leading-none">✨</span>
+          <div>
+            <p className="font-semibold">Me sugere algo</p>
+            <p className="text-xs font-normal text-green-500">Assistente recomenda</p>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories }: Props) {
+export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories, knownCustomerPhone = null, knownCustomerName = null }: Props) {
   // ── Chat ─────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -557,17 +674,31 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
 
-  // ── Suggestion mode ───────────────────────────────────────────────
-  const [showEntryModal, setShowEntryModal] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return !sessionStorage.getItem(`foocci-entry-${slug}`);
+  // customerName declared early so enterBrowsing / handlePhoneIdentified can reference its setter
+  const [customerName, setCustomerName] = useState(
+    knownCustomerName?.trim().split(/\s+/)[0] ?? "",
+  );
+
+  // ── Entry / identification ─────────────────────────────────────────
+  const [entryPhase, setEntryPhase] = useState<"identifying" | "choosing" | "browsing">(() => {
+    if (typeof window === "undefined") return "browsing";
+    if (sessionStorage.getItem(`foocci-entry-${slug}`)) return "browsing";
+    if (knownCustomerPhone) return "choosing";
+    return "identifying";
   });
+  const [identifiedName, setIdentifiedName] = useState<string | null>(knownCustomerName ?? null);
   const [showSuggestion, setShowSuggestion] = useState(false);
 
-  function dismissEntry(mode: "menu" | "suggest") {
+  function enterBrowsing(mode: "menu" | "suggest", name?: string | null) {
     sessionStorage.setItem(`foocci-entry-${slug}`, "1");
-    setShowEntryModal(false);
+    if (name) { setIdentifiedName(name); setCustomerName(name); }
+    setEntryPhase("browsing");
     if (mode === "suggest") setShowSuggestion(true);
+  }
+
+  function handlePhoneIdentified(name: string | null) {
+    if (name) { setIdentifiedName(name); setCustomerName(name); }
+    setEntryPhase("choosing");
   }
 
   // ── Stage / flow ──────────────────────────────────────────────────
@@ -585,7 +716,6 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
   // ── Checkout data ─────────────────────────────────────────────────
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup" | null>(null);
   const [address, setAddress] = useState<Address>({ street: "", number: "", neighborhood: "", complement: "" });
-  const [customerName, setCustomerName] = useState("");
   const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
   const [paymentMethodSub, setPaymentMethodSub] = useState<PaymentMethodSub | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -664,14 +794,20 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
     [slug, history, stage, activeUpsell, deliveryMethod],
   );
 
-  // ── Initial greeting ──────────────────────────────────────────────
+  // ── Initial greeting (fires once user enters browsing phase) ─────────────
   const greetedRef = useRef(false);
   useEffect(() => {
-    if (categories.length === 0 || greetedRef.current) return;
+    if (entryPhase !== "browsing" || categories.length === 0 || greetedRef.current) return;
     greetedRef.current = true;
-    sendText("Olá!", [], "BROWSE", null, null);
+    sendText(
+      identifiedName ? `Olá! Meu nome é ${identifiedName}.` : "Olá!",
+      [],
+      "BROWSE",
+      null,
+      null,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories]);
+  }, [entryPhase, categories]);
 
   // ── Handlers ──────────────────────────────────────────────────────
 
@@ -1113,6 +1249,20 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
 
         {/* Chat messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#ece5dd]">
+          {entryPhase === "identifying" && (
+            <PhoneEntryCard
+              slug={slug}
+              onIdentified={handlePhoneIdentified}
+              onSkip={() => setEntryPhase("choosing")}
+            />
+          )}
+          {entryPhase === "choosing" && (
+            <ChoiceCard
+              name={identifiedName}
+              onMenu={() => enterBrowsing("menu")}
+              onSuggest={() => enterBrowsing("suggest")}
+            />
+          )}
           {messages.map((msg) => (
             <Bubble key={msg.id} msg={msg} />
           ))}
@@ -1157,7 +1307,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
         )}
 
         {/* Mobile-only: category tabs */}
-        {stage === "BROWSE" && categories.length > 0 && (
+        {stage === "BROWSE" && entryPhase === "browsing" && categories.length > 0 && (
           <div
             className="lg:hidden shrink-0 flex overflow-x-auto gap-3 border-t border-gray-200 bg-white px-3 py-2.5 [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarWidth: "none" }}
@@ -1179,7 +1329,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
         )}
 
         {/* Mobile-only: product grid (horizontal scroll) */}
-        {stage === "BROWSE" && currentCategoryItems.length > 0 && (
+        {stage === "BROWSE" && entryPhase === "browsing" && currentCategoryItems.length > 0 && (
           <div className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
             <div
               className="flex gap-3 overflow-x-auto px-3 py-3 [&::-webkit-scrollbar]:hidden"
@@ -1199,7 +1349,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
         )}
 
         {/* Mobile-only: CartBar */}
-        {stage === "BROWSE" && (
+        {stage === "BROWSE" && entryPhase === "browsing" && (
           <div className="lg:hidden">
             <CartBar cart={cart} onFinalize={handleFinalizeClick} />
           </div>
@@ -1323,7 +1473,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
       {/* ═══════════════ end RIGHT PANEL ═══════════════ */}
 
       {/* Mobile-only floating suggestion button */}
-      {stage === "BROWSE" && (
+      {stage === "BROWSE" && entryPhase === "browsing" && (
         <div className="lg:hidden">
           <SuggestionButton onClick={() => setShowSuggestion(true)} />
         </div>
@@ -1355,15 +1505,6 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories 
           onRemove={(id) => setCart((prev) => prev.filter((c) => c.id !== id))}
           onFinalize={handleFinalizeClick}
           onClose={() => setCartOpen(false)}
-        />
-      )}
-
-      {/* Entry modal — shown once per session on first load */}
-      {showEntryModal && (
-        <EntryModal
-          restaurantName={restaurantName}
-          onMenu={() => dismissEntry("menu")}
-          onSuggest={() => dismissEntry("suggest")}
         />
       )}
 

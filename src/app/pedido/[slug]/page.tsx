@@ -9,6 +9,27 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PedidoClient } from "./PedidoClient";
 
+/** Replicates the same normalization used in /api/qr/[slug]/identify */
+function phoneCandidates(raw: string): string[] {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 8) return [];
+  const set = new Set<string>();
+  if (digits.length >= 12 && digits.startsWith("55")) {
+    set.add(`+${digits}`);
+    set.add(digits);
+  }
+  if (digits.length === 11) {
+    set.add(`+55${digits}`);
+    set.add(digits);
+  }
+  if (digits.length === 10) {
+    set.add(`+55${digits}`);
+    set.add(`+55${digits.slice(0, 2)}9${digits.slice(2)}`);
+  }
+  set.add(digits);
+  return [...set];
+}
+
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
@@ -28,10 +49,14 @@ export async function generateMetadata({
 
 export default async function PedidoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
+  const sp = await searchParams;
+  const rawPhone = typeof sp.phone === "string" ? sp.phone.trim() : null;
 
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug },
@@ -39,6 +64,27 @@ export default async function PedidoPage({
   });
 
   if (!restaurant) notFound();
+
+  // ── WhatsApp / known-user identification ─────────────────────────────────────
+  let knownCustomerPhone: string | null = null;
+  let knownCustomerName: string | null = null;
+
+  if (rawPhone) {
+    const candidates = phoneCandidates(rawPhone);
+    if (candidates.length > 0) {
+      const customer = await prisma.customer.findFirst({
+        where: { restaurantId: restaurant.id, phone: { in: candidates } },
+        select: { name: true, phone: true },
+      });
+      if (customer) {
+        knownCustomerPhone = customer.phone;
+        knownCustomerName = customer.name.trim().split(/\s+/)[0] ?? null;
+      } else {
+        // Phone is known (came from WhatsApp link) but customer record doesn't exist yet
+        knownCustomerPhone = rawPhone;
+      }
+    }
+  }
 
   const rawCategories = await prisma.menuCategory.findMany({
     where: { restaurantId: restaurant.id, isActive: true, isAvailable: true },
@@ -80,6 +126,8 @@ export default async function PedidoPage({
       logoUrl={restaurant.logoUrl ?? null}
       phone={restaurant.phone ?? null}
       categories={categories}
+      knownCustomerPhone={knownCustomerPhone}
+      knownCustomerName={knownCustomerName}
     />
   );
 }
