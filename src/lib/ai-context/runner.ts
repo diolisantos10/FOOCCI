@@ -30,6 +30,7 @@ import { buildAIContext }       from "./builder";
 import { filterMenuForAI }      from "./filter";
 import { buildAgentPrompt }     from "@/lib/agent/builder";
 import { validateOrderFlow }    from "@/lib/order/orchestrator";
+import { detectOpportunity }    from "@/lib/sales/opportunity";
 import {
   DEFAULT_PERSONALITY,
   DEFAULT_SALES,
@@ -242,6 +243,19 @@ function buildPromotionsBlock(promotions: PromotionContext[]): string {
   ].join("\n");
 }
 
+function buildOpportunityBlock(
+  opportunity: ReturnType<typeof detectOpportunity>,
+): string {
+  if (!opportunity) return "";
+  return [
+    `━━━ OPORTUNIDADE DE VENDA ━━━`,
+    `Há uma oportunidade de sugerir um item complementar (${opportunity.type}).`,
+    `${opportunity.messageHint}.`,
+    `Integre a sugestão naturalmente na resposta, como um garçom experiente — sem insistir.`,
+    `Se o cliente não demonstrar interesse, continue o fluxo normalmente.`,
+  ].join("\n");
+}
+
 // ── Main runner ───────────────────────────────────────────────────────────────
 
 export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
@@ -287,6 +301,12 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     };
   }
 
+  // ── Step 1c: Sales opportunity detection ──────────────────────────────────
+  // Detects whether a drink or dessert suggestion is appropriate right now.
+  // Passes `upsellOffered` so the same type is never suggested twice in a row.
+  // Returns null when nothing is appropriate — does not affect flow.
+  const opportunity = detectOpportunity(ctx, upsellOffered ?? null);
+
   // ── Step 2: Filter menu for this customer's dietary profile + message ──────
   const filteredMenu = filterMenuForAI(ctx.menu, {
     customerDietary: ctx.customer?.preferences?.dietary,
@@ -321,6 +341,7 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     const preamble = [
       buildCustomerBlock(ctx.customer),
       buildPromotionsBlock(ctx.promotions),
+      buildOpportunityBlock(opportunity),
     ].filter(Boolean).join("\n\n");
 
     // 5-layer behavioral prompt — protocol is LAST (highest attention weight)
