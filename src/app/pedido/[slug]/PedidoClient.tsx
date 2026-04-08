@@ -324,7 +324,15 @@ function ProductModal({
 
 // ── Cart bar ──────────────────────────────────────────────────────────────────
 
-function CartBar({ cart, onFinalize }: { cart: CartItem[]; onFinalize: () => void }) {
+function CartBar({
+  cart,
+  onFinalize,
+  upsellPending,
+}: {
+  cart:          CartItem[];
+  onFinalize:    () => void;
+  upsellPending: boolean;
+}) {
   if (cart.length === 0) return null;
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const count = cart.reduce((s, i) => s + i.qty, 0);
@@ -333,12 +341,16 @@ function CartBar({ cart, onFinalize }: { cart: CartItem[]; onFinalize: () => voi
     <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-2.5">
       <button
         onClick={onFinalize}
-        className="flex w-full items-center justify-between rounded-2xl bg-[#25d366] px-5 py-3 text-sm font-bold text-white shadow transition hover:bg-[#1ebe5a]"
+        className={`flex w-full items-center justify-between rounded-2xl px-5 py-3 text-sm font-bold text-white shadow transition ${
+          upsellPending
+            ? "bg-gray-400 hover:bg-gray-500"
+            : "bg-[#25d366] hover:bg-[#1ebe5a]"
+        }`}
       >
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/30 text-xs font-bold">
           {count}
         </span>
-        <span>Finalizar pedido</span>
+        <span>{upsellPending ? "Continuar →" : "Finalizar pedido"}</span>
         <span>R$ {total.toFixed(2).replace(".", ",")}</span>
       </button>
     </div>
@@ -705,11 +717,13 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
   const [stage, setStage] = useState<Stage>("BROWSE");
 
   // ── Upsell engine ─────────────────────────────────────────────────
+  // offeredDrink / offeredDessert: set to true once that phase has been
+  //   triggered (regardless of whether the customer accepted or skipped).
+  // lastUpsellCategory: the phase currently awaiting the customer's decision
+  //   (non-null while the suggestion is "live"); cleared once the phase resolves.
   const [upsellState, setUpsellState] = useState({
-    offeredDrink: false,
-    offeredDessert: false,
-    refusedDrink: false,
-    refusedDessert: false,
+    offeredDrink:       false,
+    offeredDessert:     false,
     lastUpsellCategory: null as "drink" | "dessert" | null,
   });
 
@@ -721,12 +735,17 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
   const [orderId, setOrderId] = useState<string | null>(null);
 
   // ── Derived ───────────────────────────────────────────────────────
+  // activeUpsell: the last offered type (persists after resolution so the
+  // backend's resolveSalesPhase() knows not to re-suggest the same type).
   const activeUpsell = useMemo((): "drink" | "dessert" | null => {
-    const { lastUpsellCategory, offeredDrink, refusedDrink, offeredDessert, refusedDessert } = upsellState;
-    if (lastUpsellCategory === "drink" && offeredDrink && !refusedDrink) return "drink";
-    if (lastUpsellCategory === "dessert" && offeredDessert && !refusedDessert) return "dessert";
+    if (upsellState.offeredDessert) return "dessert";
+    if (upsellState.offeredDrink)   return "drink";
     return null;
   }, [upsellState]);
+
+  // upsellPending: true while a suggestion is live and awaiting customer response.
+  // Controls checkout button appearance — no "Finalizar" language during this window.
+  const upsellPending = upsellState.lastUpsellCategory !== null;
 
   const currentCategoryItems = useMemo(
     () => categories.find((c) => c.id === selectedCategoryId)?.items ?? [],
@@ -828,52 +847,44 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
       setMessages((prev) => [
         ...prev,
         {
-          id: uid(),
-          role: "assistant" as const,
+          id:      uid(),
+          role:    "assistant" as const,
           content: "Seu carrinho está vazio! Selecione itens antes de finalizar 👆",
-          ts: new Date(),
+          ts:      new Date(),
         },
       ]);
       return;
     }
     if (stage !== "BROWSE") return;
 
-    const cartIds = new Set(cart.map((c) => c.id));
-    const allItems = categories.flatMap((c) => c.items);
-    const drinkCat = findBeverageCat(categories);
+    const cartIds    = new Set(cart.map((c) => c.id));
+    const drinkCat   = findBeverageCat(categories);
     const dessertCat = findDessertCat(categories);
-    const hasDrink = drinkCat ? drinkCat.items.some((i) => cartIds.has(i.id)) : false;
+    const hasDrink   = drinkCat   ? drinkCat.items.some((i)   => cartIds.has(i.id)) : false;
     const hasDessert = dessertCat ? dessertCat.items.some((i) => cartIds.has(i.id)) : false;
 
-    const justRefusedDrink = upsellState.lastUpsellCategory === "drink" && !hasDrink;
-    const justRefusedDessert = upsellState.lastUpsellCategory === "dessert" && !hasDessert;
-
-    if (justRefusedDrink || justRefusedDessert) {
-      setUpsellState((prev) => ({
-        ...prev,
-        refusedDrink: prev.refusedDrink || justRefusedDrink,
-        refusedDessert: prev.refusedDessert || justRefusedDessert,
-      }));
-    }
-
-    const refusedDrink = upsellState.refusedDrink || justRefusedDrink;
-    const refusedDessert = upsellState.refusedDessert || justRefusedDessert;
-
-    if (!hasDrink && !upsellState.offeredDrink && !refusedDrink && drinkCat) {
+    // ── DRINK phase ──────────────────────────────────────────────────────────
+    // Offer once if no drink is in the cart and we haven't offered yet.
+    // A second click (with or without drink added) falls through to DESSERT/checkout.
+    if (!hasDrink && !upsellState.offeredDrink && drinkCat) {
       setSelectedCategoryId(drinkCat.id);
       setUpsellState((prev) => ({ ...prev, offeredDrink: true, lastUpsellCategory: "drink" }));
       sendText("Quero finalizar o pedido", cart, "BROWSE", "drink");
       return;
     }
 
-    if (!hasDessert && !upsellState.offeredDessert && !refusedDessert && dessertCat) {
+    // ── DESSERT phase ────────────────────────────────────────────────────────
+    // Drink phase resolved (item added OR skipped) → offer dessert once.
+    const drinkResolved = hasDrink || upsellState.offeredDrink;
+    if (drinkResolved && !hasDessert && !upsellState.offeredDessert && dessertCat) {
       setSelectedCategoryId(dessertCat.id);
       setUpsellState((prev) => ({ ...prev, offeredDessert: true, lastUpsellCategory: "dessert" }));
       sendText("Quero finalizar o pedido", cart, "BROWSE", "dessert");
       return;
     }
 
-    void allItems; // suppress unused warning
+    // ── All upsells resolved → advance to checkout ───────────────────────────
+    setUpsellState((prev) => ({ ...prev, lastUpsellCategory: null }));
     setStage("DELIVERY_TYPE");
     sendText("Confirmar pedido", cart, "DELIVERY_TYPE", null);
   }, [cart, categories, stage, upsellState, sendText]);
@@ -1005,7 +1016,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
     setPaymentMode(null);
     setPaymentMethodSub(null);
     setOrderId(null);
-    setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
+    setUpsellState({ offeredDrink: false, offeredDessert: false, lastUpsellCategory: null });
     sendText("Ver cardápio", cart, "BROWSE", activeUpsell, null);
   }, [cart, activeUpsell, sendText]);
 
@@ -1298,9 +1309,13 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
             </div>
             <button
               onClick={handleFinalizeClick}
-              className="flex w-full items-center justify-between rounded-2xl bg-[#25d366] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#1ebe5a]"
+              className={`flex w-full items-center justify-between rounded-2xl px-5 py-2.5 text-sm font-bold text-white transition-colors ${
+                upsellPending
+                  ? "bg-gray-400 hover:bg-gray-500"
+                  : "bg-[#25d366] hover:bg-[#1ebe5a]"
+              }`}
             >
-              <span>Finalizar pedido</span>
+              <span>{upsellPending ? "Continuar →" : "Finalizar pedido"}</span>
               <span>R$ {cartTotal.toFixed(2).replace(".", ",")}</span>
             </button>
           </div>
@@ -1351,7 +1366,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
         {/* Mobile-only: CartBar */}
         {stage === "BROWSE" && entryPhase === "browsing" && (
           <div className="lg:hidden">
-            <CartBar cart={cart} onFinalize={handleFinalizeClick} />
+            <CartBar cart={cart} onFinalize={handleFinalizeClick} upsellPending={upsellPending} />
           </div>
         )}
 

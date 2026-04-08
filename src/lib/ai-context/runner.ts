@@ -306,7 +306,11 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
   // ── Step 1b: Order orchestrator gate ──────────────────────────────────────
   // Runs BEFORE the AI model is called. If any required field is missing the
   // orchestrator returns a deterministic forced message — no LLM involved.
-  const gate = validateOrderFlow(ctx);
+  //
+  // Skipped during BROWSE: the AI must respond freely to greetings and menu
+  // questions; applying the gate here would block the initial greeting and
+  // every browsing message once the cart has items.
+  const gate = stage !== "BROWSE" ? validateOrderFlow(ctx) : { block: false as const };
   if (gate.block) {
     return {
       reply:  gate.message,
