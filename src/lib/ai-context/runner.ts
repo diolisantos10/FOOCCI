@@ -24,11 +24,12 @@
  *   - System controls stage transitions; AI only controls language
  */
 
-import { openai }           from "@/lib/openai";
-import type OpenAI          from "openai";
-import { buildAIContext }   from "./builder";
-import { filterMenuForAI }  from "./filter";
-import { buildAgentPrompt } from "@/lib/agent/builder";
+import { openai }              from "@/lib/openai";
+import type OpenAI              from "openai";
+import { buildAIContext }       from "./builder";
+import { filterMenuForAI }      from "./filter";
+import { buildAgentPrompt }     from "@/lib/agent/builder";
+import { validateOrderFlow }    from "@/lib/order/orchestrator";
 import {
   DEFAULT_PERSONALITY,
   DEFAULT_SALES,
@@ -67,6 +68,10 @@ export interface AITurnInput {
   stage?:          OrderStage;
   upsellOffered?:  "drink" | "dessert" | null;
   deliveryMethod?: "delivery" | "pickup" | null;
+  /** Delivery address collected from the customer during conversation. */
+  address?:        string | null;
+  /** Payment method chosen by the customer (e.g. "pix", "cash", "card"). */
+  paymentMethod?:  string | null;
   /** Pass if customer is already identified (auth or session). */
   customerId?:     string;
   /** Pass if customer identity was resolved by phone but no DB ID yet. */
@@ -75,6 +80,14 @@ export interface AITurnInput {
 
 export interface AITurnOutput {
   reply: string;
+  /**
+   * True when the orchestrator blocked the AI call and returned a
+   * forced message. The route handler can use this to skip history
+   * recording or trigger a different UI state.
+   */
+  forced?: true;
+  /** The flow rule that triggered the block (e.g. "MISSING_PAYMENT"). */
+  reason?: string;
 }
 
 // ── Coerce helper ─────────────────────────────────────────────────────────────
@@ -240,6 +253,8 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     stage          = "BROWSE",
     upsellOffered  = null,
     deliveryMethod = null,
+    address        = null,
+    paymentMethod  = null,
     customerId,
     customerPhone,
   } = input;
@@ -248,15 +263,29 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
   const ctx = await buildAIContext(restaurantId, {
     customerId,
     customerPhone,
-    orderStage:     stage,
+    orderStage:    stage,
     deliveryMethod,
-    channel:        "delivery",
+    address,
+    paymentMethod,
+    channel:       "delivery",
     cart: cart.map((item) => ({
       name:      item.name,
       quantity:  item.qty,
       unitPrice: item.price,
     })),
   });
+
+  // ── Step 1b: Order orchestrator gate ──────────────────────────────────────
+  // Runs BEFORE the AI model is called. If any required field is missing the
+  // orchestrator returns a deterministic forced message — no LLM involved.
+  const gate = validateOrderFlow(ctx);
+  if (gate.block) {
+    return {
+      reply:  gate.message,
+      forced: true,
+      reason: gate.reason,
+    };
+  }
 
   // ── Step 2: Filter menu for this customer's dietary profile + message ──────
   const filteredMenu = filterMenuForAI(ctx.menu, {
