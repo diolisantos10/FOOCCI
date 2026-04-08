@@ -51,7 +51,7 @@ export interface AIContextOptions {
    * Not stored in DB at context-build time.
    */
   cart?: Array<{
-    itemId:    string;
+    itemId?:   string; // optional — not always available on the client side
     name:      string;
     quantity:  number;
     unitPrice: number;
@@ -317,7 +317,7 @@ export async function buildAIContext(
 
   // ── Cart context ──────────────────────────────────────────────────────────
   const cartItems: CartItemContext[] = cart.map((item) => ({
-    itemId:    item.itemId,
+    itemId:    item.itemId ?? "",
     name:      item.name,
     quantity:  item.quantity,
     unitPrice: item.unitPrice,
