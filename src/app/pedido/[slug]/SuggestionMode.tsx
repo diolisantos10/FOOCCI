@@ -27,12 +27,22 @@ type SuggStep    = "protein" | "style" | "ingredient" | "results";
 
 // ── Suggestion logic ──────────────────────────────────────────────────────────
 
+// ── Keyword maps ──────────────────────────────────────────────────────────────
+
 const PROTEIN_KW: Record<Exclude<ProteinPref, "qualquer">, string[]> = {
   carne:       ["carne", "boi", "bovino", "picanha", "fraldinha", "hambúrgu", "burger",
                 "costela", "steak", "alcatra", "churrasco", "smash", "angus"],
   frango:      ["frango", "chicken", "galinha", "peito de fr", "filé de fr"],
   vegetariano: ["vegan", "vegetar", "legum", "salada", "veggie", "tofu", "cogumelo",
                 "caprese", "margherita", "primavera", "napolitana", "brócoli", "brocoli"],
+};
+
+/**
+ * Keywords whose presence EXCLUDES an item when the given protein preference is active.
+ * Vegetarians must never see meat/chicken items; other preferences have no hard exclusions.
+ */
+const EXCLUSION_KW: Partial<Record<Exclude<ProteinPref, "qualquer">, string[]>> = {
+  vegetariano: [...PROTEIN_KW.carne, ...PROTEIN_KW.frango],
 };
 
 const LEVE_KW  = ["grelhad", "light", "wrap", "fresc", "salada", "cozid", "fit", "vapor"];
@@ -47,35 +57,44 @@ function getSuggestions(
 ): MenuItem[] {
   type Scored = MenuItem & { score: number };
 
-  const scored: Scored[] = categories
-    .flatMap((c) => c.items.map((i) => ({ ...i, catName: c.name })))
-    .map((item) => {
-      const text = `${(item as MenuItem & { catName: string }).catName} ${item.name} ${item.description ?? ""}`.toLowerCase();
-      let score = 0;
+  const exclusions = protein !== "qualquer" ? (EXCLUSION_KW[protein] ?? []) : [];
 
-      if (item.imageUrl)    score += 8;
-      if (item.description) score += 3;
+  const allItems = categories.flatMap((c) =>
+    c.items.map((i) => ({ ...i, catName: c.name }))
+  );
 
-      // Protein
-      if (protein !== "qualquer") {
-        const hits = PROTEIN_KW[protein].filter((kw) => text.includes(kw)).length;
-        score += hits * 20;
-      }
+  // ── Step 1: Exclusion (hard filter, applied before any scoring) ───────────
+  const eligible = exclusions.length > 0
+    ? allItems.filter((item) => {
+        const text = `${item.catName} ${item.name} ${item.description ?? ""}`.toLowerCase();
+        return !exclusions.some((kw) => text.includes(kw));
+      })
+    : allItems;
 
-      // Style
-      if (style === "leve")     score += LEVE_KW.filter((kw)  => text.includes(kw)).length * 12;
-      if (style === "recheado") score += RECHD_KW.filter((kw) => text.includes(kw)).length * 12;
+  // ── Step 2: Scoring ───────────────────────────────────────────────────────
+  const scored: Scored[] = eligible.map((item) => {
+    const text = `${item.catName} ${item.name} ${item.description ?? ""}`.toLowerCase();
+    let score = 0;
 
-      // Keyword
-      const kw = keyword.trim().toLowerCase();
-      if (kw && text.includes(kw)) score += 40;
+    if (item.imageUrl)    score += 8;
+    if (item.description) score += 3;
 
-      return { ...item, score };
-    });
+    if (protein !== "qualquer") {
+      score += PROTEIN_KW[protein].filter((kw) => text.includes(kw)).length * 20;
+    }
+
+    if (style === "leve")     score += LEVE_KW.filter((kw)  => text.includes(kw)).length * 12;
+    if (style === "recheado") score += RECHD_KW.filter((kw) => text.includes(kw)).length * 12;
+
+    const kw = keyword.trim().toLowerCase();
+    if (kw && text.includes(kw)) score += 40;
+
+    return { ...item, score };
+  });
 
   scored.sort((a, b) => b.score - a.score);
 
-  // Prefer items with positive score; fall back to all if nothing matched well
+  // Prefer items with positive score; fall back to full eligible list if not enough
   const pool = scored.filter((i) => i.score > 0).length >= 2
     ? scored.filter((i) => i.score > 0)
     : scored;
