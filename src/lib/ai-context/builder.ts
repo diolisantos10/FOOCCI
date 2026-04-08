@@ -69,6 +69,16 @@ export interface AIContextOptions {
    * Omit to include all active+available items regardless of channel.
    */
   channel?: "delivery" | "dine_in";
+  /**
+   * Delivery address provided by the customer during the conversation.
+   * Null until the customer has supplied it.
+   */
+  address?: string | null;
+  /**
+   * Payment method chosen by the customer (e.g. "pix", "cash", "card").
+   * Null until the customer has confirmed it.
+   */
+  paymentMethod?: string | null;
 }
 
 // ── Tag derivation ────────────────────────────────────────────────────────────
@@ -101,9 +111,11 @@ export async function buildAIContext(
   const {
     customerId,
     customerPhone,
-    cart      = [],
-    orderStage     = null,
+    cart          = [],
+    orderStage    = null,
     deliveryMethod = null,
+    address       = null,
+    paymentMethod  = null,
     channel,
   } = options;
 
@@ -363,8 +375,10 @@ export async function buildAIContext(
       payment,
       cart:           cartItems,
       cartTotal,
-      orderStage:     orderStage ?? null,
+      orderStage:     orderStage    ?? null,
       deliveryMethod: deliveryMethod ?? null,
+      address:        address        ?? null,
+      paymentMethod:  paymentMethod  ?? null,
     },
     builtAt: new Date().toISOString(),
   };

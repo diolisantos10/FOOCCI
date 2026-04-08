@@ -135,6 +135,10 @@ export interface OperationalContext {
   cartTotal:      number;
   orderStage:     string | null;
   deliveryMethod: string | null;
+  /** Delivery address provided by the customer during the conversation. */
+  address:        string | null;
+  /** Payment method chosen by the customer (e.g. "pix", "cash", "card"). */
+  paymentMethod:  string | null;
 }
 
 // ── AI Config ─────────────────────────────────────────────────────────────────
