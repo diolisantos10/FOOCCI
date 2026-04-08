@@ -20,7 +20,7 @@ interface TestResult {
   message: string;
 }
 
-type Provider = "whatsapp" | "stone" | "mercadopago" | "tipos";
+type Provider = "whatsapp" | "stone" | "mercadopago" | "tipos" | "openai";
 
 // ── Integration metadata (display config) ─────────────────────────────────────
 
@@ -58,6 +58,13 @@ const INTEGRATIONS: {
     description: "Sistema de gestão de restaurante (ERP) — sincronização de cardápio e pedidos.",
     icon:        "🍽️",
     color:       "bg-orange-500",
+  },
+  {
+    provider:    "openai",
+    name:        "OpenAI",
+    description: "Motor de IA dos agentes Foocci — GPT-4o para atendimento e vendas automáticas.",
+    icon:        "🤖",
+    color:       "bg-[#10a37f]",
   },
 ];
 
@@ -473,6 +480,54 @@ function TiposForm({
   );
 }
 
+function OpenAIForm({
+  view, saving, onSave,
+}: {
+  view:    IntegrationView | null;
+  saving:  boolean;
+  onSave:  (data: Record<string, string>) => void;
+}) {
+  const f = view?.fields ?? {};
+  const [apiKey, setApiKey] = useState("");
+
+  useEffect(() => {
+    setApiKey("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view?.provider]);
+
+  return (
+    <form
+      onSubmit={(e) => { e.preventDefault(); onSave({ apiKey }); }}
+      className="space-y-4"
+    >
+      <SecretField
+        label="API Key"
+        name="apiKey"
+        placeholder={f.apiKeyPreview ? `Atual: ${f.apiKeyPreview} — deixe em branco para manter` : "sk-..."}
+        hint="Encontre em platform.openai.com → API Keys. Deixe em branco para manter a chave atual."
+        value={apiKey}
+        onChange={setApiKey}
+      />
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+        <p className="text-xs font-medium text-blue-700">Seleção de modelo</p>
+        <p className="mt-1 text-xs text-blue-600">
+          O modelo de IA (GPT-4o, GPT-4o mini, etc.) é configurado na página{" "}
+          <a href="/agente-ia" className="font-semibold underline">Agente IA</a>.
+        </p>
+      </div>
+      <div className="flex justify-end pt-1">
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition"
+        >
+          {saving ? "Salvando…" : "Salvar"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── Detail panel ──────────────────────────────────────────────────────────────
 
 function DetailPanel({
@@ -613,10 +668,11 @@ function DetailPanel({
           {isOwner ? (
             <div>
               <p className="mb-4 text-sm font-semibold text-gray-700">Configuração</p>
-              {provider === "whatsapp" && <WhatsAppForm   view={view} saving={saving} onSave={handleSave} />}
-              {provider === "stone"    && <StoneForm       view={view} saving={saving} onSave={handleSave} />}
+              {provider === "whatsapp"    && <WhatsAppForm    view={view} saving={saving} onSave={handleSave} />}
+              {provider === "stone"       && <StoneForm       view={view} saving={saving} onSave={handleSave} />}
               {provider === "mercadopago" && <MercadoPagoForm view={view} saving={saving} onSave={handleSave} />}
-              {provider === "tipos"    && <TiposForm       view={view} saving={saving} onSave={handleSave} />}
+              {provider === "tipos"       && <TiposForm       view={view} saving={saving} onSave={handleSave} />}
+              {provider === "openai"      && <OpenAIForm      view={view} saving={saving} onSave={handleSave} />}
             </div>
           ) : (
             <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">

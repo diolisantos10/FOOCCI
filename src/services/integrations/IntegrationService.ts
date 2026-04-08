@@ -24,6 +24,7 @@ import type {
   StoneConfigInput,
   MercadoPagoConfigInput,
   TiposConfigInput,
+  OpenAIConfigInput,
 } from "@/validators/integrations";
 
 // ── Public view type (safe for API responses) ─────────────────────────────────
@@ -48,8 +49,9 @@ export interface TestResult {
 interface StoneRaw   { environment: string; clientId: string; clientSecret: string }
 interface MpRaw      { environment: string; accessToken: string }
 interface TiposRaw   { baseUrl: string; apiKey: string; accountId?: string }
+interface OpenAIRaw  { apiKey: string }
 
-type AnyRaw = StoneRaw | MpRaw | TiposRaw;
+type AnyRaw = StoneRaw | MpRaw | TiposRaw | OpenAIRaw;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -77,13 +79,17 @@ function maskView(raw: AnyRaw, provider: IntegrationProvider): Record<string, st
       accessTokenPreview:  maskSecret(r.accessToken),
     };
   }
-  // tipos
-  const r = raw as TiposRaw;
-  return {
-    baseUrl:      r.baseUrl,
-    apiKeyPreview: maskSecret(r.apiKey),
-    accountId:    r.accountId ?? null,
-  };
+  if (provider === "tipos") {
+    const r = raw as TiposRaw;
+    return {
+      baseUrl:       r.baseUrl,
+      apiKeyPreview: maskSecret(r.apiKey),
+      accountId:     r.accountId ?? null,
+    };
+  }
+  // openai
+  const r = raw as OpenAIRaw;
+  return { apiKeyPreview: maskSecret(r.apiKey) };
 }
 
 function dbRowToView(row: {
@@ -139,7 +145,7 @@ export class IntegrationService {
 
     // Ensure all known providers appear, even if not yet configured
     const configuredProviders = new Set(otherViews.map((v) => v.provider));
-    const unconfigured: IntegrationView[] = (["stone", "mercadopago", "tipos"] as IntegrationProvider[])
+    const unconfigured: IntegrationView[] = (["stone", "mercadopago", "tipos", "openai"] as IntegrationProvider[])
       .filter((p) => !configuredProviders.has(p))
       .map((p) => ({
         provider:     p,
@@ -198,7 +204,7 @@ export class IntegrationService {
   static async upsert(
     provider: IntegrationProvider,
     restaurantId: string,
-    input: StoneConfigInput | MercadoPagoConfigInput | TiposConfigInput
+    input: StoneConfigInput | MercadoPagoConfigInput | TiposConfigInput | OpenAIConfigInput
   ): Promise<ServiceResult<IntegrationView>> {
     // Load existing decrypted config to preserve secrets if empty strings sent
     let existingRaw: AnyRaw | null = null;
@@ -226,8 +232,7 @@ export class IntegrationService {
         environment: inp.environment,
         accessToken: inp.accessToken || old?.accessToken || "",
       };
-    } else {
-      // tipos
+    } else if (provider === "tipos") {
       const inp = input as TiposConfigInput;
       const old = existingRaw as TiposRaw | null;
       newRaw = {
@@ -235,6 +240,11 @@ export class IntegrationService {
         apiKey:    inp.apiKey || old?.apiKey || "",
         accountId: inp.accountId,
       };
+    } else {
+      // openai
+      const inp = input as OpenAIConfigInput;
+      const old = existingRaw as OpenAIRaw | null;
+      newRaw = { apiKey: inp.apiKey || old?.apiKey || "" };
     }
 
     const blob = encodeConfig(newRaw);
@@ -291,9 +301,10 @@ export class IntegrationService {
     let result: TestResult;
     try {
       const raw = decodeConfig<AnyRaw>(row.configBlob);
-      if (provider === "stone")       result = await IntegrationService._testStone(raw as StoneRaw);
+      if (provider === "stone")            result = await IntegrationService._testStone(raw as StoneRaw);
       else if (provider === "mercadopago") result = await IntegrationService._testMercadoPago(raw as MpRaw);
-      else result = await IntegrationService._testTipos(raw as TiposRaw);
+      else if (provider === "tipos")       result = await IntegrationService._testTipos(raw as TiposRaw);
+      else                                 result = await IntegrationService._testOpenAI(raw as OpenAIRaw);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
       result = { success: false, message: `Erro ao testar: ${msg}` };
@@ -381,6 +392,24 @@ export class IntegrationService {
       return { success: false, message: `Mercado Pago retornou HTTP ${res.status}.` };
     } catch {
       return { success: false, message: "Não foi possível alcançar o Mercado Pago." };
+    }
+  }
+
+  private static async _testOpenAI(raw: OpenAIRaw): Promise<TestResult> {
+    if (!raw.apiKey) {
+      return { success: false, message: "API Key não configurada." };
+    }
+    try {
+      const res = await fetch("https://api.openai.com/v1/models", {
+        headers: { Authorization: `Bearer ${raw.apiKey}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) return { success: true, message: "API Key válida. Conexão com OpenAI estabelecida." };
+      if (res.status === 401) return { success: false, message: "API Key inválida ou revogada." };
+      if (res.status === 429) return { success: false, message: "Limite de requisições atingido. A chave é válida." };
+      return { success: false, message: `OpenAI retornou HTTP ${res.status}.` };
+    } catch {
+      return { success: false, message: "Não foi possível alcançar a OpenAI. Verifique sua conexão." };
     }
   }
 

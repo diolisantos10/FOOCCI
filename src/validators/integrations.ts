@@ -12,7 +12,7 @@
 
 import { z } from "zod";
 
-export const VALID_PROVIDERS = ["stone", "mercadopago", "tipos"] as const;
+export const VALID_PROVIDERS = ["stone", "mercadopago", "tipos", "openai"] as const;
 export type IntegrationProvider = (typeof VALID_PROVIDERS)[number];
 
 export function isValidProvider(v: string): v is IntegrationProvider {
@@ -48,6 +48,14 @@ export const tiposConfigSchema = z.object({
 
 export type TiposConfigInput = z.infer<typeof tiposConfigSchema>;
 
+// ── OpenAI ────────────────────────────────────────────────────────────────────
+
+export const openaiConfigSchema = z.object({
+  apiKey: z.string(), // empty = keep existing
+});
+
+export type OpenAIConfigInput = z.infer<typeof openaiConfigSchema>;
+
 // ── Union dispatcher ──────────────────────────────────────────────────────────
 
 export function parseProviderConfig(provider: IntegrationProvider, body: unknown) {
@@ -55,5 +63,6 @@ export function parseProviderConfig(provider: IntegrationProvider, body: unknown
     case "stone":       return stoneConfigSchema.safeParse(body);
     case "mercadopago": return mercadopagoConfigSchema.safeParse(body);
     case "tipos":       return tiposConfigSchema.safeParse(body);
+    case "openai":      return openaiConfigSchema.safeParse(body);
   }
 }
