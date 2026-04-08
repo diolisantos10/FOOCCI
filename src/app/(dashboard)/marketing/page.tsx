@@ -20,13 +20,7 @@ const SECTIONS = [
     href:        "/settings/experience",
     icon:        "✨",
     label:       "Experiência",
-    description: "Personalize a aparência e a identidade visual do seu restaurante no app e no cardápio digital.",
-  },
-  {
-    href:        "/settings/agent",
-    icon:        "🤖",
-    label:       "Agente IA",
-    description: "Configure o assistente de IA: personalidade, contexto do restaurante, horários e comportamento de atendimento.",
+    description: "Configure cores, logo e identidade visual do restaurante no cardápio digital.",
   },
 ];
 

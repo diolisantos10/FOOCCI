@@ -51,11 +51,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Crescimento",
     items: [
       {
-        href:             "/marketing",
-        label:            "Marketing",
-        icon:             "📢",
-        // Also highlight when browsing Marketing sub-pages that live under /settings
-        extraActivePaths: ["/settings/experience", "/settings/agent"],
+        href:  "/marketing",
+        label: "Marketing",
+        icon:  "📢",
       },
       {
         href:  "/promotions",
@@ -74,11 +72,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/chat-sim", label: "Testar IA", icon: "🧪" },
       {
-        href:            "/settings",
-        label:           "Configurações",
-        icon:            "⚙️",
-        // Don't highlight Configurações when the user is on a Marketing sub-page
-        ignoreSubpaths:  ["/settings/experience", "/settings/agent"],
+        href:  "/settings",
+        label: "Configurações",
+        icon:  "⚙️",
       },
       { href: "/integracoes",    label: "Integrações",    icon: "🔌" },
       { href: "/personalizacao", label: "Personalização", icon: "🎨", soon: true },

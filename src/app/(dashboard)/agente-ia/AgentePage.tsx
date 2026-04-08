@@ -4,13 +4,10 @@
  * /agente-ia — AI Sales Agent configuration hub
  *
  * 4 tabs:
- *   1. Base da IA    — Personality, voice, greeting
- *   2. Atendimento   — WhatsApp agent identity & flows
- *   3. Cardápio      — Sales strategy & upsell behaviour
+ *   1. Base da IA    — Personality, voice, greeting      → /api/brand-config
+ *   2. Atendimento   — WhatsApp agent identity & flows   → /api/whatsapp-agent
+ *   3. Cardápio      — Sales strategy & upsell behaviour → /api/brand-config
  *   4. CRM           — Data collection (informational)
- *
- * Saves to RestaurantBrandConfig via /api/brand-config.
- * WhatsApp agent tab will wire to /api/whatsapp-agent in a later step.
  */
 
 import { useState, useEffect, type FormEvent } from "react";
@@ -25,6 +22,13 @@ import {
   type SalesFocus,
   type SalesPriority,
 } from "@/validators/brand-config";
+import {
+  AGENT_DEFAULTS,
+  DEFAULT_MENU_OPTIONS,
+  FLOW_TYPES,
+  type MenuOption,
+  type FlowType,
+} from "@/validators/whatsapp-agent";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -109,6 +113,58 @@ const STYLE_OPTIONS = [
   { value: "consultive",   label: "Consultivo",  desc: "Explica e orienta o cliente"   },
   { value: "sales_driven", label: "Vendas",      desc: "Sugere, engaja, converte"      },
 ];
+
+const FLOW_CONFIG: Record<FlowType, { label: string; desc: string; icon: string }> = {
+  order:      { icon: "🛒", label: "Fazer pedido",          desc: "Envia msg de pedido + link do cardápio" },
+  handoff:    { icon: "👤", label: "Falar com atendente",   desc: "Encaminha para o número configurado"    },
+  menu:       { icon: "📋", label: "Ver cardápio",           desc: "Envia o link do cardápio"               },
+  promotions: { icon: "🎁", label: "Ver promoções",          desc: "O agente lista as promoções ativas"     },
+  custom:     { icon: "💬", label: "Mensagem personalizada", desc: "Envia um texto livre definido aqui"     },
+};
+
+const PRESETS_AGENT: Array<{ label: string; flow: FlowType; message?: string }> = [
+  { label: "Fazer pedido",        flow: "order"      },
+  { label: "Falar com atendente", flow: "handoff"    },
+  { label: "Ver promoções",       flow: "promotions" },
+  { label: "Ver cardápio",        flow: "menu"       },
+  { label: "Informações",         flow: "custom",    message: "Horário: ...\nEndereço: ..." },
+];
+
+// ── Agent form helpers ────────────────────────────────────────────────────────
+
+function newId() {
+  return `opt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function parseMenuOptions(raw: unknown): MenuOption[] {
+  if (Array.isArray(raw) && raw.length > 0) return raw as MenuOption[];
+  return DEFAULT_MENU_OPTIONS.map((o) => ({ ...o, id: newId() }));
+}
+
+interface AgentFormState {
+  agentName:       string;
+  tone:            string;
+  style:           string;
+  welcomeMessage:  string;
+  orderPreMessage: string;
+  menuUrl:         string;
+  handoffPhone:    string;
+  handoffMessage:  string;
+}
+
+function toAgentForm(d: Record<string, unknown>): AgentFormState {
+  const def = AGENT_DEFAULTS;
+  return {
+    agentName:       String(d.agentName       ?? def.agentName),
+    tone:            String(d.tone            ?? def.tone),
+    style:           String(d.style           ?? def.style),
+    welcomeMessage:  String(d.welcomeMessage  ?? def.welcomeMessage),
+    orderPreMessage: String(d.orderPreMessage ?? def.orderPreMessage),
+    menuUrl:         String(d.menuUrl         ?? ""),
+    handoffPhone:    String(d.handoffPhone    ?? ""),
+    handoffMessage:  String(d.handoffMessage  ?? def.handoffMessage),
+  };
+}
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 
@@ -232,6 +288,79 @@ function SaveRow({ saving, label }: { saving: boolean; label: string }) {
   );
 }
 
+function CharCount({ current, max }: { current: number; max: number }) {
+  const near = current > max * 0.85;
+  return (
+    <p className={`mt-0.5 text-right text-xs ${near ? "text-amber-500" : "text-gray-400"}`}>
+      {current} / {max}
+    </p>
+  );
+}
+
+function OptionCard({
+  option, index, total, onChange, onRemove, onMoveUp, onMoveDown,
+}: {
+  option: MenuOption;
+  index: number;
+  total: number;
+  onChange: (patch: Partial<MenuOption>) => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
+  const flow = FLOW_CONFIG[option.flow];
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+          {index + 1}
+        </span>
+        <input
+          type="text"
+          value={option.label}
+          onChange={(e) => onChange({ label: e.target.value })}
+          maxLength={60}
+          placeholder="Ex: Fazer pedido"
+          className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <select
+          value={option.flow}
+          onChange={(e) => onChange({ flow: e.target.value as FlowType })}
+          className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+        >
+          {FLOW_TYPES.map((f) => (
+            <option key={f} value={f}>{FLOW_CONFIG[f].icon} {FLOW_CONFIG[f].label}</option>
+          ))}
+        </select>
+        <div className="flex flex-col gap-0.5 shrink-0">
+          <button type="button" onClick={onMoveUp} disabled={index === 0}
+            className="flex h-5 w-5 items-center justify-center rounded text-xs text-gray-400 hover:bg-gray-200 disabled:opacity-30"
+            aria-label="Mover para cima">▲</button>
+          <button type="button" onClick={onMoveDown} disabled={index === total - 1}
+            className="flex h-5 w-5 items-center justify-center rounded text-xs text-gray-400 hover:bg-gray-200 disabled:opacity-30"
+            aria-label="Mover para baixo">▼</button>
+        </div>
+        <button type="button" onClick={onRemove}
+          className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+          aria-label="Remover opção">✕</button>
+      </div>
+      <p className="pl-8 text-xs text-gray-500">{flow.icon} {flow.desc}</p>
+      {option.flow === "custom" && (
+        <div className="pl-8">
+          <textarea
+            value={option.message ?? ""}
+            onChange={(e) => onChange({ message: e.target.value })}
+            rows={2}
+            maxLength={500}
+            placeholder="Mensagem enviada ao cliente ao selecionar esta opção…"
+            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function AgentePage() {
@@ -300,18 +429,93 @@ export function AgentePage() {
     }
   }
 
-  // ── Atendimento local state (no API wiring yet) ───────────────────────────
-  const [agentName, setAgentName]           = useState("Agente");
-  const [agentTone, setAgentTone]           = useState("informal");
-  const [agentStyle, setAgentStyle]         = useState("sales_driven");
-  const [welcomeMsg, setWelcomeMsg]         = useState("Olá! Bem-vindo! 😊 O que você deseja?");
-  const [orderPreMsg, setOrderPreMsg]       = useState("Ótimo! Aqui está nosso cardápio 👇");
-  const [menuUrl, setMenuUrl]               = useState("");
-  const [handoffPhone, setHandoffPhone]     = useState("");
-  const [handoffMessage, setHandoffMessage] = useState("Vou te conectar com um atendente. Um momento! 👋");
+  // ── WhatsApp agent state (Tab 2 — Atendimento) ───────────────────────────
+  const [agentForm, setAgentForm]       = useState<AgentFormState>(toAgentForm({}));
+  const [menuOptions, setMenuOptions]   = useState<MenuOption[]>(
+    DEFAULT_MENU_OPTIONS.map((o) => ({ ...o, id: newId() }))
+  );
+  const [agentLoading, setAgentLoading] = useState(true);
+  const [agentSaving, setAgentSaving]   = useState(false);
+  const [agentOk, setAgentOk]           = useState(false);
+  const [agentErr, setAgentErr]         = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/whatsapp-agent")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data) {
+          setAgentForm(toAgentForm(json.data));
+          setMenuOptions(parseMenuOptions(json.data.menuOptions));
+        }
+      })
+      .catch(() => {/* keep defaults */})
+      .finally(() => setAgentLoading(false));
+  }, []);
+
+  function patchAgent(key: keyof AgentFormState) {
+    return (value: string) => setAgentForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function addOption(preset?: typeof PRESETS_AGENT[number]) {
+    setMenuOptions((prev) => [
+      ...prev,
+      { id: newId(), label: preset?.label ?? "", flow: preset?.flow ?? "custom", message: preset?.message ?? "" },
+    ]);
+  }
+
+  function updateOption(id: string, patch: Partial<MenuOption>) {
+    setMenuOptions((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+  }
+
+  function removeOption(id: string) {
+    setMenuOptions((prev) => prev.filter((o) => o.id !== id));
+  }
+
+  function moveOption(id: string, dir: -1 | 1) {
+    setMenuOptions((prev) => {
+      const idx = prev.findIndex((o) => o.id === id);
+      if (idx < 0) return prev;
+      const next = idx + dir;
+      if (next < 0 || next >= prev.length) return prev;
+      const arr = [...prev];
+      [arr[idx], arr[next]] = [arr[next]!, arr[idx]!];
+      return arr;
+    });
+  }
+
+  async function saveAgentConfig(e: FormEvent) {
+    e.preventDefault();
+    if (menuOptions.some((o) => !o.label.trim())) {
+      setAgentErr("Todas as opções precisam ter um rótulo.");
+      return;
+    }
+    setAgentSaving(true);
+    setAgentOk(false);
+    setAgentErr(null);
+    try {
+      const res = await fetch("/api/whatsapp-agent", {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          ...agentForm,
+          menuOptions,
+          menuUrl:      agentForm.menuUrl      || null,
+          handoffPhone: agentForm.handoffPhone || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setAgentErr(json.error ?? "Erro ao salvar"); return; }
+      setAgentOk(true);
+      setTimeout(() => setAgentOk(false), 4000);
+    } catch {
+      setAgentErr("Falha de rede — tente novamente.");
+    } finally {
+      setAgentSaving(false);
+    }
+  }
 
   // ── Loading ───────────────────────────────────────────────────────────────
-  if (loading) {
+  if (loading || agentLoading) {
     return (
       <div className="flex h-48 items-center justify-center">
         <p className="text-sm text-gray-400">Carregando configuração…</p>
@@ -492,56 +696,53 @@ export function AgentePage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TAB 2 — Atendimento
+          TAB 2 — Atendimento  (source of truth: /api/whatsapp-agent)
       ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "atendimento" && (
-        <div className="space-y-6">
+        <form onSubmit={saveAgentConfig} className="space-y-6">
 
-          {/* Coming-soon notice */}
-          <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            <span className="mt-0.5 text-base leading-none">ℹ️</span>
-            <p>
-              A configuração do agente WhatsApp será integrada aqui em breve.
-              Por enquanto, acesse{" "}
-              <Link
-                href="/settings/agent"
-                className="font-semibold underline hover:text-blue-800"
-              >
-                Configurações → Agente WhatsApp
-              </Link>
-              .
-            </p>
-          </div>
+          {/* Feedback */}
+          {agentOk && (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700">
+              Configuração de atendimento salva.
+            </div>
+          )}
+          {agentErr && (
+            <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+              <span>{agentErr}</span>
+              <button type="button" onClick={() => setAgentErr(null)} className="ml-4 text-red-400 hover:text-red-600">✕</button>
+            </div>
+          )}
 
           {/* Personalidade */}
-          <Section title="Personalidade do agente WhatsApp" subtitle="Como o agente se apresenta no WhatsApp.">
+          <Section title="Personalidade do agente WhatsApp" subtitle="Como o agente se apresenta e fala com o cliente.">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
                 Nome do agente
               </label>
               <input
                 type="text"
-                value={agentName}
-                onChange={(e) => setAgentName(e.target.value)}
+                value={agentForm.agentName}
+                onChange={(e) => patchAgent("agentName")(e.target.value)}
                 maxLength={50}
                 placeholder="Ex: Ju, Max, Agente Foocci"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <p className="mt-1 text-xs text-gray-400">
-                Nome que o agente usa para se apresentar.
+                Nome que o agente usa para se apresentar ao cliente.
               </p>
             </div>
             <RadioRow
               label="Tom de voz"
               options={TONE_OPTIONS}
-              value={agentTone}
-              onChange={setAgentTone}
+              value={agentForm.tone}
+              onChange={patchAgent("tone")}
             />
             <RadioRow
               label="Estilo de atendimento"
               options={STYLE_OPTIONS}
-              value={agentStyle}
-              onChange={setAgentStyle}
+              value={agentForm.style}
+              onChange={patchAgent("style")}
             />
           </Section>
 
@@ -552,30 +753,102 @@ export function AgentePage() {
                 Mensagem inicial
               </label>
               <textarea
-                value={welcomeMsg}
-                onChange={(e) => setWelcomeMsg(e.target.value)}
+                value={agentForm.welcomeMessage}
+                onChange={(e) => patchAgent("welcomeMessage")(e.target.value)}
                 rows={4}
                 maxLength={1000}
                 placeholder="Ex: Olá! Bem-vindo ao restaurante 🍣 O que você deseja?"
                 className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
+              <CharCount current={agentForm.welcomeMessage.length} max={1000} />
             </div>
-            {/* Live preview bubble */}
+            {/* Live preview */}
             <div className="rounded-xl bg-[#dcf8c6] px-4 py-3 text-sm text-gray-800 shadow-inner max-w-xs">
               <p className="text-[11px] font-semibold text-gray-500 mb-1">Pré-visualização</p>
-              <p className="whitespace-pre-wrap leading-relaxed">{welcomeMsg || "…"}</p>
+              <p className="whitespace-pre-wrap leading-relaxed">{agentForm.welcomeMessage || "…"}</p>
+              {menuOptions.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {menuOptions.map((o, i) => (
+                    <div key={o.id} className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-gray-700">
+                      {i + 1}. {o.label || <span className="text-gray-400 italic">sem rótulo</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Section>
+
+          {/* Opções de entrada */}
+          <Section title="Opções de entrada">
+            <p className="text-xs text-gray-500">
+              Botões exibidos após a mensagem de boas-vindas. Cada opção aciona um fluxo.
+            </p>
+            <div className="space-y-2">
+              {menuOptions.length === 0 && (
+                <p className="rounded-lg border border-dashed border-gray-300 py-4 text-center text-xs text-gray-400">
+                  Nenhuma opção configurada. Adicione abaixo.
+                </p>
+              )}
+              {menuOptions.map((opt, idx) => (
+                <OptionCard
+                  key={opt.id}
+                  option={opt}
+                  index={idx}
+                  total={menuOptions.length}
+                  onChange={(patch) => updateOption(opt.id, patch)}
+                  onRemove={() => removeOption(opt.id)}
+                  onMoveUp={() => moveOption(opt.id, -1)}
+                  onMoveDown={() => moveOption(opt.id, 1)}
+                />
+              ))}
+            </div>
+            <div className="pt-1 space-y-3">
+              <button
+                type="button"
+                onClick={() => addOption()}
+                className="rounded-lg border border-dashed border-brand-300 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-600 hover:bg-brand-100 transition-colors"
+              >
+                + Nova opção em branco
+              </button>
+              <div>
+                <p className="mb-2 text-xs font-medium text-gray-500">Adicionar predefinição:</p>
+                <div className="flex flex-wrap gap-2">
+                  {PRESETS_AGENT.map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => addOption(p)}
+                      className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:border-brand-300 hover:text-brand-600 transition-colors"
+                    >
+                      {FLOW_CONFIG[p.flow].icon} {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {menuOptions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMenuOptions(DEFAULT_MENU_OPTIONS.map((o) => ({ ...o, id: newId() })))}
+                  className="text-xs text-gray-400 underline hover:text-gray-600"
+                >
+                  Restaurar padrões
+                </button>
+              )}
             </div>
           </Section>
 
           {/* Fluxo: Fazer pedido */}
           <Section title='Fluxo — "Fazer pedido"'>
+            <p className="text-xs text-gray-500">
+              Ativado quando o cliente escolhe uma opção com fluxo <span className="font-semibold text-gray-700">Fazer pedido</span>.
+            </p>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
                 Mensagem ao iniciar pedido
               </label>
               <textarea
-                value={orderPreMsg}
-                onChange={(e) => setOrderPreMsg(e.target.value)}
+                value={agentForm.orderPreMessage}
+                onChange={(e) => patchAgent("orderPreMessage")(e.target.value)}
                 rows={2}
                 maxLength={500}
                 placeholder="Ex: Ótimo! Aqui está nosso cardápio 👇"
@@ -584,30 +857,32 @@ export function AgentePage() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                URL do cardápio{" "}
-                <span className="font-normal text-gray-400">(opcional)</span>
+                URL do cardápio <span className="font-normal text-gray-400">(opcional)</span>
               </label>
               <input
                 type="url"
-                value={menuUrl}
-                onChange={(e) => setMenuUrl(e.target.value)}
+                value={agentForm.menuUrl}
+                onChange={(e) => patchAgent("menuUrl")(e.target.value)}
                 placeholder="https://seudominio.com/qr/slug"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
+              <p className="mt-1 text-xs text-gray-400">Enviado junto com a mensagem acima.</p>
             </div>
           </Section>
 
           {/* Fluxo: Transferência */}
           <Section title='Fluxo — "Falar com atendente"'>
+            <p className="text-xs text-gray-500">
+              Ativado quando o cliente escolhe uma opção com fluxo <span className="font-semibold text-gray-700">Falar com atendente</span>.
+            </p>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                Telefone do atendente{" "}
-                <span className="font-normal text-gray-400">(WhatsApp, com DDI)</span>
+                Telefone do atendente <span className="font-normal text-gray-400">(WhatsApp, com DDI)</span>
               </label>
               <input
                 type="tel"
-                value={handoffPhone}
-                onChange={(e) => setHandoffPhone(e.target.value)}
+                value={agentForm.handoffPhone}
+                onChange={(e) => patchAgent("handoffPhone")(e.target.value)}
                 maxLength={30}
                 placeholder="5511999999999"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -618,8 +893,8 @@ export function AgentePage() {
                 Mensagem de transferência
               </label>
               <textarea
-                value={handoffMessage}
-                onChange={(e) => setHandoffMessage(e.target.value)}
+                value={agentForm.handoffMessage}
+                onChange={(e) => patchAgent("handoffMessage")(e.target.value)}
                 rows={2}
                 maxLength={500}
                 placeholder="Ex: Vou te conectar com um atendente. Um momento! 👋"
@@ -628,18 +903,8 @@ export function AgentePage() {
             </div>
           </Section>
 
-          {/* Placeholder save */}
-          <div className="flex justify-end pb-4">
-            <button
-              type="button"
-              disabled
-              className="rounded-lg bg-gray-300 px-6 py-2.5 text-sm font-semibold text-gray-500 cursor-not-allowed"
-              title="Integração em breve"
-            >
-              Salvar Atendimento
-            </button>
-          </div>
-        </div>
+          <SaveRow saving={agentSaving} label="Salvar Atendimento" />
+        </form>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
