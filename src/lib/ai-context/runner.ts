@@ -3,6 +3,8 @@
  *
  * Pipeline:
  *   1. buildAIContext()     — fetch all restaurant/menu/customer/config data
+ *   1b. validateOrderFlow() — hard gate: blocks AI if required fields missing
+ *   1c. resolveSalesPhase() — upsell phase (DRINK/DESSERT/DONE); blockCheckout advisory
  *   2. filterMenuForAI()    — remove items that conflict with dietary profile
  *   3. Build system prompt  — informational preamble + 5-layer behavioral prompt
  *   4. Call OpenAI          — validated model, capped history, max 200 tokens
@@ -30,7 +32,7 @@ import { buildAIContext }       from "./builder";
 import { filterMenuForAI }      from "./filter";
 import { buildAgentPrompt }     from "@/lib/agent/builder";
 import { validateOrderFlow }    from "@/lib/order/orchestrator";
-import { detectOpportunity }    from "@/lib/sales/opportunity";
+import { resolveSalesPhase }    from "@/lib/sales/flow";
 import {
   DEFAULT_PERSONALITY,
   DEFAULT_SALES,
@@ -243,16 +245,28 @@ function buildPromotionsBlock(promotions: PromotionContext[]): string {
   ].join("\n");
 }
 
-function buildOpportunityBlock(
-  opportunity: ReturnType<typeof detectOpportunity>,
+function buildSalesPhaseBlock(
+  phase:  ReturnType<typeof resolveSalesPhase>,
 ): string {
-  if (!opportunity) return "";
+  if (phase.salesResolved || !phase.type) return "";
+
+  if (phase.type === "drink") {
+    return [
+      `━━━ FASE COMERCIAL: BEBIDA ━━━`,
+      `O cliente tem itens no carrinho mas ainda não escolheu uma bebida.`,
+      `Sugira uma bebida que combine com o pedido, de forma natural e consultiva — como um garçom experiente.`,
+      `REGRA: Não use linguagem de finalização de pedido (endereço, pagamento, entrega) enquanto esta fase não for resolvida.`,
+      `Se o cliente recusar ou ignorar, continue o fluxo normalmente sem insistir.`,
+    ].join("\n");
+  }
+
+  // dessert phase
   return [
-    `━━━ OPORTUNIDADE DE VENDA ━━━`,
-    `Há uma oportunidade de sugerir um item complementar (${opportunity.type}).`,
-    `${opportunity.messageHint}.`,
-    `Integre a sugestão naturalmente na resposta, como um garçom experiente — sem insistir.`,
-    `Se o cliente não demonstrar interesse, continue o fluxo normalmente.`,
+    `━━━ FASE COMERCIAL: SOBREMESA ━━━`,
+    `O cliente já tem bebida no carrinho. Há uma oportunidade de sugerir uma sobremesa leve.`,
+    `Faça a sugestão de forma natural, uma única vez — sem pressionar.`,
+    `REGRA: Não use linguagem de finalização de pedido (endereço, pagamento, entrega) enquanto esta fase não for resolvida.`,
+    `Se o cliente recusar ou ignorar, continue o fluxo normalmente.`,
   ].join("\n");
 }
 
@@ -301,11 +315,14 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     };
   }
 
-  // ── Step 1c: Sales opportunity detection ──────────────────────────────────
-  // Detects whether a drink or dessert suggestion is appropriate right now.
-  // Passes `upsellOffered` so the same type is never suggested twice in a row.
-  // Returns null when nothing is appropriate — does not affect flow.
-  const opportunity = detectOpportunity(ctx, upsellOffered ?? null);
+  // ── Step 1c: Sales phase resolution ───────────────────────────────────────
+  // Determines the current upsell phase (DRINK / DESSERT / DONE / NONE) and
+  // whether checkout language should be blocked in the AI response.
+  // Runs after the orchestrator gate; result is written back to ctx.operational
+  // so downstream modules (prompt builder) can read it.
+  const salesFlow = resolveSalesPhase(ctx, upsellOffered ?? null);
+  ctx.operational.salesPhase   = salesFlow.salesPhase;
+  ctx.operational.salesResolved = salesFlow.salesResolved;
 
   // ── Step 2: Filter menu for this customer's dietary profile + message ──────
   const filteredMenu = filterMenuForAI(ctx.menu, {
@@ -341,7 +358,7 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     const preamble = [
       buildCustomerBlock(ctx.customer),
       buildPromotionsBlock(ctx.promotions),
-      buildOpportunityBlock(opportunity),
+      buildSalesPhaseBlock(salesFlow),
     ].filter(Boolean).join("\n\n");
 
     // 5-layer behavioral prompt — protocol is LAST (highest attention weight)

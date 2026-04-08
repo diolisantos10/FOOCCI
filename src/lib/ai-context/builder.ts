@@ -379,6 +379,9 @@ export async function buildAIContext(
       deliveryMethod: deliveryMethod ?? null,
       address:        address        ?? null,
       paymentMethod:  paymentMethod  ?? null,
+      // Set to defaults here; runner.ts overwrites these after resolveSalesPhase()
+      salesPhase:    "NONE",
+      salesResolved: false,
     },
     builtAt: new Date().toISOString(),
   };

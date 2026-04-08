@@ -128,6 +128,8 @@ export interface CartItemContext {
   notes:     string | null;
 }
 
+export type SalesPhase = "NONE" | "DRINK" | "DESSERT" | "DONE";
+
 export interface OperationalContext {
   delivery:       DeliveryContext | null;
   payment:        PaymentContext | null;
@@ -139,6 +141,17 @@ export interface OperationalContext {
   address:        string | null;
   /** Payment method chosen by the customer (e.g. "pix", "cash", "card"). */
   paymentMethod:  string | null;
+  /**
+   * Current sales phase — controls whether checkout language is allowed.
+   * Set by resolveSalesPhase() in runner.ts after the orchestrator gate.
+   */
+  salesPhase:     SalesPhase;
+  /**
+   * True once all upsell opportunities have been resolved (offered or
+   * already present in cart). When false the AI should not jump to
+   * delivery/payment language.
+   */
+  salesResolved:  boolean;
 }
 
 // ── AI Config ─────────────────────────────────────────────────────────────────
