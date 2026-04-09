@@ -204,9 +204,9 @@ function TypingIndicator() {
 }
 
 // ── Product card ──────────────────────────────────────────────────────────────
-// Thumbnail — uniform h-52 w-36. Image + name + price + add. No description.
+// Thumbnail — uniform h-44 w-36. Image + name + price + add. No description.
 
-const CARD_IMG_H = "h-[88px]"; // fixed image zone — same with or without photo
+const CARD_IMG_H = "h-[72px]"; // fixed image zone — same with or without photo
 
 function ProductCard({
   item,
@@ -221,7 +221,7 @@ function ProductCard({
 }) {
   return (
     /* Fixed outer size keeps the grid perfectly uniform regardless of name length */
-    <div className="flex h-52 w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <div className="flex h-44 w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
 
       {/* Image zone — fixed height, tappable */}
       <button onClick={onOpen} className={`block w-full shrink-0 overflow-hidden ${CARD_IMG_H}`}>
@@ -356,26 +356,34 @@ function CartBar({
   onFinalize:    () => void;
   upsellPending: boolean;
 }) {
-  if (cart.length === 0) return null;
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const count = cart.reduce((s, i) => s + i.qty, 0);
 
+  // Always render so space is reserved from the start → no layout jump on first add.
+  // Both empty and active states share the same container + inner heights.
   return (
-    <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-2.5">
-      <button
-        onClick={onFinalize}
-        className={`flex w-full items-center justify-between rounded-2xl px-5 py-3 text-sm font-bold text-white shadow transition ${
-          upsellPending
-            ? "bg-gray-400 hover:bg-gray-500"
-            : "bg-[#25d366] hover:bg-[#1ebe5a]"
-        }`}
-      >
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/30 text-xs font-bold">
-          {count}
-        </span>
-        <span>{upsellPending ? "Continuar →" : "Finalizar pedido"}</span>
-        <span>R$ {total.toFixed(2).replace(".", ",")}</span>
-      </button>
+    <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-1.5">
+      {count === 0 ? (
+        // Inactive placeholder — same height as the active button below
+        <div className="flex w-full items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 py-2 text-sm text-gray-400">
+          Monte seu pedido
+        </div>
+      ) : (
+        <button
+          onClick={onFinalize}
+          className={`flex w-full items-center justify-between rounded-2xl px-5 py-2 text-sm font-bold text-white shadow transition ${
+            upsellPending
+              ? "bg-gray-400 hover:bg-gray-500"
+              : "bg-[#25d366] hover:bg-[#1ebe5a]"
+          }`}
+        >
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/30 text-xs font-bold">
+            {count}
+          </span>
+          <span>{upsellPending ? "Continuar →" : "Finalizar pedido"}</span>
+          <span>R$ {total.toFixed(2).replace(".", ",")}</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -1494,7 +1502,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
         {stage === "BROWSE" && entryPhase === "browsing" && currentCategoryItems.length > 0 && (
           <div className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
             <div
-              className="flex gap-3 overflow-x-auto px-3 py-3 [&::-webkit-scrollbar]:hidden"
+              className="flex gap-3 overflow-x-auto px-3 py-1 [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none" }}
             >
               {currentCategoryItems.map((item) => (
