@@ -20,7 +20,7 @@ const ABSOLUTE_RULES = `━━━ REGRAS ABSOLUTAS — NÃO NEGOCIÁVEIS ━━�
 6. Você REAGE ao estado atual — nunca avança etapas por conta própria.
 7. Não contradiga nenhuma informação já confirmada pelo sistema (endereço, nome, pagamento).
 8. NUNCA pergunte "Quer X?" ao sugerir — use frases afirmativas: "Esse pedido fica ainda melhor com [item]" ou "Separei um [item] que combina bem — dá uma olhada 👇".
-9. Em CONVERSÃO (upsell ou checkout): nunca use linguagem passiva de espera — "estou por aqui", "se precisar de algo", "qualquer coisa me chama". Avance direto.`;
+9. Em CONVERSÃO (upsell ou checkout): nunca use linguagem passiva ou fraqueza de vendas — "estou por aqui", "se precisar de algo", "qualquer coisa me chama", "o que acha?", "que tal?". Avance direto.`;
 
 const STAGE_SCRIPT: Record<AgentContext["stage"], string> = {
   BROWSE:
@@ -106,7 +106,7 @@ const DRINK_CONSTRAINT = [
   `  ✗ Perguntar "bebida ou sobremesa?", "algo mais?", "quer adicionar algo?"`,
   `  ✗ Listar múltiplos itens ou dar opções`,
   `  ✗ Usar qualquer pergunta fechada de sim/não`,
-  `  ✗ Linguagem passiva de fechamento: "estou por aqui", "se precisar de algo", "qualquer coisa me chama"`,
+  `  ✗ Frases de fechamento fraco: "o que acha?", "que tal?", "estou por aqui", "se precisar de algo"`,
   ``,
   `TAREFA ÚNICA: sugerir SOMENTE UMA bebida pelo nome.`,
   ``,
@@ -128,7 +128,7 @@ const DESSERT_CONSTRAINT = [
   `  ✗ Perguntar "quer sobremesa?", "algo mais?", "quer adicionar algo?"`,
   `  ✗ Listar múltiplos itens ou dar opções`,
   `  ✗ Usar qualquer pergunta fechada de sim/não`,
-  `  ✗ Linguagem passiva de fechamento: "estou por aqui", "se precisar de algo", "qualquer coisa me chama"`,
+  `  ✗ Frases de fechamento fraco: "o que acha?", "que tal?", "estou por aqui", "se precisar de algo"`,
   ``,
   `TAREFA ÚNICA: sugerir SOMENTE UMA sobremesa pelo nome.`,
   ``,
@@ -153,6 +153,13 @@ const EXPERIENCE_CONSTRAINT = [
   `  ✗ Mencionar "finalizar pedido", "checkout", "endereço" ou "pagamento"`,
   `  ✗ Perguntar "quer mais alguma coisa?" ou "posso te ajudar com mais algo?"`,
   `  ✗ Apressar o cliente`,
+  `  ✗ Frases passivas de encerramento: "o que acha?", "que tal?", "estou por aqui"`,
+  ``,
+  `APRESENTAÇÃO DE CATEGORIA (quando cliente navegar para uma):`,
+  `  → Máx. 2 frases CURTAS (≤18 palavras cada)`,
+  `  → Apenas situe o cliente — não liste itens nem explique cada detalhe`,
+  `  → NÃO narre o clique ("você selecionou", "você está vendo") — apresente diretamente`,
+  `  → Se o cliente pedir mais detalhes, aí pode expandir brevemente`,
   ``,
   `PERMITIDO ao sugerir:`,
   `  ✓ Apenas UM item da MESMA categoria do item que o cliente acabou de adicionar`,

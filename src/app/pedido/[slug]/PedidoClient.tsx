@@ -757,6 +757,17 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
     [categories, selectedCategoryId],
   );
 
+  // ── Tab / salesPhase sync ─────────────────────────────────────────
+  // When an upsell phase becomes active, always pin the category tab to the
+  // matching category so the AI's suggestion and the visible menu stay aligned.
+  useEffect(() => {
+    const phase = upsellState.lastUpsellCategory;
+    if (!phase) return;
+    const target =
+      phase === "drink" ? findBeverageCat(categories) : findDessertCat(categories);
+    if (target) setSelectedCategoryId(target.id);
+  }, [upsellState.lastUpsellCategory, categories]);
+
   // ── Auto-scroll ───────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -847,9 +858,52 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
     [cart, stage, activeUpsell, sendText],
   );
 
-  // Category tab click — selects the category and, on first visit, sends a
-  // navigation message so the AI can briefly introduce it using its description.
-  // Only fires during active browsing; auto-selects during upsell phases skip this.
+  // Sends a category intro to the AI WITHOUT showing a user bubble in chat.
+  // The AI receives the category name + description via the system prompt preamble
+  // and presents the category naturally — no "Ver categoria:" event narration.
+  const sendCategoryIntro = useCallback(
+    async (cat: MenuCategory) => {
+      if (!cat.description) return;
+      setUi("thinking");
+      // Category name is used as the user message for history continuity,
+      // but is NOT rendered as a chat bubble.
+      const catMsg = cat.name;
+      const newHistory: HistoryEntry[] = [
+        ...history,
+        { role: "user" as const, content: catMsg },
+      ];
+      try {
+        const res = await fetch(`/api/pedido/${slug}`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({
+            message:       catMsg,
+            history,
+            cart,
+            stage:         "BROWSE" as Stage,
+            upsellOffered: activeUpsell,
+            deliveryMethod,
+            categoryIntro: { name: cat.name, description: cat.description },
+          }),
+        });
+        const data = await res.json();
+        const reply: string = data?.data?.reply ?? "Desculpe, algo deu errado 😅";
+        setMessages((prev) => [
+          ...prev,
+          { id: uid(), role: "assistant" as const, content: reply, ts: new Date() },
+        ]);
+        setHistory([...newHistory, { role: "assistant" as const, content: reply }]);
+      } catch {
+        // silent — don't disrupt browsing on category intro failure
+      } finally {
+        setUi("idle");
+      }
+    },
+    [slug, history, cart, activeUpsell, deliveryMethod],
+  );
+
+  // Category tab click — selects the category and, on first visit, triggers a
+  // clean AI category intro (no user bubble, natural presentation).
   const handleCategorySelect = useCallback(
     (cat: MenuCategory) => {
       setSelectedCategoryId(cat.id);
@@ -860,9 +914,9 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
         visitedCategoryIds.current.has(cat.id)
       ) return;
       visitedCategoryIds.current.add(cat.id);
-      sendText(`Ver categoria: ${cat.name}`, cart, "BROWSE", activeUpsell);
+      sendCategoryIntro(cat);
     },
-    [stage, entryPhase, cart, activeUpsell, sendText],
+    [stage, entryPhase, sendCategoryIntro],
   );
 
   const handleFinalizeClick = useCallback(() => {

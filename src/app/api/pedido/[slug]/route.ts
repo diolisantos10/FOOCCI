@@ -25,6 +25,7 @@ interface PedidoChatRequest {
   stage?:          OrderStage;
   upsellOffered?:  "drink" | "dessert" | null;
   deliveryMethod?: "delivery" | "pickup" | null;
+  categoryIntro?:  { name: string; description: string } | null;
 }
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -100,6 +101,7 @@ export async function POST(
       stage          = "BROWSE",
       upsellOffered  = null,
       deliveryMethod = null,
+      categoryIntro  = null,
     } = body;
 
     if (!message?.trim())        return badRequest("message is required.");
@@ -113,6 +115,7 @@ export async function POST(
       stage,
       upsellOffered,
       deliveryMethod,
+      categoryIntro,
     });
 
     return ok({ reply });

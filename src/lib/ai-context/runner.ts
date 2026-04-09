@@ -81,6 +81,12 @@ export interface AITurnInput {
   customerId?:     string;
   /** Pass if customer identity was resolved by phone but no DB ID yet. */
   customerPhone?:  string;
+  /**
+   * Set by the frontend when the customer first navigates to a category that
+   * has a description. The runner injects this into the preamble so the AI
+   * presents the category naturally — without the user message appearing in chat.
+   */
+  categoryIntro?:  { name: string; description: string } | null;
 }
 
 export interface AITurnOutput {
@@ -210,6 +216,25 @@ function buildInfoDepthBlock(depth: "LOW" | "HIGH", stage: OrderStage): string {
     `━━━ PROFUNDIDADE DE RESPOSTA: BAIXA (padrão) ━━━`,
     `Máx. 2 frases curtas. Situe o cliente rapidamente.`,
     `NÃO explique demais, NÃO liste itens, NÃO antecipe perguntas que ele não fez.`,
+  ].join("\n");
+}
+
+// ── Category intro hint ───────────────────────────────────────────────────────
+//
+// Injected into the preamble when the customer first navigates to a described
+// category. Using a preamble hint (instead of a user message) keeps the chat
+// clean: the AI's intro appears without a corresponding "Ver categoria: X" bubble.
+
+function buildCategoryIntroHint(
+  intro: { name: string; description: string },
+): string {
+  return [
+    `━━━ NAVEGAÇÃO DE CATEGORIA ━━━`,
+    `O cliente está visualizando: ${intro.name}`,
+    `Descrição: ${intro.description}`,
+    `→ Apresente esta categoria em 1–2 frases naturais, como um maître apresentando uma seção do cardápio.`,
+    `→ NÃO narre o clique nem use "você selecionou" ou "você está vendo".`,
+    `→ Máx. 2 frases curtas (≤18 palavras cada). Apelo sensorial, direto ao ponto.`,
   ].join("\n");
 }
 
@@ -366,6 +391,7 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     paymentMethod  = null,
     customerId,
     customerPhone,
+    categoryIntro  = null,
   } = input;
 
   // ── Step 1: Build full AI context ─────────────────────────────────────────
@@ -462,6 +488,7 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     const infoDepth = detectInfoDepth(message);
     const preamble = [
       buildInfoDepthBlock(infoDepth, stage),
+      categoryIntro ? buildCategoryIntroHint(categoryIntro) : "",
       buildCustomerBlock(ctx.customer),
       buildPromotionsBlock(ctx.promotions),
       buildSalesPhaseBlock(promptSalesFlow, suggestion, ctx.customer),
