@@ -23,8 +23,12 @@ const ABSOLUTE_RULES = `━━━ REGRAS ABSOLUTAS — NÃO NEGOCIÁVEIS ━━�
 
 const STAGE_SCRIPT: Record<AgentContext["stage"], string> = {
   BROWSE:
-    `ETAPA: BROWSE — cliente navega livremente.\n` +
-    `Resposta máx. 1 frase. Reaja ao que foi adicionado. Não liste categorias nem itens.`,
+    `ETAPA: BROWSE — MODO EXPERIÊNCIA.\n` +
+    `Você é um garçom que guia e encanta — não vende ainda.\n` +
+    `• Se o cliente visualizar uma categoria: descreva-a brevemente (máx. 2 linhas, apelo sensorial).\n` +
+    `• Se o cliente adicionar um item: valide a escolha + reforce o desejo (sabor, textura, popularidade).\n` +
+    `• Pode sugerir NO MÁXIMO UM item da MESMA categoria do item adicionado.\n` +
+    `Máx. 2–3 linhas. Nunca liste categorias. Nunca mencione checkout ou finalização.`,
 
   DELIVERY_TYPE:
     `ETAPA: FORMA DE ENTREGA.\n` +
@@ -127,15 +131,43 @@ const DESSERT_CONSTRAINT = [
   `Se o cliente aceitar, recusar ou ignorar — encerre o assunto. Não insista.`,
 ].join("\n");
 
+// ── Experience mode constraint — fires during BROWSE, no active upsell ───────
+
+const EXPERIENCE_CONSTRAINT = [
+  `━━━ RESTRIÇÃO MODO EXPERIÊNCIA — PRIORIDADE ABSOLUTA ━━━`,
+  `FASE ATUAL: BROWSING. Você é um GUIA — não um vendedor.`,
+  ``,
+  `PROIBIDO:`,
+  `  ✗ Sugerir bebidas (mesmo que o cliente não tenha nenhuma no carrinho)`,
+  `  ✗ Sugerir sobremesas`,
+  `  ✗ Sugerir combos, pacotes ou opções de múltiplas categorias`,
+  `  ✗ Mencionar "finalizar pedido", "checkout", "endereço" ou "pagamento"`,
+  `  ✗ Perguntar "quer mais alguma coisa?" ou "posso te ajudar com mais algo?"`,
+  `  ✗ Apressar o cliente`,
+  ``,
+  `PERMITIDO ao sugerir:`,
+  `  ✓ Apenas UM item da MESMA categoria do item que o cliente acabou de adicionar`,
+  `  ✓ Máx. 2–3 linhas por resposta`,
+  ``,
+  `O momento de vender bebidas e sobremesas vem DEPOIS que o cliente clicar em Finalizar.`,
+  `Agora, foque em encantar — não em converter.`,
+].join("\n");
+
 /**
- * Returns a phase-specific hard constraint that enforces single-item upsell.
- * Returns "" when no upsell is active — filtered out by the caller.
- * Must be placed AFTER buildProtocolLayer for maximum LLM recency weight.
+ * Returns a mode-specific hard constraint placed AFTER buildProtocolLayer.
+ * Last thing the LLM reads → maximum recency weight.
+ *
+ * - BROWSE + no upsell → EXPERIENCE constraint (guide, not seller)
+ * - upsellOffered = "drink"   → DRINK conversion constraint
+ * - upsellOffered = "dessert" → DESSERT conversion constraint
+ * - All other stages → "" (filtered out)
  */
 export function buildSalesConstraintBlock(
   upsellOffered: "drink" | "dessert" | null,
+  stage:         AgentContext["stage"],
 ): string {
-  if (upsellOffered === "drink")   return DRINK_CONSTRAINT;
-  if (upsellOffered === "dessert") return DESSERT_CONSTRAINT;
+  if (upsellOffered === "drink")            return DRINK_CONSTRAINT;
+  if (upsellOffered === "dessert")          return DESSERT_CONSTRAINT;
+  if (stage === "BROWSE")                   return EXPERIENCE_CONSTRAINT;
   return "";
 }

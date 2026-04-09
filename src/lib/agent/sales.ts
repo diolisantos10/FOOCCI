@@ -51,13 +51,24 @@ export function buildSalesLayer(
 ): string {
   const focus = focusInstruction(sales.focus);
 
+  // ── MODE 1 — EXPERIENCE (no active upsell) ────────────────────────────────
+  // Customer is browsing. Behave like a guide, not a seller.
   if (sales.upsellStyle === "none" || !upsellOffered) {
-    return `━━━ ESTRATÉGIA ━━━\n${focus}\nSem upsell ativo neste momento.`;
+    return [
+      `━━━ ESTRATÉGIA — MODO EXPERIÊNCIA ━━━`,
+      focus,
+      ``,
+      `MODO EXPERIÊNCIA ativo — o cliente está navegando pelo cardápio.`,
+      `→ Quando um item for adicionado: valide a escolha e reforce o apelo (sabor, textura, popularidade).`,
+      `→ Pode sugerir NO MÁXIMO UM item da MESMA categoria do item adicionado.`,
+      `→ Nunca sugira bebidas, sobremesas ou itens de outras categorias neste modo.`,
+    ].join("\n");
   }
 
+  // ── MODE 2 — CONVERSION (upsell phase active) ─────────────────────────────
   const typeLabel = upsellOffered === "drink" ? "BEBIDA" : "SOBREMESA";
 
-  // ── Specific item selected by the suggestion engine ───────────────────────
+  // Specific item selected by the suggestion engine
   if (suggested) {
     const tone =
       resolveUpsellKey(sales.upsellStyle, sales.upsellIntensity) === "proactive"
@@ -65,7 +76,7 @@ export function buildSalesLayer(
         : "consultivo e casual";
 
     return [
-      `━━━ ESTRATÉGIA ━━━`,
+      `━━━ ESTRATÉGIA — MODO CONVERSÃO ━━━`,
       focus,
       ``,
       `UPSELL ATIVO — ${typeLabel}:`,
@@ -78,7 +89,7 @@ export function buildSalesLayer(
     ].join("\n");
   }
 
-  // ── Fallback: no specific item found in menu ──────────────────────────────
+  // Fallback: no specific item found in menu
   const item = lastItemName ?? "sua escolha";
   const key  = resolveUpsellKey(sales.upsellStyle, sales.upsellIntensity);
   const upsellLine =
@@ -86,5 +97,11 @@ export function buildSalesLayer(
       ? DRINK_UPSELL[key](item)
       : DESSERT_UPSELL[key](item);
 
-  return `━━━ ESTRATÉGIA ━━━\n${focus}\n\nUPSELL ATIVO:\n${upsellLine}`;
+  return [
+    `━━━ ESTRATÉGIA — MODO CONVERSÃO ━━━`,
+    focus,
+    ``,
+    `UPSELL ATIVO:`,
+    upsellLine,
+  ].join("\n");
 }

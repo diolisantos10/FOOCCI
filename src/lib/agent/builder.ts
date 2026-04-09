@@ -5,10 +5,12 @@
  *   1. Personality       — who the agent is
  *   2. Menu              — what it knows
  *   3. Cart context      — what's happening right now
- *   4. Sales             — how to sell
+ *   4. Sales             — MODE EXPERIÊNCIA or MODE CONVERSÃO directive
  *   5. Protocol          — absolute rules + current stage script
- *   6. SalesConstraint   — single-item upsell enforcement (only when active)
- *      ↑ LAST → highest recency weight; makes multi-category suggestion impossible
+ *   6. ModeConstraint    — LAST; hard forbidden list for the active mode
+ *      BROWSE  → EXPERIENCE constraint (no drinks/desserts/checkout)
+ *      DRINK   → single-drink enforcement
+ *      DESSERT → single-dessert enforcement
  */
 
 import type { PersonalityConfig, SalesConfig, AgentContext, CartItem, MenuCategoryMeta } from "./types";
@@ -93,8 +95,8 @@ export function buildAgentPrompt(
 
     buildProtocolLayer(context.stage, context.deliveryMethod),
 
-    // Sales constraint is LAST — highest recency weight.
-    // When active it makes multi-category suggestion structurally impossible.
-    buildSalesConstraintBlock(context.upsellOffered),
+    // Mode constraint is LAST — highest recency weight.
+    // BROWSE → experience hard rules; DRINK/DESSERT → single-item enforcement.
+    buildSalesConstraintBlock(context.upsellOffered, context.stage),
   ].filter(Boolean).join("\n\n");
 }
