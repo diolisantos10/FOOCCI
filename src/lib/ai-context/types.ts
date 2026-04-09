@@ -141,6 +141,8 @@ export interface OperationalContext {
   address:        string | null;
   /** Payment method chosen by the customer (e.g. "pix", "cash", "card"). */
   paymentMethod:  string | null;
+  /** Customer name provided during the ordering flow (when no DB customer record exists). */
+  customerName:   string | null;
   /**
    * Current sales phase — controls whether checkout language is allowed.
    * Set by resolveSalesPhase() in runner.ts after the orchestrator gate.

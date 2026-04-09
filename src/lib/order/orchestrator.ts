@@ -47,7 +47,8 @@ export function validateOrderFlow(context: AIContext): OrderFlowResult {
   // ── Required field checks ─────────────────────────────────────────────────
 
   const hasItems       = cart.length > 0;
-  const hasName        = !!customer?.name?.trim();
+  // Accept name from DB customer OR from the ordering-flow state (anonymous customers)
+  const hasName        = !!(customer?.name?.trim() || operational.customerName?.trim());
   const hasDeliveryType = !!deliveryMethod;           // "delivery" | "pickup"
   const hasAddress     = !!address?.trim();
   const hasPayment     = !!paymentMethod?.trim();

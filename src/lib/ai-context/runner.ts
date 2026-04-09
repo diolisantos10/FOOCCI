@@ -81,6 +81,8 @@ export interface AITurnInput {
   customerId?:     string;
   /** Pass if customer identity was resolved by phone but no DB ID yet. */
   customerPhone?:  string;
+  /** Customer name collected during checkout flow (anonymous ordering). */
+  customerName?:   string | null;
   /**
    * Set by the frontend when the customer first navigates to a category that
    * has a description. The runner injects this into the preamble so the AI
@@ -391,6 +393,7 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     paymentMethod  = null,
     customerId,
     customerPhone,
+    customerName   = null,
     categoryIntro  = null,
   } = input;
 
@@ -398,6 +401,7 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
   const ctx = await buildAIContext(restaurantId, {
     customerId,
     customerPhone,
+    customerName,
     orderStage:    stage,
     deliveryMethod,
     address,
@@ -414,10 +418,12 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
   // Runs BEFORE the AI model is called. If any required field is missing the
   // orchestrator returns a deterministic forced message — no LLM involved.
   //
-  // Skipped during BROWSE: the AI must respond freely to greetings and menu
-  // questions; applying the gate here would block the initial greeting and
-  // every browsing message once the cart has items.
-  const gate = stage !== "BROWSE" ? validateOrderFlow(ctx) : { block: false as const };
+  // Only active at REVIEW_ORDER and DONE — the stages where ALL checkout data
+  // must already be present. During data-collection stages (ADDRESS_INPUT,
+  // ASK_NAME, PAYMENT, etc.) the UI panels drive the flow; the AI just responds
+  // naturally and should not be blocked by the orchestrator.
+  const VALIDATE_AT = new Set<OrderStage>(["REVIEW_ORDER", "DONE"]);
+  const gate = VALIDATE_AT.has(stage) ? validateOrderFlow(ctx) : { block: false as const };
   if (gate.block) {
     return {
       reply:  gate.message,

@@ -79,6 +79,11 @@ export interface AIContextOptions {
    * Null until the customer has confirmed it.
    */
   paymentMethod?: string | null;
+  /**
+   * Customer name collected during the ordering flow.
+   * Used when no DB customer record is available (anonymous ordering).
+   */
+  customerName?: string | null;
 }
 
 // ── Tag derivation ────────────────────────────────────────────────────────────
@@ -116,6 +121,7 @@ export async function buildAIContext(
     deliveryMethod = null,
     address       = null,
     paymentMethod  = null,
+    customerName  = null,
     channel,
   } = options;
 
@@ -379,6 +385,7 @@ export async function buildAIContext(
       deliveryMethod: deliveryMethod ?? null,
       address:        address        ?? null,
       paymentMethod:  paymentMethod  ?? null,
+      customerName:   customerName   ?? null,
       // Set to defaults here; runner.ts overwrites these after resolveSalesPhase()
       salesPhase:    "NONE",
       salesResolved: false,

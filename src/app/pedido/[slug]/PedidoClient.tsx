@@ -143,6 +143,26 @@ function findDessertCat(cats: MenuCategory[]) {
   }) ?? null;
 }
 
+function formatAddress(a: Address): string {
+  const line1 = [a.street, a.number].filter(Boolean).join(", ");
+  const line2 = [a.neighborhood, a.complement].filter(Boolean).join(" — ");
+  return [line1, line2].filter(Boolean).join(", ");
+}
+
+function resolvePaymentMethod(
+  mode: PaymentMode | null,
+  sub: PaymentMethodSub | null,
+): string | null {
+  if (!mode) return null;
+  if (mode === "pay_now") return "Link de pagamento";
+  const subLabels: Record<PaymentMethodSub, string> = {
+    card_machine:  mode === "pay_on_delivery" ? "Cartão na entrega" : "Cartão na retirada",
+    pix_in_person: mode === "pay_on_delivery" ? "Pix na entrega"    : "Pix na retirada",
+    cash:          "Dinheiro",
+  };
+  return sub ? subLabels[sub] : (mode === "pay_on_delivery" ? "Pagar na entrega" : "Pagar na retirada");
+}
+
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
 function Bubble({ msg }: { msg: ChatMessage }) {
@@ -781,6 +801,9 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
       stageSnap: Stage = stage,
       upsellOfferedSnap: "drink" | "dessert" | null = activeUpsell,
       deliveryMethodSnap: "delivery" | "pickup" | null = deliveryMethod,
+      /** Explicit payment method string — required when paymentMode/Sub was just set
+       *  in the same tick (React state won't reflect yet via closure). */
+      paymentMethodOverride?: string | null,
     ) => {
       setUi("thinking");
       const trimmed = text.trim();
@@ -795,17 +818,27 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
         { role: "user" as const, content: trimmed },
       ];
 
+      // Derive checkout snapshot from closure (correct for all stages except the
+      // current-tick payment handler, which passes paymentMethodOverride instead).
+      const addrStr = deliveryMethodSnap === "delivery" ? formatAddress(address) : null;
+      const pmStr   = paymentMethodOverride !== undefined
+        ? paymentMethodOverride
+        : resolvePaymentMethod(paymentMode, paymentMethodSub);
+
       try {
         const res = await fetch(`/api/pedido/${slug}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: trimmed,
+            message:       trimmed,
             history,
-            cart: cartSnap,
-            stage: stageSnap,
+            cart:          cartSnap,
+            stage:         stageSnap,
             upsellOffered: upsellOfferedSnap,
             deliveryMethod: deliveryMethodSnap,
+            address:       addrStr   || null,
+            paymentMethod: pmStr     || null,
+            customerName:  customerName || null,
           }),
         });
 
@@ -826,7 +859,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
         setUi("idle");
       }
     },
-    [slug, history, stage, activeUpsell, deliveryMethod],
+    [slug, history, stage, activeUpsell, deliveryMethod, address, customerName, paymentMode, paymentMethodSub],
   );
 
   // ── Initial greeting (fires once user enters browsing phase) ─────────────
@@ -1034,7 +1067,8 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
       setPaymentMode(mode);
       if (mode === "pay_now") {
         setStage("REVIEW_ORDER");
-        sendText("Pagar agora (link)", cart, "REVIEW_ORDER", activeUpsell);
+        // paymentMode just changed — pass resolved value explicitly to avoid stale closure
+        sendText("Pagar agora (link)", cart, "REVIEW_ORDER", activeUpsell, undefined, "Link de pagamento");
       } else {
         setStage("PAYMENT_METHOD");
         const label = mode === "pay_on_delivery" ? "Pagar na entrega" : "Pagar na retirada";
@@ -1053,9 +1087,10 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
         pix_in_person: "Pix",
         cash: "Dinheiro",
       };
-      sendText(`Pagar com ${labels[method]}`, cart, "REVIEW_ORDER", activeUpsell);
+      // paymentMethodSub just changed — pass resolved value explicitly (paymentMode is in closure)
+      sendText(`Pagar com ${labels[method]}`, cart, "REVIEW_ORDER", activeUpsell, undefined, resolvePaymentMethod(paymentMode, method));
     },
-    [cart, activeUpsell, sendText],
+    [cart, activeUpsell, paymentMode, sendText],
   );
 
   const handleFinalConfirm = useCallback(async () => {
@@ -1218,11 +1253,14 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
     }
 
     if (stage === "REVIEW_ORDER") {
-      const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const total  = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const pmLabel = resolvePaymentMethod(paymentMode, paymentMethodSub) ?? "—";
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
           <p className="mb-2 text-xs font-semibold text-gray-500">Revise seu pedido</p>
-          <div className="mb-2 max-h-32 overflow-y-auto">
+
+          {/* Cart items */}
+          <div className="mb-2 max-h-24 overflow-y-auto">
             {cart.map((c) => (
               <div key={c.id} className="flex justify-between py-0.5 text-xs text-gray-700">
                 <span>{c.name} × {c.qty}</span>
@@ -1230,10 +1268,32 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
               </div>
             ))}
           </div>
-          <div className="mb-3 flex justify-between border-t border-gray-100 pt-2 text-sm font-bold text-gray-900">
+
+          {/* Total */}
+          <div className="flex justify-between border-t border-gray-100 pt-1.5 pb-2 text-sm font-bold text-gray-900">
             <span>Total</span>
             <span>R$ {total.toFixed(2).replace(".", ",")}</span>
           </div>
+
+          {/* Order details summary */}
+          <div className="mb-3 rounded-lg bg-gray-50 px-3 py-2 space-y-0.5 text-xs text-gray-600">
+            {customerName && (
+              <p><span className="font-semibold text-gray-800">Nome:</span> {customerName}</p>
+            )}
+            <p>
+              <span className="font-semibold text-gray-800">Recebimento:</span>{" "}
+              {deliveryMethod === "delivery" ? "🛵 Entrega" : "🏪 Retirada"}
+            </p>
+            {deliveryMethod === "delivery" && address.street && (
+              <p>
+                <span className="font-semibold text-gray-800">Endereço:</span>{" "}
+                {address.street}{address.number ? `, ${address.number}` : ""}
+                {address.neighborhood ? `, ${address.neighborhood}` : ""}
+              </p>
+            )}
+            <p><span className="font-semibold text-gray-800">Pagamento:</span> {pmLabel}</p>
+          </div>
+
           <div className="flex gap-2">
             <button
               onClick={handleFinalConfirm}

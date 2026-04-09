@@ -25,6 +25,9 @@ interface PedidoChatRequest {
   stage?:          OrderStage;
   upsellOffered?:  "drink" | "dessert" | null;
   deliveryMethod?: "delivery" | "pickup" | null;
+  address?:        string | null;
+  paymentMethod?:  string | null;
+  customerName?:   string | null;
   categoryIntro?:  { name: string; description: string } | null;
 }
 
@@ -101,6 +104,9 @@ export async function POST(
       stage          = "BROWSE",
       upsellOffered  = null,
       deliveryMethod = null,
+      address        = null,
+      paymentMethod  = null,
+      customerName   = null,
       categoryIntro  = null,
     } = body;
 
@@ -115,6 +121,9 @@ export async function POST(
       stage,
       upsellOffered,
       deliveryMethod,
+      address,
+      paymentMethod,
+      customerName,
       categoryIntro,
     });
 
