@@ -178,6 +178,41 @@ function toMenuMeta(categories: MenuCategoryContext[]): MenuCategoryMeta[] {
   }));
 }
 
+// ── Information depth detection ───────────────────────────────────────────────
+//
+// Detects whether the customer's message is requesting more detail than the
+// default SHORT category presentation. Default is LOW (2 sentences max).
+// HIGH is triggered by common Portuguese "explain more" phrases.
+
+const HIGH_DEPTH_TRIGGERS = [
+  "explica", "me conta", "me fala mais", "me diz mais",
+  "o que e", "o que é", "o que sao", "o que são",
+  "qual a diferenca", "qual a diferença", "qual e", "qual é",
+  "como e feito", "como é feito", "ingredientes", "como funciona",
+  "mais detalhes", "mais informacao", "mais informação", "curiosidade",
+];
+
+function detectInfoDepth(msg: string): "LOW" | "HIGH" {
+  const n = msg.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return HIGH_DEPTH_TRIGGERS.some((t) => n.includes(t)) ? "HIGH" : "LOW";
+}
+
+function buildInfoDepthBlock(depth: "LOW" | "HIGH", stage: OrderStage): string {
+  if (stage !== "BROWSE") return "";
+  if (depth === "HIGH") {
+    return [
+      `━━━ PROFUNDIDADE DE RESPOSTA: ALTA ━━━`,
+      `O cliente pediu mais detalhes. Você pode usar 3–4 frases curtas.`,
+      `Ainda conciso — mas mais completo nesta resposta.`,
+    ].join("\n");
+  }
+  return [
+    `━━━ PROFUNDIDADE DE RESPOSTA: BAIXA (padrão) ━━━`,
+    `Máx. 2 frases curtas. Situe o cliente rapidamente.`,
+    `NÃO explique demais, NÃO liste itens, NÃO antecipe perguntas que ele não fez.`,
+  ].join("\n");
+}
+
 // ── Informational preamble blocks ─────────────────────────────────────────────
 //
 // These are prepended BEFORE the 5-layer behavioral prompt so they carry the
@@ -384,14 +419,16 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
   const personality = toPersonality(ctx.aiConfig);
   const sales       = toSales(ctx.aiConfig);
 
-  // ── Step 2b: Suppress sales phase during free browsing ───────────────────
-  // The DRINK/DESSERT phase is injected into the prompt ONLY when the customer
-  // has explicitly clicked "Finalizar" (upsellOffered is non-null).
-  // During free BROWSE the backend still resolves the phase for ctx.operational,
-  // but the AI sees no upsell directive — prevents premature drink suggestions
-  // on the very first item add.
+  // ── Step 2b: Derive prompt-facing sales phase ─────────────────────────────
+  // When upsellOffered is explicitly set by the frontend, it IS the active phase —
+  // treat it as authoritative. Do NOT use salesFlow.type here: resolveSalesPhase
+  // treats alreadyOffered="drink" as "drink was completed → advance to dessert",
+  // which would contradict the frontend that is currently mid-drink offer.
+  //
+  // When upsellOffered is null the customer is browsing freely; suppress the
+  // upsell directive entirely so the AI doesn't suggest drinks on first item add.
   const promptSalesFlow: typeof salesFlow = upsellOffered
-    ? salesFlow
+    ? { ...salesFlow, salesResolved: false, type: upsellOffered }
     : { ...salesFlow, salesResolved: true, type: undefined };
 
   // ── Step 2c: Select best suggestion item for the active sales phase ────────
@@ -422,7 +459,9 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     systemPrompt = ctx.aiConfig.systemPromptOverride;
   } else {
     // Build informational preamble (prepended = lowest LLM attention weight)
+    const infoDepth = detectInfoDepth(message);
     const preamble = [
+      buildInfoDepthBlock(infoDepth, stage),
       buildCustomerBlock(ctx.customer),
       buildPromotionsBlock(ctx.promotions),
       buildSalesPhaseBlock(promptSalesFlow, suggestion, ctx.customer),
