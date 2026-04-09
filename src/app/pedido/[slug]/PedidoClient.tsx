@@ -100,7 +100,9 @@ function categoryEmoji(name: string): string {
 }
 
 function parseStreetLine(raw: string): { street: string; number: string } {
-  const m = raw.trim().match(/^(.*?),?\s*(\d+\S*)\s*$/);
+  // Match "Rua X, 45" but also "Rua X, 45, Bairro" — no end-of-string anchor
+  // so extra segments (neighborhood typed in wrong step) don't break parsing.
+  const m = raw.trim().match(/^(.*?),?\s*(\d+[^\s,]*)/);
   return m
     ? { street: (m[1] ?? "").trim(), number: (m[2] ?? "").trim() }
     : { street: raw.trim(), number: "" };
@@ -907,7 +909,10 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
     (text: string) => {
       const { street, number } = parseStreetLine(text);
       setAddress((prev) => ({ ...prev, street, number }));
-      if (!number) {
+      // Advance as long as we got a recognisable street name.
+      // Missing house number is acceptable — ADDRESS_DETAILS will collect it.
+      // Only loop back when the input is completely unrecognisable.
+      if (!street.trim()) {
         sendText(text, cart, "ADDRESS_INPUT", activeUpsell);
         return;
       }
@@ -1340,6 +1345,13 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
                 {categoryEmoji(cat.name)} {cat.name}
               </button>
             ))}
+            {/* Suggestion shortcut — inline with category tabs, no extra height */}
+            <button
+              onClick={() => setShowSuggestion(true)}
+              className="shrink-0 whitespace-nowrap rounded-full border border-green-200 bg-green-50 px-4 py-3 text-base font-semibold min-h-[44px] text-green-700 hover:bg-green-100 transition-all active:scale-95"
+            >
+              ✨ Sugestão
+            </button>
           </div>
         )}
 
@@ -1372,19 +1384,6 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
 
         {/* Checkout panels (address / payment / review / done) */}
         {renderCheckoutPanel()}
-
-        {/* Suggestion shortcut — above input, only when browsing */}
-        {stage === "BROWSE" && entryPhase === "browsing" && (
-          <div className="shrink-0 px-3 pt-2 bg-white">
-            <button
-              onClick={() => setShowSuggestion(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 py-2.5 text-sm font-semibold text-green-700 hover:bg-green-100 transition-colors"
-            >
-              <span className="leading-none">✨</span>
-              Me sugere algo
-            </button>
-          </div>
-        )}
 
         {/* Text input */}
         {showInput && (
@@ -1444,6 +1443,13 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
                   {categoryEmoji(cat.name)} {cat.name}
                 </button>
               ))}
+              {/* Suggestion shortcut — same row as category tabs */}
+              <button
+                onClick={() => setShowSuggestion(true)}
+                className="rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 transition-all active:scale-95"
+              >
+                ✨ Me sugere algo
+              </button>
             </div>
 
             {/* Product grid — CSS grid, fills available space */}

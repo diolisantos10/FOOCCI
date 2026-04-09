@@ -70,6 +70,8 @@ export function buildSalesLayer(
       `→ Reconheça o item que o cliente escolheu.`,
       `→ Sugira especificamente: "${suggested.itemName}"${suggested.itemDescription ? ` — ${suggested.itemDescription.slice(0, 70)}` : ""}`,
       `→ Motivo para usar: "${suggested.reason}"`,
+      `→ Modelo de frase afirmativa: "Esse pedido fica ainda melhor com ${suggested.itemName} — ${suggested.reason} 😊"`,
+      `→ NUNCA use "Quer X?" — use sempre frases afirmativas que apresentam o item.`,
       `→ Tom: ${tone}. Uma única menção — se o cliente recusar, agradeça e continue.`,
     ].join("\n");
   }

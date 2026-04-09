@@ -381,13 +381,20 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
   const personality = toPersonality(ctx.aiConfig);
   const sales       = toSales(ctx.aiConfig);
 
-  // ── Step 2b: Select best suggestion item for the active sales phase ────────
-  // Must run after toSales() so we have sales.priority.
-  // Uses the filtered menu (same items the AI sees) so we never suggest
-  // something the customer can't have. Returns null when no phase is active
-  // or no suitable item exists in the menu.
-  const suggestion = salesFlow.type
-    ? selectSuggestion(ctx, filteredMenu, salesFlow.type, sales.priority)
+  // ── Step 2b: Suppress sales phase during free browsing ───────────────────
+  // The DRINK/DESSERT phase is injected into the prompt ONLY when the customer
+  // has explicitly clicked "Finalizar" (upsellOffered is non-null).
+  // During free BROWSE the backend still resolves the phase for ctx.operational,
+  // but the AI sees no upsell directive — prevents premature drink suggestions
+  // on the very first item add.
+  const promptSalesFlow: typeof salesFlow = upsellOffered
+    ? salesFlow
+    : { ...salesFlow, salesResolved: true, type: undefined };
+
+  // ── Step 2c: Select best suggestion item for the active sales phase ────────
+  // Operates on promptSalesFlow so we never suggest items during free browsing.
+  const suggestion = promptSalesFlow.type
+    ? selectSuggestion(ctx, filteredMenu, promptSalesFlow.type, sales.priority)
     : null;
 
   const agentCtx: AgentContext = {
@@ -415,7 +422,7 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     const preamble = [
       buildCustomerBlock(ctx.customer),
       buildPromotionsBlock(ctx.promotions),
-      buildSalesPhaseBlock(salesFlow, suggestion, ctx.customer),
+      buildSalesPhaseBlock(promptSalesFlow, suggestion, ctx.customer),
     ].filter(Boolean).join("\n\n");
 
     // 5-layer behavioral prompt — protocol is LAST (highest attention weight)
