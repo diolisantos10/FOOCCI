@@ -35,6 +35,7 @@ interface MenuItem {
 interface MenuCategory {
   id: string;
   name: string;
+  description: string | null;
   imageUrl: string | null;
   items: MenuItem[];
 }
@@ -677,6 +678,8 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
   const [ui, setUi] = useState<UIState>("idle");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Tracks categories already introduced this session — prevents repeated intros.
+  const visitedCategoryIds = useRef<Set<string>>(new Set());
 
   // ── Menu nav ──────────────────────────────────────────────────────
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
@@ -842,6 +845,24 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
       sendText(`Adicionar ${item.name}`, newCart, stage, activeUpsell);
     },
     [cart, stage, activeUpsell, sendText],
+  );
+
+  // Category tab click — selects the category and, on first visit, sends a
+  // navigation message so the AI can briefly introduce it using its description.
+  // Only fires during active browsing; auto-selects during upsell phases skip this.
+  const handleCategorySelect = useCallback(
+    (cat: MenuCategory) => {
+      setSelectedCategoryId(cat.id);
+      if (
+        stage !== "BROWSE" ||
+        entryPhase !== "browsing" ||
+        !cat.description ||
+        visitedCategoryIds.current.has(cat.id)
+      ) return;
+      visitedCategoryIds.current.add(cat.id);
+      sendText(`Ver categoria: ${cat.name}`, cart, "BROWSE", activeUpsell);
+    },
+    [stage, entryPhase, cart, activeUpsell, sendText],
   );
 
   const handleFinalizeClick = useCallback(() => {
@@ -1335,7 +1356,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
             {categories.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => setSelectedCategoryId(cat.id)}
+                onClick={() => handleCategorySelect(cat)}
                 className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-base font-semibold min-h-[44px] transition-all ${
                   selectedCategoryId === cat.id
                     ? "bg-green-600 text-white shadow-sm"
@@ -1433,7 +1454,7 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
               {categories.map((cat) => (
                 <button
                   key={cat.id}
-                  onClick={() => setSelectedCategoryId(cat.id)}
+                  onClick={() => handleCategorySelect(cat)}
                   className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
                     selectedCategoryId === cat.id
                       ? "bg-green-600 text-white shadow-sm"

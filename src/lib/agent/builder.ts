@@ -34,7 +34,12 @@ function buildMenuBlock(categories: MenuCategoryMeta[]): string {
             : `  • ${item.name} — ${price}`;
         })
         .join("\n");
-      return `[${cat.name.toUpperCase()}]\n${rows}`;
+      // Include category description so the AI can present the category naturally
+      // when the customer first navigates to it.
+      const catHeader = cat.description
+        ? `[${cat.name.toUpperCase()}]\n↳ ${cat.description}`
+        : `[${cat.name.toUpperCase()}]`;
+      return `${catHeader}\n${rows}`;
     })
     .join("\n\n");
 }
