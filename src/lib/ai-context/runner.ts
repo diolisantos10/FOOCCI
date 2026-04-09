@@ -292,15 +292,18 @@ function buildSalesPhaseBlock(
     const crmHint = buildCustomerSuggestionHint(customer, suggestion.itemName);
     if (crmHint) lines.push(crmHint);
   } else {
-    // No specific item found — generic fallback
+    // No specific item found — generic fallback.
+    // Directive is intentionally narrow: pick ONE item from the category and
+    // name it directly. The sales constraint block (last in prompt) enforces this.
     if (phase.type === "drink") {
       lines.push(
-        "O cliente tem itens no carrinho mas ainda não escolheu uma bebida.",
-        "Sugira uma bebida disponível no cardápio que combine com o pedido.",
+        "Nenhum item específico selecionado. Escolha UMA bebida do cardápio que combine com o pedido.",
+        "Nomeie-a diretamente na sugestão — não liste opções nem peça ao cliente para escolher a categoria.",
       );
     } else {
       lines.push(
-        "O cliente já tem bebida no carrinho. Sugira uma sobremesa leve disponível no cardápio.",
+        "Nenhuma sobremesa específica selecionada. Escolha UMA sobremesa do cardápio.",
+        "Nomeie-a diretamente na sugestão — não liste opções nem peça ao cliente para escolher a categoria.",
       );
     }
   }

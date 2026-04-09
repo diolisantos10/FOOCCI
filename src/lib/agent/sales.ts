@@ -21,16 +21,18 @@ function resolveUpsellKey(style: UpsellStyle, intensity: UpsellIntensity): Upsel
   return "gentle";
 }
 
+// All templates are AFFIRMATIVE — no closed yes/no questions.
+// The sales constraint block (last in prompt) will further enforce single-item behavior.
 const DRINK_UPSELL: Record<UpsellKey, (item: string) => string> = {
-  gentle:    (item) => `→ BEBIDA: "Algo para beber com ${item}?"`,
-  moderate:  (item) => `→ BEBIDA: "Essa ${item} fica ainda melhor com uma bebida gelada 🧊"`,
-  proactive: (item) => `→ BEBIDA ATIVA: "Já separei as bebidas que combinam com ${item} — dá uma olhada! 🧊👇"`,
+  gentle:    (item) => `→ BEBIDA: Sugira UMA bebida afirmativamente: "Esse pedido fica incrível com uma bebida gelada — escolha uma que combine com ${item}."`,
+  moderate:  (item) => `→ BEBIDA: "Essa ${item} fica ainda melhor com uma bebida gelada 🧊" — sugira UMA pelo nome.`,
+  proactive: (item) => `→ BEBIDA ATIVA: "Já tenho a bebida ideal para acompanhar ${item} — dá uma olhada! 🧊" — sugira UMA pelo nome.`,
 };
 
 const DESSERT_UPSELL: Record<UpsellKey, (item: string) => string> = {
-  gentle:    (_) => `→ SOBREMESA: "Vai querer uma sobremesa?"`,
-  moderate:  (_) => `→ SOBREMESA: "A sobremesa vai fechar com chave de ouro 🍰"`,
-  proactive: (_) => `→ SOBREMESA ATIVA: "Você vai se arrepender se não pedir a sobremesa 😏 Falta só essa! 🍰👇"`,
+  gentle:    (_) => `→ SOBREMESA: Sugira UMA sobremesa afirmativamente: "Para fechar o pedido com chave de ouro, temos [sobremesa] — é o favorito aqui."`,
+  moderate:  (_) => `→ SOBREMESA: "A sobremesa vai fechar com chave de ouro 🍰" — sugira UMA pelo nome.`,
+  proactive: (_) => `→ SOBREMESA ATIVA: "Falta só a sobremesa para o pedido perfeito! 🍰" — sugira UMA pelo nome.`,
 };
 
 function focusInstruction(focus: SalesConfig["focus"]): string {

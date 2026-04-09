@@ -82,3 +82,60 @@ export function buildProtocolLayer(
 
   return `━━━ PROTOCOLO ━━━\n${ABSOLUTE_RULES}\n\n━━━ ETAPA ATUAL ━━━\n${script}${done}`;
 }
+
+// ── Sales constraint block — appended LAST for maximum recency weight ─────────
+//
+// This block is only emitted when an upsell phase is active (upsellOffered ≠ null).
+// It is placed after the protocol layer so the LLM reads it last and it carries
+// the highest attention weight of anything in the system prompt.
+
+const DRINK_CONSTRAINT = [
+  `━━━ RESTRIÇÃO FASE BEBIDA — PRIORIDADE ABSOLUTA ━━━`,
+  `FASE ATUAL: BEBIDA. Você tem UMA única tarefa:`,
+  `→ Sugerir SOMENTE UMA bebida pelo nome. Nada mais.`,
+  ``,
+  `PROIBIDO:`,
+  `  ✗ Mencionar sobremesas, entradas ou qualquer outra categoria`,
+  `  ✗ Perguntar "bebida ou sobremesa?", "algo mais?", "quer adicionar algo?"`,
+  `  ✗ Listar múltiplos itens ou dar opções`,
+  `  ✗ Usar qualquer pergunta fechada de sim/não para a sugestão`,
+  ``,
+  `OBRIGATÓRIO — estrutura exata em 2–3 linhas:`,
+  `  1. Reconheça o que o cliente acabou de pedir (1 frase)`,
+  `  2. Sugira UMA bebida pelo nome com frase afirmativa (ex: "Esse pedido fica incrível com uma [bebida]")`,
+  `  3. Dê o motivo em uma frase curta`,
+  ``,
+  `Se o cliente aceitar, recusar ou ignorar — encerre o assunto. Não insista.`,
+].join("\n");
+
+const DESSERT_CONSTRAINT = [
+  `━━━ RESTRIÇÃO FASE SOBREMESA — PRIORIDADE ABSOLUTA ━━━`,
+  `FASE ATUAL: SOBREMESA. Você tem UMA única tarefa:`,
+  `→ Sugerir SOMENTE UMA sobremesa pelo nome. Nada mais.`,
+  ``,
+  `PROIBIDO:`,
+  `  ✗ Mencionar bebidas ou qualquer outra categoria`,
+  `  ✗ Perguntar "quer sobremesa?", "algo mais?", "quer adicionar algo?"`,
+  `  ✗ Listar múltiplos itens ou dar opções`,
+  `  ✗ Usar qualquer pergunta fechada de sim/não para a sugestão`,
+  ``,
+  `OBRIGATÓRIO — estrutura exata em 2–3 linhas:`,
+  `  1. Reconheça o pedido (1 frase curta)`,
+  `  2. Sugira UMA sobremesa pelo nome com frase afirmativa (ex: "Para fechar, [sobremesa] é perfeito")`,
+  `  3. Dê o motivo em uma frase curta`,
+  ``,
+  `Se o cliente aceitar, recusar ou ignorar — encerre o assunto. Não insista.`,
+].join("\n");
+
+/**
+ * Returns a phase-specific hard constraint that enforces single-item upsell.
+ * Returns "" when no upsell is active — filtered out by the caller.
+ * Must be placed AFTER buildProtocolLayer for maximum LLM recency weight.
+ */
+export function buildSalesConstraintBlock(
+  upsellOffered: "drink" | "dessert" | null,
+): string {
+  if (upsellOffered === "drink")   return DRINK_CONSTRAINT;
+  if (upsellOffered === "dessert") return DESSERT_CONSTRAINT;
+  return "";
+}

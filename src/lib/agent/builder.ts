@@ -1,18 +1,20 @@
 /**
- * Agent builder — assembles all 4 layers into the final system prompt.
+ * Agent builder — assembles all layers into the final system prompt.
  *
- * Layer order (matters for LLM attention):
- *   1. Personality  — who the agent is
- *   2. Menu         — what it knows
- *   3. Cart context — what's happening right now
- *   4. Sales        — how to sell
- *   5. Protocol     — what it must never do (last = highest recency weight)
+ * Layer order (matters for LLM attention — last = highest recency weight):
+ *   1. Personality       — who the agent is
+ *   2. Menu              — what it knows
+ *   3. Cart context      — what's happening right now
+ *   4. Sales             — how to sell
+ *   5. Protocol          — absolute rules + current stage script
+ *   6. SalesConstraint   — single-item upsell enforcement (only when active)
+ *      ↑ LAST → highest recency weight; makes multi-category suggestion impossible
  */
 
 import type { PersonalityConfig, SalesConfig, AgentContext, CartItem, MenuCategoryMeta } from "./types";
-import { buildPersonalityLayer } from "./personality";
-import { buildSalesLayer }       from "./sales";
-import { buildProtocolLayer }    from "./protocol";
+import { buildPersonalityLayer }    from "./personality";
+import { buildSalesLayer }          from "./sales";
+import { buildProtocolLayer, buildSalesConstraintBlock } from "./protocol";
 
 // ── Menu block ────────────────────────────────────────────────────────────────
 
@@ -89,7 +91,10 @@ export function buildAgentPrompt(
 
     buildSalesLayer(sales, context.upsellOffered, lastItem, context.suggestedItem),
 
-    // Protocol is last — recency bias reinforces its authority
     buildProtocolLayer(context.stage, context.deliveryMethod),
-  ].join("\n\n");
+
+    // Sales constraint is LAST — highest recency weight.
+    // When active it makes multi-category suggestion structurally impossible.
+    buildSalesConstraintBlock(context.upsellOffered),
+  ].filter(Boolean).join("\n\n");
 }
