@@ -6,7 +6,7 @@
  * sales instructions can never override ordering rules.
  */
 
-import type { SalesConfig, AgentContext, UpsellIntensity, UpsellStyle } from "./types";
+import type { SalesConfig, AgentContext, SuggestedItem, UpsellIntensity, UpsellStyle } from "./types";
 
 type UpsellKey = "gentle" | "moderate" | "proactive";
 
@@ -42,9 +42,10 @@ function focusInstruction(focus: SalesConfig["focus"]): string {
 }
 
 export function buildSalesLayer(
-  sales: SalesConfig,
+  sales:         SalesConfig,
   upsellOffered: AgentContext["upsellOffered"],
-  lastItemName: string | null,
+  lastItemName:  string | null,
+  suggested:     SuggestedItem | null,
 ): string {
   const focus = focusInstruction(sales.focus);
 
@@ -52,9 +53,30 @@ export function buildSalesLayer(
     return `━━━ ESTRATÉGIA ━━━\n${focus}\nSem upsell ativo neste momento.`;
   }
 
+  const typeLabel = upsellOffered === "drink" ? "BEBIDA" : "SOBREMESA";
+
+  // ── Specific item selected by the suggestion engine ───────────────────────
+  if (suggested) {
+    const tone =
+      resolveUpsellKey(sales.upsellStyle, sales.upsellIntensity) === "proactive"
+        ? "entusiasmado mas não insistente"
+        : "consultivo e casual";
+
+    return [
+      `━━━ ESTRATÉGIA ━━━`,
+      focus,
+      ``,
+      `UPSELL ATIVO — ${typeLabel}:`,
+      `→ Reconheça o item que o cliente escolheu.`,
+      `→ Sugira especificamente: "${suggested.itemName}"${suggested.itemDescription ? ` — ${suggested.itemDescription.slice(0, 70)}` : ""}`,
+      `→ Motivo para usar: "${suggested.reason}"`,
+      `→ Tom: ${tone}. Uma única menção — se o cliente recusar, agradeça e continue.`,
+    ].join("\n");
+  }
+
+  // ── Fallback: no specific item found in menu ──────────────────────────────
   const item = lastItemName ?? "sua escolha";
   const key  = resolveUpsellKey(sales.upsellStyle, sales.upsellIntensity);
-
   const upsellLine =
     upsellOffered === "drink"
       ? DRINK_UPSELL[key](item)

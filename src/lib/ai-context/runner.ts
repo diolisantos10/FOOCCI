@@ -33,6 +33,7 @@ import { filterMenuForAI }      from "./filter";
 import { buildAgentPrompt }     from "@/lib/agent/builder";
 import { validateOrderFlow }    from "@/lib/order/orchestrator";
 import { resolveSalesPhase }    from "@/lib/sales/flow";
+import { selectSuggestion }     from "@/lib/sales/suggest";
 import {
   DEFAULT_PERSONALITY,
   DEFAULT_SALES,
@@ -42,6 +43,7 @@ import type {
   PersonalityConfig,
   SalesConfig,
   AgentContext,
+  SuggestedItem,
   CartItem,
   MenuCategoryMeta,
   MenuItemMeta,
@@ -245,29 +247,70 @@ function buildPromotionsBlock(promotions: PromotionContext[]): string {
   ].join("\n");
 }
 
+function buildCustomerSuggestionHint(
+  customer:  CustomerContext | null,
+  itemName:  string,
+): string {
+  if (!customer) return "";
+  // Check if this customer has ordered this item before
+  const ordered = customer.recentOrders.some((o) =>
+    o.items.some((i) => i.name.toLowerCase().includes(itemName.toLowerCase()))
+  );
+  if (ordered) {
+    return `Contexto CRM: este cliente já pediu "${itemName}" antes — pode mencionar isso naturalmente se couber.`;
+  }
+  if (customer.preferences?.dietary.length) {
+    return `Preferências do cliente: ${customer.preferences.dietary.join(", ")} — leve em conta ao enquadrar a sugestão.`;
+  }
+  return "";
+}
+
 function buildSalesPhaseBlock(
-  phase:  ReturnType<typeof resolveSalesPhase>,
+  phase:      ReturnType<typeof resolveSalesPhase>,
+  suggestion: SuggestedItem | null,
+  customer:   CustomerContext | null,
 ): string {
   if (phase.salesResolved || !phase.type) return "";
 
-  if (phase.type === "drink") {
-    return [
-      `━━━ FASE COMERCIAL: BEBIDA ━━━`,
-      `O cliente tem itens no carrinho mas ainda não escolheu uma bebida.`,
-      `Sugira uma bebida que combine com o pedido, de forma natural e consultiva — como um garçom experiente.`,
-      `REGRA: Não use linguagem de finalização de pedido (endereço, pagamento, entrega) enquanto esta fase não for resolvida.`,
-      `Se o cliente recusar ou ignorar, continue o fluxo normalmente sem insistir.`,
-    ].join("\n");
+  const typeLabel = phase.type === "drink" ? "BEBIDA" : "SOBREMESA";
+  const lines: string[] = [`━━━ FASE COMERCIAL: ${typeLabel} ━━━`];
+
+  if (suggestion) {
+    // Specific item selected — give the AI precise context to work with
+    lines.push(
+      `Item para sugerir: "${suggestion.itemName}" — R$ ${suggestion.itemPrice.toFixed(2)}`,
+      `Motivo contextual: ${suggestion.reason}`,
+    );
+    if (suggestion.itemDescription) {
+      lines.push(`Descrição: ${suggestion.itemDescription}`);
+    }
+    if (suggestion.promotionHint) {
+      lines.push(
+        `Promoção ativa: ${suggestion.promotionHint} — mencione de forma casual se couber, nunca como argumento de venda.`,
+      );
+    }
+    const crmHint = buildCustomerSuggestionHint(customer, suggestion.itemName);
+    if (crmHint) lines.push(crmHint);
+  } else {
+    // No specific item found — generic fallback
+    if (phase.type === "drink") {
+      lines.push(
+        "O cliente tem itens no carrinho mas ainda não escolheu uma bebida.",
+        "Sugira uma bebida disponível no cardápio que combine com o pedido.",
+      );
+    } else {
+      lines.push(
+        "O cliente já tem bebida no carrinho. Sugira uma sobremesa leve disponível no cardápio.",
+      );
+    }
   }
 
-  // dessert phase
-  return [
-    `━━━ FASE COMERCIAL: SOBREMESA ━━━`,
-    `O cliente já tem bebida no carrinho. Há uma oportunidade de sugerir uma sobremesa leve.`,
-    `Faça a sugestão de forma natural, uma única vez — sem pressionar.`,
-    `REGRA: Não use linguagem de finalização de pedido (endereço, pagamento, entrega) enquanto esta fase não for resolvida.`,
-    `Se o cliente recusar ou ignorar, continue o fluxo normalmente.`,
-  ].join("\n");
+  lines.push(
+    `REGRA: Não use linguagem de finalização (endereço, pagamento, entrega) nesta fase.`,
+    `Se o cliente recusar ou ignorar, continue o fluxo normalmente sem insistir.`,
+  );
+
+  return lines.join("\n");
 }
 
 // ── Main runner ───────────────────────────────────────────────────────────────
@@ -338,6 +381,15 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
   const personality = toPersonality(ctx.aiConfig);
   const sales       = toSales(ctx.aiConfig);
 
+  // ── Step 2b: Select best suggestion item for the active sales phase ────────
+  // Must run after toSales() so we have sales.priority.
+  // Uses the filtered menu (same items the AI sees) so we never suggest
+  // something the customer can't have. Returns null when no phase is active
+  // or no suitable item exists in the menu.
+  const suggestion = salesFlow.type
+    ? selectSuggestion(ctx, filteredMenu, salesFlow.type, sales.priority)
+    : null;
+
   const agentCtx: AgentContext = {
     restaurantName: ctx.restaurant.name,
     categories:     toMenuMeta(filteredMenu),
@@ -349,6 +401,7 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     stage,
     upsellOffered,
     deliveryMethod,
+    suggestedItem:  suggestion,
   };
 
   // ── Step 4: Assemble system prompt ────────────────────────────────────────
@@ -362,7 +415,7 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     const preamble = [
       buildCustomerBlock(ctx.customer),
       buildPromotionsBlock(ctx.promotions),
-      buildSalesPhaseBlock(salesFlow),
+      buildSalesPhaseBlock(salesFlow, suggestion, ctx.customer),
     ].filter(Boolean).join("\n\n");
 
     // 5-layer behavioral prompt — protocol is LAST (highest attention weight)

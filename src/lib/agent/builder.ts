@@ -87,7 +87,7 @@ export function buildAgentPrompt(
 
     `━━━ CONTEXTO DO PEDIDO ━━━\n${cartBlock}`,
 
-    buildSalesLayer(sales, context.upsellOffered, lastItem),
+    buildSalesLayer(sales, context.upsellOffered, lastItem, context.suggestedItem),
 
     // Protocol is last — recency bias reinforces its authority
     buildProtocolLayer(context.stage, context.deliveryMethod),

@@ -58,6 +58,23 @@ export interface CartItem {
   qty:   number;
 }
 
+/** A specific item selected by the suggestion engine for the current phase. */
+export interface SuggestedItem {
+  itemName:        string;
+  itemPrice:       number;
+  itemDescription: string | null;
+  /**
+   * Contextual reason phrase in Portuguese — e.g. "cai muito bem com pizza".
+   * The AI uses this to frame the suggestion naturally.
+   */
+  reason:          string;
+  /**
+   * Active promotion hint — e.g. "10% de desconto hoje".
+   * Null when no promotion applies to this item.
+   */
+  promotionHint:   string | null;
+}
+
 export interface MenuItemMeta {
   name:        string;
   price:       unknown; // Prisma Decimal — converted via Number()
@@ -78,6 +95,11 @@ export interface AgentContext {
   stage:          OrderStage;
   upsellOffered:  "drink" | "dessert" | null;
   deliveryMethod: "delivery" | "pickup" | null;
+  /**
+   * The specific item selected by the suggestion engine for the current phase.
+   * Null when no phase is active or no suitable item was found.
+   */
+  suggestedItem:  SuggestedItem | null;
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
