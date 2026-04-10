@@ -53,57 +53,97 @@ type ContextRule = [cartKws: string[], itemKws: string[], reason: string];
 
 const DRINK_PAIRING: ContextRule[] = [
   [
-    ["pizza", "calabresa", "pepperoni", "portuguesa"],
+    ["pizza", "calabresa", "pepperoni", "portuguesa", "mussarela"],
     ["cola", "refrigerante", "coca", "cerveja", "chopp"],
-    "cai muito bem com pizza",
+    "combina muito bem com pizza",
   ],
   [
     ["hamburger", "burger", "lanche", "smash", "cheddar", "bacon"],
     ["refrigerante", "limonada", "cola", "cerveja", "chopp"],
-    "é o clássico com lanche",
+    "fica perfeito com lanche",
+  ],
+  [
+    ["costela", "churrasco", "espetinho", "picanha", "fraldinha", "bife", "carne assada"],
+    ["cerveja", "chopp", "refrigerante", "cola"],
+    "fica incrível com uma carne boa assim",
   ],
   [
     ["frango", "grelhado", "light", "leve", "fit", "salada", "vegano", "vegetariano", "natural"],
     ["suco", "vitamina", "limonada", "água", "natural"],
-    "combina com pratos mais leves",
+    "vai muito bem com esse estilo mais leve",
   ],
   [
-    ["massa", "pasta", "lasanha", "macarrão", "espaguete", "talharim"],
-    ["refrigerante", "limonada", "cerveja", "chopp"],
-    "harmoniza bem com massas",
+    ["massa", "pasta", "lasanha", "macarrão", "espaguete", "talharim", "ravioli"],
+    ["refrigerante", "limonada", "cerveja", "chopp", "suco"],
+    "harmoniza perfeitamente com massas",
   ],
   [
-    ["peixe", "camarão", "salmão", "frutos do mar", "tilápia"],
-    ["limonada", "água", "suco", "vitamina"],
-    "é ótimo com frutos do mar",
+    ["peixe", "camarão", "salmão", "frutos do mar", "tilápia", "bacalhau"],
+    ["limonada", "água", "suco", "vitamina", "cerveja"],
+    "vai muito bem com frutos do mar",
   ],
   [
     ["açaí", "frutas", "tropical", "granola"],
     ["suco", "vitamina", "água de coco", "natural"],
-    "vai muito bem junto",
+    "combina com esse estilo tropical",
   ],
   [
-    ["picante", "apimentado", "pimenta", "ardido"],
+    ["picante", "apimentado", "pimenta", "ardido", "jalapeño"],
     ["limonada", "água", "refrigerante", "suco"],
-    "ajuda a equilibrar o picante",
+    "fica perfeito para equilibrar o picante",
+  ],
+  [
+    ["japonês", "sushi", "temaki", "yakissoba", "udon", "gyoza"],
+    ["chá", "água", "refrigerante", "suco"],
+    "harmoniza com comida japonesa",
+  ],
+  [
+    ["mexicano", "burrito", "taco", "quesadilla", "nachos", "guacamole"],
+    ["limonada", "refrigerante", "suco", "água"],
+    "combina com o sabor mexicano",
+  ],
+  [
+    ["tapioca", "pão de queijo", "cuscuz", "pamonha"],
+    ["suco", "vitamina", "café", "natural", "água de coco"],
+    "vai muito bem com esse sabor brasileiro",
   ],
 ];
 
 const DESSERT_PAIRING: ContextRule[] = [
   [
-    ["pizza", "hamburger", "burger", "lanche", "bacon", "cheddar"],
+    ["pizza", "hamburger", "burger", "lanche", "bacon", "cheddar", "smash"],
     ["sorvete", "sorbet", "mousse", "leve", "fruta", "frutas"],
-    "é uma sobremesa leve para fechar bem",
+    "fica perfeito para fechar um pedido assim",
   ],
   [
     ["vegano", "vegetariano", "natural", "fit", "light", "leve", "grelhado"],
     ["frutas", "mousse", "natural", "vegano", "leve", "sorvete"],
-    "combina com o seu estilo de pedido",
+    "combina com o estilo do seu pedido",
   ],
   [
-    ["frango", "grelhado", "salada", "levinho"],
+    ["frango", "salada", "levinho", "grelhado", "wrap"],
     ["sorvete", "frutas", "mousse", "leve", "sorbet"],
-    "é perfeito para fechar com leveza",
+    "vai muito bem para fechar com leveza",
+  ],
+  [
+    ["costela", "churrasco", "espetinho", "picanha", "fraldinha", "carne assada"],
+    ["brownie", "petit gateau", "chocolate", "brigadeiro", "torta"],
+    "fica perfeito depois de um prato assim",
+  ],
+  [
+    ["massa", "pasta", "lasanha", "macarrão", "espaguete", "talharim"],
+    ["pudim", "tiramisu", "bolo", "mousse", "panna cotta"],
+    "é o fechamento clássico para massas",
+  ],
+  [
+    ["açaí", "frutas", "tropical", "granola"],
+    ["waffle", "crepe", "bolo", "frutas"],
+    "combina muito bem com esse estilo",
+  ],
+  [
+    ["picante", "apimentado", "pimenta", "ardido"],
+    ["sorvete", "sorbet", "mousse", "frutas"],
+    "vai muito bem para refrescar no final",
   ],
 ];
 
@@ -225,8 +265,8 @@ function resolveReason(
     }
   }
   return type === "drink"
-    ? "é uma boa pedida para acompanhar"
-    : "é o favorito aqui para fechar o pedido";
+    ? "vai muito bem com o que você pediu"
+    : "fica perfeito para fechar bem";
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────

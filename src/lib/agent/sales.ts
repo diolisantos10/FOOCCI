@@ -24,15 +24,15 @@ function resolveUpsellKey(style: UpsellStyle, intensity: UpsellIntensity): Upsel
 // All templates are AFFIRMATIVE — no closed yes/no questions.
 // The sales constraint block (last in prompt) will further enforce single-item behavior.
 const DRINK_UPSELL: Record<UpsellKey, (item: string) => string> = {
-  gentle:    (item) => `→ BEBIDA: Sugira UMA bebida afirmativamente: "Esse pedido fica incrível com uma bebida gelada — escolha uma que combine com ${item}."`,
-  moderate:  (item) => `→ BEBIDA: "Essa ${item} fica ainda melhor com uma bebida gelada 🧊" — sugira UMA pelo nome.`,
-  proactive: (item) => `→ BEBIDA ATIVA: "Já tenho a bebida ideal para acompanhar ${item} — dá uma olhada! 🧊" — sugira UMA pelo nome.`,
+  gentle:    (item) => `→ BEBIDA: Sugira UMA bebida afirmativamente: "Esse pedido fica ainda melhor com uma bebida gelada — tem uma que combina muito bem com ${item}."`,
+  moderate:  (item) => `→ BEBIDA: "Uma bebida gelada vai muito bem com ${item} 🧊" — sugira UMA pelo nome.`,
+  proactive: (item) => `→ BEBIDA ATIVA: "Já separei a bebida que fica perfeita com ${item} — dá uma olhada! 🧊" — sugira UMA pelo nome.`,
 };
 
 const DESSERT_UPSELL: Record<UpsellKey, (item: string) => string> = {
-  gentle:    (_) => `→ SOBREMESA: Sugira UMA sobremesa afirmativamente: "Para fechar o pedido com chave de ouro, temos [sobremesa] — é o favorito aqui."`,
-  moderate:  (_) => `→ SOBREMESA: "A sobremesa vai fechar com chave de ouro 🍰" — sugira UMA pelo nome.`,
-  proactive: (_) => `→ SOBREMESA ATIVA: "Falta só a sobremesa para o pedido perfeito! 🍰" — sugira UMA pelo nome.`,
+  gentle:    (_) => `→ SOBREMESA: Sugira UMA sobremesa afirmativamente: "Para fechar o pedido com chave de ouro, temos [sobremesa] — combina perfeitamente com o que você pediu."`,
+  moderate:  (_) => `→ SOBREMESA: "Uma sobremesa vai fechar com chave de ouro — tem uma que combina muito bem 🍰" — sugira UMA pelo nome.`,
+  proactive: (_) => `→ SOBREMESA ATIVA: "Só falta a sobremesa para o pedido perfeito 🍰" — sugira UMA pelo nome.`,
 };
 
 function focusInstruction(focus: SalesConfig["focus"]): string {
@@ -83,7 +83,7 @@ export function buildSalesLayer(
       `→ Reconheça o item que o cliente escolheu.`,
       `→ Sugira especificamente: "${suggested.itemName}"${suggested.itemDescription ? ` — ${suggested.itemDescription.slice(0, 70)}` : ""}`,
       `→ Motivo para usar: "${suggested.reason}"`,
-      `→ Modelo de frase afirmativa: "Esse pedido fica ainda melhor com ${suggested.itemName} — ${suggested.reason} 😊"`,
+      `→ Modelo de frase afirmativa: "${suggested.itemName} ${suggested.reason} 😊 — dá uma olhada 👇"`,
       `→ NUNCA use "Quer X?" — use sempre frases afirmativas que apresentam o item.`,
       `→ Tom: ${tone}. Uma única menção — se o cliente recusar, agradeça e continue.`,
     ].join("\n");
