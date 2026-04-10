@@ -695,6 +695,18 @@ function CategoryCard({
             </span>
             {editable && (
               <button
+                onClick={() => {
+                  setCatForm({ name: category.name, description: category.description ?? "" });
+                  setEditingCat(true);
+                }}
+                title="Editar categoria"
+                className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                ✎
+              </button>
+            )}
+            {editable && (
+              <button
                 onClick={toggleActive}
                 title={category.isActive ? "Desativar" : "Ativar"}
                 className="text-xs text-gray-400 hover:text-gray-700"

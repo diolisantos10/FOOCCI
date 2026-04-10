@@ -48,36 +48,19 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Crescimento",
+    label: "Marketing",
     items: [
-      {
-        href:  "/marketing",
-        label: "Marketing",
-        icon:  "📢",
-      },
-      {
-        href:  "/promotions",
-        label: "Promoções",
-        icon:  "🎁",
-      },
-      {
-        href:  "/crm",
-        label: "CRM",
-        icon:  "📊",
-      },
+      { href: "/promotions", label: "Promoções", icon: "🎁" },
+      { href: "/crm",        label: "CRM",       icon: "📊" },
+      { href: "/marca",      label: "Marca",     icon: "🎨" },
     ],
   },
   {
     label: "Plataforma",
     items: [
-      { href: "/chat-sim", label: "Testar IA", icon: "🧪" },
-      {
-        href:  "/settings",
-        label: "Configurações",
-        icon:  "⚙️",
-      },
-      { href: "/integracoes",    label: "Integrações",    icon: "🔌" },
-      { href: "/personalizacao", label: "Personalização", icon: "🎨", soon: true },
+      { href: "/chat-sim",   label: "Testar IA",      icon: "🧪" },
+      { href: "/settings",   label: "Configurações",  icon: "⚙️" },
+      { href: "/integracoes", label: "Integrações",   icon: "🔌" },
     ],
   },
 ];
