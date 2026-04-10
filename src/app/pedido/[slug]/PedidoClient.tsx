@@ -153,13 +153,13 @@ function findDessertCat(cats: MenuCategory[]) {
 
 const CHECKOUT_ENTRY_PROMPT: Partial<Record<Stage, string>> = {
   DELIVERY_TYPE:   "Vai receber em casa ou prefere retirar? 👇",
-  ADDRESS_INPUT:   "Me passa o endereço 👇",
-  ADDRESS_DETAILS: "Agora o bairro — pode jogar o complemento junto se tiver 👇",
-  ADDRESS_CONFIRM: "Confere o endereço abaixo 👇",
+  ADDRESS_INPUT:   "Rua e número, por favor 👇",
+  ADDRESS_DETAILS: "Bairro (e complemento, se tiver) 👇",
+  ADDRESS_CONFIRM: "Endereço certo? Confirma para seguir 👇",
   ASK_NAME:        "Como posso te chamar? 😊",
-  PAYMENT:         "Última etapa — como quer pagar? 👇",
-  PAYMENT_METHOD:  "Como prefere? 👇",
-  REVIEW_ORDER:    "Dá uma conferida antes de finalizar 👇",
+  PAYMENT:         "Quase lá! Como quer pagar? 👇",
+  PAYMENT_METHOD:  "Escolhe a forma de pagamento 👇",
+  REVIEW_ORDER:    "Quase pronto! Confere e confirma 👇",
 };
 
 function formatAddress(a: Address): string {
