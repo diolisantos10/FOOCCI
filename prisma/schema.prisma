@@ -760,6 +760,10 @@ model RestaurantBrandConfig {
   brandPrimaryColor    String?  // hex e.g. #6366f1
   brandSecondaryColor  String?  // hex e.g. #8b5cf6
 
+  // ── Social links (shown in ordering header if filled) ──────
+  instagramUrl         String?
+  tiktokUrl            String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

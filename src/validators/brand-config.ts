@@ -49,6 +49,8 @@ export const upsertBrandConfigSchema = z.object({
   salesPriority:       z.enum(SALES_PRIORITIES).default("bestsellers"),
   brandPrimaryColor:   z.string().max(20).nullable().optional(),
   brandSecondaryColor: z.string().max(20).nullable().optional(),
+  instagramUrl:        z.string().url().max(200).nullable().optional(),
+  tiktokUrl:           z.string().url().max(200).nullable().optional(),
 });
 
 export type UpsertBrandConfigInput = z.infer<typeof upsertBrandConfigSchema>;
@@ -71,6 +73,8 @@ export const DEFAULT_BRAND_CONFIG: UpsertBrandConfigInput = {
   salesPriority: "bestsellers",
   brandPrimaryColor: null,
   brandSecondaryColor: null,
+  instagramUrl: null,
+  tiktokUrl: null,
 };
 
 // ── Personality preset → brand config mapping ─────────────────────────────────

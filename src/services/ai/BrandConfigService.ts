@@ -26,6 +26,8 @@ export class BrandConfigService {
       salesPriority: input.salesPriority,
       brandPrimaryColor: input.brandPrimaryColor ?? null,
       brandSecondaryColor: input.brandSecondaryColor ?? null,
+      instagramUrl: input.instagramUrl ?? null,
+      tiktokUrl: input.tiktokUrl ?? null,
     };
 
     const config = await prisma.restaurantBrandConfig.upsert({
@@ -77,6 +79,8 @@ export class BrandConfigService {
       salesPriority: DEFAULT_BRAND_CONFIG.salesPriority,
       brandPrimaryColor: null,
       brandSecondaryColor: null,
+      instagramUrl: null,
+      tiktokUrl: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

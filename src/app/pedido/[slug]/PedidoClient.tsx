@@ -80,6 +80,10 @@ interface Props {
   categories: MenuCategory[];
   knownCustomerPhone?: string | null;
   knownCustomerName?: string | null;
+  /** Instagram profile URL — shown as icon in ordering header if provided. */
+  instagramUrl?: string | null;
+  /** TikTok profile URL — shown as icon in ordering header if provided. */
+  tiktokUrl?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -640,18 +644,18 @@ function PhoneEntryCard({
     }
   }
 
+  // Renders as a bottom control panel (no floating card — occupies the bottom zone)
   return (
-    <div className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100">
-      <p className="text-sm font-bold text-gray-900 mb-0.5">Olá! 👋</p>
-      <p className="text-xs text-gray-500 mb-4">
-        Informe seu WhatsApp para personalizarmos sua experiência.
+    <div className="shrink-0 border-t border-gray-100 bg-white px-4 pb-4 pt-3">
+      <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+        Identificação opcional
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-2">
         <input
           type="tel"
           value={phoneInput}
           onChange={(e) => setPhoneInput(e.target.value)}
-          placeholder="Ex: (11) 99999-9999"
+          placeholder="Seu WhatsApp — Ex: (11) 99999-9999"
           style={{ fontSize: "16px" }}
           className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
         />
@@ -668,7 +672,7 @@ function PhoneEntryCard({
           onClick={onSkip}
           className="py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
         >
-          Pular
+          Pular →
         </button>
       </form>
     </div>
@@ -676,10 +680,10 @@ function PhoneEntryCard({
 }
 
 // ── ChoiceCard ────────────────────────────────────────────────────────────────
-// Entry decision: "Ver cardápio" vs "Me sugere algo". Inline, non-blocking.
+// Entry decision: "Ver cardápio" vs "Me sugere algo".
+// Rendered as a bottom control panel, not a floating card.
 
 function ChoiceCard({
-  name,
   onMenu,
   onSuggest,
 }: {
@@ -688,11 +692,10 @@ function ChoiceCard({
   onSuggest: () => void;
 }) {
   return (
-    <div className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100">
-      <p className="text-sm font-bold text-gray-900 mb-1">
-        {name ? `Oi, ${name}! 👋` : "Olá! 👋"}
+    <div className="shrink-0 border-t border-gray-100 bg-white px-4 pb-4 pt-3">
+      <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+        Como prefere pedir?
       </p>
-      <p className="text-xs text-gray-500 mb-4">Como você prefere pedir hoje?</p>
       <div className="flex flex-col gap-2">
         <button
           onClick={onMenu}
@@ -721,7 +724,11 @@ function ChoiceCard({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories, knownCustomerPhone = null, knownCustomerName = null }: Props) {
+export function PedidoClient({
+  slug, restaurantName, logoUrl, phone, categories,
+  knownCustomerPhone = null, knownCustomerName = null,
+  instagramUrl = null, tiktokUrl = null,
+}: Props) {
   // ── Chat ─────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -1377,7 +1384,12 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
   }
 
   // ── Input area ────────────────────────────────────────────────────
-  const showInput = stage === "BROWSE" || stage === "ADDRESS_INPUT" || stage === "ADDRESS_DETAILS" || stage === "ASK_NAME";
+  // Text input is hidden during the two entry phases (identifying / choosing) —
+  // those phases own the bottom control surface with their own dedicated panels.
+  const showInput = (stage === "BROWSE" && entryPhase === "browsing")
+    || stage === "ADDRESS_INPUT"
+    || stage === "ADDRESS_DETAILS"
+    || stage === "ASK_NAME";
   const inputPlaceholder =
     stage === "ADDRESS_INPUT"   ? "Ex: Rua das Flores, 123" :
     stage === "ADDRESS_DETAILS" ? "Ex: Vila Madalena, apto 42" :
@@ -1390,10 +1402,10 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
 
   // Extracted: header (shared between mobile and desktop — rendered once)
   const header = (
-    <div className="shrink-0 flex items-center gap-3 bg-[#128c7e] px-4 py-3 shadow">
+    <div className="shrink-0 flex items-center gap-2 bg-[#128c7e] px-4 py-3 shadow">
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={logoUrl} alt={restaurantName} className="h-9 w-9 rounded-full object-cover" />
+        <img src={logoUrl} alt={restaurantName} className="h-9 w-9 rounded-full object-cover shrink-0" />
       ) : (
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-xl leading-none">
           🍕
@@ -1405,6 +1417,37 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
           {ui === "thinking" ? "digitando…" : "online"}
         </p>
       </div>
+
+      {/* Social icons — only rendered when the restaurant filled the links */}
+      {instagramUrl && (
+        <a
+          href={instagramUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Instagram"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:text-white active:scale-90"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+          </svg>
+        </a>
+      )}
+      {tiktokUrl && (
+        <a
+          href={tiktokUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="TikTok"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:text-white active:scale-90"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34v-7a8.16 8.16 0 0 0 4.77 1.52V6.37a4.85 4.85 0 0 1-1-.32z"/>
+          </svg>
+        </a>
+      )}
+
       <button
         onClick={() => setCartOpen(true)}
         aria-label={cartCount > 0 ? `Ver carrinho — ${cartCount} ${cartCount === 1 ? "item" : "itens"}` : "Carrinho vazio"}
@@ -1442,19 +1485,14 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
 
         {/* Chat messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#ece5dd]">
-          {entryPhase === "identifying" && (
-            <PhoneEntryCard
-              slug={slug}
-              onIdentified={handlePhoneIdentified}
-              onSkip={() => setEntryPhase("choosing")}
-            />
-          )}
+          {/* Greeting bubble shown during the "choosing" entry phase.
+              The choice panel itself lives in the bottom control area. */}
           {entryPhase === "choosing" && (
-            <ChoiceCard
-              name={identifiedName}
-              onMenu={() => enterBrowsing("menu")}
-              onSuggest={() => enterBrowsing("suggest")}
-            />
+            <div className="flex justify-start">
+              <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-sm leading-relaxed shadow-sm text-gray-900">
+                {identifiedName ? `Oi, ${identifiedName}! 😊` : "Olá! 😊"} Como você prefere pedir hoje?
+              </div>
+            </div>
           )}
           {messages.map((msg) => (
             <Bubble key={msg.id} msg={msg} />
@@ -1501,6 +1539,25 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
               <span>R$ {cartTotal.toFixed(2).replace(".", ",")}</span>
             </button>
           </div>
+        )}
+
+        {/* ── Entry phase bottom panels ──────────────────────────────────
+            During onboarding the bottom surface belongs exclusively to the
+            current entry step. Normal menu controls are already guarded by
+            entryPhase === "browsing" so no overlap occurs. */}
+        {entryPhase === "identifying" && (
+          <PhoneEntryCard
+            slug={slug}
+            onIdentified={handlePhoneIdentified}
+            onSkip={() => setEntryPhase("choosing")}
+          />
+        )}
+        {entryPhase === "choosing" && (
+          <ChoiceCard
+            name={identifiedName}
+            onMenu={() => enterBrowsing("menu")}
+            onSuggest={() => enterBrowsing("suggest")}
+          />
         )}
 
         {/* Mobile-only: category tabs */}

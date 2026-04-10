@@ -190,6 +190,8 @@ export default function MarcaPage() {
   const [secondaryColor, setSecondaryColor] = useState("#8b5cf6");
   const [logoUrl,        setLogoUrl]        = useState("");
   const [restaurantName, setRestaurantName] = useState("");
+  const [instagramUrl,   setInstagramUrl]   = useState("");
+  const [tiktokUrl,      setTiktokUrl]      = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
@@ -204,6 +206,8 @@ export default function MarcaPage() {
       if (bc.ok) {
         setPrimaryColor(bc.data?.brandPrimaryColor   ?? "#6366f1");
         setSecondaryColor(bc.data?.brandSecondaryColor ?? "#8b5cf6");
+        setInstagramUrl(bc.data?.instagramUrl ?? "");
+        setTiktokUrl(bc.data?.tiktokUrl ?? "");
       }
       if (store.ok) {
         setLogoUrl(store.data?.logoUrl ?? "");
@@ -222,6 +226,8 @@ export default function MarcaPage() {
       apiFetch("/api/brand-config", "PUT", {
         brandPrimaryColor:   primaryColor   || null,
         brandSecondaryColor: secondaryColor || null,
+        instagramUrl:        instagramUrl   || null,
+        tiktokUrl:           tiktokUrl      || null,
       }),
       apiFetch("/api/settings/store", "PUT", { logoUrl: logoUrl || null }),
     ]);
@@ -271,6 +277,36 @@ export default function MarcaPage() {
                     maxLength={500}
                     className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
                   />
+                </div>
+
+                {/* Social links */}
+                <div className="border-t border-gray-100 pt-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Redes sociais</p>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Instagram (URL)</label>
+                    <input
+                      type="url"
+                      value={instagramUrl}
+                      onChange={(e) => setInstagramUrl(e.target.value)}
+                      placeholder="https://instagram.com/seurestaurante"
+                      maxLength={200}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">TikTok (URL)</label>
+                    <input
+                      type="url"
+                      value={tiktokUrl}
+                      onChange={(e) => setTiktokUrl(e.target.value)}
+                      placeholder="https://tiktok.com/@seurestaurante"
+                      maxLength={200}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    Se preenchidos, ícones de redes sociais aparecem no cabeçalho do cardápio digital.
+                  </p>
                 </div>
               </div>
 

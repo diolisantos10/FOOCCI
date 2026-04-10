@@ -63,7 +63,14 @@ export default async function PedidoPage({
     select: { id: true, name: true, logoUrl: true, phone: true },
   });
 
+
   if (!restaurant) notFound();
+
+  // ── Brand config (social links for ordering header) ──────────────────────────
+  const brandConfig = await prisma.restaurantBrandConfig.findUnique({
+    where: { restaurantId: restaurant.id },
+    select: { instagramUrl: true, tiktokUrl: true },
+  });
 
   // ── WhatsApp / known-user identification ─────────────────────────────────────
   let knownCustomerPhone: string | null = null;
@@ -129,6 +136,8 @@ export default async function PedidoPage({
       categories={categories}
       knownCustomerPhone={knownCustomerPhone}
       knownCustomerName={knownCustomerName}
+      instagramUrl={brandConfig?.instagramUrl ?? null}
+      tiktokUrl={brandConfig?.tiktokUrl ?? null}
     />
   );
 }
