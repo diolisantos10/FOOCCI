@@ -147,6 +147,21 @@ function findDessertCat(cats: MenuCategory[]) {
   }) ?? null;
 }
 
+// ── Deterministic checkout prompts ────────────────────────────────────────────
+// The AI is NOT called at checkout stages. These messages are rendered into
+// the chat directly from client state — they never vary or hallucinate.
+
+const CHECKOUT_ENTRY_PROMPT: Partial<Record<Stage, string>> = {
+  DELIVERY_TYPE:   "Seu pedido é para entrega ou retirada? 👇",
+  ADDRESS_INPUT:   "Me diz a rua e o número do endereço de entrega 👇",
+  ADDRESS_DETAILS: "Me passa o bairro (e complemento, se tiver) 👇",
+  ADDRESS_CONFIRM: "Confirma o endereço abaixo 👇",
+  ASK_NAME:        "Como posso te chamar?",
+  PAYMENT:         "Agora é só escolher a forma de pagamento 👇",
+  PAYMENT_METHOD:  "Como prefere pagar? 👇",
+  REVIEW_ORDER:    "Confere aqui se está tudo certo com seu pedido 👇",
+};
+
 function formatAddress(a: Address): string {
   const line1 = [a.street, a.number].filter(Boolean).join(", ");
   const line2 = [a.neighborhood, a.complement].filter(Boolean).join(" — ");
@@ -832,16 +847,17 @@ export function PedidoClient({
   }, [messages, ui]);
 
   // ── sendText ──────────────────────────────────────────────────────
+  // Only called for AI-driven moments: BROWSE (initial greeting, item adds,
+  // category intros, upsell suggestions, free-text chat, back-to-menu).
+  // Checkout stage transitions use pushAssistantMessage instead — no AI call.
+  // Closure reads of deliveryMethod/address/customerName/paymentMode are safe
+  // here because sendText is never called in the same React tick as those setters.
   const sendText = useCallback(
     async (
       text: string,
       cartSnap: CartItem[],
-      stageSnap: Stage = stage,
-      upsellOfferedSnap: "drink" | "dessert" | null = activeUpsell,
-      deliveryMethodSnap: "delivery" | "pickup" | null = deliveryMethod,
-      /** Explicit payment method string — required when paymentMode/Sub was just set
-       *  in the same tick (React state won't reflect yet via closure). */
-      paymentMethodOverride?: string | null,
+      stageSnap: Stage,
+      upsellOfferedSnap: "drink" | "dessert" | null,
     ) => {
       setUi("thinking");
       const trimmed = text.trim();
@@ -856,31 +872,27 @@ export function PedidoClient({
         { role: "user" as const, content: trimmed },
       ];
 
-      // Derive checkout snapshot from closure (correct for all stages except the
-      // current-tick payment handler, which passes paymentMethodOverride instead).
-      const addrStr = deliveryMethodSnap === "delivery" ? formatAddress(address) : null;
-      const pmStr   = paymentMethodOverride !== undefined
-        ? paymentMethodOverride
-        : resolvePaymentMethod(paymentMode, paymentMethodSub);
+      const addrStr = deliveryMethod === "delivery" ? formatAddress(address) : null;
+      const pmStr   = resolvePaymentMethod(paymentMode, paymentMethodSub);
 
       try {
         const res = await fetch(`/api/pedido/${slug}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message:       trimmed,
+            message:        trimmed,
             history,
-            cart:          cartSnap,
-            stage:         stageSnap,
-            upsellOffered: upsellOfferedSnap,
-            deliveryMethod: deliveryMethodSnap,
-            address:       addrStr   || null,
-            paymentMethod: pmStr     || null,
-            customerName:  customerName || null,
+            cart:           cartSnap,
+            stage:          stageSnap,
+            upsellOffered:  upsellOfferedSnap,
+            deliveryMethod,
+            address:        addrStr || null,
+            paymentMethod:  pmStr   || null,
+            customerName:   customerName || null,
           }),
         });
 
-        const data = await res.json();
+        const data  = await res.json();
         const reply: string = data?.data?.reply ?? "Desculpe, algo deu errado 😅";
 
         setMessages((prev) => [
@@ -897,8 +909,26 @@ export function PedidoClient({
         setUi("idle");
       }
     },
-    [slug, history, stage, activeUpsell, deliveryMethod, address, customerName, paymentMode, paymentMethodSub],
+    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub],
   );
+
+  // ── Deterministic message helpers ─────────────────────────────────
+  // Push messages into the chat without calling the AI.
+  // Used at checkout stages where responses must not vary.
+
+  const pushAssistantMessage = useCallback((text: string) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: uid(), role: "assistant" as const, content: text, ts: new Date() },
+    ]);
+  }, []);
+
+  const pushUserMessage = useCallback((text: string) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: uid(), role: "user" as const, content: text, ts: new Date() },
+    ]);
+  }, []);
 
   // ── Initial greeting (fires once user enters browsing phase) ─────────────
   const greetedRef = useRef(false);
@@ -909,7 +939,6 @@ export function PedidoClient({
       identifiedName ? `Olá! Meu nome é ${identifiedName}.` : "Olá!",
       [],
       "BROWSE",
-      null,
       null,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1038,70 +1067,74 @@ export function PedidoClient({
     setUpsellState((prev) => ({ ...prev, lastUpsellCategory: null }));
     const resumeStage = computeResumeStage(deliveryMethod, address, customerName, paymentMode, paymentMethodSub);
     setStage(resumeStage);
-    sendText("Confirmar pedido", cart, resumeStage, null);
-  }, [cart, categories, stage, upsellState, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, sendText]);
+    // Deterministic prompt — no AI call needed at checkout entry.
+    pushAssistantMessage(CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Vamos finalizar? 👇");
+  }, [cart, categories, stage, upsellState, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, sendText, pushAssistantMessage]);
 
   const handleDeliveryMethod = useCallback(
     (type: "delivery" | "pickup") => {
       setDeliveryMethod(type);
       if (type === "pickup") {
         setStage("ASK_NAME");
-        sendText("Quero retirar no local", cart, "ASK_NAME", activeUpsell, type);
+        pushUserMessage("🏪 Retirada no local");
+        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
       } else {
         setStage("ADDRESS_INPUT");
-        sendText("Quero entrega no endereço", cart, "ADDRESS_INPUT", activeUpsell, type);
+        pushUserMessage("🛵 Entrega");
+        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_INPUT"]!);
       }
     },
-    [cart, activeUpsell, sendText],
+    [pushUserMessage, pushAssistantMessage],
   );
 
   const handleAddressInput = useCallback(
     (text: string) => {
+      pushUserMessage(text);
       const { street, number } = parseStreetLine(text);
-      setAddress((prev) => ({ ...prev, street, number }));
-      // Advance as long as we got a recognisable street name.
-      // Missing house number is acceptable — ADDRESS_DETAILS will collect it.
-      // Only loop back when the input is completely unrecognisable.
       if (!street.trim()) {
-        sendText(text, cart, "ADDRESS_INPUT", activeUpsell);
+        pushAssistantMessage("Não consegui identificar. Me passa a rua e o número, por favor 👇");
         return;
       }
+      setAddress((prev) => ({ ...prev, street, number }));
       setStage("ADDRESS_DETAILS");
-      sendText(text, cart, "ADDRESS_DETAILS", activeUpsell);
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_DETAILS"]!);
     },
-    [cart, activeUpsell, sendText],
+    [pushUserMessage, pushAssistantMessage],
   );
 
   const handleAddressDetails = useCallback(
     (text: string) => {
+      pushUserMessage(text);
       const { neighborhood, complement } = parseNeighborhoodLine(text);
       if (!neighborhood.trim()) {
-        sendText(text, cart, "ADDRESS_DETAILS", activeUpsell);
+        pushAssistantMessage("Me passa o bairro para continuar 👇");
         return;
       }
       setAddress((prev) => ({ ...prev, neighborhood, complement }));
       setStage("ADDRESS_CONFIRM");
-      sendText(text, cart, "ADDRESS_CONFIRM", activeUpsell);
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_CONFIRM"]!);
     },
-    [cart, activeUpsell, sendText],
+    [pushUserMessage, pushAssistantMessage],
   );
 
   const handleAddressConfirm = useCallback(() => {
     setStage("ASK_NAME");
-    sendText("Confirmar endereço", cart, "ASK_NAME", activeUpsell);
-  }, [cart, activeUpsell, sendText]);
+    pushUserMessage("Endereço confirmado ✓");
+    pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
+  }, [pushUserMessage, pushAssistantMessage]);
 
   const handleNameInput = useCallback(
     (text: string) => {
+      pushUserMessage(text);
       if (!isValidName(text)) {
-        sendText(text, cart, "ASK_NAME", activeUpsell);
+        pushAssistantMessage("Não entendi. Qual é o seu nome? 😊");
         return;
       }
       setCustomerName(text.trim());
       setStage("PAYMENT");
-      sendText(text, cart, "PAYMENT", activeUpsell);
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT"]!);
     },
-    [cart, activeUpsell, sendText],
+    [pushUserMessage, pushAssistantMessage],
   );
 
   const handlePaymentMode = useCallback(
@@ -1109,15 +1142,16 @@ export function PedidoClient({
       setPaymentMode(mode);
       if (mode === "pay_now") {
         setStage("REVIEW_ORDER");
-        // paymentMode just changed — pass resolved value explicitly to avoid stale closure
-        sendText("Pagar agora (link)", cart, "REVIEW_ORDER", activeUpsell, undefined, "Link de pagamento");
+        pushUserMessage("💳 Pagar agora — link de pagamento");
+        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["REVIEW_ORDER"]!);
       } else {
         setStage("PAYMENT_METHOD");
-        const label = mode === "pay_on_delivery" ? "Pagar na entrega" : "Pagar na retirada";
-        sendText(label, cart, "PAYMENT_METHOD", activeUpsell);
+        const label = mode === "pay_on_delivery" ? "🚪 Pagar na entrega" : "🏪 Pagar na retirada";
+        pushUserMessage(label);
+        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT_METHOD"]!);
       }
     },
-    [cart, activeUpsell, sendText],
+    [pushUserMessage, pushAssistantMessage],
   );
 
   const handlePaymentMethodSub = useCallback(
@@ -1125,14 +1159,14 @@ export function PedidoClient({
       setPaymentMethodSub(method);
       setStage("REVIEW_ORDER");
       const labels: Record<PaymentMethodSub, string> = {
-        card_machine: "Cartão",
-        pix_in_person: "Pix",
-        cash: "Dinheiro",
+        card_machine:  "💳 Cartão na maquininha",
+        pix_in_person: "📱 Pix",
+        cash:          "💵 Dinheiro",
       };
-      // paymentMethodSub just changed — pass resolved value explicitly (paymentMode is in closure)
-      sendText(`Pagar com ${labels[method]}`, cart, "REVIEW_ORDER", activeUpsell, undefined, resolvePaymentMethod(paymentMode, method));
+      pushUserMessage(labels[method]);
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["REVIEW_ORDER"]!);
     },
-    [cart, activeUpsell, paymentMode, sendText],
+    [pushUserMessage, pushAssistantMessage],
   );
 
   const handleFinalConfirm = useCallback(async () => {
@@ -1156,7 +1190,7 @@ export function PedidoClient({
       const data = await res.json();
       setOrderId(data.orderId ?? data.data?.orderId ?? null);
       setStage("DONE");
-      sendText("Confirmar pedido final", cart, "DONE", activeUpsell);
+      // DONE stage renders a static confirmation panel — no AI call needed.
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -1165,7 +1199,7 @@ export function PedidoClient({
     } finally {
       setUi("idle");
     }
-  }, [slug, cart, customerName, deliveryMethod, address, paymentMode, paymentMethodSub, activeUpsell, sendText]);
+  }, [slug, cart, customerName, deliveryMethod, address, paymentMode, paymentMethodSub]);
 
   const handleBackToBrowse = useCallback(() => {
     // Return to browsing without wiping checkout data.
@@ -1176,7 +1210,7 @@ export function PedidoClient({
     setStage("BROWSE");
     setOrderId(null);
     setUpsellState({ offeredDrink: false, offeredDessert: false, lastUpsellCategory: null });
-    sendText("Ver cardápio", cart, "BROWSE", activeUpsell, null);
+    sendText("Ver cardápio", cart, "BROWSE", activeUpsell);
   }, [cart, activeUpsell, sendText]);
 
   // ── Input submit ──────────────────────────────────────────────────
