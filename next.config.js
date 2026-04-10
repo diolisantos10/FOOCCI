@@ -22,7 +22,7 @@ const nextConfig = {
         "localhost:3000",
         // Add your production domain here: e.g. "app.foocci.com.br"
         ...(process.env.NEXTAUTH_URL
-          ? [new URL(process.env.NEXTAUTH_URL).host]
+          ? (() => { try { return [new URL(process.env.NEXTAUTH_URL).host]; } catch { return []; } })()
           : []),
       ],
       bodySizeLimit: "10mb",
