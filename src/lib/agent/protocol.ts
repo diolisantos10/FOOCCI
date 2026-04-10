@@ -20,58 +20,144 @@ const ABSOLUTE_RULES = `━━━ REGRAS ABSOLUTAS — NÃO NEGOCIÁVEIS ━━�
 6. Você REAGE ao estado atual — nunca avança etapas por conta própria.
 7. Não contradiga nenhuma informação já confirmada pelo sistema (endereço, nome, pagamento).
 8. NUNCA pergunte "Quer X?" ao sugerir — use frases afirmativas: "Esse pedido fica ainda melhor com [item]" ou "Separei um [item] que combina bem — dá uma olhada 👇".
-9. Em CONVERSÃO (upsell ou checkout): nunca use linguagem passiva ou fraqueza de vendas — "estou por aqui", "se precisar de algo", "qualquer coisa me chama", "o que acha?", "que tal?". Avance direto.`;
+9. Em CONVERSÃO (upsell ou checkout): nunca use linguagem passiva ou fraqueza de vendas — "estou por aqui", "se precisar de algo", "qualquer coisa me chama", "o que acha?", "que tal?". Avance direto.
+10. Em etapas de CHECKOUT (qualquer etapa fora de BROWSE): execute EXCLUSIVAMENTE o script da etapa atual. Ignore o histórico de conversa. A interface controla o fluxo — dados já coletados NÃO devem ser pedidos novamente.`;
 
-const STAGE_SCRIPT: Record<AgentContext["stage"], string> = {
-  BROWSE:
-    `ETAPA: BROWSE — MODO EXPERIÊNCIA.\n` +
-    `Você é um garçom que guia e encanta — não vende ainda.\n` +
-    `• Profundidade: siga o nível indicado no bloco PROFUNDIDADE DE RESPOSTA (no topo do prompt).\n` +
-    `• Se o cliente visualizar uma categoria: apresente-a conforme o nível de profundidade.\n` +
-    `• Se o cliente adicionar um item: valide a escolha + reforce o desejo (sabor, textura, popularidade).\n` +
-    `• Pode sugerir NO MÁXIMO UM item da MESMA categoria do item adicionado.\n` +
-    `Máx. 2–3 linhas. Nunca liste categorias. Nunca mencione checkout ou finalização.`,
+// ── BROWSE stage script (static — no collected data relevant here) ────────────
 
-  DELIVERY_TYPE:
-    `ETAPA: FORMA DE ENTREGA.\n` +
-    `Guie para a interface: "Perfeito! 🎉 Como vai receber? 👇"`,
+const BROWSE_SCRIPT =
+  `ETAPA: BROWSE — MODO EXPERIÊNCIA.\n` +
+  `Você é um garçom que guia e encanta — não vende ainda.\n` +
+  `• Profundidade: siga o nível indicado no bloco PROFUNDIDADE DE RESPOSTA (no topo do prompt).\n` +
+  `• Se o cliente visualizar uma categoria: apresente-a conforme o nível de profundidade.\n` +
+  `• Se o cliente adicionar um item: valide a escolha + reforce o desejo (sabor, textura, popularidade).\n` +
+  `• Pode sugerir NO MÁXIMO UM item da MESMA categoria do item adicionado.\n` +
+  `Máx. 2–3 linhas. Nunca liste categorias. Nunca mencione checkout ou finalização.`;
 
-  ADDRESS_INPUT:
-    `ETAPA: ENDEREÇO — passo 1 (rua e número).\n` +
-    `"Me diz a rua e o número 👇"`,
+// ── Checkout stage scripts (dynamic — embed collected data to prevent re-asking) ─
 
-  ADDRESS_DETAILS:
-    `ETAPA: ENDEREÇO — passo 2 (bairro e complemento).\n` +
-    `"Quase lá! Me passa o bairro 👇"`,
+interface CollectedCheckout {
+  address?:       string | null;
+  customerName?:  string | null;
+  paymentMethod?: string | null;
+}
 
-  ADDRESS_CONFIRM:
-    `ETAPA: CONFIRMAÇÃO DE ENDEREÇO.\n` +
-    `"Confira o endereço abaixo e confirme 👇"`,
+/**
+ * Builds a stage-locked script for every checkout stage.
+ * Each script tells the AI:
+ *   1. What data was already collected — must NEVER be asked again
+ *   2. The exact response expected at this stage
+ *   3. An explicit prohibition list
+ *
+ * History is stripped at checkout stages (done in runner.ts), so this script
+ * is the AI's sole source of truth about where we are in the flow.
+ */
+function buildCheckoutScript(
+  stage:          AgentContext["stage"],
+  deliveryMethod: AgentContext["deliveryMethod"],
+  c:              CollectedCheckout,
+): string {
+  const addr = c.address?.trim()       || null;
+  const name = c.customerName?.trim()  || null;
+  const pay  = c.paymentMethod?.trim() || null;
 
-  ASK_NAME:
-    `ETAPA: NOME DO CLIENTE.\n` +
-    `"Quase lá! 😊 Como posso chamar você?"`,
+  const already = (label: string, value: string) =>
+    `  ✓ ${label}: "${value}" — JÁ COLETADO, NUNCA PERGUNTE NOVAMENTE.`;
 
-  PAYMENT:
-    `ETAPA: PAGAMENTO — escolha do modo.\n` +
-    `"💳 Última etapa — como vai pagar? 👇"`,
+  switch (stage) {
+    case "DELIVERY_TYPE":
+      return [
+        `ETAPA: FORMA DE ENTREGA`,
+        `TAREFA ÚNICA: Direcionar para a interface de escolha (delivery ou retirada).`,
+        `RESPOSTA: "Perfeito! 🎉 Como vai receber? 👇"`,
+        `PROIBIDO: Mencionar endereço, pagamento, nome ou qualquer outra etapa. Máx. 1 linha.`,
+      ].join("\n");
 
-  PAYMENT_METHOD:
-    `ETAPA: FORMA DE PAGAMENTO.\n` +
-    `"Ótimo! Como prefere pagar? 👇"`,
+    case "ADDRESS_INPUT":
+      return [
+        `ETAPA: RUA E NÚMERO`,
+        `TAREFA ÚNICA: Pedir rua e número para entrega.`,
+        `RESPOSTA: "Me diz a rua e o número 👇"`,
+        `PROIBIDO: Pedir bairro, complemento, pagamento ou nome. Máx. 1 linha.`,
+      ].join("\n");
 
-  PAYMENT_LINK:
-    `ETAPA: AGUARDANDO PAGAMENTO.\n` +
-    `"Link enviado! Aguardando confirmação 👇"`,
+    case "ADDRESS_DETAILS":
+      return [
+        `ETAPA: BAIRRO`,
+        addr ? already("Rua", addr) : "",
+        `TAREFA ÚNICA: Pedir bairro (complemento é opcional).`,
+        `RESPOSTA: "Quase lá! Me passa o bairro 👇"`,
+        `PROIBIDO: Pedir rua novamente. Pedir nome ou pagamento. Máx. 1 linha.`,
+      ].filter(Boolean).join("\n");
 
-  REVIEW_ORDER:
-    `ETAPA: REVISÃO DO PEDIDO.\n` +
-    `1 linha apenas. "Confere ali embaixo 👇 e me confirma"`,
+    case "ADDRESS_CONFIRM":
+      return [
+        `ETAPA: CONFIRMAR ENDEREÇO`,
+        addr ? already("Endereço completo", addr) : "",
+        `TAREFA ÚNICA: Pedir que o cliente confira o endereço na interface e confirme.`,
+        `RESPOSTA: "Confira o endereço abaixo 👇"`,
+        `PROIBIDO: Digitar o endereço no chat. Pedir endereço novamente. Mencionar pagamento. Máx. 1 linha.`,
+      ].filter(Boolean).join("\n");
 
-  DONE:
-    `ETAPA: PEDIDO FINALIZADO.\n` +
-    `1 linha apenas. NÃO diga que vai finalizar — o sistema já finalizou.`,
-};
+    case "ASK_NAME":
+      return [
+        `ETAPA: NOME DO CLIENTE`,
+        addr ? already("Endereço", addr) : "",
+        deliveryMethod === "pickup" ? `  ✓ Modo de recebimento: RETIRADA — endereço não necessário.` : "",
+        `TAREFA ÚNICA: Perguntar o nome do cliente.`,
+        `RESPOSTA: "Quase lá! 😊 Como posso chamar você?"`,
+        `PROIBIDO: Mencionar endereço. Mencionar pagamento. Pedir mais de uma coisa. Máx. 1 linha.`,
+      ].filter(Boolean).join("\n");
+
+    case "PAYMENT":
+      return [
+        `ETAPA: PAGAMENTO`,
+        name ? already("Nome", name) : "",
+        addr ? already("Endereço", addr) : "",
+        deliveryMethod ? `  ✓ Modo: ${deliveryMethod === "delivery" ? "ENTREGA" : "RETIRADA"} — confirmado.` : "",
+        `TAREFA ÚNICA: Direcionar para a interface de escolha de pagamento.`,
+        `RESPOSTA: "💳 Última etapa — como vai pagar? 👇"`,
+        `PROIBIDO: Pedir nome. Pedir endereço. Mencionar dados já coletados. Máx. 1 linha.`,
+      ].filter(Boolean).join("\n");
+
+    case "PAYMENT_METHOD":
+      return [
+        `ETAPA: FORMA DE PAGAMENTO`,
+        `TAREFA ÚNICA: Direcionar para escolha do método de pagamento via interface.`,
+        `RESPOSTA: "Ótimo! Como prefere pagar? 👇"`,
+        `PROIBIDO: Perguntar dados pessoais ou de entrega. Máx. 1 linha.`,
+      ].join("\n");
+
+    case "PAYMENT_LINK":
+      return [
+        `ETAPA: AGUARDANDO PAGAMENTO`,
+        `TAREFA ÚNICA: Informar que o link de pagamento foi enviado.`,
+        `RESPOSTA: "Link enviado! Aguardando confirmação 👇"`,
+        `PROIBIDO: Pedir dados. Mencionar etapas anteriores. Máx. 1 linha.`,
+      ].join("\n");
+
+    case "REVIEW_ORDER":
+      return [
+        `ETAPA: REVISÃO FINAL`,
+        name ? already("Nome", name) : "",
+        addr ? already("Endereço", addr) : "",
+        pay  ? already("Pagamento", pay)  : "",
+        `TAREFA ÚNICA: Pedir que o cliente revise e confirme via interface.`,
+        `RESPOSTA: 1 linha. "Confere ali embaixo 👇 e me confirma"`,
+        `PROIBIDO: Listar itens no chat. Pedir confirmação dos dados já coletados. Máx. 1 linha.`,
+      ].filter(Boolean).join("\n");
+
+    case "DONE":
+      return [
+        `ETAPA: PEDIDO FINALIZADO — ENCERRADO`,
+        `TAREFA ÚNICA: Mensagem de encerramento. Nada mais.`,
+        `PROIBIDO: Listar pedido. Perguntar qualquer coisa. Mencionar etapas anteriores. 1 linha absoluta.`,
+      ].join("\n");
+
+    default:
+      return `ETAPA: ${stage}`;
+  }
+}
 
 function doneScript(deliveryMethod: AgentContext["deliveryMethod"]): string {
   return deliveryMethod === "pickup"
@@ -79,12 +165,22 @@ function doneScript(deliveryMethod: AgentContext["deliveryMethod"]): string {
     : `Mensagem: "Perfeito! Seu pedido já entrou na cozinha 🚀 Já já chega aí!"`;
 }
 
+/**
+ * @param collected  Checkout data already gathered via UI panels.
+ *                   Only used at non-BROWSE stages to prevent the AI from
+ *                   re-asking for information the customer already provided.
+ */
 export function buildProtocolLayer(
-  stage: AgentContext["stage"],
+  stage:          AgentContext["stage"],
   deliveryMethod: AgentContext["deliveryMethod"],
+  collected:      CollectedCheckout = {},
 ): string {
-  const script = STAGE_SCRIPT[stage] ?? `ETAPA: ${stage}`;
-  const done   = stage === "DONE" ? `\n${doneScript(deliveryMethod)}` : "";
+  const script =
+    stage === "BROWSE"
+      ? BROWSE_SCRIPT
+      : buildCheckoutScript(stage, deliveryMethod, collected);
+
+  const done = stage === "DONE" ? `\n${doneScript(deliveryMethod)}` : "";
 
   return `━━━ PROTOCOLO ━━━\n${ABSOLUTE_RULES}\n\n━━━ ETAPA ATUAL ━━━\n${script}${done}`;
 }

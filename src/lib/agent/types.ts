@@ -100,6 +100,14 @@ export interface AgentContext {
    * Null when no phase is active or no suitable item was found.
    */
   suggestedItem:  SuggestedItem | null;
+  /**
+   * Checkout data collected through UI panels — used by the protocol layer
+   * to prevent the AI from asking for information already provided.
+   * Only populated at non-BROWSE stages.
+   */
+  collectedAddress?:       string | null;
+  collectedCustomerName?:  string | null;
+  collectedPaymentMethod?: string | null;
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────

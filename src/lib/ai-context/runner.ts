@@ -481,6 +481,12 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     upsellOffered,
     deliveryMethod,
     suggestedItem:  suggestion,
+    // Checkout data collected via UI panels — passed to the protocol layer so
+    // stage scripts can explicitly state what was already collected, preventing
+    // the AI from re-asking for information the customer already provided.
+    collectedAddress:       address      ?? null,
+    collectedCustomerName:  customerName ?? null,
+    collectedPaymentMethod: ctx.operational.paymentMethod ?? null,
   };
 
   // ── Step 4: Assemble system prompt ────────────────────────────────────────
@@ -512,7 +518,13 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     : "gpt-4o-mini";
 
   // ── Step 6: Cap history ────────────────────────────────────────────────────
-  const cappedHistory = history.slice(-ctx.aiConfig.maxHistoryMessages);
+  // At checkout stages (non-BROWSE) the AI must respond to state, not to
+  // the conversation. Clearing history prevents the AI from being confused
+  // by earlier browsing messages and re-asking for already-collected data.
+  const cappedHistory =
+    stage === "BROWSE"
+      ? history.slice(-ctx.aiConfig.maxHistoryMessages)
+      : [];
 
   // ── Step 7: Call OpenAI ───────────────────────────────────────────────────
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [

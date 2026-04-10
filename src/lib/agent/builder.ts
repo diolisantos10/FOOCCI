@@ -85,9 +85,13 @@ export function buildAgentPrompt(
   sales:       SalesConfig,
   context:     AgentContext,
 ): string {
-  const menuBlock  = buildMenuBlock(context.categories);
-  const cartBlock  = buildCartBlock(context.cart, context.categories, context.deliveryMethod);
-  const lastItem   = context.cart.at(-1)?.name ?? null;
+  const menuBlock = buildMenuBlock(context.categories);
+  const cartBlock = buildCartBlock(context.cart, context.categories, context.deliveryMethod);
+  const lastItem  = context.cart.at(-1)?.name ?? null;
+
+  // Sales layer and its constraint are only meaningful during BROWSE.
+  // At checkout stages the AI must follow the stage script, not a sales mode.
+  const isBrowse = context.stage === "BROWSE";
 
   return [
     buildPersonalityLayer(personality, context.restaurantName),
@@ -96,12 +100,20 @@ export function buildAgentPrompt(
 
     `━━━ CONTEXTO DO PEDIDO ━━━\n${cartBlock}`,
 
-    buildSalesLayer(sales, context.upsellOffered, lastItem, context.suggestedItem),
+    // Sales layer: only during BROWSE (or active upsell which is also BROWSE-adjacent)
+    isBrowse ? buildSalesLayer(sales, context.upsellOffered, lastItem, context.suggestedItem) : "",
 
-    buildProtocolLayer(context.stage, context.deliveryMethod),
+    // Protocol layer: passes collected checkout data at non-BROWSE stages so
+    // the stage script can tell the AI what was already collected.
+    buildProtocolLayer(context.stage, context.deliveryMethod, {
+      address:       context.collectedAddress,
+      customerName:  context.collectedCustomerName,
+      paymentMethod: context.collectedPaymentMethod,
+    }),
 
     // Mode constraint is LAST — highest recency weight.
     // BROWSE → experience hard rules; DRINK/DESSERT → single-item enforcement.
-    buildSalesConstraintBlock(context.upsellOffered, context.stage),
+    // Returns "" at non-BROWSE non-upsell stages (no-op).
+    isBrowse ? buildSalesConstraintBlock(context.upsellOffered, context.stage) : "",
   ].filter(Boolean).join("\n\n");
 }
