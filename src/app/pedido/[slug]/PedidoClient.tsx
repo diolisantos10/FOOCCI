@@ -163,6 +163,29 @@ function resolvePaymentMethod(
   return sub ? subLabels[sub] : (mode === "pay_on_delivery" ? "Pagar na entrega" : "Pagar na retirada");
 }
 
+/**
+ * Determines the earliest checkout stage that still needs input,
+ * based on what data is already collected. Used to skip ahead when the
+ * customer returns to checkout after browsing back to the menu.
+ */
+function computeResumeStage(
+  deliveryMethod: "delivery" | "pickup" | null,
+  address: Address,
+  customerName: string,
+  paymentMode: PaymentMode | null,
+  paymentMethodSub: PaymentMethodSub | null,
+): Stage {
+  if (!deliveryMethod) return "DELIVERY_TYPE";
+  if (deliveryMethod === "delivery") {
+    if (!address.street.trim())        return "ADDRESS_INPUT";
+    if (!address.neighborhood.trim())  return "ADDRESS_DETAILS";
+  }
+  if (!customerName.trim()) return "ASK_NAME";
+  if (!paymentMode)         return "PAYMENT";
+  if (paymentMode !== "pay_now" && !paymentMethodSub) return "PAYMENT_METHOD";
+  return "REVIEW_ORDER";
+}
+
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
 function Bubble({ msg }: { msg: ChatMessage }) {
@@ -1001,11 +1024,15 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
       return;
     }
 
-    // ── All upsells resolved → advance to checkout ───────────────────────────
+    // ── All upsells resolved → resume from the correct checkout stage ─────────
+    // If the customer previously collected some checkout data and came back to
+    // browse, computeResumeStage detects the furthest completed step and jumps
+    // straight there — no need to re-enter address/name/payment already given.
     setUpsellState((prev) => ({ ...prev, lastUpsellCategory: null }));
-    setStage("DELIVERY_TYPE");
-    sendText("Confirmar pedido", cart, "DELIVERY_TYPE", null);
-  }, [cart, categories, stage, upsellState, sendText]);
+    const resumeStage = computeResumeStage(deliveryMethod, address, customerName, paymentMode, paymentMethodSub);
+    setStage(resumeStage);
+    sendText("Confirmar pedido", cart, resumeStage, null);
+  }, [cart, categories, stage, upsellState, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, sendText]);
 
   const handleDeliveryMethod = useCallback(
     (type: "delivery" | "pickup") => {
@@ -1134,10 +1161,12 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
   }, [slug, cart, customerName, deliveryMethod, address, paymentMode, paymentMethodSub, activeUpsell, sendText]);
 
   const handleBackToBrowse = useCallback(() => {
+    // Return to browsing without wiping checkout data.
+    // deliveryMethod, address, customerName, paymentMode, paymentMethodSub are
+    // preserved so the customer can resume from where they left off.
+    // upsellState is reset so it won't re-trigger on the next Finalize click
+    // (the resume flow jumps straight past upsells to the correct stage).
     setStage("BROWSE");
-    setDeliveryMethod(null);
-    setPaymentMode(null);
-    setPaymentMethodSub(null);
     setOrderId(null);
     setUpsellState({ offeredDrink: false, offeredDessert: false, lastUpsellCategory: null });
     sendText("Ver cardápio", cart, "BROWSE", activeUpsell, null);
@@ -1207,7 +1236,12 @@ export function PedidoClient({ slug, restaurantName, logoUrl, phone, categories,
               Confirmar endereço
             </button>
             <button
-              onClick={() => { setStage("ADDRESS_INPUT"); }}
+              onClick={() => {
+                // Explicit address edit — clear collected address so the user
+                // re-enters it from scratch (not auto-skipped by computeResumeStage).
+                setAddress({ street: "", number: "", neighborhood: "", complement: "" });
+                setStage("ADDRESS_INPUT");
+              }}
               className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
             >
               Editar

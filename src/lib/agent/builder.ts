@@ -94,7 +94,7 @@ export function buildAgentPrompt(
   const isBrowse = context.stage === "BROWSE";
 
   return [
-    buildPersonalityLayer(personality, context.restaurantName),
+    buildPersonalityLayer(personality, context.restaurantName, context.stage),
 
     `━━━ CARDÁPIO (referência interna — NÃO repita para o cliente) ━━━\n${menuBlock}`,
 

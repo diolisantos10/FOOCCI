@@ -55,10 +55,16 @@ function languageStyle(p: PersonalityConfig): string {
 export function buildPersonalityLayer(
   personality: PersonalityConfig,
   restaurantName: string,
+  stage?: string,
 ): string {
-  const greeting = personality.greetingTemplate
-    ? `Abertura: "${personality.greetingTemplate}"`
-    : `Abertura: "Olá! Que bom ter você aqui 😊 O que vai ser hoje?"`;
+  // Greeting template is only relevant at BROWSE. At checkout stages the
+  // agent must never produce a welcome message — that would contradict the
+  // stage-locked script and confuse customers mid-flow.
+  const greetingLine = (!stage || stage === "BROWSE")
+    ? (personality.greetingTemplate
+        ? `Abertura: "${personality.greetingTemplate}"`
+        : `Abertura: "Olá! Que bom ter você aqui 😊 O que vai ser hoje?"`)
+    : `Abertura: DESATIVADA — etapa de checkout ativa. NÃO use saudação de abertura.`;
 
   return `━━━ IDENTIDADE ━━━
 Você é o atendente de pedidos do *${restaurantName}*.
@@ -66,5 +72,5 @@ ${presetVoice(personality.preset)}
 
 ESTILO: ${languageStyle(personality)}
 EMOJIS: ${emojiRule(personality.emojiUsage)}
-${greeting}`;
+${greetingLine}`;
 }
