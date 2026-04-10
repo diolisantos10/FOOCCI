@@ -152,14 +152,14 @@ function findDessertCat(cats: MenuCategory[]) {
 // the chat directly from client state — they never vary or hallucinate.
 
 const CHECKOUT_ENTRY_PROMPT: Partial<Record<Stage, string>> = {
-  DELIVERY_TYPE:   "Seu pedido é para entrega ou retirada? 👇",
-  ADDRESS_INPUT:   "Me diz a rua e o número do endereço de entrega 👇",
-  ADDRESS_DETAILS: "Me passa o bairro (e complemento, se tiver) 👇",
-  ADDRESS_CONFIRM: "Confirma o endereço abaixo 👇",
-  ASK_NAME:        "Como posso te chamar?",
-  PAYMENT:         "Agora é só escolher a forma de pagamento 👇",
-  PAYMENT_METHOD:  "Como prefere pagar? 👇",
-  REVIEW_ORDER:    "Confere aqui se está tudo certo com seu pedido 👇",
+  DELIVERY_TYPE:   "Vai receber em casa ou prefere retirar? 👇",
+  ADDRESS_INPUT:   "Me passa o endereço 👇",
+  ADDRESS_DETAILS: "Agora o bairro — pode jogar o complemento junto se tiver 👇",
+  ADDRESS_CONFIRM: "Confere o endereço abaixo 👇",
+  ASK_NAME:        "Como posso te chamar? 😊",
+  PAYMENT:         "Última etapa — como quer pagar? 👇",
+  PAYMENT_METHOD:  "Como prefere? 👇",
+  REVIEW_ORDER:    "Dá uma conferida antes de finalizar 👇",
 };
 
 function formatAddress(a: Address): string {
@@ -708,9 +708,6 @@ function ChoiceCard({
 }) {
   return (
     <div className="shrink-0 border-t border-gray-100 bg-white px-4 pb-4 pt-3">
-      <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-        Como prefere pedir?
-      </p>
       <div className="flex flex-col gap-2">
         <button
           onClick={onMenu}
@@ -719,7 +716,7 @@ function ChoiceCard({
           <span className="text-xl leading-none">📋</span>
           <div>
             <p className="font-semibold">Ver cardápio</p>
-            <p className="text-xs font-normal text-gray-400">Navegar pelos itens</p>
+            <p className="text-xs font-normal text-gray-400">Escolha na hora</p>
           </div>
         </button>
         <button
@@ -729,7 +726,7 @@ function ChoiceCard({
           <span className="text-xl leading-none">✨</span>
           <div>
             <p className="font-semibold">Me sugere algo</p>
-            <p className="text-xs font-normal text-green-500">Assistente recomenda</p>
+            <p className="text-xs font-normal text-green-500">Deixa eu escolher pra você</p>
           </div>
         </button>
       </div>
@@ -1026,7 +1023,7 @@ export function PedidoClient({
         {
           id:      uid(),
           role:    "assistant" as const,
-          content: "Seu carrinho está vazio! Selecione itens antes de finalizar 👆",
+          content: "Adicione pelo menos um item antes de finalizar 👆",
           ts:      new Date(),
         },
       ]);
@@ -1067,8 +1064,12 @@ export function PedidoClient({
     setUpsellState((prev) => ({ ...prev, lastUpsellCategory: null }));
     const resumeStage = computeResumeStage(deliveryMethod, address, customerName, paymentMode, paymentMethodSub);
     setStage(resumeStage);
-    // Deterministic prompt — no AI call needed at checkout entry.
-    pushAssistantMessage(CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Vamos finalizar? 👇");
+    // First entry into checkout (all data fresh) gets a warmer bridge from the AI flow.
+    // Resuming after "Voltar ao cardápio" jumps directly with the step-specific prompt.
+    const entryMsg = resumeStage === "DELIVERY_TYPE"
+      ? "Boa pedida! 🙌 Vai receber em casa ou prefere retirar? 👇"
+      : CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Vamos finalizar? 👇";
+    pushAssistantMessage(entryMsg);
   }, [cart, categories, stage, upsellState, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, sendText, pushAssistantMessage]);
 
   const handleDeliveryMethod = useCallback(
@@ -1092,7 +1093,7 @@ export function PedidoClient({
       pushUserMessage(text);
       const { street, number } = parseStreetLine(text);
       if (!street.trim()) {
-        pushAssistantMessage("Não consegui identificar. Me passa a rua e o número, por favor 👇");
+        pushAssistantMessage("Não entendi o endereço 😅 Me passa a rua e o número, ex: Rua das Flores, 123");
         return;
       }
       setAddress((prev) => ({ ...prev, street, number }));
@@ -1107,7 +1108,7 @@ export function PedidoClient({
       pushUserMessage(text);
       const { neighborhood, complement } = parseNeighborhoodLine(text);
       if (!neighborhood.trim()) {
-        pushAssistantMessage("Me passa o bairro para continuar 👇");
+        pushAssistantMessage("Me falta o bairro 👇");
         return;
       }
       setAddress((prev) => ({ ...prev, neighborhood, complement }));
@@ -1127,12 +1128,14 @@ export function PedidoClient({
     (text: string) => {
       pushUserMessage(text);
       if (!isValidName(text)) {
-        pushAssistantMessage("Não entendi. Qual é o seu nome? 😊");
+        pushAssistantMessage("Não entendi 😅 Qual é o seu nome?");
         return;
       }
+      const firstName = text.trim().split(/\s+/)[0] ?? text.trim();
       setCustomerName(text.trim());
       setStage("PAYMENT");
-      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT"]!);
+      // Use the name immediately — feels personal and confirms the AI heard it.
+      pushAssistantMessage(`Perfeito, ${firstName}! 🙌 Última etapa — como quer pagar? 👇`);
     },
     [pushUserMessage, pushAssistantMessage],
   );
@@ -1524,7 +1527,7 @@ export function PedidoClient({
           {entryPhase === "choosing" && (
             <div className="flex justify-start">
               <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-sm leading-relaxed shadow-sm text-gray-900">
-                {identifiedName ? `Oi, ${identifiedName}! 😊` : "Olá! 😊"} Como você prefere pedir hoje?
+                {identifiedName ? `Oi, ${identifiedName}! 😊 Como prefere começar hoje?` : "Olá! 😊 Como prefere começar?"}
               </div>
             </div>
           )}
