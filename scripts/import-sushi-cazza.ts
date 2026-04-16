@@ -97,6 +97,7 @@ async function main(): Promise<void> {
 
   for (let ci = 0; ci < data.categories.length; ci++) {
     const catData = data.categories[ci];
+    if (!catData) continue;
     const deliveryHidden = isSobremesa(catData.name);
 
     console.log(`[${ci + 1}/${data.categories.length}] ${catData.name}${deliveryHidden ? " (delivery: hidden)" : ""}`);
@@ -139,6 +140,7 @@ async function main(): Promise<void> {
 
     for (let ii = 0; ii < catData.items.length; ii++) {
       const itemData = catData.items[ii];
+      if (!itemData) continue;
       const hasVariants = itemData.modifiers.length > 0;
       const basePrice = hasVariants ? 0 : itemData.price;
 
