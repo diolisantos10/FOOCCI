@@ -3,62 +3,8 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { badRequest, unauthorized, serverError, ok } from "@/lib/api-response";
-
-// ── Shared types (re-used by confirm route and UI) ────────────────────────────
-
-export type RowStatus = "valid" | "error" | "skipped";
-
-export type RowResult = {
-  rowIndex: number; // 1-based spreadsheet row number
-  foto: string;
-  categoria: string;
-  nome: string;
-  descricao: string;
-  precoRaw: string;
-  preco: number;
-  status: RowStatus;
-  errors: string[];
-};
-
-export type ImportPreview = {
-  rows: RowResult[]; // only non-skipped rows
-  categories: string[]; // ordered unique category names from valid rows
-  missingColumns: string[];
-  stats: {
-    total: number;
-    valid: number;
-    invalid: number;
-    skipped: number;
-  };
-};
-
-// ── Price normaliser ──────────────────────────────────────────────────────────
-// Handles: "R$ 42,90" / "42,90" / "42.90" / "1.234,90" / numeric cells
-
-export function normalizePrice(raw: unknown): { value: number; valid: boolean } {
-  if (raw === null || raw === undefined || raw === "") {
-    return { value: 0, valid: false };
-  }
-  if (typeof raw === "number") {
-    return { value: isNaN(raw) ? 0 : raw, valid: !isNaN(raw) && raw > 0 };
-  }
-  let s = String(raw).replace(/R\$\s*/gi, "").replace(/\s/g, "");
-
-  const hasComma = s.includes(",");
-  const hasDot = s.includes(".");
-
-  if (hasComma && hasDot) {
-    // "1.234,90" → dots are thousands separators
-    s = s.replace(/\./g, "").replace(",", ".");
-  } else if (hasComma) {
-    // "42,90"
-    s = s.replace(",", ".");
-  }
-  // else: "42.90" or bare number — parseFloat handles it
-
-  const n = parseFloat(s);
-  return { value: isNaN(n) ? 0 : n, valid: !isNaN(n) && n > 0 };
-}
+import { normalizePrice } from "@/lib/price";
+import type { RowStatus, RowResult, ImportPreview } from "@/lib/price";
 
 // ── Column detection ──────────────────────────────────────────────────────────
 
