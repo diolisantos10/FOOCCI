@@ -16,11 +16,12 @@ const nextConfig = {
   // Expose only non-secret env vars to the browser (prefix NEXT_PUBLIC_)
   // Secret vars are accessed server-side only via process.env
   experimental: {
-    // Enable server actions for future use
     serverActions: {
       allowedOrigins: ["localhost:3000"],
       bodySizeLimit: "10mb",
     },
+    // Prevent Next.js from bundling pdf-parse (avoids test-fixture read at import time)
+    serverComponentsExternalPackages: ["pdf-parse"],
   },
 };
 
