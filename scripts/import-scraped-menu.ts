@@ -22,14 +22,18 @@ import * as path from "path";
 
 const prisma = new PrismaClient();
 
-const DATA_FILE = path.join(__dirname, "../data/sushi-cazza-scraped.json");
+const DEFAULT_DATA_FILE = path.join(__dirname, "../data/sushi-cazza-scraped.json");
 const DEFAULT_SLUG = "pizzaria-demo";
 
 const args = process.argv.slice(2);
 const slugArg = args.find((a) => a.startsWith("--slug="))?.split("=")[1];
+const fileArg = args.find((a) => a.startsWith("--file="))?.split("=").slice(1).join("=");
 const slug    = slugArg ?? DEFAULT_SLUG;
 const dryRun  = args.includes("--dry-run");
 const noClear = args.includes("--no-clear");
+const DATA_FILE = fileArg
+  ? path.isAbsolute(fileArg) ? fileArg : path.join(process.cwd(), fileArg)
+  : DEFAULT_DATA_FILE;
 
 interface ScrapedOption   { name: string; price: number }
 interface ScrapedModifier { name: string; required: boolean; options: ScrapedOption[] }
