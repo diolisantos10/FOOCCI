@@ -10,6 +10,8 @@ interface MenuItem {
   price: number;
   description: string | null;
   imageUrl: string | null;
+  hasVariants: boolean;
+  variants: { id: string; name: string; price: number }[];
 }
 
 interface MenuCategory {

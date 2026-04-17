@@ -24,12 +24,20 @@ interface ChatMessage {
   ts: Date;
 }
 
+interface MenuItemVariant {
+  id: string;
+  name: string;
+  price: number;
+}
+
 interface MenuItem {
   id: string;
   name: string;
   price: number;
   description: string | null;
   imageUrl: string | null;
+  hasVariants: boolean;
+  variants: MenuItemVariant[];
 }
 
 interface MenuCategory {
@@ -145,6 +153,24 @@ function findDessertCat(cats: MenuCategory[]) {
     const n = norm(c.name);
     return n.includes("sobremesa") || n.includes("doce");
   }) ?? null;
+}
+
+function itemCartQty(item: MenuItem, cart: CartItem[]): number {
+  if (!item.hasVariants) return cart.find((c) => c.id === item.id)?.qty ?? 0;
+  return cart
+    .filter((c) => item.variants.some((v) => `${item.id}_${v.id}` === c.id))
+    .reduce((sum, c) => sum + c.qty, 0);
+}
+
+function variantCartQty(itemId: string, variantId: string, cart: CartItem[]): number {
+  return cart.find((c) => c.id === `${itemId}_${variantId}`)?.qty ?? 0;
+}
+
+function itemMinPrice(item: MenuItem): number {
+  if (!item.hasVariants || item.variants.length === 0) return item.price;
+  const priced = item.variants.filter((v) => v.price > 0);
+  if (priced.length === 0) return item.price;
+  return Math.min(...priced.map((v) => v.price));
 }
 
 // ── Deterministic checkout prompts ────────────────────────────────────────────
@@ -288,7 +314,9 @@ function ProductCard({
 
         <div className="mt-auto flex items-center justify-between">
           <span className="text-xs font-bold text-gray-900">
-            R$ {item.price.toFixed(2).replace(".", ",")}
+            {item.hasVariants && item.variants.length > 0
+              ? `A partir de R$ ${itemMinPrice(item).toFixed(2).replace(".", ",")}`
+              : `R$ ${item.price.toFixed(2).replace(".", ",")}`}
           </span>
           <button
             onClick={onAdd}
@@ -313,11 +341,15 @@ function ProductModal({
   item,
   qty,
   onAdd,
+  onAddVariant,
+  cart,
   onClose,
 }: {
   item: MenuItem;
   qty: number;
   onAdd: () => void;
+  onAddVariant?: (variant: MenuItemVariant) => void;
+  cart?: CartItem[];
   onClose: () => void;
 }) {
   return (
@@ -366,21 +398,61 @@ function ProductModal({
             </p>
           )}
 
-          {/* Price + CTA */}
-          <div className="mt-6 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Preço</p>
-              <p className="text-2xl font-bold text-gray-900">
-                R$ {item.price.toFixed(2).replace(".", ",")}
+          {/* Price + CTA — variant picker or direct add */}
+          {item.hasVariants && item.variants.length > 0 ? (
+            <div className="mt-5">
+              <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                Escolha uma opção
               </p>
+              <div className="space-y-2">
+                {item.variants.filter((v) => v.price > 0 && v.name.trim()).map((v) => {
+                  const vQty = cart ? variantCartQty(item.id, v.id, cart) : 0;
+                  return (
+                    <button
+                      key={v.id}
+                      onClick={() => onAddVariant?.(v)}
+                      className="flex w-full items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 hover:bg-green-50 hover:border-green-200 active:scale-[0.98] transition-all"
+                    >
+                      <span className="text-sm font-semibold text-gray-900">{v.name}</span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-sm font-bold text-gray-800">
+                          R$ {v.price.toFixed(2).replace(".", ",")}
+                        </span>
+                        {vQty > 0 && (
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#25d366] text-[11px] font-bold text-white">
+                            {vQty}
+                          </span>
+                        )}
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#25d366] text-white text-base font-bold shadow-sm">
+                          +
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {qty > 0 && (
+                <p className="mt-3 text-center text-xs text-gray-400">
+                  {qty} {qty === 1 ? "item" : "itens"} no carrinho
+                </p>
+              )}
             </div>
-            <button
-              onClick={onAdd}
-              className="flex-1 rounded-2xl bg-[#25d366] py-3.5 text-sm font-bold text-white shadow-sm hover:bg-[#1ebe5a] active:scale-95 transition-all"
-            >
-              {qty > 0 ? `+ Adicionar (${qty} no carrinho)` : "Adicionar ao pedido"}
-            </button>
-          </div>
+          ) : (
+            <div className="mt-6 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Preço</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  R$ {item.price.toFixed(2).replace(".", ",")}
+                </p>
+              </div>
+              <button
+                onClick={onAdd}
+                className="flex-1 rounded-2xl bg-[#25d366] py-3.5 text-sm font-bold text-white shadow-sm hover:bg-[#1ebe5a] active:scale-95 transition-all"
+              >
+                {qty > 0 ? `+ Adicionar (${qty} no carrinho)` : "Adicionar ao pedido"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -493,7 +565,9 @@ function DesktopProductCard({
         )}
         <div className="mt-auto flex items-center justify-between pt-3">
           <span className="text-sm font-extrabold text-gray-900">
-            R$ {item.price.toFixed(2).replace(".", ",")}
+            {item.hasVariants && item.variants.length > 0
+              ? `A partir de R$ ${itemMinPrice(item).toFixed(2).replace(".", ",")}`
+              : `R$ ${item.price.toFixed(2).replace(".", ",")}`}
           </span>
           <button
             onClick={onAdd}
@@ -951,6 +1025,21 @@ export function PedidoClient({
         : [...cart, { id: item.id, name: item.name, price: item.price, qty: 1 }];
       setCart(newCart);
       sendText(`Adicionar ${item.name}`, newCart, stage, activeUpsell);
+    },
+    [cart, stage, activeUpsell, sendText],
+  );
+
+  const handleVariantAdd = useCallback(
+    (item: MenuItem, variant: MenuItemVariant) => {
+      const cartId   = `${item.id}_${variant.id}`;
+      const cartName = `${item.name} — ${variant.name}`;
+      const existing = cart.find((c) => c.id === cartId);
+      const newCart  = existing
+        ? cart.map((c) => c.id === cartId ? { ...c, qty: c.qty + 1 } : c)
+        : [...cart, { id: cartId, name: cartName, price: variant.price, qty: 1 }];
+      setCart(newCart);
+      setSelectedProduct(null);
+      sendText(`Adicionar ${cartName}`, newCart, stage, activeUpsell);
     },
     [cart, stage, activeUpsell, sendText],
   );
@@ -1637,8 +1726,8 @@ export function PedidoClient({
                 <ProductCard
                   key={item.id}
                   item={item}
-                  qty={cart.find((c) => c.id === item.id)?.qty ?? 0}
-                  onAdd={() => handleItemAdd(item)}
+                  qty={itemCartQty(item, cart)}
+                  onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
                   onOpen={() => setSelectedProduct(item)}
                 />
               ))}
@@ -1731,8 +1820,8 @@ export function PedidoClient({
                     <DesktopProductCard
                       key={item.id}
                       item={item}
-                      qty={cart.find((c) => c.id === item.id)?.qty ?? 0}
-                      onAdd={() => handleItemAdd(item)}
+                      qty={itemCartQty(item, cart)}
+                      onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
                       onOpen={() => setSelectedProduct(item)}
                     />
                   ))}
@@ -1773,11 +1862,13 @@ export function PedidoClient({
       {selectedProduct && (
         <ProductModal
           item={selectedProduct}
-          qty={cart.find((c) => c.id === selectedProduct.id)?.qty ?? 0}
+          qty={itemCartQty(selectedProduct, cart)}
           onAdd={() => {
             handleItemAdd(selectedProduct);
             setSelectedProduct(null);
           }}
+          onAddVariant={(variant) => handleVariantAdd(selectedProduct, variant)}
+          cart={cart}
           onClose={() => setSelectedProduct(null)}
         />
       )}

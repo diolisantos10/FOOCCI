@@ -106,6 +106,12 @@ export default async function PedidoPage({
           price: true,
           description: true,
           imageUrl: true,
+          hasVariants: true,
+          variants: {
+            where: { isAvailable: true },
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, name: true, price: true },
+          },
         },
       },
     },
@@ -124,6 +130,12 @@ export default async function PedidoPage({
         price: Number(i.price),
         description: i.description ?? null,
         imageUrl: i.imageUrl ?? null,
+        hasVariants: i.hasVariants,
+        variants: i.variants.map((v) => ({
+          id: v.id,
+          name: v.name,
+          price: Number(v.price),
+        })),
       })),
     }));
 
