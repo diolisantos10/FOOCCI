@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { QRCard } from "./QRCard";
 import {
   DndContext,
@@ -904,6 +905,12 @@ function TopBar({
         {totalItems !== 1 ? "s" : ""}
       </p>
       <div className="flex items-center gap-2">
+        <Link
+          href="/dashboard/menu/upload"
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+        >
+          Importar planilha
+        </Link>
         {categories.length > 0 && (
           <button
             type="button"

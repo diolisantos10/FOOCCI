@@ -4,59 +4,90 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { badRequest, unauthorized, serverError, ok } from "@/lib/api-response";
 
-const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
+// ── Shared types (re-used by confirm route and UI) ────────────────────────────
 
-export type ParsedItem = { name: string; description: string; price: number };
-export type ParsedCategory = { name: string; items: ParsedItem[] };
-export type ParseResult = { categories: ParsedCategory[]; warnings: string[] };
+export type RowStatus = "valid" | "error" | "skipped";
 
-// ── Price normalizer ──────────────────────────────────────────────────────────
+export type RowResult = {
+  rowIndex: number; // 1-based spreadsheet row number
+  foto: string;
+  categoria: string;
+  nome: string;
+  descricao: string;
+  precoRaw: string;
+  preco: number;
+  status: RowStatus;
+  errors: string[];
+};
 
-function normalizePrice(raw: unknown): number {
-  if (raw === null || raw === undefined || raw === "") return 0;
-  if (typeof raw === "number") return isNaN(raw) ? 0 : raw;
-  const s = String(raw)
-    .replace(/R\$/gi, "")
-    .replace(/\s/g, "")
-    .replace(/\.(?=\d{3}(?:[,.]|$))/g, "") // strip thousand-separators (1.000 → 1000)
-    .replace(",", ".");
+export type ImportPreview = {
+  rows: RowResult[]; // only non-skipped rows
+  categories: string[]; // ordered unique category names from valid rows
+  missingColumns: string[];
+  stats: {
+    total: number;
+    valid: number;
+    invalid: number;
+    skipped: number;
+  };
+};
+
+// ── Price normaliser ──────────────────────────────────────────────────────────
+// Handles: "R$ 42,90" / "42,90" / "42.90" / "1.234,90" / numeric cells
+
+export function normalizePrice(raw: unknown): { value: number; valid: boolean } {
+  if (raw === null || raw === undefined || raw === "") {
+    return { value: 0, valid: false };
+  }
+  if (typeof raw === "number") {
+    return { value: isNaN(raw) ? 0 : raw, valid: !isNaN(raw) && raw > 0 };
+  }
+  let s = String(raw).replace(/R\$\s*/gi, "").replace(/\s/g, "");
+
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+
+  if (hasComma && hasDot) {
+    // "1.234,90" → dots are thousands separators
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (hasComma) {
+    // "42,90"
+    s = s.replace(",", ".");
+  }
+  // else: "42.90" or bare number — parseFloat handles it
+
   const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
+  return { value: isNaN(n) ? 0 : n, valid: !isNaN(n) && n > 0 };
 }
 
-// ── Header detector ───────────────────────────────────────────────────────────
+// ── Column detection ──────────────────────────────────────────────────────────
 
 type ColMap = {
+  foto?: number;
   categoria?: number;
   nome?: number;
   descricao?: number;
   preco?: number;
 };
 
-function normalizeKey(v: unknown): string {
+function normalizeHeader(v: unknown): string {
   return String(v ?? "")
     .toLowerCase()
     .trim()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/g, "");
+    .replace(/\s+/g, " ");
 }
 
-const CATEGORY_KEYS = new Set([
-  "categoria",
-  "category",
-  "cat",
-  "grupo",
-  "group",
-  "secao",
-  "seccao",
-]);
-const NAME_KEYS = new Set([
+const FOTO_KEYS = new Set(["foto", "imagem", "image", "img", "foto / imagem"]);
+const CAT_KEYS = new Set(["categoria", "category", "cat", "grupo", "group"]);
+const NOME_KEYS = new Set([
+  "nome do item",
   "nome",
   "item",
   "produto",
-  "product",
   "name",
+  "product",
   "titulo",
   "title",
 ]);
@@ -67,8 +98,9 @@ const DESC_KEYS = new Set([
   "detalhe",
   "detalhes",
   "observacao",
+  "observacao do item",
 ]);
-const PRICE_KEYS = new Set([
+const PRECO_KEYS = new Set([
   "preco",
   "price",
   "valor",
@@ -77,189 +109,134 @@ const PRICE_KEYS = new Set([
   "cost",
 ]);
 
-function detectHeaders(row: unknown[]): ColMap | null {
+function detectColumns(headerRow: unknown[]): ColMap {
   const map: ColMap = {};
-  row.forEach((h, i) => {
-    const k = normalizeKey(h);
-    if (CATEGORY_KEYS.has(k)) map.categoria = i;
-    else if (NAME_KEYS.has(k)) map.nome = i;
+  headerRow.forEach((h, i) => {
+    const k = normalizeHeader(h);
+    if (FOTO_KEYS.has(k)) map.foto = i;
+    else if (CAT_KEYS.has(k)) map.categoria = i;
+    else if (NOME_KEYS.has(k)) map.nome = i;
     else if (DESC_KEYS.has(k)) map.descricao = i;
-    else if (PRICE_KEYS.has(k)) map.preco = i;
+    else if (PRECO_KEYS.has(k)) map.preco = i;
   });
-  return map.nome !== undefined ? map : null;
+  return map;
 }
 
-// ── Excel / CSV parser ────────────────────────────────────────────────────────
+// ── Parser ────────────────────────────────────────────────────────────────────
 
-async function parseSpreadsheet(buffer: Buffer): Promise<ParseResult> {
+async function parseSpreadsheet(buffer: Buffer): Promise<ImportPreview> {
   const XLSX = await import("xlsx");
   const wb = XLSX.read(buffer, { type: "buffer", cellDates: false });
   const sheetName = wb.SheetNames[0] ?? "";
   const ws = wb.Sheets[sheetName] ?? {};
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, {
     header: 1,
     defval: "",
   });
 
-  const warnings: string[] = [];
-  const catMap = new Map<string, ParsedItem[]>();
-  let colMap: ColMap = {};
+  // Detect header row (first 5 rows)
   let headerIdx = -1;
+  let colMap: ColMap = {};
 
-  // Try to detect header row in the first 5 rows
-  for (let i = 0; i < Math.min(rows.length, 5); i++) {
-    const r = rows[i];
+  for (let i = 0; i < Math.min(raw.length, 5); i++) {
+    const r = raw[i];
     if (!r) continue;
-    const m = detectHeaders(r);
-    if (m) {
+    const m = detectColumns(r);
+    // Consider a header found if at least 2 known columns are mapped
+    const mapped = Object.keys(m).length;
+    if (mapped >= 2) {
       colMap = m;
       headerIdx = i;
       break;
     }
   }
 
-  if (headerIdx === -1) {
-    warnings.push(
-      "Cabeçalhos não reconhecidos — assumindo ordem: Categoria | Nome | Descrição | Preço"
-    );
-    colMap = { categoria: 0, nome: 1, descricao: 2, preco: 3 };
-    headerIdx = 0;
-  }
+  // Check which required columns are missing
+  const missingColumns: string[] = [];
+  if (colMap.categoria === undefined) missingColumns.push("Categoria");
+  if (colMap.nome === undefined) missingColumns.push("Nome do Item");
+  if (colMap.preco === undefined) missingColumns.push("Preço");
 
-  let lastCat = "Geral";
+  const rows: RowResult[] = [];
+  const categoriesSet = new Set<string>();
+  const categoriesOrder: string[] = [];
+  let skippedCount = 0;
 
-  for (let i = headerIdx + 1; i < rows.length; i++) {
-    const row = rows[i];
+  const dataRows = headerIdx >= 0 ? raw.slice(headerIdx + 1) : raw;
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i];
     if (!row) continue;
-    const isEmpty = row.every((c) => String(c ?? "").trim() === "");
-    if (isEmpty) continue;
 
-    const catIdx = colMap.categoria;
-    const nameIdx = colMap.nome;
-    const descIdx = colMap.descricao;
-    const priceIdx = colMap.preco;
+    const rowIndex = headerIdx + i + 2; // 1-based spreadsheet number
 
-    const cat = catIdx !== undefined ? String(row[catIdx] ?? "").trim() : "";
-    const name = nameIdx !== undefined ? String(row[nameIdx] ?? "").trim() : "";
-    const desc = descIdx !== undefined ? String(row[descIdx] ?? "").trim() : "";
-    const rawPrice = priceIdx !== undefined ? row[priceIdx] : "";
+    const get = (idx: number | undefined): string =>
+      idx !== undefined ? String(row[idx] ?? "").trim() : "";
 
-    // Row with only a category column filled → category separator
-    if (!name) {
-      if (cat) lastCat = cat;
+    const foto = get(colMap.foto);
+    const categoria = get(colMap.categoria);
+    const nome = get(colMap.nome);
+    const descricao = get(colMap.descricao);
+    const rawCell = colMap.preco !== undefined ? row[colMap.preco] : "";
+    const precoRaw = String(rawCell ?? "").trim();
+
+    // Skip entirely empty rows
+    const allEmpty = !foto && !categoria && !nome && !descricao && !precoRaw;
+    if (allEmpty) {
+      skippedCount++;
       continue;
     }
 
-    const categoryKey = cat || lastCat;
-    if (cat) lastCat = cat;
+    // Validate
+    const errors: string[] = [];
+    if (!categoria) errors.push("Categoria ausente");
+    if (!nome) errors.push("Nome do item ausente");
 
-    const price = normalizePrice(rawPrice);
-    if (price <= 0) {
-      warnings.push(
-        `Linha ${i + 1}: preço inválido ("${rawPrice}") — adicionado com preço 0.`
+    const { value: preco, valid: precoValid } = normalizePrice(rawCell);
+    if (!precoValid) {
+      errors.push(
+        precoRaw ? `Preço inválido: "${precoRaw}"` : "Preço ausente"
       );
     }
 
-    if (!catMap.has(categoryKey)) catMap.set(categoryKey, []);
-    catMap.get(categoryKey)!.push({ name, description: desc, price });
-  }
+    const status: RowStatus = errors.length > 0 ? "error" : "valid";
 
-  const categories: ParsedCategory[] = [];
-  for (const [catName, items] of catMap) {
-    categories.push({ name: catName, items });
-  }
-
-  if (categories.length === 0) {
-    warnings.push("Nenhum item encontrado na planilha. Verifique as colunas.");
-  }
-
-  return { categories, warnings };
-}
-
-// ── PDF parser ────────────────────────────────────────────────────────────────
-
-// Price pattern: matches "R$ 42,90" / "42.90" / "42,90" / "42,9"
-const PRICE_RX =
-  /(?:R\$\s*)?(\d{1,3}(?:[.,]\d{3})*[.,]\d{2}|\d+[.,]\d{1,2})/;
-
-async function parsePdfFile(buffer: Buffer): Promise<ParseResult> {
-  let text = "";
-  try {
-    // Use internal lib path to avoid Next.js + pdf-parse test-fixture issue
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfParse: (buf: Buffer) => Promise<{ text: string }> = (
-      await import("pdf-parse/lib/pdf-parse.js" as string)
-    ).default;
-    const result = await pdfParse(buffer);
-    text = result.text ?? "";
-  } catch {
-    return {
-      categories: [],
-      warnings: [
-        "Não foi possível extrair texto do PDF. Tente uma planilha .xlsx ou .csv.",
-      ],
-    };
-  }
-
-  const warnings: string[] = [
-    "Importação por PDF é aproximada — revise todos os itens antes de confirmar.",
-  ];
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const categories: ParsedCategory[] = [];
-  let current: ParsedCategory | null = null;
-
-  for (const line of lines) {
-    if (line.length > 200) continue; // skip page headers / footers
-
-    const priceMatch = line.match(PRICE_RX);
-
-    if (priceMatch?.[1]) {
-      // Line contains a price → treat as item
-      const priceStr = priceMatch[1]
-        .replace(/\.(?=\d{3})/g, "")
-        .replace(",", ".");
-      const price = parseFloat(priceStr);
-      const name = line
-        .replace(priceMatch[0], "")
-        .replace(/\.{2,}/g, " ")
-        .replace(/_{2,}/g, " ")
-        .trim();
-      if (!name || name.length < 2) continue;
-
-      if (!current) {
-        current = { name: "Geral", items: [] };
-        categories.push(current);
-      }
-      current.items.push({ name, description: "", price: isNaN(price) ? 0 : price });
-    } else {
-      // Heuristic: short, ALL-CAPS or Title-like line → category heading
-      const isAllCaps =
-        line === line.toUpperCase() && /[A-ZÁÉÍÓÚÃÕÇ]/.test(line);
-      const isShort = line.length <= 60;
-      const fewWords = line.split(/\s+/).length <= 5;
-
-      if (isShort && (isAllCaps || fewWords) && !line.includes(".")) {
-        current = { name: line, items: [] };
-        categories.push(current);
+    if (status === "valid" && categoria) {
+      if (!categoriesSet.has(categoria)) {
+        categoriesSet.add(categoria);
+        categoriesOrder.push(categoria);
       }
     }
+
+    rows.push({
+      rowIndex,
+      foto,
+      categoria,
+      nome,
+      descricao,
+      precoRaw,
+      preco,
+      status,
+      errors,
+    });
   }
 
-  const filled = categories.filter((c) => c.items.length > 0);
-  if (filled.length === 0) {
-    warnings.push(
-      "Nenhum item identificado no PDF. Tente um arquivo .xlsx ou .csv para melhores resultados."
-    );
-  }
-
-  return { categories: filled.length > 0 ? filled : categories, warnings };
+  return {
+    rows,
+    categories: categoriesOrder,
+    missingColumns,
+    stats: {
+      total: rows.length,
+      valid: rows.filter((r) => r.status === "valid").length,
+      invalid: rows.filter((r) => r.status === "error").length,
+      skipped: skippedCount,
+    },
+  };
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
+
+const MAX_BYTES = 20 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   const ctx = getTenantContext(req);
@@ -271,9 +248,7 @@ export async function POST(req: NextRequest) {
     if (!file) return badRequest("Nenhum arquivo enviado.");
 
     const name = file.name.toLowerCase();
-    const isPdf =
-      file.type === "application/pdf" || name.endsWith(".pdf");
-    const isSpreadsheet =
+    const accepted =
       name.endsWith(".xlsx") ||
       name.endsWith(".xls") ||
       name.endsWith(".csv") ||
@@ -282,22 +257,16 @@ export async function POST(req: NextRequest) {
       file.type === "text/csv" ||
       file.type === "application/csv";
 
-    if (!isPdf && !isSpreadsheet) {
-      return badRequest(
-        "Formato não suportado. Use .xlsx, .xls, .csv ou .pdf."
-      );
+    if (!accepted) {
+      return badRequest("Use .xlsx, .xls ou .csv. PDF não é suportado neste modo.");
     }
-
     if (file.size > MAX_BYTES) {
-      return badRequest("Arquivo muito grande (máximo 20 MB).");
+      return badRequest("Arquivo muito grande (máx 20 MB).");
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const result = isPdf
-      ? await parsePdfFile(buffer)
-      : await parseSpreadsheet(buffer);
-
-    return ok(result);
+    const preview = await parseSpreadsheet(buffer);
+    return ok(preview);
   } catch (e) {
     console.error("[POST /api/menu/import]", e);
     return serverError("Erro ao processar arquivo.");

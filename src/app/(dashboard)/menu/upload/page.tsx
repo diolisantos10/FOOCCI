@@ -1,66 +1,101 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types (mirrors of API types) ──────────────────────────────────────────────
 
-type ParsedItem = { name: string; description: string; price: number };
-type ParsedCategory = { name: string; items: ParsedItem[] };
-type ParseResult = { categories: ParsedCategory[]; warnings: string[] };
+type RowStatus = "valid" | "error" | "skipped";
+type ImportMode = "replace" | "append";
+type Step = "upload" | "parsing" | "preview" | "confirming" | "done";
 
-type EditItem = { id: string; name: string; description: string; price: string };
-type EditCategory = { id: string; name: string; items: EditItem[] };
+type RowResult = {
+  rowIndex: number;
+  foto: string;
+  categoria: string;
+  nome: string;
+  descricao: string;
+  precoRaw: string;
+  preco: number;
+  status: RowStatus;
+  errors: string[];
+};
 
-type Step = "idle" | "parsing" | "preview" | "saving" | "done";
+type ImportPreview = {
+  rows: RowResult[];
+  categories: string[];
+  missingColumns: string[];
+  stats: { total: number; valid: number; invalid: number; skipped: number };
+};
+
+type ImportSummary = {
+  categoriesCreated: number;
+  itemsCreated: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function uid() {
-  return Math.random().toString(36).slice(2, 9);
+function formatPrice(n: number) {
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function toEditCategories(cats: ParsedCategory[]): EditCategory[] {
-  return cats.map((c) => ({
-    id: uid(),
-    name: c.name,
-    items: c.items.map((it) => ({
-      id: uid(),
-      name: it.name,
-      description: it.description,
-      price: it.price > 0 ? it.price.toFixed(2) : "",
-    })),
-  }));
+function truncate(s: string, max: number) {
+  return s.length > max ? s.slice(0, max) + "…" : s;
 }
 
-function toConfirmPayload(cats: EditCategory[]): ParsedCategory[] {
-  return cats
-    .filter((c) => c.name.trim())
-    .map((c) => ({
-      name: c.name.trim(),
-      items: c.items
-        .filter((it) => it.name.trim())
-        .map((it) => ({
-          name: it.name.trim(),
-          description: it.description.trim(),
-          price: parseFloat(it.price.replace(",", ".")) || 0,
-        })),
-    }))
-    .filter((c) => c.items.length > 0);
-}
+// ── Spinner ───────────────────────────────────────────────────────────────────
 
-// ── Primitives ────────────────────────────────────────────────────────────────
-
-function Spinner({ large }: { large?: boolean }) {
-  const size = large ? "h-8 w-8 border-[3px]" : "h-3.5 w-3.5 border-2";
+function Spinner({ size = "sm" }: { size?: "sm" | "lg" }) {
+  const cls =
+    size === "lg"
+      ? "h-10 w-10 border-[3px]"
+      : "h-3.5 w-3.5 border-2";
   return (
     <span
-      className={`inline-block animate-spin rounded-full border-gray-300 border-t-orange-500 ${size}`}
+      className={`inline-block animate-spin rounded-full border-gray-200 border-t-orange-500 ${cls}`}
     />
   );
 }
 
-// ── Upload zone (idle / parsing) ──────────────────────────────────────────────
+// ── Step indicator ────────────────────────────────────────────────────────────
+
+function StepBadge({
+  current,
+}: {
+  current: "upload" | "preview" | "done";
+}) {
+  const steps = [
+    { key: "upload", label: "Upload" },
+    { key: "preview", label: "Revisar" },
+    { key: "done", label: "Concluído" },
+  ];
+  const idx = steps.findIndex((s) => s.key === current);
+  return (
+    <div className="flex items-center gap-1 text-xs text-gray-400">
+      {steps.map((s, i) => (
+        <span key={s.key} className="flex items-center gap-1">
+          <span
+            className={`rounded-full px-2 py-0.5 font-medium ${
+              i === idx
+                ? "bg-orange-100 text-orange-600"
+                : i < idx
+                ? "text-gray-500"
+                : "text-gray-300"
+            }`}
+          >
+            {s.label}
+          </span>
+          {i < steps.length - 1 && <span className="text-gray-200">›</span>}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ── Upload zone ───────────────────────────────────────────────────────────────
 
 function UploadZone({
   parsing,
@@ -92,323 +127,499 @@ function UploadZone({
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-12">
-      <div className="mx-auto max-w-lg">
+    <div className="min-h-screen bg-gray-50 px-4 py-10">
+      <div className="mx-auto max-w-xl">
         {/* Header */}
-        <div className="mb-2 flex items-center gap-2">
-          <Link
-            href="/dashboard/menu"
-            className="text-sm text-gray-400 hover:text-gray-600"
-          >
+        <div className="mb-1 flex items-center gap-2 text-sm">
+          <Link href="/dashboard/menu" className="text-gray-400 hover:text-gray-600">
             ← Cardápio
           </Link>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900">Importar Cardápio</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Envie uma planilha ou PDF e montamos seu cardápio automaticamente
-        </p>
-
-        <div className="mt-8 space-y-4">
-          {parsing ? (
-            <div className="flex flex-col items-center gap-4 rounded-xl border-2 border-gray-200 bg-white px-8 py-16">
-              <Spinner large />
-              <p className="text-sm text-gray-500">
-                Processando <span className="font-medium">{fileName}</span>…
-              </p>
-            </div>
-          ) : (
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => inputRef.current?.click()}
-              className={`cursor-pointer rounded-xl border-2 border-dashed bg-white px-8 py-16 text-center transition-all ${
-                dragOver
-                  ? "border-orange-400 bg-orange-50"
-                  : "border-gray-300 hover:border-gray-400"
-              }`}
-            >
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv,.pdf"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) onFile(f);
-                  e.target.value = "";
-                }}
-              />
-              <div className="mb-3 text-4xl">📄</div>
-              <p className="text-sm font-medium text-gray-700">
-                Arraste seu arquivo aqui
-              </p>
-              <p className="mt-1 text-xs text-gray-400">
-                .xlsx · .xls · .csv · .pdf — até 20 MB
-              </p>
-              <button
-                type="button"
-                className="mt-6 rounded-lg bg-orange-500 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-600"
-              >
-                Selecionar arquivo
-              </button>
-            </div>
-          )}
-
-          {error && (
-            <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
-              {error}
-            </div>
-          )}
-
-          {/* Hint card */}
-          {!parsing && (
-            <div className="rounded-lg border border-gray-100 bg-white px-4 py-3 text-xs text-gray-500 space-y-1">
-              <p className="font-semibold text-gray-700">
-                Como preparar sua planilha
-              </p>
-              <p>
-                • Colunas:{" "}
-                <span className="font-medium text-gray-600">
-                  Categoria | Nome | Descrição | Preço
-                </span>
-              </p>
-              <p>• Uma linha por item</p>
-              <p>
-                • Preço:{" "}
-                <span className="font-medium text-gray-600">
-                  42,90
-                </span>{" "}
-                ou{" "}
-                <span className="font-medium text-gray-600">R$ 42,90</span>
-              </p>
-              <p>• Linhas vazias são ignoradas</p>
-            </div>
-          )}
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Importar planilha
+            </h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Envie uma planilha com seu cardápio e importe categorias e itens
+              automaticamente
+            </p>
+          </div>
+          <StepBadge current="upload" />
         </div>
+
+        {parsing ? (
+          <div className="flex flex-col items-center gap-4 rounded-xl border-2 border-gray-200 bg-white px-8 py-16">
+            <Spinner size="lg" />
+            <p className="text-sm text-gray-500">
+              Analisando{" "}
+              <span className="font-medium text-gray-700">{fileName}</span>…
+            </p>
+          </div>
+        ) : (
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
+            className={`cursor-pointer rounded-xl border-2 border-dashed bg-white px-8 py-14 text-center transition-all ${
+              dragOver
+                ? "border-orange-400 bg-orange-50"
+                : "border-gray-300 hover:border-gray-400"
+            }`}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onFile(f);
+                e.target.value = "";
+              }}
+            />
+            <div className="mb-3 text-4xl">📊</div>
+            <p className="text-sm font-semibold text-gray-700">
+              Arraste sua planilha aqui
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              Formatos aceitos: .xlsx · .xls · .csv — até 20 MB
+            </p>
+            <button
+              type="button"
+              className="mt-5 rounded-lg bg-orange-500 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+            >
+              Selecionar arquivo
+            </button>
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {/* Format reference */}
+        {!parsing && (
+          <div className="mt-6 rounded-xl border border-gray-100 bg-white px-5 py-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Formato esperado
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    {["Foto", "Categoria", "Nome do Item", "Descrição", "Preço"].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="pb-2 pr-4 text-left font-semibold text-gray-700"
+                        >
+                          {h}
+                        </th>
+                      )
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="text-gray-400">
+                  <tr>
+                    <td className="py-1.5 pr-4 italic">URL (opcional)</td>
+                    <td className="py-1.5 pr-4">Pizzas</td>
+                    <td className="py-1.5 pr-4">Pizza Margherita</td>
+                    <td className="py-1.5 pr-4">Molho de tomate…</td>
+                    <td className="py-1.5">R$ 42,90</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 pr-4"></td>
+                    <td className="py-1.5 pr-4">Bebidas</td>
+                    <td className="py-1.5 pr-4">Coca-Cola 350ml</td>
+                    <td className="py-1.5 pr-4"></td>
+                    <td className="py-1.5">8,00</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-gray-400">
+              Colunas obrigatórias:{" "}
+              <span className="font-medium text-gray-600">
+                Categoria, Nome do Item, Preço
+              </span>
+              . Foto e Descrição são opcionais.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ── Preview / edit screen ─────────────────────────────────────────────────────
+// ── Preview table ─────────────────────────────────────────────────────────────
 
-function PreviewScreen({
-  editCats,
-  warnings,
-  saving,
+type Filter = "all" | "valid" | "error";
+
+function PreviewTable({
+  preview,
+  confirming,
   error,
-  onChange,
   onConfirm,
   onBack,
 }: {
-  editCats: EditCategory[];
-  warnings: string[];
-  saving: boolean;
+  preview: ImportPreview;
+  confirming: boolean;
   error: string;
-  onChange: (cats: EditCategory[]) => void;
-  onConfirm: (clearExisting: boolean) => void;
+  onConfirm: (mode: ImportMode) => void;
   onBack: () => void;
 }) {
-  const [clearExisting, setClearExisting] = useState(true);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [mode, setMode] = useState<ImportMode>("replace");
 
-  const totalItems = editCats.reduce((s, c) => s + c.items.length, 0);
+  const { rows, stats, missingColumns } = preview;
 
-  function setCatName(id: string, name: string) {
-    onChange(editCats.map((c) => (c.id === id ? { ...c, name } : c)));
+  const visibleRows =
+    filter === "valid"
+      ? rows.filter((r) => r.status === "valid")
+      : filter === "error"
+      ? rows.filter((r) => r.status === "error")
+      : rows;
+
+  // Group visible rows by category
+  type GroupedCategory = {
+    name: string;
+    rows: RowResult[];
+    errorCount: number;
+  };
+
+  const grouped: GroupedCategory[] = [];
+  const groupMap = new Map<string, GroupedCategory>();
+  const errorGroup: GroupedCategory = {
+    name: "__errors__",
+    rows: [],
+    errorCount: 0,
+  };
+
+  for (const row of visibleRows) {
+    if (row.status === "error" && !row.categoria) {
+      errorGroup.rows.push(row);
+      errorGroup.errorCount++;
+    } else {
+      const key = row.categoria || "(sem categoria)";
+      if (!groupMap.has(key)) {
+        const g: GroupedCategory = { name: key, rows: [], errorCount: 0 };
+        groupMap.set(key, g);
+        grouped.push(g);
+      }
+      const g = groupMap.get(key)!;
+      g.rows.push(row);
+      if (row.status === "error") g.errorCount++;
+    }
   }
+  if (errorGroup.rows.length > 0) grouped.push(errorGroup);
 
-  function removeCategory(id: string) {
-    onChange(editCats.filter((c) => c.id !== id));
-  }
-
-  function patchItem(
-    catId: string,
-    itemId: string,
-    patch: Partial<EditItem>
-  ) {
-    onChange(
-      editCats.map((c) =>
-        c.id === catId
-          ? {
-              ...c,
-              items: c.items.map((it) =>
-                it.id === itemId ? { ...it, ...patch } : it
-              ),
-            }
-          : c
-      )
-    );
-  }
-
-  function removeItem(catId: string, itemId: string) {
-    onChange(
-      editCats.map((c) =>
-        c.id === catId
-          ? { ...c, items: c.items.filter((it) => it.id !== itemId) }
-          : c
-      )
-    );
-  }
+  const canConfirm = stats.valid > 0 && !confirming;
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8">
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-4xl">
         {/* Header */}
-        <div className="mb-6 flex items-start justify-between">
+        <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-900">
-              Revisar cardápio
+              Revisar importação
             </h1>
             <p className="mt-0.5 text-sm text-gray-500">
-              {editCats.length}{" "}
-              {editCats.length === 1 ? "categoria" : "categorias"} ·{" "}
-              {totalItems} {totalItems === 1 ? "item" : "itens"}
+              Confira os dados antes de importar
             </p>
           </div>
-          <button
-            onClick={onBack}
-            className="text-sm text-gray-400 hover:text-gray-600"
-          >
-            ← Novo arquivo
-          </button>
+          <div className="flex items-center gap-3">
+            <StepBadge current="preview" />
+            <button
+              onClick={onBack}
+              className="text-sm text-gray-400 hover:text-gray-600"
+            >
+              ← Novo arquivo
+            </button>
+          </div>
         </div>
 
-        {/* Warnings */}
-        {warnings.length > 0 && (
-          <div className="mb-5 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 space-y-1">
-            {warnings.map((w, i) => (
-              <p key={i} className="text-xs text-yellow-800">
-                ⚠ {w}
-              </p>
-            ))}
+        {/* Missing columns warning */}
+        {missingColumns.length > 0 && (
+          <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3">
+            <p className="text-sm font-medium text-yellow-800">
+              Colunas não encontradas:{" "}
+              <span className="font-semibold">
+                {missingColumns.join(", ")}
+              </span>
+            </p>
+            <p className="mt-0.5 text-xs text-yellow-700">
+              Verifique se os nomes das colunas correspondem ao formato esperado.
+            </p>
           </div>
         )}
 
-        {/* Category cards */}
-        <div className="space-y-4">
-          {editCats.map((cat) => (
-            <div
-              key={cat.id}
-              className="overflow-hidden rounded-xl border border-gray-200 bg-white"
-            >
-              {/* Category header row */}
-              <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2.5">
-                <input
-                  value={cat.name}
-                  onChange={(e) => setCatName(cat.id, e.target.value)}
-                  className="flex-1 rounded bg-transparent px-1 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-orange-400"
-                  placeholder="Nome da categoria"
-                />
-                <span className="shrink-0 text-xs text-gray-400">
-                  {cat.items.length}{" "}
-                  {cat.items.length === 1 ? "item" : "itens"}
-                </span>
-                <button
-                  onClick={() => removeCategory(cat.id)}
-                  title="Remover categoria"
-                  className="ml-1 shrink-0 text-sm text-gray-300 hover:text-red-400"
-                >
-                  ×
-                </button>
-              </div>
+        {/* Stats bar + filter tabs */}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          {/* Filter tabs */}
+          <div className="flex rounded-lg border border-gray-200 bg-white p-0.5 text-xs font-medium">
+            {(
+              [
+                { key: "all", label: `Todas (${stats.total})` },
+                {
+                  key: "valid",
+                  label: `Válidas (${stats.valid})`,
+                  color: "text-green-600",
+                },
+                {
+                  key: "error",
+                  label: `Com erro (${stats.invalid})`,
+                  color: "text-red-500",
+                },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setFilter(tab.key)}
+                className={`rounded-md px-3 py-1.5 transition-colors ${
+                  filter === tab.key
+                    ? "bg-gray-100 text-gray-900 shadow-sm"
+                    : `text-gray-500 hover:text-gray-700 ${
+                        "color" in tab ? tab.color : ""
+                      }`
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-              {/* Item rows */}
-              <div className="divide-y divide-gray-50">
-                {cat.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-start gap-3 px-4 py-2.5"
-                  >
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <input
-                        value={item.name}
-                        onChange={(e) =>
-                          patchItem(cat.id, item.id, { name: e.target.value })
-                        }
-                        className="w-full border-b border-transparent text-sm font-medium text-gray-800 focus:border-orange-300 focus:outline-none"
-                        placeholder="Nome do item"
-                      />
-                      <input
-                        value={item.description}
-                        onChange={(e) =>
-                          patchItem(cat.id, item.id, {
-                            description: e.target.value,
-                          })
-                        }
-                        className="w-full border-b border-transparent text-xs text-gray-400 focus:border-orange-200 focus:outline-none"
-                        placeholder="Descrição (opcional)"
-                      />
-                    </div>
-                    {/* Price */}
-                    <div className="flex shrink-0 items-center gap-1">
-                      <span className="text-xs text-gray-400">R$</span>
-                      <input
-                        value={item.price}
-                        onChange={(e) =>
-                          patchItem(cat.id, item.id, { price: e.target.value })
-                        }
-                        className="w-16 border-b border-transparent text-right text-sm font-semibold text-gray-700 focus:border-orange-300 focus:outline-none"
-                        placeholder="0,00"
-                      />
-                    </div>
-                    <button
-                      onClick={() => removeItem(cat.id, item.id)}
-                      title="Remover item"
-                      className="shrink-0 text-sm text-gray-200 hover:text-red-400"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+          {/* Stats chips */}
+          <div className="flex items-center gap-2 text-xs">
+            {stats.skipped > 0 && (
+              <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-500">
+                {stats.skipped} ignoradas (vazias)
+              </span>
+            )}
+            <span className="rounded-full bg-green-50 px-2 py-1 text-green-700 font-medium">
+              {stats.valid} válidas
+            </span>
+            {stats.invalid > 0 && (
+              <span className="rounded-full bg-red-50 px-2 py-1 text-red-600 font-medium">
+                {stats.invalid} com erro
+              </span>
+            )}
+          </div>
         </div>
 
-        {editCats.length === 0 && (
-          <p className="py-10 text-center text-sm text-gray-400">
-            Nenhuma categoria. Volte e envie outro arquivo.
-          </p>
-        )}
+        {/* Grouped preview table */}
+        <div className="max-h-[480px] overflow-y-auto rounded-xl border border-gray-200 bg-white">
+          {grouped.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-gray-400">
+              Nenhuma linha para exibir.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 border-b border-gray-100 bg-gray-50 text-xs font-semibold text-gray-500">
+                <tr>
+                  <th className="w-10 px-3 py-2.5 text-left">#</th>
+                  <th className="px-3 py-2.5 text-left">Categoria</th>
+                  <th className="px-3 py-2.5 text-left">Nome do Item</th>
+                  <th className="hidden px-3 py-2.5 text-left md:table-cell">
+                    Descrição
+                  </th>
+                  <th className="px-3 py-2.5 text-right">Preço</th>
+                  <th className="px-3 py-2.5 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {grouped.map((group) => (
+                  <>
+                    {/* Category separator */}
+                    <tr
+                      key={`cat-${group.name}`}
+                      className="border-t border-gray-100 bg-gray-50"
+                    >
+                      <td colSpan={6} className="px-3 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-gray-700">
+                            {group.name === "__errors__"
+                              ? "Linhas com erro de categoria"
+                              : group.name}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {group.rows.length}{" "}
+                            {group.rows.length === 1 ? "item" : "itens"}
+                          </span>
+                          {group.errorCount > 0 && (
+                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-xs text-red-600">
+                              {group.errorCount}{" "}
+                              {group.errorCount === 1 ? "erro" : "erros"}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
 
-        {/* Confirm panel */}
-        <div className="mt-6 space-y-3 rounded-xl border border-gray-200 bg-white px-4 py-4">
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={clearExisting}
-              onChange={(e) => setClearExisting(e.target.checked)}
-              className="mt-0.5 accent-orange-500"
-            />
-            <div>
-              <p className="text-sm font-medium text-gray-800">
-                Substituir cardápio atual
-              </p>
-              <p className="text-xs text-gray-400">
-                As categorias e itens existentes serão removidos antes de
-                importar
-              </p>
+                    {/* Item rows */}
+                    {group.rows.map((row) => (
+                      <tr
+                        key={`row-${row.rowIndex}`}
+                        className={
+                          row.status === "error"
+                            ? "bg-red-50"
+                            : "hover:bg-gray-50"
+                        }
+                      >
+                        <td className="px-3 py-2 text-xs text-gray-400">
+                          {row.rowIndex}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={
+                              !row.categoria && row.status === "error"
+                                ? "italic text-red-400"
+                                : "text-gray-600"
+                            }
+                          >
+                            {row.categoria || "—"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={
+                              !row.nome && row.status === "error"
+                                ? "italic text-red-400"
+                                : "font-medium text-gray-800"
+                            }
+                          >
+                            {row.nome || "—"}
+                          </span>
+                          {row.status === "error" && row.errors.length > 0 && (
+                            <div className="mt-0.5 space-y-0.5">
+                              {row.errors.map((e, i) => (
+                                <p
+                                  key={i}
+                                  className="text-xs text-red-500"
+                                >
+                                  ✕ {e}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="hidden px-3 py-2 text-xs text-gray-400 md:table-cell">
+                          {truncate(row.descricao, 60) || "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {row.status === "error" &&
+                          row.errors.some((e) => e.toLowerCase().includes("preço")) ? (
+                            <span className="text-xs italic text-red-400">
+                              {row.precoRaw || "—"}
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-gray-700">
+                              R$ {formatPrice(row.preco)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {row.status === "valid" ? (
+                            <span className="text-green-500 text-xs">✓</span>
+                          ) : (
+                            <span className="text-red-400 text-xs">✕</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Import mode + confirm */}
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white px-5 py-4 space-y-4">
+          {/* Mode selection */}
+          <div>
+            <p className="mb-2 text-sm font-semibold text-gray-800">
+              Modo de importação
+            </p>
+            <div className="space-y-2">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="radio"
+                  name="import-mode"
+                  value="replace"
+                  checked={mode === "replace"}
+                  onChange={() => setMode("replace")}
+                  className="mt-0.5 accent-orange-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">
+                    Substituir cardápio atual
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Remove todas as categorias e itens existentes antes de
+                    importar
+                  </p>
+                </div>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="radio"
+                  name="import-mode"
+                  value="append"
+                  checked={mode === "append"}
+                  onChange={() => setMode("append")}
+                  className="mt-0.5 accent-orange-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">
+                    Adicionar ao cardápio atual
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Mantém o cardápio existente e adiciona os novos itens.
+                    Categorias com o mesmo nome receberão os novos itens.
+                  </p>
+                </div>
+              </label>
             </div>
-          </label>
+          </div>
+
+          {/* Validation notice */}
+          {stats.invalid > 0 && (
+            <p className="rounded-lg bg-yellow-50 px-3 py-2 text-xs text-yellow-700">
+              ⚠ {stats.invalid} linha
+              {stats.invalid !== 1 ? "s" : ""} com erro serão ignorada
+              {stats.invalid !== 1 ? "s" : ""} na importação.{" "}
+              {stats.valid === 0
+                ? "Corrija os erros e tente novamente."
+                : `Apenas ${stats.valid} ${stats.valid === 1 ? "linha válida será importada" : "linhas válidas serão importadas"}.`}
+            </p>
+          )}
 
           {error && (
-            <p className="rounded bg-red-50 px-3 py-2 text-xs text-red-600">
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
               {error}
             </p>
           )}
 
+          {/* Confirm button */}
           <button
-            onClick={() => onConfirm(clearExisting)}
-            disabled={saving || editCats.length === 0}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+            onClick={() => onConfirm(mode)}
+            disabled={!canConfirm}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-500 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
           >
-            {saving ? (
+            {confirming ? (
               <>
                 <Spinner /> Importando…
               </>
             ) : (
-              "Confirmar importação"
+              `Confirmar importação (${stats.valid} ${stats.valid === 1 ? "item" : "itens"})`
             )}
           </button>
         </div>
@@ -417,25 +628,115 @@ function PreviewScreen({
   );
 }
 
-// ── Success screen ────────────────────────────────────────────────────────────
+// ── Summary screen ────────────────────────────────────────────────────────────
 
-function SuccessScreen() {
+function SummaryScreen({ summary }: { summary: ImportSummary }) {
+  const hasErrors = summary.failed > 0 || summary.errors.length > 0;
+  const [showErrors, setShowErrors] = useState(false);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="text-center">
-        <div className="mb-4 text-5xl">✅</div>
-        <h1 className="text-xl font-bold text-gray-900">
-          Cardápio importado com sucesso
-        </h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Seus itens estão disponíveis no cardápio.
-        </p>
-        <Link
-          href="/dashboard/menu"
-          className="mt-6 inline-block rounded-lg bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
-        >
-          Ver cardápio
-        </Link>
+    <div className="min-h-screen bg-gray-50 px-4 py-16">
+      <div className="mx-auto max-w-md">
+        {/* Icon + title */}
+        <div className="mb-8 text-center">
+          <div className="mb-3 text-5xl">{hasErrors ? "⚠️" : "✅"}</div>
+          <h1 className="text-xl font-bold text-gray-900">
+            {hasErrors
+              ? "Importação concluída com avisos"
+              : "Cardápio importado com sucesso"}
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Seu cardápio foi atualizado.
+          </p>
+        </div>
+
+        {/* Stats grid */}
+        <div className="mb-6 grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-center">
+            <p className="text-2xl font-bold text-orange-500">
+              {summary.categoriesCreated}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              {summary.categoriesCreated === 1
+                ? "Categoria criada"
+                : "Categorias criadas"}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-center">
+            <p className="text-2xl font-bold text-orange-500">
+              {summary.itemsCreated}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              {summary.itemsCreated === 1 ? "Item criado" : "Itens criados"}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-center">
+            <p className="text-2xl font-bold text-gray-400">
+              {summary.skipped}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              {summary.skipped === 1
+                ? "Linha ignorada"
+                : "Linhas ignoradas"}
+            </p>
+          </div>
+          <div
+            className={`rounded-xl border bg-white px-4 py-4 text-center ${
+              summary.failed > 0
+                ? "border-red-200"
+                : "border-gray-200"
+            }`}
+          >
+            <p
+              className={`text-2xl font-bold ${
+                summary.failed > 0 ? "text-red-500" : "text-gray-400"
+              }`}
+            >
+              {summary.failed}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              {summary.failed === 1 ? "Linha com falha" : "Linhas com falha"}
+            </p>
+          </div>
+        </div>
+
+        {/* Errors toggle */}
+        {summary.errors.length > 0 && (
+          <div className="mb-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+            <button
+              onClick={() => setShowErrors((v) => !v)}
+              className="flex w-full items-center justify-between text-sm font-medium text-red-700"
+            >
+              <span>{summary.errors.length} erro(s) detalhado(s)</span>
+              <span>{showErrors ? "▲" : "▼"}</span>
+            </button>
+            {showErrors && (
+              <ul className="mt-2 space-y-1">
+                {summary.errors.map((e, i) => (
+                  <li key={i} className="text-xs text-red-600">
+                    • {e}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-col gap-2">
+          <Link
+            href="/dashboard/menu"
+            className="flex items-center justify-center rounded-lg bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
+          >
+            Ver cardápio
+          </Link>
+          <Link
+            href="/dashboard/menu/upload"
+            className="flex items-center justify-center rounded-lg border border-gray-200 bg-white px-6 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            Importar outra planilha
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -444,10 +745,10 @@ function SuccessScreen() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function MenuUploadPage() {
-  const [step, setStep] = useState<Step>("idle");
+  const [step, setStep] = useState<Step>("upload");
   const [fileName, setFileName] = useState("");
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [editCats, setEditCats] = useState<EditCategory[]>([]);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [error, setError] = useState("");
 
   async function handleFile(file: File) {
@@ -463,37 +764,30 @@ export default function MenuUploadPage() {
       if (!res.ok || !data.success) {
         throw new Error(data.error ?? "Erro ao processar arquivo.");
       }
-      const result: ParseResult = data.data;
-      setWarnings(result.warnings);
-      setEditCats(toEditCategories(result.categories));
+      setPreview(data.data as ImportPreview);
       setStep("preview");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro desconhecido.");
-      setStep("idle");
+      setStep("upload");
     }
   }
 
-  async function handleConfirm(clearExisting: boolean) {
+  async function handleConfirm(mode: ImportMode) {
+    if (!preview) return;
     setError("");
-    setStep("saving");
-
-    const categories = toConfirmPayload(editCats);
-    if (categories.length === 0) {
-      setError("Nenhum item válido para importar.");
-      setStep("preview");
-      return;
-    }
+    setStep("confirming");
 
     try {
       const res = await fetch("/api/menu/import/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categories, clearExisting }),
+        body: JSON.stringify({ rows: preview.rows, mode }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error ?? "Erro ao salvar cardápio.");
+        throw new Error(data.error ?? "Erro ao importar cardápio.");
       }
+      setSummary(data.data as ImportSummary);
       setStep("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro desconhecido.");
@@ -501,23 +795,26 @@ export default function MenuUploadPage() {
     }
   }
 
-  if (step === "done") return <SuccessScreen />;
+  function reset() {
+    setStep("upload");
+    setFileName("");
+    setPreview(null);
+    setSummary(null);
+    setError("");
+  }
 
-  if (step === "preview" || step === "saving") {
+  if (step === "done" && summary) {
+    return <SummaryScreen summary={summary} />;
+  }
+
+  if ((step === "preview" || step === "confirming") && preview) {
     return (
-      <PreviewScreen
-        editCats={editCats}
-        warnings={warnings}
-        saving={step === "saving"}
+      <PreviewTable
+        preview={preview}
+        confirming={step === "confirming"}
         error={error}
-        onChange={setEditCats}
         onConfirm={handleConfirm}
-        onBack={() => {
-          setStep("idle");
-          setEditCats([]);
-          setWarnings([]);
-          setError("");
-        }}
+        onBack={reset}
       />
     );
   }
