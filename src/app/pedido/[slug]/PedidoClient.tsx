@@ -540,20 +540,20 @@ function DesktopProductCard({
       {/* Image */}
       <button
         onClick={onOpen}
-        className="block w-full shrink-0 overflow-hidden h-40 bg-gray-100"
+        className="block w-full shrink-0 overflow-hidden h-28 bg-gray-100"
       >
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-5xl">
+          <div className="flex h-full w-full items-center justify-center text-4xl">
             {categoryEmoji(item.name)}
           </div>
         )}
       </button>
 
       {/* Content */}
-      <div className="flex flex-1 flex-col p-4">
+      <div className="flex flex-1 flex-col p-3">
         <p
           onClick={onOpen}
           className="cursor-pointer text-sm font-bold leading-snug text-gray-900 line-clamp-2"
@@ -733,9 +733,8 @@ function PhoneEntryCard({
     }
   }
 
-  // Renders as a bottom control panel (no floating card — occupies the bottom zone)
   return (
-    <div className="shrink-0 border-t border-gray-100 bg-white px-4 pb-4 pt-3">
+    <div className="rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3 max-w-sm w-full">
       <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
         Identificação opcional
       </p>
@@ -781,9 +780,8 @@ function ChoiceCard({
   onSuggest: () => void;
 }) {
   return (
-    <div className="shrink-0 border-t border-gray-100 bg-white px-4 pb-4 pt-3">
-      <div className="flex flex-col gap-2">
-        <button
+    <div className="flex flex-col gap-2 max-w-sm w-full">
+      <button
           onClick={onMenu}
           className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
         >
@@ -803,7 +801,6 @@ function ChoiceCard({
             <p className="text-xs font-normal text-green-500">Deixa eu escolher pra você</p>
           </div>
         </button>
-      </div>
     </div>
   );
 }
@@ -1602,7 +1599,7 @@ export function PedidoClient({
           Mobile : flex-1 (full width, menu stacked below)
           Desktop: fixed 420px–460px wide column
       ═══════════════════════════════════════════════════════════ */}
-      <div className="flex-1 flex flex-col overflow-hidden
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0
                       lg:flex-none lg:w-1/2 lg:shrink-0
                       lg:border-r lg:border-gray-200
                       lg:shadow-[2px_0_12px_rgba(0,0,0,0.07)]">
@@ -1611,15 +1608,35 @@ export function PedidoClient({
 
         {/* Chat messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#ece5dd]">
-          {/* Greeting bubble shown during the "choosing" entry phase.
-              The choice panel itself lives in the bottom control area. */}
+
+          {/* Phone entry inside chat — doesn't block menu on desktop */}
+          {entryPhase === "identifying" && (
+            <>
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-sm leading-relaxed shadow-sm text-gray-900">
+                  Olá! 👋 Informe seu WhatsApp para personalizarmos seu atendimento.
+                </div>
+              </div>
+              <div className="flex justify-start">
+                <PhoneEntryCard slug={slug} onIdentified={handlePhoneIdentified} onSkip={() => setEntryPhase("choosing")} />
+              </div>
+            </>
+          )}
+
+          {/* Entry decision inside chat — "Como você prefere pedir?" */}
           {entryPhase === "choosing" && (
-            <div className="flex justify-start">
-              <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-sm leading-relaxed shadow-sm text-gray-900">
-                {identifiedName ? `Oi, ${identifiedName}! 😊 Como prefere começar hoje?` : "Olá! 😊 Como prefere começar?"}
+            <div className="space-y-2">
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-sm leading-relaxed shadow-sm text-gray-900">
+                  {identifiedName ? `Oi, ${identifiedName}! 😊 ` : "Olá! 😊 "}Como você prefere pedir?
+                </div>
+              </div>
+              <div className="flex justify-start">
+                <ChoiceCard name={identifiedName} onMenu={() => enterBrowsing("menu")} onSuggest={() => enterBrowsing("suggest")} />
               </div>
             </div>
           )}
+
           {messages.map((msg) => (
             <Bubble key={msg.id} msg={msg} />
           ))}
@@ -1667,26 +1684,7 @@ export function PedidoClient({
           </div>
         )}
 
-        {/* ── Entry phase bottom panels ──────────────────────────────────
-            During onboarding the bottom surface belongs exclusively to the
-            current entry step. Normal menu controls are already guarded by
-            entryPhase === "browsing" so no overlap occurs. */}
-        {entryPhase === "identifying" && (
-          <PhoneEntryCard
-            slug={slug}
-            onIdentified={handlePhoneIdentified}
-            onSkip={() => setEntryPhase("choosing")}
-          />
-        )}
-        {entryPhase === "choosing" && (
-          <ChoiceCard
-            name={identifiedName}
-            onMenu={() => enterBrowsing("menu")}
-            onSuggest={() => enterBrowsing("suggest")}
-          />
-        )}
-
-        {/* Mobile-only: category tabs */}
+        {/* Mobile-only: category tabs — only during browsing */}
         {stage === "BROWSE" && entryPhase === "browsing" && categories.length > 0 && (
           <div
             className="lg:hidden shrink-0 flex overflow-x-auto gap-3 border-t border-gray-200 bg-white px-3 py-2.5 [&::-webkit-scrollbar]:hidden"
@@ -1705,13 +1703,6 @@ export function PedidoClient({
                 {categoryEmoji(cat.name)} {cat.name}
               </button>
             ))}
-            {/* Suggestion shortcut — inline with category tabs, no extra height */}
-            <button
-              onClick={() => setShowSuggestion(true)}
-              className="shrink-0 whitespace-nowrap rounded-full border border-green-200 bg-green-50 px-4 py-3 text-base font-semibold min-h-[44px] text-green-700 hover:bg-green-100 transition-all active:scale-95"
-            >
-              ✨ Sugestão
-            </button>
           </div>
         )}
 
@@ -1735,8 +1726,8 @@ export function PedidoClient({
           </div>
         )}
 
-        {/* Mobile-only: CartBar */}
-        {stage === "BROWSE" && entryPhase === "browsing" && (
+        {/* Mobile-only: CartBar — visible in all entry phases so bottom is anchored */}
+        {stage === "BROWSE" && (
           <div className="lg:hidden">
             <CartBar cart={cart} onFinalize={handleFinalizeClick} upsellPending={upsellPending} />
           </div>
@@ -1745,11 +1736,23 @@ export function PedidoClient({
         {/* Checkout panels (address / payment / review / done) */}
         {renderCheckoutPanel()}
 
+        {/* Suggestion button — above text input, inside chat panel */}
+        {stage === "BROWSE" && entryPhase === "browsing" && (
+          <div className="shrink-0 border-t border-gray-200 bg-white px-3 pt-2 pb-1">
+            <button
+              onClick={() => setShowSuggestion(true)}
+              className="w-full rounded-xl border border-green-200 bg-green-50 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 active:scale-[0.98] transition-all"
+            >
+              ✨ Me sugere algo
+            </button>
+          </div>
+        )}
+
         {/* Text input */}
         {showInput && (
           <form
             onSubmit={handleSubmit}
-            className="shrink-0 flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2"
+            className="shrink-0 flex items-center gap-2 bg-white px-3 py-2 border-t border-gray-100"
           >
             <textarea
               ref={inputRef}
@@ -1785,7 +1788,7 @@ export function PedidoClient({
       {/* ═══════════════════════════════════════════════════════════
           RIGHT PANEL — Menu (desktop only, hidden on mobile)
       ═══════════════════════════════════════════════════════════ */}
-      <div className="hidden lg:flex flex-1 flex-col overflow-hidden bg-gray-50">
+      <div className="hidden lg:flex lg:w-1/2 flex-col overflow-hidden bg-gray-50 min-w-0">
         {stage === "BROWSE" ? (
           <>
             {/* Category nav */}
@@ -1803,19 +1806,12 @@ export function PedidoClient({
                   {categoryEmoji(cat.name)} {cat.name}
                 </button>
               ))}
-              {/* Suggestion shortcut — same row as category tabs */}
-              <button
-                onClick={() => setShowSuggestion(true)}
-                className="rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 transition-all active:scale-95"
-              >
-                ✨ Me sugere algo
-              </button>
             </div>
 
             {/* Product grid — CSS grid, fills available space */}
             <div className="flex-1 overflow-y-auto p-5">
               {currentCategoryItems.length > 0 ? (
-                <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
                   {currentCategoryItems.map((item) => (
                     <DesktopProductCard
                       key={item.id}
