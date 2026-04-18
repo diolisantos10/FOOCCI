@@ -352,13 +352,34 @@ function ProductModal({
   cart?: CartItem[];
   onClose: () => void;
 }) {
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Modal sheet — scrollable so tall content is always reachable */}
-      <div className="w-full max-w-md overflow-y-auto rounded-t-[2rem] bg-white sm:rounded-[2rem]" style={{ maxHeight: "90dvh" }}>
+      <div
+        className="w-full max-w-md overflow-y-auto rounded-t-[2rem] bg-white sm:rounded-[2rem]"
+        style={{ maxHeight: "90dvh" }}
+        onTouchStart={(e) => {
+          touchStartX.current = e.touches[0]!.clientX;
+          touchStartY.current = e.touches[0]!.clientY;
+        }}
+        onTouchEnd={(e) => {
+          const dx = e.changedTouches[0]!.clientX - touchStartX.current;
+          const dy = Math.abs(e.changedTouches[0]!.clientY - touchStartY.current);
+          // Only trigger if horizontal swipe dominates (avoids conflict with scroll)
+          if (Math.abs(dx) > 80 && Math.abs(dx) > dy * 1.5) onClose();
+        }}
+      >
+
+        {/* Swipe handle hint */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="h-1 w-12 rounded-full bg-gray-300" />
+        </div>
 
         {/* ── Image — square crop, dominant selling element ── */}
         <div className="relative w-full overflow-hidden" style={{ aspectRatio: "1 / 1" }}>
