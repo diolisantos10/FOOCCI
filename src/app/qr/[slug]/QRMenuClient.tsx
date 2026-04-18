@@ -354,12 +354,12 @@ function ProductCard({
         onClick={onClick}
         className="w-full text-left rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-orange-100 transition-all overflow-hidden"
       >
-        <div className="flex gap-3 p-3">
+        <div className="flex gap-4 p-4">
           {/* Info */}
-          <div className="flex-1 min-w-0 flex flex-col justify-between min-h-[128px]">
+          <div className="flex-1 min-w-0 flex flex-col justify-between min-h-[160px]">
             <div>
               <div className="flex flex-wrap items-center gap-1.5">
-                <p className="text-sm font-semibold text-gray-900 leading-tight">
+                <p className="text-base font-semibold text-gray-900 leading-tight">
                   {item.name}
                 </p>
                 {isFirst && (
@@ -369,21 +369,21 @@ function ProductCard({
                 )}
               </div>
               {item.description && (
-                <p className="mt-1 text-xs text-gray-500 line-clamp-2 leading-relaxed">
+                <p className="mt-2 text-sm text-gray-500 line-clamp-3 leading-relaxed">
                   {item.description}
                 </p>
               )}
             </div>
 
-            <div className="mt-3">
-              <span className="text-base font-bold text-orange-500">
+            <div className="mt-4">
+              <span className="text-lg font-bold text-orange-500">
                 R$&nbsp;{formatPrice(item.price)}
               </span>
             </div>
           </div>
 
           {/* Thumbnail */}
-          <div className="shrink-0 w-32 h-32 rounded-xl overflow-hidden bg-gray-100">
+          <div className="shrink-0 w-40 h-40 rounded-xl overflow-hidden bg-gray-100">
             {item.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -603,7 +603,7 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
                 <h2 className="mb-4 border-b border-gray-200 pb-2 text-base font-bold text-gray-900">
                   {cat.name}
                 </h2>
-                <ul className="space-y-3">
+                <ul className="space-y-5">
                   {cat.items.map((item, idx) => (
                     <ProductCard
                       key={item.id}
