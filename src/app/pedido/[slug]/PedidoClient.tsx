@@ -357,69 +357,52 @@ function ProductModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 bg-white flex flex-col sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm"
+      onTouchStart={(e) => {
+        touchStartX.current = e.touches[0]!.clientX;
+        touchStartY.current = e.touches[0]!.clientY;
+      }}
+      onTouchEnd={(e) => {
+        const dx = e.changedTouches[0]!.clientX - touchStartX.current;
+        const dy = Math.abs(e.changedTouches[0]!.clientY - touchStartY.current);
+        if (Math.abs(dx) > 80 && Math.abs(dx) > dy * 1.5) onClose();
+      }}
     >
-      {/* Modal sheet — scrollable so tall content is always reachable */}
-      <div
-        className="w-full max-w-md overflow-y-auto rounded-t-[2rem] bg-white sm:rounded-[2rem]"
-        style={{ maxHeight: "90dvh" }}
-        onTouchStart={(e) => {
-          touchStartX.current = e.touches[0]!.clientX;
-          touchStartY.current = e.touches[0]!.clientY;
-        }}
-        onTouchEnd={(e) => {
-          const dx = e.changedTouches[0]!.clientX - touchStartX.current;
-          const dy = Math.abs(e.changedTouches[0]!.clientY - touchStartY.current);
-          // Only trigger if horizontal swipe dominates (avoids conflict with scroll)
-          if (Math.abs(dx) > 80 && Math.abs(dx) > dy * 1.5) onClose();
-        }}
-      >
+      {/* Card — full-screen on mobile, centered on desktop */}
+      <div className="w-full h-full flex flex-col sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white">
 
-        {/* Swipe handle hint */}
-        <div className="flex justify-center pt-3 pb-1 sm:hidden">
-          <div className="h-1 w-12 rounded-full bg-gray-300" />
-        </div>
-
-        {/* ── Image — square crop, dominant selling element ── */}
-        <div className="relative w-full overflow-hidden" style={{ aspectRatio: "1 / 1" }}>
+        {/* ── Image — square, flush to top of screen ── */}
+        <div className="relative w-full aspect-square shrink-0">
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={item.imageUrl}
               alt={item.name}
-              className="absolute inset-0 h-full w-full object-cover"
+              className="w-full h-full object-cover"
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-7xl">
+            <div className="w-full h-full flex items-center justify-center bg-gray-100 text-7xl">
               {categoryEmoji(item.name)}
             </div>
           )}
 
-          {/* Close — floating over image, easy tap target */}
+          {/* Back arrow — top left, same as iFood */}
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60 active:scale-90 transition-transform"
+            className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60 active:scale-90 transition-transform text-lg"
           >
-            ✕
+            ←
           </button>
         </div>
 
-        {/* ── Content ── */}
-        <div className="px-6 pb-8 pt-5">
-          {/* Name */}
-          <h2 className="text-xl font-bold leading-snug text-gray-900">
-            {item.name}
-          </h2>
+        {/* ── Content — scrolls if needed ── */}
+        <div className="flex-1 overflow-y-auto px-6 pt-5 pb-2">
+          <h2 className="text-xl font-bold leading-snug text-gray-900">{item.name}</h2>
 
-          {/* Description */}
           {item.description && (
-            <p className="mt-2 text-sm leading-relaxed text-gray-500">
-              {item.description}
-            </p>
+            <p className="mt-2 text-sm leading-relaxed text-gray-500">{item.description}</p>
           )}
 
-          {/* Price + CTA — variant picker or direct add */}
           {item.hasVariants && item.variants.length > 0 ? (
             <div className="mt-5">
               <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
@@ -444,9 +427,7 @@ function ProductModal({
                             {vQty}
                           </span>
                         )}
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#25d366] text-white text-base font-bold shadow-sm">
-                          +
-                        </span>
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#25d366] text-white text-base font-bold shadow-sm">+</span>
                       </div>
                     </button>
                   );
@@ -475,6 +456,9 @@ function ProductModal({
             </div>
           )}
         </div>
+
+        {/* ── Footer CTA (non-variant items already have inline CTA above) ── */}
+        <div className="shrink-0 px-6 pb-8 pt-3" />
       </div>
     </div>
   );
