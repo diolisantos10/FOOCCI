@@ -272,7 +272,7 @@ model OrderDraft {
 model OrderDraftItem {
   id           String   @id @default(cuid())
   orderDraftId String
-  menuItemId   String
+  menuItemId   String?
   quantity     Int
   unitPrice    Decimal  @db.Decimal(10, 2) // snapshot of price at time of add
   isUpsell     Boolean  @default(false)    // true if suggested by AI upsell (Phase 3)
@@ -280,7 +280,7 @@ model OrderDraftItem {
   addedAt      DateTime @default(now())
 
   orderDraft OrderDraft @relation(fields: [orderDraftId], references: [id], onDelete: Cascade)
-  menuItem   MenuItem   @relation(fields: [menuItemId], references: [id])
+  menuItem   MenuItem?  @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
 
   @@index([orderDraftId])
   @@map("order_draft_items")
@@ -337,7 +337,7 @@ model Order {
 model OrderItem {
   id         String  @id @default(cuid())
   orderId    String
-  menuItemId String
+  menuItemId String?
   name       String  // snapshot of name at order time
   price      Decimal @db.Decimal(10, 2)
   quantity   Int
@@ -345,7 +345,7 @@ model OrderItem {
   total      Decimal @db.Decimal(10, 2)
 
   order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+  menuItem MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@map("order_items")

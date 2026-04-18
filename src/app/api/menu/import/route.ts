@@ -25,7 +25,11 @@ function normalizeHeader(v: unknown): string {
     .replace(/\s+/g, " ");
 }
 
-const FOTO_KEYS = new Set(["foto", "imagem", "image", "img", "foto / imagem"]);
+const FOTO_KEYS = new Set([
+  "foto", "imagem", "image", "img", "foto / imagem",
+  "url", "url da foto", "url da imagem", "link", "link da foto",
+  "photo", "picture", "pic", "thumbnail", "thumb",
+]);
 const CAT_KEYS = new Set(["categoria", "category", "cat", "grupo", "group"]);
 const NOME_KEYS = new Set([
   "nome do item",
