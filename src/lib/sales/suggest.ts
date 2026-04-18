@@ -52,6 +52,22 @@ const DESSERT_CAT_KEYWORDS = [
 type ContextRule = [cartKws: string[], itemKws: string[], reason: string];
 
 const DRINK_PAIRING: ContextRule[] = [
+  // Dietary rules first — more specific, must take priority in reason selection
+  [
+    ["vegano", "vegetariano", "plant based", "sem carne", "fit", "light", "leve", "natural"],
+    ["suco", "vitamina", "limonada", "água", "natural", "chá"],
+    "vai muito bem com esse estilo leve e natural",
+  ],
+  [
+    ["peixe", "camarão", "salmão", "frutos do mar", "tilápia", "bacalhau"],
+    ["limonada", "água", "suco", "vitamina", "cerveja"],
+    "vai muito bem com frutos do mar",
+  ],
+  [
+    ["japonês", "sushi", "temaki", "yakissoba", "udon", "gyoza", "sashimi", "niguiri", "harumaki"],
+    ["chá", "água", "suco", "refrigerante", "saquê"],
+    "harmoniza com comida japonesa",
+  ],
   [
     ["pizza", "calabresa", "pepperoni", "portuguesa", "mussarela"],
     ["cola", "refrigerante", "coca", "cerveja", "chopp"],
@@ -68,7 +84,7 @@ const DRINK_PAIRING: ContextRule[] = [
     "fica incrível com uma carne boa assim",
   ],
   [
-    ["frango", "grelhado", "light", "leve", "fit", "salada", "vegano", "vegetariano", "natural"],
+    ["frango", "grelhado", "salada"],
     ["suco", "vitamina", "limonada", "água", "natural"],
     "vai muito bem com esse estilo mais leve",
   ],
@@ -158,13 +174,23 @@ function matchesAny(text: string, keywords: string[]): boolean {
   return keywords.some((kw) => n.includes(norm(kw)));
 }
 
-/** Find the drink or dessert category in the (filtered) menu. */
+/**
+ * Find the drink or dessert category in the (filtered) menu.
+ * Falls back to any category whose ITEMS contain drink/dessert keywords
+ * (handles menus where the category name is atypical, e.g. "Carta de Refrescos").
+ */
 function findCategory(
   menu:  MenuCategoryContext[],
   type:  "drink" | "dessert",
 ): MenuCategoryContext | null {
   const kws = type === "drink" ? DRINK_CAT_KEYWORDS : DESSERT_CAT_KEYWORDS;
-  return menu.find((cat) => matchesAny(cat.name, kws)) ?? null;
+  // 1st pass: match by category name
+  const byName = menu.find((cat) => matchesAny(cat.name, kws));
+  if (byName) return byName;
+  // 2nd pass: match by item names within each category
+  return menu.find((cat) =>
+    cat.items.some((item) => matchesAny(item.name, kws))
+  ) ?? null;
 }
 
 /**
@@ -222,16 +248,23 @@ function scoreItem(
     score += priority === "promotions" ? 30 : 20;
   }
 
-  // Context pairing: does this item match what's in the cart?
+  // Context pairing: accumulate ALL matching rules (not first-match-wins)
   const itemText = norm(
     `${item.name} ${item.description ?? ""} ${item.tags.join(" ")}`,
   );
   const rules = type === "drink" ? DRINK_PAIRING : DESSERT_PAIRING;
   for (const [cartKws, itemKws] of rules) {
     if (matchesAny(cartText, cartKws) && matchesAny(itemText, itemKws)) {
-      score += 15;
-      break;
+      score += 15; // accumulate — no break
     }
+  }
+
+  // Dietary compatibility: if cart is vegan/vegetarian, penalise animal-derived items
+  const cartIsVegan = /vegano|vegetariano|plant.based|sem.carne/.test(cartText);
+  if (cartIsVegan) {
+    const animalKws = ["leite", "queijo", "creme", "requeijao", "cream", "dairy",
+                       "mel", "ovo", "ovos", "bacon", "carne", "frango", "camarao"];
+    if (matchesAny(itemText, animalKws)) score -= 25;
   }
 
   // CRM: customer has ordered this item before

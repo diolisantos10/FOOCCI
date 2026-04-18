@@ -18,6 +18,76 @@ import { buildPersonalityLayer }    from "./personality";
 import { buildSalesLayer }          from "./sales";
 import { buildProtocolLayer, buildSalesConstraintBlock } from "./protocol";
 
+// ── Restaurant profile ────────────────────────────────────────────────────────
+
+const CUISINE_SIGNATURES: [string[], string][] = [
+  [["sushi", "temaki", "sashimi", "niguiri", "uramaki", "harumaki", "yakissoba", "udon", "gyoza", "missoshiro"], "Restaurante japonês / culinária oriental"],
+  [["pizza", "pizzas", "calzone", "mussarela", "pepperoni", "calabresa"], "Pizzaria"],
+  [["hamburger", "burger", "smash", "artesanal", "lanche", "hot dog"], "Hamburgueria / lanchonete"],
+  [["vegano", "vegetariano", "plant based", "sem carne", "integral", "orgânico"], "Restaurante vegano / vegetariano"],
+  [["peixe", "salmão", "camarão", "frutos do mar", "atum", "tilápia", "bacalhau"], "Restaurante de frutos do mar / peixaria"],
+  [["churrasco", "picanha", "costela", "espetinho", "fraldinha", "maminha"], "Churrascaria"],
+  [["tapioca", "cuscuz", "baião", "macaxeira", "nordestino", "regional"], "Restaurante regional / nordestino"],
+  [["massa", "lasanha", "macarrão", "espaguete", "risoto", "nhoque"], "Restaurante italiano / massas"],
+];
+
+function detectCuisine(categories: MenuCategoryMeta[]): string {
+  const allText = categories
+    .flatMap((c) => [c.name, ...c.items.map((i) => `${i.name} ${i.description ?? ""}`)])
+    .join(" ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  for (const [keywords, label] of CUISINE_SIGNATURES) {
+    const hits = keywords.filter((kw) =>
+      allText.includes(kw.normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
+    ).length;
+    if (hits >= 2) return label;
+  }
+  return "Restaurante";
+}
+
+const DRINK_KEYWORDS_DETECT = ["bebida", "bebidas", "suco", "refrigerante", "agua", "cerveja", "limonada", "cha", "cafe", "drink", "drinks"];
+const DESSERT_KEYWORDS_DETECT = ["sobremesa", "sobremesas", "doce", "pudim", "sorvete", "brownie", "torta", "bolo", "mousse", "acai", "waffle"];
+
+function norm(s: string) {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function findUpsellCategory(categories: MenuCategoryMeta[], type: "drink" | "dessert"): MenuCategoryMeta | null {
+  const kws = type === "drink" ? DRINK_KEYWORDS_DETECT : DESSERT_KEYWORDS_DETECT;
+  return categories.find((c) => kws.some((kw) => norm(c.name).includes(kw)))
+    ?? categories.find((c) => c.items.some((i) => kws.some((kw) => norm(i.name).includes(kw))))
+    ?? null;
+}
+
+function buildRestaurantProfileBlock(categories: MenuCategoryMeta[]): string {
+  const active = categories.filter((c) => c.items.length > 0);
+  const cuisine = detectCuisine(active);
+  const catNames = active.map((c) => c.name).join(", ");
+
+  const drinkCat = findUpsellCategory(active, "drink");
+  const dessertCat = findUpsellCategory(active, "dessert");
+
+  const drinkLine = drinkCat
+    ? `Bebidas disponíveis (${drinkCat.name}): ${drinkCat.items.map((i) => `${i.name} — R$${Number(i.price).toFixed(2)}`).join(", ")}`
+    : "Sem categoria de bebidas no cardápio.";
+
+  const dessertLine = dessertCat
+    ? `Sobremesas disponíveis (${dessertCat.name}): ${dessertCat.items.map((i) => `${i.name} — R$${Number(i.price).toFixed(2)}`).join(", ")}`
+    : "Sem categoria de sobremesas no cardápio.";
+
+  return [
+    `━━━ PERFIL DO RESTAURANTE (use para calibrar sugestões) ━━━`,
+    `Tipo: ${cuisine}`,
+    `Categorias do cardápio: ${catNames}`,
+    drinkLine,
+    dessertLine,
+    `REGRA CRÍTICA: Só sugira itens que existam EXATAMENTE no cardápio acima. Nunca invente ou assuma itens não listados.`,
+  ].join("\n");
+}
+
 // ── Menu block ────────────────────────────────────────────────────────────────
 
 function buildMenuBlock(categories: MenuCategoryMeta[]): string {
@@ -93,8 +163,12 @@ export function buildAgentPrompt(
   // At checkout stages the AI must follow the stage script, not a sales mode.
   const isBrowse = context.stage === "BROWSE";
 
+  const profileBlock = buildRestaurantProfileBlock(context.categories);
+
   return [
     buildPersonalityLayer(personality, context.restaurantName, context.stage),
+
+    profileBlock,
 
     `━━━ CARDÁPIO (referência interna — NÃO repita para o cliente) ━━━\n${menuBlock}`,
 

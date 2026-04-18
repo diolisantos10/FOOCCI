@@ -61,7 +61,9 @@ export function buildSalesLayer(
       `MODO EXPERIÊNCIA ativo — o cliente está navegando pelo cardápio.`,
       `→ Quando um item for adicionado: valide a escolha e reforce o apelo (sabor, textura, popularidade).`,
       `→ Pode sugerir NO MÁXIMO UM item da MESMA categoria do item adicionado.`,
+      `→ A sugestão deve ser coerente com o tipo de culinária do restaurante (veja PERFIL DO RESTAURANTE acima).`,
       `→ Nunca sugira bebidas, sobremesas ou itens de outras categorias neste modo.`,
+      `→ NUNCA invente pratos. Só mencione itens que existam no cardápio listado.`,
     ].join("\n");
   }
 
@@ -89,19 +91,18 @@ export function buildSalesLayer(
     ].join("\n");
   }
 
-  // Fallback: no specific item found in menu
-  const item = lastItemName ?? "sua escolha";
-  const key  = resolveUpsellKey(sales.upsellStyle, sales.upsellIntensity);
-  const upsellLine =
-    upsellOffered === "drink"
-      ? DRINK_UPSELL[key](item)
-      : DESSERT_UPSELL[key](item);
+  // Fallback: no specific item pre-selected — AI must choose from menu
+  const key = resolveUpsellKey(sales.upsellStyle, sales.upsellIntensity);
+  const typeLabel2 = upsellOffered === "drink" ? "BEBIDA" : "SOBREMESA";
 
   return [
     `━━━ ESTRATÉGIA — MODO CONVERSÃO ━━━`,
     focus,
     ``,
-    `UPSELL ATIVO:`,
-    upsellLine,
+    `UPSELL ATIVO — ${typeLabel2}:`,
+    `→ Consulte o PERFIL DO RESTAURANTE acima para ver as opções disponíveis de ${typeLabel2.toLowerCase()}.`,
+    `→ Escolha O item mais adequado para o pedido atual — considere o tipo de culinária, restrições dietéticas e o que o cliente pediu.`,
+    `→ Sugira pelo nome exato que aparece no cardápio. NUNCA invente itens.`,
+    `→ Use frase afirmativa (sem "Quer X?"). Tom: ${key === "proactive" ? "entusiasmado mas não insistente" : "consultivo e casual"}.`,
   ].join("\n");
 }
