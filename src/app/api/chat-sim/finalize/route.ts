@@ -16,6 +16,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant";
 import { createPaymentLink } from "@/lib/stone";
+import { createMPPaymentLink } from "@/lib/mercadopago";
+import { decrypt } from "@/lib/crypto";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const cartItemSchema = z.object({
@@ -150,20 +152,61 @@ export async function POST(req: NextRequest) {
   // ── Create Payment + advance Order status ────────────────────
 
   if (paymentMode === "pay_now") {
-    // Call Stone (or mock) for hosted payment link
-    let stoneResult;
-    try {
-      stoneResult = await createPaymentLink({
-        orderId: order.id,
-        amount: total,
-        description: `Pedido chat-sim – ${restaurantId}`,
-        expiresInMinutes: 30,
-      });
-    } catch (err) {
-      // Roll back order on Stone failure
-      await prisma.order.delete({ where: { id: order.id } });
-      const msg = err instanceof Error ? err.message : "Stone error";
-      return NextResponse.json({ error: msg }, { status: 502 });
+    // Detect active payment provider: Mercado Pago takes precedence over Stone
+    const mpCfg = await prisma.integrationConfig.findUnique({
+      where: { restaurantId_provider: { restaurantId, provider: "mercadopago" } },
+      select: { configBlob: true, isActive: true },
+    });
+    const mpToken = mpCfg?.isActive
+      ? (() => {
+          try { return (JSON.parse(decrypt(mpCfg.configBlob)) as { accessToken: string }).accessToken; }
+          catch { return null; }
+        })()
+      : null;
+
+    let providerReference: string;
+    let paymentUrl: string;
+    let expiresAtStr: string;
+    let providerName: string;
+
+    if (mpToken) {
+      // Use Mercado Pago
+      let mpResult;
+      try {
+        mpResult = await createMPPaymentLink(mpToken, {
+          orderId: order.id,
+          amount: total,
+          description: `Pedido chat-sim – ${restaurantId}`,
+          expiresInMinutes: 30,
+        });
+      } catch (err) {
+        await prisma.order.delete({ where: { id: order.id } });
+        const msg = err instanceof Error ? err.message : "MP error";
+        return NextResponse.json({ error: msg }, { status: 502 });
+      }
+      providerReference = mpResult.providerReference;
+      paymentUrl        = mpResult.paymentUrl;
+      expiresAtStr      = mpResult.expiresAt;
+      providerName      = "mercadopago";
+    } else {
+      // Fall back to Stone
+      let stoneResult;
+      try {
+        stoneResult = await createPaymentLink({
+          orderId: order.id,
+          amount: total,
+          description: `Pedido chat-sim – ${restaurantId}`,
+          expiresInMinutes: 30,
+        });
+      } catch (err) {
+        await prisma.order.delete({ where: { id: order.id } });
+        const msg = err instanceof Error ? err.message : "Stone error";
+        return NextResponse.json({ error: msg }, { status: 502 });
+      }
+      providerReference = stoneResult.providerReference;
+      paymentUrl        = stoneResult.paymentUrl;
+      expiresAtStr      = stoneResult.expiresAt;
+      providerName      = "stone";
     }
 
     // Create payment record with LINK_SENT status
@@ -174,13 +217,12 @@ export async function POST(req: NextRequest) {
         status: "LINK_SENT",
         amount: new Decimal(total),
         paymentMode: "PAY_NOW",
-        providerName: "stone",
-        providerReference: stoneResult.providerReference,
-        paymentUrl: stoneResult.paymentUrl,
-        expiresAt: new Date(stoneResult.expiresAt),
+        providerName,
+        providerReference,
+        paymentUrl,
+        expiresAt: new Date(expiresAtStr),
       },
     });
-
     // Advance order to AWAITING_PAYMENT
     await prisma.order.update({
       where: { id: order.id },
@@ -189,9 +231,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       orderId: order.id,
-      paymentUrl: stoneResult.paymentUrl,
-      providerReference: stoneResult.providerReference,
-      expiresAt: stoneResult.expiresAt,
+      paymentUrl,
+      providerReference,
+      expiresAt: expiresAtStr,
     });
   }
 

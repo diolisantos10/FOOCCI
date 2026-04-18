@@ -176,9 +176,24 @@ function PromotionDrawer({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   function set<K extends keyof PromotionForm>(key: K, value: PromotionForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleBannerUpload(file: File) {
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/menu/upload", { method: "POST", body: fd });
+    setUploading(false);
+    if (!res.ok) {
+      setError("Falha ao enviar imagem. Tente novamente.");
+      return;
+    }
+    const json = await res.json();
+    set("bannerImageUrl", json.url ?? "");
   }
 
   function toggleDay(d: number) {
@@ -351,31 +366,53 @@ function PromotionDrawer({
 
             {form.type === "BANNER" && (
               <div className="mt-4 space-y-3">
-                <FormGroup
-                  label="URL da imagem do banner *"
-                  hint="Use uma imagem no formato retangular (ex: 1200×400 px). Aparecerá no topo de todos os cardápios no dia agendado."
-                >
-                  <input
-                    required={form.type === "BANNER"}
-                    type="url"
-                    className={inputCls}
-                    value={form.bannerImageUrl}
-                    onChange={(e) => set("bannerImageUrl", e.target.value)}
-                    placeholder="https://exemplo.com/banner-promocao.jpg"
-                  />
-                </FormGroup>
-                {form.bannerImageUrl && (
-                  <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                <p className="text-xs text-gray-500">
+                  Imagem retangular (proporção 3:1 recomendada, ex: 1200×400 px). Aparecerá no topo de todos os cardápios no dia agendado.
+                </p>
+
+                {/* Preview */}
+                {form.bannerImageUrl ? (
+                  <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={form.bannerImageUrl}
                       alt="Preview do banner"
                       className="w-full object-cover"
                       style={{ aspectRatio: "3/1" }}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
-                    <p className="px-3 py-1.5 text-[11px] text-gray-400">Preview — formato 3:1 recomendado</p>
+                    <button
+                      type="button"
+                      onClick={() => set("bannerImageUrl", "")}
+                      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white text-xs hover:bg-black/70"
+                    >
+                      ✕
+                    </button>
                   </div>
+                ) : (
+                  <label
+                    className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors cursor-pointer ${
+                      uploading
+                        ? "border-brand-300 bg-brand-50"
+                        : "border-gray-300 bg-gray-50 hover:border-brand-400 hover:bg-brand-50"
+                    }`}
+                  >
+                    <span className="text-2xl">{uploading ? "⏳" : "🖼️"}</span>
+                    <span className="text-sm font-semibold text-gray-700">
+                      {uploading ? "Enviando…" : "Clique para fazer upload do banner"}
+                    </span>
+                    <span className="text-xs text-gray-400">JPEG, PNG ou WebP · máx. 5 MB</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleBannerUpload(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
                 )}
               </div>
             )}
