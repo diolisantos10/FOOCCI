@@ -59,7 +59,7 @@ export class UpsellEngine {
       draft.items.map((item) => item.menuItem?.categoryId).filter((id): id is string => !!id)
     );
     // Items already in cart
-    const cartItemIds = new Set(draft.items.map((item) => item.menuItemId));
+    const cartItemIds = new Set(draft.items.map((item) => item.menuItemId).filter((id): id is string => id !== null));
 
     // Item ordering based on sales priority
     const itemOrderBy =
