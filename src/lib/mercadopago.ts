@@ -44,7 +44,7 @@ export async function createMPPaymentLink(
     external_reference: orderId,
     // Allow all payment methods: credit/debit cards, PIX, boleto, MP balance
     payment_methods: {
-      excluded_payment_types: [],
+      excluded_payment_types: [{ id: "ticket" }], // sem boleto bancário
       excluded_payment_methods: [],
       installments: 12,
     },
