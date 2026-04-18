@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { pickAutomationPlaceholder } from "@/lib/crm-messages";
 import type { CRMCustomer, Opportunity, AutomationRow, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
-import { BrainPanel } from "./BrainPanel";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab } from "./OverviewTab";
 
@@ -730,11 +729,6 @@ export function CRMClient({
 
         </div>
       )}
-
-      {/* Adaptive Brain — always visible below tabs */}
-      <div className="mt-6">
-        <BrainPanel />
-      </div>
 
       <ImportModal
         open={showImport}
