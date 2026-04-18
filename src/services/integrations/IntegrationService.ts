@@ -108,9 +108,10 @@ function dbRowToView(row: {
     // decryption failed — config corrupt, treat as error
   }
 
+  // isActive drives status; lastError now stores any test message (success or failure)
   const status: IntegrationView["status"] =
-    !row.isActive ? "unconfigured" :
-    row.lastError ? "error" : "active";
+    row.isActive    ? "active" :
+    row.lastTestedAt ? "error" : "unconfigured";
 
   return {
     provider,
