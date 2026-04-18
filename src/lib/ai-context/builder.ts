@@ -228,7 +228,7 @@ export async function buildAIContext(
     take:     5,
   });
 
-  const bestsellerIds = new Set(topItems.map((r) => r.menuItemId));
+  const bestsellerIds = new Set(topItems.map((r) => r.menuItemId).filter((id): id is string => id !== null));
 
   // ── Menu context ──────────────────────────────────────────────────────────
   const menu: MenuCategoryContext[] = categories.map((cat) => ({
