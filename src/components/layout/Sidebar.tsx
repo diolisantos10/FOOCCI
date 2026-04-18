@@ -39,10 +39,10 @@ const HOME_ITEM: NavItem = {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Principal",
+    label: "Atendimento",
     items: [
       { href: "/orders",      label: "Pedidos",     icon: "📋" },
-      { href: "/atendimento", label: "Atendimento", icon: "🎧" },
+      { href: "/atendimento", label: "Chat",         icon: "🎧" },
       { href: "/menu",        label: "Cardápio",    icon: "🍽" },
       { href: "/agente-ia",   label: "Agente IA",   icon: "🤖" },
     ],
