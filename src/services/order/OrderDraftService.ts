@@ -400,7 +400,7 @@ export class OrderDraftService {
           items: {
             create: draft.items.map((item) => ({
               menuItemId: item.menuItemId,
-              name: item.menuItem.name, // snapshot
+              name: item.menuItem?.name ?? "Item", // snapshot
               price: item.unitPrice,    // snapshot
               quantity: item.quantity,
               notes: item.notes ?? null,
