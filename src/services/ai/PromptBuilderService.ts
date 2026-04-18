@@ -151,7 +151,7 @@ type DraftData = {
     quantity: number;
     unitPrice: { toString(): string };
     notes: string | null;
-    menuItem: { name: string; price: { toString(): string } };
+    menuItem: { name: string; price: { toString(): string } } | null;
   }[];
 } | null;
 
@@ -291,7 +291,7 @@ function buildDraftBlock(draft: DraftData): string {
 
   const itemLines = draft.items.map(
     (item) =>
-      `  • ${item.quantity}x ${item.menuItem.name} — R$ ${Number(item.unitPrice).toFixed(2)} cada` +
+      `  • ${item.quantity}x ${item.menuItem?.name ?? "Item"} — R$ ${Number(item.unitPrice).toFixed(2)} cada` +
       (item.notes ? ` (obs: ${item.notes})` : "")
   );
 
