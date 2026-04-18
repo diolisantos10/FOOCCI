@@ -11,7 +11,6 @@
  */
 
 import { useState, useEffect, type FormEvent } from "react";
-import Link from "next/link";
 import {
   DEFAULT_BRAND_CONFIG,
   PERSONALITY_VOICE_MAP,
@@ -32,7 +31,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TabId = "base" | "atendimento" | "cardapio" | "crm";
+type TabId = "base" | "atendimento" | "cardapio";
 
 // ── Tab config ────────────────────────────────────────────────────────────────
 
@@ -40,7 +39,6 @@ const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: "base",        label: "Base da IA",  icon: "🧠" },
   { id: "atendimento", label: "Atendimento", icon: "💬" },
   { id: "cardapio",    label: "Cardápio",    icon: "🍽" },
-  { id: "crm",         label: "CRM",         icon: "📊" },
 ];
 
 // ── Option tables ─────────────────────────────────────────────────────────────
@@ -986,96 +984,6 @@ export function AgentePage() {
 
           <SaveRow saving={saving} label="Salvar Cardápio" />
         </form>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          TAB 4 — CRM
-      ══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === "crm" && (
-        <div className="space-y-6">
-
-          {/* Dados coletados */}
-          <Section title="Dados coletados pelo agente" subtitle="O agente registra automaticamente cada interação.">
-            <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-2">
-              <p className="text-sm font-medium text-blue-800">
-                O agente coleta automaticamente:
-              </p>
-              <ul className="space-y-1.5 text-sm text-blue-700">
-                {[
-                  "Nome do cliente",
-                  "Número de telefone",
-                  "Última interação",
-                  "Histórico de pedidos",
-                  "Preferências alimentares (quando informadas)",
-                ].map((item) => (
-                  <li key={item} className="flex items-center gap-2">
-                    <span className="text-green-500 font-bold">✓</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs text-blue-500 pt-1">
-                Dados disponíveis em{" "}
-                <Link href="/customers" className="underline font-medium hover:text-blue-700">
-                  Clientes
-                </Link>{" "}
-                e no motor de receita em{" "}
-                <Link href="/crm" className="underline font-medium hover:text-blue-700">
-                  CRM
-                </Link>
-                .
-              </p>
-            </div>
-          </Section>
-
-          {/* Segmentação */}
-          <Section
-            title="Segmentação automática"
-            subtitle="O CRM agrupa clientes com base no comportamento de compra."
-          >
-            <div className="space-y-2">
-              {[
-                { icon: "👑", label: "VIP",         desc: "Alto valor de compra e alta frequência"    },
-                { icon: "💤", label: "Inativos",     desc: "Sem pedidos nos últimos 30 dias"           },
-                { icon: "🌟", label: "Novos",        desc: "Primeiro pedido nos últimos 7 dias"        },
-                { icon: "🔁", label: "Recorrentes",  desc: "Mais de 2 pedidos no histórico"            },
-              ].map((s) => (
-                <div
-                  key={s.label}
-                  className="flex items-start gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3"
-                >
-                  <span className="text-lg leading-none mt-0.5">{s.icon}</span>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">{s.label}</p>
-                    <p className="text-xs text-gray-500">{s.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-gray-400">
-              Configure automações de reativação e aniversário em{" "}
-              <Link href="/crm" className="text-brand-600 underline hover:text-brand-700">
-                CRM → Automações
-              </Link>
-              .
-            </p>
-          </Section>
-
-          {/* Em breve */}
-          <section className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
-              Em breve
-            </p>
-            <p className="text-sm font-medium text-gray-700">
-              Comportamentos automáticos de CRM
-            </p>
-            <p className="mt-1 text-xs text-gray-400">
-              Reativação de inativos, mensagem de aniversário e follow-up pós-pedido
-              diretamente configuráveis aqui.
-            </p>
-          </section>
-
-        </div>
       )}
 
     </div>
