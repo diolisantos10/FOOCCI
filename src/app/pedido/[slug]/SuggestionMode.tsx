@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 
 // ── Shared types (mirror PedidoClient) ────────────────────────────────────────
 
@@ -326,18 +326,10 @@ export function SuggestionSheet({
   const [keyword, setKeyword] = useState("");
   const [results, setResults] = useState<MenuItem[]>([]);
 
-  // Guard against iOS "ghost tap": when the keyboard dismisses after tapping a
-  // button, iOS fires a delayed synthetic click at the same screen coordinates
-  // which can land on the backdrop and trigger onClose. Block backdrop clicks
-  // for 600 ms after any step transition.
-  const blockBackdropUntil = useRef(0);
-  function blockBackdrop() { blockBackdropUntil.current = Date.now() + 600; }
-
   const stepIndex = { protein: 0, style: 1, ingredient: 2, results: 3 }[step];
   const totalSteps = 3; // show 3 dots (protein, style, ingredient) before results
 
   function goResults(kw: string) {
-    blockBackdrop();
     const suggestions = getSuggestions(
       categories,
       protein ?? "qualquer",
@@ -362,15 +354,15 @@ export function SuggestionSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end">
-      {/* Backdrop — guarded against iOS ghost taps after keyboard dismissal */}
+    <>
+      {/* Backdrop — independent fixed layer so iOS keyboard doesn't affect stacking */}
       <div
-        className="absolute inset-0 bg-black/40"
-        onClick={() => { if (Date.now() > blockBackdropUntil.current) onClose(); }}
+        className="fixed inset-0 z-40 bg-black/40"
+        onClick={onClose}
       />
 
-      {/* Sheet */}
-      <div className="relative z-10 w-full rounded-t-3xl bg-gray-50 shadow-2xl max-h-[85dvh] flex flex-col">
+      {/* Sheet — own fixed layer at z-50, always above backdrop */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-gray-50 shadow-2xl max-h-[85dvh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 bg-white rounded-t-3xl border-b border-gray-100">
           <div>
@@ -436,7 +428,6 @@ export function SuggestionSheet({
                   emoji={o.emoji}
                   active={protein === o.value}
                   onClick={() => {
-                    blockBackdrop();
                     setProtein(o.value);
                     setStep("style");
                   }}
@@ -461,7 +452,6 @@ export function SuggestionSheet({
                     emoji={o.emoji}
                     active={style === o.value}
                     onClick={() => {
-                      blockBackdrop();
                       setStyle(o.value);
                       setStep("ingredient");
                     }}
@@ -487,7 +477,6 @@ export function SuggestionSheet({
                 onKeyDown={(e) => { if (e.key === "Enter") goResults(keyword); }}
                 placeholder="Ex: pepperoni, cream cheese, bacon…"
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-100"
-                autoFocus
               />
               <div className="flex gap-2">
                 <button
@@ -559,6 +548,6 @@ export function SuggestionSheet({
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
