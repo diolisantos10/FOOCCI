@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 // ── Shared types (mirror PedidoClient) ────────────────────────────────────────
 
@@ -326,10 +326,18 @@ export function SuggestionSheet({
   const [keyword, setKeyword] = useState("");
   const [results, setResults] = useState<MenuItem[]>([]);
 
+  // Guard against iOS "ghost tap": when the keyboard dismisses after tapping a
+  // button, iOS fires a delayed synthetic click at the same screen coordinates
+  // which can land on the backdrop and trigger onClose. Block backdrop clicks
+  // for 600 ms after any step transition.
+  const blockBackdropUntil = useRef(0);
+  function blockBackdrop() { blockBackdropUntil.current = Date.now() + 600; }
+
   const stepIndex = { protein: 0, style: 1, ingredient: 2, results: 3 }[step];
   const totalSteps = 3; // show 3 dots (protein, style, ingredient) before results
 
   function goResults(kw: string) {
+    blockBackdrop();
     const suggestions = getSuggestions(
       categories,
       protein ?? "qualquer",
@@ -355,8 +363,11 @@ export function SuggestionSheet({
 
   return (
     <div className="fixed inset-0 z-40 flex items-end">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      {/* Backdrop — guarded against iOS ghost taps after keyboard dismissal */}
+      <div
+        className="absolute inset-0 bg-black/40"
+        onClick={() => { if (Date.now() > blockBackdropUntil.current) onClose(); }}
+      />
 
       {/* Sheet */}
       <div className="relative z-10 w-full rounded-t-3xl bg-gray-50 shadow-2xl max-h-[85dvh] flex flex-col">
@@ -425,6 +436,7 @@ export function SuggestionSheet({
                   emoji={o.emoji}
                   active={protein === o.value}
                   onClick={() => {
+                    blockBackdrop();
                     setProtein(o.value);
                     setStep("style");
                   }}
@@ -449,6 +461,7 @@ export function SuggestionSheet({
                     emoji={o.emoji}
                     active={style === o.value}
                     onClick={() => {
+                      blockBackdrop();
                       setStyle(o.value);
                       setStep("ingredient");
                     }}
