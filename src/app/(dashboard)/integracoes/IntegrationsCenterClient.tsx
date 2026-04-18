@@ -633,8 +633,8 @@ function DetailPanel({
                 </p>
               )}
               {view?.lastError && (
-                <p className="text-red-600">
-                  <span className="font-medium">Erro:</span> {view.lastError}
+                <p className={view.isActive ? "text-green-700 font-medium" : "text-red-600"}>
+                  <span>{view.isActive ? "✓" : "⚠"}</span> {view.lastError}
                 </p>
               )}
             </div>

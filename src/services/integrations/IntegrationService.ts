@@ -310,12 +310,12 @@ export class IntegrationService {
       result = { success: false, message: `Erro ao testar: ${msg}` };
     }
 
-    // Persist test outcome
+    // Persist test outcome — always store the message so UI can show it on reopen
     await prisma.integrationConfig.update({
       where: { restaurantId_provider: { restaurantId, provider } },
       data: {
         lastTestedAt: new Date(),
-        lastError:    result.success ? null : result.message,
+        lastError:    result.message,   // stored for both success and failure
         isActive:     result.success,
       },
     });
