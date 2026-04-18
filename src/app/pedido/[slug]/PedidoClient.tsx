@@ -395,7 +395,7 @@ function ProductModal({
           </button>
         </div>
 
-        {/* ── Content — scrolls if needed ── */}
+        {/* ── Content — name + description scroll, variants if any ── */}
         <div className="flex-1 overflow-y-auto px-6 pt-5 pb-2">
           <h2 className="text-xl font-bold leading-snug text-gray-900">{item.name}</h2>
 
@@ -403,7 +403,7 @@ function ProductModal({
             <p className="mt-2 text-sm leading-relaxed text-gray-500">{item.description}</p>
           )}
 
-          {item.hasVariants && item.variants.length > 0 ? (
+          {item.hasVariants && item.variants.length > 0 && (
             <div className="mt-5">
               <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                 Escolha uma opção
@@ -433,14 +433,14 @@ function ProductModal({
                   );
                 })}
               </div>
-              {qty > 0 && (
-                <p className="mt-3 text-center text-xs text-gray-400">
-                  {qty} {qty === 1 ? "item" : "itens"} no carrinho
-                </p>
-              )}
             </div>
-          ) : (
-            <div className="mt-6 flex items-center justify-between gap-4">
+          )}
+        </div>
+
+        {/* ── Footer — price + CTA pinned to bottom ── */}
+        <div className="shrink-0 px-6 pb-8 pt-4 border-t border-gray-100 bg-white">
+          {!item.hasVariants ? (
+            <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Preço</p>
                 <p className="text-2xl font-bold text-gray-900">
@@ -454,11 +454,12 @@ function ProductModal({
                 {qty > 0 ? `+ Adicionar (${qty} no carrinho)` : "Adicionar ao pedido"}
               </button>
             </div>
-          )}
+          ) : qty > 0 ? (
+            <p className="text-center text-xs text-gray-400">
+              {qty} {qty === 1 ? "item" : "itens"} no carrinho
+            </p>
+          ) : null}
         </div>
-
-        {/* ── Footer CTA (non-variant items already have inline CTA above) ── */}
-        <div className="shrink-0 px-6 pb-8 pt-3" />
       </div>
     </div>
   );
