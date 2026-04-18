@@ -8,6 +8,9 @@
  * - Safe async: resolves only on process 'close'
  * - No terminal required — triggered from the QA panel UI
  *
+ * Security: requires a valid session with OWNER role. This endpoint
+ * is expensive (90 s process spawn) and must never be open to regular staff.
+ *
  * Response (success):
  *   {
  *     total: number,
@@ -21,9 +24,10 @@
  *   { error: string, detail?: string }
  */
 
-import { NextResponse } from "next/server";
-import { spawn }        from "child_process";
-import path             from "path";
+import { NextRequest, NextResponse } from "next/server";
+import { spawn } from "child_process";
+import path from "path";
+import { getTenantContext } from "@/lib/tenant";
 
 // ── Types matching Playwright's JSON reporter output ────────────
 
@@ -124,7 +128,17 @@ function runPlaywright(cwd: string, timeoutMs: number, baseUrl: string): Promise
 
 const TIMEOUT_MS = 90_000; // 90 seconds
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Auth guard: must be authenticated with OWNER role.
+  // Middleware already blocks unauthenticated requests, but we enforce role here.
+  const ctx = getTenantContext(req);
+  if (!ctx) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (ctx.role !== "OWNER") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const cwd     = process.cwd();
     const baseUrl = new URL(req.url).origin;

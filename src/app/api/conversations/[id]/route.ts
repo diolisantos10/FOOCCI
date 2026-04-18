@@ -7,7 +7,16 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { ConversationService } from "@/services/conversation/ConversationService";
 import { patchConversationSchema } from "@/validators/conversation";
+import { auditLog, AuditAction } from "@/lib/audit";
 import { ok, badRequest, unauthorized, notFound, serverError } from "@/lib/api-response";
+
+// Map conversation patch actions to audit actions
+const ACTION_AUDIT_MAP: Record<string, AuditAction> = {
+  assign:   "conversation.takeover",
+  unassign: "conversation.assign",
+  resolve:  "conversation.resolve",
+  reopen:   "conversation.reopen",
+};
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -45,6 +54,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (result.status === 404) return notFound(result.error);
       if (result.status === 400) return badRequest(result.error);
       return serverError(result.error);
+    }
+
+    // Audit sensitive conversation state changes
+    const auditAction = ACTION_AUDIT_MAP[parsed.data.action];
+    if (auditAction) {
+      auditLog({
+        action: auditAction,
+        restaurantId: ctx.restaurantId,
+        userId: ctx.userId,
+        targetId: params.id,
+        meta: { action: parsed.data.action },
+      });
     }
 
     return ok(result.data);

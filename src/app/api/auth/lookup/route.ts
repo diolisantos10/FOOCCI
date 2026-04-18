@@ -8,16 +8,29 @@
  * Route is already public via the /api/auth/* whitelist in middleware.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
-export async function POST(req: Request) {
-  const body = await req.json().catch(() => null);
-  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : null;
+const bodySchema = z.object({
+  email: z.string().email(),
+});
 
-  if (!email) {
+export async function POST(req: NextRequest) {
+  // Rate limit: 10 lookups / minute per IP to slow credential enumeration
+  const ip = getClientIp(req);
+  const rl = rateLimit({ key: `lookup:${ip}`, limit: 10, windowMs: 60_000 });
+  if (rl.limited) return rateLimitResponse(rl.retryAfter) as NextResponse;
+
+  const raw = await req.json().catch(() => null);
+  const parsed = bodySchema.safeParse(raw);
+
+  if (!parsed.success) {
     return NextResponse.json({ error: "Email required." }, { status: 400 });
   }
+
+  const email = parsed.data.email.toLowerCase();
 
   const user = await prisma.user.findFirst({
     where: { email, isActive: true },

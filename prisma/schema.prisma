@@ -28,6 +28,7 @@ model Restaurant {
   email       String?
   logoUrl     String?
   address     String?
+  description String?
   timezone    String   @default("America/Sao_Paulo")
   isActive    Boolean  @default(true)
   plan        Plan     @default(STARTER)
@@ -44,8 +45,19 @@ model Restaurant {
   offers           Offer[]
   customerSegments CustomerSegment[]
   aiLogs           AIInteractionLog[]
-  evolutionConfig  EvolutionConfig?
-  brandConfig      RestaurantBrandConfig?
+  evolutionConfig    EvolutionConfig?
+  brandConfig        RestaurantBrandConfig?
+  agentConfig        WhatsAppAgentConfig?
+  deliveryConfig     DeliveryConfig?
+  deliveryZones      DeliveryZone[]
+  businessHours      BusinessHours[]
+  paymentSettings    PaymentSettings?
+  storePolicies      StorePolicies?
+  integrationConfigs IntegrationConfig[]
+  promotions         Promotion[]
+  crmAutomations     CRMAutomation[]
+  crmActionLogs      CRMActionLog[]
+  crmProfile         RestaurantCRMProfile?
 
   @@map("restaurants")
 }
@@ -201,6 +213,7 @@ model MenuItem {
   orderItems      OrderItem[]
   orderDraftItems OrderDraftItem[]
   variants        MenuItemVariant[]
+  extras          MenuItemExtra[]
 
   @@index([categoryId])
   @@map("menu_items")
@@ -671,6 +684,32 @@ model EvolutionConfig {
 }
 
 // ═══════════════════════════════════════════
+//  GENERIC INTEGRATION CONFIG
+//  Stores per-restaurant credentials for external integrations
+//  (Stone, Mercado Pago, Tipos, etc.).
+//  WhatsApp credentials live in EvolutionConfig above.
+//  configBlob is AES-256-GCM encrypted JSON containing all fields.
+// ═══════════════════════════════════════════
+
+model IntegrationConfig {
+  id           String    @id @default(cuid())
+  restaurantId String
+  provider     String    // "stone" | "mercadopago" | "tipos"
+  configBlob   String    // AES-256-GCM encrypted JSON
+  isActive     Boolean   @default(false)
+  lastTestedAt DateTime?
+  lastError    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, provider])
+  @@index([restaurantId])
+  @@map("integration_configs")
+}
+
+// ═══════════════════════════════════════════
 //  RESTAURANT BRAND CONFIG  (Phase 4)
 //  Per-restaurant AI brand voice and ordering engine settings.
 //  Injected into PromptBuilder to shape the AI's tone, style,
@@ -707,12 +746,79 @@ model RestaurantBrandConfig {
   maxHistoryMessages   Int      @default(20)
   // how many recent messages to include in the prompt
 
+  // ── Experience / behavioral config (Phase 5) ─────────────────
+  personalityPreset    String   @default("traditional")
+  // traditional | fast | premium | young | aggressive
+  upsellIntensity      String   @default("medium")
+  // low | medium | high
+  salesFocus           String   @default("balanced")
+  // balanced | ticket | volume
+  salesPriority        String   @default("bestsellers")
+  // bestsellers | high_margin | promotions
+
+  // ── Visual identity ──────────────────────────────────────────
+  brandPrimaryColor    String?  // hex e.g. #6366f1
+  brandSecondaryColor  String?  // hex e.g. #8b5cf6
+
+  // ── Social links (shown in ordering header if filled) ──────
+  instagramUrl         String?
+  tiktokUrl            String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("restaurant_brand_configs")
+}
+
+// ═══════════════════════════════════════════
+//  WHATSAPP AGENT CONFIG
+// ═══════════════════════════════════════════
+
+model WhatsAppAgentConfig {
+  id              String   @id @default(cuid())
+  restaurantId    String   @unique
+
+  // Personality
+  agentName       String   @default("Agente")
+  tone            String   @default("informal")      // informal | neutral | premium
+  style           String   @default("sales_driven")  // direct | consultive | sales_driven
+
+  // Welcome message
+  welcomeMessage  String   @default("Olá! Bem-vindo! 😊 O que você deseja?")
+
+  // Entry menu options — JSON array of { id, label, flow, message? }
+  // flow: order | handoff | menu | promotions | custom
+  menuOptions     Json?
+
+  // Order action
+  orderPreMessage String   @default("Ótimo! Aqui está nosso cardápio 👇")
+  menuUrl         String?
+
+  // Human handoff
+  handoffPhone    String?
+  handoffMessage  String   @default("Vou te conectar com um atendente. Um momento! 👋")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_agent_configs")
+}
+
+model MenuItemExtra {
+  id         String  @id @default(cuid())
+  menuItemId String
+  name       String
+  quantity   Int     @default(1)
+  price      Decimal @db.Decimal(10, 2)
+
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([menuItemId])
+  @@map("menu_item_extras")
 }
 
 model MediaUpload {
@@ -724,4 +830,290 @@ model MediaUpload {
 
   @@index([restaurantId])
   @@map("media_uploads")
+}
+
+// ═══════════════════════════════════════════
+//  GENERAL SETTINGS
+// ═══════════════════════════════════════════
+
+model DeliveryConfig {
+  id               String   @id @default(cuid())
+  restaurantId     String   @unique
+
+  // Global toggles
+  enabled          Boolean  @default(true)
+  pickupEnabled    Boolean  @default(true)
+
+  // UI mode — "simple" | "advanced" | "distance"
+  mode             String   @default("simple")
+
+  // Simple-mode fields
+  fee              Decimal? @db.Decimal(10, 2)
+  estimatedMinutes Int?
+  areaDescription  String?
+
+  // Commercial rules (apply in all modes)
+  minOrderValue    Decimal? @db.Decimal(10, 2)
+  freeDeliveryAbove Decimal? @db.Decimal(10, 2) // free delivery above this order value
+
+  // Distance-mode fields: fee = baseFee + (distanceKm * pricePerKm), clamped to [minFee, maxFee]
+  distanceBaseFee      Decimal? @db.Decimal(10, 2)
+  distancePricePerKm   Decimal? @db.Decimal(10, 2)
+  distanceMaxKm        Float?
+  distanceMinFee       Decimal? @db.Decimal(10, 2)
+  distanceMaxFee       Decimal? @db.Decimal(10, 2)
+  distanceEstimatedBase Int?
+
+  // Phase 3 — dynamic pricing hooks (not yet active)
+  peakHoursEnabled Boolean  @default(false)
+  peakHoursConfig  String?  // JSON blob: [{ days, startTime, endTime, surchargePercent }]
+
+  // Phase 5 — map-ready geographic anchor
+  geoCenter        String?  // JSON: { lat: number, lng: number }
+  geoRadiusKm      Float?   // max delivery radius in km
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("delivery_configs")
+}
+
+// ── Delivery Zones (advanced mode) ─────────────────────────────────────────────
+//  Each zone represents a distance tier with its own fee and estimated time.
+//  Phase 3: peakFee field for future time-based surcharge.
+//  Phase 5: geoPolygon field for future map-drawn boundaries.
+
+model DeliveryZone {
+  id               String   @id @default(cuid())
+  restaurantId     String
+
+  name             String   // e.g. "Zona 1 — Centro", "Raio 5km"
+  sortOrder        Int      @default(0)
+  maxDistanceKm    Float    // upper bound for this tier (km)
+  fee              Decimal  @db.Decimal(10, 2)
+  estimatedMinutes Int
+  minOrderValue    Decimal? @db.Decimal(10, 2) // zone-level minimum (overrides global)
+  isActive         Boolean  @default(true)
+
+  // Phase 3 — time-based pricing hook
+  peakFee          Decimal? @db.Decimal(10, 2) // future: surge fee during peak hours
+
+  // Phase 5 — map-ready boundary
+  geoPolygon       String?  // future: JSON polygon [[lat,lng], …]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, sortOrder])
+  @@map("delivery_zones")
+}
+
+model BusinessHours {
+  id           String   @id @default(cuid())
+  restaurantId String
+  dayOfWeek    Int      // 0 = Sunday … 6 = Saturday
+  isOpen       Boolean  @default(true)
+  openTime     String   @default("09:00")   // "HH:MM"
+  closeTime    String   @default("22:00")   // "HH:MM"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, dayOfWeek])
+  @@index([restaurantId])
+  @@map("business_hours")
+}
+
+model PaymentSettings {
+  id            String   @id @default(cuid())
+  restaurantId  String   @unique
+  acceptPix     Boolean  @default(true)
+  acceptCash    Boolean  @default(true)
+  acceptCard    Boolean  @default(true)
+  acceptLink    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("payment_settings")
+}
+
+model StorePolicies {
+  id                 String   @id @default(cuid())
+  restaurantId       String   @unique
+  termsOfUse         String?
+  privacyPolicy      String?
+  cancellationPolicy String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("store_policies")
+}
+
+// ═══════════════════════════════════════════
+//  PROMOTIONS  (Marketing Engine)
+// ═══════════════════════════════════════════
+
+enum PromotionType {
+  PERCENTAGE    // e.g. 10% off
+  FIXED         // e.g. R$5 off
+  COMBO         // bundled offer (configured via description/rules)
+  FREE_DELIVERY // zeroes delivery fee
+  COUPON        // code-gated discount
+}
+
+enum PromotionStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+}
+
+enum PromotionChannel {
+  QR_MENU
+  DELIVERY
+  WHATSAPP
+  ALL
+}
+
+enum PromotionTarget {
+  PRODUCT   // applies to specific products
+  CATEGORY  // applies to a whole category
+  ORDER     // applies to the whole order
+}
+
+model Promotion {
+  id                String           @id @default(cuid())
+  restaurantId      String
+  name              String
+  description       String?
+  type              PromotionType
+  status            PromotionStatus  @default(DRAFT)
+  discountValue     Decimal          @default(0) @db.Decimal(10, 2)
+
+  // Targeting
+  target            PromotionTarget  @default(ORDER)
+  targetProductIds  String[]         @default([])
+  targetCategoryIds String[]         @default([])
+  channel           PromotionChannel @default(ALL)
+
+  // Coupon
+  couponCode        String?
+
+  // Validity window
+  startsAt          DateTime?
+  endsAt            DateTime?
+  daysOfWeek        Int[]            @default([]) // 0=Sun … 6=Sat; empty = every day
+  timeFrom          String?          // "HH:MM" (local restaurant time)
+  timeTo            String?          // "HH:MM"
+
+  // Eligibility rules
+  minOrderValue     Decimal?         @db.Decimal(10, 2)
+  minQuantity       Int?
+  maxUses           Int?
+  usedCount         Int              @default(0)
+  oneTimePerUser    Boolean          @default(false)
+  combinable        Boolean          @default(false)
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@map("promotions")
+}
+
+// ═══════════════════════════════════════════
+//  CRM AUTOMATIONS
+// ═══════════════════════════════════════════
+
+enum AutomationTrigger {
+  REACTIVATION // fires after X days of customer inactivity
+  BIRTHDAY     // fires on customer birthday
+  POST_ORDER   // fires X days after a completed order
+}
+
+model CRMAutomation {
+  id               String            @id @default(cuid())
+  restaurantId     String
+  trigger          AutomationTrigger
+  isEnabled        Boolean           @default(false)
+  messageTemplate  String            @default("")
+  triggerAfterDays Int               @default(30)
+  discountType     String?           // "PERCENTAGE" | "FIXED" | null
+  discountValue    Decimal?          @db.Decimal(10, 2)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, trigger])
+  @@index([restaurantId])
+  @@map("crm_automations")
+}
+
+// ═══════════════════════════════════════════
+//  CRM ADAPTIVE BRAIN
+// ═══════════════════════════════════════════
+
+enum CRMMessageStyle {
+  FRIENDLY
+  PLAYFUL
+  DIRECT
+  EMOTIONAL
+  PREMIUM
+}
+
+/// Tone personality of the restaurant — biases style selection.
+enum CRMToneProfile {
+  CASUAL        // boosts PLAYFUL + FRIENDLY
+  PREMIUM_FEEL  // boosts PREMIUM + EMOTIONAL
+  FRIENDLY      // boosts FRIENDLY + EMOTIONAL
+  SALES_FORWARD // boosts DIRECT + PREMIUM
+}
+
+/// One row per CRM message dispatched. Outcomes updated asynchronously.
+model CRMActionLog {
+  id           String          @id @default(cuid())
+  restaurantId String
+  customerId   String?
+  actionType   String          // maps to MessageIntent values
+  messageStyle CRMMessageStyle
+  messageText  String
+  responded    Boolean         @default(false)
+  converted    Boolean         @default(false)
+  revenue      Decimal?        @db.Decimal(10, 2)
+  respondedAt  DateTime?
+  convertedAt  DateTime?
+  createdAt    DateTime        @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([restaurantId, messageStyle])
+  @@index([restaurantId, createdAt])
+  @@map("crm_action_logs")
+}
+
+/// One row per restaurant. Tone preference + cached style weights.
+model RestaurantCRMProfile {
+  id             String         @id @default(cuid())
+  restaurantId   String         @unique
+  toneProfile    CRMToneProfile @default(FRIENDLY)
+  styleWeights   Json           @default("{}") // { FRIENDLY: 0.3, PLAYFUL: 0.2, ... }
+  profileVersion Int            @default(0)    // bumped each time weights are recomputed
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("restaurant_crm_profiles")
 }

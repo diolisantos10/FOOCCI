@@ -6,18 +6,26 @@
  *
  * POST /api/setup  – creates the first restaurant + owner account.
  *                   Blocked with 403 if any restaurant already exists.
+ *
+ * Security:
+ *   - POST is rate-limited (3 attempts / hour per IP)
+ *   - The restaurant count check and creation happen inside a single Prisma
+ *     transaction so no race condition can produce two tenants.
+ *   - bcrypt is computed BEFORE entering the transaction to keep the DB
+ *     connection hold time short.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { RestaurantService } from "@/services/restaurant/RestaurantService";
 import { z } from "zod";
+import { hash } from "bcryptjs";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 const setupSchema = z.object({
   restaurantName: z.string().min(2).max(100),
-  ownerName: z.string().min(2).max(100),
-  ownerEmail: z.string().email(),
-  ownerPassword: z.string().min(8).max(72),
+  ownerName:      z.string().min(2).max(100),
+  ownerEmail:     z.string().email(),
+  ownerPassword:  z.string().min(8).max(72),
 });
 
 function toSlug(name: string): string {
@@ -30,15 +38,10 @@ function toSlug(name: string): string {
     .slice(0, 60);
 }
 
-async function isSetupRequired(): Promise<boolean> {
-  const count = await prisma.restaurant.count();
-  return count === 0;
-}
-
 export async function GET() {
   try {
-    const setupRequired = await isSetupRequired();
-    return NextResponse.json({ setupRequired });
+    const count = await prisma.restaurant.count();
+    return NextResponse.json({ setupRequired: count === 0 });
   } catch {
     return NextResponse.json(
       { error: "Could not reach the database. Check DATABASE_URL." },
@@ -47,14 +50,12 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
-  // Guard: block if already initialised
-  const setupRequired = await isSetupRequired().catch(() => false);
-  if (!setupRequired) {
-    return NextResponse.json(
-      { error: "Setup already completed." },
-      { status: 403 }
-    );
+export async function POST(req: NextRequest) {
+  // Rate limit: 3 attempts / hour per IP
+  const ip = getClientIp(req);
+  const rl = rateLimit({ key: `setup:${ip}`, limit: 3, windowMs: 60 * 60_000 });
+  if (rl.limited) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 });
   }
 
   const body = await req.json().catch(() => null);
@@ -72,34 +73,71 @@ export async function POST(req: Request) {
 
   const { restaurantName, ownerName, ownerEmail, ownerPassword } = parsed.data;
 
+  // Hash password before entering the transaction (bcrypt is slow by design;
+  // we don't want to hold a DB connection open while it runs).
+  const hashedPassword = await hash(ownerPassword, 12);
+
   const baseSlug = toSlug(restaurantName) || "restaurante";
 
-  // Ensure slug uniqueness (unlikely but safe)
-  let slug = baseSlug;
-  const existing = await prisma.restaurant.findUnique({ where: { slug } });
-  if (existing) {
-    slug = `${baseSlug}-${Date.now()}`;
+  try {
+    // Atomically check "no restaurant yet" and create the first one.
+    // Using a transaction prevents a race condition where two simultaneous
+    // POST requests both see count=0 and try to create a tenant.
+    const result = await prisma.$transaction(async (tx) => {
+      // Re-check inside the transaction
+      const count = await tx.restaurant.count();
+      if (count > 0) return null; // already set up
+
+      // Ensure slug uniqueness (unlikely collision but handle it)
+      const slugTaken = await tx.restaurant.findUnique({
+        where: { slug: baseSlug },
+        select: { id: true },
+      });
+      const slug = slugTaken ? `${baseSlug}-${Date.now()}` : baseSlug;
+
+      const restaurant = await tx.restaurant.create({
+        data: {
+          name: restaurantName,
+          slug,
+          timezone: "America/Sao_Paulo",
+        },
+      });
+
+      const owner = await tx.user.create({
+        data: {
+          restaurantId: restaurant.id,
+          name: ownerName,
+          email: ownerEmail,
+          password: hashedPassword,
+          role: "OWNER",
+        },
+      });
+
+      return { restaurant, owner };
+    });
+
+    if (!result) {
+      return NextResponse.json(
+        { error: "Setup already completed." },
+        { status: 403 }
+      );
+    }
+
+    const { password: _pwd, ...ownerWithoutPassword } = result.owner;
+
+    return NextResponse.json(
+      {
+        ok: true,
+        restaurantSlug: result.restaurant.slug,
+        ownerEmail: ownerWithoutPassword.email,
+      },
+      { status: 201 }
+    );
+  } catch (err) {
+    console.error("[POST /api/setup]", err);
+    return NextResponse.json(
+      { error: "Setup failed. Check server logs." },
+      { status: 500 }
+    );
   }
-
-  const result = await RestaurantService.register({
-    name: restaurantName,
-    slug,
-    ownerName,
-    ownerEmail,
-    ownerPassword,
-    timezone: "America/Sao_Paulo",
-  });
-
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.status });
-  }
-
-  return NextResponse.json(
-    {
-      ok: true,
-      restaurantSlug: result.data.restaurant.slug,
-      ownerEmail: result.data.owner.email,
-    },
-    { status: 201 }
-  );
 }

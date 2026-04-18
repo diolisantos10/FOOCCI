@@ -7,6 +7,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { upsertEvolutionConfigSchema } from "@/validators/evolution";
+import { auditLog } from "@/lib/audit";
 import {
   ok,
   badRequest,
@@ -50,6 +51,13 @@ export async function PUT(req: NextRequest) {
 
     const result = await EvolutionConfigService.upsert(ctx.restaurantId, parsed.data);
     if (!result.ok) return serverError(result.error);
+
+    auditLog({
+      action: "integration.update",
+      restaurantId: ctx.restaurantId,
+      userId: ctx.userId,
+      meta: { integration: "evolution" },
+    });
 
     return ok(result.data);
   } catch (err) {

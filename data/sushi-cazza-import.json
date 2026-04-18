@@ -1,0 +1,514 @@
+{
+  "_meta": {
+    "source": "Sushi Cazza — Neemo platform export",
+    "generated": "2026-04-11",
+    "scope": "First import batch — 7 categories",
+    "total_categories": 7,
+    "total_items": 46
+  },
+  "categories": [
+    {
+      "name": "Entradas",
+      "description": "Entradas leves e saborosas para começar o pedido com clássicos da culinária japonesa. Perfeitas para dividir.",
+      "items": [
+        {
+          "name": "Ceviche",
+          "description": "Peixe branco cortado em cubos marinado no suco de limão, cebola roxa, pimenta e cebolinha.",
+          "price": 62.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970279/325125_original_item.png",
+          "tags": ["japones", "entrada", "ceviche", "peixe", "cru", "citrico"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Carpaccio de Salmão (20 Lâminas)",
+          "description": "20 lâminas de salmão finas regadas ao molho de shoyu, limão e cebolinha.",
+          "price": 72.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970280/c9996acd834cbeaf810bc257183b72a7_item.png",
+          "tags": ["japones", "entrada", "salmao", "carpaccio", "cru", "premium"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Sunomono",
+          "description": "Típica salada de pepino oriental agridoce.",
+          "price": 24.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970283/sunomono_item.png",
+          "tags": ["japones", "entrada", "salada", "leve", "vegano"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Shimeji",
+          "description": "Cogumelos salteados na manteiga, shoyu e cebolinha.",
+          "price": 30.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970281/SHIMEJI_item.png",
+          "tags": ["japones", "entrada", "shimeji", "cogumelo", "quente"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Guioza (6 Unidades)",
+          "description": "Pastelzinhos orientais fritos, crocantes por fora e suculentos por dentro.",
+          "price": 28.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970286/68bf0ef705a832e831c27dc5083235f5_item.png",
+          "tags": ["japones", "entrada", "guioza", "empanado", "quente"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Harumaki de Queijo (5 Unidades)",
+          "description": "Rolinho primavera da cozinha oriental, recheado com queijo.",
+          "price": 29.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970285/HARUMAKI_item.png",
+          "tags": ["japones", "entrada", "harumaki", "queijo", "empanado", "quente"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        }
+      ]
+    },
+    {
+      "name": "Hot Roll",
+      "description": "Sushis empanados e quentinhos, crocantes por fora e macios por dentro. O carro-chefe da Cazza.",
+      "items": [
+        {
+          "name": "Hot Roll (6 Unidades)",
+          "description": "Sushi de salmão grelhado empanado, finalizado com cream cheese, cebolinha e tarê.",
+          "price": 29.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483445/ifood_50_item.png",
+          "tags": ["japones", "hot_roll", "salmao", "grelhado", "empanado", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Hot Roll (12 Unidades)",
+          "description": "Sushi de salmão grelhado empanado, finalizado com cream cheese, cebolinha e tarê.",
+          "price": 39.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970428/ifood_50_item.png",
+          "tags": ["japones", "hot_roll", "salmao", "grelhado", "empanado", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Hot Roll Especial (6 Unidades)",
+          "description": "Sushi de salmão grelhado empanado com cobertura extra de salmão grelhado, cream cheese, cebolinha e tarê.",
+          "price": 39.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551669/photo1732350463.jpeg_item.png",
+          "tags": ["japones", "hot_roll", "salmao", "grelhado", "empanado", "cream_cheese", "especial"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Hot Roll Especial (12 Unidades)",
+          "description": "Sushi de salmão grelhado empanado com cobertura extra de salmão grelhado, cream cheese, cebolinha e tarê.",
+          "price": 54.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970427/download__7__item.png",
+          "tags": ["japones", "hot_roll", "salmao", "grelhado", "empanado", "cream_cheese", "especial"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Hot Crispy (6 Unidades)",
+          "description": "Sushi de salmão grelhado empanado com cream cheese, crispy de couve, cebolinha e tarê.",
+          "price": 32.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483474/photo1704404283.jpeg_item.png",
+          "tags": ["japones", "hot_roll", "salmao", "grelhado", "empanado", "crocante", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Hot Crispy (12 Unidades)",
+          "description": "Sushi de salmão grelhado empanado com cream cheese, crispy de couve, cebolinha e tarê.",
+          "price": 42.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483473/photo1704404228.jpeg_item.png",
+          "tags": ["japones", "hot_roll", "salmao", "grelhado", "empanado", "crocante", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Hot Roll Doce de Leite (8 Unidades)",
+          "description": "Hot roll de banana com cobertura de doce de leite polvilhado com canela.",
+          "price": 28.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551673/photo1732350879.jpeg_item.png",
+          "tags": ["hot_roll", "doce", "banana", "doce_de_leite", "sobremesa"],
+          "upsellHints": [],
+          "modifiers": []
+        },
+        {
+          "name": "Hot Roll Nutella (8 Unidades)",
+          "description": "Hot roll de banana com cobertura de Nutella.",
+          "price": 28.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551674/photo1732351002.jpeg_item.png",
+          "tags": ["hot_roll", "doce", "banana", "nutella", "sobremesa"],
+          "upsellHints": [],
+          "modifiers": []
+        }
+      ]
+    },
+    {
+      "name": "Temakis",
+      "description": "Cones de alga com arroz e recheios variados, feitos na hora. Clássicos do delivery japonês.",
+      "items": [
+        {
+          "name": "Temaki Skin",
+          "description": "Pele de salmão frita, cream cheese e cebolinha.",
+          "price": 32.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2711095/photo1756430337.jpeg_item.png",
+          "tags": ["japones", "temaki", "salmao", "skin", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Salmão Cru",
+          "description": "Salmão cru cortado em cubos, cream cheese e cebolinha.",
+          "price": 42.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970350/ifood_95_item.png",
+          "tags": ["japones", "temaki", "salmao", "cru", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Salmão Shimeji",
+          "description": "Salmão cru em cubos com shimeji, cream cheese e cebolinha.",
+          "price": 44.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551665/photo1732347711.jpeg_item.png",
+          "tags": ["japones", "temaki", "salmao", "cru", "shimeji", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Salmão Grelhado",
+          "description": "Salmão grelhado, cream cheese e cebolinha.",
+          "price": 42.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970349/download__5__item.png",
+          "tags": ["japones", "temaki", "salmao", "grelhado", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Hot Roll",
+          "description": "Temaki de salmão grelhado empanado, cream cheese, cebolinha e tarê.",
+          "price": 46.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970341/photo1724225345.jpeg_item.png",
+          "tags": ["japones", "temaki", "salmao", "grelhado", "empanado", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Salmão Cazza",
+          "description": "Cubos de salmão empanado, cream cheese, cebolinha e tarê.",
+          "price": 46.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970343/photo1724225304.jpeg_item.png",
+          "tags": ["japones", "temaki", "salmao", "empanado", "cream_cheese", "especial"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Hakone",
+          "description": "Salmão empanado com camarão, cream cheese, cebolinha e gergelim.",
+          "price": 54.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504177/photo1726637332.jpeg_item.png",
+          "tags": ["japones", "temaki", "salmao", "camarao", "empanado", "cream_cheese", "premium"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Nacho",
+          "description": "Salmão cru com cream cheese, nachos e cebolinha.",
+          "price": 44.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2351452/photo1712960053.jpeg_item.png",
+          "tags": ["japones", "temaki", "salmao", "cru", "cream_cheese", "nacho"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Califórnia",
+          "description": "Manga, pepino e kani.",
+          "price": 28.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970348/5efe07ad-6dc8-4cad-b60c-2a9aac1e01b4_item.png",
+          "tags": ["japones", "temaki", "california", "kani", "manga", "leve"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Shimeji",
+          "description": "Shimeji, cream cheese e cebolinha.",
+          "price": 36.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551664/photo1732347601.jpeg_item.png",
+          "tags": ["japones", "temaki", "shimeji", "cream_cheese", "vegetariano"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Ebi Fry",
+          "description": "Camarão empanado com cream cheese e cebolinha.",
+          "price": 54.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551666/photo1732348661.jpeg_item.png",
+          "tags": ["japones", "temaki", "camarao", "empanado", "cream_cheese", "ebi"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Ebi",
+          "description": "Camarão cozido com cream cheese, cebolinha e gergelim.",
+          "price": 48.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504181/photo1731547418.jpeg_item.png",
+          "tags": ["japones", "temaki", "camarao", "cream_cheese", "ebi"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Temaki Salmão Ebi",
+          "description": "Salmão cru em cubos com camarões cozidos, cream cheese, cebolinha e gergelim.",
+          "price": 54.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504176/photo1726637063.jpeg_item.png",
+          "tags": ["japones", "temaki", "salmao", "camarao", "cru", "cream_cheese", "premium"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        }
+      ]
+    },
+    {
+      "name": "Uramaki",
+      "description": "Sushis enrolados com arroz por fora, cobertos de gergelim torrado. Combinações clássicas e especiais da Cazza.",
+      "items": [
+        {
+          "name": "Uramaki de Salmão (10 Unidades)",
+          "description": "Arroz na parte externa com gergelim torrado, recheado de salmão cru e cream cheese.",
+          "price": 36.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483466/ifood_18_item.png",
+          "tags": ["japones", "uramaki", "salmao", "cru", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Uramaki de Salmão Grelhado (10 Unidades)",
+          "description": "Arroz na parte externa com gergelim torrado, recheado de salmão grelhado e cream cheese.",
+          "price": 36.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483463/images_item.png",
+          "tags": ["japones", "uramaki", "salmao", "grelhado", "cream_cheese"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Uramaki de Salmão Especial (10 Unidades)",
+          "description": "Arroz na parte externa com gergelim, recheio de salmão cru e cream cheese, envolto de lâmina de salmão.",
+          "price": 40.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483462/WhatsApp_Image_2021-05-19_at_14_item.png",
+          "tags": ["japones", "uramaki", "salmao", "cru", "cream_cheese", "especial", "premium"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Uramaki Cazza (10 Unidades)",
+          "description": "Arroz na parte externa com gergelim, recheado de salmão empanado, cream cheese e geleia de pimenta.",
+          "price": 38.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483467/Uramaki_item.png",
+          "tags": ["japones", "uramaki", "salmao", "empanado", "cream_cheese", "especial"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Morangume (10 Unidades)",
+          "description": "Arroz na parte externa com gergelim, recheado de salmão cru, morango e cream cheese.",
+          "price": 40.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551662/photo1732342823.jpeg_item.png",
+          "tags": ["japones", "uramaki", "salmao", "cru", "morango", "cream_cheese", "especial"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Uramaki Califórnia (10 Unidades)",
+          "description": "Arroz na parte externa com gergelim, recheado de manga, pepino e kani.",
+          "price": 30.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483461/sushi-hokkai_item.png",
+          "tags": ["japones", "uramaki", "california", "kani", "manga", "leve"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        }
+      ]
+    },
+    {
+      "name": "Sashimis",
+      "description": "Fatias frescas de salmão, ideais para quem prefere o sabor puro do peixe sem arroz.",
+      "items": [
+        {
+          "name": "Sashimi Salmão (10 Unidades)",
+          "description": "10 lâminas de salmão cru, frescas e cortadas na hora.",
+          "price": 68.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970353/photo1724225202.jpeg_item.png",
+          "tags": ["japones", "sashimi", "salmao", "cru", "premium", "leve"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        },
+        {
+          "name": "Sashimi Salmão Flambado (10 Unidades)",
+          "description": "10 lâminas de salmão flambado na pedra de sal.",
+          "price": 68.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970352/photo1724225257.jpeg_item.png",
+          "tags": ["japones", "sashimi", "salmao", "flambado", "premium"],
+          "upsellHints": ["bebida"],
+          "modifiers": []
+        }
+      ]
+    },
+    {
+      "name": "Bebidas",
+      "description": "Bebidas para acompanhar o pedido, das opções clássicas às mais refrescantes.",
+      "items": [
+        {
+          "name": "Água",
+          "description": "Água mineral sem gás.",
+          "price": 7.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970902/Agua_item.png",
+          "tags": ["bebida", "agua", "leve", "refrescante"],
+          "upsellHints": [],
+          "modifiers": []
+        },
+        {
+          "name": "Água com Gás",
+          "description": "Água mineral com gás.",
+          "price": 8.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970900/Agua-c-g_s_item.png",
+          "tags": ["bebida", "agua", "com_gas", "refrescante"],
+          "upsellHints": [],
+          "modifiers": []
+        },
+        {
+          "name": "Refrigerante 350ml",
+          "description": "Refrigerantes gelados em lata 350ml. Escolha o sabor.",
+          "price": 0.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2436286/photo1720103827.jpeg_item.png",
+          "tags": ["bebida", "refrigerante", "lata", "gelado"],
+          "upsellHints": [],
+          "modifiers": [
+            {
+              "name": "Escolha o sabor",
+              "required": true,
+              "options": [
+                { "name": "Coca-Cola", "price": 10.9 },
+                { "name": "Coca-Cola Zero", "price": 10.9 },
+                { "name": "Guaraná", "price": 10.9 },
+                { "name": "Guaraná Zero", "price": 10.9 },
+                { "name": "Fanta Uva", "price": 10.9 },
+                { "name": "Fanta Laranja", "price": 10.9 },
+                { "name": "Schweppes", "price": 10.9 },
+                { "name": "Água Tônica", "price": 10.9 },
+                { "name": "H2OH", "price": 13.9 }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Sucos Naturais",
+          "description": "Sucos naturais feitos na hora. Escolha o sabor.",
+          "price": 0.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2436761/photo1720109634.jpeg_item.png",
+          "tags": ["bebida", "suco", "natural", "refrescante"],
+          "upsellHints": [],
+          "modifiers": [
+            {
+              "name": "Escolha o sabor",
+              "required": true,
+              "options": [
+                { "name": "Laranja", "price": 14.9 },
+                { "name": "Limão", "price": 14.9 },
+                { "name": "Morango", "price": 14.9 },
+                { "name": "Maracujá", "price": 14.9 },
+                { "name": "Abacaxi", "price": 14.9 },
+                { "name": "Laranja com Morango", "price": 16.9 },
+                { "name": "Laranja com Acerola", "price": 16.9 }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Cervejas Long Neck 330ml",
+          "description": "Cervejas long neck 330ml geladas. Escolha a sua.",
+          "price": 0.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2438198/photo1720205449.jpeg_item.png",
+          "tags": ["bebida", "cerveja", "long_neck", "gelado"],
+          "upsellHints": [],
+          "modifiers": [
+            {
+              "name": "Escolha a cerveja",
+              "required": true,
+              "options": [
+                { "name": "Heineken", "price": 14.0 },
+                { "name": "Corona", "price": 14.0 },
+                { "name": "Budweiser", "price": 12.0 },
+                { "name": "Stella Artois", "price": 12.0 },
+                { "name": "Heineken Zero", "price": 12.0 }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Coca-Cola 2L",
+          "description": "Coca-Cola 2 litros. Exclusivo para delivery.",
+          "price": 18.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/1886202/200_item.png",
+          "tags": ["bebida", "refrigerante", "delivery", "familia"],
+          "upsellHints": [],
+          "modifiers": []
+        },
+        {
+          "name": "Coca-Cola Zero 2L",
+          "description": "Coca-Cola Zero 2 litros. Exclusivo para delivery.",
+          "price": 20.0,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2770743/photo1772583500.jpeg_item.png",
+          "tags": ["bebida", "refrigerante", "zero", "delivery", "familia"],
+          "upsellHints": [],
+          "modifiers": []
+        }
+      ]
+    },
+    {
+      "name": "Sobremesas",
+      "description": "Finalizações doces para fechar o pedido de um jeito especial.",
+      "_note": "Todos os itens desta categoria têm entrega não configurada no sistema de origem. Preço baseado no valor de lista (campo 'value'). Verificar configuração de delivery antes de publicar.",
+      "items": [
+        {
+          "name": "Banana Empanada",
+          "description": "Banana empanada com leite condensado e canela.",
+          "price": 28.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486770/photo1724816650.jpeg_item.png",
+          "tags": ["sobremesa", "doce", "banana", "doce_de_leite"],
+          "upsellHints": [],
+          "modifiers": [],
+          "_note": "delivery_price_not_configured — usando valor de lista R$ 28,90"
+        },
+        {
+          "name": "Taça Merengue",
+          "description": "Sobremesa em taça com merengue.",
+          "price": 38.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486768/photo1756208261.jpeg_item.png",
+          "tags": ["sobremesa", "doce", "merengue", "taca"],
+          "upsellHints": [],
+          "modifiers": [],
+          "_note": "delivery_price_not_configured — usando valor de lista R$ 38,90"
+        },
+        {
+          "name": "Taça Nutella",
+          "description": "Sobremesa em taça com Nutella cremosa.",
+          "price": 38.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486767/photo1724816049.jpeg_item.png",
+          "tags": ["sobremesa", "doce", "nutella", "taca"],
+          "upsellHints": [],
+          "modifiers": [],
+          "_note": "delivery_price_not_configured — usando valor de lista R$ 38,90"
+        },
+        {
+          "name": "Taça Banoffee",
+          "description": "Sobremesa em taça no estilo banoffee, com banana e doce de leite.",
+          "price": 30.9,
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486766/photo1756208324.jpeg_item.png",
+          "tags": ["sobremesa", "doce", "banana", "doce_de_leite", "taca"],
+          "upsellHints": [],
+          "modifiers": [],
+          "_note": "delivery_price_not_configured — usando valor de lista R$ 30,90"
+        }
+      ]
+    }
+  ]
+}

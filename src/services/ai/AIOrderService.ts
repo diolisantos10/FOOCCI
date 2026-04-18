@@ -26,6 +26,8 @@ import { BrandConfigService } from "./BrandConfigService";
 import { PromptBuilderService } from "./PromptBuilderService";
 import { UpsellEngine } from "./UpsellEngine";
 import { AIInteractionLogger } from "./AIInteractionLogger";
+import { buildSalesProfile } from "./SalesProfile";
+import { resolveMaxTokens } from "./BehaviorEngine";
 import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
@@ -93,8 +95,10 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
   });
 
   // 3. Load brand config + Evolution config
-  const [brandConfig, configResult] = await Promise.all([
+  const [brandConfig, restaurantName, configResult] = await Promise.all([
     BrandConfigService.getOrDefault(restaurantId),
+    prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } })
+      .then((r) => r?.name ?? ""),
     EvolutionConfigService.getSnapshot(restaurantId),
   ]);
 
@@ -133,8 +137,13 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     requestHandoff: (reason) => { handoffRequested = true; handoffReason = reason; },
   };
 
-  // 5. Build upsell context and inject into prompt
-  const upsellSuggestions = await UpsellEngine.suggest(restaurantId, draftId);
+  // 5. Build sales profile + upsell context
+  const salesProfile = buildSalesProfile(brandConfig, restaurantName);
+  const upsellSuggestions = await UpsellEngine.suggest(
+    restaurantId,
+    draftId,
+    salesProfile.salesPriority
+  );
 
   // 6. Build messages
   const messages = await PromptBuilderService.build({
@@ -169,7 +178,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
       messages: loopMessages,
       tools: AI_TOOL_DEFINITIONS,
       tool_choice: "auto",
-      max_tokens: 600,
+      max_tokens: resolveMaxTokens(salesProfile),
       temperature: 0.3,
     });
 

@@ -32,6 +32,13 @@ type Variant = {
   sortOrder: number;
 };
 
+type Extra = {
+  id: string;
+  name: string;
+  quantity: number;
+  price: number;
+};
+
 type Item = {
   id: string;
   name: string;
@@ -46,6 +53,7 @@ type Item = {
   hasVariants: boolean;
   code: string | null;
   variants: Variant[];
+  extras: Extra[];
 };
 
 type Category = {
@@ -395,7 +403,7 @@ function AddItemForm({
           imageUrl: form.imageUrl || undefined,
         }
       );
-      onAdded({ ...data.data, price: Number(data.data.price), hasVariants: data.data.hasVariants ?? false, variants: [] });
+      onAdded({ ...data.data, price: Number(data.data.price), hasVariants: data.data.hasVariants ?? false, variants: [], extras: [] });
       setForm(EMPTY_ITEM);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao adicionar.");
@@ -686,6 +694,18 @@ function CategoryCard({
               {category.items.length} item
               {category.items.length !== 1 ? "s" : ""}
             </span>
+            {editable && (
+              <button
+                onClick={() => {
+                  setCatForm({ name: category.name, description: category.description ?? "" });
+                  setEditingCat(true);
+                }}
+                title="Editar categoria"
+                className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                ✎
+              </button>
+            )}
             {editable && (
               <button
                 onClick={toggleActive}
@@ -1153,6 +1173,13 @@ function EditItemModal({
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState("");
 
+  // Extras state
+  const [extras, setExtras] = useState<Extra[]>([]);
+  const [addingExtra, setAddingExtra] = useState(false);
+  const [newExtra, setNewExtra] = useState({ name: "", quantity: "1", price: "" });
+  const [extraAddBusy, setExtraAddBusy] = useState(false);
+  const [extraAddError, setExtraAddError] = useState("");
+
   const variantSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -1171,10 +1198,14 @@ function EditItemModal({
       code: item.code ?? "",
     });
     setVariants(item.variants ?? []);
+    setExtras(item.extras ?? []);
     setAddingVariant(false);
     setNewVariant({ name: "", price: "" });
+    setAddingExtra(false);
+    setNewExtra({ name: "", quantity: "1", price: "" });
     setError("");
     setAddError("");
+    setExtraAddError("");
   }, [item?.id]);
 
   // Close on Escape
@@ -1250,6 +1281,41 @@ function EditItemModal({
       setAddError(e instanceof Error ? e.message : "Erro ao adicionar variante.");
     } finally {
       setAddBusy(false);
+    }
+  }
+
+  async function handleAddExtra() {
+    if (!item) return;
+    const qty = parseInt(newExtra.quantity, 10);
+    const price = parseFloat(newExtra.price);
+    if (!newExtra.name.trim() || isNaN(qty) || qty < 1 || isNaN(price) || price < 0) {
+      setExtraAddError("Nome, quantidade (≥1) e preço (≥0) são obrigatórios.");
+      return;
+    }
+    setExtraAddBusy(true);
+    setExtraAddError("");
+    try {
+      const data = await apiFetch(`/api/menu/items/${item.id}/extras`, "POST", {
+        name: newExtra.name.trim(),
+        quantity: qty,
+        price,
+      });
+      setExtras((es) => [...es, { ...data.data, price: Number(data.data.price) }]);
+      setNewExtra({ name: "", quantity: "1", price: "" });
+      setAddingExtra(false);
+    } catch (e: unknown) {
+      setExtraAddError(e instanceof Error ? e.message : "Erro ao adicionar extra.");
+    } finally {
+      setExtraAddBusy(false);
+    }
+  }
+
+  async function handleDeleteExtra(extraId: string) {
+    try {
+      await apiFetch(`/api/menu/extras/${extraId}`, "DELETE");
+      setExtras((es) => es.filter((e) => e.id !== extraId));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao remover extra.");
     }
   }
 
@@ -1497,6 +1563,96 @@ function EditItemModal({
                   </button>
                 )}
               </div>
+            )}
+          </div>
+
+          {/* Extras section */}
+          <div className="border-t border-gray-100 pt-4 space-y-3">
+            <p className="text-xs font-medium text-gray-700">Adicionais</p>
+
+            {extras.length > 0 && (
+              <ul className="space-y-1.5">
+                {extras.map((e) => (
+                  <li
+                    key={e.id}
+                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+                  >
+                    <span className="flex-1 truncate">{e.name}</span>
+                    <span className="mx-3 text-gray-500 text-xs whitespace-nowrap">
+                      x{e.quantity} · R$ {e.price.toFixed(2)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteExtra(e.id)}
+                      className="text-red-400 hover:text-red-600 text-xs leading-none"
+                      aria-label="Remover extra"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {addingExtra ? (
+              <div className="rounded-lg border border-dashed border-orange-200 bg-orange-50 p-3 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    value={newExtra.name}
+                    onChange={(e) => setNewExtra((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Nome (ex: Queijo extra)"
+                    className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                  <input
+                    value={newExtra.quantity}
+                    onChange={(e) => setNewExtra((f) => ({ ...f, quantity: e.target.value }))}
+                    placeholder="Qtd"
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="w-16 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                  <input
+                    value={newExtra.price}
+                    onChange={(e) => setNewExtra((f) => ({ ...f, price: e.target.value }))}
+                    placeholder="Preço"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                </div>
+                {extraAddError && <InlineError message={extraAddError} />}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddExtra}
+                    disabled={extraAddBusy}
+                    className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                  >
+                    {extraAddBusy ? <Spinner /> : "Adicionar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingExtra(false);
+                      setNewExtra({ name: "", quantity: "1", price: "" });
+                      setExtraAddError("");
+                    }}
+                    className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddingExtra(true)}
+                className="text-xs font-medium text-orange-500 hover:text-orange-700"
+              >
+                + Adicionar adicional
+              </button>
             )}
           </div>
 

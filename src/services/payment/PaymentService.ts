@@ -97,13 +97,30 @@ export class PaymentService {
   }
 
   /**
-   * Mark a payment PAID by its providerReference (for Stone webhook idempotency).
-   * Returns null if not found.
+   * Look up a payment by its external provider reference.
+   *
+   * Used primarily in the Stone webhook for idempotency — we don't know the
+   * restaurantId ahead of time (providerReference is the only identifier Stone
+   * sends us). The optional restaurantId parameter scopes the query to a
+   * specific tenant when the caller does know it.
+   *
+   * NOTE: The Stone webhook handler performs HMAC signature verification before
+   * calling this method, so the cross-tenant lookup is covered by that gate.
    */
   static async getByProviderReference(
-    providerReference: string
+    providerReference: string,
+    restaurantId?: string
   ): Promise<Payment | null> {
-    return prisma.payment.findFirst({ where: { providerReference } });
+    return prisma.payment.findFirst({
+      where: {
+        providerReference,
+        // When restaurantId is provided, scope through the order relation
+        // so a caller with a known tenant cannot access another tenant's payment.
+        ...(restaurantId !== undefined && {
+          order: { restaurantId },
+        }),
+      },
+    });
   }
 
   static async getByOrderId(

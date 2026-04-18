@@ -7,6 +7,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { createUserSchema } from "@/validators/user";
 import { UserService } from "@/services/user/UserService";
+import { auditLog } from "@/lib/audit";
 import {
   ok,
   created,
@@ -54,6 +55,14 @@ export async function POST(req: NextRequest) {
       if (result.status === 409) return conflict(result.error);
       return badRequest(result.error);
     }
+
+    auditLog({
+      action: "user.create",
+      restaurantId: ctx.restaurantId,
+      userId: ctx.userId,
+      targetId: result.data.id,
+      meta: { role: parsed.data.role },
+    });
 
     return created(result.data);
   } catch (err) {

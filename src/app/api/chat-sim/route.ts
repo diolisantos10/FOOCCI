@@ -329,26 +329,33 @@ export async function GET(req: NextRequest) {
   try {
     // Internal E2E bypass: return stable mock menu so tests need no DB.
     if (req.headers.get("x-e2e-bypass") === "1") {
-      return ok({ categories: mockMenu });
+      return ok({ slug: null, categories: mockMenu });
     }
 
     const ctx = getTenantContext(req);
     if (!ctx) return unauthorized();
 
-    const categories = await prisma.menuCategory.findMany({
-      where: { restaurantId: ctx.restaurantId, isActive: true, isAvailable: true },
-      orderBy: { sortOrder: "asc" },
-      include: {
-        items: {
-          // Delivery channel: only show items that are active, available, and enabled for delivery
-          where: { isActive: true, isAvailable: true, showInDelivery: true },
-          orderBy: { sortOrder: "asc" },
-          select: { id: true, name: true, price: true, description: true, imageUrl: true },
+    const [restaurant, categories] = await Promise.all([
+      prisma.restaurant.findUnique({
+        where: { id: ctx.restaurantId },
+        select: { slug: true },
+      }),
+      prisma.menuCategory.findMany({
+        where: { restaurantId: ctx.restaurantId, isActive: true, isAvailable: true },
+        orderBy: { sortOrder: "asc" },
+        include: {
+          items: {
+            // Delivery channel: only show items that are active, available, and enabled for delivery
+            where: { isActive: true, isAvailable: true, showInDelivery: true },
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, name: true, price: true, description: true, imageUrl: true },
+          },
         },
-      },
-    });
+      }),
+    ]);
 
     return ok({
+      slug: restaurant?.slug ?? null,
       categories: categories.map((c) => ({
         id: c.id,
         name: c.name,

@@ -9,19 +9,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Brand palette – update to match final design system
+        // Foocci brand palette — aligned to #F97316 (orange-500 standard scale)
         brand: {
-          50: "#fef9ee",
-          100: "#fdf0d5",
-          200: "#f9dea9",
-          300: "#f5c673",
-          400: "#f0a33a",
-          500: "#ec8a19",
-          600: "#dc6c0e",
-          700: "#b6510e",
-          800: "#923f12",
-          900: "#763512",
-          950: "#401906",
+          50:  "#fff7ed",
+          100: "#ffedd5",
+          200: "#fed7aa",
+          300: "#fdba74",
+          400: "#fb923c",
+          500: "#f97316",  // Primary accent
+          600: "#ea580c",  // Hover state
+          700: "#c2410c",
+          800: "#9a3412",
+          900: "#7c2d12",
+          950: "#431407",
         },
       },
       fontFamily: {

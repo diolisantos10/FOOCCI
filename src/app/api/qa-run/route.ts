@@ -5,6 +5,8 @@
  * state-machine engine (no real database, no WhatsApp) and returns the
  * full run log plus the rendered markdown report.
  *
+ * Security: requires a valid session with OWNER role.
+ *
  * Body:
  *   { mode: "critical" | "full" | "single", scenarioId?: string }
  *
@@ -12,9 +14,10 @@
  *   { data: { log: QARunLog, markdown: string } }
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { getTenantContext } from "@/lib/tenant";
 
 import { allScenarios } from "@/lib/qa/scenarios";
 import { CRITICAL_SCENARIO_IDS } from "@/lib/qa/critical-scenarios";
@@ -22,7 +25,17 @@ import { mockMenu } from "@/lib/qa/fixtures/menu";
 import { runScenarios } from "@/lib/qa/runner";
 import { toJSON, toMarkdown } from "@/lib/qa/reporter";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Auth guard: must be authenticated with OWNER role.
+  // Middleware already blocks unauthenticated requests, but we enforce role here.
+  const ctx = getTenantContext(req);
+  if (!ctx) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (ctx.role !== "OWNER") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const mode: "critical" | "full" | "single" = body.mode ?? "full";

@@ -77,6 +77,16 @@ export const reorderVariantsSchema = z.object({
   ),
 });
 
+// ─── Extras ──────────────────────────────────────────────────
+
+export const createExtraSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório").max(100),
+  quantity: z.number().int().min(1, "Quantidade mínima é 1"),
+  price: z.number().min(0, "Preço não pode ser negativo").multipleOf(0.01),
+});
+
+export const updateExtraSchema = createExtraSchema.partial();
+
 // ─── Bulk price ───────────────────────────────────────────────
 
 export const bulkPriceSchema = z.object({
@@ -98,3 +108,5 @@ export type CreateVariantInput = z.infer<typeof createVariantSchema>;
 export type UpdateVariantInput = z.infer<typeof updateVariantSchema>;
 export type ReorderVariantsInput = z.infer<typeof reorderVariantsSchema>;
 export type BulkPriceInput = z.infer<typeof bulkPriceSchema>;
+export type CreateExtraInput = z.infer<typeof createExtraSchema>;
+export type UpdateExtraInput = z.infer<typeof updateExtraSchema>;

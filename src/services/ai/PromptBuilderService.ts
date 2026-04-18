@@ -18,6 +18,8 @@
 import { prisma } from "@/lib/prisma";
 import type { RestaurantBrandConfig } from "@prisma/client";
 import type OpenAI from "openai";
+import { buildSalesProfile } from "./SalesProfile";
+import { buildBehaviorBlock } from "./BehaviorEngine";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -168,7 +170,8 @@ function buildSystemPrompt(params: {
     return brandConfig.systemPromptOverride.replace("{CONTEXT}", contextBlock);
   }
 
-  const voiceBlock = buildVoiceBlock(brandConfig);
+  const profile = buildSalesProfile(brandConfig, restaurant.name);
+  const behaviorBlock = buildBehaviorBlock(profile);
   const menuBlock = buildMenuBlock(menuCategories);
   const draftBlock = buildDraftBlock(draft);
   const customerBlock = buildCustomerBlock(customer);
@@ -177,9 +180,9 @@ function buildSystemPrompt(params: {
 Sua função é ajudar clientes a fazerem pedidos de forma rápida e agradável.
 
 ══════════════════════════════════════
-IDENTIDADE E VOZ DA MARCA
+IDENTIDADE & COMPORTAMENTO
 ══════════════════════════════════════
-${voiceBlock}
+${behaviorBlock}
 
 ══════════════════════════════════════
 INFORMAÇÕES DO RESTAURANTE
