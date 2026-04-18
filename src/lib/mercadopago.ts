@@ -42,9 +42,14 @@ export async function createMPPaymentLink(
       },
     ],
     external_reference: orderId,
-    expires: true,
-    expiration_date_from: new Date().toISOString(),
-    expiration_date_to: expiresAt.toISOString(),
+    // Allow all payment methods: credit/debit cards, PIX, boleto, MP balance
+    payment_methods: {
+      excluded_payment_types: [],
+      excluded_payment_methods: [],
+      installments: 12,
+    },
+    // Do NOT set expires on the preference — boleto requires ≥3 business days
+    // and a short window would hide it. We track our own expiry in the DB.
     statement_descriptor: "Foocci",
     ...(notificationUrl && { notification_url: notificationUrl }),
   };
