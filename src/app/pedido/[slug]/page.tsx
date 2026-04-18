@@ -93,6 +93,31 @@ export default async function PedidoPage({
     }
   }
 
+  // ── Active banners for today ─────────────────────────────────────────────────
+  const now = new Date();
+  const todayDow = now.getDay(); // 0=Sun … 6=Sat
+  const rawBanners = await prisma.promotion.findMany({
+    where: {
+      restaurantId: restaurant.id,
+      type: "BANNER",
+      status: "ACTIVE",
+      OR: [
+        { startsAt: null },
+        { startsAt: { lte: now } },
+      ],
+      AND: [
+        { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+      ],
+      bannerImageUrl: { not: null },
+    },
+    select: { id: true, name: true, bannerImageUrl: true, daysOfWeek: true },
+    orderBy: { createdAt: "desc" },
+  });
+  // Filter by day-of-week (empty array = every day)
+  const activeBanners = rawBanners
+    .filter((b) => b.daysOfWeek.length === 0 || b.daysOfWeek.includes(todayDow))
+    .map((b) => ({ id: b.id, name: b.name, imageUrl: b.bannerImageUrl! }));
+
   const rawCategories = await prisma.menuCategory.findMany({
     where: { restaurantId: restaurant.id, isActive: true, isAvailable: true },
     orderBy: { sortOrder: "asc" },
@@ -150,6 +175,7 @@ export default async function PedidoPage({
       knownCustomerName={knownCustomerName}
       instagramUrl={brandConfig?.instagramUrl ?? null}
       tiktokUrl={brandConfig?.tiktokUrl ?? null}
+      banners={activeBanners}
     />
   );
 }

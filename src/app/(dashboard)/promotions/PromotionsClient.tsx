@@ -16,6 +16,7 @@ const TYPE_LABELS: Record<string, string> = {
   COMBO:         "Combo",
   FREE_DELIVERY: "Frete grátis",
   COUPON:        "Cupom",
+  BANNER:        "Banner",
 };
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -57,6 +58,7 @@ function blankForm(): PromotionForm {
     targetCategoryIds: [],
     channel:           "ALL",
     couponCode:        "",
+    bannerImageUrl:    "",
     startsAt:          "",
     endsAt:            "",
     daysOfWeek:        [],
@@ -80,6 +82,7 @@ interface PromotionForm {
   targetCategoryIds: string[];
   channel: PromotionChannel;
   couponCode: string;
+  bannerImageUrl: string;
   startsAt: string;
   endsAt: string;
   daysOfWeek: number[];
@@ -103,6 +106,7 @@ function rowToForm(p: PromotionRow): PromotionForm {
     targetCategoryIds: p.targetCategoryIds,
     channel:           p.channel as PromotionChannel,
     couponCode:        p.couponCode ?? "",
+    bannerImageUrl:    p.bannerImageUrl ?? "",
     startsAt:          p.startsAt ? p.startsAt.slice(0, 16) : "",
     endsAt:            p.endsAt ? p.endsAt.slice(0, 16) : "",
     daysOfWeek:        p.daysOfWeek,
@@ -201,6 +205,7 @@ function PromotionDrawer({
       targetCategoryIds: form.targetCategoryIds,
       channel:           form.channel,
       couponCode:        form.couponCode.trim() || undefined,
+      bannerImageUrl:    form.bannerImageUrl.trim() || undefined,
       startsAt:          form.startsAt ? new Date(form.startsAt).toISOString() : undefined,
       endsAt:            form.endsAt ? new Date(form.endsAt).toISOString() : undefined,
       daysOfWeek:        form.daysOfWeek,
@@ -232,7 +237,7 @@ function PromotionDrawer({
     onSaved(json.data);
   }
 
-  const showDiscount = form.type !== "FREE_DELIVERY" && form.type !== "COMBO";
+  const showDiscount = form.type !== "FREE_DELIVERY" && form.type !== "COMBO" && form.type !== "BANNER";
   const discountLabel = form.type === "PERCENTAGE" ? "Desconto (%)" : "Desconto (R$)";
 
   return (
@@ -293,7 +298,7 @@ function PromotionDrawer({
           <div>
             <SectionTitle>Tipo de promoção</SectionTitle>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {(["PERCENTAGE", "FIXED", "COMBO", "FREE_DELIVERY", "COUPON"] as PromotionType[]).map((t) => (
+              {(["PERCENTAGE", "FIXED", "COMBO", "FREE_DELIVERY", "COUPON", "BANNER"] as PromotionType[]).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -341,6 +346,37 @@ function PromotionDrawer({
                     maxLength={50}
                   />
                 </FormGroup>
+              </div>
+            )}
+
+            {form.type === "BANNER" && (
+              <div className="mt-4 space-y-3">
+                <FormGroup
+                  label="URL da imagem do banner *"
+                  hint="Use uma imagem no formato retangular (ex: 1200×400 px). Aparecerá no topo de todos os cardápios no dia agendado."
+                >
+                  <input
+                    required={form.type === "BANNER"}
+                    type="url"
+                    className={inputCls}
+                    value={form.bannerImageUrl}
+                    onChange={(e) => set("bannerImageUrl", e.target.value)}
+                    placeholder="https://exemplo.com/banner-promocao.jpg"
+                  />
+                </FormGroup>
+                {form.bannerImageUrl && (
+                  <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={form.bannerImageUrl}
+                      alt="Preview do banner"
+                      className="w-full object-cover"
+                      style={{ aspectRatio: "3/1" }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                    <p className="px-3 py-1.5 text-[11px] text-gray-400">Preview — formato 3:1 recomendado</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -579,7 +615,9 @@ function PromotionCard({
       ? `R$${promotion.discountValue.toFixed(2)} off`
       : promotion.type === "FREE_DELIVERY"
         ? "Frete grátis"
-        : TYPE_LABELS[promotion.type] ?? promotion.type;
+        : promotion.type === "BANNER"
+          ? "Banner visual"
+          : TYPE_LABELS[promotion.type] ?? promotion.type;
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
@@ -617,6 +655,19 @@ function PromotionCard({
           )}
         </div>
       </div>
+
+      {/* Banner preview */}
+      {promotion.type === "BANNER" && promotion.bannerImageUrl && (
+        <div className="mt-3 overflow-hidden rounded-xl border border-gray-100">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={promotion.bannerImageUrl}
+            alt={promotion.name}
+            className="w-full object-cover"
+            style={{ aspectRatio: "3/1" }}
+          />
+        </div>
+      )}
 
       {/* Actions */}
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-50 pt-3">

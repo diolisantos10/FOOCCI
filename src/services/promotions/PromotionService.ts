@@ -34,6 +34,7 @@ export type PromotionRow = {
   usedCount: number;
   oneTimePerUser: boolean;
   combinable: boolean;
+  bannerImageUrl: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -84,6 +85,7 @@ function serialize(p: Promotion): PromotionRow {
     usedCount:         p.usedCount,
     oneTimePerUser:    p.oneTimePerUser,
     combinable:        p.combinable,
+    bannerImageUrl:    p.bannerImageUrl ?? null,
     createdAt:         p.createdAt.toISOString(),
     updatedAt:         p.updatedAt.toISOString(),
   };
@@ -157,6 +159,10 @@ export class PromotionService {
     if (input.type === "COUPON" && !input.couponCode?.trim()) {
       return serviceFail("Promoções do tipo Cupom exigem um código.");
     }
+    // Banner type requires an image URL
+    if (input.type === "BANNER" && !input.bannerImageUrl?.trim()) {
+      return serviceFail("Promoções do tipo Banner exigem uma URL de imagem.");
+    }
 
     const p = await prisma.promotion.create({
       data: {
@@ -171,6 +177,7 @@ export class PromotionService {
         targetCategoryIds: input.targetCategoryIds ?? [],
         channel:           input.channel ?? "ALL",
         couponCode:        input.couponCode ?? null,
+        bannerImageUrl:    input.bannerImageUrl ?? null,
         startsAt:          input.startsAt ? new Date(input.startsAt) : null,
         endsAt:            input.endsAt ? new Date(input.endsAt) : null,
         daysOfWeek:        input.daysOfWeek ?? [],
@@ -212,6 +219,7 @@ export class PromotionService {
         ...(input.targetCategoryIds !== undefined && { targetCategoryIds: input.targetCategoryIds }),
         ...(input.channel !== undefined && { channel: input.channel }),
         ...(input.couponCode !== undefined && { couponCode: input.couponCode }),
+        ...(input.bannerImageUrl !== undefined && { bannerImageUrl: input.bannerImageUrl ?? null }),
         ...(input.startsAt !== undefined && { startsAt: input.startsAt ? new Date(input.startsAt) : null }),
         ...(input.endsAt !== undefined && { endsAt: input.endsAt ? new Date(input.endsAt) : null }),
         ...(input.daysOfWeek !== undefined && { daysOfWeek: input.daysOfWeek }),
@@ -258,6 +266,7 @@ export class PromotionService {
         targetCategoryIds: source.targetCategoryIds,
         channel:           source.channel,
         couponCode:        source.couponCode ? `${source.couponCode}-2` : null,
+        bannerImageUrl:    source.bannerImageUrl,
         startsAt:          source.startsAt,
         endsAt:            source.endsAt,
         daysOfWeek:        source.daysOfWeek,

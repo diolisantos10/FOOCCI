@@ -969,6 +969,7 @@ enum PromotionType {
   COMBO         // bundled offer (configured via description/rules)
   FREE_DELIVERY // zeroes delivery fee
   COUPON        // code-gated discount
+  BANNER        // visual banner displayed on all menus on scheduled day
 }
 
 enum PromotionStatus {
@@ -1007,6 +1008,9 @@ model Promotion {
 
   // Coupon
   couponCode        String?
+
+  // Banner (type=BANNER only)
+  bannerImageUrl    String?
 
   // Validity window
   startsAt          DateTime?

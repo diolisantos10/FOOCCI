@@ -80,6 +80,12 @@ interface Address {
   complement: string;
 }
 
+interface PromoBanner {
+  id: string;
+  name: string;
+  imageUrl: string;
+}
+
 interface Props {
   slug: string;
   restaurantName: string;
@@ -92,6 +98,8 @@ interface Props {
   instagramUrl?: string | null;
   /** TikTok profile URL — shown as icon in ordering header if provided. */
   tiktokUrl?: string | null;
+  /** Active promotion banners to show at the top of the menu. */
+  banners?: PromoBanner[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -817,6 +825,7 @@ export function PedidoClient({
   slug, restaurantName, logoUrl, phone, categories,
   knownCustomerPhone = null, knownCustomerName = null,
   instagramUrl = null, tiktokUrl = null,
+  banners = [],
 }: Props) {
   // ── Chat ─────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1554,9 +1563,9 @@ export function PedidoClient({
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Instagram"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:text-white active:scale-90"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/80 transition hover:text-white active:scale-90"
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
             <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
             <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
@@ -1569,9 +1578,9 @@ export function PedidoClient({
           target="_blank"
           rel="noopener noreferrer"
           aria-label="TikTok"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:text-white active:scale-90"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/80 transition hover:text-white active:scale-90"
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">
             <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34v-7a8.16 8.16 0 0 0 4.77 1.52V6.37a4.85 4.85 0 0 1-1-.32z"/>
           </svg>
         </a>
@@ -1687,6 +1696,22 @@ export function PedidoClient({
               <span>{upsellPending ? "Continuar →" : "Finalizar pedido"}</span>
               <span>R$ {cartTotal.toFixed(2).replace(".", ",")}</span>
             </button>
+          </div>
+        )}
+
+        {/* Promotion banners — shown when browsing, above category tabs */}
+        {stage === "BROWSE" && entryPhase === "browsing" && banners.length > 0 && (
+          <div className="lg:hidden shrink-0 flex flex-col gap-2 px-3 pt-2">
+            {banners.map((b) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={b.id}
+                src={b.imageUrl}
+                alt={b.name}
+                className="w-full rounded-xl object-cover shadow-sm"
+                style={{ aspectRatio: "3/1" }}
+              />
+            ))}
           </div>
         )}
 
@@ -1816,6 +1841,21 @@ export function PedidoClient({
 
             {/* Product grid — CSS grid, fills available space */}
             <div className="flex-1 overflow-y-auto p-5">
+              {/* Desktop promotion banners */}
+              {banners.length > 0 && (
+                <div className="mb-4 flex flex-col gap-2">
+                  {banners.map((b) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={b.id}
+                      src={b.imageUrl}
+                      alt={b.name}
+                      className="w-full rounded-xl object-cover shadow-sm"
+                      style={{ aspectRatio: "3/1" }}
+                    />
+                  ))}
+                </div>
+              )}
               {currentCategoryItems.length > 0 ? (
                 <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
                   {currentCategoryItems.map((item) => (
