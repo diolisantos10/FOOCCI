@@ -897,6 +897,25 @@ export function PedidoClient({
   const [orderId, setOrderId] = useState<string | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
 
+  // ── Poll payment status while in PAYMENT_LINK stage ───────────────
+  useEffect(() => {
+    if (stage !== "PAYMENT_LINK" || !orderId) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/pedido/payment-status?orderId=${orderId}`);
+        const data = await res.json();
+        if (data.paymentStatus === "PAID") {
+          clearInterval(interval);
+          setStage("DONE");
+        } else if (data.paymentStatus === "EXPIRED") {
+          clearInterval(interval);
+          setPaymentUrl(null);
+        }
+      } catch { /* ignore */ }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [stage, orderId]);
+
   // ── Derived ───────────────────────────────────────────────────────
   // activeUpsell: the last offered type (persists after resolution so the
   // backend's resolveSalesPhase() knows not to re-suggest the same type).
@@ -1516,18 +1535,20 @@ export function PedidoClient({
             Clique no botão abaixo para pagar. Seu pedido será confirmado automaticamente após o pagamento.
           </p>
           {paymentUrl ? (
-            <a
-              href={paymentUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700 transition-colors"
-            >
-              Ir para o pagamento →
-            </a>
+            <>
+              <a
+                href={paymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700 transition-colors"
+              >
+                Ir para o pagamento →
+              </a>
+              <p className="mt-2 text-[10px] text-gray-400 text-center animate-pulse">⏳ Aguardando confirmação do pagamento…</p>
+            </>
           ) : (
-            <p className="mt-2 text-xs text-red-500">Erro ao gerar link. Tente novamente.</p>
+            <p className="mt-2 text-xs text-red-500">Link expirado ou erro. Recarregue a página para tentar novamente.</p>
           )}
-          <p className="mt-2 text-[10px] text-gray-400 text-center animate-pulse">⏳ Aguardando confirmação do pagamento…</p>
         </div>
       );
     }

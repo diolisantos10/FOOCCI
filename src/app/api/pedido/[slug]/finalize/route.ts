@@ -144,11 +144,13 @@ export async function POST(
     if (mpToken) {
       let mpResult;
       try {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
         mpResult = await createMPPaymentLink(mpToken, {
           orderId:          order.id,
           amount:           subtotal,
           description:      `Pedido – ${restaurantId}`,
           expiresInMinutes: 30,
+          notificationUrl:  appUrl ? `${appUrl}/api/payments/mercadopago/webhook` : undefined,
         });
       } catch (err) {
         await prisma.order.delete({ where: { id: order.id } });

@@ -173,11 +173,13 @@ export async function POST(req: NextRequest) {
       // Use Mercado Pago
       let mpResult;
       try {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
         mpResult = await createMPPaymentLink(mpToken, {
           orderId: order.id,
           amount: total,
           description: `Pedido chat-sim – ${restaurantId}`,
           expiresInMinutes: 30,
+          notificationUrl: appUrl ? `${appUrl}/api/payments/mercadopago/webhook` : undefined,
         });
       } catch (err) {
         await prisma.order.delete({ where: { id: order.id } });

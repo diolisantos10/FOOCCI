@@ -4,8 +4,9 @@
  * Receives IPN / webhook notifications from Mercado Pago.
  * Docs: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
  *
- * MP sends a POST with `{ type, data: { id } }`.
- * We fetch the payment from the MP API, check status, then confirm the order.
+ * MP sends { type, data: { id } } where data.id is the PAYMENT ID (not preference ID).
+ * We fetch the payment from the MP API to get external_reference (= orderId),
+ * then look up and confirm the order.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -45,33 +46,91 @@ export async function POST(req: NextRequest) {
   const paymentId = (body.data as Record<string, unknown>)?.id as string | undefined;
   if (!paymentId) return NextResponse.json({ received: true });
 
-  // Find the payment record by providerReference (preference or payment ID)
-  // MP sends payment IDs in webhooks; we need to find which restaurant this belongs to.
-  // Look up via providerReference OR try fetching from MP API.
-  const payment = await prisma.payment.findFirst({
+  // Find the payment record by orderId (stored as external_reference in MP).
+  // MP sends a payment.id in webhooks which differs from the preference ID we stored.
+  // Strategy: look up all active MP payments and find the matching one via MP API.
+  // More efficient: find order via our DB payment that has providerName=mercadopago
+  // and status=LINK_SENT, then fetch each from MP until we find the matching payment.
+  //
+  // Better: fetch the payment directly from MP API using the payment ID,
+  // extract external_reference (= orderId), then look up our order.
+
+  // We need a token — find any active MP integration to start.
+  // First try: find a payment record using providerReference = paymentId (unlikely to match)
+  let payment = await prisma.payment.findFirst({
     where: { providerReference: paymentId, providerName: "mercadopago" },
     include: { order: { select: { id: true, restaurantId: true, status: true } } },
   });
 
+  let mpPaymentData: Record<string, unknown> | null = null;
+
+  if (!payment) {
+    // Fetch from MP using any available token to get external_reference
+    const activeMpCfgs = await prisma.integrationConfig.findMany({
+      where: { provider: "mercadopago", isActive: true },
+      select: { restaurantId: true, configBlob: true },
+    });
+
+    for (const cfg of activeMpCfgs) {
+      let token: string;
+      try {
+        token = (JSON.parse(decrypt(cfg.configBlob)) as { accessToken: string }).accessToken;
+      } catch { continue; }
+
+      const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => null);
+
+      if (!mpRes?.ok) continue;
+      const data = await mpRes.json().catch(() => null);
+      if (!data) continue;
+
+      // Verify this payment belongs to this restaurant's preference
+      const externalRef = data.external_reference as string | undefined;
+      if (!externalRef) continue;
+
+      // Look up the order and its payment
+      const orderRecord = await prisma.order.findFirst({
+        where: { id: externalRef, restaurantId: cfg.restaurantId },
+        select: { id: true, restaurantId: true, status: true },
+      });
+      if (!orderRecord) continue;
+
+      const paymentRecord = await prisma.payment.findUnique({
+        where: { orderId: externalRef },
+        include: { order: { select: { id: true, restaurantId: true, status: true } } },
+      });
+      if (!paymentRecord) continue;
+
+      payment = paymentRecord;
+      mpPaymentData = data;
+      break;
+    }
+  }
+
   if (!payment || !payment.order) {
-    // Payment ID from webhook may differ from preference ID; try MP API lookup
-    // to find external_reference (orderId) if stored as providerReference
     return NextResponse.json({ received: true });
   }
 
-  const { order } = payment;
-  const accessToken = await getMpToken(order.restaurantId);
-  if (!accessToken) return NextResponse.json({ received: true });
+  // Fetch the payment status from MP if we haven't already
+  if (!mpPaymentData) {
+    const accessToken = await getMpToken(payment.order.restaurantId);
+    if (!accessToken) return NextResponse.json({ received: true });
 
-  // Fetch payment status from MP API
-  const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  }).catch(() => null);
+    const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }).catch(() => null);
 
-  if (!mpRes?.ok) return NextResponse.json({ received: true });
+    if (!mpRes?.ok) return NextResponse.json({ received: true });
+    mpPaymentData = await mpRes.json().catch(() => null);
+  }
 
-  const mpPayment = await mpRes.json().catch(() => null);
-  if (!mpPayment || mpPayment.status !== "approved") {
+  if (!mpPaymentData || mpPaymentData.status !== "approved") {
+    return NextResponse.json({ received: true });
+  }
+
+  // Already confirmed — idempotent
+  if (payment.status === "PAID") {
     return NextResponse.json({ received: true });
   }
 
@@ -82,14 +141,26 @@ export async function POST(req: NextRequest) {
       data: {
         status: "PAID",
         paidAt: new Date(),
-        amount: new Decimal(mpPayment.transaction_amount ?? Number(payment.amount)),
+        amount: new Decimal(
+          (mpPaymentData.transaction_amount as number) ?? Number(payment.amount)
+        ),
       },
     }),
     prisma.order.update({
-      where: { id: order.id },
+      where: { id: payment.order.id },
       data: { status: "CONFIRMED" },
     }),
   ]);
+
+  // Update customer stats
+  await prisma.customer.updateMany({
+    where: { id: (await prisma.order.findUnique({ where: { id: payment.order.id }, select: { customerId: true } }))?.customerId ?? "" },
+    data: {
+      totalOrders: { increment: 1 },
+      totalSpend: { increment: new Decimal((mpPaymentData.transaction_amount as number) ?? Number(payment.amount)) },
+      lastOrderAt: new Date(),
+    },
+  });
 
   return NextResponse.json({ received: true });
 }

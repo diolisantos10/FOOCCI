@@ -13,6 +13,7 @@ export interface CreateMPPaymentLinkParams {
   amount: number;       // BRL, e.g. 49.90
   description: string;
   expiresInMinutes?: number;
+  notificationUrl?: string;
 }
 
 export interface MPPaymentLinkResult {
@@ -25,12 +26,12 @@ export async function createMPPaymentLink(
   accessToken: string,
   params: CreateMPPaymentLinkParams
 ): Promise<MPPaymentLinkResult> {
-  const { orderId, amount, description, expiresInMinutes = 30 } = params;
+  const { orderId, amount, description, expiresInMinutes = 30, notificationUrl } = params;
   const isTest = accessToken.startsWith("TEST-");
 
   const expiresAt = new Date(Date.now() + expiresInMinutes * 60_000);
 
-  const body = {
+  const body: Record<string, unknown> = {
     items: [
       {
         id: orderId,
@@ -45,6 +46,7 @@ export async function createMPPaymentLink(
     expiration_date_from: new Date().toISOString(),
     expiration_date_to: expiresAt.toISOString(),
     statement_descriptor: "Foocci",
+    ...(notificationUrl && { notification_url: notificationUrl }),
   };
 
   const res = await fetch(`${MP_API_URL}/checkout/preferences`, {
