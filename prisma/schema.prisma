@@ -196,6 +196,7 @@ model MenuItem {
   categoryId  String
   name        String
   description String?
+  ingredients String?  // composition for AI suggestions
   price       Decimal  @db.Decimal(10, 2)
   imageUrl    String?
   sortOrder   Int      @default(0)

@@ -29,9 +29,9 @@ function buildMenuBlock(categories: MenuCategoryMeta[]): string {
       const rows = cat.items
         .map((item) => {
           const price = `R$ ${Number(item.price).toFixed(2)}`;
-          return item.description
-            ? `  • ${item.name} — ${price} (${item.description})`
-            : `  • ${item.name} — ${price}`;
+          const desc = item.description ? ` (${item.description})` : "";
+          const ing  = item.ingredients ? `\n    Ingredientes: ${item.ingredients}` : "";
+          return `  • ${item.name} — ${price}${desc}${ing}`;
         })
         .join("\n");
       // Include category description so the AI can present the category naturally

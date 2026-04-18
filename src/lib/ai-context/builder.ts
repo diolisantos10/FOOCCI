@@ -242,6 +242,7 @@ export async function buildAIContext(
       id:           item.id,
       name:         item.name,
       description:  item.description,
+      ingredients:  item.ingredients ?? null,
       price:        Number(item.price),
       imageUrl:     item.imageUrl,
       isAvailable:  item.isAvailable,

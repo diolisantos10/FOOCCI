@@ -29,6 +29,7 @@ export const reorderCategoriesSchema = z.object({
 export const createMenuItemSchema = z.object({
   name: z.string().min(2).max(100),
   description: z.string().max(1000).optional(),
+  ingredients: z.string().max(2000).optional(),
   price: z
     .number()
     .positive("Price must be positive")

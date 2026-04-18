@@ -43,6 +43,7 @@ type Item = {
   id: string;
   name: string;
   description: string | null;
+  ingredients: string | null;
   price: number;
   imageUrl: string | null;
   isActive: boolean;
@@ -1134,6 +1135,7 @@ function SortableVariantRow({
 type EditModalForm = {
   name: string;
   description: string;
+  ingredients: string;
   price: string;
   imageUrl: string | null;
   showInDelivery: boolean;
@@ -1156,6 +1158,7 @@ function EditItemModal({
   const [form, setForm] = useState<EditModalForm>({
     name: "",
     description: "",
+    ingredients: "",
     price: "",
     imageUrl: null,
     showInDelivery: false,
@@ -1190,6 +1193,7 @@ function EditItemModal({
     setForm({
       name: item.name,
       description: item.description ?? "",
+      ingredients: item.ingredients ?? "",
       price: String(item.price),
       imageUrl: item.imageUrl ?? null,
       showInDelivery: item.showInDelivery,
@@ -1392,6 +1396,22 @@ function EditItemModal({
                 setForm((f) => ({ ...f, description: e.target.value }))
               }
               placeholder="Descrição (opcional)"
+              rows={3}
+              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+            />
+          </div>
+
+          {/* Ingredients */}
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-gray-700">
+              Ingredientes
+            </label>
+            <textarea
+              value={form.ingredients}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, ingredients: e.target.value }))
+              }
+              placeholder="Ex: frango grelhado, queijo prato, alface, tomate, maionese caseira (usado pelo agente de IA para sugestões)"
               rows={3}
               className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
@@ -2050,6 +2070,7 @@ export function MenuManager({
     const body: Record<string, unknown> = {
       name: patch.name.trim(),
       description: patch.description.trim() || undefined,
+      ingredients: patch.ingredients.trim() || undefined,
       price: parseFloat(patch.price),
       imageUrl: patch.imageUrl,
       showInDelivery: patch.showInDelivery,

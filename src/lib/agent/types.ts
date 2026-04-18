@@ -79,6 +79,7 @@ export interface MenuItemMeta {
   name:        string;
   price:       unknown; // Prisma Decimal — converted via Number()
   description: string | null;
+  ingredients: string | null;
   imageUrl:    string | null;
 }
 

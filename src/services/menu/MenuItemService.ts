@@ -67,6 +67,7 @@ export class MenuItemService {
         categoryId,
         name: input.name,
         description: input.description,
+        ingredients: input.ingredients,
         price: new Decimal(input.price),
         imageUrl: input.imageUrl || null,
         sortOrder: input.sortOrder,
@@ -99,6 +100,7 @@ export class MenuItemService {
       data: {
         ...(input.name !== undefined && { name: input.name }),
         ...(input.description !== undefined && { description: input.description }),
+        ...(input.ingredients !== undefined && { ingredients: input.ingredients || null }),
         ...(input.price !== undefined && { price: new Decimal(input.price) }),
         ...(input.imageUrl !== undefined && { imageUrl: input.imageUrl || null }),
         ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),

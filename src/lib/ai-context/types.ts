@@ -29,6 +29,7 @@ export interface MenuItemContext {
   id:           string;
   name:         string;
   description:  string | null;
+  ingredients:  string | null;
   price:        number;
   imageUrl:     string | null;
   isAvailable:  boolean;

@@ -67,6 +67,7 @@ export class PromptBuilderService {
                 id: true,
                 name: true,
                 description: true,
+                ingredients: true,
                 price: true,
               },
             },
@@ -139,7 +140,7 @@ type CustomerInfo = {
 };
 type CategoryWithItems = {
   name: string;
-  items: { id: string; name: string; description: string | null; price: { toString(): string } }[];
+  items: { id: string; name: string; description: string | null; ingredients: string | null; price: { toString(): string } }[];
 };
 type DraftData = {
   id: string;
@@ -276,7 +277,8 @@ function buildMenuBlock(categories: CategoryWithItems[]): string {
       const itemLines = cat.items.map(
         (item) =>
           `  • [ID: ${item.id}] ${item.name} — R$ ${Number(item.price).toFixed(2)}` +
-          (item.description ? `\n    ${item.description}` : "")
+          (item.description ? `\n    ${item.description}` : "") +
+          (item.ingredients ? `\n    Ingredientes: ${item.ingredients}` : "")
       );
       return `${cat.name}:\n${itemLines.join("\n")}`;
     })

@@ -181,6 +181,7 @@ function toMenuMeta(categories: MenuCategoryContext[]): MenuCategoryMeta[] {
       name:        item.name,
       price:       item.price,
       description: item.description,
+      ingredients: item.ingredients,
       imageUrl:    item.imageUrl,
     })),
   }));

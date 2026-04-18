@@ -56,6 +56,7 @@ export default async function MenuPage() {
       id: item.id,
       name: item.name,
       description: item.description,
+      ingredients: item.ingredients ?? null,
       price: Number(item.price),
       imageUrl: item.imageUrl,
       isActive: item.isActive,
