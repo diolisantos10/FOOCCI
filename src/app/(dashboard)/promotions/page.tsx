@@ -63,6 +63,7 @@ export default async function PromotionsPage() {
         usedCount:         p.usedCount,
         oneTimePerUser:    p.oneTimePerUser,
         combinable:        p.combinable,
+        bannerImageUrl:    p.bannerImageUrl ?? null,
         createdAt:         p.createdAt.toISOString(),
         updatedAt:         p.updatedAt.toISOString(),
       };
