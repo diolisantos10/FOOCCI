@@ -598,9 +598,11 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
           <main className="mx-auto max-w-2xl px-4 py-6 space-y-10">
             {categories.map((cat) => (
               <section key={cat.id} id={`cat-${cat.id}`}>
-                <h2 className="mb-4 border-b border-gray-200 pb-2 text-base font-bold text-gray-900">
-                  {cat.name}
-                </h2>
+                <div className="-mx-4 mb-6 bg-orange-500 px-4 py-3.5">
+                  <h2 className="text-lg font-extrabold uppercase tracking-widest text-white">
+                    {cat.name}
+                  </h2>
+                </div>
                 <ul className="space-y-5">
                   {cat.items.map((item, idx) => (
                     <ProductCard
