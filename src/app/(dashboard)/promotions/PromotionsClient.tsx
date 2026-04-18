@@ -366,6 +366,7 @@ function PromotionDrawer({
 
             {form.type === "BANNER" && (
               <div className="mt-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-800">Imagem do banner *</p>
                 <p className="text-xs text-gray-500">
                   Imagem retangular (proporção 3:1 recomendada, ex: 1200×400 px). Aparecerá no topo de todos os cardápios no dia agendado.
                 </p>
