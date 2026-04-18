@@ -68,6 +68,7 @@ type Stage =
   | "PAYMENT"
   | "PAYMENT_METHOD"
   | "REVIEW_ORDER"
+  | "PAYMENT_LINK"
   | "DONE";
 
 type PaymentMode = "pay_now" | "pay_on_delivery" | "pay_on_pickup";
@@ -894,6 +895,7 @@ export function PedidoClient({
   const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
   const [paymentMethodSub, setPaymentMethodSub] = useState<PaymentMethodSub | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
 
   // ── Derived ───────────────────────────────────────────────────────
   // activeUpsell: the last offered type (persists after resolution so the
@@ -1292,9 +1294,15 @@ export function PedidoClient({
         }),
       });
       const data = await res.json();
-      setOrderId(data.orderId ?? data.data?.orderId ?? null);
-      setStage("DONE");
-      // DONE stage renders a static confirmation panel — no AI call needed.
+      const resolvedOrderId = data.orderId ?? data.data?.orderId ?? null;
+      setOrderId(resolvedOrderId);
+
+      if (paymentMode === "pay_now" && data.paymentUrl) {
+        setPaymentUrl(data.paymentUrl);
+        setStage("PAYMENT_LINK");
+      } else {
+        setStage("DONE");
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -1496,6 +1504,30 @@ export function PedidoClient({
               Editar
             </button>
           </div>
+        </div>
+      );
+    }
+
+    if (stage === "PAYMENT_LINK") {
+      return (
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-4">
+          <p className="text-sm font-semibold text-gray-800">💳 Pagamento online</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Clique no botão abaixo para pagar. Seu pedido será confirmado automaticamente após o pagamento.
+          </p>
+          {paymentUrl ? (
+            <a
+              href={paymentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700 transition-colors"
+            >
+              Ir para o pagamento →
+            </a>
+          ) : (
+            <p className="mt-2 text-xs text-red-500">Erro ao gerar link. Tente novamente.</p>
+          )}
+          <p className="mt-2 text-[10px] text-gray-400 text-center animate-pulse">⏳ Aguardando confirmação do pagamento…</p>
         </div>
       );
     }
@@ -1806,7 +1838,7 @@ export function PedidoClient({
         )}
 
         {/* Back to browse */}
-        {stage !== "BROWSE" && stage !== "DONE" && (
+        {stage !== "BROWSE" && stage !== "DONE" && stage !== "PAYMENT_LINK" && (
           <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-1.5 text-center">
             <button onClick={handleBackToBrowse} className="text-xs text-gray-400 hover:text-gray-600">
               ← Voltar ao cardápio
