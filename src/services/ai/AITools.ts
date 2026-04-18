@@ -406,7 +406,7 @@ async function execConfirmOrder(
 
     // Enrich order items with menu item names (snapshot)
     const menuItems = await tx.menuItem.findMany({
-      where: { id: { in: draft.items.map((i) => i.menuItemId) } },
+      where: { id: { in: draft.items.map((i) => i.menuItemId).filter((id): id is string => id !== null) } },
       select: { id: true, name: true },
     });
     const nameMap = Object.fromEntries(menuItems.map((m) => [m.id, m.name]));
@@ -416,7 +416,7 @@ async function execConfirmOrder(
       if (draftItem) {
         await tx.orderItem.update({
           where: { id: oi.id },
-          data: { name: nameMap[draftItem.menuItemId] ?? "Item" },
+          data: { name: (draftItem.menuItemId ? nameMap[draftItem.menuItemId] : undefined) ?? "Item" },
         });
       }
     }

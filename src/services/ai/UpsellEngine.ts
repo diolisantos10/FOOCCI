@@ -56,7 +56,7 @@ export class UpsellEngine {
 
     // Categories already in cart
     const cartCategoryIds = new Set(
-      draft.items.map((item) => item.menuItem.categoryId)
+      draft.items.map((item) => item.menuItem?.categoryId).filter((id): id is string => !!id)
     );
     // Items already in cart
     const cartItemIds = new Set(draft.items.map((item) => item.menuItemId));
