@@ -156,83 +156,81 @@ function ProductModal({
   }, [onClose]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={onClose}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-      {/* Panel — bottom sheet on mobile, centered card on desktop */}
+    <div className="fixed inset-0 z-50 bg-white flex flex-col sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm">
+      {/* Desktop: centered card */}
       <div
-        className="relative z-10 w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col"
+        className="w-full h-full flex flex-col sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Image */}
-        {item.imageUrl ? (
-          <div className="relative h-56 sm:h-64 shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={item.imageUrl}
-              alt={item.name}
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-          </div>
-        ) : (
-          <div className="h-32 shrink-0 bg-orange-50 flex items-center justify-center text-6xl">
-            🍽️
-          </div>
-        )}
-
-        {/* Close button */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-3 right-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-sm text-white hover:bg-black/60 transition-colors"
-          aria-label="Fechar"
-        >
-          ✕
-        </button>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="text-lg font-bold text-gray-900 leading-tight">
-              {item.name}
-            </h3>
-            <span className="shrink-0 text-lg font-bold text-orange-500">
-              R$&nbsp;{formatPrice(item.price)}
-            </span>
-          </div>
-
-          {item.description && (
-            <p className="text-sm text-gray-600 leading-relaxed">
-              {item.description}
-            </p>
-          )}
-
-          {item.variants.length > 0 && (
-            <div className="space-y-2 pt-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                Variantes
-              </p>
-              <div className="space-y-1.5">
-                {item.variants.map((v) => (
-                  <div
-                    key={v.id}
-                    className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2.5 border border-gray-100"
-                  >
-                    <span className="text-sm text-gray-800">{v.name}</span>
-                    <span className="text-sm font-bold text-gray-900">
-                      R$&nbsp;{formatPrice(v.price)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+        {/* Image — square, full width, flush to top */}
+        <div className="relative w-full aspect-square shrink-0">
+          {item.imageUrl ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={item.imageUrl}
+                alt={item.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+            </>
+          ) : (
+            <div className="w-full h-full bg-orange-50 flex items-center justify-center text-8xl">
+              🍽️
             </div>
           )}
+
+          {/* Close button — top left */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 left-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+            aria-label="Fechar"
+          >
+            ←
+          </button>
+        </div>
+
+        {/* Body — scrolls if content is long */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-5 pt-5 pb-2 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-xl font-bold text-gray-900 leading-tight">
+                {item.name}
+              </h3>
+              <span className="shrink-0 text-xl font-bold text-orange-500">
+                R$&nbsp;{formatPrice(item.price)}
+              </span>
+            </div>
+
+            {item.description && (
+              <p className="text-sm text-gray-600 leading-relaxed">
+                {item.description}
+              </p>
+            )}
+
+            {item.variants.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  Variantes
+                </p>
+                <div className="space-y-1.5">
+                  {item.variants.map((v) => (
+                    <div
+                      key={v.id}
+                      className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2.5 border border-gray-100"
+                    >
+                      <span className="text-sm text-gray-800">{v.name}</span>
+                      <span className="text-sm font-bold text-gray-900">
+                        R$&nbsp;{formatPrice(v.price)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -240,7 +238,7 @@ function ProductModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-full rounded-xl bg-orange-500 py-3 text-sm font-bold text-white hover:bg-orange-600 transition-colors shadow-sm"
+            className="w-full rounded-2xl bg-orange-500 py-4 text-base font-bold text-white hover:bg-orange-600 transition-colors shadow-sm"
           >
             Fechar
           </button>
