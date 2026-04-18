@@ -305,7 +305,7 @@ async function execRemoveItem(
 
   return {
     success: true,
-    message: `Removido: ${item.menuItem.name}`,
+    message: `Removido: ${item.menuItem?.name ?? menuItemId}`,
   };
 }
 
@@ -340,7 +340,7 @@ async function execUpdateQuantity(
 
   return {
     success: true,
-    message: `Atualizado: ${item.menuItem.name} → ${quantity}x`,
+    message: `Atualizado: ${item.menuItem?.name ?? menuItemId} → ${quantity}x`,
   };
 }
 
