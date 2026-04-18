@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // ── Enums (mirror Prisma) ──────────────────────────────────────────────────────
 
-export const PROMOTION_TYPES = ["PERCENTAGE", "FIXED", "COMBO", "FREE_DELIVERY", "COUPON", "BANNER"] as const;
+export const PROMOTION_TYPES = ["PERCENTAGE", "FIXED", "COMBO", "FREE_DELIVERY", "COUPON"] as const;
 export const PROMOTION_STATUSES = ["DRAFT", "ACTIVE", "PAUSED"] as const;
 export const PROMOTION_CHANNELS = ["QR_MENU", "DELIVERY", "WHATSAPP", "ALL"] as const;
 export const PROMOTION_TARGETS = ["PRODUCT", "CATEGORY", "ORDER"] as const;

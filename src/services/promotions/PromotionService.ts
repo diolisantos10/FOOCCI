@@ -159,10 +159,6 @@ export class PromotionService {
     if (input.type === "COUPON" && !input.couponCode?.trim()) {
       return serviceFail("Promoções do tipo Cupom exigem um código.");
     }
-    // Banner type requires an image URL
-    if (input.type === "BANNER" && !input.bannerImageUrl?.trim()) {
-      return serviceFail("Promoções do tipo Banner exigem uma URL de imagem.");
-    }
 
     const p = await prisma.promotion.create({
       data: {

@@ -16,7 +16,6 @@ const TYPE_LABELS: Record<string, string> = {
   COMBO:         "Combo",
   FREE_DELIVERY: "Frete grátis",
   COUPON:        "Cupom",
-  BANNER:        "Banner",
 };
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -177,6 +176,9 @@ function PromotionDrawer({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [showBannerSection, setShowBannerSection] = useState(
+    !!(editing?.bannerImageUrl)
+  );
 
   function set<K extends keyof PromotionForm>(key: K, value: PromotionForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -252,7 +254,7 @@ function PromotionDrawer({
     onSaved(json.data);
   }
 
-  const showDiscount = form.type !== "FREE_DELIVERY" && form.type !== "COMBO" && form.type !== "BANNER";
+  const showDiscount = form.type !== "FREE_DELIVERY" && form.type !== "COMBO";
   const discountLabel = form.type === "PERCENTAGE" ? "Desconto (%)" : "Desconto (R$)";
 
   return (
@@ -313,7 +315,7 @@ function PromotionDrawer({
           <div>
             <SectionTitle>Tipo de promoção</SectionTitle>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {(["PERCENTAGE", "FIXED", "COMBO", "FREE_DELIVERY", "COUPON", "BANNER"] as PromotionType[]).map((t) => (
+              {(["PERCENTAGE", "FIXED", "COMBO", "FREE_DELIVERY", "COUPON"] as PromotionType[]).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -364,14 +366,38 @@ function PromotionDrawer({
               </div>
             )}
 
-            {form.type === "BANNER" && (
-              <div className="mt-4 space-y-3">
-                <p className="text-sm font-semibold text-gray-800">Imagem do banner *</p>
-                <p className="text-xs text-gray-500">
-                  Imagem retangular (proporção 3:1 recomendada, ex: 1200×400 px). Aparecerá no topo de todos os cardápios no dia agendado.
-                </p>
+          </div>
 
-                {/* Preview */}
+          {/* ── Banner opcional ── */}
+          <div>
+            <SectionTitle>Banner promocional</SectionTitle>
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 hover:bg-gray-100 transition-colors">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 accent-brand-500"
+                checked={!!form.bannerImageUrl || showBannerSection}
+                onChange={(e) => {
+                  if (!e.target.checked) {
+                    set("bannerImageUrl", "");
+                    setShowBannerSection(false);
+                  } else {
+                    setShowBannerSection(true);
+                  }
+                }}
+              />
+              <span className="text-sm font-medium text-gray-700">
+                Adicionar banner a esta promoção
+              </span>
+            </label>
+            <p className="mt-1 text-xs text-gray-400">
+              O banner aparecerá no topo do cardápio QR e do delivery online enquanto a promoção estiver ativa.
+            </p>
+
+            {(showBannerSection || !!form.bannerImageUrl) && (
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-gray-500">
+                  Imagem retangular (proporção 3:1 recomendada, ex: 1200×400 px).
+                </p>
                 {form.bannerImageUrl ? (
                   <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -653,9 +679,7 @@ function PromotionCard({
       ? `R$${promotion.discountValue.toFixed(2)} off`
       : promotion.type === "FREE_DELIVERY"
         ? "Frete grátis"
-        : promotion.type === "BANNER"
-          ? "Banner visual"
-          : TYPE_LABELS[promotion.type] ?? promotion.type;
+        : TYPE_LABELS[promotion.type] ?? promotion.type;
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
@@ -669,6 +693,11 @@ function PromotionCard({
             {promotion.couponCode && (
               <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-mono font-semibold text-purple-700">
                 {promotion.couponCode}
+              </span>
+            )}
+            {promotion.bannerImageUrl && (
+              <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-600">
+                🖼 banner
               </span>
             )}
           </div>

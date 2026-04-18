@@ -99,8 +99,8 @@ export default async function PedidoPage({
   const rawBanners = await prisma.promotion.findMany({
     where: {
       restaurantId: restaurant.id,
-      type: "BANNER",
       status: "ACTIVE",
+      bannerImageUrl: { not: null },
       OR: [
         { startsAt: null },
         { startsAt: { lte: now } },
@@ -108,7 +108,6 @@ export default async function PedidoPage({
       AND: [
         { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
       ],
-      bannerImageUrl: { not: null },
     },
     select: { id: true, name: true, bannerImageUrl: true, daysOfWeek: true },
     orderBy: { createdAt: "desc" },
