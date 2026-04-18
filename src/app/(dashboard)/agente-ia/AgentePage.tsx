@@ -36,9 +36,9 @@ type TabId = "base" | "atendimento" | "cardapio";
 // ── Tab config ────────────────────────────────────────────────────────────────
 
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
-  { id: "base",        label: "Base da IA",  icon: "🧠" },
-  { id: "atendimento", label: "Atendimento", icon: "💬" },
-  { id: "cardapio",    label: "Cardápio",    icon: "🍽" },
+  { id: "base",        label: "Personalidade IA",  icon: "🧠" },
+  { id: "atendimento", label: "Agente Whatsapp",   icon: "💬" },
+  { id: "cardapio",    label: "Agente Cardápio",   icon: "🍽" },
 ];
 
 // ── Option tables ─────────────────────────────────────────────────────────────
