@@ -131,7 +131,7 @@ function UploadZone({
       <div className="mx-auto max-w-xl">
         {/* Header */}
         <div className="mb-1 flex items-center gap-2 text-sm">
-          <Link href="/dashboard/menu" className="text-gray-400 hover:text-gray-600">
+          <Link href="/menu" className="text-gray-400 hover:text-gray-600">
             ← Cardápio
           </Link>
         </div>
@@ -725,13 +725,13 @@ function SummaryScreen({ summary }: { summary: ImportSummary }) {
         {/* Actions */}
         <div className="flex flex-col gap-2">
           <Link
-            href="/dashboard/menu"
+            href="/menu"
             className="flex items-center justify-center rounded-lg bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
           >
             Ver cardápio
           </Link>
           <Link
-            href="/dashboard/menu/upload"
+            href="/menu/upload"
             className="flex items-center justify-center rounded-lg border border-gray-200 bg-white px-6 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
           >
             Importar outra planilha

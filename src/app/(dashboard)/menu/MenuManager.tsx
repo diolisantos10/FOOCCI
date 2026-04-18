@@ -906,7 +906,7 @@ function TopBar({
       </p>
       <div className="flex items-center gap-2">
         <Link
-          href="/dashboard/menu/upload"
+          href="/menu/upload"
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
         >
           Importar planilha
