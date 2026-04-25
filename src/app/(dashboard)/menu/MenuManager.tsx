@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { QRCard } from "./QRCard";
+import { QRCard, QRSalaoCard } from "./QRCard";
 import {
   DndContext,
   closestCenter,
@@ -2135,8 +2135,13 @@ export function MenuManager({
 
   return (
     <div className="space-y-4">
-      {/* QR access card */}
-      {restaurantSlug && <QRCard url={qrUrl} slug={restaurantSlug} />}
+      {/* QR access cards */}
+      {restaurantSlug && (
+        <div className="space-y-2">
+          <QRCard url={qrUrl} slug={restaurantSlug} />
+          <QRSalaoCard slug={restaurantSlug} />
+        </div>
+      )}
 
       {/* Header actions */}
       <TopBar
