@@ -187,7 +187,7 @@ function UploadZone({
               Arraste sua planilha aqui
             </p>
             <p className="mt-1 text-xs text-gray-400">
-              Formatos aceitos: .xlsx · .xls · .csv — até 20 MB
+              Formatos aceitos: .xlsx · .xls · .csv — até 100 MB
             </p>
             <button
               type="button"
