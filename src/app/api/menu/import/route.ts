@@ -50,24 +50,27 @@ const DESC_KEYS = new Set([
   "observacao",
   "observacao do item",
 ]);
-const PRECO_KEYS = new Set([
-  "preco",
-  "price",
-  "valor",
-  "value",
-  "custo",
-  "cost",
-]);
+// Root prefixes for price: also matches compound Neemo headers like
+// "Preço Cardápio", "Preço Delivery", "Preço Site" (first match wins).
+const PRECO_PREFIXES = ["preco", "price", "valor", "value", "custo", "cost"];
+
+function matchesSet(k: string, exact: Set<string>): boolean {
+  return exact.has(k);
+}
+
+function matchesPricePrefix(k: string): boolean {
+  return PRECO_PREFIXES.some((p) => k === p || k.startsWith(p + " "));
+}
 
 function detectColumns(headerRow: unknown[]): ColMap {
   const map: ColMap = {};
   headerRow.forEach((h, i) => {
     const k = normalizeHeader(h);
-    if (FOTO_KEYS.has(k)) map.foto = i;
-    else if (CAT_KEYS.has(k)) map.categoria = i;
-    else if (NOME_KEYS.has(k)) map.nome = i;
-    else if (DESC_KEYS.has(k)) map.descricao = i;
-    else if (PRECO_KEYS.has(k)) map.preco = i;
+    if (matchesSet(k, FOTO_KEYS)) map.foto = i;
+    else if (matchesSet(k, CAT_KEYS)) map.categoria = i;
+    else if (matchesSet(k, NOME_KEYS)) map.nome = i;
+    else if (matchesSet(k, DESC_KEYS)) map.descricao = i;
+    else if (map.preco === undefined && matchesPricePrefix(k)) map.preco = i;
   });
   return map;
 }
@@ -186,7 +189,7 @@ async function parseSpreadsheet(buffer: Buffer): Promise<ImportPreview> {
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 
-const MAX_BYTES = 20 * 1024 * 1024;
+const MAX_BYTES = 100 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   const ctx = getTenantContext(req);
@@ -211,7 +214,7 @@ export async function POST(req: NextRequest) {
       return badRequest("Use .xlsx, .xls ou .csv. PDF não é suportado neste modo.");
     }
     if (file.size > MAX_BYTES) {
-      return badRequest("Arquivo muito grande (máx 20 MB).");
+      return badRequest("Arquivo muito grande (máx 100 MB).");
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());

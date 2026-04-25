@@ -24,7 +24,7 @@ const nextConfig = {
           ? (() => { try { return [new URL(process.env.NEXTAUTH_URL).host]; } catch { return []; } })()
           : []),
       ],
-      bodySizeLimit: "10mb",
+      bodySizeLimit: "100mb",
     },
     // Prevent Next.js from bundling pdf-parse (avoids test-fixture read at import time)
     serverComponentsExternalPackages: ["pdf-parse"],
