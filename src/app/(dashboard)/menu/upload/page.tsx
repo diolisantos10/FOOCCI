@@ -251,6 +251,13 @@ function UploadZone({
               </span>
               . Foto e Descrição são opcionais.
             </p>
+            <a
+              href="/api/menu/import/template"
+              download
+              className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-orange-600 hover:text-orange-700"
+            >
+              ↓ Baixar planilha modelo (.xlsx)
+            </a>
           </div>
         )}
       </div>
@@ -355,9 +362,20 @@ function PreviewTable({
                 {missingColumns.join(", ")}
               </span>
             </p>
-            <p className="mt-0.5 text-xs text-yellow-700">
-              Verifique se os nomes das colunas correspondem ao formato esperado.
+            <p className="mt-1 text-xs text-yellow-700">
+              Nomes aceitos (não diferencia maiúsculas/acentos):
             </p>
+            <ul className="mt-0.5 text-xs text-yellow-700 list-disc list-inside space-y-0.5">
+              {missingColumns.includes("Categoria") && (
+                <li><span className="font-medium">Categoria:</span> Categoria, Grupo, Category</li>
+              )}
+              {missingColumns.includes("Nome do Item") && (
+                <li><span className="font-medium">Nome do Item:</span> Nome, Nome do Item, Item, Produto, Title</li>
+              )}
+              {missingColumns.includes("Preço") && (
+                <li><span className="font-medium">Preço:</span> Preço, Preco, Valor, Price, Preço Cardápio, Preço Delivery, Preço Site</li>
+              )}
+            </ul>
           </div>
         )}
 
@@ -425,6 +443,7 @@ function PreviewTable({
               <thead className="sticky top-0 border-b border-gray-100 bg-gray-50 text-xs font-semibold text-gray-500">
                 <tr>
                   <th className="w-10 px-3 py-2.5 text-left">#</th>
+                  <th className="w-10 px-3 py-2.5 text-left hidden sm:table-cell">Foto</th>
                   <th className="px-3 py-2.5 text-left">Categoria</th>
                   <th className="px-3 py-2.5 text-left">Nome do Item</th>
                   <th className="hidden px-3 py-2.5 text-left md:table-cell">
@@ -475,6 +494,23 @@ function PreviewTable({
                       >
                         <td className="px-3 py-2 text-xs text-gray-400">
                           {row.rowIndex}
+                        </td>
+                        <td className="hidden px-3 py-2 sm:table-cell">
+                          {row.foto ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={row.foto}
+                              alt=""
+                              className="h-8 w-8 rounded object-cover bg-gray-100"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <span className="flex h-8 w-8 items-center justify-center rounded bg-gray-100 text-xs text-gray-300">
+                              —
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           <span

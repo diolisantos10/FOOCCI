@@ -10,6 +10,10 @@ const nextConfig = {
         protocol: "https",
         hostname: "**.amazonaws.com",
       },
+      {
+        protocol: "https",
+        hostname: "cdn.neemo.com.br",
+      },
     ],
   },
 
