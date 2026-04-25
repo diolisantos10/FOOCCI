@@ -30,7 +30,7 @@
         {
           "name": "FESTIVAL CAZZA (DELIVERY)",
           "description": "Entradas: Sunomono Ceviche Pratos quentes: Yakisoba 01 Teppan de salmão 04 harumaki queijo 02 Guioza tiras de frango empanado Pratos frios: 02 temaki (cru ou grelhado) 10 sashimi salmão 05 uramaki salmão 05 hossomaki salmão 02 niguiri salmão 02 niguiri cazza 02 niguiri skin 12 hot roll Sobremesa: Banana empanada com leite condensado polvilhada com canela",
-          "price": 0,
+          "price": 199.0,
           "image": "https://cdn.neemo.com.br/uploads/item/photo/970292/photo1724225413.jpeg_item.png",
           "tags": [],
           "upsellHints": [],
@@ -120,7 +120,7 @@
         {
           "name": "COMBO AYANE",
           "description": "02 Temaki (Cru Ou Grelhado) 06 Sashimi Salmão 05 Uramaki Salmão 06 Hot Holl 02 Niguiri 02 Jhow",
-          "price": 0,
+          "price": 132.9,
           "image": "https://cdn.neemo.com.br/uploads/item/photo/2551663/photo1732344546.jpeg_item.png",
           "tags": [],
           "upsellHints": [],
@@ -162,7 +162,7 @@
         {
           "name": "Combo Temaki + Hot + Refri",
           "description": "01Temaki salmão (cru ou grelhado) 06 hot roll Refri 350ml",
-          "price": 0,
+          "price": 58.9,
           "image": "https://cdn.neemo.com.br/uploads/item/photo/970442/photo1724224710.jpeg_item.png",
           "tags": [],
           "upsellHints": [],
@@ -264,7 +264,7 @@
         {
           "name": "Teppan de Salmão",
           "description": "Posta de salmão grelhado acompanhado de legumes na manteiga e Gohan (arroz japonês) ou arroz brasileiro.",
-          "price": 0,
+          "price": 76.0,
           "image": "https://cdn.neemo.com.br/uploads/item/photo/970382/photo1724224960.jpeg_item.png",
           "tags": [],
           "upsellHints": [],
@@ -288,7 +288,7 @@
         {
           "name": "Salmão á Camarão",
           "description": "Posta de salmão grelhado com camarões regados ao molho de cebola, alcaparras e tomate cereja, acompanhado de purê de batata e Gohan (arroz japonês) ou arroz brasileiro.",
-          "price": 0,
+          "price": 125.0,
           "image": "https://cdn.neemo.com.br/uploads/item/photo/970380/photo1724225023.jpeg_item.png",
           "tags": [],
           "upsellHints": [],
@@ -312,7 +312,7 @@
         {
           "name": "Salmão ao Molho de Requeijão",
           "description": "Posta de salmão grelhado regado ao molho de requeijão acompanhado de purê de batata e Gohan (arroz) ou arroz brasileiro.",
-          "price": 0,
+          "price": 85.0,
           "image": "https://cdn.neemo.com.br/uploads/item/photo/970377/photo1724225082.jpeg_item.png",
           "tags": [],
           "upsellHints": [],
