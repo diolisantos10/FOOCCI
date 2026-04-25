@@ -328,17 +328,20 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
   );
 }
 
-// ── Promotion Form Drawer ──────────────────────────────────────────────────────
+// ── Promotion Form Drawer (full content-area panel) ───────────────────────────
 
 function PromotionDrawer({
   editing,
   onClose,
   onSaved,
+  automations,
 }: {
   editing: PromotionRow | null;
   onClose: () => void;
   onSaved: (p: PromotionRow) => void;
+  automations: AutomationRow[];
 }) {
+  const [drawerTab, setDrawerTab] = useState<"promotion" | "automations">("promotion");
   const [form, setForm] = useState<PromotionForm>(
     editing ? rowToForm(editing) : blankForm()
   );
@@ -428,30 +431,63 @@ function PromotionDrawer({
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — only over the content area (right of sidebar) */}
       <div
-        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+        className="fixed inset-y-0 left-0 lg:left-56 right-0 z-40 bg-black/20 backdrop-blur-[2px]"
         onClick={onClose}
       />
 
-      {/* Drawer panel */}
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg sm:max-w-2xl flex-col bg-white shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h2 className="text-base font-bold text-gray-900">
-            {editing ? "Editar promoção" : "Nova promoção"}
-          </h2>
+      {/* Full content-area panel */}
+      <div className="fixed inset-y-0 left-0 lg:left-56 right-0 z-50 flex flex-col bg-white shadow-2xl">
+
+        {/* Header: tabs + close */}
+        <div className="flex items-center gap-4 border-b border-gray-100 px-6 py-3">
+          <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => setDrawerTab("promotion")}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                drawerTab === "promotion"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {editing ? "Editar promoção" : "Nova promoção"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDrawerTab("automations")}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                drawerTab === "automations"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              🤖 Automações WhatsApp
+            </button>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
             ✕
           </button>
         </div>
 
-        {/* Scrollable body */}
+        {/* Automations tab body */}
+        {drawerTab === "automations" && (
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="mx-auto max-w-3xl">
+              <AutomationsSection initialAutomations={automations} />
+            </div>
+          </div>
+        )}
+
+        {/* Promotion form tab body */}
+        {drawerTab === "promotion" && (
         <form id="promotion-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-7">
+          <div className="mx-auto max-w-3xl space-y-7">
 
           {/* ── 1. Informações básicas ── */}
           <div>
@@ -784,10 +820,13 @@ function PromotionDrawer({
               {error}
             </div>
           )}
+          </div>{/* /max-w-3xl */}
         </form>
+        )}
 
-        {/* Footer */}
-        <div className="border-t border-gray-100 px-6 py-4 flex gap-3">
+        {/* Footer — only for promotion tab */}
+        {drawerTab === "promotion" && (
+        <div className="border-t border-gray-100 px-6 py-4 flex gap-3 max-w-3xl w-full mx-auto">
           <button
             type="button"
             onClick={onClose}
@@ -804,6 +843,7 @@ function PromotionDrawer({
             {saving ? "Salvando…" : editing ? "Salvar alterações" : "Criar promoção"}
           </button>
         </div>
+        )}
       </div>
     </>
   );
@@ -1099,24 +1139,13 @@ export function PromotionsClient({
         </div>
       )}
 
-      {/* ── Automações WhatsApp ── */}
-      <div className="border-t border-gray-100 pt-6">
-        <div className="mb-4 flex items-center gap-2">
-          <span className="text-lg">🤖</span>
-          <div>
-            <h2 className="text-sm font-bold text-gray-900">Automações WhatsApp</h2>
-            <p className="text-xs text-gray-400">Mensagens automáticas disparadas por comportamento do cliente</p>
-          </div>
-        </div>
-        <AutomationsSection initialAutomations={automations} />
-      </div>
-
       {/* Drawer */}
       {drawerOpen && (
         <PromotionDrawer
           editing={editing}
           onClose={() => setDrawerOpen(false)}
           onSaved={handleSaved}
+          automations={automations}
         />
       )}
     </div>
