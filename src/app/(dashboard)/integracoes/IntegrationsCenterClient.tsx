@@ -238,7 +238,7 @@ function SelectField({
 
 // ── Per-provider config forms ─────────────────────────────────────────────────
 
-function WhatsAppQRPanel({ isActive }: { isActive: boolean }) {
+function WhatsAppQRPanel() {
   const [qrBase64, setQrBase64]   = useState<string | null>(null);
   const [qrState, setQrState]     = useState<"idle" | "loading" | "shown" | "connected" | "error">("idle");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -275,8 +275,6 @@ function WhatsAppQRPanel({ isActive }: { isActive: boolean }) {
 
   // Stop polling when component unmounts or instance becomes connected
   useEffect(() => () => stopPolling(), []);
-
-  if (!isActive) return null;
 
   return (
     <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-4">
@@ -363,7 +361,7 @@ function WhatsAppForm({
       onSubmit={(e) => { e.preventDefault(); onSave({ instanceName, baseUrl, apiKey, webhookSecret }); }}
       className="space-y-4"
     >
-      <WhatsAppQRPanel isActive={view?.isActive ?? false} />
+      <WhatsAppQRPanel />
       <TextField
         label="Nome da instância"
         name="instanceName"
