@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -238,6 +238,105 @@ function SelectField({
 
 // ── Per-provider config forms ─────────────────────────────────────────────────
 
+function WhatsAppQRPanel({ isActive }: { isActive: boolean }) {
+  const [qrBase64, setQrBase64]   = useState<string | null>(null);
+  const [qrState, setQrState]     = useState<"idle" | "loading" | "shown" | "connected" | "error">("idle");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = () => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+  };
+
+  const fetchQR = async () => {
+    const res  = await fetch("/api/evolution/qr");
+    const data = await res.json().catch(() => ({}));
+    const qr   = (data?.data ?? data) as { base64?: string | null; error?: string };
+
+    if (qr.base64) {
+      setQrBase64(qr.base64);
+      setQrState("shown");
+    } else {
+      // No QR → instance is already open or error
+      setQrBase64(null);
+      setQrState(qr.error === "not_configured" ? "error" : "connected");
+      stopPolling();
+    }
+  };
+
+  const handleConnect = async () => {
+    setQrState("loading");
+    setQrBase64(null);
+    await fetchQR();
+    // Auto-refresh every 30 s so QR doesn't expire
+    intervalRef.current = setInterval(async () => {
+      await fetchQR();
+    }, 30_000);
+  };
+
+  // Stop polling when component unmounts or instance becomes connected
+  useEffect(() => () => stopPolling(), []);
+
+  if (!isActive) return null;
+
+  return (
+    <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-4">
+      <p className="mb-3 text-sm font-semibold text-green-800">Conectar WhatsApp</p>
+
+      {qrState === "idle" && (
+        <button
+          type="button"
+          onClick={handleConnect}
+          className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition"
+        >
+          Gerar QR Code
+        </button>
+      )}
+
+      {qrState === "loading" && (
+        <div className="flex items-center gap-2 text-sm text-green-700">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
+          Gerando QR Code…
+        </div>
+      )}
+
+      {qrState === "shown" && qrBase64 && (
+        <div className="flex flex-col items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={qrBase64}
+            alt="QR Code WhatsApp"
+            className="rounded-xl border border-green-200 shadow-sm"
+            style={{ width: 200, height: 200 }}
+          />
+          <p className="text-center text-[11px] text-green-700">
+            Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar aparelho
+          </p>
+          <button
+            type="button"
+            onClick={handleConnect}
+            className="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition"
+          >
+            Atualizar QR
+          </button>
+        </div>
+      )}
+
+      {qrState === "connected" && (
+        <p className="flex items-center gap-2 text-sm font-medium text-green-700">
+          <span className="h-2 w-2 rounded-full bg-green-500" />
+          WhatsApp já está conectado!
+        </p>
+      )}
+
+      {qrState === "error" && (
+        <p className="text-sm text-red-600">
+          Integração não configurada. Salve as credenciais primeiro.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function WhatsAppForm({
   view, saving, onSave,
 }: {
@@ -264,6 +363,7 @@ function WhatsAppForm({
       onSubmit={(e) => { e.preventDefault(); onSave({ instanceName, baseUrl, apiKey, webhookSecret }); }}
       className="space-y-4"
     >
+      <WhatsAppQRPanel isActive={view?.isActive ?? false} />
       <TextField
         label="Nome da instância"
         name="instanceName"

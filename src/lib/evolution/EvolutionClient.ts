@@ -48,6 +48,11 @@ export interface InstanceStatus {
   instance: string;
 }
 
+export interface InstanceQRCode {
+  base64: string | null;  // data:image/png;base64,... or null if already connected
+  code:   string | null;
+}
+
 // ─── helpers ─────────────────────────────────────────────────
 
 function buildUrl(base: string, path: string): string {
@@ -136,5 +141,23 @@ export const EvolutionClient = {
       "GET",
       `/instance/connectionState/${config.instanceName}`
     );
+  },
+
+  /**
+   * Fetch the QR code for the instance.
+   * The Evolution API returns `{ qrcode: { base64, code } }` when the instance
+   * is in "connecting" / "close" state, or `{ instance: { state: "open" } }`
+   * when already connected.
+   */
+  async getQRCode(config: EvolutionConfigSnapshot): Promise<InstanceQRCode> {
+    const raw = await request<{
+      qrcode?: { base64?: string; code?: string };
+      instance?: { state?: string };
+    }>(config, "GET", `/instance/connect/${config.instanceName}`);
+
+    return {
+      base64: raw.qrcode?.base64 ?? null,
+      code:   raw.qrcode?.code   ?? null,
+    };
   },
 };
