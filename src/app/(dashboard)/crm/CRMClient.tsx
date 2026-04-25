@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { pickAutomationPlaceholder } from "@/lib/crm-messages";
-import type { CRMCustomer, Opportunity, AutomationRow, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
+import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab } from "./OverviewTab";
 
@@ -15,24 +14,6 @@ const TIER_CONFIG: Record<CustomerTier, { label: string; bg: string; text: strin
   OURO:     { label: "Ouro",     bg: "bg-amber-100",  text: "text-amber-700",  icon: "🥇" },
   PRATA:    { label: "Prata",    bg: "bg-gray-200",   text: "text-gray-700",   icon: "🥈" },
   BRONZE:   { label: "Bronze",   bg: "bg-orange-100", text: "text-orange-700", icon: "🥉" },
-};
-
-const TRIGGER_META: Record<string, { label: string; icon: string; description: string }> = {
-  REACTIVATION: {
-    label:       "Reativação",
-    icon:        "🔄",
-    description: "Enviado para clientes que não pedem há X dias.",
-  },
-  BIRTHDAY: {
-    label:       "Aniversário",
-    icon:        "🎂",
-    description: "Enviado automaticamente no aniversário do cliente.",
-  },
-  POST_ORDER: {
-    label:       "Pós-pedido",
-    icon:        "⭐",
-    description: "Enviado X dias após a conclusão de um pedido.",
-  },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; dot: string }> = {
@@ -376,210 +357,18 @@ function CustomersTab({
   );
 }
 
-// ── Automations Tab ───────────────────────────────────────────────────────────
-
-function AutomationsTab({ initialAutomations }: { initialAutomations: AutomationRow[] }) {
-  // Dynamic placeholders — fresh every day, never the same text twice
-  const placeholders = useMemo(() => ({
-    REACTIVATION: pickAutomationPlaceholder("REACTIVATION"),
-    BIRTHDAY:     pickAutomationPlaceholder("BIRTHDAY"),
-    POST_ORDER:   pickAutomationPlaceholder("POST_ORDER"),
-  }), []);
-
-  // Build a map: trigger → row (or defaults)
-  const defaults: Record<string, AutomationRow> = {
-    REACTIVATION: { id: "", trigger: "REACTIVATION", isEnabled: false, messageTemplate: "", triggerAfterDays: 30, discountType: null, discountValue: null },
-    BIRTHDAY:     { id: "", trigger: "BIRTHDAY",     isEnabled: false, messageTemplate: "", triggerAfterDays: 0,  discountType: null, discountValue: null },
-    POST_ORDER:   { id: "", trigger: "POST_ORDER",   isEnabled: false, messageTemplate: "", triggerAfterDays: 1,  discountType: null, discountValue: null },
-  };
-
-  initialAutomations.forEach((a) => { defaults[a.trigger] = a; });
-
-  const [automations, setAutomations] = useState<Record<string, AutomationRow>>(defaults);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [saving, setSaving] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
-
-  const handleUpdate = useCallback(
-    (trigger: string, patch: Partial<AutomationRow>) => {
-      setAutomations((prev) => ({ ...prev, [trigger]: { ...prev[trigger]!, ...patch } }));
-    },
-    []
-  );
-
-  async function saveAutomation(trigger: string) {
-    const a = automations[trigger]!;
-    setSaving(trigger);
-    const res = await fetch(`/api/crm/automations/${trigger}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        isEnabled:        a.isEnabled,
-        messageTemplate:  a.messageTemplate,
-        triggerAfterDays: a.triggerAfterDays,
-        discountType:     a.discountType,
-        discountValue:    a.discountValue,
-      }),
-    });
-    if (res.ok) {
-      const json = await res.json();
-      setAutomations((prev) => ({ ...prev, [trigger]: json.data }));
-      setSaved(trigger);
-      setTimeout(() => setSaved(null), 2000);
-    }
-    setSaving(null);
-  }
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-gray-500">
-        Configure mensagens automáticas para aumentar o retorno dos seus clientes.
-        <span className="ml-1 text-orange-500 font-medium">Requer integração WhatsApp ativa.</span>
-      </p>
-
-      {(["REACTIVATION", "BIRTHDAY", "POST_ORDER"] as const).map((trigger) => {
-        const a = automations[trigger]!;
-        const meta = TRIGGER_META[trigger]!;
-        const isOpen = expanded === trigger;
-
-        return (
-          <div key={trigger} className={`rounded-2xl border bg-white shadow-sm overflow-hidden transition-all ${
-            a.isEnabled ? "border-green-200" : "border-gray-100"
-          }`}>
-            {/* Header row */}
-            <div className="flex items-center gap-4 px-4 py-4">
-              <span className="text-2xl">{meta.icon}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900">{meta.label}</p>
-                <p className="text-xs text-gray-500">{meta.description}</p>
-              </div>
-
-              {/* Toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  handleUpdate(trigger, { isEnabled: !a.isEnabled });
-                }}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                  a.isEnabled ? "bg-green-500" : "bg-gray-200"
-                }`}
-                aria-label={a.isEnabled ? "Desativar" : "Ativar"}
-              >
-                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  a.isEnabled ? "translate-x-5" : "translate-x-0.5"
-                }`} />
-              </button>
-
-              <button
-                onClick={() => setExpanded(isOpen ? null : trigger)}
-                className="text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                {isOpen ? "▲" : "▼"}
-              </button>
-            </div>
-
-            {/* Config panel */}
-            {isOpen && (
-              <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-4">
-
-                {/* Trigger days (not for birthday) */}
-                {trigger !== "BIRTHDAY" && (
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      {trigger === "REACTIVATION"
-                        ? "Disparar após quantos dias sem pedido"
-                        : "Disparar quantos dias após o pedido"}
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={365}
-                      value={a.triggerAfterDays}
-                      onChange={(e) => handleUpdate(trigger, { triggerAfterDays: parseInt(e.target.value) || 0 })}
-                      className="w-32 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    />
-                    <span className="ml-2 text-xs text-gray-400">dias</span>
-                  </div>
-                )}
-
-                {/* Message template */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Mensagem
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={a.messageTemplate || placeholders[trigger as keyof typeof placeholders] || ""}
-                    onChange={(e) => handleUpdate(trigger, { messageTemplate: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none"
-                    placeholder={placeholders[trigger as keyof typeof placeholders]}
-                  />
-                  <p className="mt-1 text-[10px] text-gray-400">
-                    Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para o nome do cliente.
-                  </p>
-                </div>
-
-                {/* Optional discount */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-2">
-                    Desconto opcional
-                  </label>
-                  <div className="flex flex-wrap gap-3 items-center">
-                    <select
-                      value={a.discountType ?? ""}
-                      onChange={(e) => handleUpdate(trigger, { discountType: e.target.value || null, discountValue: null })}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-                    >
-                      <option value="">Sem desconto</option>
-                      <option value="PERCENTAGE">% Desconto</option>
-                      <option value="FIXED">R$ Desconto</option>
-                    </select>
-                    {a.discountType && (
-                      <input
-                        type="number"
-                        min={0}
-                        step={a.discountType === "PERCENTAGE" ? 1 : 0.01}
-                        max={a.discountType === "PERCENTAGE" ? 100 : undefined}
-                        value={a.discountValue ?? ""}
-                        onChange={(e) => handleUpdate(trigger, { discountValue: parseFloat(e.target.value) || null })}
-                        className="w-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-                        placeholder={a.discountType === "PERCENTAGE" ? "10" : "5.00"}
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* Save */}
-                <button
-                  onClick={() => saveAutomation(trigger)}
-                  disabled={saving === trigger}
-                  className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white hover:bg-brand-700 transition-colors disabled:opacity-60 shadow-sm"
-                >
-                  {saving === trigger ? "Salvando…" : saved === trigger ? "✓ Salvo!" : "Salvar configuração"}
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "overview" | "opportunities" | "customers" | "automations" | "agente";
+type Tab = "overview" | "opportunities" | "customers" | "agente";
 
 export function CRMClient({
   initialCustomers,
   initialOpportunities,
-  initialAutomations,
   overviewStats,
   opportunitiesCount,
 }: {
   initialCustomers:     CRMCustomer[];
   initialOpportunities: Opportunity[];
-  initialAutomations:   AutomationRow[];
   restaurantName:       string;
   overviewStats:        OverviewStats;
   opportunitiesCount:   number;
@@ -593,7 +382,6 @@ export function CRMClient({
     { id: "overview",       label: "Visão Geral" },
     { id: "opportunities",  label: "Oportunidades", badge: initialOpportunities.length || undefined },
     { id: "customers",      label: "Clientes" },
-    { id: "automations",    label: "Automações" },
     { id: "agente",         label: "Agente IA" },
   ];
 
@@ -652,10 +440,6 @@ export function CRMClient({
           onImportOpen={() => setShowImport(true)}
         />
       )}
-      {tab === "automations" && (
-        <AutomationsTab initialAutomations={initialAutomations} />
-      )}
-
       {tab === "agente" && (
         <div className="space-y-6">
 
@@ -711,10 +495,10 @@ export function CRMClient({
               ))}
             </div>
             <p className="text-xs text-gray-400">
-              Configure reativação e aniversário na aba{" "}
-              <button onClick={() => setTab("automations")} className="text-brand-600 underline hover:text-brand-700">
-                Automações
-              </button>.
+              Configure reativação e aniversário em{" "}
+              <Link href="/promotions" className="text-brand-600 underline hover:text-brand-700">
+                Promoções
+              </Link>.
             </p>
           </div>
 

@@ -3,7 +3,7 @@ import { getTenantId } from "@/lib/tenant";
 import { TopBar } from "@/components/layout/TopBar";
 import { CRMClient } from "./CRMClient";
 import { CRMService, getTier } from "@/services/crm/CRMService";
-import type { CRMCustomer, Opportunity, AutomationRow, OverviewStats } from "@/services/crm/CRMService";
+import type { CRMCustomer, Opportunity, OverviewStats } from "@/services/crm/CRMService";
 
 export const metadata = { title: "CRM — Motor de Receita" };
 export const dynamic = "force-dynamic";
@@ -15,14 +15,13 @@ export default async function CRMPage() {
 
   let customers:     CRMCustomer[]  = [];
   let opportunities: Opportunity[]  = [];
-  let automations:   AutomationRow[] = [];
   let overviewStats: OverviewStats = {
     totalCustomers: 0, activeCustomers: 0, inactiveCustomers: 0,
     newThisMonth: 0, avgTicket: 0, segments: [],
   };
 
   if (restaurantId) {
-    const [restaurant, rows, autoRows, opResult, statsResult] = await Promise.all([
+    const [restaurant, rows, opResult, statsResult] = await Promise.all([
       prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
       prisma.customer.findMany({
         where: { restaurantId },
@@ -34,10 +33,6 @@ export default async function CRMPage() {
           lastOrderAt: true, isActive: true, birthDate: true,
         },
       }),
-      prisma.cRMAutomation.findMany({
-        where: { restaurantId },
-        orderBy: { trigger: "asc" },
-      }),
       CRMService.getOpportunities(restaurantId, restaurantName),
       CRMService.getOverviewStats(restaurantId),
     ]);
@@ -46,6 +41,7 @@ export default async function CRMPage() {
 
     const now = new Date();
     customers = rows.map((c) => {
+
       const spend = Number(c.totalSpend);
       const days = c.lastOrderAt
         ? Math.floor((now.getTime() - c.lastOrderAt.getTime()) / 86_400_000)
@@ -64,16 +60,6 @@ export default async function CRMPage() {
       };
     });
 
-    automations = autoRows.map((r) => ({
-      id:               r.id,
-      trigger:          r.trigger,
-      isEnabled:        r.isEnabled,
-      messageTemplate:  r.messageTemplate,
-      triggerAfterDays: r.triggerAfterDays,
-      discountType:     r.discountType ?? null,
-      discountValue:    r.discountValue != null ? Number(r.discountValue) : null,
-    }));
-
     if (opResult.ok) opportunities = opResult.data;
     if (statsResult.ok) overviewStats = statsResult.data;
   }
@@ -84,7 +70,6 @@ export default async function CRMPage() {
       <CRMClient
         initialCustomers={customers}
         initialOpportunities={opportunities}
-        initialAutomations={automations}
         restaurantName={restaurantName}
         overviewStats={overviewStats}
         opportunitiesCount={opportunities.length}
