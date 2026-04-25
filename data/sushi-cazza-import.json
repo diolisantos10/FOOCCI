@@ -1039,7 +1039,7 @@
         {
           "name": "REFRIGERANTE 350 ml",
           "description": "REFRIGERANTES 350 ml",
-          "price": 0,
+          "price": 10.9,
           "image": "https://cdn.neemo.com.br/uploads/item/photo/2436286/photo1720103827.jpeg_item.png",
           "tags": [],
           "upsellHints": [],
@@ -1091,7 +1091,7 @@
         {
           "name": "SUCOS NATURAIS",
           "description": null,
-          "price": 0,
+          "price": 14.9,
           "image": "https://cdn.neemo.com.br/uploads/item/photo/2436761/photo1720109634.jpeg_item.png",
           "tags": [],
           "upsellHints": [],
@@ -1145,7 +1145,7 @@
         {
           "name": "CAIPIRNHAS SAQUÊ / VODKA",
           "description": null,
-          "price": 0,
+          "price": 23.0,
           "image": "https://cdn.neemo.com.br/uploads/item/photo/2436769/photo1720110895.jpeg_item.png",
           "tags": [],
           "upsellHints": [],
@@ -1200,7 +1200,7 @@
         {
           "name": "CERVEJAS LONG NECK 330ML",
           "description": null,
-          "price": 0,
+          "price": 12.0,
           "image": "https://cdn.neemo.com.br/uploads/item/photo/2438198/photo1720205449.jpeg_item.png",
           "tags": [],
           "upsellHints": [],
