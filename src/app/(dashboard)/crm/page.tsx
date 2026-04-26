@@ -20,6 +20,9 @@ export default async function CRMPage() {
     newThisMonth: 0, avgTicket: 0, segments: [],
   };
 
+  let googleReviewUrl: string | null = null;
+  let ifoodReviewUrl:  string | null = null;
+
   if (restaurantId) {
     const [restaurant, rows, opResult, statsResult] = await Promise.all([
       prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
@@ -62,6 +65,13 @@ export default async function CRMPage() {
 
     if (opResult.ok) opportunities = opResult.data;
     if (statsResult.ok) overviewStats = statsResult.data;
+
+    const brandCfg = await prisma.restaurantBrandConfig.findUnique({
+      where: { restaurantId },
+      select: { googleReviewUrl: true, ifoodReviewUrl: true },
+    });
+    googleReviewUrl = brandCfg?.googleReviewUrl ?? null;
+    ifoodReviewUrl  = brandCfg?.ifoodReviewUrl  ?? null;
   }
 
   return (
@@ -73,6 +83,8 @@ export default async function CRMPage() {
         restaurantName={restaurantName}
         overviewStats={overviewStats}
         opportunitiesCount={opportunities.length}
+        googleReviewUrl={googleReviewUrl}
+        ifoodReviewUrl={ifoodReviewUrl}
       />
     </>
   );

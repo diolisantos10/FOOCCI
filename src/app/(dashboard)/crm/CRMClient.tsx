@@ -359,19 +359,167 @@ function CustomersTab({
 
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "overview" | "opportunities" | "customers" | "agente";
+// ── Avaliações Tab ────────────────────────────────────────────────────────────
+
+const MOCK_REVIEWS = [
+  { author: "Maria S.", stars: 5, text: "Comida incrível, entrega rápida! Voltarei com certeza.", date: "há 2 dias" },
+  { author: "João P.",  stars: 5, text: "Atendimento excelente e pedido chegou quente.",          date: "há 5 dias" },
+  { author: "Ana L.",   stars: 4, text: "Muito bom! Apenas a embalagem poderia ser melhor.",       date: "há 1 semana" },
+];
+
+function StarRating({ count }: { count: number }) {
+  return (
+    <span className="text-amber-400 text-base leading-none">
+      {"★".repeat(count)}{"☆".repeat(5 - count)}
+    </span>
+  );
+}
+
+function AvaliacoesTab({
+  googleReviewUrl,
+  ifoodReviewUrl,
+}: {
+  googleReviewUrl: string | null;
+  ifoodReviewUrl: string | null;
+}) {
+  const hasAnyLink = googleReviewUrl || ifoodReviewUrl;
+
+  return (
+    <div className="space-y-5">
+      {/* Plataformas */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* Google */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🌐</span>
+            <h3 className="text-sm font-semibold text-gray-900">Google Reviews</h3>
+          </div>
+          {googleReviewUrl ? (
+            <a
+              href={googleReviewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition"
+            >
+              Ver no Google →
+            </a>
+          ) : (
+            <p className="text-xs text-gray-400">
+              Link não configurado.{" "}
+              <Link href="/settings/marca" className="text-brand-600 underline">Adicionar →</Link>
+            </p>
+          )}
+          {/* Mocked reviews */}
+          <div className="space-y-2 pt-1">
+            {MOCK_REVIEWS.map((r) => (
+              <div key={r.author} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-semibold text-gray-800">{r.author}</p>
+                  <span className="text-[10px] text-gray-400">{r.date}</span>
+                </div>
+                <StarRating count={r.stars} />
+                <p className="mt-1 text-xs text-gray-600">{r.text}</p>
+              </div>
+            ))}
+            <p className="text-[10px] text-gray-400 pt-1">
+              * Avaliações de exemplo — integração real com a API do Google em breve.
+            </p>
+          </div>
+        </div>
+
+        {/* iFood */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🛵</span>
+            <h3 className="text-sm font-semibold text-gray-900">iFood Avaliações</h3>
+          </div>
+          {ifoodReviewUrl ? (
+            <a
+              href={ifoodReviewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition"
+            >
+              Ver no iFood →
+            </a>
+          ) : (
+            <p className="text-xs text-gray-400">
+              Link não configurado.{" "}
+              <Link href="/settings/marca" className="text-brand-600 underline">Adicionar →</Link>
+            </p>
+          )}
+          {/* Mocked reviews */}
+          <div className="space-y-2 pt-1">
+            {MOCK_REVIEWS.map((r) => (
+              <div key={r.author} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-semibold text-gray-800">{r.author}</p>
+                  <span className="text-[10px] text-gray-400">{r.date}</span>
+                </div>
+                <StarRating count={r.stars} />
+                <p className="mt-1 text-xs text-gray-600">{r.text}</p>
+              </div>
+            ))}
+            <p className="text-[10px] text-gray-400 pt-1">
+              * Avaliações de exemplo — integração real com a API do iFood em breve.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* CTA para configurar links */}
+      {!hasAnyLink && (
+        <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 p-4 text-center">
+          <p className="text-sm font-medium text-amber-800">Configure seus links de avaliação</p>
+          <p className="mt-1 text-xs text-amber-600">
+            Acesse <Link href="/settings/marca" className="underline font-semibold">Configurações → Marca</Link>{" "}
+            e cole os links do Google e iFood.
+          </p>
+        </div>
+      )}
+
+      {/* Template pós-venda */}
+      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+        <h3 className="text-sm font-semibold text-gray-900">📨 Template Pós-Venda</h3>
+        <p className="text-xs text-gray-500">Use este template nas campanhas de WhatsApp após o pedido.</p>
+        <div className="rounded-lg border border-green-100 bg-green-50 p-4 font-mono text-xs text-green-800 whitespace-pre-wrap">
+{`Olá {nome}, o que achou do seu pedido? 😊
+Se puder, nos avalie — sua opinião faz toda a diferença!
+${googleReviewUrl ? `\n⭐ Google: ${googleReviewUrl}` : "⭐ Google: [configure o link nas configurações]"}${ifoodReviewUrl ? `\n🛵 iFood: ${ifoodReviewUrl}` : ""}`}
+        </div>
+        <button
+          onClick={() => {
+            const txt = `Olá {nome}, o que achou do seu pedido? 😊\nSe puder, nos avalie — sua opinião faz toda a diferença!\n${googleReviewUrl ? `\n⭐ Google: ${googleReviewUrl}` : ""}${ifoodReviewUrl ? `\n🛵 iFood: ${ifoodReviewUrl}` : ""}`.trim();
+            navigator.clipboard.writeText(txt);
+          }}
+          className="text-xs text-brand-600 underline hover:text-brand-700"
+        >
+          Copiar template
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main CRM Component ────────────────────────────────────────────────────────
+
+type Tab = "overview" | "opportunities" | "customers" | "agente" | "avaliacoes";
 
 export function CRMClient({
   initialCustomers,
   initialOpportunities,
   overviewStats,
   opportunitiesCount,
+  googleReviewUrl,
+  ifoodReviewUrl,
 }: {
   initialCustomers:     CRMCustomer[];
   initialOpportunities: Opportunity[];
   restaurantName:       string;
   overviewStats:        OverviewStats;
   opportunitiesCount:   number;
+  googleReviewUrl:      string | null;
+  ifoodReviewUrl:       string | null;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
@@ -379,10 +527,11 @@ export function CRMClient({
   const [customerFilter, setCustomerFilter] = useState<"all" | "inactive" | "vip" | "recent">("all");
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
-    { id: "overview",       label: "Visão Geral" },
-    { id: "opportunities",  label: "Oportunidades", badge: initialOpportunities.length || undefined },
-    { id: "customers",      label: "Clientes" },
-    { id: "agente",         label: "Agente IA" },
+    { id: "overview",      label: "Visão Geral" },
+    { id: "opportunities", label: "Oportunidades", badge: initialOpportunities.length || undefined },
+    { id: "customers",     label: "Clientes" },
+    { id: "avaliacoes",    label: "Avaliações" },
+    { id: "agente",        label: "Agente IA" },
   ];
 
   function goToInactive() {
@@ -438,6 +587,12 @@ export function CRMClient({
           initialCustomers={initialCustomers}
           initialFilter={customerFilter}
           onImportOpen={() => setShowImport(true)}
+        />
+      )}
+      {tab === "avaliacoes" && (
+        <AvaliacoesTab
+          googleReviewUrl={googleReviewUrl}
+          ifoodReviewUrl={ifoodReviewUrl}
         />
       )}
       {tab === "agente" && (

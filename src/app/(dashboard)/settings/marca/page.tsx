@@ -140,6 +140,8 @@ interface PassthroughConfig {
   brandSecondaryColor: string | null;
   instagramUrl: string | null;
   tiktokUrl: string | null;
+  googleReviewUrl: string | null;
+  ifoodReviewUrl: string | null;
 }
 
 const PASSTHROUGH_DEFAULTS: PassthroughConfig = {
@@ -157,6 +159,8 @@ const PASSTHROUGH_DEFAULTS: PassthroughConfig = {
   brandSecondaryColor: null,
   instagramUrl: null,
   tiktokUrl: null,
+  googleReviewUrl: null,
+  ifoodReviewUrl: null,
 };
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -359,6 +363,8 @@ export default function MarcaPage() {
           brandSecondaryColor:  data.brandSecondaryColor ?? null,
           instagramUrl:         data.instagramUrl ?? null,
           tiktokUrl:            data.tiktokUrl ?? null,
+          googleReviewUrl:      data.googleReviewUrl ?? null,
+          ifoodReviewUrl:       data.ifoodReviewUrl ?? null,
         });
       }
     }).finally(() => setLoading(false));
@@ -714,6 +720,34 @@ export default function MarcaPage() {
             {passthrough.brandPrimaryColor ?? "#6366f1"} &middot;{" "}
             {passthrough.brandSecondaryColor ?? "#8b5cf6"}
           </p>
+        </div>
+      </PageCard>
+
+      {/* ── 10. Links de Avaliação ───────────────────────────────── */}
+      <PageCard>
+        <h2 className="text-base font-semibold text-gray-900">⭐ Links de Avaliação</h2>
+        <p className="mt-0.5 mb-4 text-sm text-gray-500">
+          Cole os links de avaliação do seu restaurante. Eles aparecem no CRM para facilitar campanhas pós-venda.
+        </p>
+        <div className="space-y-3">
+          <Field label="Google Reviews">
+            <input
+              type="url"
+              value={passthrough.googleReviewUrl ?? ""}
+              onChange={(e) => setPassthrough((p) => ({ ...p, googleReviewUrl: e.target.value || null }))}
+              placeholder="https://g.page/r/..."
+              className={INPUT}
+            />
+          </Field>
+          <Field label="iFood Avaliações">
+            <input
+              type="url"
+              value={passthrough.ifoodReviewUrl ?? ""}
+              onChange={(e) => setPassthrough((p) => ({ ...p, ifoodReviewUrl: e.target.value || null }))}
+              placeholder="https://www.ifood.com.br/..."
+              className={INPUT}
+            />
+          </Field>
         </div>
       </PageCard>
 
