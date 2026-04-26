@@ -29,6 +29,7 @@ export type ImportSummary = {
   categoriesCreated: number;
   itemsCreated: number;
   skipped: number;
+  duplicatesSkipped: number;
   failed: number;
   errors: string[];
 };
@@ -83,18 +84,24 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // ── Append: find existing categories ──────────────────────────────────
+      // ── Append: find existing categories + items (to avoid duplicates) ───────
       const existingCatMap = new Map<string, string>(); // lowerName → id
+      // catId → Set of lower-cased item names already in that category
+      const existingItemNames = new Map<string, Set<string>>();
       let catSortBase = 0;
 
       if (mode === "append") {
         const existing = await tx.menuCategory.findMany({
           where: { restaurantId },
-          select: { id: true, name: true, sortOrder: true },
+          select: { id: true, name: true, sortOrder: true, items: { select: { name: true } } },
           orderBy: { sortOrder: "asc" },
         });
         for (const c of existing) {
           existingCatMap.set(c.name.toLowerCase(), c.id);
+          existingItemNames.set(
+            c.id,
+            new Set(c.items.map((i) => i.name.toLowerCase().trim()))
+          );
         }
         const maxSort = existing[existing.length - 1]?.sortOrder ?? -1;
         catSortBase = maxSort + 1;
@@ -138,7 +145,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // ── Create items ───────────────────────────────────────────────────────
+      // ── Create items (skip duplicates in append mode) ──────────────────────
+      let duplicatesSkipped = 0;
       for (const row of validRows) {
         try {
           const catId = catIdMap.get(row.categoria);
@@ -147,6 +155,13 @@ export async function POST(req: NextRequest) {
               `Linha ${row.rowIndex}: categoria "${row.categoria}" não mapeada`
             );
             failed++;
+            continue;
+          }
+
+          // Skip if item with same name already exists in this category (append mode)
+          const existingNames = existingItemNames.get(catId);
+          if (existingNames?.has(row.nome.toLowerCase().trim())) {
+            duplicatesSkipped++;
             continue;
           }
 
@@ -182,6 +197,7 @@ export async function POST(req: NextRequest) {
       categoriesCreated,
       itemsCreated,
       skipped,
+      duplicatesSkipped,
       failed,
       errors,
     });

@@ -32,6 +32,7 @@ type ImportSummary = {
   categoriesCreated: number;
   itemsCreated: number;
   skipped: number;
+  duplicatesSkipped: number;
   failed: number;
   errors: string[];
 };
@@ -716,6 +717,18 @@ function SummaryScreen({ summary }: { summary: ImportSummary }) {
                 : "Linhas ignoradas"}
             </p>
           </div>
+          {(summary.duplicatesSkipped ?? 0) > 0 && (
+            <div className="col-span-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-4 text-center">
+              <p className="text-2xl font-bold text-blue-500">
+                {summary.duplicatesSkipped}
+              </p>
+              <p className="mt-0.5 text-xs text-blue-600">
+                {summary.duplicatesSkipped === 1
+                  ? "Duplicata ignorada (já existia)"
+                  : "Duplicatas ignoradas (já existiam)"}
+              </p>
+            </div>
+          )}
           <div
             className={`rounded-xl border bg-white px-4 py-4 text-center ${
               summary.failed > 0
