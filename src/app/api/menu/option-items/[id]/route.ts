@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
-import { updateExtraSchema } from "@/validators/menu";
-import { MenuItemExtraService } from "@/services/menu/MenuItemExtraService";
+import { updateOptionItemSchema } from "@/validators/menu";
+import { OptionGroupService } from "@/services/menu/OptionGroupService";
 import { ok, noContent, badRequest, unauthorized, forbidden, notFound, serverError } from "@/lib/api-response";
 
 type Params = { params: { id: string } };
@@ -14,15 +14,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!["OWNER", "MANAGER"].includes(ctx.role)) return forbidden();
 
     const body = await req.json();
-    const parsed = updateExtraSchema.safeParse(body);
+    const parsed = updateOptionItemSchema.safeParse(body);
     if (!parsed.success) return badRequest("Validation failed", parsed.error.flatten());
 
-    const result = await MenuItemExtraService.update(ctx.restaurantId, params.id, parsed.data);
+    const result = await OptionGroupService.updateOption(ctx.restaurantId, params.id, parsed.data);
     if (!result.ok) return notFound(result.error);
 
     return ok(result.data);
   } catch (err) {
-    console.error("[PATCH /api/menu/extras/[id]]", err);
+    console.error("[PATCH /api/menu/option-items/[id]]", err);
     return serverError();
   }
 }
@@ -34,12 +34,12 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
     if (!["OWNER", "MANAGER"].includes(ctx.role)) return forbidden();
 
-    const result = await MenuItemExtraService.remove(ctx.restaurantId, params.id);
+    const result = await OptionGroupService.removeOption(ctx.restaurantId, params.id);
     if (!result.ok) return notFound(result.error);
 
     return noContent();
   } catch (err) {
-    console.error("[DELETE /api/menu/extras/[id]]", err);
+    console.error("[DELETE /api/menu/option-items/[id]]", err);
     return serverError();
   }
 }

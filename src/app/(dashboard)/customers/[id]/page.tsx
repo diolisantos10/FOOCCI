@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import CustomerProfileClient from "./CustomerProfileClient";
-import type { Classification, BehaviorData, InsightItem, OrderHistoryItem, InteractionItem, CustomerTag } from "./CustomerProfileClient";
+import type { Classification, BehaviorData, InsightItem, OrderHistoryItem, InteractionItem, CustomerTag, AddressItem } from "./CustomerProfileClient";
 
 export const metadata = { title: "Perfil do Cliente" };
 
@@ -353,6 +353,21 @@ export default async function CustomerDetailPage({
       createdAt:    true,
       isActive:     true,
       restaurantId: true,
+      addresses: {
+        orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+        select: {
+          id:           true,
+          label:        true,
+          street:       true,
+          number:       true,
+          complement:   true,
+          neighborhood: true,
+          city:         true,
+          state:        true,
+          zipCode:      true,
+          isDefault:    true,
+        },
+      },
       orders: {
         orderBy: { createdAt: "asc" },
         select: {
@@ -394,7 +409,19 @@ export default async function CustomerDetailPage({
     notFound();
   }
 
-  const totalSpend   = Number(customer.totalSpend);
+  const totalSpend = Number(customer.totalSpend);
+  const addresses: AddressItem[] = customer.addresses.map((a) => ({
+    id:           a.id,
+    label:        a.label,
+    street:       a.street,
+    number:       a.number,
+    complement:   a.complement,
+    neighborhood: a.neighborhood,
+    city:         a.city,
+    state:        a.state,
+    zipCode:      a.zipCode,
+    isDefault:    a.isDefault,
+  }));
   const classification = classify(totalSpend);
   const serializedOrders: OrderHistoryItem[] = [...customer.orders]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -448,6 +475,7 @@ export default async function CustomerDetailPage({
         orders={serializedOrders}
         interactions={interactions}
         tags={tags}
+        addresses={addresses}
       />
     </>
   );

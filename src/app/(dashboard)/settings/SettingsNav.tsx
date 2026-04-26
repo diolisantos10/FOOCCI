@@ -17,13 +17,6 @@ interface Group {
 
 const GROUPS: Group[] = [
   {
-    title: "Identidade",
-    items: [
-      { href: "/settings/marca",      label: "Marca",      icon: "🎨" },
-      { href: "/settings/experience", label: "Visual",     icon: "🖌️" },
-    ],
-  },
-  {
     title: "Operação",
     items: [
       { href: "/settings/store",     label: "Loja",       icon: "🏪" },

@@ -217,6 +217,7 @@ model MenuItem {
   orderDraftItems OrderDraftItem[]
   variants        MenuItemVariant[]
   extras          MenuItemExtra[]
+  optionGroups    OptionGroup[]
 
   @@index([categoryId])
   @@map("menu_items")
@@ -227,6 +228,7 @@ model MenuItemVariant {
   menuItemId  String
   name        String                     // e.g. "350ml", "600ml", "2L"
   price       Decimal  @db.Decimal(10, 2)
+  portion     String?                    // e.g. "300g", "500ml"
   isAvailable Boolean  @default(true)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
@@ -821,16 +823,59 @@ model WhatsAppAgentConfig {
 }
 
 model MenuItemExtra {
-  id         String  @id @default(cuid())
-  menuItemId String
-  name       String
-  quantity   Int     @default(1)
-  price      Decimal @db.Decimal(10, 2)
+  id          String   @id @default(cuid())
+  menuItemId  String
+  name        String
+  quantity    Int      @default(1)
+  price       Decimal  @db.Decimal(10, 2)
+  portion     String?                    // e.g. "100g", "50ml", "1 porção"
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
   @@index([menuItemId])
   @@map("menu_item_extras")
+}
+
+// ═══════════════════════════════════════════
+//  OPTION GROUPS (product customisation)
+// ═══════════════════════════════════════════
+
+model OptionGroup {
+  id         String   @id @default(cuid())
+  menuItemId String
+  name       String                     // e.g. "Tipo do peixe", "Molho"
+  required   Boolean  @default(false)   // if true, customer must pick at least minSelect
+  minSelect  Int      @default(0)       // minimum selections required
+  maxSelect  Int      @default(1)       // maximum selections allowed
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  menuItem   MenuItem          @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  options    OptionGroupItem[]
+
+  @@index([menuItemId])
+  @@map("option_groups")
+}
+
+model OptionGroupItem {
+  id          String   @id @default(cuid())
+  groupId     String
+  name        String                     // e.g. "Cru", "Flambado", "Shoyu"
+  price       Decimal  @db.Decimal(10, 2) @default(0)
+  portion     String?                    // e.g. "50g"
+  isAvailable Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group       OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@map("option_group_items")
 }
 
 model MediaUpload {

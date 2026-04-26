@@ -29,6 +29,31 @@ interface MenuItemVariant {
   id: string;
   name: string;
   price: number;
+  portion: string | null;
+}
+
+interface Extra {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  portion: string | null;
+}
+
+interface OptionItem {
+  id: string;
+  name: string;
+  price: number;
+  portion: string | null;
+}
+
+interface OptionGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number;
+  options: OptionItem[];
 }
 
 interface MenuItem {
@@ -39,6 +64,8 @@ interface MenuItem {
   imageUrl: string | null;
   hasVariants: boolean;
   variants: MenuItemVariant[];
+  extras: Extra[];
+  optionGroups: OptionGroup[];
 }
 
 interface MenuCategory {

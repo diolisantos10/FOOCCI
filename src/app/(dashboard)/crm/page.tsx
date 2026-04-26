@@ -19,12 +19,10 @@ export default async function CRMPage() {
     totalCustomers: 0, activeCustomers: 0, inactiveCustomers: 0,
     newThisMonth: 0, avgTicket: 0, segments: [],
   };
-
-  let googleReviewUrl: string | null = null;
-  let ifoodReviewUrl:  string | null = null;
+  let reviewLinks: { google: string | null; ifood: string | null } = { google: null, ifood: null };
 
   if (restaurantId) {
-    const [restaurant, rows, opResult, statsResult] = await Promise.all([
+    const [restaurant, rows, opResult, statsResult, brandConfig] = await Promise.all([
       prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
       prisma.customer.findMany({
         where: { restaurantId },
@@ -38,13 +36,16 @@ export default async function CRMPage() {
       }),
       CRMService.getOpportunities(restaurantId, restaurantName),
       CRMService.getOverviewStats(restaurantId),
+      prisma.restaurantBrandConfig.findUnique({
+        where: { restaurantId },
+        select: { googleReviewUrl: true, ifoodReviewUrl: true },
+      }),
     ]);
 
     restaurantName = restaurant?.name ?? "Restaurante";
 
     const now = new Date();
     customers = rows.map((c) => {
-
       const spend = Number(c.totalSpend);
       const days = c.lastOrderAt
         ? Math.floor((now.getTime() - c.lastOrderAt.getTime()) / 86_400_000)
@@ -65,13 +66,12 @@ export default async function CRMPage() {
 
     if (opResult.ok) opportunities = opResult.data;
     if (statsResult.ok) overviewStats = statsResult.data;
-
-    const brandCfg = await prisma.restaurantBrandConfig.findUnique({
-      where: { restaurantId },
-      select: { googleReviewUrl: true, ifoodReviewUrl: true },
-    });
-    googleReviewUrl = brandCfg?.googleReviewUrl ?? null;
-    ifoodReviewUrl  = brandCfg?.ifoodReviewUrl  ?? null;
+    if (brandConfig) {
+      reviewLinks = {
+        google: brandConfig.googleReviewUrl ?? null,
+        ifood:  brandConfig.ifoodReviewUrl  ?? null,
+      };
+    }
   }
 
   return (
@@ -83,8 +83,7 @@ export default async function CRMPage() {
         restaurantName={restaurantName}
         overviewStats={overviewStats}
         opportunitiesCount={opportunities.length}
-        googleReviewUrl={googleReviewUrl}
-        ifoodReviewUrl={ifoodReviewUrl}
+        reviewLinks={reviewLinks}
       />
     </>
   );

@@ -1,7 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
-import type { CreateExtraInput } from "@/validators/menu";
+import type { CreateExtraInput, UpdateExtraInput } from "@/validators/menu";
 import type { MenuItemExtra } from "@prisma/client";
 
 export class MenuItemExtraService {
@@ -57,9 +57,32 @@ export class MenuItemExtraService {
         name: input.name.trim(),
         quantity: input.quantity,
         price: new Decimal(input.price),
+        portion: input.portion?.trim() ?? null,
+        isAvailable: input.isAvailable ?? true,
       },
     });
     return serviceOk(extra);
+  }
+
+  static async update(
+    restaurantId: string,
+    extraId: string,
+    input: UpdateExtraInput
+  ): Promise<ServiceResult<MenuItemExtra>> {
+    const extra = await this.resolveExtra(restaurantId, extraId);
+    if (!extra) return serviceFail("Extra not found", 404);
+
+    const updated = await prisma.menuItemExtra.update({
+      where: { id: extraId },
+      data: {
+        ...(input.name !== undefined && { name: input.name.trim() }),
+        ...(input.quantity !== undefined && { quantity: input.quantity }),
+        ...(input.price !== undefined && { price: new Decimal(input.price) }),
+        ...(input.portion !== undefined && { portion: input.portion?.trim() ?? null }),
+        ...(input.isAvailable !== undefined && { isAvailable: input.isAvailable }),
+      },
+    });
+    return serviceOk(updated);
   }
 
   static async remove(

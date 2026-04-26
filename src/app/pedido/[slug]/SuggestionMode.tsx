@@ -11,7 +11,9 @@ interface MenuItem {
   description: string | null;
   imageUrl: string | null;
   hasVariants: boolean;
-  variants: { id: string; name: string; price: number }[];
+  variants: { id: string; name: string; price: number; portion: string | null }[];
+  extras: { id: string; name: string; price: number; portion: string | null; quantity: number }[];
+  optionGroups: { id: string; name: string; required: boolean; minSelect: number; maxSelect: number; options: { id: string; name: string; price: number; portion: string | null }[] }[];
 }
 
 interface MenuCategory {

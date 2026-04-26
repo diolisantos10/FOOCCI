@@ -58,6 +58,7 @@ export class MenuItemVariantService {
         menuItemId: itemId,
         name: input.name.trim(),
         price: new Decimal(input.price),
+        portion: input.portion?.trim() ?? null,
         isAvailable: input.isAvailable ?? true,
         sortOrder: input.sortOrder ?? 0,
       },
@@ -78,6 +79,7 @@ export class MenuItemVariantService {
       data: {
         ...(input.name !== undefined && { name: input.name.trim() }),
         ...(input.price !== undefined && { price: new Decimal(input.price) }),
+        ...(input.portion !== undefined && { portion: input.portion?.trim() ?? null }),
         ...(input.isAvailable !== undefined && { isAvailable: input.isAvailable }),
         ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
       },
