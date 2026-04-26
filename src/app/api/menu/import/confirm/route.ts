@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     let categoriesCreated = 0;
     let itemsCreated = 0;
     let failed = 0;
+    let duplicatesSkipped = 0;
 
     // Errors from the preview are skipped (not failed — they were known invalid)
     const skipped = errorRows.length;
@@ -146,7 +147,6 @@ export async function POST(req: NextRequest) {
       }
 
       // ── Create items (skip duplicates in append mode) ──────────────────────
-      let duplicatesSkipped = 0;
       for (const row of validRows) {
         try {
           const catId = catIdMap.get(row.categoria);
