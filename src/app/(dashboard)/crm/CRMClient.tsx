@@ -23,10 +23,11 @@ const PRIORITY_CONFIG: Record<string, { label: string; dot: string }> = {
 };
 
 const CUSTOMER_FILTER_LABELS: Record<string, string> = {
-  all:      "Todos",
-  inactive: "Inativos",
-  vip:      "VIPs",
-  recent:   "Recentes",
+  all:       "Top Gasto",
+  inactive:  "Inativos (30d)",
+  vip:       "Clientes VIP",
+  firstTime: "1º pedido",
+  recent:    "Recentes",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -196,24 +197,206 @@ function OpportunitiesTab({ opportunities }: { opportunities: Opportunity[] }) {
   );
 }
 
+// ── CSV Export ────────────────────────────────────────────────────────────────
+
+function exportCSV(customers: CRMCustomer[]) {
+  const header = "Nome,Telefone,Último pedido,Gasto total (R$)";
+  const rows = customers.map((c) => [
+    `"${c.name.replace(/"/g, '""')}"`,
+    c.phone,
+    c.lastOrderAt ? new Date(c.lastOrderAt).toLocaleDateString("pt-BR") : "",
+    c.totalSpend.toFixed(2).replace(".", ","),
+  ].join(","));
+  const csv = "﻿" + [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `clientes_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Copy Phone ────────────────────────────────────────────────────────────────
+
+function CopyPhoneButton({ phone }: { phone: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    navigator.clipboard.writeText(phone);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <button
+      onClick={copy}
+      title="Copiar telefone"
+      className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors ${
+        copied ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+      }`}
+    >
+      {copied ? "✓" : "copiar"}
+    </button>
+  );
+}
+
+// ── Reactivation Helper ───────────────────────────────────────────────────────
+
+function ReactivationHelper({
+  customers,
+  reviewLinks,
+}: {
+  customers: CRMCustomer[];
+  reviewLinks: { google: string | null; ifood: string | null };
+}) {
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState(
+    "Olá {nome}, sentimos sua falta! Temos uma oferta especial pra você hoje 👇"
+  );
+  const [copied, setCopied] = useState<string | null>(null);
+
+  function copyFor(c: CRMCustomer) {
+    navigator.clipboard.writeText(message.replace(/\{nome\}/gi, c.name));
+    setCopied(c.id);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  function copyTemplate() {
+    navigator.clipboard.writeText(message);
+    setCopied("__template__");
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  function appendLink(url: string) {
+    setMessage((m) => m.trimEnd() + "\n" + url);
+  }
+
+  const hasLinks = reviewLinks.google || reviewLinks.ifood;
+
+  return (
+    <div className="rounded-2xl border border-brand-100 bg-brand-50 overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left"
+      >
+        <span className="text-xs font-bold text-brand-800">
+          Mensagem rápida de reativação
+        </span>
+        <svg
+          className={`h-4 w-4 text-brand-600 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="border-t border-brand-100 bg-white p-4 space-y-3">
+          <textarea
+            rows={3}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:outline-none resize-none"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[10px] text-gray-400 flex-1 min-w-0">
+              Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para personalizar.
+            </p>
+            <button
+              onClick={copyTemplate}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                copied === "__template__"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {copied === "__template__" ? "✓ Copiado!" : "Copiar modelo"}
+            </button>
+            {hasLinks && (
+              <>
+                {reviewLinks.google && (
+                  <button
+                    onClick={() => appendLink(reviewLinks.google!)}
+                    className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+                  >
+                    + Google
+                  </button>
+                )}
+                {reviewLinks.ifood && (
+                  <button
+                    onClick={() => appendLink(reviewLinks.ifood!)}
+                    className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
+                  >
+                    + iFood
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
+          {customers.length > 0 && (
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                Copiar mensagem personalizada para cada cliente
+              </p>
+              <div className="max-h-52 overflow-y-auto space-y-1.5">
+                {customers.slice(0, 30).map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
+                      <p className="text-[10px] text-gray-400">{formatPhone(c.phone)}</p>
+                    </div>
+                    <button
+                      onClick={() => copyFor(c)}
+                      className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                        copied === c.id
+                          ? "bg-green-100 text-green-700"
+                          : "bg-brand-50 text-brand-700 hover:bg-brand-100"
+                      }`}
+                    >
+                      {copied === c.id ? "✓ Copiado" : "Copiar"}
+                    </button>
+                  </div>
+                ))}
+                {customers.length > 30 && (
+                  <p className="text-center text-[10px] text-gray-400 py-1.5">
+                    +{customers.length - 30} clientes. Use "Exportar CSV" para ver todos.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Customers Tab ─────────────────────────────────────────────────────────────
+
+type CRMFilter = "all" | "inactive" | "vip" | "firstTime" | "recent";
 
 function CustomersTab({
   initialCustomers,
   initialFilter = "all",
   onImportOpen,
+  reviewLinks,
 }: {
   initialCustomers: CRMCustomer[];
-  initialFilter?: "all" | "inactive" | "vip" | "recent";
+  initialFilter?: CRMFilter;
   onImportOpen: () => void;
+  reviewLinks: { google: string | null; ifood: string | null };
 }) {
-  const [filter, setFilter] = useState<"all" | "inactive" | "vip" | "recent">(initialFilter);
+  const [filter, setFilter] = useState<CRMFilter>(initialFilter);
   const [customers, setCustomers] = useState<CRMCustomer[]>(
     initialFilter === "all" ? initialCustomers : []
   );
   const [loading, setLoading] = useState(initialFilter !== "all");
 
-  // Fetch on mount if a non-default filter was requested
   useEffect(() => {
     if (initialFilter !== "all") {
       fetch(`/api/crm/customers?filter=${initialFilter}`)
@@ -223,7 +406,7 @@ function CustomersTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function applyFilter(f: "all" | "inactive" | "vip" | "recent") {
+  async function applyFilter(f: CRMFilter) {
     setFilter(f);
     setLoading(true);
     const res = await fetch(`/api/crm/customers?filter=${f}`);
@@ -235,12 +418,13 @@ function CustomersTab({
   }
 
   const tierOrder: CustomerTier[] = ["DIAMANTE", "OURO", "PRATA", "BRONZE"];
+  const filterKeys = Object.keys(CUSTOMER_FILTER_LABELS) as CRMFilter[];
 
   return (
     <div className="space-y-4">
-      {/* Filter pills + import button */}
+      {/* Filter pills + actions */}
       <div className="flex flex-wrap items-center gap-2">
-        {(["all", "vip", "inactive", "recent"] as const).map((f) => (
+        {filterKeys.map((f) => (
           <button
             key={f}
             onClick={() => applyFilter(f)}
@@ -253,16 +437,29 @@ function CustomersTab({
             {CUSTOMER_FILTER_LABELS[f]}
           </button>
         ))}
-        <span className="text-xs text-gray-400">{customers.length} clientes</span>
-        <button
-          onClick={onImportOpen}
-          className="ml-auto flex items-center gap-1.5 rounded-full bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-700 transition-colors"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-          </svg>
-          Importar clientes
-        </button>
+        <span className="text-xs text-gray-400 ml-1">{customers.length} clientes</span>
+        <div className="ml-auto flex items-center gap-2">
+          {customers.length > 0 && (
+            <button
+              onClick={() => exportCSV(customers)}
+              className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              Exportar CSV
+            </button>
+          )}
+          <button
+            onClick={onImportOpen}
+            className="flex items-center gap-1.5 rounded-full bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-700 transition-colors"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            Importar
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -290,7 +487,10 @@ function CustomersTab({
                     <td className="px-4 py-3">
                       <Link href={`/customers/${c.id}`} className="hover:text-brand-600 transition-colors">
                         <p className="font-semibold text-gray-900 text-sm">{c.name}</p>
-                        <p className="text-[11px] text-gray-400">{formatPhone(c.phone)}</p>
+                        <span className="text-[11px] text-gray-400">
+                          {formatPhone(c.phone)}
+                          <CopyPhoneButton phone={c.phone} />
+                        </span>
                       </Link>
                     </td>
                     <td className="px-4 py-3">
@@ -336,7 +536,10 @@ function CustomersTab({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-900 truncate">{c.name}</p>
-                      <p className="text-xs text-gray-400">{formatPhone(c.phone)}</p>
+                      <span className="text-xs text-gray-400">
+                        {formatPhone(c.phone)}
+                        <CopyPhoneButton phone={c.phone} />
+                      </span>
                     </div>
                     <TierBadge tier={c.tier} />
                   </div>
@@ -353,6 +556,9 @@ function CustomersTab({
           </div>
         </>
       )}
+
+      {/* Reactivation Helper */}
+      <ReactivationHelper customers={customers} reviewLinks={reviewLinks} />
     </div>
   );
 }
@@ -366,17 +572,19 @@ export function CRMClient({
   initialOpportunities,
   overviewStats,
   opportunitiesCount,
+  reviewLinks = { google: null, ifood: null },
 }: {
   initialCustomers:     CRMCustomer[];
   initialOpportunities: Opportunity[];
   restaurantName:       string;
   overviewStats:        OverviewStats;
   opportunitiesCount:   number;
+  reviewLinks?:         { google: string | null; ifood: string | null };
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
   const [showImport, setShowImport] = useState(false);
-  const [customerFilter, setCustomerFilter] = useState<"all" | "inactive" | "vip" | "recent">("all");
+  const [customerFilter, setCustomerFilter] = useState<CRMFilter>("all");
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: "overview",       label: "Visão Geral" },
@@ -438,6 +646,7 @@ export function CRMClient({
           initialCustomers={initialCustomers}
           initialFilter={customerFilter}
           onImportOpen={() => setShowImport(true)}
+          reviewLinks={reviewLinks}
         />
       )}
       {tab === "agente" && (

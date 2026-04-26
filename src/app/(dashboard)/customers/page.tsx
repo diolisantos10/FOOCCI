@@ -8,7 +8,7 @@ import CustomersClient, { type SortCol, type SortDir, type FilterTab } from "./C
 export const metadata = { title: "Clientes" };
 
 const VALID_SORT_COLS = new Set<SortCol>(["totalSpend", "totalOrders", "lastOrderAt"]);
-const VALID_FILTERS   = new Set<FilterTab>(["all", "vip", "inactive", "recent"]);
+const VALID_FILTERS   = new Set<FilterTab>(["all", "vip", "inactive", "firstTime", "recent"]);
 
 export default async function CustomersPage({
   searchParams,
@@ -32,23 +32,38 @@ export default async function CustomersPage({
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const filterWhere = {
-    all:      { isActive: true  as const },
-    vip:      { isActive: true  as const, totalSpend: { gte: 800 } },
-    inactive: { isActive: false as const },
-    recent:   { isActive: true  as const, createdAt: { gte: thirtyDaysAgo } },
-  }[filter];
+  // Unified filter definitions — same logic as CRMService
+  const filterClause = (() => {
+    switch (filter) {
+      case "vip":
+        return { isActive: true as const, OR: [
+          { totalSpend: { gte: 800 } },
+          { totalOrders: { gte: 10 } },
+        ]};
+      case "inactive":
+        return { isActive: true as const, OR: [
+          { lastOrderAt: { lt: thirtyDaysAgo } },
+          { lastOrderAt: null as null },
+        ]};
+      case "firstTime":
+        return { isActive: true as const, totalOrders: 1 };
+      case "recent":
+        return { isActive: true as const, lastOrderAt: { gte: thirtyDaysAgo } };
+      default:
+        return { isActive: true as const };
+    }
+  })();
 
-  const where = {
-    restaurantId: session.user.restaurantId,
-    ...filterWhere,
-    ...(search && {
-      OR: [
-        { name:  { contains: search, mode: "insensitive" as const } },
-        { phone: { contains: search } },
-      ],
-    }),
-  };
+  const andClauses = [
+    { restaurantId: session.user.restaurantId },
+    filterClause,
+    ...(search ? [{ OR: [
+      { name:  { contains: search, mode: "insensitive" as const } },
+      { phone: { contains: search } },
+    ]}] : []),
+  ];
+
+  const where = { AND: andClauses };
 
   const orderBy = sortBy ? { [sortBy]: sortDir } : { createdAt: "desc" as const };
 
