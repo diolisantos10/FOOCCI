@@ -46,7 +46,9 @@ export const createMenuItemSchema = z.object({
   portionInfo: z.string().max(50).optional(),
 });
 
-export const updateMenuItemSchema = createMenuItemSchema.partial();
+export const updateMenuItemSchema = createMenuItemSchema.partial().extend({
+  categoryId: z.string().cuid().optional(),
+});
 
 export const reorderItemsSchema = z.object({
   items: z.array(

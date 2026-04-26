@@ -1394,19 +1394,25 @@ type EditModalForm = {
   code: string;
   servingSize: number | null;
   portionInfo: string;
+  categoryId: string;
 };
 
 function EditItemModal({
   item,
+  categories,
+  currentCategoryId,
   onClose,
   onSave,
   onDelete,
 }: {
   item: Item | null;
+  categories: Category[];
+  currentCategoryId: string;
   onClose: () => void;
   onSave: (patch: EditModalForm) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
+  const manualCategories = categories.filter((c) => c.source === "MANUAL");
   const [form, setForm] = useState<EditModalForm>({
     name: "",
     description: "",
@@ -1419,6 +1425,7 @@ function EditItemModal({
     code: "",
     servingSize: null,
     portionInfo: "",
+    categoryId: currentCategoryId,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1456,6 +1463,7 @@ function EditItemModal({
       code: item.code ?? "",
       servingSize: item.servingSize ?? null,
       portionInfo: item.portionInfo ?? "",
+      categoryId: currentCategoryId,
     });
     setVariants(item.variants ?? []);
     setExtras(item.extras ?? []);
@@ -1628,6 +1636,22 @@ function EditItemModal({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {/* Category */}
+          {manualCategories.length > 1 && (
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Categoria</label>
+              <select
+                value={form.categoryId}
+                onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              >
+                {manualCategories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Name */}
           <div className="space-y-1">
             <label className="block text-xs font-medium text-gray-700">
@@ -2362,7 +2386,8 @@ export function MenuManager({
 
   async function handleModalSave(patch: EditModalForm) {
     if (!editingItem) return;
-    const { item, categoryId } = editingItem;
+    const { item, categoryId: oldCategoryId } = editingItem;
+    const newCategoryId = patch.categoryId || oldCategoryId;
     const body: Record<string, unknown> = {
       name: patch.name.trim(),
       description: patch.description.trim() || undefined,
@@ -2375,6 +2400,7 @@ export function MenuManager({
       code: patch.code.trim() || undefined,
       servingSize: patch.servingSize ?? undefined,
       portionInfo: patch.portionInfo.trim() || undefined,
+      ...(newCategoryId !== oldCategoryId && { categoryId: newCategoryId }),
     };
     const data = await apiFetch(`/api/menu/items/${item.id}`, "PATCH", body);
     const updated: Item = {
@@ -2385,13 +2411,21 @@ export function MenuManager({
       portionInfo: data.data.portionInfo ?? null,
       variants: item.variants,
     };
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id === categoryId
-          ? { ...c, items: c.items.map((it) => (it.id === item.id ? updated : it)) }
-          : c
-      )
-    );
+    setCategories((prev) => {
+      if (newCategoryId === oldCategoryId) {
+        return prev.map((c) =>
+          c.id === oldCategoryId
+            ? { ...c, items: c.items.map((it) => (it.id === item.id ? updated : it)) }
+            : c
+        );
+      }
+      // Category changed: remove from old, append to new
+      return prev.map((c) => {
+        if (c.id === oldCategoryId) return { ...c, items: c.items.filter((it) => it.id !== item.id) };
+        if (c.id === newCategoryId) return { ...c, items: [...c.items, updated] };
+        return c;
+      });
+    });
     refresh();
   }
 
@@ -2510,7 +2544,7 @@ export function MenuManager({
                 filterActive={isFilterActive}
                 onChange={updateCategory}
                 onDelete={removeCategory}
-                onEditItem={(item, categoryId) => setEditingItem({ item, categoryId })}
+                onEditItem={(item, categoryId: string) => setEditingItem({ item, categoryId })}
               />
             ))}
           </div>
@@ -2554,6 +2588,8 @@ export function MenuManager({
       {/* Edit item modal */}
       <EditItemModal
         item={editingItem?.item ?? null}
+        categories={categories}
+        currentCategoryId={editingItem?.categoryId ?? ""}
         onClose={() => { setEditingItem(null); refresh(); }}
         onSave={handleModalSave}
         onDelete={handleModalDelete}
