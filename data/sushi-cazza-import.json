@@ -15,7 +15,7 @@
           "name": "RODIZIO PRESENCIAL",
           "description": "RODIZIO : 99,00 POR PESSOA CRIANÇAS: ATÉ 5 ANOS NÃO PAGAM 6 Á 10 ANOS 49,90 *ENTRADAS* CEVICHE SUNOMONO SHIMEJI CANAPÉ DE SALMÃO HARUMAKI (ROLINHO PRIMAVERA QUEIJO) GUIOZA PASTELZINHO SHIMEJI PASTELZINHO QUEIJO *CARPACCIOS* CARPACCIO SALMÃO CARPACCIO TILÁPIA CARPACCIO SALMÃO COM MOLHO DE ERVAS *HOT HOLL* HOT HOLL HOT CRISPY *TEMAKIS* SALMÃO SALMÃO GRELHADO TEMAKI HOT HOLL SALMÃO SHIMEJI SHIMEJI SKIN CALIFÓRNIA *PRATOS QUENTES* CAMARÃO EMPANADO LULA DORÊ YAKISSOBA YAKIMESHI TEPPAN SALMÃO LULA A DORÊ MISSÔSHIRO FILÉZINHO GRATINADO *COMBO SUSHI* COMBINADO DE SUSHIS VARIADOS *SASHIMI* SALMÃO ATUM TILÁPIA SALMÃO FLAMBADO *JHOW* SALMÃO SALMÃO FLAMBADO PEPINO MARACUJÁ GELEIA OVAS *NIGUIRI* SALMÃO ATUM SALMÃO FLAMBADO KANI SKIN TILÁPIA *URAMAKI* SALMÃO SALMÃO GRELHADO ESPECIAL SKIN CALIFÓRNIA *HOSSOMAKI* SALMÃO PEPINO KANI *SOBREMESAS* HOT DOCE DE LEITE HOT CHOCOLATE BOLA DE SORVETE BANANA EMPANADA c/leite condensado e canela",
           "price": 99,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710303/photo1756325207.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710303/photo1756325207.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [],
@@ -31,7 +31,7 @@
           "name": "FESTIVAL CAZZA (DELIVERY)",
           "description": "Entradas: Sunomono Ceviche Pratos quentes: Yakisoba 01 Teppan de salmão 04 harumaki queijo 02 Guioza tiras de frango empanado Pratos frios: 02 temaki (cru ou grelhado) 10 sashimi salmão 05 uramaki salmão 05 hossomaki salmão 02 niguiri salmão 02 niguiri cazza 02 niguiri skin 12 hot roll Sobremesa: Banana empanada com leite condensado polvilhada com canela",
           "price": 199.0,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970292/photo1724225413.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970292/photo1724225413.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": [
@@ -61,7 +61,7 @@
           "name": "Ceviche",
           "description": "Peixe branco cortado em cubos marinado no suco de limão, cebola roxa, pimenta e cebolinha.",
           "price": 62.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970279/325125_original_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970279/325125_original.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -70,7 +70,7 @@
           "name": "Carpaccio de Salmão (20 Lâminas)",
           "description": "20 lâminas de salmão finas regadas ao molho a base de shoyu, limão e cebolinha.",
           "price": 72,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970280/c9996acd834cbeaf810bc257183b72a7_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970280/c9996acd834cbeaf810bc257183b72a7.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -79,7 +79,7 @@
           "name": "Sunomono",
           "description": "Típica salada de pepino oriental agridoce.",
           "price": 24,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970283/sunomono_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970283/sunomono.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -88,7 +88,7 @@
           "name": "Shimeji",
           "description": "Cogumelos salteados na manteiga, shoyu e cobinha.",
           "price": 30,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970281/SHIMEJI_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970281/SHIMEJI.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -97,7 +97,7 @@
           "name": "Guioza (06 Unidades)",
           "description": null,
           "price": 28,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970286/68bf0ef705a832e831c27dc5083235f5_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970286/68bf0ef705a832e831c27dc5083235f5.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -106,7 +106,7 @@
           "name": "Harumaki de Queijo (05 Unidades)",
           "description": "Famoso rolinho primavera da cozinha oriental.",
           "price": 29.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970285/HARUMAKI_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970285/HARUMAKI.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -121,7 +121,7 @@
           "name": "COMBO AYANE",
           "description": "02 Temaki (Cru Ou Grelhado) 06 Sashimi Salmão 05 Uramaki Salmão 06 Hot Holl 02 Niguiri 02 Jhow",
           "price": 132.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551663/photo1732344546.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551663/photo1732344546.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": [
@@ -145,7 +145,7 @@
           "name": "Combo 1 (32 Unidades)",
           "description": "12 hot roll 05 niguiri salmão flambado 05 uramaki salmão grelhado 05 hossomaki kani 05 batera de salmão grelhado",
           "price": 82.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970751/photo1724224627.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970751/photo1724224627.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -154,7 +154,7 @@
           "name": "Combo 2 (18 Unidades)",
           "description": "06 hot roll 05 hossomaki salmão 05 hossomaki kani 02 niguiri salmão",
           "price": 47.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970752/ifood_38_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970752/ifood_38.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -163,7 +163,7 @@
           "name": "Combo Temaki + Hot + Refri",
           "description": "01Temaki salmão (cru ou grelhado) 06 hot roll Refri 350ml",
           "price": 58.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970442/photo1724224710.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970442/photo1724224710.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": [
@@ -187,7 +187,7 @@
           "name": "Combo Flambado (21 Unidades)",
           "description": "06 niguiri salmão flambado 04 jhow salmão flambado 06 hot roll 05 uramaki salmão grelhado",
           "price": 72.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970441/photo1724224834.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970441/photo1724224834.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -196,7 +196,7 @@
           "name": "COMBO AKEMI",
           "description": "02 TEMAKIS (CRU OU GRELHADO) 05 URAMAKIS SALMÃO",
           "price": 72.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504179/photo1726637627.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504179/photo1726637627.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -205,7 +205,7 @@
           "name": "COMBO MINAMI",
           "description": "05 SASHIMI SALMÃO 02 NIGUIRI SALMÃO 02 JHOW SALMÃO 5 URAMAKI SALMÃO",
           "price": 58.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504178/photo1726637522.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504178/photo1726637522.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -214,7 +214,7 @@
           "name": "Combo Só Salmão (30 Unidades)",
           "description": "06 sashimi salmão 04 niguiri salmão 04 johw salmão 05 batera de salmão 05 uramaki salmão 06 hot roll",
           "price": 122.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970748/photo1724224670.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970748/photo1724224670.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -223,7 +223,7 @@
           "name": "Combo Hot (51 Unidades)",
           "description": "30 hot roll 06 hot roll especial 05 uramaki salmão grelhado 04 niguiri salmão flambado 06 jhow flambado",
           "price": 155,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970756/photo1724224527.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970756/photo1724224527.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -232,7 +232,7 @@
           "name": "Combo Cazza (53 Unidades)",
           "description": "12 hot roll 10 sashimi salmão 05 hossomaki salmão 05 uramaki salmão 05 uramaki salmão especial 04 niguiri cazza 04 niguiri salmão 04 batera salmão 02 jhow salmão 02 jhow geleia",
           "price": 192,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970754/photo1724224582.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970754/photo1724224582.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -247,7 +247,7 @@
           "name": "Gohan",
           "description": "Arroz japonês.",
           "price": 26,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970303/photo1726638153.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970303/photo1726638153.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -256,7 +256,7 @@
           "name": "Yakisoba Carne e Frango",
           "description": null,
           "price": 54,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970384/photo1724224922.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970384/photo1724224922.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -265,7 +265,7 @@
           "name": "Teppan de Salmão",
           "description": "Posta de salmão grelhado acompanhado de legumes na manteiga e Gohan (arroz japonês) ou arroz brasileiro.",
           "price": 76.0,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970382/photo1724224960.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970382/photo1724224960.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": [
@@ -289,7 +289,7 @@
           "name": "Salmão á Camarão",
           "description": "Posta de salmão grelhado com camarões regados ao molho de cebola, alcaparras e tomate cereja, acompanhado de purê de batata e Gohan (arroz japonês) ou arroz brasileiro.",
           "price": 125.0,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970380/photo1724225023.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970380/photo1724225023.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": [
@@ -313,7 +313,7 @@
           "name": "Salmão ao Molho de Requeijão",
           "description": "Posta de salmão grelhado regado ao molho de requeijão acompanhado de purê de batata e Gohan (arroz) ou arroz brasileiro.",
           "price": 85.0,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970377/photo1724225082.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970377/photo1724225082.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": [
@@ -337,7 +337,7 @@
           "name": "YAKISOBA DE CAMARÃO",
           "description": "YAKISOBA DE CAMARÃO",
           "price": 82,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2637650/photo1756207676.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2637650/photo1756207676.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -346,7 +346,7 @@
           "name": "Yakissoba Especial",
           "description": "Yakisoba Carne, Frango e Camarão",
           "price": 74,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2351451/photo1724224389.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2351451/photo1724224389.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -355,7 +355,7 @@
           "name": "Yakissoba Frutos do Mar",
           "description": "Yakisoba fetio com camarão, lula e molho de ostras",
           "price": 82,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483441/photo1724222384.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483441/photo1724222384.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -364,7 +364,7 @@
           "name": "Yakimeshi",
           "description": "Yakimeshi",
           "price": 32.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2433692/photo1720111023.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2433692/photo1720111023.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -373,7 +373,7 @@
           "name": "FETUCCINE SALMÃO",
           "description": "FETUCCINE BASÍLICO COM POSTA DE SALMÃO GRELHADO",
           "price": 82,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551668/photo1732349913.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551668/photo1732349913.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -382,7 +382,7 @@
           "name": "FETUCCINE BASÍLICO",
           "description": "Fetuccine De Massa Fresca Refogado Com Alho, Tomate Cereja E Manjericão. Finalizado Mcom Azeite E Parmesão",
           "price": 42,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551667/photo1732349754.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551667/photo1732349754.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -391,7 +391,7 @@
           "name": "TEPPAN PICANHA",
           "description": "02 STEAK DE PICANHA SERVIDO COM LEGUMES SALTEADOS NA MANTEIGA E ARROZ",
           "price": 69.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504173/photo1732342042.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504173/photo1732342042.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -400,7 +400,7 @@
           "name": "SAINT PETER CAMARONÊ",
           "description": "FILÉ DE SAINT PETER EMPANADO ENVOLTO COM MOLHO DE CAMARÃO , COM PURE DE BATATAS E ARROZ",
           "price": 76,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504172/photo1726757055.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504172/photo1726757055.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -409,7 +409,7 @@
           "name": "MIGNON FETUCCINE",
           "description": "02 MEDALHÕES DE MIGNON GRELHADOS COM FETUCCINE DE MASSA FRESCA AO MOLHO ALFREDO. FINALIZADO COM PARMESÃO E AZEITE",
           "price": 85,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504171/photo1726757108.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504171/photo1726757108.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -418,7 +418,7 @@
           "name": "FETUCCINE Á CAMARÃO LIMONE",
           "description": "CAMARÕES TEMPERADOS COM ERVAS SALTEADO NO AZEITE COM FETUCCINE DE MASSA FRESCA AO MOLHO DE LIMÃO SICILIANO",
           "price": 72,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504170/photo1726757137.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504170/photo1726757137.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -433,7 +433,7 @@
           "name": "LÁMEN KARE",
           "description": "Pasta de soja, macarrão, karê, carne de porco, ovo, nori e cebolinha.",
           "price": 44.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2695512/photo1756187706.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2695512/photo1756187706.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -442,7 +442,7 @@
           "name": "LÁMEN MISSÔ",
           "description": "Pasta de soja, macarrão, nori, carne de porco, ovo, milho, moyashi e cebolinha.",
           "price": 44.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2695511/photo1756207404.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2695511/photo1756207404.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -451,7 +451,7 @@
           "name": "LÁMEN SHOYU",
           "description": "Macarrão, molho de soja, carne de porco, wakamê, nori, ovo, moyashi e cebolinha",
           "price": 42.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2695497/photo1756207720.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2695497/photo1756207720.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -466,7 +466,7 @@
           "name": "Isca de Tilápia",
           "description": "Iscas de tilápia empanado da farinha panko, acompanhado do molho da casa.",
           "price": 62.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970296/WhatsApp_Image_2021-05-19_at_14.28.21__2__item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970296/WhatsApp_Image_2021-05-19_at_14.28.21__2_.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -475,7 +475,7 @@
           "name": "Camarão Empanado",
           "description": "Camarões empanados na farinha panko, acompanhado do molho da casa.",
           "price": 90,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483468/WhatsApp_Image_2021-05-19_at_14_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483468/WhatsApp_Image_2021-05-19_at_14.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -484,7 +484,7 @@
           "name": "LULA Á DORÊ",
           "description": "Anéis de lula empanado da farinha panko, acompanhado do molho da casa.",
           "price": 72.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2438265/photo1724222424.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2438265/photo1724222424.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -493,7 +493,7 @@
           "name": "Frango Empanado",
           "description": "Tiras de frango empanado da farinha panko, acompanhado do molho da casa.",
           "price": 50,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483458/WhatsApp_Image_2021-05-19_at_14_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483458/WhatsApp_Image_2021-05-19_at_14.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -508,7 +508,7 @@
           "name": "CAZZA HOT SALMÂO CRU",
           "description": "Hot empanado na farinha panko e recheio de cream cheese, cortado ao meio e coberto por salmão cru misturado no cream cheese e finalizado com molho taré, celolinha e gergilim",
           "price": 54.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483486/photo1709854584.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483486/photo1709854584.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -517,7 +517,7 @@
           "name": "CAZZA HOT SALMÃO GRELHADO",
           "description": "Hot empanado na farinha panko e recheio de cream cheese, cortado ao meio e coberto por salmão grelhado misturado no cream cheese e finalizado com molho taré, celolinha e gergilim",
           "price": 54.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2303064/photo1709854709.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2303064/photo1709854709.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -526,7 +526,7 @@
           "name": "CAZZA BURGUER SALMÃO",
           "description": "Nosso delicioso arroz misturado com cream cheese empanado na farinha Panko, recheado com salmão cru, cream cheese e finalizado com molho de pimenta doce (sweet chilli) e cebolinha",
           "price": 54.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2364982/photo1713996122.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2364982/photo1713996122.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -541,7 +541,7 @@
           "name": "Hot Roll (06 Unidades)",
           "description": "Sushi de salmão grelhado empanado finalizado com cream cheese, cebolinha e tarê.",
           "price": 29.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483445/ifood_50_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483445/ifood_50.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -550,7 +550,7 @@
           "name": "Hot Roll (12 Unidades)",
           "description": "Sushi de salmão grelhado empanado finalizado com cream cheese, cebolinha e tarê.",
           "price": 39.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970428/ifood_50_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970428/ifood_50.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -559,7 +559,7 @@
           "name": "HOT ROLL ESPECIAL (06 UNIDADES)",
           "description": "Sushi de salmão grelado empanado com cobertura de salmão grelhado finalizado com cream cheese, cebolinha e tarê",
           "price": 39.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551669/photo1732350463.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551669/photo1732350463.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -568,7 +568,7 @@
           "name": "Hot Roll Especial (12 Unidades)",
           "description": "Sushi de salmão grelhado empanado com cobertura de salmão grelhado finalizado com cream cheese, cebolinha e tarê.",
           "price": 54.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970427/download__7__item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970427/download__7_.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -577,7 +577,7 @@
           "name": "HOT CRISPY (06 UNIDADES)",
           "description": "Sushi de salmão grelado empanado finalizado com cream cheese, crispy de couve, cebolinha e tarê",
           "price": 32.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483474/photo1704404283.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483474/photo1704404283.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -586,7 +586,7 @@
           "name": "HOT CRISPY (12 UNIDADES)",
           "description": "Sushi de salmão grelado empanado finalizado com cream cheese, crispy de couve, cebolinha e tarê",
           "price": 42,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483473/photo1704404228.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483473/photo1704404228.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -595,7 +595,7 @@
           "name": "HOT ROLL DOCE DE LEITE (08 UNIDADES)",
           "description": "08 unidades de hot roll de banana com cobertura de doce de leite polvilhado com canela",
           "price": 28.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551673/photo1732350879.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551673/photo1732350879.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -604,7 +604,7 @@
           "name": "HOT ROLL NUTELLA (08 UNIDADES)",
           "description": "08 unidades de hot roll de banana com cobertura de Nutella",
           "price": 28.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551674/photo1732351002.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551674/photo1732351002.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -619,7 +619,7 @@
           "name": "POKE FRY",
           "description": "BASE DE ARROZ COBERTA COM SALMÃO EM CUBOS EMPANADOS E FRITOS COM CREAM CHEESE E CEBOLINHA, MANGA, SUNOMONO E TOMATE CEREJA",
           "price": 48.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2770750/photo1772587458.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2770750/photo1772587458.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -628,7 +628,7 @@
           "name": "POKE SHIMEJI",
           "description": "Base de arroz coberto com shimeji, Sunomono, cream cheese, manga, tomate cereja e crispy de couve",
           "price": 42.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710906/photo1756356069.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710906/photo1756356069.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -637,7 +637,7 @@
           "name": "Poke Salmão Grelhado",
           "description": "Base de arroz coberta com salmão grelhado com cream cheese e cebolinha , manga, sunomono e tomate cereja",
           "price": 48.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483483/photo1678900166.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483483/photo1678900166.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -646,7 +646,7 @@
           "name": "Poke Salmão cream",
           "description": "Base de arroz coberta com salmão cru com cream cheese e cebolinha, manga, sunomono e tomate cereja",
           "price": 48.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483477/photo1756350773.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483477/photo1756350773.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -661,7 +661,7 @@
           "name": "TEMAKI SKIN",
           "description": "Skin (pele de salmão frita), cream cheese e cebolinha",
           "price": 32.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2711095/photo1756430337.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2711095/photo1756430337.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -670,7 +670,7 @@
           "name": "Temaki Salmão Cru",
           "description": "Salmão cru cortado em cubos, cream cheese e cebolinha.",
           "price": 42.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970350/ifood_95_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970350/ifood_95.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -679,7 +679,7 @@
           "name": "TEMAKI SALMÃO SHIMEJI",
           "description": "Salmão cru cortado em cubos, com shimeji, cream cheese e cebolinha",
           "price": 44.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551665/photo1732347711.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551665/photo1732347711.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -688,7 +688,7 @@
           "name": "Temaki Salmão Grelhado",
           "description": "Salmão grelhado, cream cheese e cebolinha.",
           "price": 42.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970349/download__5__item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970349/download__5_.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -697,7 +697,7 @@
           "name": "Temaki Hot Roll",
           "description": "Temaki de salmão grelhado empando, cream cheese, cebolinha e tarê.",
           "price": 46.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970341/photo1724225345.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970341/photo1724225345.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -706,7 +706,7 @@
           "name": "Temaki Salmão Cazza",
           "description": "Cubos de salmão empanado, cream cheese, cebolinha e tarê.",
           "price": 46.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970343/photo1724225304.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970343/photo1724225304.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -715,7 +715,7 @@
           "name": "TEMAKI HAKONE",
           "description": "TEMAKI DE SALMÃO EMPANADO COM CAMARÃO COM CREAM CHEESE , CEBOLINHA, GERGELIM",
           "price": 54.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504177/photo1726637332.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504177/photo1726637332.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -724,7 +724,7 @@
           "name": "Temaki Nacho",
           "description": "Salmão cru com cream cheese, nachos (Doritos), e cebolinha",
           "price": 44.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2351452/photo1712960053.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2351452/photo1712960053.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -733,7 +733,7 @@
           "name": "Temaki Califórnia",
           "description": "Manga peino e kani.",
           "price": 28.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970348/5efe07ad-6dc8-4cad-b60c-2a9aac1e01b4_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970348/5efe07ad-6dc8-4cad-b60c-2a9aac1e01b4.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -742,7 +742,7 @@
           "name": "TEMAKI SHIMEJI",
           "description": "Shimeji, cream cheese e cebolinha",
           "price": 36.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551664/photo1732347601.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551664/photo1732347601.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -751,7 +751,7 @@
           "name": "TEMAKI EBI FRY",
           "description": "CAMARÃO EMPANADO COM CREAM CHEESE E CEBOLINHA",
           "price": 54.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551666/photo1732348661.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551666/photo1732348661.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -760,7 +760,7 @@
           "name": "TEMAKI EBI",
           "description": "CAMARÃO COZIDO COM CREAM CHEESE, CEBOLINHA E GERGELIM",
           "price": 48.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504181/photo1731547418.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504181/photo1731547418.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -769,7 +769,7 @@
           "name": "TEMAKI SALMÃO EBI",
           "description": "SALMÃO CRU EM CUBOS COM CAMARÕES COZIDOS COM CREAM CHEESE, CEBOLINHA E GERGELIM",
           "price": 54.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504176/photo1726637063.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2504176/photo1726637063.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -784,7 +784,7 @@
           "name": "Jhow Salmão (06 Unidades)",
           "description": "Arroz envolto por fatia fina de salmão, com cobertura de salmão, cream cheese e cebolinha.",
           "price": 30.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483449/ifood_1__1__item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483449/ifood_1__1_.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -793,7 +793,7 @@
           "name": "Jhow Geleia (06 Unidades)",
           "description": "Arroz envolto por fatia fina de salmão, com cobertura de geléia de morango e cream cheese.",
           "price": 30.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483448/download__3__item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483448/download__3_.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -802,7 +802,7 @@
           "name": "Jhow Salmão Flambado (06 Unidades)",
           "description": "Arroz envolto por fatia fina de salmão maçaricado com cobertura de salmão grelhado, cream cheese e cebolinha.",
           "price": 30.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970324/264a7a68-2ed7-4b07-81fd-50958a8836fe-1611320198005_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970324/264a7a68-2ed7-4b07-81fd-50958a8836fe-1611320198005.png",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -817,7 +817,7 @@
           "name": "Sashimi Salmão (10 Unidades)",
           "description": "10 lâminas de salmão cru.",
           "price": 68.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970353/photo1724225202.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970353/photo1724225202.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -826,7 +826,7 @@
           "name": "Sashimi Salmão Flambado (10 Unidades)",
           "description": "10 lâminas de salmão flambado na pedra de sal",
           "price": 68.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970352/photo1724225257.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970352/photo1724225257.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -841,7 +841,7 @@
           "name": "Niguiri Salmão (06 Unidades)",
           "description": "Bolinho de arroz coberto com lâmina de salmão.",
           "price": 30.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483451/ifood_12_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483451/ifood_12.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -850,7 +850,7 @@
           "name": "Niguiri Salmão Flambado (06 Unidades)",
           "description": "Bolinho de arroz coberto com lâmina de salmão flambado.",
           "price": 30.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483450/WhatsApp_Image_2021-05-19_at_14_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483450/WhatsApp_Image_2021-05-19_at_14.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -859,7 +859,7 @@
           "name": "Niguiri Cazza (06 Unidades)",
           "description": "Bolinho de arroz coberto com lâmina de salmão empando com cream cheese, geleia de pimenta e cebolinha.",
           "price": 32.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483452/photo1712803347.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483452/photo1712803347.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -874,7 +874,7 @@
           "name": "Uramaki de Salmão (10 Unidades)",
           "description": "Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de salmão cru e cream cheese.",
           "price": 36.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483466/ifood_18_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483466/ifood_18.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -883,7 +883,7 @@
           "name": "Uramaki de Salmão Grelhado (10 Unidades)",
           "description": "Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de salmão grelhado e cream cheese.",
           "price": 36.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483463/images_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483463/images.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -892,7 +892,7 @@
           "name": "Uramaki de Salmão Especial (10 Unidades)",
           "description": "Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de salmão cru e cream cheese, envolto de lâmina de salmão cru.",
           "price": 40.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483462/WhatsApp_Image_2021-05-19_at_14_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483462/WhatsApp_Image_2021-05-19_at_14.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -901,7 +901,7 @@
           "name": "Uramaki Cazza (10 Unidades)",
           "description": "Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de salmão empanado, cream cheese e geleia de pimenta.",
           "price": 38.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483467/Uramaki_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483467/Uramaki.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -910,7 +910,7 @@
           "name": "MORANGUME",
           "description": "Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de salmão cru com morango e cream cheese",
           "price": 40.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551662/photo1732342823.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2551662/photo1732342823.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -919,7 +919,7 @@
           "name": "Uramaki Califórnia (10 Unidades)",
           "description": "Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de maga, pepino e kani.",
           "price": 30.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483461/sushi-hokkai_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483461/sushi-hokkai.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -934,7 +934,7 @@
           "name": "Hossomaki de pepino (10 unidades )",
           "description": "Sushi enrolado com arroz na parte interna recheado de pepino",
           "price": 20,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2436773/photo1720111994.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2436773/photo1720111994.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -943,7 +943,7 @@
           "name": "Hossomaki de Salmão (10 Unidades)",
           "description": "Sushi enrolado com arroz na parte interna recheado de salmão cru.",
           "price": 24,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970316/download__1__item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970316/download__1_.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -952,7 +952,7 @@
           "name": "Hossomaki de Kani (10 Unidades)",
           "description": "Sushi enrolado com arroz na parte interna recheado de kani.",
           "price": 24,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970315/WhatsApp_Image_2021-05-19_at_14.28.21__4__item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970315/WhatsApp_Image_2021-05-19_at_14.28.21__4_.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -967,7 +967,7 @@
           "name": "BANANA EMPANADA",
           "description": "BANANA EMPANADA",
           "price": 26.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486770/photo1724816650.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486770/photo1724816650.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [],
@@ -977,7 +977,7 @@
           "name": "TAÇA MERENGUE",
           "description": "TAÇA MERENGUE",
           "price": 34.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486768/photo1756208261.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486768/photo1756208261.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [],
@@ -987,7 +987,7 @@
           "name": "TAÇA NUTELLA",
           "description": "TAÇA NUTELLA",
           "price": 38.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486767/photo1724816049.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486767/photo1724816049.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [],
@@ -997,7 +997,7 @@
           "name": "TAÇA BANOFFEE",
           "description": "TAÇA BANOFFEE",
           "price": 30.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486766/photo1756208324.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486766/photo1756208324.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [],
@@ -1013,7 +1013,7 @@
           "name": "COCA ZERO 2 LITROS (APENAS DELIVERY)",
           "description": "APENAS PARA DELIVERY !",
           "price": 20,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2770743/photo1772583500.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2770743/photo1772583500.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1022,7 +1022,7 @@
           "name": "Água",
           "description": null,
           "price": 7,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970902/Agua_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970902/Agua.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1031,7 +1031,7 @@
           "name": "Água c/ Gás",
           "description": null,
           "price": 8,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/970900/Agua-c-g_s_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/970900/Agua-c-g_s.jpg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1040,7 +1040,7 @@
           "name": "REFRIGERANTE 350 ml",
           "description": "REFRIGERANTES 350 ml",
           "price": 10.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2436286/photo1720103827.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2436286/photo1720103827.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": [
@@ -1092,7 +1092,7 @@
           "name": "SUCOS NATURAIS",
           "description": null,
           "price": 14.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2436761/photo1720109634.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2436761/photo1720109634.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [
@@ -1136,7 +1136,7 @@
           "name": "ICE TEA RED FRUITS",
           "description": "CHÁ GELADO COM FRUTAS VERMELHAS",
           "price": 22,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486771/photo1724817008.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2486771/photo1724817008.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [],
@@ -1146,7 +1146,7 @@
           "name": "CAIPIRNHAS SAQUÊ / VODKA",
           "description": null,
           "price": 23.0,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2436769/photo1720110895.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2436769/photo1720110895.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [
@@ -1182,7 +1182,7 @@
           "name": "SODA ITALIANA",
           "description": "CONSULTAR SABORES COM O GARÇOM",
           "price": 18,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710302/photo1756212500.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710302/photo1756212500.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [],
@@ -1192,7 +1192,7 @@
           "name": "VINHOS",
           "description": "CONSULTAR COM O GARÇOM:",
           "price": 0,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710301/photo1756212290.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710301/photo1756212290.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1201,7 +1201,7 @@
           "name": "CERVEJAS LONG NECK 330ML",
           "description": null,
           "price": 12.0,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2438198/photo1720205449.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2438198/photo1720205449.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": [
@@ -1237,7 +1237,7 @@
           "name": "GIN TROPICAL",
           "description": "GIN, FRUTAS CÍTRICAS E ENERGÉTICO TROPICAL",
           "price": 34.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710298/photo1756211718.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710298/photo1756211718.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [],
@@ -1247,7 +1247,7 @@
           "name": "GIN RED FRUIT",
           "description": "GIN, XAROPE DE MORANGO, FRUTAS VERMELHAS E ESPUMA DE LIMÃO SICILIANO",
           "price": 36.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710296/photo1756210515.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710296/photo1756210515.jpeg",
           "tags": [],
           "upsellHints": [],
           "modifiers": [],
@@ -1257,7 +1257,7 @@
           "name": "Coca Cola 2L (APENAS DELIVERY)",
           "description": "Coca Cola 2l",
           "price": 18,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/1886202/200_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/1886202/200.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1272,7 +1272,7 @@
           "name": "GENGIBRE",
           "description": "GENGIBRE EM CONSERVA 30 ML",
           "price": 2,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710903/photo1756347464.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710903/photo1756347464.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1281,7 +1281,7 @@
           "name": "WASABI",
           "description": "WASABI 30 ML",
           "price": 4,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710902/photo1756346428.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710902/photo1756346428.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1290,7 +1290,7 @@
           "name": "HASHI",
           "description": "01 UNIDADE HASHI",
           "price": 0.9,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710901/photo1756346231.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710901/photo1756346231.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1299,7 +1299,7 @@
           "name": "ADAPTADOR HASHI",
           "description": "01 UNIDADE ADAPTADOR",
           "price": 0.5,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710900/photo1756346131.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710900/photo1756346131.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1308,7 +1308,7 @@
           "name": "AGRIDOCE SACHÊ",
           "description": "03 UNIDADES AGRIDOCE SACHÊ",
           "price": 3.5,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710899/photo1756345778.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710899/photo1756345778.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1317,7 +1317,7 @@
           "name": "TARÊ SACHÊ",
           "description": "03 UNIDADES TARÊ SACHÊ",
           "price": 3.5,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710898/photo1756345690.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710898/photo1756345690.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1326,7 +1326,7 @@
           "name": "SHOYU SACHÊ",
           "description": "03 UNIDADES SHOYU SACHÊ",
           "price": 2.5,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710897/photo1756345584.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2710897/photo1756345584.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1335,7 +1335,7 @@
           "name": "TARÊ ARTESANAL",
           "description": "Molho Tarê 30ML",
           "price": 8,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483470/photo1713999263.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2483470/photo1713999263.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1344,7 +1344,7 @@
           "name": "SWEET CHILLI",
           "description": "(SWEET CHILLI) 30ml",
           "price": 7.5,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2365057/photo1713999572.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2365057/photo1713999572.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
@@ -1353,7 +1353,7 @@
           "name": "CREAM CHEESE 30 ML",
           "description": "CREAM CHEESE",
           "price": 8,
-          "image": "https://cdn.neemo.com.br/uploads/item/photo/2365056/photo1713999404.jpeg_item.png",
+          "image": "https://cdn.neemo.com.br/uploads/item/photo/2365056/photo1713999404.jpeg.webp",
           "tags": [],
           "upsellHints": [],
           "modifiers": []
