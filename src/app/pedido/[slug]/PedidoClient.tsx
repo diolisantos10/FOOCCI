@@ -1041,7 +1041,7 @@ export function PedidoClient({
         });
 
         const data  = await res.json();
-        const reply: string = data?.data?.reply ?? "Desculpe, algo deu errado 😅";
+        const reply: string = data?.data?.reply || "Desculpe, algo deu errado 😅";
 
         setMessages((prev) => [
           ...prev,
@@ -1150,7 +1150,7 @@ export function PedidoClient({
           }),
         });
         const data = await res.json();
-        const reply: string = data?.data?.reply ?? "Desculpe, algo deu errado 😅";
+        const reply: string = data?.data?.reply || "Desculpe, algo deu errado 😅";
         setMessages((prev) => [
           ...prev,
           { id: uid(), role: "assistant" as const, content: reply, ts: new Date() },

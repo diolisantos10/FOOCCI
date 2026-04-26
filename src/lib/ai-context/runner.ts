@@ -530,7 +530,10 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
   // ── Step 7: Call OpenAI ───────────────────────────────────────────────────
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
-    ...cappedHistory.map((m) => ({ role: m.role, content: m.content })),
+    // Filter out any empty-content entries — OpenAI rejects them with 400.
+    ...cappedHistory
+      .filter((m) => m.content.trim().length > 0)
+      .map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: message.trim() },
   ];
 
@@ -541,8 +544,9 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     temperature: 0.2,
   });
 
+  // Use || (not ??) so that an empty-string response also falls back.
   const reply =
-    completion.choices[0]?.message?.content?.trim() ??
+    completion.choices[0]?.message?.content?.trim() ||
     "Desculpe, não consegui processar sua mensagem. 😅";
 
   return { reply };
