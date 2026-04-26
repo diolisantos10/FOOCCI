@@ -17,7 +17,7 @@ import type { Order, OrderItem, Payment, OrderStatus } from "@prisma/client";
 export type OrderWithDetails = Order & {
   items: OrderItem[];
   payment: Payment | null;
-  customer: { name: string; phone: string };
+  customer: { name: string; phone: string; totalOrders: number; totalSpend: unknown };
   deliveryAddress: {
     street: string;
     number: string;
@@ -68,7 +68,7 @@ export class OrderService {
         include: {
           items: true,
           payment: true,
-          customer: { select: { name: true, phone: true } },
+          customer: { select: { name: true, phone: true, totalOrders: true, totalSpend: true } },
           deliveryAddress: {
             select: {
               street: true,

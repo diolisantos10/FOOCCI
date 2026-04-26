@@ -67,7 +67,7 @@ interface ApiOrder {
   deliveryFee: string;
   total: string;
   createdAt: string;
-  customer: { name: string; phone: string };
+  customer: { name: string; phone: string; totalOrders: number; totalSpend: string };
   deliveryAddress: {
     street: string;
     number: string;
@@ -124,6 +124,10 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
       price: parseFloat(item.price),
       note:  item.notes ?? undefined,
     })),
+    profile: {
+      totalOrders: o.customer.totalOrders,
+      totalSpend:  parseFloat(o.customer.totalSpend),
+    },
   };
 }
 
@@ -305,17 +309,19 @@ function isDelayed(order: MockOrder): boolean {
   return minutesSince(order.createdAt) > DELAY_THRESHOLD;
 }
 
-// ─── Customer tier helper ─────────────────────────────────────
+// ─── Customer context helpers ─────────────────────────────────
 
-function customerTier(totalOrders: number): {
-  label: string;
-  icon: string;
-  color: string;
-} {
-  if (totalOrders <= 1) return { label: "Primeiro pedido",  icon: "🎉", color: "text-emerald-600 bg-emerald-50" };
-  if (totalOrders <= 4) return { label: "Cliente novo",     icon: "🌱", color: "text-blue-600 bg-blue-50"      };
-  if (totalOrders <= 14) return { label: "Frequente",       icon: "🔄", color: "text-orange-600 bg-orange-50"  };
-  return                        { label: "VIP",             icon: "⭐", color: "text-purple-600 bg-purple-50"  };
+function customerSpendTier(spend: number): { label: string; icon: string; color: string } {
+  if (spend >= 2000) return { label: "Diamond", icon: "💎", color: "text-cyan-700 bg-cyan-50 border border-cyan-200"     };
+  if (spend >= 800)  return { label: "Gold",    icon: "🥇", color: "text-amber-700 bg-amber-50 border border-amber-200"  };
+  if (spend >= 300)  return { label: "Silver",  icon: "🥈", color: "text-gray-600 bg-gray-100 border border-gray-200"    };
+  return                    { label: "Bronze",  icon: "🥉", color: "text-orange-700 bg-orange-50 border border-orange-200" };
+}
+
+function customerTag(totalOrders: number, spend: number): { label: string; color: string } {
+  if (totalOrders <= 1) return { label: "Novo cliente", color: "text-emerald-700 bg-emerald-50" };
+  if (spend >= 800)     return { label: "VIP",          color: "text-purple-700 bg-purple-50"   };
+  return                       { label: "Recorrente",   color: "text-blue-700 bg-blue-50"       };
 }
 
 function priorityScore(order: MockOrder): number {
@@ -583,17 +589,21 @@ function OrderCard({
         {/* Row 3.5: customer profile strip */}
         {order.profile && (() => {
           const { totalOrders, totalSpend, note } = order.profile!;
-          const tier = customerTier(totalOrders);
+          const tier = customerSpendTier(totalSpend);
+          const tag  = customerTag(totalOrders, totalSpend);
           return (
             <div className="mt-2 rounded-lg bg-gray-50 px-2.5 py-1.5 border border-gray-100">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${tier.color}`}>
+              <div className="flex flex-wrap items-center gap-1">
+                <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tier.color}`}>
                   {tier.icon} {tier.label}
                 </span>
+                <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${tag.color}`}>
+                  {tag.label}
+                </span>
                 <span className="text-[10px] text-gray-400">
-                  {totalOrders > 1 ? `${totalOrders} pedidos` : "1 pedido"}
+                  {totalOrders === 1 ? "1 pedido" : `${totalOrders} pedidos`}
                   {" · "}
-                  {totalSpend.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} no total
+                  {totalSpend.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                 </span>
               </div>
               {note && (
