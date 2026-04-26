@@ -1618,184 +1618,271 @@ function EditItemModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {/* Category */}
-          {manualCategories.length > 1 && (
+        <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+
+          {/* ── Informações básicas ───────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              Informações básicas
+            </p>
+
+            {manualCategories.length > 1 && (
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">Categoria</label>
+                <select
+                  value={form.categoryId}
+                  onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                >
+                  {manualCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-700">Categoria</label>
-              <select
-                value={form.categoryId}
-                onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-              >
-                {manualCategories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Name */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Nome <span className="text-red-500">*</span>
-            </label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Nome do item"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
-
-          {/* Description */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Descrição
-            </label>
-            <textarea
-              value={form.description}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, description: e.target.value }))
-              }
-              placeholder="Descrição (opcional)"
-              rows={3}
-              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
-
-          {/* Ingredients */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Ingredientes
-            </label>
-            <textarea
-              value={form.ingredients}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, ingredients: e.target.value }))
-              }
-              placeholder="Ex: frango grelhado, queijo prato, alface, tomate, maionese caseira (usado pelo agente de IA para sugestões)"
-              rows={3}
-              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
-
-          {/* Price */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Preço <span className="text-red-500">*</span>
-            </label>
-            <input
-              value={form.price}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, price: e.target.value }))
-              }
-              placeholder="0,00"
-              type="number"
-              step="0.01"
-              min="0.01"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
-
-          {/* Code */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Código
-            </label>
-            <input
-              value={form.code}
-              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-              placeholder="Código do produto (opcional)"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
-
-          {/* Serving size + portion info */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-700">
-                Serve (pessoas)
+              <label className="block text-xs font-medium text-gray-600">
+                Nome <span className="text-red-500">*</span>
               </label>
-              <div className="flex gap-1">
+              <input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Nome do item"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Descrição</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Descrição curta exibida no cardápio (opcional)"
+                rows={2}
+                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Ingredientes</label>
+              <textarea
+                value={form.ingredients}
+                onChange={(e) => setForm((f) => ({ ...f, ingredients: e.target.value }))}
+                placeholder="Ex: frango grelhado, queijo prato, alface, tomate — usado pela IA para sugestões"
+                rows={2}
+                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Imagem</label>
+              <ImageUpload
+                value={form.imageUrl}
+                onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+              />
+            </div>
+          </div>
+
+          {/* ── Preço e porção ────────────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              Preço e porção
+            </p>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">
+                Preço base <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">
+                  R$
+                </span>
+                <input
+                  value={form.price}
+                  onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                  placeholder="0,00"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Serve (pessoas)</label>
+              <div className="flex gap-1.5">
                 {[1, 2, 3, 4].map((n) => (
                   <button
                     key={n}
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, servingSize: f.servingSize === n ? null : n }))}
-                    className={`flex-1 rounded border py-1.5 text-xs font-medium transition-colors ${
+                    className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors ${
                       form.servingSize === n
-                        ? "border-orange-500 bg-orange-500 text-white"
-                        : "border-gray-300 text-gray-600 hover:border-orange-300"
+                        ? "border-orange-500 bg-orange-500 text-white shadow-sm"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-orange-300 hover:text-orange-500"
                     }`}
                   >
                     {n === 4 ? "4+" : n}
                   </button>
                 ))}
               </div>
+              {form.servingSize && (
+                <p className="text-[11px] text-gray-400">
+                  Serve {form.servingSize === 4 ? "4 ou mais" : form.servingSize} pessoa{form.servingSize !== 1 ? "s" : ""}
+                </p>
+              )}
             </div>
+
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-700">
-                Porção
-              </label>
+              <label className="block text-xs font-medium text-gray-600">Informação de porção</label>
               <input
                 value={form.portionInfo}
                 onChange={(e) => setForm((f) => ({ ...f, portionInfo: e.target.value }))}
-                placeholder="ex: 300g, 500ml"
+                placeholder="ex: 300g, 500ml, 2 fatias"
                 maxLength={50}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
               />
             </div>
           </div>
 
-          {/* Image */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Imagem
-            </label>
-            <ImageUpload
-              value={form.imageUrl}
-              onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
-            />
-          </div>
-
-          {/* Channel toggles */}
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-gray-700">Canais</p>
-            <div className="flex gap-4">
-              <ToggleSwitch
-                label="Delivery"
-                checked={form.showInDelivery}
-                onChange={() =>
-                  setForm((f) => ({ ...f, showInDelivery: !f.showInDelivery }))
-                }
-              />
-              <ToggleSwitch
-                label="Salão"
-                checked={form.showInDineIn}
-                onChange={() =>
-                  setForm((f) => ({ ...f, showInDineIn: !f.showInDineIn }))
-                }
-              />
-            </div>
-          </div>
-
-          {/* Variants toggle */}
-          <div className="border-t border-gray-100 pt-4 space-y-3">
+          {/* ── Adicionais ────────────────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-gray-700">Variantes</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                Adicionais
+              </p>
+              {extras.length > 0 && (
+                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-600">
+                  {extras.length}
+                </span>
+              )}
+            </div>
+
+            {extras.length > 0 && (
+              <ul className="space-y-2">
+                {extras.map((e) => (
+                  <li
+                    key={e.id}
+                    className="flex items-center gap-3 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2.5"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-sm font-medium text-gray-800">{e.name}</p>
+                      <p className="text-[11px] text-gray-400">
+                        {e.quantity > 1 ? `até ${e.quantity}x` : "1 unidade"}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-lg bg-orange-500 px-2 py-1 text-xs font-bold text-white">
+                      +R$ {e.price.toFixed(2)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteExtra(e.id)}
+                      className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      aria-label="Remover adicional"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {extras.length === 0 && !addingExtra && (
+              <p className="rounded-lg border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
+                Nenhum adicional — clique abaixo para adicionar
+              </p>
+            )}
+
+            {addingExtra ? (
+              <div className="rounded-xl border border-dashed border-orange-300 bg-orange-50 p-3 space-y-2">
+                <p className="text-[11px] font-medium text-orange-700">Novo adicional</p>
+                <div className="flex gap-2">
+                  <input
+                    value={newExtra.name}
+                    onChange={(e) => setNewExtra((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Nome (ex: Queijo extra)"
+                    className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                  <input
+                    value={newExtra.quantity}
+                    onChange={(e) => setNewExtra((f) => ({ ...f, quantity: e.target.value }))}
+                    placeholder="Qtd"
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="w-16 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                  <div className="relative w-24">
+                    <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
+                    <input
+                      value={newExtra.price}
+                      onChange={(e) => setNewExtra((f) => ({ ...f, price: e.target.value }))}
+                      placeholder="0,00"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="w-full rounded-lg border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    />
+                  </div>
+                </div>
+                {extraAddError && <InlineError message={extraAddError} />}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddExtra}
+                    disabled={extraAddBusy}
+                    className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                  >
+                    {extraAddBusy ? <Spinner /> : "Adicionar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingExtra(false);
+                      setNewExtra({ name: "", quantity: "1", price: "" });
+                      setExtraAddError("");
+                    }}
+                    className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddingExtra(true)}
+                className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-700"
+              >
+                <span className="text-base leading-none">+</span> Adicionar adicional
+              </button>
+            )}
+          </div>
+
+          {/* ── Variantes ─────────────────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                  Variantes
+                </p>
+                {!form.hasVariants && (
+                  <p className="text-[11px] text-gray-400">Tamanhos, sabores ou opções com preço diferente</p>
+                )}
+              </div>
               <ToggleSwitch
-                label="Ativar variantes"
+                label="Ativar"
                 checked={form.hasVariants}
-                onChange={() =>
-                  setForm((f) => ({ ...f, hasVariants: !f.hasVariants }))
-                }
+                onChange={() => setForm((f) => ({ ...f, hasVariants: !f.hasVariants }))}
               />
             </div>
 
             {form.hasVariants && (
               <div className="space-y-2">
-                {/* Variant list with DnD */}
                 {variants.length > 0 && (
                   <DndContext
                     sensors={variantSensors}
@@ -1826,29 +1913,28 @@ function EditItemModal({
                   </DndContext>
                 )}
 
-                {/* Add variant form */}
                 {addingVariant ? (
-                  <div className="rounded-lg border border-dashed border-orange-200 bg-orange-50 p-3 space-y-2">
+                  <div className="rounded-xl border border-dashed border-orange-300 bg-orange-50 p-3 space-y-2">
+                    <p className="text-[11px] font-medium text-orange-700">Nova variante</p>
                     <div className="flex gap-2">
                       <input
                         value={newVariant.name}
-                        onChange={(e) =>
-                          setNewVariant((f) => ({ ...f, name: e.target.value }))
-                        }
-                        placeholder="Nome (ex: 350ml)"
-                        className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        onChange={(e) => setNewVariant((f) => ({ ...f, name: e.target.value }))}
+                        placeholder="Nome (ex: 350ml, Grande)"
+                        className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
                       />
-                      <input
-                        value={newVariant.price}
-                        onChange={(e) =>
-                          setNewVariant((f) => ({ ...f, price: e.target.value }))
-                        }
-                        placeholder="Preço"
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                      />
+                      <div className="relative w-24">
+                        <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
+                        <input
+                          value={newVariant.price}
+                          onChange={(e) => setNewVariant((f) => ({ ...f, price: e.target.value }))}
+                          placeholder="0,00"
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          className="w-full rounded-lg border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        />
+                      </div>
                     </div>
                     {addError && <InlineError message={addError} />}
                     <div className="flex gap-2">
@@ -1856,7 +1942,7 @@ function EditItemModal({
                         type="button"
                         onClick={handleAddVariant}
                         disabled={addBusy}
-                        className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                        className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
                       >
                         {addBusy ? <Spinner /> : "Adicionar"}
                       </button>
@@ -1867,7 +1953,7 @@ function EditItemModal({
                           setNewVariant({ name: "", price: "" });
                           setAddError("");
                         }}
-                        className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                        className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
                       >
                         Cancelar
                       </button>
@@ -1877,106 +1963,53 @@ function EditItemModal({
                   <button
                     type="button"
                     onClick={() => setAddingVariant(true)}
-                    className="text-xs font-medium text-orange-500 hover:text-orange-700"
+                    className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-700"
                   >
-                    + Adicionar variante
+                    <span className="text-base leading-none">+</span> Adicionar variante
                   </button>
                 )}
               </div>
             )}
           </div>
 
-          {/* Extras section */}
-          <div className="border-t border-gray-100 pt-4 space-y-3">
-            <p className="text-xs font-medium text-gray-700">Adicionais</p>
+          {/* ── Configurações ─────────────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              Configurações
+            </p>
 
-            {extras.length > 0 && (
-              <ul className="space-y-1.5">
-                {extras.map((e) => (
-                  <li
-                    key={e.id}
-                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
-                  >
-                    <span className="flex-1 truncate">{e.name}</span>
-                    <span className="mx-3 text-gray-500 text-xs whitespace-nowrap">
-                      x{e.quantity} · R$ {e.price.toFixed(2)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteExtra(e.id)}
-                      className="text-red-400 hover:text-red-600 text-xs leading-none"
-                      aria-label="Remover extra"
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {addingExtra ? (
-              <div className="rounded-lg border border-dashed border-orange-200 bg-orange-50 p-3 space-y-2">
-                <div className="flex gap-2">
-                  <input
-                    value={newExtra.name}
-                    onChange={(e) => setNewExtra((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="Nome (ex: Queijo extra)"
-                    className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                  />
-                  <input
-                    value={newExtra.quantity}
-                    onChange={(e) => setNewExtra((f) => ({ ...f, quantity: e.target.value }))}
-                    placeholder="Qtd"
-                    type="number"
-                    min="1"
-                    step="1"
-                    className="w-16 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                  />
-                  <input
-                    value={newExtra.price}
-                    onChange={(e) => setNewExtra((f) => ({ ...f, price: e.target.value }))}
-                    placeholder="Preço"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                  />
-                </div>
-                {extraAddError && <InlineError message={extraAddError} />}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleAddExtra}
-                    disabled={extraAddBusy}
-                    className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-                  >
-                    {extraAddBusy ? <Spinner /> : "Adicionar"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAddingExtra(false);
-                      setNewExtra({ name: "", quantity: "1", price: "" });
-                      setExtraAddError("");
-                    }}
-                    className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Canais de venda</label>
+              <div className="flex gap-4 pt-0.5">
+                <ToggleSwitch
+                  label="Delivery"
+                  checked={form.showInDelivery}
+                  onChange={() => setForm((f) => ({ ...f, showInDelivery: !f.showInDelivery }))}
+                />
+                <ToggleSwitch
+                  label="Salão"
+                  checked={form.showInDineIn}
+                  onChange={() => setForm((f) => ({ ...f, showInDineIn: !f.showInDineIn }))}
+                />
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAddingExtra(true)}
-                className="text-xs font-medium text-orange-500 hover:text-orange-700"
-              >
-                + Adicionar adicional
-              </button>
-            )}
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Código interno</label>
+              <input
+                value={form.code}
+                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                placeholder="Código do produto (opcional)"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
           </div>
 
-          {error && <InlineError message={error} />}
+          {error && (
+            <div className="px-5 pb-4">
+              <InlineError message={error} />
+            </div>
+          )}
         </div>
 
         {/* Footer */}
