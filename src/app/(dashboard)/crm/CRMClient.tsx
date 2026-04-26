@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
 import { ImportModal } from "./ImportModal";
-import { OverviewTab } from "./OverviewTab";
+import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
 
 // ── Label maps ─────────────────────────────────────────────────────────────────
 
@@ -732,6 +732,54 @@ export function CRMClient({
   const [showImport, setShowImport] = useState(false);
   const [customerFilter, setCustomerFilter] = useState<CRMFilter>("all");
 
+  // ── Overview stats with date filter ────────────────────────────────────────
+  const [currentStats, setCurrentStats] = useState<OverviewStats>(overviewStats);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [datePreset, setDatePreset] = useState<DateFilterPreset>("total");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo,   setCustomTo]   = useState("");
+
+  async function handleDateChange(
+    preset: DateFilterPreset,
+    cfrom?: string,
+    cto?: string,
+  ) {
+    setDatePreset(preset);
+    if (cfrom !== undefined) setCustomFrom(cfrom);
+    if (cto   !== undefined) setCustomTo(cto);
+
+    if (preset === "custom" && (!cfrom || !cto)) return;
+
+    let url = "/api/crm/overview-stats";
+    if (preset !== "total") {
+      const now = new Date();
+      let from: string;
+      let to: string;
+      if (preset === "month") {
+        from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        to   = now.toISOString();
+      } else if (preset === "year") {
+        from = new Date(now.getFullYear(), 0, 1).toISOString();
+        to   = now.toISOString();
+      } else {
+        from = new Date(cfrom!).toISOString();
+        to   = new Date(cto!  ).toISOString();
+      }
+      url += `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    }
+
+    setStatsLoading(true);
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const json = await res.json();
+        setCurrentStats(json.data);
+      }
+    } finally {
+      setStatsLoading(false);
+    }
+  }
+
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: "overview",      label: "Visão Geral" },
     { id: "opportunities", label: "Oportunidades", badge: initialOpportunities.length || undefined },
@@ -777,11 +825,13 @@ export function CRMClient({
       {/* Tab content */}
       {tab === "overview" && (
         <OverviewTab
-          stats={overviewStats}
+          stats={currentStats}
           opportunitiesCount={opportunitiesCount}
-          onImportOpen={() => setShowImport(true)}
-          onGoToInactive={goToInactive}
-          onGoToOpportunities={goToOpportunities}
+          loading={statsLoading}
+          datePreset={datePreset}
+          customFrom={customFrom}
+          customTo={customTo}
+          onDateChange={handleDateChange}
         />
       )}
       {tab === "opportunities" && (

@@ -82,9 +82,10 @@ export type OverviewStats = {
   totalCustomers:    number;
   activeCustomers:   number;   // lastOrderAt within 30 days
   inactiveCustomers: number;   // isActive but no order in 30+ days
-  newThisMonth:      number;   // created in current calendar month
-  avgTicket:         number;   // avg totalSpend where totalOrders > 0
+  newCustomers:      number;   // created within selected date range
   segments: Array<{ tier: CustomerTier; count: number }>;
+  deliveryOrders:    number;
+  dineInOrders:      number;
 };
 
 // ── Automation shape ──────────────────────────────────────────────────────────
@@ -362,43 +363,48 @@ export class CRMService {
 
   // ── Overview stats ─────────────────────────────────────────────────────────
 
-  static async getOverviewStats(restaurantId: string): Promise<ServiceResult<OverviewStats>> {
+  static async getOverviewStats(
+    restaurantId: string,
+    dateRange?: { from: Date; to: Date }
+  ): Promise<ServiceResult<OverviewStats>> {
     const now = new Date();
-    const thirtyDaysAgo  = new Date(now.getTime() - 30 * 86_400_000);
-    const startOfMonth   = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
+
+    const newCustomersFilter = dateRange
+      ? { gte: dateRange.from, lte: dateRange.to }
+      : { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
 
     const [
       totalCustomers,
       activeCustomers,
-      newThisMonth,
-      avgResult,
+      newCustomers,
       bronze, prata, ouro, diamante,
+      deliveryOrders, dineInOrders,
     ] = await Promise.all([
       prisma.customer.count({ where: { restaurantId } }),
       prisma.customer.count({ where: { restaurantId, isActive: true, lastOrderAt: { gte: thirtyDaysAgo } } }),
-      prisma.customer.count({ where: { restaurantId, createdAt: { gte: startOfMonth } } }),
-      prisma.customer.aggregate({
-        where: { restaurantId, totalOrders: { gt: 0 } },
-        _avg: { totalSpend: true },
-      }),
+      prisma.customer.count({ where: { restaurantId, createdAt: newCustomersFilter } }),
       prisma.customer.count({ where: { restaurantId, totalSpend: { lt:  300 } } }),
       prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 300, lt:  800 } } }),
       prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 800, lt: 2000 } } }),
       prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 2000 } } }),
+      prisma.order.count({ where: { restaurantId, type: "DELIVERY" } }),
+      prisma.order.count({ where: { restaurantId, type: "DINE_IN" } }),
     ]);
 
     return serviceOk({
       totalCustomers,
       activeCustomers,
       inactiveCustomers: Math.max(0, totalCustomers - activeCustomers),
-      newThisMonth,
-      avgTicket: Number(avgResult._avg.totalSpend ?? 0),
+      newCustomers,
       segments: [
         { tier: "DIAMANTE" as CustomerTier, count: diamante },
         { tier: "OURO"     as CustomerTier, count: ouro },
         { tier: "PRATA"    as CustomerTier, count: prata },
         { tier: "BRONZE"   as CustomerTier, count: bronze },
       ],
+      deliveryOrders,
+      dineInOrders,
     });
   }
 }

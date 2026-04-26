@@ -73,6 +73,27 @@ export default function CustomersClient({
   const router = useRouter();
   const [rows, setRows] = useState<CustomerRow[]>(initial);
 
+  // ── Bulk select ──────────────────────────────────────────────────────────────
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selected.size === rows.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(rows.map((r) => r.id)));
+    }
+  }
+
+  const allSelected = rows.length > 0 && selected.size === rows.length;
+
   // ── Edit modal ──────────────────────────────────────────────────────────────
   const [editTarget, setEditTarget] = useState<CustomerRow | null>(null);
   const [editName,   setEditName]   = useState("");
@@ -176,11 +197,35 @@ export default function CustomersClient({
         ))}
       </div>
 
+      {/* Bulk-select bar */}
+      {selected.size > 0 && (
+        <div className="mb-2 flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5">
+          <span className="text-xs font-semibold text-brand-800">
+            {selected.size} cliente{selected.size !== 1 ? "s" : ""} selecionado{selected.size !== 1 ? "s" : ""}
+          </span>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="ml-auto rounded-lg px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
+          >
+            Limpar seleção
+          </button>
+        </div>
+      )}
+
       {/* Desktop table */}
       <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white sm:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+              <th className="w-10 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600"
+                  title="Selecionar todos"
+                />
+              </th>
               <th className="px-4 py-3">Nome</th>
               <th className="px-4 py-3">Telefone</th>
               {SORT_COLS.map((col) => (
@@ -200,13 +245,21 @@ export default function CustomersClient({
           <tbody className="divide-y divide-gray-100">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                   Nenhum cliente encontrado.
                 </td>
               </tr>
             )}
             {rows.map((c) => (
-              <tr key={c.id} className="group hover:bg-gray-50">
+              <tr key={c.id} className={`hover:bg-gray-50 ${selected.has(c.id) ? "bg-brand-50" : ""}`}>
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(c.id)}
+                    onChange={() => toggleSelect(c.id)}
+                    className="h-4 w-4 rounded border-gray-300 accent-brand-600"
+                  />
+                </td>
                 <td className="px-4 py-3">
                   <Link
                     href={`/customers/${c.id}`}
@@ -226,7 +279,7 @@ export default function CustomersClient({
                     : "—"}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex items-center justify-end gap-1">
                     <button
                       onClick={() => openEdit(c)}
                       title="Editar"
@@ -257,8 +310,14 @@ export default function CustomersClient({
           rows.map((c) => (
             <div
               key={c.id}
-              className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-3"
+              className={`flex items-center gap-2 rounded-xl border bg-white p-3 ${selected.has(c.id) ? "border-brand-300 bg-brand-50" : "border-gray-200"}`}
             >
+              <input
+                type="checkbox"
+                checked={selected.has(c.id)}
+                onChange={() => toggleSelect(c.id)}
+                className="h-4 w-4 shrink-0 rounded border-gray-300 accent-brand-600"
+              />
               <Link href={`/customers/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-700">
                   {c.name.charAt(0).toUpperCase()}

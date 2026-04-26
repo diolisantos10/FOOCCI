@@ -1,18 +1,30 @@
 "use client";
 
+import { useState } from "react";
 import type { OverviewStats, CustomerTier } from "@/services/crm/CRMService";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const TIER_CONFIG: Record<CustomerTier, { label: string; icon: string; bar: string; text: string; bg: string }> = {
-  DIAMANTE: { label: "Diamante", icon: "💎", bar: "bg-cyan-400",   text: "text-cyan-700",   bg: "bg-cyan-50"   },
-  OURO:     { label: "Ouro",     icon: "🥇", bar: "bg-amber-400",  text: "text-amber-700",  bg: "bg-amber-50"  },
-  PRATA:    { label: "Prata",    icon: "🥈", bar: "bg-gray-400",   text: "text-gray-600",   bg: "bg-gray-50"   },
-  BRONZE:   { label: "Bronze",   icon: "🥉", bar: "bg-orange-400", text: "text-orange-700", bg: "bg-orange-50" },
+const TIER_CONFIG: Record<CustomerTier, { label: string; icon: string; bar: string; text: string }> = {
+  DIAMANTE: { label: "Diamante", icon: "💎", bar: "bg-cyan-400",   text: "text-cyan-700"   },
+  OURO:     { label: "Ouro",     icon: "🥇", bar: "bg-amber-400",  text: "text-amber-700"  },
+  PRATA:    { label: "Prata",    icon: "🥈", bar: "bg-gray-400",   text: "text-gray-600"   },
+  BRONZE:   { label: "Bronze",   icon: "🥉", bar: "bg-orange-400", text: "text-orange-700" },
 };
 
-function formatCurrency(v: number) {
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
+// ── Date filter ───────────────────────────────────────────────────────────────
+
+export type DateFilterPreset = "total" | "month" | "year" | "custom";
+
+function getPresetRange(preset: DateFilterPreset): { from: Date; to: Date } | undefined {
+  const now = new Date();
+  if (preset === "month") {
+    return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: now };
+  }
+  if (preset === "year") {
+    return { from: new Date(now.getFullYear(), 0, 1), to: now };
+  }
+  return undefined;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -22,11 +34,13 @@ function KPICard({
   value,
   sub,
   accent,
+  loading,
 }: {
   label: string;
   value: string | number;
   sub?: string;
   accent?: "green" | "red" | "blue" | "brand";
+  loading?: boolean;
 }) {
   const accentClass = {
     green: "text-green-700",
@@ -37,7 +51,11 @@ function KPICard({
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-      <p className={`text-2xl font-extrabold ${accentClass}`}>{value}</p>
+      {loading ? (
+        <div className="h-8 w-16 animate-pulse rounded bg-gray-100" />
+      ) : (
+        <p className={`text-2xl font-extrabold ${accentClass}`}>{value}</p>
+      )}
       <p className="mt-0.5 text-xs font-semibold text-gray-600">{label}</p>
       {sub && <p className="mt-1 text-[10px] text-gray-400">{sub}</p>}
     </div>
@@ -49,24 +67,105 @@ function KPICard({
 export function OverviewTab({
   stats,
   opportunitiesCount,
-  onImportOpen,
-  onGoToInactive,
-  onGoToOpportunities,
+  loading,
+  datePreset,
+  customFrom,
+  customTo,
+  onDateChange,
 }: {
   stats: OverviewStats;
   opportunitiesCount: number;
-  onImportOpen: () => void;
-  onGoToInactive: () => void;
-  onGoToOpportunities: () => void;
+  loading: boolean;
+  datePreset: DateFilterPreset;
+  customFrom: string;
+  customTo: string;
+  onDateChange: (preset: DateFilterPreset, customFrom?: string, customTo?: string) => void;
 }) {
+  const [localFrom, setLocalFrom] = useState(customFrom);
+  const [localTo,   setLocalTo]   = useState(customTo);
+
   const activeRate = stats.totalCustomers > 0
     ? Math.round((stats.activeCustomers / stats.totalCustomers) * 100)
     : 0;
 
   const totalSegmented = stats.segments.reduce((s, x) => s + x.count, 0);
+  const totalOrderTypes = stats.deliveryOrders + stats.dineInOrders;
+  const deliveryPct = totalOrderTypes > 0 ? Math.round((stats.deliveryOrders / totalOrderTypes) * 100) : 0;
+  const dineInPct   = totalOrderTypes > 0 ? Math.round((stats.dineInOrders  / totalOrderTypes) * 100) : 0;
+
+  const DATE_PRESETS: { id: DateFilterPreset; label: string }[] = [
+    { id: "total", label: "Total"      },
+    { id: "month", label: "Este mês"   },
+    { id: "year",  label: "Este ano"   },
+    { id: "custom", label: "Personalizado" },
+  ];
+
+  function handlePreset(preset: DateFilterPreset) {
+    if (preset !== "custom") {
+      onDateChange(preset);
+    } else {
+      onDateChange("custom", localFrom, localTo);
+    }
+  }
+
+  function applyCustom() {
+    if (localFrom && localTo) {
+      onDateChange("custom", localFrom, localTo);
+    }
+  }
+
+  const newCustomersLabel =
+    datePreset === "month"  ? "Novos clientes (mês)"  :
+    datePreset === "year"   ? "Novos clientes (ano)"   :
+    datePreset === "custom" ? "Novos clientes (período)" :
+                              "Novos clientes";
 
   return (
     <div className="space-y-6">
+
+      {/* ── Date filter ──────────────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          {DATE_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => handlePreset(p.id)}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
+                datePreset === p.id
+                  ? "bg-brand-600 text-white shadow-sm"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {datePreset === "custom" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={localFrom}
+              onChange={(e) => setLocalFrom(e.target.value)}
+              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+            <span className="text-xs text-gray-400">até</span>
+            <input
+              type="date"
+              value={localTo}
+              onChange={(e) => setLocalTo(e.target.value)}
+              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+            <button
+              onClick={applyCustom}
+              disabled={!localFrom || !localTo}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              Aplicar
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* ── KPI grid ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -74,74 +173,100 @@ export function OverviewTab({
           label="Total de clientes"
           value={stats.totalCustomers}
           accent="brand"
+          loading={loading}
         />
         <KPICard
           label="Clientes ativos"
           value={stats.activeCustomers}
           sub="Pedido nos últimos 30 dias"
           accent="green"
+          loading={loading}
         />
         <KPICard
           label="Clientes inativos"
           value={stats.inactiveCustomers}
           sub="Sem pedido há 30+ dias"
           accent="red"
+          loading={loading}
         />
         <KPICard
-          label="Novos este mês"
-          value={stats.newThisMonth}
+          label={newCustomersLabel}
+          value={stats.newCustomers}
           accent="blue"
+          loading={loading}
         />
       </div>
 
-      {/* ── Ticket médio + Active rate ────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {/* ── Engajamento ──────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+          Engajamento da base
+        </p>
+        {stats.totalCustomers === 0 ? (
+          <p className="text-sm text-gray-400">Nenhum cliente ainda.</p>
+        ) : (
+          <>
+            <div className="flex h-3 w-full overflow-hidden rounded-full bg-gray-100">
+              <div
+                className="bg-green-500 transition-all"
+                style={{ width: `${activeRate}%` }}
+              />
+              <div
+                className="bg-red-300 transition-all"
+                style={{ width: `${100 - activeRate}%` }}
+              />
+            </div>
+            <div className="mt-2.5 flex gap-4 text-xs text-gray-600">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                {activeRate}% ativos ({stats.activeCustomers})
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-red-300" />
+                {100 - activeRate}% inativos ({stats.inactiveCustomers})
+              </span>
+            </div>
+          </>
+        )}
+      </div>
 
-        {/* Ticket médio */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
-            Ticket médio
-          </p>
-          <p className="text-3xl font-extrabold text-gray-900">
-            {stats.avgTicket > 0 ? formatCurrency(stats.avgTicket) : "—"}
-          </p>
-          <p className="mt-1 text-[10px] text-gray-400">
-            Média de gasto por cliente que já fez ao menos 1 pedido
-          </p>
-        </div>
-
-        {/* Active / Inactive bar */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-            Engajamento da base
-          </p>
-          {stats.totalCustomers === 0 ? (
-            <p className="text-sm text-gray-400">Nenhum cliente ainda.</p>
-          ) : (
-            <>
-              <div className="flex h-3 w-full overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className="bg-green-500 transition-all"
-                  style={{ width: `${activeRate}%` }}
-                />
-                <div
-                  className="bg-red-300 transition-all"
-                  style={{ width: `${100 - activeRate}%` }}
-                />
+      {/* ── Delivery / Presencial ─────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+          Canal de pedidos
+        </p>
+        {totalOrderTypes === 0 ? (
+          <p className="text-sm text-gray-400">Nenhum pedido registrado ainda.</p>
+        ) : (
+          <>
+            <div className="flex h-3 w-full overflow-hidden rounded-full bg-gray-100 mb-3">
+              <div
+                className="bg-blue-500 transition-all"
+                style={{ width: `${deliveryPct}%` }}
+              />
+              <div
+                className="bg-amber-400 transition-all"
+                style={{ width: `${dineInPct}%` }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-blue-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-500 mb-1">
+                  🛵 Delivery
+                </p>
+                <p className="text-xl font-extrabold text-blue-700">{stats.deliveryOrders.toLocaleString("pt-BR")}</p>
+                <p className="text-[10px] text-blue-400">{deliveryPct}% dos pedidos</p>
               </div>
-              <div className="mt-2.5 flex gap-4 text-xs text-gray-600">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-green-500" />
-                  {activeRate}% ativos ({stats.activeCustomers})
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-red-300" />
-                  {100 - activeRate}% inativos ({stats.inactiveCustomers})
-                </span>
+              <div className="rounded-xl bg-amber-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 mb-1">
+                  🍽️ Presencial
+                </p>
+                <p className="text-xl font-extrabold text-amber-700">{stats.dineInOrders.toLocaleString("pt-BR")}</p>
+                <p className="text-[10px] text-amber-500">{dineInPct}% dos pedidos</p>
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Segmentos ────────────────────────────────────────────────────── */}
@@ -179,48 +304,6 @@ export function OverviewTab({
             })}
           </div>
         )}
-      </div>
-
-      {/* ── Quick actions ─────────────────────────────────────────────────── */}
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-          Ações rápidas
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={onImportOpen}
-            className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-            </svg>
-            Importar clientes
-          </button>
-
-          {stats.inactiveCustomers > 0 && (
-            <button
-              onClick={onGoToInactive}
-              className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-              </svg>
-              Ver {stats.inactiveCustomers} inativos
-            </button>
-          )}
-
-          {opportunitiesCount > 0 && (
-            <button
-              onClick={onGoToOpportunities}
-              className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-              </svg>
-              {opportunitiesCount} oportunidade{opportunitiesCount !== 1 ? "s" : ""} identificada{opportunitiesCount !== 1 ? "s" : ""}
-            </button>
-          )}
-        </div>
       </div>
 
     </div>

@@ -20,7 +20,7 @@ export default async function CustomersPage({
   if (!session) redirect("/login");
 
   const page    = Math.max(1, Number(searchParams.page ?? 1));
-  const limit   = 20;
+  const limit   = 10;
   const skip    = (page - 1) * limit;
   const search  = searchParams.search?.trim();
   const sortBy  = VALID_SORT_COLS.has(searchParams.sortBy as SortCol)
