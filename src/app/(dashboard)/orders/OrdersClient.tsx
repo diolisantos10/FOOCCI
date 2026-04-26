@@ -23,6 +23,12 @@ interface OrderItem {
   addons?: string[];
 }
 
+interface CustomerProfile {
+  totalOrders: number;
+  totalSpend: number;
+  note?: string;
+}
+
 interface MockOrder {
   id: string;
   num: number;
@@ -41,6 +47,7 @@ interface MockOrder {
   payment: string;
   address: string;
   items: OrderItem[];
+  profile?: CustomerProfile;
 }
 
 // ─── Constants ────────────────────────────────────────────────
@@ -86,6 +93,7 @@ const INITIAL_ORDERS: MockOrder[] = [
       { name: "Arroz + Feijão", qty: 1, price: 18.50 },
       { name: "Refrigerante Lata", qty: 2, price: 8.50, addons: ["Coca-Cola", "Guaraná"] },
     ],
+    profile: { totalOrders: 12, totalSpend: 843.00, note: "Sempre pede sem cebola" },
   },
   {
     id: "o2", num: 2, customer: "João Santos",
@@ -98,6 +106,7 @@ const INITIAL_ORDERS: MockOrder[] = [
       { name: "X-Bacon Duplo", qty: 1, price: 32.00, addons: ["+ Queijo extra", "+ Bacon extra"] },
       { name: "Batata Frita M", qty: 1, price: 13.00 },
     ],
+    profile: { totalOrders: 1, totalSpend: 45.00 },
   },
   {
     id: "o3", num: 3, customer: "Ana Oliveira",
@@ -111,6 +120,7 @@ const INITIAL_ORDERS: MockOrder[] = [
       { name: "Salada Caesar", qty: 1, price: 24.00, note: "Molho à parte" },
       { name: "Suco Natural 500ml", qty: 2, price: 8.00 },
     ],
+    profile: { totalOrders: 4, totalSpend: 387.00, note: "Prefere molho à parte" },
   },
   {
     id: "o4", num: 4, customer: "Carlos Mendes",
@@ -122,6 +132,7 @@ const INITIAL_ORDERS: MockOrder[] = [
     items: [
       { name: "Marmita Fitness", qty: 1, price: 38.50, note: "Sem sal na salada" },
     ],
+    profile: { totalOrders: 7, totalSpend: 291.00, note: "Dieta fitness, sem sal" },
   },
   {
     id: "o5", num: 5, customer: "Lúcia Ferreira",
@@ -135,6 +146,7 @@ const INITIAL_ORDERS: MockOrder[] = [
       { name: "Água Mineral 500ml", qty: 2, price: 4.00 },
       { name: "Sobremesa do Dia", qty: 1, price: 12.00 },
     ],
+    profile: { totalOrders: 22, totalSpend: 1480.00, note: "VIP — sempre pede sobremesa" },
   },
   {
     id: "o6", num: 6, customer: "Roberto Lima",
@@ -148,6 +160,7 @@ const INITIAL_ORDERS: MockOrder[] = [
       { name: "Farofa Especial", qty: 1, price: 14.00 },
       { name: "Refrigerante 600ml", qty: 1, price: 10.00 },
     ],
+    profile: { totalOrders: 3, totalSpend: 238.00 },
   },
   {
     id: "o7", num: 7, customer: "Patrícia Souza",
@@ -162,6 +175,7 @@ const INITIAL_ORDERS: MockOrder[] = [
       { name: "Suco de Laranja", qty: 1, price: 10.00 },
       { name: "Tapioca Recheada", qty: 1, price: 9.00, note: "Sem queijo" },
     ],
+    profile: { totalOrders: 9, totalSpend: 512.00, note: "Intolerante à lactose" },
   },
   {
     id: "o8", num: 8, customer: "Fernando Costa",
@@ -175,6 +189,7 @@ const INITIAL_ORDERS: MockOrder[] = [
       { name: "Risoto de Cogumelos", qty: 1, price: 38.00 },
       { name: "Vinho Tinto 375ml", qty: 1, price: 41.00 },
     ],
+    profile: { totalOrders: 18, totalSpend: 2140.00 },
   },
   {
     id: "o9", num: 9, customer: "Beatriz Alves",
@@ -186,6 +201,7 @@ const INITIAL_ORDERS: MockOrder[] = [
     items: [
       { name: "Combo Kids", qty: 1, price: 29.00 },
     ],
+    profile: { totalOrders: 2, totalSpend: 58.00 },
   },
 ];
 
@@ -210,6 +226,19 @@ function elapsed(date: Date): string {
 function isDelayed(order: MockOrder): boolean {
   if (TERMINAL.includes(order.status)) return false;
   return minutesSince(order.createdAt) > DELAY_THRESHOLD;
+}
+
+// ─── Customer tier helper ─────────────────────────────────────
+
+function customerTier(totalOrders: number): {
+  label: string;
+  icon: string;
+  color: string;
+} {
+  if (totalOrders <= 1) return { label: "Primeiro pedido",  icon: "🎉", color: "text-emerald-600 bg-emerald-50" };
+  if (totalOrders <= 4) return { label: "Cliente novo",     icon: "🌱", color: "text-blue-600 bg-blue-50"      };
+  if (totalOrders <= 14) return { label: "Frequente",       icon: "🔄", color: "text-orange-600 bg-orange-50"  };
+  return                        { label: "VIP",             icon: "⭐", color: "text-purple-600 bg-purple-50"  };
 }
 
 function priorityScore(order: MockOrder): number {
@@ -473,6 +502,31 @@ function OrderCard({
           {" · "}
           {order.payment}
         </p>
+
+        {/* Row 3.5: customer profile strip */}
+        {order.profile && (() => {
+          const { totalOrders, totalSpend, note } = order.profile!;
+          const tier = customerTier(totalOrders);
+          return (
+            <div className="mt-2 rounded-lg bg-gray-50 px-2.5 py-1.5 border border-gray-100">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${tier.color}`}>
+                  {tier.icon} {tier.label}
+                </span>
+                <span className="text-[10px] text-gray-400">
+                  {totalOrders > 1 ? `${totalOrders} pedidos` : "1 pedido"}
+                  {" · "}
+                  {totalSpend.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} no total
+                </span>
+              </div>
+              {note && (
+                <p className="mt-1 text-[10px] text-gray-500 leading-tight">
+                  📝 {note}
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Row 4: actions */}
         {!isTerminal && (
