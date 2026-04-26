@@ -90,6 +90,7 @@ export default async function MenuPage() {
           initialCategories={data}
           restaurantSlug={restaurant?.slug ?? ""}
           qrUrl={`${appOrigin}/qr/${restaurant?.slug ?? ""}`}
+          pedidoUrl={`${appOrigin}/pedido/${restaurant?.slug ?? ""}`}
         />
       </div>
     </>

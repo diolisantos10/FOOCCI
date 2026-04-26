@@ -2019,10 +2019,12 @@ export function MenuManager({
   initialCategories,
   restaurantSlug,
   qrUrl,
+  pedidoUrl,
 }: {
   initialCategories: Category[];
   restaurantSlug: string;
   qrUrl: string;
+  pedidoUrl: string;
 }) {
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [filterQuery, setFilterQuery] = useState("");
@@ -2137,8 +2139,23 @@ export function MenuManager({
     <div className="space-y-4">
       {/* QR access cards */}
       {restaurantSlug && (
-        <div className="space-y-2">
-          <QRCard url={qrUrl} slug={restaurantSlug} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <QRCard
+            url={qrUrl}
+            slug={restaurantSlug}
+            label="QR Code Salão"
+            subtitle="Cardápio digital — sem pedido"
+            downloadName={`salao-qr-${restaurantSlug}.png`}
+            tip="Cole nas mesas para que os clientes consultem o cardápio. Leitura apenas — sem carrinho ou checkout."
+          />
+          <QRCard
+            url={pedidoUrl}
+            slug={restaurantSlug}
+            label="QR Code Delivery"
+            subtitle="Pedido online completo"
+            downloadName={`delivery-qr-${restaurantSlug}.png`}
+            tip="Compartilhe para delivery e retirada. O cliente conversa com o agente, monta o pedido e paga online."
+          />
         </div>
       )}
 

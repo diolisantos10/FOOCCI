@@ -3,7 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 
-export function QRCard({ url, slug }: { url: string; slug: string }) {
+export function QRCard({
+  url,
+  slug,
+  label = "Cardápio Online",
+  subtitle = "Compartilhe com seus clientes",
+  downloadName,
+  tip = "Imprima o QR code e cole nas mesas, embalagens ou stories. Qualquer alteração no cardápio aparece instantaneamente.",
+}: {
+  url: string;
+  slug: string;
+  label?: string;
+  subtitle?: string;
+  downloadName?: string;
+  tip?: string;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -28,7 +42,7 @@ export function QRCard({ url, slug }: { url: string; slug: string }) {
     if (!canvas) return;
     const a = document.createElement("a");
     a.href = canvas.toDataURL("image/png");
-    a.download = `cardapio-qr-${slug}.png`;
+    a.download = downloadName ?? `cardapio-qr-${slug}.png`;
     a.click();
   }
 
@@ -40,8 +54,8 @@ export function QRCard({ url, slug }: { url: string; slug: string }) {
           📲
         </div>
         <div>
-          <p className="text-sm font-bold text-gray-900">Cardápio Online</p>
-          <p className="text-[11px] text-gray-400">Compartilhe com seus clientes</p>
+          <p className="text-sm font-bold text-gray-900">{label}</p>
+          <p className="text-[11px] text-gray-400">{subtitle}</p>
         </div>
         <span className="ml-auto rounded-full bg-green-100 px-2.5 py-0.5 text-[11px] font-semibold text-green-700">
           Ativo
@@ -98,7 +112,7 @@ export function QRCard({ url, slug }: { url: string; slug: string }) {
 
           {/* Tip */}
           <p className="text-[11px] leading-relaxed text-gray-400">
-            Imprima o QR code e cole nas mesas, embalagens ou stories. Qualquer alteração no cardápio aparece instantaneamente.
+            {tip}
           </p>
         </div>
       </div>
