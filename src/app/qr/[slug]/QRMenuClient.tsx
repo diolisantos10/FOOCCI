@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, FormEvent } from "react";
+import React, { useState, useEffect, useRef, FormEvent } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,6 +33,7 @@ type Props = {
   categories: Category[];
   featured: Item[];
   promoBanner?: Item | null;
+  brandPrimaryColor?: string | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -92,8 +93,8 @@ function WelcomeModal({
           <div className="h-1 w-10 rounded-full bg-gray-200" />
         </div>
 
-        {/* Orange accent bar */}
-        <div className="mx-6 mt-5 rounded-2xl bg-gradient-to-r from-orange-500 to-orange-400 px-5 py-4 text-white shadow-sm">
+        {/* Accent bar */}
+        <div className="mx-6 mt-5 rounded-2xl px-5 py-4 text-white shadow-sm" style={{ backgroundColor: 'var(--brand-primary)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Bem-vindo!</p>
           <p className="mt-0.5 text-base font-bold leading-snug">
             Antes de ver o cardápio,<br />se apresente 😊
@@ -142,7 +143,8 @@ function WelcomeModal({
             <button
               type="submit"
               disabled={!canSubmit}
-              className="w-full rounded-2xl bg-orange-500 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-orange-600 active:scale-[0.98] disabled:opacity-50"
+              className="w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+              style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               {phase === "loading" ? "Verificando…" : "Ver o cardápio →"}
             </button>
@@ -227,7 +229,7 @@ function ProductModal({
               <h3 className="text-xl font-bold text-gray-900 leading-tight">
                 {item.name}
               </h3>
-              <span className="shrink-0 text-xl font-bold text-orange-500">
+              <span className="shrink-0 text-xl font-bold" style={{ color: 'var(--brand-primary)' }}>
                 R$&nbsp;{formatPrice(item.price)}
               </span>
             </div>
@@ -266,7 +268,8 @@ function ProductModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-full rounded-2xl bg-orange-500 py-4 text-base font-bold text-white hover:bg-orange-600 transition-colors shadow-sm"
+            className="w-full rounded-2xl py-4 text-base font-bold text-white hover:opacity-90 transition-opacity shadow-sm"
+            style={{ backgroundColor: 'var(--brand-primary)' }}
           >
             Fechar
           </button>
@@ -300,7 +303,7 @@ function PromoBanner({
           loading="lazy"
         />
       ) : (
-        <div className="w-full h-52 bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-7xl">
+        <div className="w-full h-52 flex items-center justify-center text-7xl" style={{ backgroundColor: 'var(--brand-primary)' }}>
           🍽️
         </div>
       )}
@@ -308,11 +311,11 @@ function PromoBanner({
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
       {/* Text */}
       <div className="absolute bottom-0 left-0 right-0 px-4 py-4 text-left">
-        <span className="mb-1.5 inline-block rounded-full bg-orange-500 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+        <span className="mb-1.5 inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: 'var(--brand-primary)' }}>
           Promoção do dia
         </span>
         <p className="text-lg font-bold text-white leading-tight">{item.name}</p>
-        <p className="mt-0.5 text-sm font-bold text-orange-300">
+        <p className="mt-0.5 text-sm font-bold text-white/80">
           R$&nbsp;{formatPrice(item.price)}
         </p>
       </div>
@@ -354,7 +357,7 @@ function FeaturedCard({
         <p className="text-xs font-semibold text-gray-900 leading-tight line-clamp-2">
           {item.name}
         </p>
-        <p className="mt-1 text-xs font-bold text-orange-500">
+        <p className="mt-1 text-xs font-bold" style={{ color: 'var(--brand-primary)' }}>
           R$&nbsp;{formatPrice(item.price)}
         </p>
       </div>
@@ -402,7 +405,7 @@ function ProductCard({
             </div>
 
             <div className="mt-4">
-              <span className="text-lg font-bold text-orange-500">
+              <span className="text-lg font-bold" style={{ color: 'var(--brand-primary)' }}>
                 R$&nbsp;{formatPrice(item.price)}
               </span>
             </div>
@@ -435,7 +438,7 @@ function ProductCard({
 function PlaceholderBanner() {
   return (
     <div className="mx-auto max-w-2xl px-4 pb-5">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-orange-500 to-red-500 px-5 py-6 shadow-sm">
+      <div className="relative overflow-hidden rounded-2xl px-5 py-6 shadow-sm" style={{ backgroundColor: 'var(--brand-primary)' }}>
         <p className="text-xl font-bold text-white leading-snug">🔥 Combo do dia</p>
         <p className="mt-1 text-sm text-orange-100">Pizza + bebida com desconto especial</p>
         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-4xl opacity-30">🍕</span>
@@ -446,7 +449,8 @@ function PlaceholderBanner() {
 
 // ── Main Client Component ─────────────────────────────────────────────────────
 
-export function QRMenuClient({ slug, restaurant, categories, featured, promoBanner }: Props) {
+export function QRMenuClient({ slug, restaurant, categories, featured, promoBanner, brandPrimaryColor }: Props) {
+  const pc = brandPrimaryColor || '#f97316';
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>(
     categories[0]?.id ?? ""
@@ -523,7 +527,7 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
         />
       )}
 
-      <div className="min-h-screen bg-[#fafaf9]">
+      <div className="min-h-screen bg-[#fafaf9]" style={{ '--brand-primary': pc } as React.CSSProperties}>
 
         {/* ── HERO ──────────────────────────────────────────────── */}
         <div ref={heroRef} id="hero" className="bg-white border-b border-gray-100">
@@ -605,9 +609,10 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
                   onClick={() => scrollToCategory(cat.id)}
                   className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-base font-semibold min-h-[44px] transition-colors ${
                     activeCategory === cat.id
-                      ? "bg-green-600 text-white shadow-sm"
+                      ? "text-white shadow-sm"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
+                  style={activeCategory === cat.id ? { backgroundColor: 'var(--brand-primary)' } : undefined}
                 >
                   {cat.name}
                 </button>
@@ -626,7 +631,7 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
           <main className="mx-auto max-w-2xl px-4 py-6 space-y-10">
             {categories.map((cat) => (
               <section key={cat.id} id={`cat-${cat.id}`}>
-                <div className="-mx-4 mb-6 bg-orange-500 px-4 py-3.5">
+                <div className="-mx-4 mb-6 px-4 py-3.5" style={{ backgroundColor: 'var(--brand-primary)' }}>
                   <h2 className="text-lg font-extrabold uppercase tracking-widest text-white">
                     {cat.name}
                   </h2>

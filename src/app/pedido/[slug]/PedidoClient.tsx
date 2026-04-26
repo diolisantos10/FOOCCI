@@ -12,7 +12,7 @@
  *   REVIEW_ORDER → DONE
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
 import { SuggestionSheet } from "./SuggestionMode";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -101,6 +101,8 @@ interface Props {
   tiktokUrl?: string | null;
   /** Active promotion banners to show at the top of the menu. */
   banners?: PromoBanner[];
+  brandPrimaryColor?: string | null;
+  brandSecondaryColor?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -331,9 +333,10 @@ function ProductCard({
             onClick={onAdd}
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${
               qty > 0
-                ? "bg-[#25d366] text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-[#25d366] hover:text-white"
+                ? "text-white"
+                : "bg-gray-100 text-gray-700 hover:text-white"
             }`}
+          style={qty > 0 ? { backgroundColor: 'var(--brand-primary)' } : undefined}
           >
             {qty > 0 ? qty : "+"}
           </button>
@@ -432,11 +435,11 @@ function ProductModal({
                           R$ {v.price.toFixed(2).replace(".", ",")}
                         </span>
                         {vQty > 0 && (
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#25d366] text-[11px] font-bold text-white">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold text-white" style={{ backgroundColor: 'var(--brand-primary)' }}>
                             {vQty}
                           </span>
                         )}
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#25d366] text-white text-base font-bold shadow-sm">+</span>
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full text-white text-base font-bold shadow-sm" style={{ backgroundColor: 'var(--brand-primary)' }}>+</span>
                       </div>
                     </button>
                   );
@@ -458,7 +461,8 @@ function ProductModal({
               </div>
               <button
                 onClick={onAdd}
-                className="flex-1 rounded-2xl bg-[#25d366] py-3.5 text-sm font-bold text-white shadow-sm hover:bg-[#1ebe5a] active:scale-95 transition-all"
+                className="flex-1 rounded-2xl py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90 active:scale-95 transition-all"
+                style={{ backgroundColor: 'var(--brand-primary)' }}
               >
                 {qty > 0 ? `+ Adicionar (${qty} no carrinho)` : "Adicionar ao pedido"}
               </button>
@@ -503,8 +507,9 @@ function CartBar({
           className={`flex w-full items-center justify-between rounded-2xl px-5 py-2 text-sm font-bold text-white shadow transition ${
             upsellPending
               ? "bg-gray-400 hover:bg-gray-500"
-              : "bg-[#25d366] hover:bg-[#1ebe5a]"
+              : "hover:opacity-90"
           }`}
+          style={!upsellPending ? { backgroundColor: 'var(--brand-primary)' } : undefined}
         >
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/30 text-xs font-bold">
             {count}
@@ -526,7 +531,8 @@ function CartFAB({ count, onClick }: { count: number; onClick: () => void }) {
     <button
       onClick={onClick}
       aria-label={`Ver carrinho — ${count} ${count === 1 ? "item" : "itens"}`}
-      className="absolute bottom-[5.5rem] right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-[#128c7e] shadow-lg transition active:scale-95"
+      className="absolute bottom-[5.5rem] right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition active:scale-95"
+      style={{ backgroundColor: 'var(--brand-secondary)' }}
     >
       <span className="text-2xl leading-none">🛒</span>
       <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow">
@@ -588,9 +594,10 @@ function DesktopProductCard({
             onClick={onAdd}
             className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition-colors ${
               qty > 0
-                ? "bg-[#25d366] text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-[#25d366] hover:text-white"
+                ? "text-white"
+                : "bg-gray-100 text-gray-700 hover:text-white"
             }`}
+            style={qty > 0 ? { backgroundColor: 'var(--brand-primary)' } : undefined}
           >
             {qty > 0 ? qty : "+"}
           </button>
@@ -674,7 +681,8 @@ function CartDrawer({
                     <span className="w-5 text-center text-sm font-bold text-gray-900">{item.qty}</span>
                     <button
                       onClick={() => onIncrement(item.id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-[#25d366] text-white hover:bg-[#1ebe5a] active:scale-90 transition-transform text-sm font-bold"
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-white hover:opacity-90 active:scale-90 transition-transform text-sm font-bold"
+                      style={{ backgroundColor: 'var(--brand-primary)' }}
                     >
                       +
                     </button>
@@ -701,7 +709,8 @@ function CartDrawer({
             </div>
             <button
               onClick={() => { onClose(); onFinalize(); }}
-              className="w-full rounded-2xl bg-[#25d366] py-4 text-sm font-bold text-white shadow active:scale-[0.98] transition-all hover:bg-[#1ebe5a]"
+              className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow active:scale-[0.98] transition-all hover:opacity-90"
+              style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               Finalizar pedido 🎉
             </button>
@@ -781,7 +790,8 @@ function PhoneEntryCard({
         <button
           type="submit"
           disabled={!phoneInput.trim() || loading}
-          className="rounded-xl bg-[#25d366] py-2.5 text-sm font-bold text-white hover:bg-[#1ebe5a] disabled:opacity-40 transition-colors"
+          className="rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-40 transition-all"
+          style={{ backgroundColor: 'var(--brand-primary)' }}
         >
           {loading ? "Verificando…" : "Continuar →"}
         </button>
@@ -842,7 +852,10 @@ export function PedidoClient({
   knownCustomerPhone = null, knownCustomerName = null,
   instagramUrl = null, tiktokUrl = null,
   banners = [],
+  brandPrimaryColor = null, brandSecondaryColor = null,
 }: Props) {
+  const pc = brandPrimaryColor || '#25d366';
+  const sc = brandSecondaryColor || '#128c7e';
   // ── Chat ─────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -1418,7 +1431,8 @@ export function PedidoClient({
           <div className="flex gap-2">
             <button
               onClick={handleAddressConfirm}
-              className="flex-1 rounded-xl bg-[#25d366] py-2 text-sm font-bold text-white hover:bg-[#1ebe5a]"
+              className="flex-1 rounded-xl py-2 text-sm font-bold text-white hover:opacity-90"
+              style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               Confirmar endereço
             </button>
@@ -1527,7 +1541,8 @@ export function PedidoClient({
             <button
               onClick={handleFinalConfirm}
               disabled={ui === "thinking"}
-              className="flex-1 rounded-xl bg-[#25d366] py-2.5 text-sm font-bold text-white hover:bg-[#1ebe5a] disabled:opacity-50"
+              className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               {ui === "thinking" ? "Confirmando…" : "Confirmar pedido 🎉"}
             </button>
@@ -1608,12 +1623,12 @@ export function PedidoClient({
 
   // Extracted: header (shared between mobile and desktop — rendered once)
   const header = (
-    <div className="shrink-0 flex items-center gap-2 bg-[#128c7e] px-4 py-3 shadow">
+    <div className="shrink-0 flex items-center gap-2 px-4 py-3 shadow" style={{ backgroundColor: sc }}>
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={logoUrl} alt={restaurantName} className="h-9 w-9 rounded-full object-cover shrink-0" />
       ) : (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-xl leading-none">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl leading-none" style={{ backgroundColor: pc }}>
           🍕
         </div>
       )}
@@ -1675,7 +1690,7 @@ export function PedidoClient({
   );
 
   return (
-    <div className="fixed inset-0 flex flex-col lg:flex-row bg-[#ece5dd]">
+    <div className="fixed inset-0 flex flex-col lg:flex-row bg-[#ece5dd]" style={{ '--brand-primary': pc, '--brand-secondary': sc } as React.CSSProperties}>
 
       {/* ═══════════════════════════════════════════════════════════
           LEFT PANEL — Chat
@@ -1758,8 +1773,9 @@ export function PedidoClient({
               className={`flex w-full items-center justify-between rounded-2xl px-5 py-2.5 text-sm font-bold text-white transition-colors ${
                 upsellPending
                   ? "bg-gray-400 hover:bg-gray-500"
-                  : "bg-[#25d366] hover:bg-[#1ebe5a]"
+                  : "hover:opacity-90"
               }`}
+              style={!upsellPending ? { backgroundColor: 'var(--brand-primary)' } : undefined}
             >
               <span>{upsellPending ? "Continuar →" : "Finalizar pedido"}</span>
               <span>R$ {cartTotal.toFixed(2).replace(".", ",")}</span>
@@ -1795,9 +1811,10 @@ export function PedidoClient({
                 onClick={() => handleCategorySelect(cat)}
                 className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-base font-semibold min-h-[44px] transition-all ${
                   selectedCategoryId === cat.id
-                    ? "bg-green-600 text-white shadow-sm"
+                    ? "text-white shadow-sm"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
                 }`}
+                style={selectedCategoryId === cat.id ? { backgroundColor: 'var(--brand-primary)' } : undefined}
               >
                 {categoryEmoji(cat.name)} {cat.name}
               </button>
@@ -1866,7 +1883,8 @@ export function PedidoClient({
             <button
               type="submit"
               disabled={!inputText.trim() || ui === "thinking"}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-lg text-white shadow disabled:opacity-40 hover:bg-[#1ebe5a] active:scale-95 transition-all"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-white shadow disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all"
+              style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               ➤
             </button>
@@ -1898,9 +1916,10 @@ export function PedidoClient({
                   onClick={() => handleCategorySelect(cat)}
                   className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
                     selectedCategoryId === cat.id
-                      ? "bg-green-600 text-white shadow-sm"
+                      ? "text-white shadow-sm"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
                   }`}
+                  style={selectedCategoryId === cat.id ? { backgroundColor: 'var(--brand-primary)' } : undefined}
                 >
                   {categoryEmoji(cat.name)} {cat.name}
                 </button>
