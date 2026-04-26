@@ -82,6 +82,7 @@ export class BrandConfigService {
       brandSecondaryColor: null,
       instagramUrl: null,
       tiktokUrl: null,
+      brandPersona: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
