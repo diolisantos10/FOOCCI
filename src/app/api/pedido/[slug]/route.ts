@@ -12,6 +12,7 @@ import { prisma }      from "@/lib/prisma";
 import { ok, badRequest, serverError } from "@/lib/api-response";
 import { runAITurn }   from "@/lib/ai-context/runner";
 import type { OrderStage } from "@/lib/agent/types";
+import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 // ── Request shape ─────────────────────────────────────────────────────────────
 
@@ -85,6 +86,10 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
+  const ip = getClientIp(req);
+  const rl = rateLimit({ key: `pedido-chat:${ip}`, limit: 60, windowMs: 60_000 });
+  if (rl.limited) return rateLimitResponse(rl.retryAfter);
+
   try {
     const { slug } = await params;
 

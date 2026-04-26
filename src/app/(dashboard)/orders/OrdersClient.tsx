@@ -50,6 +50,83 @@ interface MockOrder {
   profile?: CustomerProfile;
 }
 
+// ─── API response type (from GET /api/orders) ─────────────────
+
+interface ApiOrderItem {
+  name: string;
+  price: string;
+  quantity: number;
+  notes?: string | null;
+}
+
+interface ApiOrder {
+  id: string;
+  status: string;
+  type: string;
+  subtotal: string;
+  deliveryFee: string;
+  total: string;
+  createdAt: string;
+  customer: { name: string; phone: string };
+  deliveryAddress: {
+    street: string;
+    number: string;
+    complement: string | null;
+    neighborhood: string;
+  } | null;
+  items: ApiOrderItem[];
+  payment: { method: string } | null;
+}
+
+const PAYMENT_LABELS: Record<string, string> = {
+  CASH:          "Dinheiro",
+  PIX:           "PIX",
+  PIX_IN_PERSON: "PIX",
+  CREDIT_CARD:   "Cartão Crédito",
+  DEBIT_CARD:    "Cartão Débito",
+  CARD_MACHINE:  "Cartão Maquininha",
+  ONLINE:        "Online",
+};
+
+function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
+  const status = o.status === "AWAITING_PAYMENT"
+    ? "PENDING"
+    : (o.status as OrderStatus);
+  const type = o.type === "DINE_IN" ? "TABLE" : (o.type as MockOrder["type"]);
+  return {
+    id:         o.id,
+    num:        index + 1,
+    customer:   o.customer.name,
+    phone:      o.customer.phone,
+    channel:    "Online",
+    total:      parseFloat(o.total),
+    subtotal:   parseFloat(o.subtotal),
+    deliveryFee: parseFloat(o.deliveryFee) || undefined,
+    status,
+    type,
+    createdAt:  new Date(o.createdAt),
+    itemCount:  o.items.length,
+    payment:    PAYMENT_LABELS[o.payment?.method ?? ""] ?? o.payment?.method ?? "—",
+    address:
+      type === "DELIVERY" && o.deliveryAddress
+        ? [
+            o.deliveryAddress.street,
+            o.deliveryAddress.number,
+            o.deliveryAddress.complement,
+            o.deliveryAddress.neighborhood,
+          ]
+            .filter(Boolean)
+            .join(", ")
+        : "Retirada no local",
+    items: o.items.map((item) => ({
+      name:  item.name,
+      qty:   item.quantity,
+      price: parseFloat(item.price),
+      note:  item.notes ?? undefined,
+    })),
+  };
+}
+
 // ─── Constants ────────────────────────────────────────────────
 
 const DELAY_THRESHOLD = 20;
@@ -908,7 +985,7 @@ function DetailPanel({
 // ─── Root ─────────────────────────────────────────────────────
 
 export default function OrdersClient() {
-  const [orders,       setOrders]       = useState<MockOrder[]>(INITIAL_ORDERS);
+  const [orders,       setOrders]       = useState<MockOrder[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [checkedIds,   setCheckedIds]   = useState<Set<string>>(new Set());
@@ -920,6 +997,17 @@ export default function OrdersClient() {
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 30_000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/orders?limit=100")
+      .then((r) => r.json())
+      .then((res: { success: boolean; data?: { data: ApiOrder[] } }) => {
+        if (res.success && Array.isArray(res.data?.data)) {
+          setOrders(res.data.data.map(apiOrderToMock));
+        }
+      })
+      .catch((err) => console.error("[OrdersClient] fetch failed", err));
   }, []);
 
   const filtered  = useMemo(

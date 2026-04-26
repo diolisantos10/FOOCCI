@@ -8,7 +8,10 @@ import { prisma } from "@/lib/prisma";
 
 const rowSchema = z.object({
   rowIndex: z.number(),
-  foto: z.string(),
+  foto: z.string().refine(
+    (val) => val === "" || /^https?:\/\//i.test(val),
+    { message: "imageUrl must use http or https" }
+  ),
   categoria: z.string(),
   nome: z.string(),
   descricao: z.string(),
