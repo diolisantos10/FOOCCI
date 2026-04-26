@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
-import Link from "next/link";
 import {
   apiFetch,
   Feedback,
@@ -136,10 +135,6 @@ interface PassthroughConfig {
   upsellIntensity: string;
   salesFocus: string;
   salesPriority: string;
-  brandPrimaryColor: string | null;
-  brandSecondaryColor: string | null;
-  instagramUrl: string | null;
-  tiktokUrl: string | null;
 }
 
 const PASSTHROUGH_DEFAULTS: PassthroughConfig = {
@@ -153,10 +148,6 @@ const PASSTHROUGH_DEFAULTS: PassthroughConfig = {
   upsellIntensity: "medium",
   salesFocus: "balanced",
   salesPriority: "bestsellers",
-  brandPrimaryColor: null,
-  brandSecondaryColor: null,
-  instagramUrl: null,
-  tiktokUrl: null,
 };
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -306,60 +297,167 @@ function MultiChips({
   );
 }
 
+// ── ColorField ────────────────────────────────────────────────────────────────
+
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const display = value || "#6366f1";
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={display}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-10 w-10 cursor-pointer rounded-xl border-0 p-0.5 shadow-sm"
+          style={{ backgroundColor: display }}
+        />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="#6366f1"
+          maxLength={7}
+          className="w-28 rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono text-gray-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+        />
+        <div className="h-10 w-10 shrink-0 rounded-xl border border-gray-100 shadow-sm" style={{ backgroundColor: display }} />
+      </div>
+    </div>
+  );
+}
+
+// ── LivePreview ───────────────────────────────────────────────────────────────
+
+function LivePreview({ primaryColor, secondaryColor, logoUrl, restaurantName }: {
+  primaryColor: string; secondaryColor: string; logoUrl: string; restaurantName: string;
+}) {
+  const primary   = primaryColor   || "#6366f1";
+  const secondary = secondaryColor || "#8b5cf6";
+  return (
+    <div className="flex flex-col items-center">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">Preview ao vivo</p>
+      <div className="w-52 rounded-[2.5rem] bg-gray-900 p-[5px] shadow-2xl shadow-gray-400/30">
+        <div className="overflow-hidden rounded-[2.1rem] bg-gray-50">
+          <div className="flex justify-center bg-gray-900 py-1.5">
+            <div className="h-1.5 w-14 rounded-full bg-gray-700" />
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2.5" style={{ backgroundColor: primary }}>
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt="logo" className="h-8 w-8 rounded-full border-2 border-white/30 object-cover" />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-sm">🍽</div>
+            )}
+            <div>
+              <p className="text-[11px] font-bold leading-none text-white">{restaurantName || "Seu Restaurante"}</p>
+              <p className="mt-0.5 text-[9px] text-white/70">• Online agora</p>
+            </div>
+          </div>
+          <div className="space-y-2 p-2.5" style={{ minHeight: 140, background: "#e5ddd5" }}>
+            <div className="flex items-end gap-1.5">
+              <div className="max-w-[85%] rounded-2xl rounded-tl-sm px-3 py-2 text-[10px] leading-snug text-white shadow-sm" style={{ backgroundColor: primary }}>
+                Olá! Bem-vindo 😊 O que vai ser hoje?
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+              <div className="h-8 w-full" style={{ background: `linear-gradient(135deg, ${primary}33 0%, ${secondary}33 100%)` }} />
+              <div className="px-2.5 py-1.5">
+                <p className="text-[10px] font-bold text-gray-900">Produto especial</p>
+                <div className="mt-0.5 flex items-center justify-between">
+                  <span className="text-[10px] text-gray-500">R$ 28,90</span>
+                  <button type="button" className="rounded-full px-2 py-0.5 text-[9px] font-bold text-white" style={{ backgroundColor: primary }}>+ Pedir</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 bg-gray-100 px-2.5 py-2">
+            <div className="flex-1 rounded-full bg-white px-3 py-1.5 text-[9px] text-gray-400">Mensagem…</div>
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <div className="h-5 w-5 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: primary }} />
+        <div className="h-5 w-5 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: secondary }} />
+        <p className="text-[10px] text-gray-400">{primary} · {secondary}</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MarcaPage() {
   const [form, setForm] = useState<MarcaForm>(FORM_DEFAULTS);
   const [passthrough, setPassthrough] = useState<PassthroughConfig>(PASSTHROUGH_DEFAULTS);
+
+  // Visual identity (formerly /settings/experience)
+  const [primaryColor, setPrimaryColor]     = useState("#6366f1");
+  const [secondaryColor, setSecondaryColor] = useState("#8b5cf6");
+  const [logoUrl, setLogoUrl]               = useState("");
+  const [restaurantName, setRestaurantName] = useState("");
+
+  // Reviews & social
+  const [googleReviewUrl, setGoogleReviewUrl] = useState("");
+  const [ifoodReviewUrl, setIfoodReviewUrl]   = useState("");
+  const [instagramUrl, setInstagramUrl]       = useState("");
+  const [tiktokUrl, setTiktokUrl]             = useState("");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiFetch("/api/brand-config").then(({ ok, data }) => {
-      if (ok && data) {
-        const p = (data.brandPersona ?? {}) as Record<string, unknown>;
+    Promise.all([
+      apiFetch("/api/brand-config"),
+      apiFetch("/api/settings/store"),
+    ]).then(([{ ok: bcOk, data: bc }, { ok: storeOk, data: store }]) => {
+      if (bcOk && bc) {
+        const p = (bc.brandPersona ?? {}) as Record<string, unknown>;
         setForm({
-          brandName:             String(p.brandName ?? ""),
-          shortDescription:      String(p.shortDescription ?? ""),
-          brandStory:            String(p.brandStory ?? ""),
-          targetAudience:        String(p.targetAudience ?? ""),
-          restaurantType:        String(p.restaurantType ?? ""),
-          pricePositioning:      String(p.pricePositioning ?? ""),
-          businessObjective:     String(p.businessObjective ?? ""),
-          voiceTonePreset:       String(p.voiceTonePreset ?? ""),
-          personalityTraits:     Array.isArray(p.personalityTraits)
-            ? (p.personalityTraits as string[])
-            : [],
-          upsellStyle:           data.upsellStyle ?? "gentle",
-          comboFocus:            Boolean(p.comboFocus),
-          avgTicketFocus:        Boolean(p.avgTicketFocus),
-          emojiUsage:            data.emojiUsage ?? "moderate",
-          communicationStyle:    data.communicationStyle ?? "conversational",
-          canInsistAfterRefusal: p.canInsistAfterRefusal !== false,
-          useClientName:         p.useClientName !== false,
-          mainDishes:            String(p.mainDishes ?? ""),
-          differentials:         String(p.differentials ?? ""),
+          brandName:              String(p.brandName ?? ""),
+          shortDescription:       String(p.shortDescription ?? ""),
+          brandStory:             String(p.brandStory ?? ""),
+          targetAudience:         String(p.targetAudience ?? ""),
+          restaurantType:         String(p.restaurantType ?? ""),
+          pricePositioning:       String(p.pricePositioning ?? ""),
+          businessObjective:      String(p.businessObjective ?? ""),
+          voiceTonePreset:        String(p.voiceTonePreset ?? ""),
+          personalityTraits:      Array.isArray(p.personalityTraits) ? (p.personalityTraits as string[]) : [],
+          upsellStyle:            bc.upsellStyle ?? "gentle",
+          comboFocus:             Boolean(p.comboFocus),
+          avgTicketFocus:         Boolean(p.avgTicketFocus),
+          emojiUsage:             bc.emojiUsage ?? "moderate",
+          communicationStyle:     bc.communicationStyle ?? "conversational",
+          canInsistAfterRefusal:  p.canInsistAfterRefusal !== false,
+          useClientName:          p.useClientName !== false,
+          mainDishes:             String(p.mainDishes ?? ""),
+          differentials:          String(p.differentials ?? ""),
           mostProfitableProducts: String(p.mostProfitableProducts ?? ""),
-          cuisineType:           String(p.cuisineType ?? ""),
+          cuisineType:            String(p.cuisineType ?? ""),
         });
         setPassthrough({
-          tone:                 data.tone ?? "friendly",
-          formality:            data.formality ?? "informal",
-          greetingTemplate:     data.greetingTemplate ?? null,
-          systemPromptOverride: data.systemPromptOverride ?? null,
-          aiModel:              data.aiModel ?? "gpt-4o-mini",
-          maxHistoryMessages:   data.maxHistoryMessages ?? 20,
-          personalityPreset:    data.personalityPreset ?? "traditional",
-          upsellIntensity:      data.upsellIntensity ?? "medium",
-          salesFocus:           data.salesFocus ?? "balanced",
-          salesPriority:        data.salesPriority ?? "bestsellers",
-          brandPrimaryColor:    data.brandPrimaryColor ?? null,
-          brandSecondaryColor:  data.brandSecondaryColor ?? null,
-          instagramUrl:         data.instagramUrl ?? null,
-          tiktokUrl:            data.tiktokUrl ?? null,
+          tone:                 bc.tone ?? "friendly",
+          formality:            bc.formality ?? "informal",
+          greetingTemplate:     bc.greetingTemplate ?? null,
+          systemPromptOverride: bc.systemPromptOverride ?? null,
+          aiModel:              bc.aiModel ?? "gpt-4o-mini",
+          maxHistoryMessages:   bc.maxHistoryMessages ?? 20,
+          personalityPreset:    bc.personalityPreset ?? "traditional",
+          upsellIntensity:      bc.upsellIntensity ?? "medium",
+          salesFocus:           bc.salesFocus ?? "balanced",
+          salesPriority:        bc.salesPriority ?? "bestsellers",
         });
+        setPrimaryColor(bc.brandPrimaryColor   ?? "#6366f1");
+        setSecondaryColor(bc.brandSecondaryColor ?? "#8b5cf6");
+        setGoogleReviewUrl(bc.googleReviewUrl ?? "");
+        setIfoodReviewUrl(bc.ifoodReviewUrl   ?? "");
+        setInstagramUrl(bc.instagramUrl ?? "");
+        setTiktokUrl(bc.tiktokUrl   ?? "");
+      }
+      if (storeOk && store) {
+        setLogoUrl(store.logoUrl ?? "");
+        setRestaurantName(store.name ?? "");
       }
     }).finally(() => setLoading(false));
   }, []);
@@ -394,18 +492,31 @@ export default function MarcaPage() {
     if (form.mostProfitableProducts) brandPersona.mostProfitableProducts = form.mostProfitableProducts;
     if (form.cuisineType)            brandPersona.cuisineType = form.cuisineType;
 
-    const { ok, data } = await apiFetch("/api/brand-config", "PUT", {
-      ...passthrough,
-      upsellStyle:        form.upsellStyle,
-      emojiUsage:         form.emojiUsage,
-      communicationStyle: form.communicationStyle,
-      brandPersona,
-    });
+    const [bcRes, storeRes] = await Promise.all([
+      apiFetch("/api/brand-config", "PUT", {
+        ...passthrough,
+        upsellStyle:        form.upsellStyle,
+        emojiUsage:         form.emojiUsage,
+        communicationStyle: form.communicationStyle,
+        brandPrimaryColor:  primaryColor   || null,
+        brandSecondaryColor: secondaryColor || null,
+        instagramUrl:       instagramUrl   || null,
+        tiktokUrl:          tiktokUrl      || null,
+        googleReviewUrl:    googleReviewUrl || null,
+        ifoodReviewUrl:     ifoodReviewUrl  || null,
+        brandPersona,
+      }),
+      apiFetch("/api/settings/store", "PUT", { logoUrl: logoUrl || null }),
+    ]);
 
-    if (ok) {
-      setSuccess("Persona da marca salva com sucesso.");
+    if (bcRes.ok && storeRes.ok) {
+      setSuccess("Marca salva com sucesso.");
     } else {
-      setError(data?.error ?? "Erro ao salvar.");
+      setError(
+        (!bcRes.ok    ? bcRes.data?.error    : null) ??
+        (!storeRes.ok ? storeRes.data?.error : null) ??
+        "Erro ao salvar."
+      );
     }
     setSaving(false);
   }
@@ -686,38 +797,99 @@ export default function MarcaPage() {
       </PageCard>
 
       {/* ── 9. Identidade Visual ─────────────────────────────────── */}
-      <PageCard>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">🎨 Identidade Visual</h2>
-            <p className="mt-0.5 text-sm text-gray-500">
-              Cores e logo aplicadas ao cardápio digital e WhatsApp.
-            </p>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <PageCard>
+          <SectionHeading
+            title="🎨 Identidade Visual"
+            subtitle="Cores e logo aplicadas ao cardápio digital e comunicações com o cliente."
+          />
+          <div className="space-y-5">
+            <ColorField label="Cor principal"  value={primaryColor}   onChange={setPrimaryColor}   />
+            <ColorField label="Cor secundária" value={secondaryColor} onChange={setSecondaryColor} />
+            <Field label="Logo (URL)">
+              <input
+                type="url"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                placeholder="https://…"
+                maxLength={500}
+                className={INPUT}
+              />
+            </Field>
           </div>
-          <Link
-            href="/settings/experience"
-            className="shrink-0 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100"
-          >
-            Editar visual →
-          </Link>
+        </PageCard>
+
+        <div className="flex items-center justify-center rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <LivePreview
+            primaryColor={primaryColor}
+            secondaryColor={secondaryColor}
+            logoUrl={logoUrl}
+            restaurantName={restaurantName}
+          />
         </div>
-        <div className="mt-4 flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <div
-            className="h-7 w-7 rounded-full border border-gray-200 shadow-sm"
-            style={{ backgroundColor: passthrough.brandPrimaryColor ?? "#6366f1" }}
-          />
-          <div
-            className="h-7 w-7 rounded-full border border-gray-200 shadow-sm"
-            style={{ backgroundColor: passthrough.brandSecondaryColor ?? "#8b5cf6" }}
-          />
-          <p className="text-sm text-gray-500">
-            {passthrough.brandPrimaryColor ?? "#6366f1"} &middot;{" "}
-            {passthrough.brandSecondaryColor ?? "#8b5cf6"}
-          </p>
+      </div>
+
+      {/* ── 10. Avaliações ────────────────────────────────────────── */}
+      <PageCard>
+        <SectionHeading
+          title="⭐ Avaliações"
+          subtitle="Links para avaliações que a IA pode compartilhar com os clientes."
+        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Google Review" hint="Link direto para avaliações no Google">
+            <input
+              type="url"
+              value={googleReviewUrl}
+              onChange={(e) => setGoogleReviewUrl(e.target.value)}
+              placeholder="https://g.page/r/…"
+              maxLength={500}
+              className={INPUT}
+            />
+          </Field>
+          <Field label="iFood" hint="Link do perfil no iFood">
+            <input
+              type="url"
+              value={ifoodReviewUrl}
+              onChange={(e) => setIfoodReviewUrl(e.target.value)}
+              placeholder="https://www.ifood.com.br/…"
+              maxLength={500}
+              className={INPUT}
+            />
+          </Field>
         </div>
       </PageCard>
 
-      <SaveButton saving={saving} label="Salvar persona da marca" />
+      {/* ── 11. Redes Sociais ─────────────────────────────────────── */}
+      <PageCard>
+        <SectionHeading
+          title="🔗 Redes Sociais"
+          subtitle="Exibidas no cabeçalho do cardápio digital quando preenchidas."
+        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Instagram">
+            <input
+              type="url"
+              value={instagramUrl}
+              onChange={(e) => setInstagramUrl(e.target.value)}
+              placeholder="https://instagram.com/seurestaurante"
+              maxLength={200}
+              className={INPUT}
+            />
+          </Field>
+          <Field label="TikTok">
+            <input
+              type="url"
+              value={tiktokUrl}
+              onChange={(e) => setTiktokUrl(e.target.value)}
+              placeholder="https://tiktok.com/@seurestaurante"
+              maxLength={200}
+              className={INPUT}
+            />
+          </Field>
+        </div>
+      </PageCard>
+
+      <SaveButton saving={saving} label="Salvar marca" />
     </form>
   );
 }

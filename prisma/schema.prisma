@@ -768,6 +768,10 @@ model RestaurantBrandConfig {
   instagramUrl         String?
   tiktokUrl            String?
 
+  // ── Review links ────────────────────────────────────────────
+  googleReviewUrl      String?
+  ifoodReviewUrl       String?
+
   // ── Brand Persona (marketing strategy) ───────────────────────
   // Stored as JSON to allow flexible evolution without migrations.
   brandPersona         Json?

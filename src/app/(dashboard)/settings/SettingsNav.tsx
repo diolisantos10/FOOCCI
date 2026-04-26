@@ -19,8 +19,7 @@ const GROUPS: Group[] = [
   {
     title: "Identidade",
     items: [
-      { href: "/settings/marca",      label: "Marca",      icon: "🎨" },
-      { href: "/settings/experience", label: "Visual",     icon: "🖌️" },
+      { href: "/settings/marca", label: "Marca", icon: "🎨" },
     ],
   },
   {

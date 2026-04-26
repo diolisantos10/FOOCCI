@@ -28,6 +28,8 @@ export class BrandConfigService {
       brandSecondaryColor: input.brandSecondaryColor ?? null,
       instagramUrl: input.instagramUrl ?? null,
       tiktokUrl: input.tiktokUrl ?? null,
+      googleReviewUrl: input.googleReviewUrl ?? null,
+      ifoodReviewUrl:  input.ifoodReviewUrl  ?? null,
       brandPersona: input.brandPersona ?? undefined,
     };
 
@@ -82,6 +84,8 @@ export class BrandConfigService {
       brandSecondaryColor: null,
       instagramUrl: null,
       tiktokUrl: null,
+      googleReviewUrl: null,
+      ifoodReviewUrl: null,
       brandPersona: null,
       createdAt: new Date(),
       updatedAt: new Date(),
