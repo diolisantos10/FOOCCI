@@ -876,9 +876,21 @@ export function PedidoClient({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
 
+  // ── Cross-flow identity: read what /qr/[slug] already stored ──────
+  const [storedCustomer] = useState<{ phone: string; name: string; customerId?: string } | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = sessionStorage.getItem(`foocci-customer-${slug}`);
+      return raw ? (JSON.parse(raw) as { phone: string; name: string; customerId?: string }) : null;
+    } catch { return null; }
+  });
+
+  // Effective phone: from server (WhatsApp link) or from QR identification
+  const effectiveCustomerPhone = knownCustomerPhone ?? storedCustomer?.phone ?? null;
+
   // customerName declared early so enterBrowsing / handlePhoneIdentified can reference its setter
   const [customerName, setCustomerName] = useState(
-    knownCustomerName?.trim().split(/\s+/)[0] ?? "",
+    knownCustomerName?.trim().split(/\s+/)[0] ?? storedCustomer?.name ?? "",
   );
 
   // ── Entry / identification ─────────────────────────────────────────
@@ -886,9 +898,12 @@ export function PedidoClient({
     if (typeof window === "undefined") return "browsing";
     if (sessionStorage.getItem(`foocci-entry-${slug}`)) return "browsing";
     if (knownCustomerPhone) return "choosing";
+    if (storedCustomer) return "choosing"; // already identified via QR modal
     return "identifying";
   });
-  const [identifiedName, setIdentifiedName] = useState<string | null>(knownCustomerName ?? null);
+  const [identifiedName, setIdentifiedName] = useState<string | null>(
+    knownCustomerName ?? storedCustomer?.name ?? null,
+  );
   const [showSuggestion, setShowSuggestion] = useState(false);
 
   function enterBrowsing(mode: "menu" | "suggest", name?: string | null) {
@@ -1021,6 +1036,7 @@ export function PedidoClient({
             address:        addrStr || null,
             paymentMethod:  pmStr   || null,
             customerName:   customerName || null,
+            customerPhone:  effectiveCustomerPhone,
           }),
         });
 
@@ -1041,7 +1057,7 @@ export function PedidoClient({
         setUi("idle");
       }
     },
-    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub],
+    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, effectiveCustomerPhone],
   );
 
   // ── Deterministic message helpers ─────────────────────────────────
@@ -1226,16 +1242,22 @@ export function PedidoClient({
     (type: "delivery" | "pickup") => {
       setDeliveryMethod(type);
       if (type === "pickup") {
-        setStage("ASK_NAME");
         pushUserMessage("🏪 Retirada no local");
-        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
+        if (customerName.trim()) {
+          // Name already known — skip ASK_NAME
+          setStage("PAYMENT");
+          pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT"]!);
+        } else {
+          setStage("ASK_NAME");
+          pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
+        }
       } else {
         setStage("ADDRESS_INPUT");
         pushUserMessage("🛵 Entrega");
         pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_INPUT"]!);
       }
     },
-    [pushUserMessage, pushAssistantMessage],
+    [pushUserMessage, pushAssistantMessage, customerName],
   );
 
   const handleAddressInput = useCallback(
@@ -1269,10 +1291,16 @@ export function PedidoClient({
   );
 
   const handleAddressConfirm = useCallback(() => {
-    setStage("ASK_NAME");
     pushUserMessage("Endereço confirmado ✓");
-    pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
-  }, [pushUserMessage, pushAssistantMessage]);
+    if (customerName.trim()) {
+      // Name already known — skip ASK_NAME
+      setStage("PAYMENT");
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT"]!);
+    } else {
+      setStage("ASK_NAME");
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
+    }
+  }, [pushUserMessage, pushAssistantMessage, customerName]);
 
   const handleNameInput = useCallback(
     (text: string) => {

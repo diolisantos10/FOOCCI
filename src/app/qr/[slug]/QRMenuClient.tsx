@@ -72,8 +72,15 @@ function WelcomeModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, name: name.trim() }),
       });
-      const data: { found: boolean; name?: string } = await res.json();
-      const firstName = data.name ?? name.trim().split(/\s+/)[0];
+      const data: { found: boolean; name?: string; customerId?: string } = await res.json();
+      const firstName = data.name ?? name.trim().split(/\s+/)[0] ?? "";
+      // Store for /pedido/[slug] so it can pre-identify without asking again
+      try {
+        sessionStorage.setItem(
+          `foocci-customer-${slug}`,
+          JSON.stringify({ phone: phone.trim(), name: firstName, customerId: data.customerId }),
+        );
+      } catch { /* incognito storage quota */ }
       onClose(firstName ? `Olá, ${firstName}! 👋` : "Bem-vindo! 👋");
     } catch {
       onClose(name.trim() ? `Olá, ${name.trim().split(/\s+/)[0]}! 👋` : "Bem-vindo! 👋");

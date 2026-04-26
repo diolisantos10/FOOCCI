@@ -29,6 +29,7 @@ interface PedidoChatRequest {
   address?:        string | null;
   paymentMethod?:  string | null;
   customerName?:   string | null;
+  customerPhone?:  string | null;
   categoryIntro?:  { name: string; description: string } | null;
 }
 
@@ -112,6 +113,7 @@ export async function POST(
       address        = null,
       paymentMethod  = null,
       customerName   = null,
+      customerPhone  = null,
       categoryIntro  = null,
     } = body;
 
@@ -119,8 +121,8 @@ export async function POST(
     if (!Array.isArray(history)) return badRequest("history must be an array.");
 
     const { reply } = await runAITurn({
-      restaurantId: restaurant.id,
-      message:      message.trim(),
+      restaurantId:  restaurant.id,
+      message:       message.trim(),
       history,
       cart,
       stage,
@@ -129,6 +131,7 @@ export async function POST(
       address,
       paymentMethod,
       customerName,
+      customerPhone:  customerPhone ?? undefined,
       categoryIntro,
     });
 

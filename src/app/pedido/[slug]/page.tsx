@@ -8,27 +8,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PedidoClient } from "./PedidoClient";
-
-/** Replicates the same normalization used in /api/qr/[slug]/identify */
-function phoneCandidates(raw: string): string[] {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length < 8) return [];
-  const set = new Set<string>();
-  if (digits.length >= 12 && digits.startsWith("55")) {
-    set.add(`+${digits}`);
-    set.add(digits);
-  }
-  if (digits.length === 11) {
-    set.add(`+55${digits}`);
-    set.add(digits);
-  }
-  if (digits.length === 10) {
-    set.add(`+55${digits}`);
-    set.add(`+55${digits.slice(0, 2)}9${digits.slice(2)}`);
-  }
-  set.add(digits);
-  return [...set];
-}
+import { phoneCandidates } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
 
