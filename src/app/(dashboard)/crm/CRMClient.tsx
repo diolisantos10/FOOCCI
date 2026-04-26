@@ -364,7 +364,7 @@ function ReactivationHelper({
                 ))}
                 {customers.length > 30 && (
                   <p className="text-center text-[10px] text-gray-400 py-1.5">
-                    +{customers.length - 30} clientes. Use "Exportar CSV" para ver todos.
+                    +{customers.length - 30} clientes. Use &quot;Exportar CSV&quot; para ver todos.
                   </p>
                 )}
               </div>
