@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ interface Props {
   orders: OrderHistoryItem[];
   interactions: InteractionItem[];
   tags: CustomerTag[];
+  addresses: AddressItem[];
 }
 
 export interface InteractionItem {
@@ -74,6 +76,19 @@ export interface CustomerTag {
   id: string;
   label: string;
   color: "amber" | "green" | "red" | "blue" | "purple" | "teal" | "orange" | "rose";
+}
+
+export interface AddressItem {
+  id:           string;
+  label:        string | null;
+  street:       string;
+  number:       string;
+  complement:   string | null;
+  neighborhood: string;
+  city:         string;
+  state:        string;
+  zipCode:      string;
+  isDefault:    boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -426,12 +441,16 @@ type HeaderProps = Pick<
   | "name" | "phone" | "email" | "isActive" | "createdAt"
   | "totalOrders" | "totalSpend" | "lastOrderAt"
   | "classification" | "purchaseFrequencyDays" | "favoriteProduct"
->;
+> & {
+  onEdit: () => void;
+  onDelete: () => void;
+};
 
 function HeaderSection({
   name, phone, email, isActive, createdAt,
   totalOrders, totalSpend, lastOrderAt,
   classification, purchaseFrequencyDays, favoriteProduct,
+  onEdit, onDelete,
 }: HeaderProps) {
   const ts = TIER_STYLES[classification.tier];
 
@@ -468,9 +487,9 @@ function HeaderSection({
 
   return (
     <div className="border-b border-[#E5E5E5] bg-white px-6 py-5">
-      {/* Breadcrumb */}
+      {/* Breadcrumb + actions */}
       <div className="mb-4 flex items-center gap-2 text-sm text-gray-400">
-        <Link href="/customers" className="hover:text-gray-600 transition-colors">
+        <Link href="/customers" className="transition-colors hover:text-gray-600">
           Clientes
         </Link>
         <span>/</span>
@@ -480,6 +499,20 @@ function HeaderSection({
             Inativo
           </span>
         )}
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+          >
+            ✏️ Editar
+          </button>
+          <button
+            onClick={onDelete}
+            className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
+          >
+            🗑️ Excluir cliente
+          </button>
+        </div>
       </div>
 
       {/* Identity row */}
@@ -587,19 +620,67 @@ function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   );
 }
 
+// ─── AddressList ──────────────────────────────────────────────────────────────
+
+function AddressList({ addresses }: { addresses: AddressItem[] }) {
+  if (addresses.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6">
+        <span className="text-xl">📍</span>
+        <p className="mt-2 text-xs font-medium text-gray-400">Nenhum endereço cadastrado</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {addresses.map((a) => (
+        <div
+          key={a.id}
+          className={`rounded-2xl border bg-white px-4 py-3 shadow-sm ${
+            a.isDefault ? "border-orange-200 ring-1 ring-orange-100" : "border-gray-100"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-semibold text-gray-800">
+              {a.street}, {a.number}
+              {a.complement && ` — ${a.complement}`}
+            </p>
+            {a.isDefault && (
+              <span className="shrink-0 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-600">
+                padrão
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {a.neighborhood} · {a.city} / {a.state}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-400">{a.zipCode}</p>
+          {a.label && (
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-300">
+              {a.label}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 
 function OverviewTab({
   behavior,
   insights,
+  addresses,
 }: {
   behavior: BehaviorData;
   insights: InsightItem[];
+  addresses: AddressItem[];
 }) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Left column — 2/3 */}
-      <div className="lg:col-span-2 space-y-6">
+      <div className="space-y-6 lg:col-span-2">
         <Section title="IA — Insights" icon="✨">
           <AIInsights insights={insights} />
         </Section>
@@ -616,7 +697,14 @@ function OverviewTab({
         </Section>
 
         <Section title="Endereços" icon="📍">
-          <Placeholder label="Endereços cadastrados" height="h-28" />
+          <AddressList addresses={addresses} />
+        </Section>
+
+        <Section title="Perfil de comportamento" icon="🧠">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6">
+            <span className="text-xl">🧠</span>
+            <p className="mt-2 text-xs font-medium text-gray-400">Dados insuficientes ainda</p>
+          </div>
         </Section>
       </div>
     </div>
@@ -907,6 +995,7 @@ function ActionsTab({ tags }: { tags: CustomerTag[] }) {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function CustomerProfileClient({
+  id,
   name,
   phone,
   email,
@@ -923,8 +1012,67 @@ export default function CustomerProfileClient({
   orders,
   interactions,
   tags,
+  addresses,
 }: Props) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+
+  // ── Edit modal ──────────────────────────────────────────────────────────────
+  const [editOpen,  setEditOpen]  = useState(false);
+  const [editName,  setEditName]  = useState(name);
+  const [editPhone, setEditPhone] = useState(phone);
+  const [editEmail, setEditEmail] = useState(email ?? "");
+  const [editErr,   setEditErr]   = useState("");
+  const [editBusy,  setEditBusy]  = useState(false);
+
+  function openEdit() {
+    setEditName(name);
+    setEditPhone(phone);
+    setEditEmail(email ?? "");
+    setEditErr("");
+    setEditOpen(true);
+  }
+
+  async function submitEdit() {
+    setEditBusy(true);
+    setEditErr("");
+    try {
+      const res = await fetch(`/api/customers/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:  editName.trim(),
+          phone: editPhone.trim(),
+          email: editEmail.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setEditErr((body as { message?: string }).message ?? "Erro ao salvar");
+        return;
+      }
+      setEditOpen(false);
+      router.refresh();
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  // ── Delete modal ────────────────────────────────────────────────────────────
+  const [delOpen, setDelOpen] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
+
+  async function confirmDelete() {
+    setDelBusy(true);
+    try {
+      const res = await fetch(`/api/customers/${id}`, { method: "DELETE" });
+      if (res.ok || res.status === 204) {
+        router.push("/customers");
+      }
+    } finally {
+      setDelBusy(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -941,18 +1089,107 @@ export default function CustomerProfileClient({
         classification={classification}
         purchaseFrequencyDays={purchaseFrequencyDays}
         favoriteProduct={favoriteProduct}
+        onEdit={openEdit}
+        onDelete={() => setDelOpen(true)}
       />
 
       {/* Tab navigation */}
       <TabNav active={activeTab} onChange={setActiveTab} />
 
       {/* Tab content */}
-      <div className="p-6 max-w-7xl mx-auto">
-        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} />}
+      <div className="mx-auto max-w-7xl p-6">
+        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} addresses={addresses} />}
         {activeTab === "history"      && <HistoryTab orders={orders} />}
         {activeTab === "interactions" && <InteractionsTab interactions={interactions} />}
         {activeTab === "actions"      && <ActionsTab tags={tags} />}
       </div>
+
+      {/* ── Edit modal ──────────────────────────────────────────────────────── */}
+      {editOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-bold text-gray-900">Editar cliente</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-600">Nome</label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-600">Telefone</label>
+                <input
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-600">
+                  Email <span className="font-normal text-gray-400">(opcional)</span>
+                </label>
+                <input
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  type="email"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
+            </div>
+            {editErr && <p className="mt-2 text-xs text-red-500">{editErr}</p>}
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setEditOpen(false)}
+                disabled={editBusy}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={submitEdit}
+                disabled={editBusy || !editName.trim() || !editPhone.trim()}
+                className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50"
+              >
+                {editBusy ? "Salvando…" : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete confirm modal ─────────────────────────────────────────────── */}
+      {delOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-2xl">
+              🗑️
+            </div>
+            <h2 className="mb-1 text-lg font-bold text-gray-900">Excluir cliente</h2>
+            <p className="mb-5 text-sm text-gray-500">
+              Tem certeza que deseja excluir{" "}
+              <strong className="text-gray-900">{name}</strong>? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDelOpen(false)}
+                disabled={delBusy}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={delBusy}
+                className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-50"
+              >
+                {delBusy ? "Excluindo…" : "Excluir"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
