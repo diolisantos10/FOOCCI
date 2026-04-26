@@ -5,7 +5,7 @@ import { CRMService } from "@/services/crm/CRMService";
 import { z } from "zod";
 
 const querySchema = z.object({
-  filter: z.enum(["all", "inactive", "vip", "recent", "firstTime"]).default("all"),
+  filter: z.enum(["all", "inactive", "neverOrdered", "vip", "recent", "firstTime"]).default("all"),
 });
 
 export async function GET(req: NextRequest) {

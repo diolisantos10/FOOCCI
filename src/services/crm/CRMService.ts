@@ -118,7 +118,7 @@ export class CRMService {
 
   static async getCustomers(
     restaurantId: string,
-    filter?: "inactive" | "vip" | "recent" | "all" | "firstTime"
+    filter?: "inactive" | "neverOrdered" | "vip" | "recent" | "all" | "firstTime"
   ): Promise<ServiceResult<CRMCustomer[]>> {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
@@ -130,10 +130,13 @@ export class CRMService {
       where = {
         ...where,
         isActive: true,
-        OR: [
-          { lastOrderAt: { lt: thirtyDaysAgo } },
-          { lastOrderAt: null },
-        ],
+        lastOrderAt: { lt: thirtyDaysAgo },
+      };
+    } else if (filter === "neverOrdered") {
+      where = {
+        ...where,
+        isActive: true,
+        totalOrders: 0,
       };
     } else if (filter === "vip") {
       where = {
@@ -161,7 +164,6 @@ export class CRMService {
     const rows = await prisma.customer.findMany({
       where,
       orderBy: [{ totalSpend: "desc" }, { lastOrderAt: "desc" }],
-      take: 100,
       select: {
         id: true, name: true, phone: true,
         totalSpend: true, totalOrders: true,

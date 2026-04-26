@@ -27,7 +27,6 @@ export default async function CRMPage() {
       prisma.customer.findMany({
         where: { restaurantId },
         orderBy: [{ totalSpend: "desc" }, { lastOrderAt: "desc" }],
-        take: 100,
         select: {
           id: true, name: true, phone: true,
           totalSpend: true, totalOrders: true,

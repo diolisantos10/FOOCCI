@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 export type SortCol = "totalSpend" | "totalOrders" | "lastOrderAt";
 export type SortDir = "asc" | "desc";
-export type FilterTab = "all" | "vip" | "inactive" | "firstTime" | "recent";
+export type FilterTab = "all" | "vip" | "inactive" | "neverOrdered" | "firstTime" | "recent";
 
 export type CustomerRow = {
   id: string;
@@ -30,11 +30,12 @@ interface Props {
 }
 
 const FILTER_TABS: { id: FilterTab; label: string }[] = [
-  { id: "all",       label: "Todos"         },
-  { id: "vip",       label: "VIPs"          },
-  { id: "inactive",  label: "Inativos 30d"  },
-  { id: "firstTime", label: "1º pedido"     },
-  { id: "recent",    label: "Recentes"      },
+  { id: "all",          label: "Todos"         },
+  { id: "vip",          label: "VIPs"          },
+  { id: "inactive",     label: "Inativos 30d+" },
+  { id: "neverOrdered", label: "Nunca pediu"   },
+  { id: "firstTime",    label: "1º pedido"     },
+  { id: "recent",       label: "Recentes"      },
 ];
 
 const SORT_COLS: { id: SortCol; label: string }[] = [

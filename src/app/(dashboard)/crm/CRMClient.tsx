@@ -23,11 +23,12 @@ const PRIORITY_CONFIG: Record<string, { label: string; dot: string }> = {
 };
 
 const CUSTOMER_FILTER_LABELS: Record<string, string> = {
-  all:       "Top Gasto",
-  inactive:  "Inativos (30d)",
-  vip:       "Clientes VIP",
-  firstTime: "1º pedido",
-  recent:    "Recentes",
+  all:          "Top Gasto",
+  inactive:     "Inativos 30d+",
+  neverOrdered: "Nunca pediu",
+  vip:          "Clientes VIP",
+  firstTime:    "1º pedido",
+  recent:       "Recentes",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -252,7 +253,7 @@ function ReactivationHelper({
 }) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState(
-    "Olá {nome}, sentimos sua falta! Temos uma oferta especial pra você hoje 👇"
+    "Fala {nome}, tudo bem? 👋\nTemos uma condição especial hoje pra você voltar — quer ver?"
   );
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -378,7 +379,7 @@ function ReactivationHelper({
 
 // ── Customers Tab ─────────────────────────────────────────────────────────────
 
-type CRMFilter = "all" | "inactive" | "vip" | "firstTime" | "recent";
+type CRMFilter = "all" | "inactive" | "neverOrdered" | "vip" | "firstTime" | "recent";
 
 function CustomersTab({
   initialCustomers,
