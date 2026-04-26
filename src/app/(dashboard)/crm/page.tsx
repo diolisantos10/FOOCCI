@@ -46,7 +46,6 @@ export default async function CRMPage() {
 
     const now = new Date();
     customers = rows.map((c) => {
-
       const spend = Number(c.totalSpend);
       const days = c.lastOrderAt
         ? Math.floor((now.getTime() - c.lastOrderAt.getTime()) / 86_400_000)

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import CustomersClient, { type SortCol, type SortDir, type FilterTab } from "./CustomersClient";
+import { NewCustomerButton } from "./NewCustomerButton";
 
 export const metadata = { title: "Clientes" };
 
@@ -98,12 +99,10 @@ export default async function CustomersPage({
     <>
       <TopBar title="Clientes" />
       <div className="p-4 sm:p-6">
-        {/* Header row: count + search */}
+        {/* Header row: count + search + new customer */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <p className="text-sm text-gray-500">
-            {total} cliente{total !== 1 ? "s" : ""}
-          </p>
-          <form method="GET" className="ml-auto">
+          <p className="text-sm text-gray-500">{total} cliente{total !== 1 ? "s" : ""}</p>
+          <form method="GET" className="ml-auto flex items-center gap-2">
             {/* Preserve sort/filter when searching */}
             {sortBy  && <input type="hidden" name="sortBy"  value={sortBy}  />}
             {sortDir === "asc" && <input type="hidden" name="sortDir" value="asc" />}
@@ -115,6 +114,7 @@ export default async function CustomersPage({
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 sm:w-auto"
             />
           </form>
+          <NewCustomerButton />
         </div>
 
         <CustomersClient

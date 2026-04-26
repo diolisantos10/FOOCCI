@@ -173,6 +173,11 @@ export interface AIConfigContext {
   upsellIntensity: string;
   salesFocus:      string;
   salesPriority:   string;
+  // Behavior flags (from brandPersona)
+  comboFocus:            boolean;
+  avgTicketFocus:        boolean;
+  useClientName:         boolean;
+  canInsistAfterRefusal: boolean;
   // Model
   aiModel:            string;
   maxHistoryMessages: number;

@@ -101,6 +101,8 @@ export interface AITurnOutput {
   forced?: true;
   /** The flow rule that triggered the block (e.g. "MISSING_PAYMENT"). */
   reason?: string;
+  /** Name of the item the AI is actively suggesting, if any. */
+  suggestedItemName?: string;
 }
 
 // ── Coerce helper ─────────────────────────────────────────────────────────────
@@ -222,6 +224,29 @@ function buildInfoDepthBlock(depth: "LOW" | "HIGH", stage: OrderStage): string {
   ].join("\n");
 }
 
+// ── Behavior config block ─────────────────────────────────────────────────────
+//
+// Injects operator-configured behavior flags into the system prompt.
+// Only added to the preamble; never to the protocol layer so it can be overridden.
+
+function buildBehaviorConfigBlock(cfg: AIContext["aiConfig"]): string {
+  const lines: string[] = [];
+  if (!cfg.useClientName) {
+    lines.push("NÃO use o nome do cliente nas mensagens — mantenha genérico.");
+  }
+  if (!cfg.canInsistAfterRefusal) {
+    lines.push("Se o cliente recusar um item, NÃO sugira novamente. Respeite a decisão e siga em frente.");
+  }
+  if (cfg.comboFocus) {
+    lines.push("Prioridade: ofereça combos sempre que possível (item principal + complemento com valor percebido).");
+  }
+  if (cfg.avgTicketFocus) {
+    lines.push("Prioridade: maximize o ticket médio — sugira complementos, upgrades ou adicionais relevantes.");
+  }
+  if (lines.length === 0) return "";
+  return ["━━━ CONFIGURAÇÃO DE COMPORTAMENTO ━━━", ...lines].join("\n");
+}
+
 // ── Category intro hint ───────────────────────────────────────────────────────
 //
 // Injected into the preamble when the customer first navigates to a described
@@ -275,9 +300,7 @@ function buildCustomerBlock(customer: CustomerContext | null): string {
     lines.push(`Segmento: ${customer.segments.join(", ")}`);
   }
 
-  lines.push(
-    "Use o primeiro nome quando soar natural. Não mencione valores gastos ao cliente."
-  );
+  lines.push("Não mencione valores gastos ao cliente.");
 
   return lines.join("\n");
 }
@@ -501,6 +524,7 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     const infoDepth = detectInfoDepth(message);
     const preamble = [
       buildInfoDepthBlock(infoDepth, stage),
+      buildBehaviorConfigBlock(ctx.aiConfig),
       categoryIntro ? buildCategoryIntroHint(categoryIntro) : "",
       buildCustomerBlock(ctx.customer),
       buildPromotionsBlock(ctx.promotions),
@@ -549,5 +573,5 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     completion.choices[0]?.message?.content?.trim() ||
     "Desculpe, não consegui processar sua mensagem. 😅";
 
-  return { reply };
+  return { reply, suggestedItemName: suggestion?.itemName ?? undefined };
 }

@@ -8,7 +8,6 @@ type Variant = {
   id: string;
   name: string;
   price: number;
-  portion: string | null;
   isAvailable: boolean;
 };
 
@@ -17,23 +16,6 @@ type Extra = {
   name: string;
   quantity: number;
   price: number;
-  portion: string | null;
-};
-
-type OptionItem = {
-  id: string;
-  name: string;
-  price: number;
-  portion: string | null;
-};
-
-type OptionGroup = {
-  id: string;
-  name: string;
-  required: boolean;
-  minSelect: number;
-  maxSelect: number;
-  options: OptionItem[];
 };
 
 type Item = {
@@ -45,7 +27,6 @@ type Item = {
   isAvailable: boolean;
   variants: Variant[];
   extras: Extra[];
-  optionGroups: OptionGroup[];
 };
 
 type Category = {
@@ -277,7 +258,7 @@ function ProductModal({
             {item.variants.length > 0 && (
               <div className="space-y-2 pt-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                  Tamanhos / Variantes
+                  Variantes
                 </p>
                 <div className="space-y-1.5">
                   {item.variants.map((v) => (
@@ -285,53 +266,13 @@ function ProductModal({
                       key={v.id}
                       className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2.5 border border-gray-100"
                     >
-                      <div>
-                        <span className="text-sm text-gray-800">{v.name}</span>
-                        {v.portion && (
-                          <span className="ml-1.5 text-xs text-gray-400">{v.portion}</span>
-                        )}
-                      </div>
+                      <span className="text-sm text-gray-800">{v.name}</span>
                       <span className="text-sm font-bold text-gray-900">
                         R$&nbsp;{formatPrice(v.price)}
                       </span>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {item.optionGroups.length > 0 && (
-              <div className="space-y-3 pt-1">
-                {item.optionGroups.map((group) => (
-                  <div key={group.id} className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                        {group.name}
-                      </p>
-                      {group.required && (
-                        <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-500">
-                          Obrigatório
-                        </span>
-                      )}
-                    </div>
-                    {group.options.map((opt) => (
-                      <div
-                        key={opt.id}
-                        className="flex items-center justify-between rounded-xl bg-blue-50 px-3 py-2 border border-blue-100"
-                      >
-                        <div>
-                          <span className="text-sm text-gray-800">{opt.name}</span>
-                          {opt.portion && (
-                            <span className="ml-1.5 text-xs text-gray-400">{opt.portion}</span>
-                          )}
-                        </div>
-                        <span className="text-sm font-semibold text-gray-700">
-                          {opt.price > 0 ? `+R$ ${formatPrice(opt.price)}` : "Incluso"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
               </div>
             )}
 
@@ -346,15 +287,12 @@ function ProductModal({
                       key={e.id}
                       className="flex items-center justify-between rounded-xl bg-orange-50 px-3 py-2.5 border border-orange-100"
                     >
-                      <div>
-                        <span className="text-sm text-gray-800">{e.name}</span>
-                        {e.portion && (
-                          <span className="ml-1.5 text-xs text-gray-400">{e.portion}</span>
-                        )}
+                      <span className="text-sm text-gray-800">
+                        {e.name}
                         {e.quantity > 1 && (
                           <span className="ml-1 text-xs text-gray-400">×{e.quantity}</span>
                         )}
-                      </div>
+                      </span>
                       <span className="text-sm font-bold text-gray-900">
                         {e.price === 0 ? "Grátis" : `+ R$ ${formatPrice(e.price)}`}
                       </span>

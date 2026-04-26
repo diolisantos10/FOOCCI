@@ -75,6 +75,8 @@ export class MenuItemService {
         isAvailable: input.isAvailable ?? true,
         showInDelivery: input.showInDelivery ?? true,
         showInDineIn: input.showInDineIn ?? true,
+        servingSize: input.servingSize ?? null,
+        portionInfo: input.portionInfo ?? null,
       },
     });
 
@@ -95,9 +97,21 @@ export class MenuItemService {
       return serviceFail("Item not found", 404);
     }
 
+    // If categoryId is changing, verify the new category belongs to this restaurant
+    if (input.categoryId && input.categoryId !== item.categoryId) {
+      const newCat = await prisma.menuCategory.findUnique({
+        where: { id: input.categoryId },
+        select: { restaurantId: true },
+      });
+      if (!newCat || newCat.restaurantId !== restaurantId) {
+        return serviceFail("Category not found", 404);
+      }
+    }
+
     const updated = await prisma.menuItem.update({
       where: { id: itemId },
       data: {
+        ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
         ...(input.name !== undefined && { name: input.name }),
         ...(input.description !== undefined && { description: input.description }),
         ...(input.ingredients !== undefined && { ingredients: input.ingredients || null }),
@@ -110,6 +124,8 @@ export class MenuItemService {
         ...(input.showInDineIn !== undefined && { showInDineIn: input.showInDineIn }),
         ...(input.hasVariants !== undefined && { hasVariants: input.hasVariants }),
         ...(input.code !== undefined && { code: input.code || null }),
+        ...(input.servingSize !== undefined && { servingSize: input.servingSize ?? null }),
+        ...(input.portionInfo !== undefined && { portionInfo: input.portionInfo ?? null }),
       },
     });
 

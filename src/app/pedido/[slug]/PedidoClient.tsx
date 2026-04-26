@@ -22,6 +22,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   ts: Date;
+  suggestedItemName?: string;
 }
 
 interface MenuItemVariant {
@@ -31,28 +32,28 @@ interface MenuItemVariant {
   portion: string | null;
 }
 
-interface MenuItemExtra {
+interface Extra {
   id: string;
   name: string;
   price: number;
-  portion: string | null;
   quantity: number;
+  portion: string | null;
 }
 
-interface MenuOptionItem {
+interface OptionItem {
   id: string;
   name: string;
   price: number;
   portion: string | null;
 }
 
-interface MenuOptionGroup {
+interface OptionGroup {
   id: string;
   name: string;
   required: boolean;
   minSelect: number;
   maxSelect: number;
-  options: MenuOptionItem[];
+  options: OptionItem[];
 }
 
 interface MenuItem {
@@ -63,8 +64,8 @@ interface MenuItem {
   imageUrl: string | null;
   hasVariants: boolean;
   variants: MenuItemVariant[];
-  extras: MenuItemExtra[];
-  optionGroups: MenuOptionGroup[];
+  extras: Extra[];
+  optionGroups: OptionGroup[];
 }
 
 interface MenuCategory {
@@ -75,30 +76,11 @@ interface MenuCategory {
   items: MenuItem[];
 }
 
-interface SelectedOption {
-  groupId: string;
-  groupName: string;
-  optionId: string;
-  optionName: string;
-  price: number;
-}
-
-interface SelectedExtra {
-  extraId: string;
-  name: string;
-  price: number;
-  qty: number;
-  portion: string | null;
-}
-
 interface CartItem {
   id: string;
   name: string;
   price: number;
   qty: number;
-  variantName?: string;
-  selectedOptions?: SelectedOption[];
-  selectedExtras?: SelectedExtra[];
 }
 
 type HistoryEntry = { role: "user" | "assistant"; content: string };
@@ -141,6 +123,8 @@ interface Props {
   categories: MenuCategory[];
   knownCustomerPhone?: string | null;
   knownCustomerName?: string | null;
+  knownCustomerId?: string | null;
+  knownDefaultAddress?: { street: string; number: string; neighborhood: string; complement: string } | null;
   /** Instagram profile URL — shown as icon in ordering header if provided. */
   instagramUrl?: string | null;
   /** TikTok profile URL — shown as icon in ordering header if provided. */
@@ -290,10 +274,18 @@ function computeResumeStage(
 
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
-function Bubble({ msg }: { msg: ChatMessage }) {
+function Bubble({
+  msg,
+  suggestedItem,
+  onOpenSuggested,
+}: {
+  msg: ChatMessage;
+  suggestedItem?: MenuItem | null;
+  onOpenSuggested?: () => void;
+}) {
   const isUser = msg.role === "user";
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
       <div
         className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
           isUser
@@ -306,6 +298,24 @@ function Bubble({ msg }: { msg: ChatMessage }) {
           {formatTime(msg.ts)}
         </p>
       </div>
+      {!isUser && suggestedItem?.imageUrl && onOpenSuggested && (
+        <button
+          onClick={onOpenSuggested}
+          className="mt-1.5 ml-1 flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition-transform"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={suggestedItem.imageUrl}
+            alt={suggestedItem.name}
+            className="h-12 w-12 rounded-lg object-cover shrink-0"
+          />
+          <div className="text-left min-w-0">
+            <p className="text-xs font-semibold text-gray-900 truncate max-w-[140px]">{suggestedItem.name}</p>
+            <p className="text-xs text-gray-500">R$ {suggestedItem.price.toFixed(2).replace(".", ",")}</p>
+            <p className="text-[10px] text-orange-500 font-medium">Ver produto →</p>
+          </div>
+        </button>
+      )}
     </div>
   );
 }
@@ -393,97 +403,29 @@ function ProductCard({
 }
 
 // ── Product modal ─────────────────────────────────────────────────────────────
-// Expanded card: image → name/description → variants → option groups → extras → CTA.
-// Simple items (no config): direct add button.
-// Complex items: guided selection with running price + validation.
+// Expanded card — image dominates, then name → description → price → CTA.
 
 function ProductModal({
   item,
   qty,
   onAdd,
-  onAddConfigured,
+  onAddVariant,
+  cart,
   onClose,
 }: {
   item: MenuItem;
   qty: number;
   onAdd: () => void;
-  onAddConfigured?: (variant: MenuItemVariant | null, options: SelectedOption[], extras: SelectedExtra[]) => void;
+  onAddVariant?: (variant: MenuItemVariant) => void;
+  cart?: CartItem[];
   onClose: () => void;
 }) {
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
 
-  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
-  const [optionSelections, setOptionSelections] = useState<Record<string, string[]>>({});
-  const [extraQtys, setExtraQtys] = useState<Record<string, number>>({});
-
-  const hasComplexConfig =
-    item.hasVariants || item.optionGroups.length > 0 || item.extras.length > 0;
-
-  const pricedVariants = item.variants.filter((v) => v.price > 0 && v.name.trim());
-  const selectedVariant = pricedVariants.find((v) => v.id === selectedVariantId) ?? null;
-  const basePrice = selectedVariant ? selectedVariant.price : item.price;
-
-  const optionsPrice = Object.values(optionSelections).flat().reduce((sum, optId) => {
-    for (const g of item.optionGroups) {
-      const opt = g.options.find((o) => o.id === optId);
-      if (opt) return sum + opt.price;
-    }
-    return sum;
-  }, 0);
-
-  const extrasPrice = Object.entries(extraQtys).reduce((sum, [extraId, q]) => {
-    if (q <= 0) return sum;
-    const extra = item.extras.find((e) => e.id === extraId);
-    return sum + (extra ? extra.price * q : 0);
-  }, 0);
-
-  const totalPrice = basePrice + optionsPrice + extrasPrice;
-
-  const allRequiredFulfilled = item.optionGroups
-    .filter((g) => g.required)
-    .every((g) => (optionSelections[g.id] ?? []).length >= Math.max(1, g.minSelect));
-  const variantRequired = item.hasVariants && pricedVariants.length > 0;
-  const canAdd = (!variantRequired || selectedVariantId !== null) && allRequiredFulfilled;
-
-  function handleOptionToggle(groupId: string, optionId: string, maxSelect: number) {
-    setOptionSelections((prev) => {
-      const current = prev[groupId] ?? [];
-      if (maxSelect === 1) return { ...prev, [groupId]: [optionId] };
-      if (current.includes(optionId)) return { ...prev, [groupId]: current.filter((id) => id !== optionId) };
-      if (current.length >= maxSelect) return prev;
-      return { ...prev, [groupId]: [...current, optionId] };
-    });
-  }
-
-  function handleExtraToggle(extraId: string) {
-    setExtraQtys((prev) => ({ ...prev, [extraId]: (prev[extraId] ?? 0) > 0 ? 0 : 1 }));
-  }
-
-  function handleAdd() {
-    if (!hasComplexConfig) { onAdd(); return; }
-    if (!canAdd) return;
-    if (!onAddConfigured) { onAdd(); return; }
-    const options: SelectedOption[] = Object.entries(optionSelections).flatMap(([groupId, optIds]) => {
-      const group = item.optionGroups.find((g) => g.id === groupId);
-      if (!group) return [];
-      return optIds.map((optId) => {
-        const opt = group.options.find((o) => o.id === optId)!;
-        return { groupId, groupName: group.name, optionId: optId, optionName: opt.name, price: opt.price };
-      });
-    });
-    const extras: SelectedExtra[] = Object.entries(extraQtys)
-      .filter(([, q]) => q > 0)
-      .map(([extraId, q]) => {
-        const extra = item.extras.find((e) => e.id === extraId)!;
-        return { extraId, name: extra.name, price: extra.price, qty: q, portion: extra.portion };
-      });
-    onAddConfigured(selectedVariant, options, extras);
-  }
-
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-white sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm"
+      className="fixed inset-0 z-50 bg-white flex flex-col sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm"
       onTouchStart={(e) => {
         touchStartX.current = e.touches[0]!.clientX;
         touchStartY.current = e.touches[0]!.clientY;
@@ -494,18 +436,25 @@ function ProductModal({
         if (Math.abs(dx) > 80 && Math.abs(dx) > dy * 1.5) onClose();
       }}
     >
-      <div className="flex h-full w-full flex-col bg-white sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl">
+      {/* Card — full-screen on mobile, centered on desktop */}
+      <div className="w-full h-full flex flex-col sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white">
 
-        {/* Image */}
+        {/* ── Image — square, flush to top of screen ── */}
         <div className="relative w-full aspect-square shrink-0">
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+            <img
+              src={item.imageUrl}
+              alt={item.name}
+              className="w-full h-full object-cover"
+            />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gray-100 text-7xl">
+            <div className="w-full h-full flex items-center justify-center bg-gray-100 text-7xl">
               {categoryEmoji(item.name)}
             </div>
           )}
+
+          {/* Back arrow — top left, same as iFood */}
           <button
             onClick={onClose}
             className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60 active:scale-90 transition-transform text-lg"
@@ -514,127 +463,40 @@ function ProductModal({
           </button>
         </div>
 
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 pt-5 pb-4">
+        {/* ── Content — name + description scroll, variants if any ── */}
+        <div className="flex-1 overflow-y-auto px-6 pt-5 pb-2">
           <h2 className="text-xl font-bold leading-snug text-gray-900">{item.name}</h2>
+
           {item.description && (
             <p className="mt-2 text-sm leading-relaxed text-gray-500">{item.description}</p>
           )}
 
-          {/* ── Variants ── */}
-          {item.hasVariants && pricedVariants.length > 0 && (
+          {item.hasVariants && item.variants.length > 0 && (
             <div className="mt-5">
-              <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                Tamanho / Variante
+              <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                Escolha uma opção
               </p>
-              <p className="mb-2.5 text-[10px] text-gray-400">Escolha uma opção</p>
               <div className="space-y-2">
-                {pricedVariants.map((v) => {
-                  const sel = selectedVariantId === v.id;
+                {item.variants.filter((v) => v.price > 0 && v.name.trim()).map((v) => {
+                  const vQty = cart ? variantCartQty(item.id, v.id, cart) : 0;
                   return (
                     <button
                       key={v.id}
-                      onClick={() => setSelectedVariantId(v.id)}
-                      className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all active:scale-[0.98] ${
-                        sel ? "border-transparent text-white shadow-sm" : "border-gray-100 bg-gray-50 hover:border-gray-200"
-                      }`}
-                      style={sel ? { backgroundColor: "var(--brand-primary)" } : undefined}
+                      onClick={() => onAddVariant?.(v)}
+                      className="flex w-full items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 hover:bg-green-50 hover:border-green-200 active:scale-[0.98] transition-all"
                     >
-                      <div className="flex items-center gap-2 text-sm font-semibold">
-                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${sel ? "border-white bg-white" : "border-gray-300"}`}>
-                          {sel && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "var(--brand-primary)" }} />}
+                      <span className="text-sm font-semibold text-gray-900">{v.name}</span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-sm font-bold text-gray-800">
+                          R$ {v.price.toFixed(2).replace(".", ",")}
                         </span>
-                        <span>{v.name}</span>
-                        {v.portion && <span className={`text-xs font-normal ${sel ? "text-white/80" : "text-gray-400"}`}>{v.portion}</span>}
-                      </div>
-                      <span className={`text-sm font-bold shrink-0 ${sel ? "text-white" : "text-gray-800"}`}>
-                        R$ {v.price.toFixed(2).replace(".", ",")}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── Option groups ── */}
-          {item.optionGroups.map((group) => (
-            <div key={group.id} className="mt-5">
-              <div className="mb-0.5 flex items-center gap-2">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">{group.name}</p>
-                {group.required && (
-                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-600">
-                    Obrigatório
-                  </span>
-                )}
-              </div>
-              <p className="mb-2.5 text-[10px] text-gray-400">
-                {group.maxSelect === 1 ? "Escolha 1 opção" : `Escolha até ${group.maxSelect} opções`}
-              </p>
-              <div className="space-y-2">
-                {group.options.map((opt) => {
-                  const sel = (optionSelections[group.id] ?? []).includes(opt.id);
-                  const isRadio = group.maxSelect === 1;
-                  return (
-                    <button
-                      key={opt.id}
-                      onClick={() => handleOptionToggle(group.id, opt.id, group.maxSelect)}
-                      className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all active:scale-[0.98] ${
-                        sel ? "border-transparent text-white shadow-sm" : "border-gray-100 bg-gray-50 hover:border-gray-200"
-                      }`}
-                      style={sel ? { backgroundColor: "var(--brand-primary)" } : undefined}
-                    >
-                      <div className="flex items-center gap-2 text-sm font-semibold">
-                        {isRadio ? (
-                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${sel ? "border-white bg-white" : "border-gray-300"}`}>
-                            {sel && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "var(--brand-primary)" }} />}
-                          </span>
-                        ) : (
-                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-md border-2 ${sel ? "border-white bg-white" : "border-gray-300"}`}>
-                            {sel && <span className="text-[10px] font-black" style={{ color: "var(--brand-primary)" }}>✓</span>}
+                        {vQty > 0 && (
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold text-white" style={{ backgroundColor: 'var(--brand-primary)' }}>
+                            {vQty}
                           </span>
                         )}
-                        <span>{opt.name}</span>
-                        {opt.portion && <span className={`text-xs font-normal ${sel ? "text-white/80" : "text-gray-400"}`}>{opt.portion}</span>}
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full text-white text-base font-bold shadow-sm" style={{ backgroundColor: 'var(--brand-primary)' }}>+</span>
                       </div>
-                      <span className={`text-sm font-bold shrink-0 ${sel ? "text-white" : "text-gray-800"}`}>
-                        {opt.price > 0 ? `+ R$ ${opt.price.toFixed(2).replace(".", ",")}` : "Incluso"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          {/* ── Extras / Adicionais ── */}
-          {item.extras.length > 0 && (
-            <div className="mt-5">
-              <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-gray-400">Adicionais</p>
-              <p className="mb-2.5 text-[10px] text-gray-400">Opcional — adicione ao seu pedido</p>
-              <div className="space-y-2">
-                {item.extras.map((extra) => {
-                  const q = extraQtys[extra.id] ?? 0;
-                  const sel = q > 0;
-                  return (
-                    <button
-                      key={extra.id}
-                      onClick={() => handleExtraToggle(extra.id)}
-                      className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all active:scale-[0.98] ${
-                        sel ? "border-transparent text-white shadow-sm" : "border-gray-100 bg-gray-50 hover:border-gray-200"
-                      }`}
-                      style={sel ? { backgroundColor: "var(--brand-primary)" } : undefined}
-                    >
-                      <div className="flex items-center gap-2 text-sm font-semibold">
-                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-md border-2 ${sel ? "border-white bg-white" : "border-gray-300"}`}>
-                          {sel && <span className="text-[10px] font-black" style={{ color: "var(--brand-primary)" }}>✓</span>}
-                        </span>
-                        <span>{extra.name}</span>
-                        {extra.portion && <span className={`text-xs font-normal ${sel ? "text-white/80" : "text-gray-400"}`}>{extra.portion}</span>}
-                      </div>
-                      <span className={`text-sm font-bold shrink-0 ${sel ? "text-white" : "text-gray-800"}`}>
-                        {extra.price > 0 ? `+ R$ ${extra.price.toFixed(2).replace(".", ",")}` : "Grátis"}
-                      </span>
                     </button>
                   );
                 })}
@@ -643,33 +505,29 @@ function ProductModal({
           )}
         </div>
 
-        {/* Footer — running price + CTA */}
-        <div className="shrink-0 border-t border-gray-100 bg-white px-5 pb-8 pt-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                {hasComplexConfig ? "Total" : "Preço"}
-              </p>
-              <p className="text-2xl font-bold text-gray-900">
-                R$ {totalPrice.toFixed(2).replace(".", ",")}
-              </p>
+        {/* ── Footer — price + CTA pinned to bottom ── */}
+        <div className="shrink-0 px-6 pb-8 pt-4 border-t border-gray-100 bg-white">
+          {!item.hasVariants ? (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Preço</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  R$ {item.price.toFixed(2).replace(".", ",")}
+                </p>
+              </div>
+              <button
+                onClick={onAdd}
+                className="flex-1 rounded-2xl py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90 active:scale-95 transition-all"
+                style={{ backgroundColor: 'var(--brand-primary)' }}
+              >
+                {qty > 0 ? `+ Adicionar (${qty} no carrinho)` : "Adicionar ao pedido"}
+              </button>
             </div>
-            <button
-              onClick={handleAdd}
-              disabled={hasComplexConfig && !canAdd}
-              className="flex-1 rounded-2xl py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90 active:scale-95 transition-all disabled:opacity-40"
-              style={{ backgroundColor: "var(--brand-primary)" }}
-            >
-              {qty > 0 ? `+ Adicionar (${qty} no carrinho)` : "Adicionar ao pedido"}
-            </button>
-          </div>
-          {hasComplexConfig && !canAdd && (
-            <p className="mt-2 text-center text-xs text-red-500">
-              {variantRequired && !selectedVariantId
-                ? "Escolha uma variante para continuar"
-                : "Preencha as opções obrigatórias"}
+          ) : qty > 0 ? (
+            <p className="text-center text-xs text-gray-400">
+              {qty} {qty === 1 ? "item" : "itens"} no carrinho
             </p>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
@@ -859,23 +717,10 @@ function CartDrawer({
           ) : (
             <div className="divide-y divide-gray-100">
               {cart.map((item) => (
-                <div key={item.id} className="flex items-start gap-3 py-3">
-                  {/* Name + details + price */}
+                <div key={item.id} className="flex items-center gap-3 py-3">
+                  {/* Name + price */}
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-900">{item.name}</p>
-                    {item.variantName && (
-                      <p className="text-xs text-gray-400">{item.variantName}</p>
-                    )}
-                    {item.selectedOptions && item.selectedOptions.length > 0 && (
-                      <p className="text-xs text-gray-400 line-clamp-2">
-                        {item.selectedOptions.map((o) => o.optionName).join(" · ")}
-                      </p>
-                    )}
-                    {item.selectedExtras && item.selectedExtras.length > 0 && (
-                      <p className="text-xs text-gray-400">
-                        + {item.selectedExtras.map((e) => e.qty > 1 ? `${e.qty}× ${e.name}` : e.name).join(" · ")}
-                      </p>
-                    )}
                     <p className="text-xs text-gray-500">
                       R$ {item.price.toFixed(2).replace(".", ",")} × {item.qty}
                     </p>
@@ -941,7 +786,7 @@ function PhoneEntryCard({
   onSkip,
 }: {
   slug: string;
-  onIdentified: (name: string | null) => void;
+  onIdentified: (name: string | null, customerId?: string) => void;
   onSkip: () => void;
 }) {
   const [nameInput,  setNameInput]  = useState("");
@@ -961,9 +806,18 @@ function PhoneEntryCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: ph, name: nameInput.trim() }),
       });
-      const data: { found: boolean; name?: string } = await res.json();
+      const data: { found: boolean; name?: string; customerId?: string } = await res.json();
       const resolved = data.name ?? (nameInput.trim() ? nameInput.trim().split(/\s+/)[0]! : null);
-      onIdentified(resolved);
+      // Persist phone + name + customerId so other pages can reuse identity
+      if (resolved) {
+        try {
+          sessionStorage.setItem(
+            `foocci-customer-${slug}`,
+            JSON.stringify({ phone: ph, name: resolved, customerId: data.customerId })
+          );
+        } catch { /* ignore */ }
+      }
+      onIdentified(resolved, data.customerId);
     } catch {
       setError("Erro ao verificar. Tente novamente.");
       setLoading(false);
@@ -1061,6 +915,7 @@ function ChoiceCard({
 export function PedidoClient({
   slug, restaurantName, logoUrl, phone, categories,
   knownCustomerPhone = null, knownCustomerName = null,
+  knownCustomerId = null, knownDefaultAddress = null,
   instagramUrl = null, tiktokUrl = null,
   banners = [],
   brandPrimaryColor = null, brandSecondaryColor = null,
@@ -1083,12 +938,6 @@ export function PedidoClient({
   );
   const [selectedProduct, setSelectedProduct] = useState<MenuItem | null>(null);
 
-  // Scroll-spy: refs for each category section in the menu panels
-  const desktopMenuScrollRef = useRef<HTMLDivElement>(null);
-  const mobileMenuScrollRef  = useRef<HTMLDivElement>(null);
-  const catSectionRefs       = useRef<Record<string, HTMLDivElement | null>>({});
-  const mobileCatTabsRef     = useRef<HTMLDivElement>(null);
-
   // ── Cart ──────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -1104,6 +953,8 @@ export function PedidoClient({
 
   // Effective phone: from server (WhatsApp link) or from QR identification
   const effectiveCustomerPhone = knownCustomerPhone ?? storedCustomer?.phone ?? null;
+  // Effective customerId: from server prop or from session-stored identify response
+  const effectiveCustomerId = knownCustomerId ?? storedCustomer?.customerId ?? undefined;
 
   // customerName declared early so enterBrowsing / handlePhoneIdentified can reference its setter
   const [customerName, setCustomerName] = useState(
@@ -1130,8 +981,13 @@ export function PedidoClient({
     if (mode === "suggest") setShowSuggestion(true);
   }
 
-  function handlePhoneIdentified(name: string | null) {
+  // customerId state updated when PhoneEntryCard resolves identity client-side
+  const [sessionCustomerId, setSessionCustomerId] = useState<string | undefined>(undefined);
+  const resolvedCustomerId = effectiveCustomerId ?? sessionCustomerId;
+
+  function handlePhoneIdentified(name: string | null, customerId?: string) {
     if (name) { setIdentifiedName(name); setCustomerName(name); }
+    if (customerId) setSessionCustomerId(customerId);
     setEntryPhase("choosing");
   }
 
@@ -1143,15 +999,30 @@ export function PedidoClient({
   //   triggered (regardless of whether the customer accepted or skipped).
   // lastUpsellCategory: the phase currently awaiting the customer's decision
   //   (non-null while the suggestion is "live"); cleared once the phase resolves.
-  const [upsellState, setUpsellState] = useState({
-    offeredDrink:       false,
-    offeredDessert:     false,
-    lastUpsellCategory: null as "drink" | "dessert" | null,
+  // Persisted to localStorage so a page refresh doesn't re-trigger the same offer.
+  type UpsellState = { offeredDrink: boolean; offeredDessert: boolean; lastUpsellCategory: "drink" | "dessert" | null };
+  const UPSELL_KEY = `foocci-upsell-${slug}`;
+  const [upsellState, setUpsellStateRaw] = useState<UpsellState>(() => {
+    if (typeof window === "undefined") return { offeredDrink: false, offeredDessert: false, lastUpsellCategory: null };
+    try {
+      const raw = localStorage.getItem(UPSELL_KEY);
+      if (raw) return JSON.parse(raw) as UpsellState;
+    } catch { /* ignore */ }
+    return { offeredDrink: false, offeredDessert: false, lastUpsellCategory: null };
   });
+  function setUpsellState(updater: UpsellState | ((prev: UpsellState) => UpsellState)) {
+    setUpsellStateRaw((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem(UPSELL_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   // ── Checkout data ─────────────────────────────────────────────────
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup" | null>(null);
-  const [address, setAddress] = useState<Address>({ street: "", number: "", neighborhood: "", complement: "" });
+  const [address, setAddress] = useState<Address>(
+    knownDefaultAddress ?? { street: "", number: "", neighborhood: "", complement: "" }
+  );
   const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
   const [paymentMethodSub, setPaymentMethodSub] = useState<PaymentMethodSub | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -1205,29 +1076,10 @@ export function PedidoClient({
     if (target) setSelectedCategoryId(target.id);
   }, [upsellState.lastUpsellCategory, categories]);
 
-  // ── Auto-scroll (chat) ────────────────────────────────────────────
+  // ── Auto-scroll ───────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, ui]);
-
-  // ── Scroll-spy: IntersectionObserver for category sections ────────
-  useEffect(() => {
-    if (stage !== "BROWSE" || entryPhase !== "browsing") return;
-    const observers: IntersectionObserver[] = [];
-    categories.forEach((cat) => {
-      const el = catSectionRefs.current[cat.id];
-      if (!el) return;
-      const obs = new IntersectionObserver(
-        ([entry]) => {
-          if (entry?.isIntersecting) setSelectedCategoryId(cat.id);
-        },
-        { threshold: 0.3 },
-      );
-      obs.observe(el);
-      observers.push(obs);
-    });
-    return () => observers.forEach((obs) => obs.disconnect());
-  }, [stage, entryPhase, categories]);
 
   // ── sendText ──────────────────────────────────────────────────────
   // Only called for AI-driven moments: BROWSE (initial greeting, item adds,
@@ -1273,15 +1125,17 @@ export function PedidoClient({
             paymentMethod:  pmStr   || null,
             customerName:   customerName || null,
             customerPhone:  effectiveCustomerPhone,
+            customerId:     resolvedCustomerId ?? undefined,
           }),
         });
 
         const data  = await res.json();
         const reply: string = data?.data?.reply || "Desculpe, algo deu errado 😅";
+        const suggestedItemName: string | undefined = data?.data?.suggestedItemName ?? undefined;
 
         setMessages((prev) => [
           ...prev,
-          { id: uid(), role: "assistant" as const, content: reply, ts: new Date() },
+          { id: uid(), role: "assistant" as const, content: reply, ts: new Date(), suggestedItemName },
         ]);
         setHistory([...newHistory, { role: "assistant" as const, content: reply }]);
       } catch {
@@ -1332,11 +1186,6 @@ export function PedidoClient({
 
   const handleItemAdd = useCallback(
     (item: MenuItem) => {
-      // Items with any configuration should open the modal instead of direct-add
-      if (item.hasVariants || item.optionGroups.length > 0 || item.extras.length > 0) {
-        setSelectedProduct(item);
-        return;
-      }
       const existing = cart.find((c) => c.id === item.id);
       const newCart = existing
         ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
@@ -1354,50 +1203,10 @@ export function PedidoClient({
       const existing = cart.find((c) => c.id === cartId);
       const newCart  = existing
         ? cart.map((c) => c.id === cartId ? { ...c, qty: c.qty + 1 } : c)
-        : [...cart, { id: cartId, name: cartName, price: variant.price, qty: 1, variantName: variant.name }];
+        : [...cart, { id: cartId, name: cartName, price: variant.price, qty: 1 }];
       setCart(newCart);
       setSelectedProduct(null);
       sendText(`Adicionar ${cartName}`, newCart, stage, activeUpsell);
-    },
-    [cart, stage, activeUpsell, sendText],
-  );
-
-  const handleConfiguredAdd = useCallback(
-    (item: MenuItem, variant: MenuItemVariant | null, options: SelectedOption[], extras: SelectedExtra[]) => {
-      const optionKey = options.map((o) => o.optionId).sort().join("_");
-      const extraKey  = extras.map((e) => `${e.extraId}x${e.qty}`).sort().join("_");
-      const cartId    = [item.id, variant?.id, optionKey, extraKey].filter(Boolean).join("_");
-      const cartName  = item.name + (variant ? ` — ${variant.name}` : "");
-      const totalPrice =
-        (variant ? variant.price : item.price) +
-        options.reduce((s, o) => s + o.price, 0) +
-        extras.reduce((s, e) => s + e.price * e.qty, 0);
-
-      const existing = cart.find((c) => c.id === cartId);
-      const newCart = existing
-        ? cart.map((c) => c.id === cartId ? { ...c, qty: c.qty + 1 } : c)
-        : [
-            ...cart,
-            {
-              id: cartId,
-              name: cartName,
-              price: totalPrice,
-              qty: 1,
-              variantName: variant?.name,
-              selectedOptions: options.length > 0 ? options : undefined,
-              selectedExtras:  extras.length  > 0 ? extras  : undefined,
-            },
-          ];
-      setCart(newCart);
-      setSelectedProduct(null);
-      const details = [
-        options.map((o) => o.optionName).join(", "),
-        extras.map((e) => e.name).join(", "),
-      ].filter(Boolean).join(" + ");
-      sendText(
-        `Adicionar ${cartName}${details ? ` (${details})` : ""}`,
-        newCart, stage, activeUpsell,
-      );
     },
     [cart, stage, activeUpsell, sendText],
   );
@@ -1446,19 +1255,11 @@ export function PedidoClient({
     [slug, history, cart, activeUpsell, deliveryMethod],
   );
 
-  // Category tab click — scrolls to that section in the menu, triggers AI intro on first visit.
+  // Category tab click — selects the category and, on first visit, triggers a
+  // clean AI category intro (no user bubble, natural presentation).
   const handleCategorySelect = useCallback(
     (cat: MenuCategory) => {
       setSelectedCategoryId(cat.id);
-      // Scroll to the section in whichever panel is visible
-      const el = catSectionRefs.current[cat.id];
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
-        // Also keep the tab in view (mobile horizontal tab bar)
-        mobileCatTabsRef.current
-          ?.querySelector(`[data-cat="${cat.id}"]`)
-          ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-      }
       if (
         stage !== "BROWSE" ||
         entryPhase !== "browsing" ||
@@ -2052,9 +1853,21 @@ export function PedidoClient({
             </div>
           )}
 
-          {messages.map((msg) => (
-            <Bubble key={msg.id} msg={msg} />
-          ))}
+          {messages.map((msg) => {
+            const suggestedItem = msg.suggestedItemName
+              ? categories.flatMap((c) => c.items).find(
+                  (i) => i.name.toLowerCase() === msg.suggestedItemName!.toLowerCase()
+                ) ?? null
+              : null;
+            return (
+              <Bubble
+                key={msg.id}
+                msg={msg}
+                suggestedItem={suggestedItem}
+                onOpenSuggested={suggestedItem ? () => setSelectedProduct(suggestedItem) : undefined}
+              />
+            );
+          })}
           {ui === "thinking" && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>
@@ -2116,24 +1929,22 @@ export function PedidoClient({
           </div>
         )}
 
-        {/* Mobile-only: sticky category tabs — only during browsing */}
+        {/* Mobile-only: category tabs — only during browsing */}
         {stage === "BROWSE" && entryPhase === "browsing" && categories.length > 0 && (
           <div
-            ref={mobileCatTabsRef}
-            className="lg:hidden shrink-0 flex overflow-x-auto gap-3 border-t border-gray-200 bg-white px-3 py-2.5 [&::-webkit-scrollbar]:hidden sticky top-0 z-10"
+            className="lg:hidden shrink-0 flex overflow-x-auto gap-3 border-t border-gray-200 bg-white px-3 py-2.5 [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarWidth: "none" }}
           >
             {categories.map((cat) => (
               <button
                 key={cat.id}
-                data-cat={cat.id}
                 onClick={() => handleCategorySelect(cat)}
-                className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold min-h-[36px] transition-all ${
+                className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-base font-semibold min-h-[44px] transition-all ${
                   selectedCategoryId === cat.id
                     ? "text-white shadow-sm"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
                 }`}
-                style={selectedCategoryId === cat.id ? { backgroundColor: "var(--brand-primary)" } : undefined}
+                style={selectedCategoryId === cat.id ? { backgroundColor: 'var(--brand-primary)' } : undefined}
               >
                 {categoryEmoji(cat.name)} {cat.name}
               </button>
@@ -2141,67 +1952,23 @@ export function PedidoClient({
           </div>
         )}
 
-        {/* Mobile-only: vertical product list — all categories stacked */}
-        {stage === "BROWSE" && entryPhase === "browsing" && categories.length > 0 && (
-          <div
-            ref={mobileMenuScrollRef}
-            className="lg:hidden flex-1 overflow-y-auto bg-gray-50"
-            style={{ maxHeight: "45vh" }}
-          >
-            {categories.map((cat) => (
-              <div
-                key={cat.id}
-                ref={(el) => { catSectionRefs.current[cat.id] = el; }}
-              >
-                <p className="sticky top-0 z-[5] bg-gray-100 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 shadow-[0_1px_0_rgba(0,0,0,0.05)]">
-                  {categoryEmoji(cat.name)} {cat.name}
-                </p>
-                <div className="divide-y divide-gray-100 bg-white">
-                  {cat.items.map((item) => {
-                    const q = itemCartQty(item, cart);
-                    return (
-                      <div
-                        key={item.id}
-                        className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
-                        onClick={() => setSelectedProduct(item)}
-                      >
-                        {/* Image */}
-                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-gray-100">
-                          {item.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-2xl">{categoryEmoji(item.name)}</div>
-                          )}
-                        </div>
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 line-clamp-1">{item.name}</p>
-                          {item.description && (
-                            <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{item.description}</p>
-                          )}
-                          <p className="mt-1 text-sm font-bold text-gray-800">
-                            {item.hasVariants && item.variants.length > 0
-                              ? `A partir de R$ ${itemMinPrice(item).toFixed(2).replace(".", ",")}`
-                              : `R$ ${item.price.toFixed(2).replace(".", ",")}`}
-                          </p>
-                        </div>
-                        {/* Add button */}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleItemAdd(item); }}
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${
-                            q > 0 ? "text-white" : "bg-gray-100 text-gray-700 hover:text-white"
-                          }`}
-                          style={q > 0 ? { backgroundColor: "var(--brand-primary)" } : undefined}
-                        >
-                          {q > 0 ? q : "+"}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+        {/* Mobile-only: product grid (horizontal scroll) */}
+        {stage === "BROWSE" && entryPhase === "browsing" && currentCategoryItems.length > 0 && (
+          <div className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
+            <div
+              className="flex gap-3 overflow-x-auto px-3 py-1 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {currentCategoryItems.map((item) => (
+                <ProductCard
+                  key={item.id}
+                  item={item}
+                  qty={itemCartQty(item, cart)}
+                  onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                  onOpen={() => setSelectedProduct(item)}
+                />
+              ))}
+            </div>
           </div>
         )}
 
@@ -2271,8 +2038,8 @@ export function PedidoClient({
       <div className="hidden lg:flex lg:w-1/2 flex-col overflow-hidden bg-gray-50 min-w-0">
         {stage === "BROWSE" ? (
           <>
-            {/* Sticky category nav */}
-            <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-white px-5 py-3 sticky top-0 z-10">
+            {/* Category nav */}
+            <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-white px-5 py-3">
               {categories.map((cat) => (
                 <button
                   key={cat.id}
@@ -2282,18 +2049,18 @@ export function PedidoClient({
                       ? "text-white shadow-sm"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
                   }`}
-                  style={selectedCategoryId === cat.id ? { backgroundColor: "var(--brand-primary)" } : undefined}
+                  style={selectedCategoryId === cat.id ? { backgroundColor: 'var(--brand-primary)' } : undefined}
                 >
                   {categoryEmoji(cat.name)} {cat.name}
                 </button>
               ))}
             </div>
 
-            {/* Vertical scroll — all categories stacked */}
-            <div ref={desktopMenuScrollRef} className="flex-1 overflow-y-auto">
-              {/* Promotion banners at top */}
+            {/* Product grid — CSS grid, fills available space */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {/* Desktop promotion banners */}
               {banners.length > 0 && (
-                <div className="flex flex-col gap-2 px-5 pt-5">
+                <div className="mb-4 flex flex-col gap-2">
                   {banners.map((b) => (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -2306,30 +2073,23 @@ export function PedidoClient({
                   ))}
                 </div>
               )}
-
-              {/* All category sections */}
-              {categories.map((cat) => (
-                <div
-                  key={cat.id}
-                  ref={(el) => { catSectionRefs.current[cat.id] = el; }}
-                  className="px-5 pb-6 pt-5"
-                >
-                  <h3 className="mb-3 text-base font-bold text-gray-800">
-                    {categoryEmoji(cat.name)} {cat.name}
-                  </h3>
-                  <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-                    {cat.items.map((item) => (
-                      <DesktopProductCard
-                        key={item.id}
-                        item={item}
-                        qty={itemCartQty(item, cart)}
-                        onAdd={() => handleItemAdd(item)}
-                        onOpen={() => setSelectedProduct(item)}
-                      />
-                    ))}
-                  </div>
+              {currentCategoryItems.length > 0 ? (
+                <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+                  {currentCategoryItems.map((item) => (
+                    <DesktopProductCard
+                      key={item.id}
+                      item={item}
+                      qty={itemCartQty(item, cart)}
+                      onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                      onOpen={() => setSelectedProduct(item)}
+                    />
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-sm text-gray-400">Nenhum item nesta categoria.</p>
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -2363,16 +2123,11 @@ export function PedidoClient({
           item={selectedProduct}
           qty={itemCartQty(selectedProduct, cart)}
           onAdd={() => {
-            const item = selectedProduct;
+            handleItemAdd(selectedProduct);
             setSelectedProduct(null);
-            const existing = cart.find((c) => c.id === item.id);
-            const newCart = existing
-              ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
-              : [...cart, { id: item.id, name: item.name, price: item.price, qty: 1 }];
-            setCart(newCart);
-            sendText(`Adicionar ${item.name}`, newCart, stage, activeUpsell);
           }}
-          onAddConfigured={(variant, options, extras) => handleConfiguredAdd(selectedProduct, variant, options, extras)}
+          onAddVariant={(variant) => handleVariantAdd(selectedProduct, variant)}
+          cart={cart}
           onClose={() => setSelectedProduct(null)}
         />
       )}

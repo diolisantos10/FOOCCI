@@ -4,6 +4,8 @@ import type { UpsertBrandConfigInput } from "@/validators/brand-config";
 import { DEFAULT_BRAND_CONFIG } from "@/validators/brand-config";
 import type { RestaurantBrandConfig } from "@prisma/client";
 
+type PartialConfig = Partial<UpsertBrandConfigInput>;
+
 export class BrandConfigService {
   static async upsert(
     restaurantId: string,
@@ -29,12 +31,51 @@ export class BrandConfigService {
       instagramUrl: input.instagramUrl ?? null,
       tiktokUrl: input.tiktokUrl ?? null,
       googleReviewUrl: input.googleReviewUrl ?? null,
-      ifoodReviewUrl:  input.ifoodReviewUrl  ?? null,
+      ifoodReviewUrl: input.ifoodReviewUrl ?? null,
       brandPersona: input.brandPersona ?? undefined,
     };
 
     const config = await prisma.restaurantBrandConfig.upsert({
       where: { restaurantId },
+      create: { restaurantId, ...data },
+      update: data,
+    });
+
+    return serviceOk(config);
+  }
+
+  /**
+   * Partial update — only fields present in `input` are written.
+   * Creates the record with defaults if it doesn't exist yet.
+   */
+  static async patch(
+    restaurantId: string,
+    input: PartialConfig
+  ): Promise<ServiceResult<RestaurantBrandConfig>> {
+    const data: Record<string, unknown> = {};
+    if (input.tone              !== undefined) data.tone              = input.tone;
+    if (input.formality         !== undefined) data.formality         = input.formality;
+    if (input.emojiUsage        !== undefined) data.emojiUsage        = input.emojiUsage;
+    if (input.communicationStyle !== undefined) data.communicationStyle = input.communicationStyle;
+    if (input.upsellStyle       !== undefined) data.upsellStyle       = input.upsellStyle;
+    if (input.greetingTemplate  !== undefined) data.greetingTemplate  = input.greetingTemplate ?? null;
+    if (input.systemPromptOverride !== undefined) data.systemPromptOverride = input.systemPromptOverride ?? null;
+    if (input.aiModel           !== undefined) data.aiModel           = input.aiModel;
+    if (input.maxHistoryMessages !== undefined) data.maxHistoryMessages = input.maxHistoryMessages;
+    if (input.personalityPreset !== undefined) data.personalityPreset = input.personalityPreset;
+    if (input.upsellIntensity   !== undefined) data.upsellIntensity   = input.upsellIntensity;
+    if (input.salesFocus        !== undefined) data.salesFocus        = input.salesFocus;
+    if (input.salesPriority     !== undefined) data.salesPriority     = input.salesPriority;
+    if (input.brandPrimaryColor !== undefined) data.brandPrimaryColor = input.brandPrimaryColor ?? null;
+    if (input.brandSecondaryColor !== undefined) data.brandSecondaryColor = input.brandSecondaryColor ?? null;
+    if (input.instagramUrl      !== undefined) data.instagramUrl      = input.instagramUrl ?? null;
+    if (input.tiktokUrl         !== undefined) data.tiktokUrl         = input.tiktokUrl ?? null;
+    if (input.googleReviewUrl   !== undefined) data.googleReviewUrl   = input.googleReviewUrl ?? null;
+    if (input.ifoodReviewUrl    !== undefined) data.ifoodReviewUrl    = input.ifoodReviewUrl ?? null;
+    if (input.brandPersona      !== undefined) data.brandPersona      = input.brandPersona ?? undefined;
+
+    const config = await prisma.restaurantBrandConfig.upsert({
+      where:  { restaurantId },
       create: { restaurantId, ...data },
       update: data,
     });

@@ -28,7 +28,6 @@ type Variant = {
   id: string;
   name: string;
   price: number;
-  portion: string | null;
   isAvailable: boolean;
   sortOrder: number;
 };
@@ -38,27 +37,6 @@ type Extra = {
   name: string;
   quantity: number;
   price: number;
-  portion: string | null;
-  isAvailable: boolean;
-};
-
-type OptionItem = {
-  id: string;
-  name: string;
-  price: number;
-  portion: string | null;
-  isAvailable: boolean;
-  sortOrder: number;
-};
-
-type OptionGroup = {
-  id: string;
-  name: string;
-  required: boolean;
-  minSelect: number;
-  maxSelect: number;
-  sortOrder: number;
-  options: OptionItem[];
 };
 
 type Item = {
@@ -75,6 +53,8 @@ type Item = {
   showInDineIn: boolean;
   hasVariants: boolean;
   code: string | null;
+  servingSize: number | null;
+  portionInfo: string | null;
   variants: Variant[];
   extras: Extra[];
 };
@@ -93,20 +73,8 @@ type Category = {
 };
 
 type CategoryFormState = { name: string; description: string };
-type ItemFormState = {
-  name: string;
-  description: string;
-  price: string;
-  imageUrl: string | null;
-};
 
 const EMPTY_CAT: CategoryFormState = { name: "", description: "" };
-const EMPTY_ITEM: ItemFormState = {
-  name: "",
-  description: "",
-  price: "",
-  imageUrl: null,
-};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -402,14 +370,15 @@ function AddItemForm({
   categoryId: string;
   onAdded: (item: Item) => void;
 }) {
-  const [form, setForm] = useState<ItemFormState>(EMPTY_ITEM);
-  const [busy, setBusy] = useState(false);
+  const [name, setName]   = useState("");
+  const [price, setPrice] = useState("");
+  const [busy, setBusy]   = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const price = parseFloat(form.price);
-    if (!form.name.trim() || isNaN(price) || price <= 0) {
+    const p = parseFloat(price);
+    if (!name.trim() || isNaN(p) || p <= 0) {
       setError("Nome e preço válido são obrigatórios.");
       return;
     }
@@ -419,15 +388,19 @@ function AddItemForm({
       const data = await apiFetch(
         `/api/menu/categories/${categoryId}/items`,
         "POST",
-        {
-          name: form.name.trim(),
-          description: form.description.trim() || undefined,
-          price,
-          imageUrl: form.imageUrl || undefined,
-        }
+        { name: name.trim(), price: p }
       );
-      onAdded({ ...data.data, price: Number(data.data.price), hasVariants: data.data.hasVariants ?? false, variants: [], extras: [] });
-      setForm(EMPTY_ITEM);
+      onAdded({
+        ...data.data,
+        price: Number(data.data.price),
+        hasVariants: data.data.hasVariants ?? false,
+        servingSize: data.data.servingSize ?? null,
+        portionInfo: data.data.portionInfo ?? null,
+        variants: [],
+        extras: [],
+      });
+      setName("");
+      setPrice("");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao adicionar.");
     } finally {
@@ -440,18 +413,20 @@ function AddItemForm({
       onSubmit={handleSubmit}
       className="border-t border-dashed border-gray-200 bg-gray-50 px-5 py-3 space-y-2"
     >
-      <p className="text-xs font-medium text-gray-500">Novo item</p>
+      <p className="text-xs font-medium text-gray-400">
+        Adição rápida — para detalhes, use <strong>+ Novo Produto</strong>
+      </p>
       <div className="flex gap-2">
         <input
-          value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           placeholder="Nome do item"
           required
           className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
         />
         <input
-          value={form.price}
-          onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
           placeholder="Preço"
           type="number"
           step="0.01"
@@ -459,27 +434,15 @@ function AddItemForm({
           required
           className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
         />
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+        >
+          {busy ? <Spinner /> : "OK"}
+        </button>
       </div>
-      <input
-        value={form.description}
-        onChange={(e) =>
-          setForm((f) => ({ ...f, description: e.target.value }))
-        }
-        placeholder="Descrição (opcional)"
-        className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-      />
-      <ImageUpload
-        value={form.imageUrl}
-        onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
-      />
       {error && <InlineError message={error} />}
-      <button
-        type="submit"
-        disabled={busy}
-        className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-      >
-        {busy ? <Spinner /> : "Adicionar item"}
-      </button>
     </form>
   );
 }
@@ -926,15 +889,254 @@ function AddCategoryForm({ onAdded }: { onAdded: (cat: Category) => void }) {
   );
 }
 
+// ── NewItemModal ──────────────────────────────────────────────────────────────
+
+type NewItemForm = {
+  categoryId: string;
+  name: string;
+  description: string;
+  price: string;
+  imageUrl: string | null;
+  servingSize: number | null;
+  portionInfo: string;
+};
+
+function NewItemModal({
+  categories,
+  open,
+  onClose,
+  onCreated,
+}: {
+  categories: Category[];
+  open: boolean;
+  onClose: () => void;
+  onCreated: (item: Item, categoryId: string) => void;
+}) {
+  const manualCategories = categories.filter((c) => c.source === "MANUAL");
+  const [form, setForm] = useState<NewItemForm>({
+    categoryId: manualCategories[0]?.id ?? "",
+    name: "",
+    description: "",
+    price: "",
+    imageUrl: null,
+    servingSize: null,
+    portionInfo: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      categoryId: manualCategories[0]?.id ?? "",
+      name: "",
+      description: "",
+      price: "",
+      imageUrl: null,
+      servingSize: null,
+      portionInfo: "",
+    });
+    setError("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const price = parseFloat(form.price);
+    if (!form.categoryId) { setError("Selecione uma categoria."); return; }
+    if (!form.name.trim() || isNaN(price) || price <= 0) {
+      setError("Nome e preço válido são obrigatórios.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const data = await apiFetch(
+        `/api/menu/categories/${form.categoryId}/items`,
+        "POST",
+        {
+          name: form.name.trim(),
+          description: form.description.trim() || undefined,
+          price,
+          imageUrl: form.imageUrl || undefined,
+          servingSize: form.servingSize ?? undefined,
+          portionInfo: form.portionInfo.trim() || undefined,
+        }
+      );
+      const item: Item = {
+        ...data.data,
+        price: Number(data.data.price),
+        hasVariants: data.data.hasVariants ?? false,
+        servingSize: data.data.servingSize ?? null,
+        portionInfo: data.data.portionInfo ?? null,
+        variants: [],
+        extras: [],
+      };
+      onCreated(item, form.categoryId);
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao criar produto.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <div
+          className="relative w-full max-w-md rounded-xl bg-white shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-gray-900">Novo Produto</h2>
+            <button type="button" onClick={onClose} className="text-lg leading-none text-gray-400 hover:text-gray-600" aria-label="Fechar">✕</button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
+            {/* Category */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Categoria <span className="text-red-500">*</span></label>
+              {manualCategories.length === 0 ? (
+                <p className="text-xs text-red-500">Crie uma categoria antes de adicionar produtos.</p>
+              ) : (
+                <select
+                  value={form.categoryId}
+                  onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                >
+                  {manualCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Name */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Nome <span className="text-red-500">*</span></label>
+              <input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Nome do produto"
+                required
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Descrição</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Descrição (opcional)"
+                rows={2}
+                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            {/* Price */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Preço <span className="text-red-500">*</span></label>
+              <input
+                value={form.price}
+                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                placeholder="0,00"
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            {/* Serving size + portion info */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Serve (pessoas)</label>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, servingSize: f.servingSize === n ? null : n }))}
+                      className={`flex-1 rounded border py-1.5 text-xs font-medium transition-colors ${
+                        form.servingSize === n
+                          ? "border-orange-500 bg-orange-500 text-white"
+                          : "border-gray-300 text-gray-600 hover:border-orange-300"
+                      }`}
+                    >
+                      {n === 4 ? "4+" : n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Porção</label>
+                <input
+                  value={form.portionInfo}
+                  onChange={(e) => setForm((f) => ({ ...f, portionInfo: e.target.value }))}
+                  placeholder="ex: 300g, 500ml"
+                  maxLength={50}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                />
+              </div>
+            </div>
+
+            {/* Image */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Imagem</label>
+              <ImageUpload value={form.imageUrl} onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))} />
+            </div>
+
+            {error && <InlineError message={error} />}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={busy || manualCategories.length === 0}
+                className="flex-1 rounded-lg bg-orange-500 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+              >
+                {busy ? <Spinner /> : "Criar produto"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── TopBar ────────────────────────────────────────────────────────────────────
 
 function TopBar({
   categories,
   onAdded,
+  onNewItem,
   onBulkPrice,
 }: {
   categories: Category[];
   onAdded: (cat: Category) => void;
+  onNewItem: () => void;
   onBulkPrice: () => void;
 }) {
   const totalItems = categories.reduce((n, c) => n + c.items.length, 0);
@@ -961,6 +1163,15 @@ function TopBar({
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
           >
             Ajustar preços
+          </button>
+        )}
+        {categories.some((c) => c.source === "MANUAL") && (
+          <button
+            type="button"
+            onClick={onNewItem}
+            className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
+          >
+            + Novo Produto
           </button>
         )}
         <AddCategoryForm onAdded={onAdded} />
@@ -1021,7 +1232,6 @@ function SortableVariantRow({
   const [form, setForm] = useState({
     name: variant.name,
     price: String(variant.price),
-    portion: variant.portion ?? "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1044,14 +1254,8 @@ function SortableVariantRow({
       const data = await apiFetch(`/api/menu/variants/${variant.id}`, "PATCH", {
         name: form.name.trim(),
         price,
-        portion: form.portion.trim() || undefined,
       });
-      onUpdated({
-        ...variant,
-        name: data.data.name,
-        price: Number(data.data.price),
-        portion: data.data.portion ?? null,
-      });
+      onUpdated({ ...variant, name: data.data.name, price: Number(data.data.price) });
       setEditing(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
@@ -1085,27 +1289,18 @@ function SortableVariantRow({
             <input
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Nome (ex: Grande)"
+              placeholder="Nome (ex: 350ml)"
               className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
             <input
-              value={form.portion}
-              onChange={(e) => setForm((f) => ({ ...f, portion: e.target.value }))}
-              placeholder="Porção (ex: 800g)"
+              value={form.price}
+              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+              placeholder="Preço"
+              type="number"
+              step="0.01"
+              min="0.01"
               className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
-            <div className="relative w-24">
-              <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
-              <input
-                value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                placeholder="0,00"
-                type="number"
-                step="0.01"
-                min="0.01"
-                className="w-full rounded border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-              />
-            </div>
           </div>
           {error && <InlineError message={error} />}
           <div className="flex gap-2">
@@ -1122,7 +1317,7 @@ function SortableVariantRow({
               onClick={() => {
                 setEditing(false);
                 setError("");
-                setForm({ name: variant.name, price: String(variant.price), portion: variant.portion ?? "" });
+                setForm({ name: variant.name, price: String(variant.price) });
               }}
               className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
             >
@@ -1133,19 +1328,16 @@ function SortableVariantRow({
       ) : (
         <div className="flex items-center gap-2 px-3 py-2.5">
           <DragHandle listeners={listeners} />
-          <div className="flex-1 min-w-0">
-            <span className="block truncate text-sm text-gray-800">{variant.name}</span>
-            {variant.portion && (
-              <span className="text-[11px] text-gray-400">{variant.portion}</span>
-            )}
-          </div>
+          <span className="flex-1 truncate text-sm text-gray-800">
+            {variant.name}
+          </span>
           <span className="shrink-0 text-sm font-semibold text-gray-700">
             R$ {Number(variant.price).toFixed(2)}
           </span>
           <button
             type="button"
             onClick={() => {
-              setForm({ name: variant.name, price: String(variant.price), portion: variant.portion ?? "" });
+              setForm({ name: variant.name, price: String(variant.price) });
               setEditing(true);
             }}
             className="shrink-0 text-xs text-blue-500 hover:underline"
@@ -1183,19 +1375,27 @@ type EditModalForm = {
   showInDineIn: boolean;
   hasVariants: boolean;
   code: string;
+  servingSize: number | null;
+  portionInfo: string;
+  categoryId: string;
 };
 
 function EditItemModal({
   item,
+  categories,
+  currentCategoryId,
   onClose,
   onSave,
   onDelete,
 }: {
   item: Item | null;
+  categories: Category[];
+  currentCategoryId: string;
   onClose: () => void;
   onSave: (patch: EditModalForm) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
+  const manualCategories = categories.filter((c) => c.source === "MANUAL");
   const [form, setForm] = useState<EditModalForm>({
     name: "",
     description: "",
@@ -1206,6 +1406,9 @@ function EditItemModal({
     showInDineIn: false,
     hasVariants: false,
     code: "",
+    servingSize: null,
+    portionInfo: "",
+    categoryId: currentCategoryId,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1213,28 +1416,16 @@ function EditItemModal({
   // Variants state — initialised from item.variants when modal opens
   const [variants, setVariants] = useState<Variant[]>([]);
   const [addingVariant, setAddingVariant] = useState(false);
-  const [newVariant, setNewVariant] = useState({ name: "", price: "", portion: "" });
+  const [newVariant, setNewVariant] = useState({ name: "", price: "" });
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState("");
 
   // Extras state
   const [extras, setExtras] = useState<Extra[]>([]);
   const [addingExtra, setAddingExtra] = useState(false);
-  const [newExtra, setNewExtra] = useState({ name: "", quantity: "1", price: "", portion: "" });
+  const [newExtra, setNewExtra] = useState({ name: "", quantity: "1", price: "" });
   const [extraAddBusy, setExtraAddBusy] = useState(false);
   const [extraAddError, setExtraAddError] = useState("");
-
-  // Option groups state
-  const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
-  const [addingGroup, setAddingGroup] = useState(false);
-  const [newGroup, setNewGroup] = useState({ name: "", required: false, minSelect: "0", maxSelect: "1" });
-  const [groupAddBusy, setGroupAddBusy] = useState(false);
-  const [groupAddError, setGroupAddError] = useState("");
-  // Per-group option adding state: keyed by groupId
-  const [addingOptionFor, setAddingOptionFor] = useState<string | null>(null);
-  const [newOption, setNewOption] = useState({ name: "", price: "", portion: "" });
-  const [optionAddBusy, setOptionAddBusy] = useState(false);
-  const [optionAddError, setOptionAddError] = useState("");
 
   const variantSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -1253,27 +1444,19 @@ function EditItemModal({
       showInDineIn: item.showInDineIn,
       hasVariants: item.hasVariants,
       code: item.code ?? "",
+      servingSize: item.servingSize ?? null,
+      portionInfo: item.portionInfo ?? "",
+      categoryId: currentCategoryId,
     });
     setVariants(item.variants ?? []);
     setExtras(item.extras ?? []);
     setAddingVariant(false);
-    setNewVariant({ name: "", price: "", portion: "" });
+    setNewVariant({ name: "", price: "" });
     setAddingExtra(false);
-    setNewExtra({ name: "", quantity: "1", price: "", portion: "" });
-    setAddingGroup(false);
-    setNewGroup({ name: "", required: false, minSelect: "0", maxSelect: "1" });
-    setAddingOptionFor(null);
-    setNewOption({ name: "", price: "", portion: "" });
+    setNewExtra({ name: "", quantity: "1", price: "" });
     setError("");
     setAddError("");
     setExtraAddError("");
-    setGroupAddError("");
-    setOptionAddError("");
-
-    // Fetch option groups for this item
-    apiFetch(`/api/menu/items/${item.id}/option-groups`, "GET")
-      .then((data) => setOptionGroups(data?.data ?? []))
-      .catch(() => setOptionGroups([]));
   }, [item?.id]);
 
   // Close on Escape
@@ -1337,14 +1520,13 @@ function EditItemModal({
       const data = await apiFetch(`/api/menu/items/${item.id}/variants`, "POST", {
         name: newVariant.name.trim(),
         price,
-        portion: newVariant.portion.trim() || undefined,
         sortOrder: variants.length,
       });
       setVariants((vs) => [
         ...vs,
-        { ...data.data, price: Number(data.data.price), portion: data.data.portion ?? null },
+        { ...data.data, price: Number(data.data.price) },
       ]);
-      setNewVariant({ name: "", price: "", portion: "" });
+      setNewVariant({ name: "", price: "" });
       setAddingVariant(false);
     } catch (e: unknown) {
       setAddError(e instanceof Error ? e.message : "Erro ao adicionar variante.");
@@ -1368,10 +1550,9 @@ function EditItemModal({
         name: newExtra.name.trim(),
         quantity: qty,
         price,
-        portion: newExtra.portion.trim() || undefined,
       });
-      setExtras((es) => [...es, { ...data.data, price: Number(data.data.price), portion: data.data.portion ?? null, isAvailable: data.data.isAvailable ?? true }]);
-      setNewExtra({ name: "", quantity: "1", price: "", portion: "" });
+      setExtras((es) => [...es, { ...data.data, price: Number(data.data.price) }]);
+      setNewExtra({ name: "", quantity: "1", price: "" });
       setAddingExtra(false);
     } catch (e: unknown) {
       setExtraAddError(e instanceof Error ? e.message : "Erro ao adicionar extra.");
@@ -1386,87 +1567,6 @@ function EditItemModal({
       setExtras((es) => es.filter((e) => e.id !== extraId));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao remover extra.");
-    }
-  }
-
-  async function handleAddOptionGroup() {
-    if (!item) return;
-    if (!newGroup.name.trim()) { setGroupAddError("Nome é obrigatório."); return; }
-    const min = parseInt(newGroup.minSelect, 10);
-    const max = parseInt(newGroup.maxSelect, 10);
-    if (isNaN(min) || isNaN(max) || max < 1 || min > max) {
-      setGroupAddError("Min/max inválidos.");
-      return;
-    }
-    setGroupAddBusy(true);
-    setGroupAddError("");
-    try {
-      const data = await apiFetch(`/api/menu/items/${item.id}/option-groups`, "POST", {
-        name: newGroup.name.trim(),
-        required: newGroup.required,
-        minSelect: min,
-        maxSelect: max,
-        sortOrder: optionGroups.length,
-      });
-      setOptionGroups((gs) => [...gs, { ...data.data, options: data.data.options ?? [] }]);
-      setNewGroup({ name: "", required: false, minSelect: "0", maxSelect: "1" });
-      setAddingGroup(false);
-    } catch (e: unknown) {
-      setGroupAddError(e instanceof Error ? e.message : "Erro ao adicionar grupo.");
-    } finally {
-      setGroupAddBusy(false);
-    }
-  }
-
-  async function handleDeleteOptionGroup(groupId: string) {
-    try {
-      await apiFetch(`/api/menu/option-groups/${groupId}`, "DELETE");
-      setOptionGroups((gs) => gs.filter((g) => g.id !== groupId));
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erro ao remover grupo.");
-    }
-  }
-
-  async function handleAddOption(groupId: string) {
-    if (!item) return;
-    if (!newOption.name.trim()) { setOptionAddError("Nome é obrigatório."); return; }
-    const price = parseFloat(newOption.price || "0");
-    if (isNaN(price) || price < 0) { setOptionAddError("Preço inválido."); return; }
-    setOptionAddBusy(true);
-    setOptionAddError("");
-    try {
-      const data = await apiFetch(`/api/menu/option-groups/${groupId}/options`, "POST", {
-        name: newOption.name.trim(),
-        price,
-        portion: newOption.portion.trim() || undefined,
-        sortOrder: optionGroups.find((g) => g.id === groupId)?.options.length ?? 0,
-      });
-      setOptionGroups((gs) =>
-        gs.map((g) =>
-          g.id === groupId
-            ? { ...g, options: [...g.options, { ...data.data, price: Number(data.data.price), portion: data.data.portion ?? null }] }
-            : g
-        )
-      );
-      setNewOption({ name: "", price: "", portion: "" });
-      setAddingOptionFor(null);
-    } catch (e: unknown) {
-      setOptionAddError(e instanceof Error ? e.message : "Erro ao adicionar opção.");
-    } finally {
-      setOptionAddBusy(false);
-    }
-  }
-
-  async function handleDeleteOption(groupId: string, optionId: string) {
-    try {
-      await apiFetch(`/api/menu/option-items/${optionId}`, "DELETE");
-      setOptionGroups((gs) =>
-        gs.map((g) =>
-          g.id === groupId ? { ...g, options: g.options.filter((o) => o.id !== optionId) } : g
-        )
-      );
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erro ao remover opção.");
     }
   }
 
@@ -1518,63 +1618,141 @@ function EditItemModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {/* Name */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Nome <span className="text-red-500">*</span>
-            </label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Nome do item"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
+        <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+
+          {/* ── Informações básicas ───────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              Informações básicas
+            </p>
+
+            {manualCategories.length > 1 && (
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">Categoria</label>
+                <select
+                  value={form.categoryId}
+                  onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                >
+                  {manualCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">
+                Nome <span className="text-red-500">*</span>
+              </label>
+              <input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Nome do item"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Descrição</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Descrição curta exibida no cardápio (opcional)"
+                rows={2}
+                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Ingredientes</label>
+              <textarea
+                value={form.ingredients}
+                onChange={(e) => setForm((f) => ({ ...f, ingredients: e.target.value }))}
+                placeholder="Ex: frango grelhado, queijo prato, alface, tomate — usado pela IA para sugestões"
+                rows={2}
+                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Imagem</label>
+              <ImageUpload
+                value={form.imageUrl}
+                onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+              />
+            </div>
           </div>
 
-          {/* Description */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Descrição
-            </label>
-            <textarea
-              value={form.description}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, description: e.target.value }))
-              }
-              placeholder="Descrição (opcional)"
-              rows={3}
-              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
+          {/* ── Preço e porção ────────────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              Preço e porção
+            </p>
 
-          {/* Image */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-gray-700">
-              Imagem <span className="font-normal text-gray-400">(opcional)</span>
-            </label>
-            <input
-              type="url"
-              value={form.imageUrl ?? ""}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, imageUrl: e.target.value || null }))
-              }
-              placeholder="Cole a URL da imagem…"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
-            <ImageUpload
-              value={form.imageUrl}
-              onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
-            />
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">
+                Preço base <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">
+                  R$
+                </span>
+                <input
+                  value={form.price}
+                  onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                  placeholder="0,00"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Serve (pessoas)</label>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, servingSize: f.servingSize === n ? null : n }))}
+                    className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors ${
+                      form.servingSize === n
+                        ? "border-orange-500 bg-orange-500 text-white shadow-sm"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-orange-300 hover:text-orange-500"
+                    }`}
+                  >
+                    {n === 4 ? "4+" : n}
+                  </button>
+                ))}
+              </div>
+              {form.servingSize && (
+                <p className="text-[11px] text-gray-400">
+                  Serve {form.servingSize === 4 ? "4 ou mais" : form.servingSize} pessoa{form.servingSize !== 1 ? "s" : ""}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Informação de porção</label>
+              <input
+                value={form.portionInfo}
+                onChange={(e) => setForm((f) => ({ ...f, portionInfo: e.target.value }))}
+                placeholder="ex: 300g, 500ml, 2 fatias"
+                maxLength={50}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
           </div>
 
           {/* ── Adicionais ────────────────────────────────────────────── */}
           <div className="px-5 py-4 space-y-3">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Adicionais</p>
-                <p className="text-[11px] text-gray-400">Extras pagos opcionais (ex: queijo, bacon, molho)</p>
-              </div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                Adicionais
+              </p>
               {extras.length > 0 && (
                 <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-600">
                   {extras.length}
@@ -1585,20 +1763,25 @@ function EditItemModal({
             {extras.length > 0 && (
               <ul className="space-y-2">
                 {extras.map((e) => (
-                  <li key={e.id} className="flex items-center gap-3 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2.5">
+                  <li
+                    key={e.id}
+                    className="flex items-center gap-3 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2.5"
+                  >
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm font-medium text-gray-800">{e.name}</p>
                       <p className="text-[11px] text-gray-400">
-                        {e.quantity > 1 ? `até ${e.quantity}x` : ""}
-                        {e.portion ? (e.quantity > 1 ? " · " : "") + e.portion : ""}
-                        {!e.quantity && !e.portion ? "1 unidade" : ""}
+                        {e.quantity > 1 ? `até ${e.quantity}x` : "1 unidade"}
                       </p>
                     </div>
                     <span className="shrink-0 rounded-lg bg-orange-500 px-2 py-1 text-xs font-bold text-white">
                       +R$ {e.price.toFixed(2)}
                     </span>
-                    <button type="button" onClick={() => handleDeleteExtra(e.id)}
-                      className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors" aria-label="Remover">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteExtra(e.id)}
+                      className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      aria-label="Remover adicional"
+                    >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                       </svg>
@@ -1610,180 +1793,72 @@ function EditItemModal({
 
             {extras.length === 0 && !addingExtra && (
               <p className="rounded-lg border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
-                Nenhum adicional
+                Nenhum adicional — clique abaixo para adicionar
               </p>
             )}
 
             {addingExtra ? (
               <div className="rounded-xl border border-dashed border-orange-300 bg-orange-50 p-3 space-y-2">
                 <p className="text-[11px] font-medium text-orange-700">Novo adicional</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={newExtra.name} onChange={(e) => setNewExtra((f) => ({ ...f, name: e.target.value }))}
+                <div className="flex gap-2">
+                  <input
+                    value={newExtra.name}
+                    onChange={(e) => setNewExtra((f) => ({ ...f, name: e.target.value }))}
                     placeholder="Nome (ex: Queijo extra)"
-                    className="col-span-2 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
-                  <input value={newExtra.portion} onChange={(e) => setNewExtra((f) => ({ ...f, portion: e.target.value }))}
-                    placeholder="Porção (ex: 100g)"
-                    className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
-                  <input value={newExtra.quantity} onChange={(e) => setNewExtra((f) => ({ ...f, quantity: e.target.value }))}
-                    placeholder="Qtd máx" type="number" min="1" step="1"
-                    className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
-                  <div className="relative col-span-2">
+                    className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                  <input
+                    value={newExtra.quantity}
+                    onChange={(e) => setNewExtra((f) => ({ ...f, quantity: e.target.value }))}
+                    placeholder="Qtd"
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="w-16 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                  <div className="relative w-24">
                     <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
-                    <input value={newExtra.price} onChange={(e) => setNewExtra((f) => ({ ...f, price: e.target.value }))}
-                      placeholder="0,00" type="number" step="0.01" min="0"
-                      className="w-full rounded-lg border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+                    <input
+                      value={newExtra.price}
+                      onChange={(e) => setNewExtra((f) => ({ ...f, price: e.target.value }))}
+                      placeholder="0,00"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="w-full rounded-lg border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    />
                   </div>
                 </div>
                 {extraAddError && <InlineError message={extraAddError} />}
                 <div className="flex gap-2">
-                  <button type="button" onClick={handleAddExtra} disabled={extraAddBusy}
-                    className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50">
+                  <button
+                    type="button"
+                    onClick={handleAddExtra}
+                    disabled={extraAddBusy}
+                    className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                  >
                     {extraAddBusy ? <Spinner /> : "Adicionar"}
                   </button>
-                  <button type="button" onClick={() => { setAddingExtra(false); setNewExtra({ name: "", quantity: "1", price: "", portion: "" }); setExtraAddError(""); }}
-                    className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingExtra(false);
+                      setNewExtra({ name: "", quantity: "1", price: "" });
+                      setExtraAddError("");
+                    }}
+                    className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  >
                     Cancelar
                   </button>
                 </div>
               </div>
             ) : (
-              <button type="button" onClick={() => setAddingExtra(true)}
-                className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-700">
+              <button
+                type="button"
+                onClick={() => setAddingExtra(true)}
+                className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-700"
+              >
                 <span className="text-base leading-none">+</span> Adicionar adicional
-              </button>
-            )}
-          </div>
-
-          {/* ── Opções do produto ─────────────────────────────────────── */}
-          <div className="px-5 py-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Opções do produto</p>
-                <p className="text-[11px] text-gray-400">Grupos de escolha — ex: tipo, molho, ponto</p>
-              </div>
-              {optionGroups.length > 0 && (
-                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-600">
-                  {optionGroups.length}
-                </span>
-              )}
-            </div>
-
-            {optionGroups.length === 0 && !addingGroup && (
-              <p className="rounded-lg border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
-                Nenhum grupo de opções
-              </p>
-            )}
-
-            {optionGroups.map((group) => (
-              <div key={group.id} className="rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-800">{group.name}</p>
-                    <p className="text-[11px] text-gray-500">
-                      {group.required ? "Obrigatório" : "Opcional"}
-                      {" · "}
-                      {group.maxSelect === 1 ? "escolha 1" : `escolha ${group.minSelect}–${group.maxSelect}`}
-                    </p>
-                  </div>
-                  <button type="button" onClick={() => handleDeleteOptionGroup(group.id)}
-                    className="shrink-0 text-xs text-red-400 hover:underline">Remover grupo</button>
-                </div>
-
-                {group.options.length > 0 && (
-                  <ul className="space-y-1.5">
-                    {group.options.map((opt) => (
-                      <li key={opt.id} className="flex items-center gap-2 rounded-lg bg-white border border-blue-100 px-2.5 py-2">
-                        <div className="flex-1 min-w-0">
-                          <span className="block truncate text-xs font-medium text-gray-800">{opt.name}</span>
-                          {opt.portion && <span className="text-[11px] text-gray-400">{opt.portion}</span>}
-                        </div>
-                        <span className="shrink-0 text-xs font-semibold text-gray-600">
-                          {opt.price > 0 ? `+R$ ${opt.price.toFixed(2)}` : "Grátis"}
-                        </span>
-                        <button type="button" onClick={() => handleDeleteOption(group.id, opt.id)}
-                          className="shrink-0 text-[10px] text-red-400 hover:underline">✕</button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {addingOptionFor === group.id ? (
-                  <div className="space-y-2 pt-1">
-                    <div className="grid grid-cols-2 gap-2">
-                      <input value={newOption.name} onChange={(e) => setNewOption((f) => ({ ...f, name: e.target.value }))}
-                        placeholder="Nome (ex: Shoyu)"
-                        className="col-span-2 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                      <input value={newOption.portion} onChange={(e) => setNewOption((f) => ({ ...f, portion: e.target.value }))}
-                        placeholder="Porção (opcional)"
-                        className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                      <div className="relative">
-                        <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
-                        <input value={newOption.price} onChange={(e) => setNewOption((f) => ({ ...f, price: e.target.value }))}
-                          placeholder="0,00" type="number" step="0.01" min="0"
-                          className="w-full rounded-lg border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                      </div>
-                    </div>
-                    {optionAddError && <InlineError message={optionAddError} />}
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => handleAddOption(group.id)} disabled={optionAddBusy}
-                        className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50">
-                        {optionAddBusy ? <Spinner /> : "Adicionar"}
-                      </button>
-                      <button type="button" onClick={() => { setAddingOptionFor(null); setNewOption({ name: "", price: "", portion: "" }); setOptionAddError(""); }}
-                        className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50">
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => { setAddingOptionFor(group.id); setNewOption({ name: "", price: "", portion: "" }); setOptionAddError(""); }}
-                    className="text-xs font-medium text-blue-500 hover:text-blue-700">
-                    + Adicionar opção
-                  </button>
-                )}
-              </div>
-            ))}
-
-            {addingGroup ? (
-              <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-3 space-y-2">
-                <p className="text-[11px] font-medium text-blue-700">Novo grupo de opções</p>
-                <input value={newGroup.name} onChange={(e) => setNewGroup((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="Nome do grupo (ex: Tipo do peixe, Molho)"
-                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                <div className="flex gap-3 flex-wrap items-center">
-                  <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-                    <input type="checkbox" checked={newGroup.required}
-                      onChange={(e) => setNewGroup((f) => ({ ...f, required: e.target.checked }))}
-                      className="rounded" />
-                    Obrigatório
-                  </label>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-500">Mín</span>
-                    <input value={newGroup.minSelect} onChange={(e) => setNewGroup((f) => ({ ...f, minSelect: e.target.value }))}
-                      type="number" min="0" className="w-14 rounded border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-500">Máx</span>
-                    <input value={newGroup.maxSelect} onChange={(e) => setNewGroup((f) => ({ ...f, maxSelect: e.target.value }))}
-                      type="number" min="1" className="w-14 rounded border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                  </div>
-                </div>
-                {groupAddError && <InlineError message={groupAddError} />}
-                <div className="flex gap-2">
-                  <button type="button" onClick={handleAddOptionGroup} disabled={groupAddBusy}
-                    className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50">
-                    {groupAddBusy ? <Spinner /> : "Criar grupo"}
-                  </button>
-                  <button type="button" onClick={() => { setAddingGroup(false); setNewGroup({ name: "", required: false, minSelect: "0", maxSelect: "1" }); setGroupAddError(""); }}
-                    className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50">
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button type="button" onClick={() => setAddingGroup(true)}
-                className="flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-700">
-                <span className="text-base leading-none">+</span> Adicionar grupo de opções
               </button>
             )}
           </div>
@@ -1796,42 +1871,18 @@ function EditItemModal({
                   Variantes
                 </p>
                 {!form.hasVariants && (
-                  <p className="text-[11px] text-gray-400">Tamanhos com preço diferente (ex: Pequeno, Médio, Grande)</p>
+                  <p className="text-[11px] text-gray-400">Tamanhos, sabores ou opções com preço diferente</p>
                 )}
               </div>
               <ToggleSwitch
-                label="Delivery"
-                checked={form.showInDelivery}
-                onChange={() =>
-                  setForm((f) => ({ ...f, showInDelivery: !f.showInDelivery }))
-                }
-              />
-              <ToggleSwitch
-                label="Salão"
-                checked={form.showInDineIn}
-                onChange={() =>
-                  setForm((f) => ({ ...f, showInDineIn: !f.showInDineIn }))
-                }
-              />
-            </div>
-          </div>
-
-          {/* Variants toggle */}
-          <div className="border-t border-gray-100 pt-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-gray-700">Variantes</p>
-              <ToggleSwitch
-                label="Ativar variantes"
+                label="Ativar"
                 checked={form.hasVariants}
-                onChange={() =>
-                  setForm((f) => ({ ...f, hasVariants: !f.hasVariants }))
-                }
+                onChange={() => setForm((f) => ({ ...f, hasVariants: !f.hasVariants }))}
               />
             </div>
 
             {form.hasVariants && (
               <div className="space-y-2">
-                {/* Variant list with DnD */}
                 {variants.length > 0 && (
                   <DndContext
                     sensors={variantSensors}
@@ -1862,21 +1913,15 @@ function EditItemModal({
                   </DndContext>
                 )}
 
-                {/* Add variant form */}
                 {addingVariant ? (
-                  <div className="rounded-lg border border-dashed border-orange-200 bg-orange-50 p-3 space-y-2">
+                  <div className="rounded-xl border border-dashed border-orange-300 bg-orange-50 p-3 space-y-2">
+                    <p className="text-[11px] font-medium text-orange-700">Nova variante</p>
                     <div className="flex gap-2">
                       <input
                         value={newVariant.name}
                         onChange={(e) => setNewVariant((f) => ({ ...f, name: e.target.value }))}
-                        placeholder="Nome (ex: Grande)"
+                        placeholder="Nome (ex: 350ml, Grande)"
                         className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                      />
-                      <input
-                        value={newVariant.portion}
-                        onChange={(e) => setNewVariant((f) => ({ ...f, portion: e.target.value }))}
-                        placeholder="Porção (ex: 800g)"
-                        className="w-24 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
                       />
                       <div className="relative w-24">
                         <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
@@ -1897,7 +1942,7 @@ function EditItemModal({
                         type="button"
                         onClick={handleAddVariant}
                         disabled={addBusy}
-                        className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                        className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
                       >
                         {addBusy ? <Spinner /> : "Adicionar"}
                       </button>
@@ -1905,10 +1950,10 @@ function EditItemModal({
                         type="button"
                         onClick={() => {
                           setAddingVariant(false);
-                          setNewVariant({ name: "", price: "", portion: "" });
+                          setNewVariant({ name: "", price: "" });
                           setAddError("");
                         }}
-                        className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                        className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
                       >
                         Cancelar
                       </button>
@@ -1918,106 +1963,53 @@ function EditItemModal({
                   <button
                     type="button"
                     onClick={() => setAddingVariant(true)}
-                    className="text-xs font-medium text-orange-500 hover:text-orange-700"
+                    className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-700"
                   >
-                    + Adicionar variante
+                    <span className="text-base leading-none">+</span> Adicionar variante
                   </button>
                 )}
               </div>
             )}
           </div>
 
-          {/* Extras section */}
-          <div className="border-t border-gray-100 pt-4 space-y-3">
-            <p className="text-xs font-medium text-gray-700">Adicionais</p>
+          {/* ── Configurações ─────────────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              Configurações
+            </p>
 
-            {extras.length > 0 && (
-              <ul className="space-y-1.5">
-                {extras.map((e) => (
-                  <li
-                    key={e.id}
-                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
-                  >
-                    <span className="flex-1 truncate">{e.name}</span>
-                    <span className="mx-3 text-gray-500 text-xs whitespace-nowrap">
-                      x{e.quantity} · R$ {e.price.toFixed(2)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteExtra(e.id)}
-                      className="text-red-400 hover:text-red-600 text-xs leading-none"
-                      aria-label="Remover extra"
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {addingExtra ? (
-              <div className="rounded-lg border border-dashed border-orange-200 bg-orange-50 p-3 space-y-2">
-                <div className="flex gap-2">
-                  <input
-                    value={newExtra.name}
-                    onChange={(e) => setNewExtra((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="Nome (ex: Queijo extra)"
-                    className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                  />
-                  <input
-                    value={newExtra.quantity}
-                    onChange={(e) => setNewExtra((f) => ({ ...f, quantity: e.target.value }))}
-                    placeholder="Qtd"
-                    type="number"
-                    min="1"
-                    step="1"
-                    className="w-16 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                  />
-                  <input
-                    value={newExtra.price}
-                    onChange={(e) => setNewExtra((f) => ({ ...f, price: e.target.value }))}
-                    placeholder="Preço"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                  />
-                </div>
-                {extraAddError && <InlineError message={extraAddError} />}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleAddExtra}
-                    disabled={extraAddBusy}
-                    className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-                  >
-                    {extraAddBusy ? <Spinner /> : "Adicionar"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAddingExtra(false);
-                      setNewExtra({ name: "", quantity: "1", price: "", portion: "" });
-                      setExtraAddError("");
-                    }}
-                    className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Canais de venda</label>
+              <div className="flex gap-4 pt-0.5">
+                <ToggleSwitch
+                  label="Delivery"
+                  checked={form.showInDelivery}
+                  onChange={() => setForm((f) => ({ ...f, showInDelivery: !f.showInDelivery }))}
+                />
+                <ToggleSwitch
+                  label="Salão"
+                  checked={form.showInDineIn}
+                  onChange={() => setForm((f) => ({ ...f, showInDineIn: !f.showInDineIn }))}
+                />
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAddingExtra(true)}
-                className="text-xs font-medium text-orange-500 hover:text-orange-700"
-              >
-                + Adicionar adicional
-              </button>
-            )}
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Código interno</label>
+              <input
+                value={form.code}
+                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                placeholder="Código do produto (opcional)"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
           </div>
 
-          {error && <InlineError message={error} />}
+          {error && (
+            <div className="px-5 pb-4">
+              <InlineError message={error} />
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -2370,6 +2362,7 @@ export function MenuManager({
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [filterQuery, setFilterQuery] = useState("");
   const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
+  const [newItemOpen, setNewItemOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<{
     item: Item;
     categoryId: string;
@@ -2409,7 +2402,8 @@ export function MenuManager({
 
   async function handleModalSave(patch: EditModalForm) {
     if (!editingItem) return;
-    const { item, categoryId } = editingItem;
+    const { item, categoryId: oldCategoryId } = editingItem;
+    const newCategoryId = patch.categoryId || oldCategoryId;
     const body: Record<string, unknown> = {
       name: patch.name.trim(),
       description: patch.description.trim() || undefined,
@@ -2420,21 +2414,34 @@ export function MenuManager({
       showInDineIn: patch.showInDineIn,
       hasVariants: patch.hasVariants,
       code: patch.code.trim() || undefined,
+      servingSize: patch.servingSize ?? undefined,
+      portionInfo: patch.portionInfo.trim() || undefined,
+      ...(newCategoryId !== oldCategoryId && { categoryId: newCategoryId }),
     };
     const data = await apiFetch(`/api/menu/items/${item.id}`, "PATCH", body);
     const updated: Item = {
       ...item,
       ...data.data,
       price: Number(data.data.price),
+      servingSize: data.data.servingSize ?? null,
+      portionInfo: data.data.portionInfo ?? null,
       variants: item.variants,
     };
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id === categoryId
-          ? { ...c, items: c.items.map((it) => (it.id === item.id ? updated : it)) }
-          : c
-      )
-    );
+    setCategories((prev) => {
+      if (newCategoryId === oldCategoryId) {
+        return prev.map((c) =>
+          c.id === oldCategoryId
+            ? { ...c, items: c.items.map((it) => (it.id === item.id ? updated : it)) }
+            : c
+        );
+      }
+      // Category changed: remove from old, append to new
+      return prev.map((c) => {
+        if (c.id === oldCategoryId) return { ...c, items: c.items.filter((it) => it.id !== item.id) };
+        if (c.id === newCategoryId) return { ...c, items: [...c.items, updated] };
+        return c;
+      });
+    });
     refresh();
   }
 
@@ -2504,6 +2511,7 @@ export function MenuManager({
       <TopBar
         categories={categories}
         onAdded={addCategory}
+        onNewItem={() => setNewItemOpen(true)}
         onBulkPrice={() => setBulkPriceOpen(true)}
       />
 
@@ -2552,7 +2560,7 @@ export function MenuManager({
                 filterActive={isFilterActive}
                 onChange={updateCategory}
                 onDelete={removeCategory}
-                onEditItem={(item, categoryId) => setEditingItem({ item, categoryId })}
+                onEditItem={(item, categoryId: string) => setEditingItem({ item, categoryId })}
               />
             ))}
           </div>
@@ -2578,9 +2586,26 @@ export function MenuManager({
         onApplied={refresh}
       />
 
+      {/* New item modal */}
+      <NewItemModal
+        categories={categories}
+        open={newItemOpen}
+        onClose={() => setNewItemOpen(false)}
+        onCreated={(item, categoryId) => {
+          setCategories((prev) =>
+            prev.map((c) =>
+              c.id === categoryId ? { ...c, items: [...c.items, item] } : c
+            )
+          );
+          refresh();
+        }}
+      />
+
       {/* Edit item modal */}
       <EditItemModal
         item={editingItem?.item ?? null}
+        categories={categories}
+        currentCategoryId={editingItem?.categoryId ?? ""}
         onClose={() => { setEditingItem(null); refresh(); }}
         onSave={handleModalSave}
         onDelete={handleModalDelete}

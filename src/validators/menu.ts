@@ -42,9 +42,13 @@ export const createMenuItemSchema = z.object({
   showInDineIn: z.boolean().default(true),
   hasVariants: z.boolean().default(false),
   code: z.string().max(100).optional(),
+  servingSize: z.number().int().min(1).max(20).optional(),
+  portionInfo: z.string().max(50).optional(),
 });
 
-export const updateMenuItemSchema = createMenuItemSchema.partial();
+export const updateMenuItemSchema = createMenuItemSchema.partial().extend({
+  categoryId: z.string().cuid().optional(),
+});
 
 export const reorderItemsSchema = z.object({
   items: z.array(

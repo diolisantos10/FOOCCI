@@ -207,6 +207,8 @@ model MenuItem {
   showInDineIn   Boolean @default(true)  // false = hidden from QR dine-in menu
   hasVariants    Boolean @default(false) // true = must select a variant before add-to-cart
   code        String?
+  servingSize Int?     // number of people (1, 2, 3, 4+)
+  portionInfo String?  // free-text weight/volume e.g. "300g", "500ml"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -768,7 +770,7 @@ model RestaurantBrandConfig {
   instagramUrl         String?
   tiktokUrl            String?
 
-  // ── Review links ────────────────────────────────────────────
+  // ── Review links (shown in CRM Avaliações tab) ───────────────
   googleReviewUrl      String?
   ifoodReviewUrl       String?
 

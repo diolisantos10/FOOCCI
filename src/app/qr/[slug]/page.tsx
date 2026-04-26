@@ -61,22 +61,11 @@ export default async function QRMenuPage({
           variants: {
             where: { isAvailable: true },
             orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-            select: { id: true, name: true, price: true, portion: true, isAvailable: true },
+            select: { id: true, name: true, price: true, isAvailable: true },
           },
           extras: {
-            where: { isAvailable: true },
             orderBy: { name: "asc" },
-            select: { id: true, name: true, quantity: true, price: true, portion: true },
-          },
-          optionGroups: {
-            orderBy: { sortOrder: "asc" },
-            include: {
-              options: {
-                where: { isAvailable: true },
-                orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-                select: { id: true, name: true, price: true, portion: true },
-              },
-            },
+            select: { id: true, name: true, quantity: true, price: true },
           },
         },
       },
@@ -99,7 +88,6 @@ export default async function QRMenuPage({
           id: v.id,
           name: v.name,
           price: Number(v.price),
-          portion: v.portion ?? null,
           isAvailable: v.isAvailable,
         })),
         extras: i.extras.map((e) => ({
@@ -107,20 +95,6 @@ export default async function QRMenuPage({
           name: e.name,
           quantity: e.quantity,
           price: Number(e.price),
-          portion: e.portion ?? null,
-        })),
-        optionGroups: i.optionGroups.map((g) => ({
-          id: g.id,
-          name: g.name,
-          required: g.required,
-          minSelect: g.minSelect,
-          maxSelect: g.maxSelect,
-          options: g.options.map((o) => ({
-            id: o.id,
-            name: o.name,
-            price: Number(o.price),
-            portion: o.portion ?? null,
-          })),
         })),
       })),
     }));
