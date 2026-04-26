@@ -21,30 +21,64 @@ export const PRICE_POSITIONINGS = ["budget", "mid-range", "premium", "luxury"] a
 export const TARGET_GENDERS     = ["all", "female", "male"] as const;
 export const TARGET_INCOMES     = ["low", "middle", "upper-middle", "high"] as const;
 
+export const CUISINE_TYPES = [
+  "pizza", "sushi", "burger", "italiano", "brasileiro",
+  "saudável", "café", "sobremesa", "mexicano", "asiático",
+] as const;
+
+export const VOICE_TONE_PRESETS = ["formal", "casual", "divertido", "premium", "direto"] as const;
+export const BUSINESS_OBJECTIVES = ["velocidade", "experiência", "ticket_alto", "volume"] as const;
+
 export const brandPersonaSchema = z.object({
-  // ── Identidade
+  // ── Identidade (Section 1)
+  brandName:            z.string().max(100).optional(),
   tagline:              z.string().max(100).optional(),
+  shortDescription:     z.string().max(200).optional(),
   brandStory:           z.string().max(1000).optional(),
+  targetAudience:       z.string().max(200).optional(),
   missionStatement:     z.string().max(300).optional(),
   visionStatement:      z.string().max(300).optional(),
   brandValues:          z.array(z.string().max(40)).max(5).optional(),
 
-  // ── Personalidade
+  // ── Posicionamento (Section 2)
+  restaurantType:       z.string().max(100).optional(),
+  pricePositioning:     z.enum(PRICE_POSITIONINGS).optional(),
+  businessObjective:    z.enum(BUSINESS_OBJECTIVES).optional(),
+
+  // ── Tom de Voz preset (Section 3)
+  voiceTonePreset:      z.enum(VOICE_TONE_PRESETS).optional(),
+
+  // ── Personalidade (Section 4)
   brandArchetype:       z.enum(BRAND_ARCHETYPES).optional(),
-  personalityTraits:    z.array(z.string().max(30)).max(6).optional(),
+  personalityTraits:    z.array(z.string().max(30)).max(8).optional(),
   brandIs:              z.array(z.string().max(60)).max(5).optional(),
   brandIsNot:           z.array(z.string().max(60)).max(5).optional(),
 
-  // ── Público-alvo
+  // ── Estilo de Venda extras (Section 5)
+  comboFocus:           z.boolean().optional(),
+  avgTicketFocus:       z.boolean().optional(),
+
+  // ── Regras de Comunicação extras (Section 6)
+  canInsistAfterRefusal: z.boolean().optional(),
+  useClientName:         z.boolean().optional(),
+
+  // ── Contexto do Cardápio (Section 7)
+  mainDishes:             z.string().max(500).optional(),
+  differentials:          z.string().max(500).optional(),
+  mostProfitableProducts: z.string().max(300).optional(),
+
+  // ── Avatar (Section 8)
+  cuisineType:          z.enum(CUISINE_TYPES).optional(),
+
+  // ── Público-alvo detalhado
   targetAgeRange:       z.string().max(20).optional(),
   targetGender:         z.enum(TARGET_GENDERS).optional(),
   targetIncome:         z.enum(TARGET_INCOMES).optional(),
   targetLifestyle:      z.string().max(500).optional(),
   targetPainPoints:     z.string().max(500).optional(),
 
-  // ── Posicionamento
+  // ── Posicionamento detalhado
   uniqueValueProposition: z.string().max(300).optional(),
-  pricePositioning:       z.enum(PRICE_POSITIONINGS).optional(),
   differentiators:        z.array(z.string().max(80)).max(5).optional(),
 
   // ── Vocabulário

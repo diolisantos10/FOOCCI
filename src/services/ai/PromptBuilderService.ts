@@ -177,6 +177,8 @@ function buildSystemPrompt(params: {
   const draftBlock = buildDraftBlock(draft);
   const customerBlock = buildCustomerBlock(customer);
 
+  const personaBlock = buildPersonaBlock(brandConfig.brandPersona);
+
   return `Você é o assistente virtual de pedidos do restaurante "${restaurant.name}" no WhatsApp.
 Sua função é ajudar clientes a fazerem pedidos de forma rápida e agradável.
 
@@ -184,6 +186,7 @@ Sua função é ajudar clientes a fazerem pedidos de forma rápida e agradável.
 IDENTIDADE & COMPORTAMENTO
 ══════════════════════════════════════
 ${behaviorBlock}
+${personaBlock ? `\n══════════════════════════════════════\nPERFIL DA MARCA\n══════════════════════════════════════\n${personaBlock}` : ""}
 
 ══════════════════════════════════════
 INFORMAÇÕES DO RESTAURANTE
@@ -221,6 +224,74 @@ REGRAS OBRIGATÓRIAS (nunca viole)
 5. Nunca confirme um pedido vazio.
 6. Se não tiver certeza sobre a intenção do cliente, pergunte antes de agir.
 `.trim();
+}
+
+/**
+ * Converts the brandPersona JSON field into a concise brand context block
+ * injected into the AI system prompt. Returns null when no persona is set.
+ */
+function buildPersonaBlock(persona: unknown): string | null {
+  if (!persona || typeof persona !== "object") return null;
+  const p = persona as Record<string, unknown>;
+  const lines: string[] = [];
+
+  // Identity
+  if (p.brandName)        lines.push(`Marca: ${p.brandName}`);
+  if (p.shortDescription) lines.push(`Identidade: ${p.shortDescription}`);
+  if (p.targetAudience)   lines.push(`Público-alvo: ${p.targetAudience}`);
+  if (p.brandStory)       lines.push(`História: ${p.brandStory}`);
+
+  // Positioning
+  if (p.restaurantType)   lines.push(`Tipo: ${p.restaurantType}`);
+  if (p.cuisineType)      lines.push(`Culinária: ${p.cuisineType}`);
+  if (p.pricePositioning) {
+    const map: Record<string, string> = {
+      budget: "econômico/popular", "mid-range": "médio", premium: "premium", luxury: "luxo/sofisticado",
+    };
+    lines.push(`Posicionamento: ${map[p.pricePositioning as string] ?? p.pricePositioning}`);
+  }
+  if (p.businessObjective) {
+    const map: Record<string, string> = {
+      velocidade: "velocidade de atendimento", "experiência": "experiência memorável",
+      ticket_alto: "ticket médio alto", volume: "alto volume de pedidos",
+    };
+    lines.push(`Objetivo: ${map[p.businessObjective as string] ?? p.businessObjective}`);
+  }
+
+  // Personality traits
+  if (Array.isArray(p.personalityTraits) && p.personalityTraits.length > 0) {
+    lines.push(`Personalidade: ${(p.personalityTraits as string[]).join(", ")}`);
+  }
+
+  // Menu context
+  if (p.mainDishes)             lines.push(`Pratos principais: ${p.mainDishes}`);
+  if (p.differentials)          lines.push(`Diferenciais: ${p.differentials}`);
+  if (p.mostProfitableProducts) lines.push(`Produtos prioritários: ${p.mostProfitableProducts}`);
+
+  // Behavioral rules derived from persona
+  const rules: string[] = [];
+  if (p.comboFocus)           rules.push("Priorize sugestões de combos e promoções.");
+  if (p.avgTicketFocus)       rules.push("Trabalhe ativamente para aumentar o valor de cada pedido.");
+  if (p.canInsistAfterRefusal === false)
+    rules.push("Se o cliente recusar uma sugestão, aceite imediatamente — nunca insista.");
+  if (p.useClientName === false)
+    rules.push("Não use o nome do cliente nas mensagens.");
+  if (p.voiceTonePreset) {
+    const toneMap: Record<string, string> = {
+      formal:    "Mantenha linguagem formal e profissional em todo momento.",
+      casual:    "Use linguagem casual, próxima e descontraída.",
+      divertido: "Seja animado, use humor leve e emojis para criar energia positiva.",
+      premium:   "Transmita exclusividade e sofisticação em cada palavra.",
+      direto:    "Seja direto e objetivo — respostas curtas, sem rodeios.",
+    };
+    if (toneMap[p.voiceTonePreset as string]) rules.push(toneMap[p.voiceTonePreset as string]!);
+  }
+
+  if (rules.length > 0) {
+    lines.push(`\nREGRAS ESPECÍFICAS DA MARCA:\n${rules.map((r) => `- ${r}`).join("\n")}`);
+  }
+
+  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 function buildVoiceBlock(cfg: RestaurantBrandConfig): string {
