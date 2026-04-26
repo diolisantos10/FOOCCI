@@ -16,17 +16,6 @@ const TIER_CONFIG: Record<CustomerTier, { label: string; icon: string; bar: stri
 
 export type DateFilterPreset = "total" | "month" | "year" | "custom";
 
-function getPresetRange(preset: DateFilterPreset): { from: Date; to: Date } | undefined {
-  const now = new Date();
-  if (preset === "month") {
-    return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: now };
-  }
-  if (preset === "year") {
-    return { from: new Date(now.getFullYear(), 0, 1), to: now };
-  }
-  return undefined;
-}
-
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function KPICard({
@@ -39,14 +28,15 @@ function KPICard({
   label: string;
   value: string | number;
   sub?: string;
-  accent?: "green" | "red" | "blue" | "brand";
+  accent?: "green" | "yellow" | "red" | "blue" | "brand";
   loading?: boolean;
 }) {
   const accentClass = {
-    green: "text-green-700",
-    red:   "text-red-600",
-    blue:  "text-blue-700",
-    brand: "text-brand-700",
+    green:  "text-green-700",
+    yellow: "text-yellow-600",
+    red:    "text-red-600",
+    blue:   "text-blue-700",
+    brand:  "text-brand-700",
   }[accent ?? "brand"] ?? "text-brand-700";
 
   return (
@@ -84,19 +74,21 @@ export function OverviewTab({
   const [localFrom, setLocalFrom] = useState(customFrom);
   const [localTo,   setLocalTo]   = useState(customTo);
 
-  const activeRate = stats.totalCustomers > 0
-    ? Math.round((stats.activeCustomers / stats.totalCustomers) * 100)
-    : 0;
+  // Temperature bar calculations
+  const tempTotal = stats.ativoCustomers + stats.mornoCustomers + stats.frioCustomers;
+  const ativoPct  = tempTotal > 0 ? Math.round((stats.ativoCustomers / tempTotal) * 100) : 0;
+  const mornoPct  = tempTotal > 0 ? Math.round((stats.mornoCustomers / tempTotal) * 100) : 0;
+  const frioPct   = tempTotal > 0 ? Math.round((stats.frioCustomers  / tempTotal) * 100) : 0;
+
+  // Channel calculations
+  const totalChannelCustomers = stats.deliveryOnlyCustomers + stats.dineInOnlyCustomers + stats.bothChannelsCustomers;
 
   const totalSegmented = stats.segments.reduce((s, x) => s + x.count, 0);
-  const totalOrderTypes = stats.deliveryOrders + stats.dineInOrders;
-  const deliveryPct = totalOrderTypes > 0 ? Math.round((stats.deliveryOrders / totalOrderTypes) * 100) : 0;
-  const dineInPct   = totalOrderTypes > 0 ? Math.round((stats.dineInOrders  / totalOrderTypes) * 100) : 0;
 
   const DATE_PRESETS: { id: DateFilterPreset; label: string }[] = [
-    { id: "total", label: "Total"      },
-    { id: "month", label: "Este mês"   },
-    { id: "year",  label: "Este ano"   },
+    { id: "total",  label: "Total"         },
+    { id: "month",  label: "Este mês"      },
+    { id: "year",   label: "Este ano"      },
     { id: "custom", label: "Personalizado" },
   ];
 
@@ -109,15 +101,13 @@ export function OverviewTab({
   }
 
   function applyCustom() {
-    if (localFrom && localTo) {
-      onDateChange("custom", localFrom, localTo);
-    }
+    if (localFrom && localTo) onDateChange("custom", localFrom, localTo);
   }
 
   const newCustomersLabel =
-    datePreset === "month"  ? "Novos clientes (mês)"  :
-    datePreset === "year"   ? "Novos clientes (ano)"   :
-    datePreset === "custom" ? "Novos clientes (período)" :
+    datePreset === "month"  ? "Novos (mês)"     :
+    datePreset === "year"   ? "Novos (ano)"      :
+    datePreset === "custom" ? "Novos (período)"  :
                               "Novos clientes";
 
   return (
@@ -167,25 +157,32 @@ export function OverviewTab({
         )}
       </div>
 
-      {/* ── KPI grid ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* ── KPI grid (5 cards) ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <KPICard
-          label="Total de clientes"
+          label="Total"
           value={stats.totalCustomers}
           accent="brand"
           loading={loading}
         />
         <KPICard
-          label="Clientes ativos"
-          value={stats.activeCustomers}
-          sub="Pedido nos últimos 30 dias"
+          label="Ativos"
+          value={stats.ativoCustomers}
+          sub="≤ 30 dias"
           accent="green"
           loading={loading}
         />
         <KPICard
-          label="Clientes inativos"
-          value={stats.inactiveCustomers}
-          sub="Sem pedido há 30+ dias"
+          label="Mornos"
+          value={stats.mornoCustomers}
+          sub="31–60 dias"
+          accent="yellow"
+          loading={loading}
+        />
+        <KPICard
+          label="Frios"
+          value={stats.frioCustomers}
+          sub="> 60 dias"
           accent="red"
           loading={loading}
         />
@@ -197,75 +194,64 @@ export function OverviewTab({
         />
       </div>
 
-      {/* ── Engajamento ──────────────────────────────────────────────────── */}
+      {/* ── Temperatura da base ──────────────────────────────────────────── */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-          Engajamento da base
+          Temperatura da base
         </p>
-        {stats.totalCustomers === 0 ? (
-          <p className="text-sm text-gray-400">Nenhum cliente ainda.</p>
+        {tempTotal === 0 ? (
+          <p className="text-sm text-gray-400">Nenhum cliente com pedidos ainda.</p>
         ) : (
           <>
             <div className="flex h-3 w-full overflow-hidden rounded-full bg-gray-100">
-              <div
-                className="bg-green-500 transition-all"
-                style={{ width: `${activeRate}%` }}
-              />
-              <div
-                className="bg-red-300 transition-all"
-                style={{ width: `${100 - activeRate}%` }}
-              />
+              <div className="bg-green-500 transition-all"  style={{ width: `${ativoPct}%` }} />
+              <div className="bg-yellow-400 transition-all" style={{ width: `${mornoPct}%` }} />
+              <div className="bg-red-400 transition-all"    style={{ width: `${frioPct}%`  }} />
             </div>
-            <div className="mt-2.5 flex gap-4 text-xs text-gray-600">
+            <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-green-500" />
-                {activeRate}% ativos ({stats.activeCustomers})
+                🟢 Ativo: {ativoPct}% ({stats.ativoCustomers})
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-red-300" />
-                {100 - activeRate}% inativos ({stats.inactiveCustomers})
+                <span className="h-2 w-2 rounded-full bg-yellow-400" />
+                🟡 Morno: {mornoPct}% ({stats.mornoCustomers})
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-red-400" />
+                🔴 Frio: {frioPct}% ({stats.frioCustomers})
               </span>
             </div>
           </>
         )}
       </div>
 
-      {/* ── Delivery / Presencial ─────────────────────────────────────────── */}
+      {/* ── Canal de pedidos (por clientes únicos) ────────────────────────── */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
           Canal de pedidos
         </p>
-        {totalOrderTypes === 0 ? (
+        <p className="text-[10px] text-gray-400 mb-3">Clientes únicos por canal preferido</p>
+        {totalChannelCustomers === 0 ? (
           <p className="text-sm text-gray-400">Nenhum pedido registrado ainda.</p>
         ) : (
-          <>
-            <div className="flex h-3 w-full overflow-hidden rounded-full bg-gray-100 mb-3">
-              <div
-                className="bg-blue-500 transition-all"
-                style={{ width: `${deliveryPct}%` }}
-              />
-              <div
-                className="bg-amber-400 transition-all"
-                style={{ width: `${dineInPct}%` }}
-              />
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl bg-blue-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-500 mb-1">🛵 Só Delivery</p>
+              <p className="text-xl font-extrabold text-blue-700">{stats.deliveryOnlyCustomers.toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-blue-400">clientes</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-blue-50 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-500 mb-1">
-                  🛵 Delivery
-                </p>
-                <p className="text-xl font-extrabold text-blue-700">{stats.deliveryOrders.toLocaleString("pt-BR")}</p>
-                <p className="text-[10px] text-blue-400">{deliveryPct}% dos pedidos</p>
-              </div>
-              <div className="rounded-xl bg-amber-50 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 mb-1">
-                  🍽️ Presencial
-                </p>
-                <p className="text-xl font-extrabold text-amber-700">{stats.dineInOrders.toLocaleString("pt-BR")}</p>
-                <p className="text-[10px] text-amber-500">{dineInPct}% dos pedidos</p>
-              </div>
+            <div className="rounded-xl bg-amber-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 mb-1">🍽️ Só Presencial</p>
+              <p className="text-xl font-extrabold text-amber-700">{stats.dineInOnlyCustomers.toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-amber-500">clientes</p>
             </div>
-          </>
+            <div className="rounded-xl bg-purple-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1">🔀 Ambos</p>
+              <p className="text-xl font-extrabold text-purple-700">{stats.bothChannelsCustomers.toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-purple-400">clientes</p>
+            </div>
+          </div>
         )}
       </div>
 

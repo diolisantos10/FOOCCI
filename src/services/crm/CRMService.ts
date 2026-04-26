@@ -79,13 +79,15 @@ export type Opportunity = {
 // ── Overview stats ────────────────────────────────────────────────────────────
 
 export type OverviewStats = {
-  totalCustomers:    number;
-  activeCustomers:   number;   // lastOrderAt within 30 days
-  inactiveCustomers: number;   // isActive but no order in 30+ days
-  newCustomers:      number;   // created within selected date range
+  totalCustomers:         number;
+  ativoCustomers:         number; // lastOrderAt ≤ 30 days
+  mornoCustomers:         number; // lastOrderAt 31-60 days
+  frioCustomers:          number; // lastOrderAt > 60 days
+  newCustomers:           number; // created within selected date range
   segments: Array<{ tier: CustomerTier; count: number }>;
-  deliveryOrders:    number;
-  dineInOrders:      number;
+  deliveryOnlyCustomers:  number; // ordered only via delivery
+  dineInOnlyCustomers:    number; // ordered only presencially
+  bothChannelsCustomers:  number; // ordered via both channels
 };
 
 // ── Automation shape ──────────────────────────────────────────────────────────
@@ -118,10 +120,11 @@ export class CRMService {
 
   static async getCustomers(
     restaurantId: string,
-    filter?: "inactive" | "neverOrdered" | "vip" | "recent" | "all" | "firstTime"
+    filter?: "inactive" | "neverOrdered" | "morno" | "frio" | "vip" | "recent" | "all" | "firstTime"
   ): Promise<ServiceResult<CRMCustomer[]>> {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
+    const sixtyDaysAgo  = new Date(now.getTime() - 60 * 86_400_000);
     const sevenDaysAgo  = new Date(now.getTime() - 7  * 86_400_000);
 
     let where: Record<string, unknown> = { restaurantId };
@@ -131,6 +134,18 @@ export class CRMService {
         ...where,
         isActive: true,
         lastOrderAt: { lt: thirtyDaysAgo },
+      };
+    } else if (filter === "morno") {
+      where = {
+        ...where,
+        isActive: true,
+        lastOrderAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo },
+      };
+    } else if (filter === "frio") {
+      where = {
+        ...where,
+        isActive: true,
+        lastOrderAt: { lt: sixtyDaysAgo },
       };
     } else if (filter === "neverOrdered") {
       where = {
@@ -371,6 +386,7 @@ export class CRMService {
   ): Promise<ServiceResult<OverviewStats>> {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
+    const sixtyDaysAgo  = new Date(now.getTime() - 60 * 86_400_000);
 
     const newCustomersFilter = dateRange
       ? { gte: dateRange.from, lte: dateRange.to }
@@ -378,26 +394,49 @@ export class CRMService {
 
     const [
       totalCustomers,
-      activeCustomers,
+      ativoCustomers,
+      mornoCustomers,
+      frioCustomers,
       newCustomers,
       bronze, prata, ouro, diamante,
-      deliveryOrders, dineInOrders,
+      channelData,
     ] = await Promise.all([
       prisma.customer.count({ where: { restaurantId } }),
-      prisma.customer.count({ where: { restaurantId, isActive: true, lastOrderAt: { gte: thirtyDaysAgo } } }),
+      prisma.customer.count({ where: { restaurantId, lastOrderAt: { gte: thirtyDaysAgo } } }),
+      prisma.customer.count({ where: { restaurantId, lastOrderAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } } }),
+      prisma.customer.count({ where: { restaurantId, lastOrderAt: { lt: sixtyDaysAgo } } }),
       prisma.customer.count({ where: { restaurantId, createdAt: newCustomersFilter } }),
       prisma.customer.count({ where: { restaurantId, totalSpend: { lt:  300 } } }),
       prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 300, lt:  800 } } }),
       prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 800, lt: 2000 } } }),
       prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 2000 } } }),
-      prisma.order.count({ where: { restaurantId, type: "DELIVERY" } }),
-      prisma.order.count({ where: { restaurantId, type: "DINE_IN" } }),
+      prisma.order.groupBy({
+        by: ["customerId", "type"],
+        where: { restaurantId },
+        _count: { _all: true },
+      }),
     ]);
+
+    // Customer-based channel segmentation
+    const customerChannelMap = new Map<string, Set<string>>();
+    for (const row of channelData) {
+      if (!customerChannelMap.has(row.customerId)) {
+        customerChannelMap.set(row.customerId, new Set());
+      }
+      customerChannelMap.get(row.customerId)!.add(row.type as string);
+    }
+    let deliveryOnlyCustomers = 0, dineInOnlyCustomers = 0, bothChannelsCustomers = 0;
+    for (const channels of customerChannelMap.values()) {
+      if (channels.has("DELIVERY") && channels.has("DINE_IN")) bothChannelsCustomers++;
+      else if (channels.has("DELIVERY")) deliveryOnlyCustomers++;
+      else if (channels.has("DINE_IN"))  dineInOnlyCustomers++;
+    }
 
     return serviceOk({
       totalCustomers,
-      activeCustomers,
-      inactiveCustomers: Math.max(0, totalCustomers - activeCustomers),
+      ativoCustomers,
+      mornoCustomers,
+      frioCustomers,
       newCustomers,
       segments: [
         { tier: "DIAMANTE" as CustomerTier, count: diamante },
@@ -405,8 +444,9 @@ export class CRMService {
         { tier: "PRATA"    as CustomerTier, count: prata },
         { tier: "BRONZE"   as CustomerTier, count: bronze },
       ],
-      deliveryOrders,
-      dineInOrders,
+      deliveryOnlyCustomers,
+      dineInOnlyCustomers,
+      bothChannelsCustomers,
     });
   }
 }

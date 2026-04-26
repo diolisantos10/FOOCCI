@@ -9,7 +9,7 @@ import { NewCustomerButton } from "./NewCustomerButton";
 export const metadata = { title: "Clientes" };
 
 const VALID_SORT_COLS = new Set<SortCol>(["totalSpend", "totalOrders", "lastOrderAt"]);
-const VALID_FILTERS   = new Set<FilterTab>(["all", "vip", "inactive", "neverOrdered", "firstTime", "recent"]);
+const VALID_FILTERS   = new Set<FilterTab>(["all", "vip", "inactive", "neverOrdered", "morno", "frio", "firstTime", "recent"]);
 
 export default async function CustomersPage({
   searchParams,
@@ -32,6 +32,7 @@ export default async function CustomersPage({
     : "all";
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const sixtyDaysAgo  = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
 
   // Unified filter definitions — same logic as CRMService
   const filterClause = (() => {
@@ -43,6 +44,10 @@ export default async function CustomersPage({
         ]};
       case "inactive":
         return { isActive: true as const, lastOrderAt: { lt: thirtyDaysAgo } };
+      case "morno":
+        return { isActive: true as const, lastOrderAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } };
+      case "frio":
+        return { isActive: true as const, lastOrderAt: { lt: sixtyDaysAgo } };
       case "neverOrdered":
         return { isActive: true as const, totalOrders: 0 };
       case "firstTime":

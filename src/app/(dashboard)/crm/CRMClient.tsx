@@ -25,6 +25,8 @@ const PRIORITY_CONFIG: Record<string, { label: string; dot: string }> = {
 const CUSTOMER_FILTER_LABELS: Record<string, string> = {
   all:          "Top Gasto",
   inactive:     "Inativos 30d+",
+  morno:        "Mornos (31–60d)",
+  frio:         "Frios (60d+)",
   neverOrdered: "Nunca pediu",
   vip:          "Clientes VIP",
   firstTime:    "1º pedido",
@@ -379,7 +381,7 @@ function ReactivationHelper({
 
 // ── Customers Tab ─────────────────────────────────────────────────────────────
 
-type CRMFilter = "all" | "inactive" | "neverOrdered" | "vip" | "firstTime" | "recent";
+type CRMFilter = "all" | "inactive" | "morno" | "frio" | "neverOrdered" | "vip" | "firstTime" | "recent";
 
 function CustomersTab({
   initialCustomers,
@@ -710,7 +712,7 @@ ${googleReviewUrl ? `\n⭐ Google: ${googleReviewUrl}` : "⭐ Google: [configure
 
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "overview" | "opportunities" | "customers" | "agente" | "avaliacoes";
+type Tab = "overview" | "opportunities" | "customers" | "agente" | "agenteCRM" | "avaliacoes";
 
 export function CRMClient({
   initialCustomers,
@@ -787,6 +789,7 @@ export function CRMClient({
     { id: "customers",     label: "Clientes" },
     { id: "avaliacoes",    label: "Avaliações" },
     { id: "agente",        label: "Agente IA" },
+    { id: "agenteCRM",     label: "Agente CRM" },
   ];
 
   function goToInactive() {
@@ -921,6 +924,70 @@ export function CRMClient({
             <p className="text-sm font-medium text-gray-700">Comportamentos automáticos de CRM</p>
             <p className="mt-1 text-xs text-gray-400">
               Reativação de inativos, mensagem de aniversário e follow-up pós-pedido configuráveis aqui.
+            </p>
+          </div>
+
+        </div>
+      )}
+
+      {tab === "agenteCRM" && (
+        <div className="space-y-6">
+
+          {/* Propósito */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">Agente CRM</h2>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Inteligência dedicada a relacionamento, retenção e reativação de clientes.
+                Separado do Agente IA de pedidos para foco total em receita.
+              </p>
+            </div>
+            <div className="rounded-lg border border-brand-100 bg-brand-50 p-4 space-y-2">
+              <p className="text-sm font-medium text-brand-800">Responsabilidades do Agente CRM:</p>
+              <ul className="space-y-1.5 text-sm text-brand-700">
+                {[
+                  "Identificar clientes inativos e acionar reativação",
+                  "Segmentar clientes por temperatura (Ativo, Morno, Frio)",
+                  "Sugerir mensagens personalizadas por segmento",
+                  "Monitorar oportunidades de fidelização",
+                  "Disparar alertas de VIPs em risco",
+                ].map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <span className="text-brand-500 font-bold">✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Segmentação por temperatura */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-gray-900">Segmentação por temperatura</h2>
+            <div className="space-y-2">
+              {[
+                { icon: "🟢", label: "Ativo",  desc: "Pedido nos últimos 30 dias — manter engajamento",        bg: "bg-green-50",  text: "text-green-700"  },
+                { icon: "🟡", label: "Morno",  desc: "Sem pedido entre 31 e 60 dias — momento de reativação",  bg: "bg-yellow-50", text: "text-yellow-700" },
+                { icon: "🔴", label: "Frio",   desc: "Sem pedido há mais de 60 dias — oferta agressiva",       bg: "bg-red-50",    text: "text-red-700"    },
+                { icon: "⬛", label: "Nunca pediu", desc: "Cadastrado mas sem pedido — ativar primeiro pedido", bg: "bg-gray-50",   text: "text-gray-700"   },
+              ].map((s) => (
+                <div key={s.label} className={`flex items-start gap-3 rounded-lg border border-gray-100 ${s.bg} p-3`}>
+                  <span className="text-lg leading-none mt-0.5">{s.icon}</span>
+                  <div>
+                    <p className={`text-sm font-semibold ${s.text}`}>{s.label}</p>
+                    <p className="text-xs text-gray-500">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Em breve */}
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Em breve</p>
+            <p className="text-sm font-medium text-gray-700">Automações CRM inteligentes</p>
+            <p className="mt-1 text-xs text-gray-400">
+              Disparo automático de mensagens por temperatura, campanhas segmentadas e relatórios de retenção.
             </p>
           </div>
 

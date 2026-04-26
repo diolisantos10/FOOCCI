@@ -16,8 +16,9 @@ export default async function CRMPage() {
   let customers:     CRMCustomer[]  = [];
   let opportunities: Opportunity[]  = [];
   let overviewStats: OverviewStats = {
-    totalCustomers: 0, activeCustomers: 0, inactiveCustomers: 0,
-    newCustomers: 0, segments: [], deliveryOrders: 0, dineInOrders: 0,
+    totalCustomers: 0, ativoCustomers: 0, mornoCustomers: 0, frioCustomers: 0,
+    newCustomers: 0, segments: [],
+    deliveryOnlyCustomers: 0, dineInOnlyCustomers: 0, bothChannelsCustomers: 0,
   };
   let reviewLinks: { google: string | null; ifood: string | null } = { google: null, ifood: null };
 
