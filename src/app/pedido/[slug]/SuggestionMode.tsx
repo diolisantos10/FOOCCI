@@ -39,12 +39,33 @@ const PROTEIN_KW: Record<Exclude<ProteinPref, "qualquer">, string[]> = {
                 "caprese", "margherita", "primavera", "napolitana", "brócoli", "brocoli"],
 };
 
+// Hard exclusion lists — checked against categoryName + item name + description.
+// Used by EXCLUSION_KW below and NOT for scoring.
+const FISH_EXCL = [
+  "peixe", "atum", "salmão", "salmao", "tilápia", "tilapia",
+  "bacalhau", "sardinha", "anchova", "moqueca",
+];
+const SEAFOOD_EXCL = [
+  "camarão", "camarao", "lagosta", "caranguejo", "mariscos",
+  "frutos do mar", "polvo", "lula", "ostra",
+];
+const PORK_EXCL = [
+  "porco", "bacon", "presunto", "linguiça", "linguica",
+  "chouriço", "chourico", "pernil", "salame", "pepperoni", "peperoni",
+];
+
 /**
  * Keywords whose presence EXCLUDES an item when the given protein preference is active.
- * Vegetarians must never see meat/chicken items; other preferences have no hard exclusions.
+ * Vegetarians must never see meat, chicken, fish, seafood, or pork.
  */
 const EXCLUSION_KW: Partial<Record<Exclude<ProteinPref, "qualquer">, string[]>> = {
-  vegetariano: [...PROTEIN_KW.carne, ...PROTEIN_KW.frango],
+  vegetariano: [
+    ...PROTEIN_KW.carne,
+    ...PROTEIN_KW.frango,
+    ...FISH_EXCL,
+    ...SEAFOOD_EXCL,
+    ...PORK_EXCL,
+  ],
 };
 
 const LEVE_KW  = ["grelhad", "light", "wrap", "fresc", "salada", "cozid", "fit", "vapor"];
@@ -507,8 +528,11 @@ export function SuggestionSheet({
               {results.length === 0 ? (
                 <div className="py-8 text-center">
                   <p className="text-3xl mb-3">🤷</p>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">
+                    Nenhuma opção compatível encontrada
+                  </p>
                   <p className="text-sm text-gray-500">
-                    Não encontrei itens que combinem exatamente com isso.
+                    Não encontrei uma opção compatível agora, mas posso te mostrar outras opções do cardápio.
                   </p>
                   <button
                     onClick={reset}
