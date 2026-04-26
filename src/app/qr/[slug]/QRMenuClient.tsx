@@ -11,6 +11,13 @@ type Variant = {
   isAvailable: boolean;
 };
 
+type Extra = {
+  id: string;
+  name: string;
+  quantity: number;
+  price: number;
+};
+
 type Item = {
   id: string;
   name: string;
@@ -19,6 +26,7 @@ type Item = {
   imageUrl: string | null;
   isAvailable: boolean;
   variants: Variant[];
+  extras: Extra[];
 };
 
 type Category = {
@@ -261,6 +269,32 @@ function ProductModal({
                       <span className="text-sm text-gray-800">{v.name}</span>
                       <span className="text-sm font-bold text-gray-900">
                         R$&nbsp;{formatPrice(v.price)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {item.extras.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  Adicionais
+                </p>
+                <div className="space-y-1.5">
+                  {item.extras.map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex items-center justify-between rounded-xl bg-orange-50 px-3 py-2.5 border border-orange-100"
+                    >
+                      <span className="text-sm text-gray-800">
+                        {e.name}
+                        {e.quantity > 1 && (
+                          <span className="ml-1 text-xs text-gray-400">×{e.quantity}</span>
+                        )}
+                      </span>
+                      <span className="text-sm font-bold text-gray-900">
+                        {e.price === 0 ? "Grátis" : `+ R$ ${formatPrice(e.price)}`}
                       </span>
                     </div>
                   ))}

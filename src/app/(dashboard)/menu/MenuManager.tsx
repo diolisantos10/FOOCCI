@@ -73,20 +73,8 @@ type Category = {
 };
 
 type CategoryFormState = { name: string; description: string };
-type ItemFormState = {
-  name: string;
-  description: string;
-  price: string;
-  imageUrl: string | null;
-};
 
 const EMPTY_CAT: CategoryFormState = { name: "", description: "" };
-const EMPTY_ITEM: ItemFormState = {
-  name: "",
-  description: "",
-  price: "",
-  imageUrl: null,
-};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -382,14 +370,15 @@ function AddItemForm({
   categoryId: string;
   onAdded: (item: Item) => void;
 }) {
-  const [form, setForm] = useState<ItemFormState>(EMPTY_ITEM);
-  const [busy, setBusy] = useState(false);
+  const [name, setName]   = useState("");
+  const [price, setPrice] = useState("");
+  const [busy, setBusy]   = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const price = parseFloat(form.price);
-    if (!form.name.trim() || isNaN(price) || price <= 0) {
+    const p = parseFloat(price);
+    if (!name.trim() || isNaN(p) || p <= 0) {
       setError("Nome e preço válido são obrigatórios.");
       return;
     }
@@ -399,15 +388,19 @@ function AddItemForm({
       const data = await apiFetch(
         `/api/menu/categories/${categoryId}/items`,
         "POST",
-        {
-          name: form.name.trim(),
-          description: form.description.trim() || undefined,
-          price,
-          imageUrl: form.imageUrl || undefined,
-        }
+        { name: name.trim(), price: p }
       );
-      onAdded({ ...data.data, price: Number(data.data.price), hasVariants: data.data.hasVariants ?? false, variants: [], extras: [] });
-      setForm(EMPTY_ITEM);
+      onAdded({
+        ...data.data,
+        price: Number(data.data.price),
+        hasVariants: data.data.hasVariants ?? false,
+        servingSize: data.data.servingSize ?? null,
+        portionInfo: data.data.portionInfo ?? null,
+        variants: [],
+        extras: [],
+      });
+      setName("");
+      setPrice("");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao adicionar.");
     } finally {
@@ -420,18 +413,20 @@ function AddItemForm({
       onSubmit={handleSubmit}
       className="border-t border-dashed border-gray-200 bg-gray-50 px-5 py-3 space-y-2"
     >
-      <p className="text-xs font-medium text-gray-500">Novo item</p>
+      <p className="text-xs font-medium text-gray-400">
+        Adição rápida — para detalhes, use <strong>+ Novo Produto</strong>
+      </p>
       <div className="flex gap-2">
         <input
-          value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           placeholder="Nome do item"
           required
           className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
         />
         <input
-          value={form.price}
-          onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
           placeholder="Preço"
           type="number"
           step="0.01"
@@ -439,27 +434,15 @@ function AddItemForm({
           required
           className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
         />
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+        >
+          {busy ? <Spinner /> : "OK"}
+        </button>
       </div>
-      <input
-        value={form.description}
-        onChange={(e) =>
-          setForm((f) => ({ ...f, description: e.target.value }))
-        }
-        placeholder="Descrição (opcional)"
-        className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-      />
-      <ImageUpload
-        value={form.imageUrl}
-        onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
-      />
       {error && <InlineError message={error} />}
-      <button
-        type="submit"
-        disabled={busy}
-        className="rounded bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-      >
-        {busy ? <Spinner /> : "Adicionar item"}
-      </button>
     </form>
   );
 }

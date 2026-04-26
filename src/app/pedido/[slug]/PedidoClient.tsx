@@ -96,6 +96,8 @@ interface Props {
   categories: MenuCategory[];
   knownCustomerPhone?: string | null;
   knownCustomerName?: string | null;
+  knownCustomerId?: string | null;
+  knownDefaultAddress?: { street: string; number: string; neighborhood: string; complement: string } | null;
   /** Instagram profile URL — shown as icon in ordering header if provided. */
   instagramUrl?: string | null;
   /** TikTok profile URL — shown as icon in ordering header if provided. */
@@ -757,7 +759,7 @@ function PhoneEntryCard({
   onSkip,
 }: {
   slug: string;
-  onIdentified: (name: string | null) => void;
+  onIdentified: (name: string | null, customerId?: string) => void;
   onSkip: () => void;
 }) {
   const [nameInput,  setNameInput]  = useState("");
@@ -777,9 +779,18 @@ function PhoneEntryCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: ph, name: nameInput.trim() }),
       });
-      const data: { found: boolean; name?: string } = await res.json();
+      const data: { found: boolean; name?: string; customerId?: string } = await res.json();
       const resolved = data.name ?? (nameInput.trim() ? nameInput.trim().split(/\s+/)[0]! : null);
-      onIdentified(resolved);
+      // Persist phone + name + customerId so other pages can reuse identity
+      if (resolved) {
+        try {
+          sessionStorage.setItem(
+            `foocci-customer-${slug}`,
+            JSON.stringify({ phone: ph, name: resolved, customerId: data.customerId })
+          );
+        } catch { /* ignore */ }
+      }
+      onIdentified(resolved, data.customerId);
     } catch {
       setError("Erro ao verificar. Tente novamente.");
       setLoading(false);
@@ -877,6 +888,7 @@ function ChoiceCard({
 export function PedidoClient({
   slug, restaurantName, logoUrl, phone, categories,
   knownCustomerPhone = null, knownCustomerName = null,
+  knownCustomerId = null, knownDefaultAddress = null,
   instagramUrl = null, tiktokUrl = null,
   banners = [],
   brandPrimaryColor = null, brandSecondaryColor = null,
@@ -914,6 +926,8 @@ export function PedidoClient({
 
   // Effective phone: from server (WhatsApp link) or from QR identification
   const effectiveCustomerPhone = knownCustomerPhone ?? storedCustomer?.phone ?? null;
+  // Effective customerId: from server prop or from session-stored identify response
+  const effectiveCustomerId = knownCustomerId ?? storedCustomer?.customerId ?? undefined;
 
   // customerName declared early so enterBrowsing / handlePhoneIdentified can reference its setter
   const [customerName, setCustomerName] = useState(
@@ -940,8 +954,13 @@ export function PedidoClient({
     if (mode === "suggest") setShowSuggestion(true);
   }
 
-  function handlePhoneIdentified(name: string | null) {
+  // customerId state updated when PhoneEntryCard resolves identity client-side
+  const [sessionCustomerId, setSessionCustomerId] = useState<string | undefined>(undefined);
+  const resolvedCustomerId = effectiveCustomerId ?? sessionCustomerId;
+
+  function handlePhoneIdentified(name: string | null, customerId?: string) {
     if (name) { setIdentifiedName(name); setCustomerName(name); }
+    if (customerId) setSessionCustomerId(customerId);
     setEntryPhase("choosing");
   }
 
@@ -953,15 +972,30 @@ export function PedidoClient({
   //   triggered (regardless of whether the customer accepted or skipped).
   // lastUpsellCategory: the phase currently awaiting the customer's decision
   //   (non-null while the suggestion is "live"); cleared once the phase resolves.
-  const [upsellState, setUpsellState] = useState({
-    offeredDrink:       false,
-    offeredDessert:     false,
-    lastUpsellCategory: null as "drink" | "dessert" | null,
+  // Persisted to localStorage so a page refresh doesn't re-trigger the same offer.
+  type UpsellState = { offeredDrink: boolean; offeredDessert: boolean; lastUpsellCategory: "drink" | "dessert" | null };
+  const UPSELL_KEY = `foocci-upsell-${slug}`;
+  const [upsellState, setUpsellStateRaw] = useState<UpsellState>(() => {
+    if (typeof window === "undefined") return { offeredDrink: false, offeredDessert: false, lastUpsellCategory: null };
+    try {
+      const raw = localStorage.getItem(UPSELL_KEY);
+      if (raw) return JSON.parse(raw) as UpsellState;
+    } catch { /* ignore */ }
+    return { offeredDrink: false, offeredDessert: false, lastUpsellCategory: null };
   });
+  function setUpsellState(updater: UpsellState | ((prev: UpsellState) => UpsellState)) {
+    setUpsellStateRaw((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem(UPSELL_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   // ── Checkout data ─────────────────────────────────────────────────
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup" | null>(null);
-  const [address, setAddress] = useState<Address>({ street: "", number: "", neighborhood: "", complement: "" });
+  const [address, setAddress] = useState<Address>(
+    knownDefaultAddress ?? { street: "", number: "", neighborhood: "", complement: "" }
+  );
   const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
   const [paymentMethodSub, setPaymentMethodSub] = useState<PaymentMethodSub | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -1064,6 +1098,7 @@ export function PedidoClient({
             paymentMethod:  pmStr   || null,
             customerName:   customerName || null,
             customerPhone:  effectiveCustomerPhone,
+            customerId:     resolvedCustomerId ?? undefined,
           }),
         });
 

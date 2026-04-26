@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
-import Link from "next/link";
 import {
   apiFetch,
   Feedback,
@@ -99,6 +98,10 @@ interface MarcaForm {
   differentials: string;
   mostProfitableProducts: string;
   cuisineType: string;
+  brandPrimaryColor: string;
+  brandSecondaryColor: string;
+  googleReviewUrl: string;
+  ifoodReviewUrl: string;
 }
 
 const FORM_DEFAULTS: MarcaForm = {
@@ -122,45 +125,10 @@ const FORM_DEFAULTS: MarcaForm = {
   differentials: "",
   mostProfitableProducts: "",
   cuisineType: "",
-};
-
-// Fields managed by other settings pages — passed through unchanged on save
-interface PassthroughConfig {
-  tone: string;
-  formality: string;
-  greetingTemplate: string | null;
-  systemPromptOverride: string | null;
-  aiModel: string;
-  maxHistoryMessages: number;
-  personalityPreset: string;
-  upsellIntensity: string;
-  salesFocus: string;
-  salesPriority: string;
-  brandPrimaryColor: string | null;
-  brandSecondaryColor: string | null;
-  instagramUrl: string | null;
-  tiktokUrl: string | null;
-  googleReviewUrl: string | null;
-  ifoodReviewUrl: string | null;
-}
-
-const PASSTHROUGH_DEFAULTS: PassthroughConfig = {
-  tone: "friendly",
-  formality: "informal",
-  greetingTemplate: null,
-  systemPromptOverride: null,
-  aiModel: "gpt-4o-mini",
-  maxHistoryMessages: 20,
-  personalityPreset: "traditional",
-  upsellIntensity: "medium",
-  salesFocus: "balanced",
-  salesPriority: "bestsellers",
-  brandPrimaryColor: null,
-  brandSecondaryColor: null,
-  instagramUrl: null,
-  tiktokUrl: null,
-  googleReviewUrl: null,
-  ifoodReviewUrl: null,
+  brandPrimaryColor: "#6366f1",
+  brandSecondaryColor: "#8b5cf6",
+  googleReviewUrl: "",
+  ifoodReviewUrl: "",
 };
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -314,7 +282,6 @@ function MultiChips({
 
 export default function MarcaPage() {
   const [form, setForm] = useState<MarcaForm>(FORM_DEFAULTS);
-  const [passthrough, setPassthrough] = useState<PassthroughConfig>(PASSTHROUGH_DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -347,24 +314,10 @@ export default function MarcaPage() {
           differentials:         String(p.differentials ?? ""),
           mostProfitableProducts: String(p.mostProfitableProducts ?? ""),
           cuisineType:           String(p.cuisineType ?? ""),
-        });
-        setPassthrough({
-          tone:                 data.tone ?? "friendly",
-          formality:            data.formality ?? "informal",
-          greetingTemplate:     data.greetingTemplate ?? null,
-          systemPromptOverride: data.systemPromptOverride ?? null,
-          aiModel:              data.aiModel ?? "gpt-4o-mini",
-          maxHistoryMessages:   data.maxHistoryMessages ?? 20,
-          personalityPreset:    data.personalityPreset ?? "traditional",
-          upsellIntensity:      data.upsellIntensity ?? "medium",
-          salesFocus:           data.salesFocus ?? "balanced",
-          salesPriority:        data.salesPriority ?? "bestsellers",
-          brandPrimaryColor:    data.brandPrimaryColor ?? null,
-          brandSecondaryColor:  data.brandSecondaryColor ?? null,
-          instagramUrl:         data.instagramUrl ?? null,
-          tiktokUrl:            data.tiktokUrl ?? null,
-          googleReviewUrl:      data.googleReviewUrl ?? null,
-          ifoodReviewUrl:       data.ifoodReviewUrl ?? null,
+          brandPrimaryColor:     data.brandPrimaryColor ?? "#6366f1",
+          brandSecondaryColor:   data.brandSecondaryColor ?? "#8b5cf6",
+          googleReviewUrl:       data.googleReviewUrl ?? "",
+          ifoodReviewUrl:        data.ifoodReviewUrl ?? "",
         });
       }
     }).finally(() => setLoading(false));
@@ -382,7 +335,9 @@ export default function MarcaPage() {
 
     const brandPersona: Record<string, unknown> = {
       canInsistAfterRefusal: form.canInsistAfterRefusal,
-      useClientName: form.useClientName,
+      useClientName:         form.useClientName,
+      comboFocus:            form.comboFocus,
+      avgTicketFocus:        form.avgTicketFocus,
     };
     if (form.brandName)              brandPersona.brandName = form.brandName;
     if (form.shortDescription)       brandPersona.shortDescription = form.shortDescription;
@@ -393,18 +348,20 @@ export default function MarcaPage() {
     if (form.businessObjective)      brandPersona.businessObjective = form.businessObjective;
     if (form.voiceTonePreset)        brandPersona.voiceTonePreset = form.voiceTonePreset;
     if (form.personalityTraits.length > 0) brandPersona.personalityTraits = form.personalityTraits;
-    if (form.comboFocus)             brandPersona.comboFocus = true;
-    if (form.avgTicketFocus)         brandPersona.avgTicketFocus = true;
     if (form.mainDishes)             brandPersona.mainDishes = form.mainDishes;
     if (form.differentials)          brandPersona.differentials = form.differentials;
     if (form.mostProfitableProducts) brandPersona.mostProfitableProducts = form.mostProfitableProducts;
     if (form.cuisineType)            brandPersona.cuisineType = form.cuisineType;
 
-    const { ok, data } = await apiFetch("/api/brand-config", "PUT", {
-      ...passthrough,
+    // PATCH — only sends fields owned by this form; never clobbers AI/other settings
+    const { ok, data } = await apiFetch("/api/brand-config", "PATCH", {
       upsellStyle:        form.upsellStyle,
       emojiUsage:         form.emojiUsage,
       communicationStyle: form.communicationStyle,
+      brandPrimaryColor:  form.brandPrimaryColor || null,
+      brandSecondaryColor: form.brandSecondaryColor || null,
+      googleReviewUrl:    form.googleReviewUrl || null,
+      ifoodReviewUrl:     form.ifoodReviewUrl || null,
       brandPersona,
     });
 
@@ -693,33 +650,49 @@ export default function MarcaPage() {
 
       {/* ── 9. Identidade Visual ─────────────────────────────────── */}
       <PageCard>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">🎨 Identidade Visual</h2>
-            <p className="mt-0.5 text-sm text-gray-500">
-              Cores e logo aplicadas ao cardápio digital e WhatsApp.
-            </p>
-          </div>
-          <Link
-            href="/settings/experience"
-            className="shrink-0 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100"
-          >
-            Editar visual →
-          </Link>
-        </div>
-        <div className="mt-4 flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <div
-            className="h-7 w-7 rounded-full border border-gray-200 shadow-sm"
-            style={{ backgroundColor: passthrough.brandPrimaryColor ?? "#6366f1" }}
-          />
-          <div
-            className="h-7 w-7 rounded-full border border-gray-200 shadow-sm"
-            style={{ backgroundColor: passthrough.brandSecondaryColor ?? "#8b5cf6" }}
-          />
-          <p className="text-sm text-gray-500">
-            {passthrough.brandPrimaryColor ?? "#6366f1"} &middot;{" "}
-            {passthrough.brandSecondaryColor ?? "#8b5cf6"}
-          </p>
+        <SectionHeading
+          title="🎨 Identidade Visual"
+          subtitle="Cores aplicadas ao cardápio digital e comunicações com o cliente."
+        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Cor principal">
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={form.brandPrimaryColor || "#6366f1"}
+                onChange={(e) => set("brandPrimaryColor")(e.target.value)}
+                className="h-10 w-10 cursor-pointer rounded-xl border-0 p-0.5 shadow-sm"
+              />
+              <input
+                type="text"
+                value={form.brandPrimaryColor}
+                onChange={(e) => set("brandPrimaryColor")(e.target.value)}
+                placeholder="#6366f1"
+                maxLength={7}
+                className={`${INPUT} w-32 font-mono`}
+              />
+              <div className="h-10 w-10 shrink-0 rounded-xl border border-gray-100 shadow-sm" style={{ backgroundColor: form.brandPrimaryColor || "#6366f1" }} />
+            </div>
+          </Field>
+          <Field label="Cor secundária">
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={form.brandSecondaryColor || "#8b5cf6"}
+                onChange={(e) => set("brandSecondaryColor")(e.target.value)}
+                className="h-10 w-10 cursor-pointer rounded-xl border-0 p-0.5 shadow-sm"
+              />
+              <input
+                type="text"
+                value={form.brandSecondaryColor}
+                onChange={(e) => set("brandSecondaryColor")(e.target.value)}
+                placeholder="#8b5cf6"
+                maxLength={7}
+                className={`${INPUT} w-32 font-mono`}
+              />
+              <div className="h-10 w-10 shrink-0 rounded-xl border border-gray-100 shadow-sm" style={{ backgroundColor: form.brandSecondaryColor || "#8b5cf6" }} />
+            </div>
+          </Field>
         </div>
       </PageCard>
 
@@ -733,8 +706,8 @@ export default function MarcaPage() {
           <Field label="Google Reviews">
             <input
               type="url"
-              value={passthrough.googleReviewUrl ?? ""}
-              onChange={(e) => setPassthrough((p) => ({ ...p, googleReviewUrl: e.target.value || null }))}
+              value={form.googleReviewUrl}
+              onChange={(e) => set("googleReviewUrl")(e.target.value)}
               placeholder="https://g.page/r/..."
               className={INPUT}
             />
@@ -742,8 +715,8 @@ export default function MarcaPage() {
           <Field label="iFood Avaliações">
             <input
               type="url"
-              value={passthrough.ifoodReviewUrl ?? ""}
-              onChange={(e) => setPassthrough((p) => ({ ...p, ifoodReviewUrl: e.target.value || null }))}
+              value={form.ifoodReviewUrl}
+              onChange={(e) => set("ifoodReviewUrl")(e.target.value)}
               placeholder="https://www.ifood.com.br/..."
               className={INPUT}
             />

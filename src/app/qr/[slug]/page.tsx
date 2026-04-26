@@ -63,6 +63,10 @@ export default async function QRMenuPage({
             orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
             select: { id: true, name: true, price: true, isAvailable: true },
           },
+          extras: {
+            orderBy: { name: "asc" },
+            select: { id: true, name: true, quantity: true, price: true },
+          },
         },
       },
     },
@@ -85,6 +89,12 @@ export default async function QRMenuPage({
           name: v.name,
           price: Number(v.price),
           isAvailable: v.isAvailable,
+        })),
+        extras: i.extras.map((e) => ({
+          id: e.id,
+          name: e.name,
+          quantity: e.quantity,
+          price: Number(e.price),
         })),
       })),
     }));

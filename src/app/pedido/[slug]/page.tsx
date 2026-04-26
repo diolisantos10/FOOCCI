@@ -55,17 +55,38 @@ export default async function PedidoPage({
   // ── WhatsApp / known-user identification ─────────────────────────────────────
   let knownCustomerPhone: string | null = null;
   let knownCustomerName: string | null = null;
+  let knownCustomerId: string | null = null;
+  let knownDefaultAddress: { street: string; number: string; neighborhood: string; complement: string } | null = null;
 
   if (rawPhone) {
     const candidates = phoneCandidates(rawPhone);
     if (candidates.length > 0) {
       const customer = await prisma.customer.findFirst({
         where: { restaurantId: restaurant.id, phone: { in: candidates } },
-        select: { name: true, phone: true },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          addresses: {
+            where: { isDefault: true },
+            select: { street: true, number: true, neighborhood: true, complement: true },
+            take: 1,
+          },
+        },
       });
       if (customer) {
         knownCustomerPhone = customer.phone;
         knownCustomerName = customer.name.trim().split(/\s+/)[0] ?? null;
+        knownCustomerId = customer.id;
+        const addr = customer.addresses[0];
+        if (addr) {
+          knownDefaultAddress = {
+            street: addr.street,
+            number: addr.number,
+            neighborhood: addr.neighborhood,
+            complement: addr.complement ?? "",
+          };
+        }
       } else {
         // Phone is known (came from WhatsApp link) but customer record doesn't exist yet
         knownCustomerPhone = rawPhone;
@@ -152,6 +173,8 @@ export default async function PedidoPage({
       categories={categories}
       knownCustomerPhone={knownCustomerPhone}
       knownCustomerName={knownCustomerName}
+      knownCustomerId={knownCustomerId}
+      knownDefaultAddress={knownDefaultAddress}
       instagramUrl={brandConfig?.instagramUrl ?? null}
       tiktokUrl={brandConfig?.tiktokUrl ?? null}
       brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
