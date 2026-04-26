@@ -57,6 +57,7 @@ function WelcomeModal({
   slug: string;
   onClose: (greeting: string | null) => void;
 }) {
+  const [name, setName]   = useState("");
   const [phone, setPhone] = useState("");
   const [phase, setPhase] = useState<WelcomePhase>("idle");
 
@@ -68,64 +69,91 @@ function WelcomeModal({
       const res = await fetch(`/api/qr/${slug}/identify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone, name: name.trim() }),
       });
       const data: { found: boolean; name?: string } = await res.json();
-      onClose(data.found && data.name ? `Olá, ${data.name}! 👋` : "Bem-vindo! 👋");
+      const firstName = data.name ?? name.trim().split(/\s+/)[0];
+      onClose(firstName ? `Olá, ${firstName}! 👋` : "Bem-vindo! 👋");
     } catch {
-      onClose("Bem-vindo! 👋");
+      onClose(name.trim() ? `Olá, ${name.trim().split(/\s+/)[0]}! 👋` : "Bem-vindo! 👋");
     }
   }
 
+  const canSubmit = phone.trim().length >= 8 && phase !== "loading";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/60 backdrop-blur-sm">
       <div
         className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Drag handle */}
+        {/* Drag handle — mobile only */}
         <div className="flex justify-center pt-3 sm:hidden">
           <div className="h-1 w-10 rounded-full bg-gray-200" />
         </div>
 
-        <div className="px-6 pb-8 pt-5">
-          {/* Header */}
-          <div className="mb-4 text-center">
-            <p className="text-2xl leading-none mb-2">👋</p>
-            <h2 className="text-lg font-bold text-gray-900">Bem-vindo!</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Digite seu número para uma experiência personalizada
-            </p>
-          </div>
+        {/* Orange accent bar */}
+        <div className="mx-6 mt-5 rounded-2xl bg-gradient-to-r from-orange-500 to-orange-400 px-5 py-4 text-white shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Bem-vindo!</p>
+          <p className="mt-0.5 text-base font-bold leading-snug">
+            Antes de ver o cardápio,<br />se apresente 😊
+          </p>
+        </div>
 
-          {/* Form */}
+        <div className="px-6 pb-7 pt-5">
           <form onSubmit={handleSubmit} className="space-y-3">
-            <input
-              type="tel"
-              inputMode="numeric"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="(11) 99999-9999"
-              disabled={phase === "loading"}
-              style={{ fontSize: "16px" }}
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60"
-            />
+            {/* Name */}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-gray-500">
+                Seu nome
+              </label>
+              <input
+                type="text"
+                inputMode="text"
+                autoCapitalize="words"
+                autoComplete="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ex: João Silva"
+                disabled={phase === "loading"}
+                style={{ fontSize: "16px" }}
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60"
+              />
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-gray-500">
+                Seu WhatsApp
+              </label>
+              <input
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(11) 99999-9999"
+                disabled={phase === "loading"}
+                style={{ fontSize: "16px" }}
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60"
+              />
+            </div>
+
             <button
               type="submit"
-              disabled={phase === "loading" || !phone.trim()}
+              disabled={!canSubmit}
               className="w-full rounded-2xl bg-orange-500 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-orange-600 active:scale-[0.98] disabled:opacity-50"
             >
-              {phase === "loading" ? "Verificando…" : "Continuar"}
+              {phase === "loading" ? "Verificando…" : "Ver o cardápio →"}
             </button>
           </form>
 
-          {/* Skip */}
           <button
             type="button"
             onClick={() => onClose(null)}
-            className="mt-3 w-full py-2 text-sm text-gray-400 transition-colors hover:text-gray-600"
+            className="mt-3 w-full py-2 text-xs text-gray-400 transition-colors hover:text-gray-600"
           >
-            Pular
+            Pular identificação
           </button>
         </div>
       </div>

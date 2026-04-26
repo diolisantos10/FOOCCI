@@ -724,6 +724,7 @@ function PhoneEntryCard({
   onIdentified: (name: string | null) => void;
   onSkip: () => void;
 }) {
+  const [nameInput,  setNameInput]  = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -738,10 +739,11 @@ function PhoneEntryCard({
       const res = await fetch(`/api/qr/${slug}/identify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: ph }),
+        body: JSON.stringify({ phone: ph, name: nameInput.trim() }),
       });
       const data: { found: boolean; name?: string } = await res.json();
-      onIdentified(data.found && data.name ? data.name : null);
+      const resolved = data.name ?? (nameInput.trim() ? nameInput.trim().split(/\s+/)[0]! : null);
+      onIdentified(resolved);
     } catch {
       setError("Erro ao verificar. Tente novamente.");
       setLoading(false);
@@ -749,13 +751,26 @@ function PhoneEntryCard({
   }
 
   return (
-    <div className="rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3 max-w-sm w-full">
-      <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-        Identificação opcional
+    <div className="rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-4 max-w-sm w-full">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+        Identificação rápida
       </p>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+        {/* Name */}
+        <input
+          type="text"
+          inputMode="text"
+          autoCapitalize="words"
+          value={nameInput}
+          onChange={(e) => setNameInput(e.target.value)}
+          placeholder="Seu nome — Ex: João Silva"
+          style={{ fontSize: "16px" }}
+          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
+        />
+        {/* Phone */}
         <input
           type="tel"
+          inputMode="numeric"
           value={phoneInput}
           onChange={(e) => setPhoneInput(e.target.value)}
           placeholder="Seu WhatsApp — Ex: (11) 99999-9999"
@@ -768,7 +783,7 @@ function PhoneEntryCard({
           disabled={!phoneInput.trim() || loading}
           className="rounded-xl bg-[#25d366] py-2.5 text-sm font-bold text-white hover:bg-[#1ebe5a] disabled:opacity-40 transition-colors"
         >
-          {loading ? "Verificando…" : "Continuar"}
+          {loading ? "Verificando…" : "Continuar →"}
         </button>
         <button
           type="button"
@@ -1682,7 +1697,7 @@ export function PedidoClient({
             <>
               <div className="flex justify-start">
                 <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-sm leading-relaxed shadow-sm text-gray-900">
-                  Olá! 👋 Informe seu WhatsApp para personalizarmos seu atendimento.
+                  Olá! 👋 Para personalizarmos seu atendimento, informe seu nome e WhatsApp.
                 </div>
               </div>
               <div className="flex justify-start">

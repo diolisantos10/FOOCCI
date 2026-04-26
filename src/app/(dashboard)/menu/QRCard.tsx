@@ -1,21 +1,21 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 
-// ── Delivery QR ───────────────────────────────────────────────────────────────
-
 export function QRCard({ url, slug }: { url: string; slug: string }) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (open && canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, url, { width: 200, margin: 2 });
+    if (canvasRef.current) {
+      QRCode.toCanvas(canvasRef.current, url, {
+        width: 180,
+        margin: 2,
+        color: { dark: "#111827", light: "#ffffff" },
+      });
     }
-  }, [open, url]);
+  }, [url]);
 
   async function copyLink() {
     await navigator.clipboard.writeText(url);
@@ -28,148 +28,80 @@ export function QRCard({ url, slug }: { url: string; slug: string }) {
     if (!canvas) return;
     const a = document.createElement("a");
     a.href = canvas.toDataURL("image/png");
-    a.download = `qr-delivery-${slug}.png`;
+    a.download = `cardapio-qr-${slug}.png`;
     a.click();
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-gray-50"
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-700">QR Code Delivery</span>
-          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-600">
-            /qr/{slug}
-          </span>
+    <div className="overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white shadow-sm">
+      {/* Header strip */}
+      <div className="flex items-center gap-3 border-b border-orange-100 bg-white px-5 py-3.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white text-base">
+          📲
         </div>
-        <span className="text-xs text-gray-400">{open ? "▲" : "▼"}</span>
-      </button>
+        <div>
+          <p className="text-sm font-bold text-gray-900">Cardápio Online</p>
+          <p className="text-[11px] text-gray-400">Compartilhe com seus clientes</p>
+        </div>
+        <span className="ml-auto rounded-full bg-green-100 px-2.5 py-0.5 text-[11px] font-semibold text-green-700">
+          Ativo
+        </span>
+      </div>
 
-      {open && (
-        <div className="flex flex-col items-start gap-6 border-t border-gray-100 px-5 py-4 sm:flex-row">
-          <canvas
-            ref={canvasRef}
-            className="rounded-lg border border-gray-200"
-          />
+      {/* Body */}
+      <div className="flex flex-col items-center gap-5 px-5 py-6 sm:flex-row sm:items-start">
+        {/* QR Code */}
+        <div className="shrink-0 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-gray-100">
+          <canvas ref={canvasRef} className="block rounded-xl" />
+        </div>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <div>
-              <p className="mb-1 text-xs font-medium text-gray-500">Link público</p>
+        {/* Right side */}
+        <div className="flex w-full flex-col gap-4">
+          {/* Link input */}
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              Link público
+            </p>
+            <div className="flex items-center gap-2">
               <input
                 readOnly
                 value={url}
                 onFocus={(e) => e.target.select()}
-                className="w-full rounded border border-gray-200 bg-gray-50 px-3 py-1.5 font-mono text-sm text-gray-700 focus:outline-none"
+                className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 font-mono text-xs text-gray-700 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
               />
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={copyLink}
-                className="rounded bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
-              >
-                {copied ? "Copiado!" : "Copiar link"}
-              </button>
-              <button
-                onClick={downloadQR}
-                className="rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600"
-              >
-                Baixar QR
-              </button>
-              <a
-                href={`/qr/${slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-              >
-                Visualizar →
-              </a>
-            </div>
-            <p className="text-[11px] text-gray-400">
-              Cardápio público, somente leitura. Itens com &quot;Salão&quot; ativo aparecem aqui.
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Salão QR ──────────────────────────────────────────────────────────────────
-
-export function QRSalaoCard({ slug }: { slug: string }) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const salaoUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/qr/${slug}?mode=salao`;
-
-  async function copyLink() {
-    await navigator.clipboard.writeText(salaoUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-gray-50"
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-700">QR Code Salão</span>
-          <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-600">
-            /qr/{slug}?mode=salao
-          </span>
-        </div>
-        <span className="text-xs text-gray-400">{open ? "▲" : "▼"}</span>
-      </button>
-
-      {open && (
-        <div className="flex flex-col items-start gap-6 border-t border-gray-100 px-5 py-4 sm:flex-row">
-          {/* Static placeholder image */}
-          <div className="rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
-            <Image
-              src="/qrcode_mesa_default.png"
-              alt="QR Code Salão"
-              width={200}
-              height={200}
-              unoptimized
-            />
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <div>
-              <p className="mb-1 text-xs font-medium text-gray-500">Link do salão (modo leitura)</p>
-              <input
-                readOnly
-                value={salaoUrl}
-                onFocus={(e) => e.target.select()}
-                className="w-full rounded border border-gray-200 bg-gray-50 px-3 py-1.5 font-mono text-sm text-gray-700 focus:outline-none"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={copyLink}
-                className="rounded bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
-              >
-                {copied ? "Copiado!" : "Copiar link"}
-              </button>
-              <a
-                href={`/qr/${slug}?mode=salao`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-              >
-                Visualizar →
-              </a>
-            </div>
-            <p className="text-[11px] text-gray-400">
-              Cardápio para mesas do salão — somente visualização, sem checkout ou chat.
-            </p>
+          {/* Actions */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={copyLink}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 shadow-sm transition-all hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600 active:scale-95"
+            >
+              {copied ? "✓ Copiado!" : "📋 Copiar link"}
+            </button>
+            <button
+              onClick={downloadQR}
+              className="flex items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-orange-600 active:scale-95"
+            >
+              ⬇ Baixar QR
+            </button>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-600 shadow-sm transition-all hover:bg-gray-50 active:scale-95"
+            >
+              👁 Visualizar
+            </a>
           </div>
+
+          {/* Tip */}
+          <p className="text-[11px] leading-relaxed text-gray-400">
+            Imprima o QR code e cole nas mesas, embalagens ou stories. Qualquer alteração no cardápio aparece instantaneamente.
+          </p>
         </div>
-      )}
+      </div>
     </div>
   );
 }
