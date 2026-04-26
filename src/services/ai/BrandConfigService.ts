@@ -28,6 +28,7 @@ export class BrandConfigService {
       brandSecondaryColor: input.brandSecondaryColor ?? null,
       instagramUrl: input.instagramUrl ?? null,
       tiktokUrl: input.tiktokUrl ?? null,
+      brandPersona: input.brandPersona ?? undefined,
     };
 
     const config = await prisma.restaurantBrandConfig.upsert({

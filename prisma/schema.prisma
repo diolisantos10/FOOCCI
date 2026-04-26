@@ -765,6 +765,10 @@ model RestaurantBrandConfig {
   instagramUrl         String?
   tiktokUrl            String?
 
+  // ── Brand Persona (marketing strategy) ───────────────────────
+  // Stored as JSON to allow flexible evolution without migrations.
+  brandPersona         Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -1,5 +1,59 @@
 import { z } from "zod";
 
+// ── Brand Persona schema ──────────────────────────────────────────────────────
+
+export const BRAND_ARCHETYPES = [
+  "hero",        // Herói
+  "sage",        // Sábio
+  "creator",     // Criador
+  "caregiver",   // Cuidador
+  "outlaw",      // Fora-da-lei
+  "magician",    // Mago
+  "ruler",       // Governante
+  "lover",       // Amante
+  "jester",      // Bobo da corte
+  "everyman",    // Homem comum
+  "explorer",    // Explorador
+  "innocent",    // Inocente
+] as const;
+
+export const PRICE_POSITIONINGS = ["budget", "mid-range", "premium", "luxury"] as const;
+export const TARGET_GENDERS     = ["all", "female", "male"] as const;
+export const TARGET_INCOMES     = ["low", "middle", "upper-middle", "high"] as const;
+
+export const brandPersonaSchema = z.object({
+  // ── Identidade
+  tagline:              z.string().max(100).optional(),
+  brandStory:           z.string().max(1000).optional(),
+  missionStatement:     z.string().max(300).optional(),
+  visionStatement:      z.string().max(300).optional(),
+  brandValues:          z.array(z.string().max(40)).max(5).optional(),
+
+  // ── Personalidade
+  brandArchetype:       z.enum(BRAND_ARCHETYPES).optional(),
+  personalityTraits:    z.array(z.string().max(30)).max(6).optional(),
+  brandIs:              z.array(z.string().max(60)).max(5).optional(),
+  brandIsNot:           z.array(z.string().max(60)).max(5).optional(),
+
+  // ── Público-alvo
+  targetAgeRange:       z.string().max(20).optional(),
+  targetGender:         z.enum(TARGET_GENDERS).optional(),
+  targetIncome:         z.enum(TARGET_INCOMES).optional(),
+  targetLifestyle:      z.string().max(500).optional(),
+  targetPainPoints:     z.string().max(500).optional(),
+
+  // ── Posicionamento
+  uniqueValueProposition: z.string().max(300).optional(),
+  pricePositioning:       z.enum(PRICE_POSITIONINGS).optional(),
+  differentiators:        z.array(z.string().max(80)).max(5).optional(),
+
+  // ── Vocabulário
+  wordsToUse:   z.array(z.string().max(30)).max(10).optional(),
+  wordsToAvoid: z.array(z.string().max(30)).max(10).optional(),
+});
+
+export type BrandPersona = z.infer<typeof brandPersonaSchema>;
+
 // ── Existing AI voice fields ───────────────────────────────────────────────────
 
 const TONES = ["friendly", "professional", "casual", "warm"] as const;
@@ -51,6 +105,9 @@ export const upsertBrandConfigSchema = z.object({
   brandSecondaryColor: z.string().max(20).nullable().optional(),
   instagramUrl:        z.string().url().max(200).nullable().optional(),
   tiktokUrl:           z.string().url().max(200).nullable().optional(),
+
+  // Brand Persona
+  brandPersona:        brandPersonaSchema.optional(),
 });
 
 export type UpsertBrandConfigInput = z.infer<typeof upsertBrandConfigSchema>;
