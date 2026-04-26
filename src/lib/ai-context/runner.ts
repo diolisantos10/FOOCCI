@@ -101,6 +101,8 @@ export interface AITurnOutput {
   forced?: true;
   /** The flow rule that triggered the block (e.g. "MISSING_PAYMENT"). */
   reason?: string;
+  /** Name of the item the AI is actively suggesting, if any. */
+  suggestedItemName?: string;
 }
 
 // ── Coerce helper ─────────────────────────────────────────────────────────────
@@ -549,5 +551,5 @@ export async function runAITurn(input: AITurnInput): Promise<AITurnOutput> {
     completion.choices[0]?.message?.content?.trim() ||
     "Desculpe, não consegui processar sua mensagem. 😅";
 
-  return { reply };
+  return { reply, suggestedItemName: suggestion?.itemName ?? undefined };
 }

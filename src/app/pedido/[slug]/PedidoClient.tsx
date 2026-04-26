@@ -22,6 +22,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   ts: Date;
+  suggestedItemName?: string;
 }
 
 interface MenuItemVariant {
@@ -244,10 +245,18 @@ function computeResumeStage(
 
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
-function Bubble({ msg }: { msg: ChatMessage }) {
+function Bubble({
+  msg,
+  suggestedItem,
+  onOpenSuggested,
+}: {
+  msg: ChatMessage;
+  suggestedItem?: MenuItem | null;
+  onOpenSuggested?: () => void;
+}) {
   const isUser = msg.role === "user";
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
       <div
         className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
           isUser
@@ -260,6 +269,24 @@ function Bubble({ msg }: { msg: ChatMessage }) {
           {formatTime(msg.ts)}
         </p>
       </div>
+      {!isUser && suggestedItem?.imageUrl && onOpenSuggested && (
+        <button
+          onClick={onOpenSuggested}
+          className="mt-1.5 ml-1 flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition-transform"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={suggestedItem.imageUrl}
+            alt={suggestedItem.name}
+            className="h-12 w-12 rounded-lg object-cover shrink-0"
+          />
+          <div className="text-left min-w-0">
+            <p className="text-xs font-semibold text-gray-900 truncate max-w-[140px]">{suggestedItem.name}</p>
+            <p className="text-xs text-gray-500">R$ {suggestedItem.price.toFixed(2).replace(".", ",")}</p>
+            <p className="text-[10px] text-orange-500 font-medium">Ver produto →</p>
+          </div>
+        </button>
+      )}
     </div>
   );
 }
@@ -1042,10 +1069,11 @@ export function PedidoClient({
 
         const data  = await res.json();
         const reply: string = data?.data?.reply || "Desculpe, algo deu errado 😅";
+        const suggestedItemName: string | undefined = data?.data?.suggestedItemName ?? undefined;
 
         setMessages((prev) => [
           ...prev,
-          { id: uid(), role: "assistant" as const, content: reply, ts: new Date() },
+          { id: uid(), role: "assistant" as const, content: reply, ts: new Date(), suggestedItemName },
         ]);
         setHistory([...newHistory, { role: "assistant" as const, content: reply }]);
       } catch {
@@ -1763,9 +1791,21 @@ export function PedidoClient({
             </div>
           )}
 
-          {messages.map((msg) => (
-            <Bubble key={msg.id} msg={msg} />
-          ))}
+          {messages.map((msg) => {
+            const suggestedItem = msg.suggestedItemName
+              ? categories.flatMap((c) => c.items).find(
+                  (i) => i.name.toLowerCase() === msg.suggestedItemName!.toLowerCase()
+                ) ?? null
+              : null;
+            return (
+              <Bubble
+                key={msg.id}
+                msg={msg}
+                suggestedItem={suggestedItem}
+                onOpenSuggested={suggestedItem ? () => setSelectedProduct(suggestedItem) : undefined}
+              />
+            );
+          })}
           {ui === "thinking" && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>

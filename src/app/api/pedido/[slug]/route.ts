@@ -120,7 +120,7 @@ export async function POST(
     if (!message?.trim())        return badRequest("message is required.");
     if (!Array.isArray(history)) return badRequest("history must be an array.");
 
-    const { reply } = await runAITurn({
+    const { reply, suggestedItemName } = await runAITurn({
       restaurantId:  restaurant.id,
       message:       message.trim(),
       history,
@@ -135,7 +135,7 @@ export async function POST(
       categoryIntro,
     });
 
-    return ok({ reply });
+    return ok({ reply, suggestedItemName: suggestedItemName ?? null });
   } catch (err) {
     console.error("[POST /api/pedido/[slug]]", err);
     return serverError("Erro interno ao processar mensagem.");

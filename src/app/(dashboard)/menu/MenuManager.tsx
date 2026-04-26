@@ -53,6 +53,8 @@ type Item = {
   showInDineIn: boolean;
   hasVariants: boolean;
   code: string | null;
+  servingSize: number | null;
+  portionInfo: string | null;
   variants: Variant[];
   extras: Extra[];
 };
@@ -904,15 +906,254 @@ function AddCategoryForm({ onAdded }: { onAdded: (cat: Category) => void }) {
   );
 }
 
+// ── NewItemModal ──────────────────────────────────────────────────────────────
+
+type NewItemForm = {
+  categoryId: string;
+  name: string;
+  description: string;
+  price: string;
+  imageUrl: string | null;
+  servingSize: number | null;
+  portionInfo: string;
+};
+
+function NewItemModal({
+  categories,
+  open,
+  onClose,
+  onCreated,
+}: {
+  categories: Category[];
+  open: boolean;
+  onClose: () => void;
+  onCreated: (item: Item, categoryId: string) => void;
+}) {
+  const manualCategories = categories.filter((c) => c.source === "MANUAL");
+  const [form, setForm] = useState<NewItemForm>({
+    categoryId: manualCategories[0]?.id ?? "",
+    name: "",
+    description: "",
+    price: "",
+    imageUrl: null,
+    servingSize: null,
+    portionInfo: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      categoryId: manualCategories[0]?.id ?? "",
+      name: "",
+      description: "",
+      price: "",
+      imageUrl: null,
+      servingSize: null,
+      portionInfo: "",
+    });
+    setError("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const price = parseFloat(form.price);
+    if (!form.categoryId) { setError("Selecione uma categoria."); return; }
+    if (!form.name.trim() || isNaN(price) || price <= 0) {
+      setError("Nome e preço válido são obrigatórios.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const data = await apiFetch(
+        `/api/menu/categories/${form.categoryId}/items`,
+        "POST",
+        {
+          name: form.name.trim(),
+          description: form.description.trim() || undefined,
+          price,
+          imageUrl: form.imageUrl || undefined,
+          servingSize: form.servingSize ?? undefined,
+          portionInfo: form.portionInfo.trim() || undefined,
+        }
+      );
+      const item: Item = {
+        ...data.data,
+        price: Number(data.data.price),
+        hasVariants: data.data.hasVariants ?? false,
+        servingSize: data.data.servingSize ?? null,
+        portionInfo: data.data.portionInfo ?? null,
+        variants: [],
+        extras: [],
+      };
+      onCreated(item, form.categoryId);
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao criar produto.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <div
+          className="relative w-full max-w-md rounded-xl bg-white shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-gray-900">Novo Produto</h2>
+            <button type="button" onClick={onClose} className="text-lg leading-none text-gray-400 hover:text-gray-600" aria-label="Fechar">✕</button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
+            {/* Category */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Categoria <span className="text-red-500">*</span></label>
+              {manualCategories.length === 0 ? (
+                <p className="text-xs text-red-500">Crie uma categoria antes de adicionar produtos.</p>
+              ) : (
+                <select
+                  value={form.categoryId}
+                  onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                >
+                  {manualCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Name */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Nome <span className="text-red-500">*</span></label>
+              <input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Nome do produto"
+                required
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Descrição</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Descrição (opcional)"
+                rows={2}
+                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            {/* Price */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Preço <span className="text-red-500">*</span></label>
+              <input
+                value={form.price}
+                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                placeholder="0,00"
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            {/* Serving size + portion info */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Serve (pessoas)</label>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, servingSize: f.servingSize === n ? null : n }))}
+                      className={`flex-1 rounded border py-1.5 text-xs font-medium transition-colors ${
+                        form.servingSize === n
+                          ? "border-orange-500 bg-orange-500 text-white"
+                          : "border-gray-300 text-gray-600 hover:border-orange-300"
+                      }`}
+                    >
+                      {n === 4 ? "4+" : n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Porção</label>
+                <input
+                  value={form.portionInfo}
+                  onChange={(e) => setForm((f) => ({ ...f, portionInfo: e.target.value }))}
+                  placeholder="ex: 300g, 500ml"
+                  maxLength={50}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                />
+              </div>
+            </div>
+
+            {/* Image */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">Imagem</label>
+              <ImageUpload value={form.imageUrl} onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))} />
+            </div>
+
+            {error && <InlineError message={error} />}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={busy || manualCategories.length === 0}
+                className="flex-1 rounded-lg bg-orange-500 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+              >
+                {busy ? <Spinner /> : "Criar produto"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── TopBar ────────────────────────────────────────────────────────────────────
 
 function TopBar({
   categories,
   onAdded,
+  onNewItem,
   onBulkPrice,
 }: {
   categories: Category[];
   onAdded: (cat: Category) => void;
+  onNewItem: () => void;
   onBulkPrice: () => void;
 }) {
   const totalItems = categories.reduce((n, c) => n + c.items.length, 0);
@@ -939,6 +1180,15 @@ function TopBar({
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
           >
             Ajustar preços
+          </button>
+        )}
+        {categories.some((c) => c.source === "MANUAL") && (
+          <button
+            type="button"
+            onClick={onNewItem}
+            className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
+          >
+            + Novo Produto
           </button>
         )}
         <AddCategoryForm onAdded={onAdded} />
@@ -1142,6 +1392,8 @@ type EditModalForm = {
   showInDineIn: boolean;
   hasVariants: boolean;
   code: string;
+  servingSize: number | null;
+  portionInfo: string;
 };
 
 function EditItemModal({
@@ -1165,6 +1417,8 @@ function EditItemModal({
     showInDineIn: false,
     hasVariants: false,
     code: "",
+    servingSize: null,
+    portionInfo: "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1200,6 +1454,8 @@ function EditItemModal({
       showInDineIn: item.showInDineIn,
       hasVariants: item.hasVariants,
       code: item.code ?? "",
+      servingSize: item.servingSize ?? null,
+      portionInfo: item.portionInfo ?? "",
     });
     setVariants(item.variants ?? []);
     setExtras(item.extras ?? []);
@@ -1446,6 +1702,43 @@ function EditItemModal({
               placeholder="Código do produto (opcional)"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
+          </div>
+
+          {/* Serving size + portion info */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">
+                Serve (pessoas)
+              </label>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, servingSize: f.servingSize === n ? null : n }))}
+                    className={`flex-1 rounded border py-1.5 text-xs font-medium transition-colors ${
+                      form.servingSize === n
+                        ? "border-orange-500 bg-orange-500 text-white"
+                        : "border-gray-300 text-gray-600 hover:border-orange-300"
+                    }`}
+                  >
+                    {n === 4 ? "4+" : n}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-700">
+                Porção
+              </label>
+              <input
+                value={form.portionInfo}
+                onChange={(e) => setForm((f) => ({ ...f, portionInfo: e.target.value }))}
+                placeholder="ex: 300g, 500ml"
+                maxLength={50}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
           </div>
 
           {/* Image */}
@@ -2029,6 +2322,7 @@ export function MenuManager({
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [filterQuery, setFilterQuery] = useState("");
   const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
+  const [newItemOpen, setNewItemOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<{
     item: Item;
     categoryId: string;
@@ -2079,12 +2373,16 @@ export function MenuManager({
       showInDineIn: patch.showInDineIn,
       hasVariants: patch.hasVariants,
       code: patch.code.trim() || undefined,
+      servingSize: patch.servingSize ?? undefined,
+      portionInfo: patch.portionInfo.trim() || undefined,
     };
     const data = await apiFetch(`/api/menu/items/${item.id}`, "PATCH", body);
     const updated: Item = {
       ...item,
       ...data.data,
       price: Number(data.data.price),
+      servingSize: data.data.servingSize ?? null,
+      portionInfo: data.data.portionInfo ?? null,
       variants: item.variants,
     };
     setCategories((prev) =>
@@ -2163,6 +2461,7 @@ export function MenuManager({
       <TopBar
         categories={categories}
         onAdded={addCategory}
+        onNewItem={() => setNewItemOpen(true)}
         onBulkPrice={() => setBulkPriceOpen(true)}
       />
 
@@ -2235,6 +2534,21 @@ export function MenuManager({
         open={bulkPriceOpen}
         onClose={() => setBulkPriceOpen(false)}
         onApplied={refresh}
+      />
+
+      {/* New item modal */}
+      <NewItemModal
+        categories={categories}
+        open={newItemOpen}
+        onClose={() => setNewItemOpen(false)}
+        onCreated={(item, categoryId) => {
+          setCategories((prev) =>
+            prev.map((c) =>
+              c.id === categoryId ? { ...c, items: [...c.items, item] } : c
+            )
+          );
+          refresh();
+        }}
       />
 
       {/* Edit item modal */}

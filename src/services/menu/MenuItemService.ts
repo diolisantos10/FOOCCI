@@ -75,6 +75,8 @@ export class MenuItemService {
         isAvailable: input.isAvailable ?? true,
         showInDelivery: input.showInDelivery ?? true,
         showInDineIn: input.showInDineIn ?? true,
+        servingSize: input.servingSize ?? null,
+        portionInfo: input.portionInfo ?? null,
       },
     });
 
@@ -110,6 +112,8 @@ export class MenuItemService {
         ...(input.showInDineIn !== undefined && { showInDineIn: input.showInDineIn }),
         ...(input.hasVariants !== undefined && { hasVariants: input.hasVariants }),
         ...(input.code !== undefined && { code: input.code || null }),
+        ...(input.servingSize !== undefined && { servingSize: input.servingSize ?? null }),
+        ...(input.portionInfo !== undefined && { portionInfo: input.portionInfo ?? null }),
       },
     });
 
