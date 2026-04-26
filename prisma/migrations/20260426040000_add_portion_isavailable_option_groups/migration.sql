@@ -35,14 +35,30 @@ CREATE TABLE IF NOT EXISTS "option_group_items" (
   CONSTRAINT "option_group_items_pkey" PRIMARY KEY ("id")
 );
 
--- Add FK constraints
-ALTER TABLE "option_groups"
-  ADD CONSTRAINT IF NOT EXISTS "option_groups_menuItemId_fkey"
-  FOREIGN KEY ("menuItemId") REFERENCES "menu_items"("id") ON DELETE CASCADE;
+-- Add FK constraints (idempotent via DO blocks — ADD CONSTRAINT IF NOT EXISTS is not valid PostgreSQL)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'option_groups_menuItemId_fkey'
+      AND table_name = 'option_groups'
+  ) THEN
+    ALTER TABLE "option_groups"
+      ADD CONSTRAINT "option_groups_menuItemId_fkey"
+      FOREIGN KEY ("menuItemId") REFERENCES "menu_items"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
 
-ALTER TABLE "option_group_items"
-  ADD CONSTRAINT IF NOT EXISTS "option_group_items_groupId_fkey"
-  FOREIGN KEY ("groupId") REFERENCES "option_groups"("id") ON DELETE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'option_group_items_groupId_fkey'
+      AND table_name = 'option_group_items'
+  ) THEN
+    ALTER TABLE "option_group_items"
+      ADD CONSTRAINT "option_group_items_groupId_fkey"
+      FOREIGN KEY ("groupId") REFERENCES "option_groups"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS "option_groups_menuItemId_idx" ON "option_groups"("menuItemId");
