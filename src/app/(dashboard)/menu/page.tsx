@@ -70,6 +70,7 @@ export default async function MenuPage() {
         id: v.id,
         name: v.name,
         price: Number(v.price),
+        portion: v.portion ?? null,
         isAvailable: v.isAvailable,
         sortOrder: v.sortOrder,
       })),
@@ -78,6 +79,8 @@ export default async function MenuPage() {
         name: e.name,
         quantity: e.quantity,
         price: Number(e.price),
+        portion: e.portion ?? null,
+        isAvailable: e.isAvailable,
       })),
     })),
   }));

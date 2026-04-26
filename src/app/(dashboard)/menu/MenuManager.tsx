@@ -28,6 +28,7 @@ type Variant = {
   id: string;
   name: string;
   price: number;
+  portion: string | null;
   isAvailable: boolean;
   sortOrder: number;
 };
@@ -37,6 +38,27 @@ type Extra = {
   name: string;
   quantity: number;
   price: number;
+  portion: string | null;
+  isAvailable: boolean;
+};
+
+type OptionItem = {
+  id: string;
+  name: string;
+  price: number;
+  portion: string | null;
+  isAvailable: boolean;
+  sortOrder: number;
+};
+
+type OptionGroup = {
+  id: string;
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number;
+  sortOrder: number;
+  options: OptionItem[];
 };
 
 type Item = {
@@ -999,6 +1021,7 @@ function SortableVariantRow({
   const [form, setForm] = useState({
     name: variant.name,
     price: String(variant.price),
+    portion: variant.portion ?? "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1021,8 +1044,14 @@ function SortableVariantRow({
       const data = await apiFetch(`/api/menu/variants/${variant.id}`, "PATCH", {
         name: form.name.trim(),
         price,
+        portion: form.portion.trim() || undefined,
       });
-      onUpdated({ ...variant, name: data.data.name, price: Number(data.data.price) });
+      onUpdated({
+        ...variant,
+        name: data.data.name,
+        price: Number(data.data.price),
+        portion: data.data.portion ?? null,
+      });
       setEditing(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
@@ -1056,18 +1085,27 @@ function SortableVariantRow({
             <input
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Nome (ex: 350ml)"
+              placeholder="Nome (ex: Grande)"
               className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
             <input
-              value={form.price}
-              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-              placeholder="Preço"
-              type="number"
-              step="0.01"
-              min="0.01"
+              value={form.portion}
+              onChange={(e) => setForm((f) => ({ ...f, portion: e.target.value }))}
+              placeholder="Porção (ex: 800g)"
               className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
+            <div className="relative w-24">
+              <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
+              <input
+                value={form.price}
+                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                placeholder="0,00"
+                type="number"
+                step="0.01"
+                min="0.01"
+                className="w-full rounded border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
           </div>
           {error && <InlineError message={error} />}
           <div className="flex gap-2">
@@ -1084,7 +1122,7 @@ function SortableVariantRow({
               onClick={() => {
                 setEditing(false);
                 setError("");
-                setForm({ name: variant.name, price: String(variant.price) });
+                setForm({ name: variant.name, price: String(variant.price), portion: variant.portion ?? "" });
               }}
               className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
             >
@@ -1095,16 +1133,19 @@ function SortableVariantRow({
       ) : (
         <div className="flex items-center gap-2 px-3 py-2.5">
           <DragHandle listeners={listeners} />
-          <span className="flex-1 truncate text-sm text-gray-800">
-            {variant.name}
-          </span>
+          <div className="flex-1 min-w-0">
+            <span className="block truncate text-sm text-gray-800">{variant.name}</span>
+            {variant.portion && (
+              <span className="text-[11px] text-gray-400">{variant.portion}</span>
+            )}
+          </div>
           <span className="shrink-0 text-sm font-semibold text-gray-700">
             R$ {Number(variant.price).toFixed(2)}
           </span>
           <button
             type="button"
             onClick={() => {
-              setForm({ name: variant.name, price: String(variant.price) });
+              setForm({ name: variant.name, price: String(variant.price), portion: variant.portion ?? "" });
               setEditing(true);
             }}
             className="shrink-0 text-xs text-blue-500 hover:underline"
@@ -1172,16 +1213,28 @@ function EditItemModal({
   // Variants state — initialised from item.variants when modal opens
   const [variants, setVariants] = useState<Variant[]>([]);
   const [addingVariant, setAddingVariant] = useState(false);
-  const [newVariant, setNewVariant] = useState({ name: "", price: "" });
+  const [newVariant, setNewVariant] = useState({ name: "", price: "", portion: "" });
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState("");
 
   // Extras state
   const [extras, setExtras] = useState<Extra[]>([]);
   const [addingExtra, setAddingExtra] = useState(false);
-  const [newExtra, setNewExtra] = useState({ name: "", quantity: "1", price: "" });
+  const [newExtra, setNewExtra] = useState({ name: "", quantity: "1", price: "", portion: "" });
   const [extraAddBusy, setExtraAddBusy] = useState(false);
   const [extraAddError, setExtraAddError] = useState("");
+
+  // Option groups state
+  const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
+  const [addingGroup, setAddingGroup] = useState(false);
+  const [newGroup, setNewGroup] = useState({ name: "", required: false, minSelect: "0", maxSelect: "1" });
+  const [groupAddBusy, setGroupAddBusy] = useState(false);
+  const [groupAddError, setGroupAddError] = useState("");
+  // Per-group option adding state: keyed by groupId
+  const [addingOptionFor, setAddingOptionFor] = useState<string | null>(null);
+  const [newOption, setNewOption] = useState({ name: "", price: "", portion: "" });
+  const [optionAddBusy, setOptionAddBusy] = useState(false);
+  const [optionAddError, setOptionAddError] = useState("");
 
   const variantSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -1204,12 +1257,23 @@ function EditItemModal({
     setVariants(item.variants ?? []);
     setExtras(item.extras ?? []);
     setAddingVariant(false);
-    setNewVariant({ name: "", price: "" });
+    setNewVariant({ name: "", price: "", portion: "" });
     setAddingExtra(false);
-    setNewExtra({ name: "", quantity: "1", price: "" });
+    setNewExtra({ name: "", quantity: "1", price: "", portion: "" });
+    setAddingGroup(false);
+    setNewGroup({ name: "", required: false, minSelect: "0", maxSelect: "1" });
+    setAddingOptionFor(null);
+    setNewOption({ name: "", price: "", portion: "" });
     setError("");
     setAddError("");
     setExtraAddError("");
+    setGroupAddError("");
+    setOptionAddError("");
+
+    // Fetch option groups for this item
+    apiFetch(`/api/menu/items/${item.id}/option-groups`, "GET")
+      .then((data) => setOptionGroups(data?.data ?? []))
+      .catch(() => setOptionGroups([]));
   }, [item?.id]);
 
   // Close on Escape
@@ -1273,13 +1337,14 @@ function EditItemModal({
       const data = await apiFetch(`/api/menu/items/${item.id}/variants`, "POST", {
         name: newVariant.name.trim(),
         price,
+        portion: newVariant.portion.trim() || undefined,
         sortOrder: variants.length,
       });
       setVariants((vs) => [
         ...vs,
-        { ...data.data, price: Number(data.data.price) },
+        { ...data.data, price: Number(data.data.price), portion: data.data.portion ?? null },
       ]);
-      setNewVariant({ name: "", price: "" });
+      setNewVariant({ name: "", price: "", portion: "" });
       setAddingVariant(false);
     } catch (e: unknown) {
       setAddError(e instanceof Error ? e.message : "Erro ao adicionar variante.");
@@ -1303,9 +1368,10 @@ function EditItemModal({
         name: newExtra.name.trim(),
         quantity: qty,
         price,
+        portion: newExtra.portion.trim() || undefined,
       });
-      setExtras((es) => [...es, { ...data.data, price: Number(data.data.price) }]);
-      setNewExtra({ name: "", quantity: "1", price: "" });
+      setExtras((es) => [...es, { ...data.data, price: Number(data.data.price), portion: data.data.portion ?? null, isAvailable: data.data.isAvailable ?? true }]);
+      setNewExtra({ name: "", quantity: "1", price: "", portion: "" });
       setAddingExtra(false);
     } catch (e: unknown) {
       setExtraAddError(e instanceof Error ? e.message : "Erro ao adicionar extra.");
@@ -1320,6 +1386,87 @@ function EditItemModal({
       setExtras((es) => es.filter((e) => e.id !== extraId));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao remover extra.");
+    }
+  }
+
+  async function handleAddOptionGroup() {
+    if (!item) return;
+    if (!newGroup.name.trim()) { setGroupAddError("Nome é obrigatório."); return; }
+    const min = parseInt(newGroup.minSelect, 10);
+    const max = parseInt(newGroup.maxSelect, 10);
+    if (isNaN(min) || isNaN(max) || max < 1 || min > max) {
+      setGroupAddError("Min/max inválidos.");
+      return;
+    }
+    setGroupAddBusy(true);
+    setGroupAddError("");
+    try {
+      const data = await apiFetch(`/api/menu/items/${item.id}/option-groups`, "POST", {
+        name: newGroup.name.trim(),
+        required: newGroup.required,
+        minSelect: min,
+        maxSelect: max,
+        sortOrder: optionGroups.length,
+      });
+      setOptionGroups((gs) => [...gs, { ...data.data, options: data.data.options ?? [] }]);
+      setNewGroup({ name: "", required: false, minSelect: "0", maxSelect: "1" });
+      setAddingGroup(false);
+    } catch (e: unknown) {
+      setGroupAddError(e instanceof Error ? e.message : "Erro ao adicionar grupo.");
+    } finally {
+      setGroupAddBusy(false);
+    }
+  }
+
+  async function handleDeleteOptionGroup(groupId: string) {
+    try {
+      await apiFetch(`/api/menu/option-groups/${groupId}`, "DELETE");
+      setOptionGroups((gs) => gs.filter((g) => g.id !== groupId));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao remover grupo.");
+    }
+  }
+
+  async function handleAddOption(groupId: string) {
+    if (!item) return;
+    if (!newOption.name.trim()) { setOptionAddError("Nome é obrigatório."); return; }
+    const price = parseFloat(newOption.price || "0");
+    if (isNaN(price) || price < 0) { setOptionAddError("Preço inválido."); return; }
+    setOptionAddBusy(true);
+    setOptionAddError("");
+    try {
+      const data = await apiFetch(`/api/menu/option-groups/${groupId}/options`, "POST", {
+        name: newOption.name.trim(),
+        price,
+        portion: newOption.portion.trim() || undefined,
+        sortOrder: optionGroups.find((g) => g.id === groupId)?.options.length ?? 0,
+      });
+      setOptionGroups((gs) =>
+        gs.map((g) =>
+          g.id === groupId
+            ? { ...g, options: [...g.options, { ...data.data, price: Number(data.data.price), portion: data.data.portion ?? null }] }
+            : g
+        )
+      );
+      setNewOption({ name: "", price: "", portion: "" });
+      setAddingOptionFor(null);
+    } catch (e: unknown) {
+      setOptionAddError(e instanceof Error ? e.message : "Erro ao adicionar opção.");
+    } finally {
+      setOptionAddBusy(false);
+    }
+  }
+
+  async function handleDeleteOption(groupId: string, optionId: string) {
+    try {
+      await apiFetch(`/api/menu/option-items/${optionId}`, "DELETE");
+      setOptionGroups((gs) =>
+        gs.map((g) =>
+          g.id === groupId ? { ...g, options: g.options.filter((o) => o.id !== optionId) } : g
+        )
+      );
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao remover opção.");
     }
   }
 
@@ -1401,68 +1548,237 @@ function EditItemModal({
             />
           </div>
 
-          {/* Ingredients */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Ingredientes
-            </label>
-            <textarea
-              value={form.ingredients}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, ingredients: e.target.value }))
-              }
-              placeholder="Ex: frango grelhado, queijo prato, alface, tomate, maionese caseira (usado pelo agente de IA para sugestões)"
-              rows={3}
-              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
+          {/* ── Adicionais ────────────────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Adicionais</p>
+                <p className="text-[11px] text-gray-400">Extras pagos opcionais (ex: queijo, bacon, molho)</p>
+              </div>
+              {extras.length > 0 && (
+                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-600">
+                  {extras.length}
+                </span>
+              )}
+            </div>
+
+            {extras.length > 0 && (
+              <ul className="space-y-2">
+                {extras.map((e) => (
+                  <li key={e.id} className="flex items-center gap-3 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2.5">
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-sm font-medium text-gray-800">{e.name}</p>
+                      <p className="text-[11px] text-gray-400">
+                        {e.quantity > 1 ? `até ${e.quantity}x` : ""}
+                        {e.portion ? (e.quantity > 1 ? " · " : "") + e.portion : ""}
+                        {!e.quantity && !e.portion ? "1 unidade" : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-lg bg-orange-500 px-2 py-1 text-xs font-bold text-white">
+                      +R$ {e.price.toFixed(2)}
+                    </span>
+                    <button type="button" onClick={() => handleDeleteExtra(e.id)}
+                      className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors" aria-label="Remover">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {extras.length === 0 && !addingExtra && (
+              <p className="rounded-lg border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
+                Nenhum adicional
+              </p>
+            )}
+
+            {addingExtra ? (
+              <div className="rounded-xl border border-dashed border-orange-300 bg-orange-50 p-3 space-y-2">
+                <p className="text-[11px] font-medium text-orange-700">Novo adicional</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={newExtra.name} onChange={(e) => setNewExtra((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Nome (ex: Queijo extra)"
+                    className="col-span-2 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+                  <input value={newExtra.portion} onChange={(e) => setNewExtra((f) => ({ ...f, portion: e.target.value }))}
+                    placeholder="Porção (ex: 100g)"
+                    className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+                  <input value={newExtra.quantity} onChange={(e) => setNewExtra((f) => ({ ...f, quantity: e.target.value }))}
+                    placeholder="Qtd máx" type="number" min="1" step="1"
+                    className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+                  <div className="relative col-span-2">
+                    <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
+                    <input value={newExtra.price} onChange={(e) => setNewExtra((f) => ({ ...f, price: e.target.value }))}
+                      placeholder="0,00" type="number" step="0.01" min="0"
+                      className="w-full rounded-lg border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400" />
+                  </div>
+                </div>
+                {extraAddError && <InlineError message={extraAddError} />}
+                <div className="flex gap-2">
+                  <button type="button" onClick={handleAddExtra} disabled={extraAddBusy}
+                    className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50">
+                    {extraAddBusy ? <Spinner /> : "Adicionar"}
+                  </button>
+                  <button type="button" onClick={() => { setAddingExtra(false); setNewExtra({ name: "", quantity: "1", price: "", portion: "" }); setExtraAddError(""); }}
+                    className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setAddingExtra(true)}
+                className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-700">
+                <span className="text-base leading-none">+</span> Adicionar adicional
+              </button>
+            )}
           </div>
 
-          {/* Price */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Preço <span className="text-red-500">*</span>
-            </label>
-            <input
-              value={form.price}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, price: e.target.value }))
-              }
-              placeholder="0,00"
-              type="number"
-              step="0.01"
-              min="0.01"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
+          {/* ── Opções do produto ─────────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Opções do produto</p>
+                <p className="text-[11px] text-gray-400">Grupos de escolha — ex: tipo, molho, ponto</p>
+              </div>
+              {optionGroups.length > 0 && (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-600">
+                  {optionGroups.length}
+                </span>
+              )}
+            </div>
+
+            {optionGroups.length === 0 && !addingGroup && (
+              <p className="rounded-lg border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
+                Nenhum grupo de opções
+              </p>
+            )}
+
+            {optionGroups.map((group) => (
+              <div key={group.id} className="rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-800">{group.name}</p>
+                    <p className="text-[11px] text-gray-500">
+                      {group.required ? "Obrigatório" : "Opcional"}
+                      {" · "}
+                      {group.maxSelect === 1 ? "escolha 1" : `escolha ${group.minSelect}–${group.maxSelect}`}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => handleDeleteOptionGroup(group.id)}
+                    className="shrink-0 text-xs text-red-400 hover:underline">Remover grupo</button>
+                </div>
+
+                {group.options.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {group.options.map((opt) => (
+                      <li key={opt.id} className="flex items-center gap-2 rounded-lg bg-white border border-blue-100 px-2.5 py-2">
+                        <div className="flex-1 min-w-0">
+                          <span className="block truncate text-xs font-medium text-gray-800">{opt.name}</span>
+                          {opt.portion && <span className="text-[11px] text-gray-400">{opt.portion}</span>}
+                        </div>
+                        <span className="shrink-0 text-xs font-semibold text-gray-600">
+                          {opt.price > 0 ? `+R$ ${opt.price.toFixed(2)}` : "Grátis"}
+                        </span>
+                        <button type="button" onClick={() => handleDeleteOption(group.id, opt.id)}
+                          className="shrink-0 text-[10px] text-red-400 hover:underline">✕</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {addingOptionFor === group.id ? (
+                  <div className="space-y-2 pt-1">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={newOption.name} onChange={(e) => setNewOption((f) => ({ ...f, name: e.target.value }))}
+                        placeholder="Nome (ex: Shoyu)"
+                        className="col-span-2 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                      <input value={newOption.portion} onChange={(e) => setNewOption((f) => ({ ...f, portion: e.target.value }))}
+                        placeholder="Porção (opcional)"
+                        className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                      <div className="relative">
+                        <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
+                        <input value={newOption.price} onChange={(e) => setNewOption((f) => ({ ...f, price: e.target.value }))}
+                          placeholder="0,00" type="number" step="0.01" min="0"
+                          className="w-full rounded-lg border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                      </div>
+                    </div>
+                    {optionAddError && <InlineError message={optionAddError} />}
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => handleAddOption(group.id)} disabled={optionAddBusy}
+                        className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50">
+                        {optionAddBusy ? <Spinner /> : "Adicionar"}
+                      </button>
+                      <button type="button" onClick={() => { setAddingOptionFor(null); setNewOption({ name: "", price: "", portion: "" }); setOptionAddError(""); }}
+                        className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => { setAddingOptionFor(group.id); setNewOption({ name: "", price: "", portion: "" }); setOptionAddError(""); }}
+                    className="text-xs font-medium text-blue-500 hover:text-blue-700">
+                    + Adicionar opção
+                  </button>
+                )}
+              </div>
+            ))}
+
+            {addingGroup ? (
+              <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-3 space-y-2">
+                <p className="text-[11px] font-medium text-blue-700">Novo grupo de opções</p>
+                <input value={newGroup.name} onChange={(e) => setNewGroup((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Nome do grupo (ex: Tipo do peixe, Molho)"
+                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                <div className="flex gap-3 flex-wrap items-center">
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={newGroup.required}
+                      onChange={(e) => setNewGroup((f) => ({ ...f, required: e.target.checked }))}
+                      className="rounded" />
+                    Obrigatório
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Mín</span>
+                    <input value={newGroup.minSelect} onChange={(e) => setNewGroup((f) => ({ ...f, minSelect: e.target.value }))}
+                      type="number" min="0" className="w-14 rounded border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Máx</span>
+                    <input value={newGroup.maxSelect} onChange={(e) => setNewGroup((f) => ({ ...f, maxSelect: e.target.value }))}
+                      type="number" min="1" className="w-14 rounded border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                  </div>
+                </div>
+                {groupAddError && <InlineError message={groupAddError} />}
+                <div className="flex gap-2">
+                  <button type="button" onClick={handleAddOptionGroup} disabled={groupAddBusy}
+                    className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50">
+                    {groupAddBusy ? <Spinner /> : "Criar grupo"}
+                  </button>
+                  <button type="button" onClick={() => { setAddingGroup(false); setNewGroup({ name: "", required: false, minSelect: "0", maxSelect: "1" }); setGroupAddError(""); }}
+                    className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setAddingGroup(true)}
+                className="flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-700">
+                <span className="text-base leading-none">+</span> Adicionar grupo de opções
+              </button>
+            )}
           </div>
 
-          {/* Code */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Código
-            </label>
-            <input
-              value={form.code}
-              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-              placeholder="Código do produto (opcional)"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
-
-          {/* Image */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-700">
-              Imagem
-            </label>
-            <ImageUpload
-              value={form.imageUrl}
-              onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
-            />
-          </div>
-
-          {/* Channel toggles */}
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-gray-700">Canais</p>
-            <div className="flex gap-4">
+          {/* ── Variantes ─────────────────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                  Variantes
+                </p>
+                {!form.hasVariants && (
+                  <p className="text-[11px] text-gray-400">Tamanhos com preço diferente (ex: Pequeno, Médio, Grande)</p>
+                )}
+              </div>
               <ToggleSwitch
                 label="Delivery"
                 checked={form.showInDelivery}
@@ -1532,23 +1848,28 @@ function EditItemModal({
                     <div className="flex gap-2">
                       <input
                         value={newVariant.name}
-                        onChange={(e) =>
-                          setNewVariant((f) => ({ ...f, name: e.target.value }))
-                        }
-                        placeholder="Nome (ex: 350ml)"
-                        className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        onChange={(e) => setNewVariant((f) => ({ ...f, name: e.target.value }))}
+                        placeholder="Nome (ex: Grande)"
+                        className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
                       />
                       <input
-                        value={newVariant.price}
-                        onChange={(e) =>
-                          setNewVariant((f) => ({ ...f, price: e.target.value }))
-                        }
-                        placeholder="Preço"
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        value={newVariant.portion}
+                        onChange={(e) => setNewVariant((f) => ({ ...f, portion: e.target.value }))}
+                        placeholder="Porção (ex: 800g)"
+                        className="w-24 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
                       />
+                      <div className="relative w-24">
+                        <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
+                        <input
+                          value={newVariant.price}
+                          onChange={(e) => setNewVariant((f) => ({ ...f, price: e.target.value }))}
+                          placeholder="0,00"
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          className="w-full rounded-lg border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        />
+                      </div>
                     </div>
                     {addError && <InlineError message={addError} />}
                     <div className="flex gap-2">
@@ -1564,7 +1885,7 @@ function EditItemModal({
                         type="button"
                         onClick={() => {
                           setAddingVariant(false);
-                          setNewVariant({ name: "", price: "" });
+                          setNewVariant({ name: "", price: "", portion: "" });
                           setAddError("");
                         }}
                         className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
@@ -1656,7 +1977,7 @@ function EditItemModal({
                     type="button"
                     onClick={() => {
                       setAddingExtra(false);
-                      setNewExtra({ name: "", quantity: "1", price: "" });
+                      setNewExtra({ name: "", quantity: "1", price: "", portion: "" });
                       setExtraAddError("");
                     }}
                     className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"

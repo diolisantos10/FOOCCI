@@ -63,6 +63,7 @@ export const createVariantSchema = z.object({
     .number()
     .positive("Preço deve ser maior que zero")
     .multipleOf(0.01, "Preço deve ter no máximo 2 casas decimais"),
+  portion: z.string().max(50).optional(),
   isAvailable: z.boolean().default(true),
   sortOrder: z.number().int().min(0).default(0),
 });
@@ -84,9 +85,33 @@ export const createExtraSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(100),
   quantity: z.number().int().min(1, "Quantidade mínima é 1"),
   price: z.number().min(0, "Preço não pode ser negativo").multipleOf(0.01),
+  portion: z.string().max(50).optional(),
+  isAvailable: z.boolean().default(true).optional(),
 });
 
 export const updateExtraSchema = createExtraSchema.partial();
+
+// ─── Option Groups ────────────────────────────────────────────
+
+export const createOptionGroupSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório").max(100),
+  required: z.boolean().default(false),
+  minSelect: z.number().int().min(0).default(0),
+  maxSelect: z.number().int().min(1).default(1),
+  sortOrder: z.number().int().min(0).default(0),
+});
+
+export const updateOptionGroupSchema = createOptionGroupSchema.partial();
+
+export const createOptionItemSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório").max(100),
+  price: z.number().min(0).multipleOf(0.01).default(0),
+  portion: z.string().max(50).optional(),
+  isAvailable: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).default(0),
+});
+
+export const updateOptionItemSchema = createOptionItemSchema.partial();
 
 // ─── Bulk price ───────────────────────────────────────────────
 
@@ -111,3 +136,7 @@ export type ReorderVariantsInput = z.infer<typeof reorderVariantsSchema>;
 export type BulkPriceInput = z.infer<typeof bulkPriceSchema>;
 export type CreateExtraInput = z.infer<typeof createExtraSchema>;
 export type UpdateExtraInput = z.infer<typeof updateExtraSchema>;
+export type CreateOptionGroupInput = z.infer<typeof createOptionGroupSchema>;
+export type UpdateOptionGroupInput = z.infer<typeof updateOptionGroupSchema>;
+export type CreateOptionItemInput = z.infer<typeof createOptionItemSchema>;
+export type UpdateOptionItemInput = z.infer<typeof updateOptionItemSchema>;

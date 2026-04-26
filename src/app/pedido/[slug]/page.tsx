@@ -114,7 +114,22 @@ export default async function PedidoPage({
           variants: {
             where: { isAvailable: true },
             orderBy: { sortOrder: "asc" },
-            select: { id: true, name: true, price: true },
+            select: { id: true, name: true, price: true, portion: true },
+          },
+          extras: {
+            where: { isAvailable: true },
+            orderBy: { name: "asc" },
+            select: { id: true, name: true, price: true, portion: true, quantity: true },
+          },
+          optionGroups: {
+            orderBy: { sortOrder: "asc" },
+            include: {
+              options: {
+                where: { isAvailable: true },
+                orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+                select: { id: true, name: true, price: true, portion: true },
+              },
+            },
           },
         },
       },
@@ -139,6 +154,27 @@ export default async function PedidoPage({
           id: v.id,
           name: v.name,
           price: Number(v.price),
+          portion: v.portion ?? null,
+        })),
+        extras: i.extras.map((e) => ({
+          id: e.id,
+          name: e.name,
+          price: Number(e.price),
+          portion: e.portion ?? null,
+          quantity: e.quantity,
+        })),
+        optionGroups: i.optionGroups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          required: g.required,
+          minSelect: g.minSelect,
+          maxSelect: g.maxSelect,
+          options: g.options.map((o) => ({
+            id: o.id,
+            name: o.name,
+            price: Number(o.price),
+            portion: o.portion ?? null,
+          })),
         })),
       })),
     }));
