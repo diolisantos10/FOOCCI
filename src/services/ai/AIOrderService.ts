@@ -29,6 +29,7 @@ import { AIInteractionLogger } from "./AIInteractionLogger";
 import { buildSalesProfile } from "./SalesProfile";
 import { resolveMaxTokens } from "./BehaviorEngine";
 import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
+import { getAlreadySuggestedIds } from "./ConversationGuardrails";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
 
@@ -127,7 +128,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
   let handoffRequested = false;
   let handoffReason = "";
 
-  // Build tool context
+  // Build tool context (upsellSuggestedThisTurn starts false — reset each turn)
   const toolCtx: ToolContext = {
     restaurantId,
     conversationId,
@@ -135,14 +136,31 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     draftId,
     setDraftId: (id) => { draftId = id; toolCtx.draftId = id; },
     requestHandoff: (reason) => { handoffRequested = true; handoffReason = reason; },
+    upsellSuggestedThisTurn: false,
   };
 
-  // 5. Build sales profile + upsell context
+  // 5. Build sales profile + guardrail data + upsell context
   const salesProfile = buildSalesProfile(brandConfig, restaurantName);
+
+  // Load guardrail data in parallel with the existing profile build
+  const [alreadySuggestedIds, customerPrefs] = await Promise.all([
+    getAlreadySuggestedIds(conversationId),
+    prisma.customerPreference.findUnique({
+      where:  { customerId },
+      select: { dietary: true, allergies: true },
+    }),
+  ]);
+
+  const customerDietary   = customerPrefs?.dietary   ?? [];
+  const customerAllergies = customerPrefs?.allergies ?? [];
+
   const upsellSuggestions = await UpsellEngine.suggest(
     restaurantId,
     draftId,
-    salesProfile.salesPriority
+    salesProfile.salesPriority,
+    alreadySuggestedIds,
+    customerDietary,
+    customerAllergies,
   );
 
   // 6. Build messages
@@ -153,15 +171,27 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     brandConfig,
   });
 
-  // Inject upsell hints into last system message if suggestions exist
+  // Inject upsell hints + guardrail context into system message
+  const sysMsg = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
+  let sysAddendum = "";
+
   if (upsellSuggestions.length > 0 && brandConfig.upsellStyle !== "none") {
-    const upsellHint =
+    sysAddendum +=
       "\n\nSUGESTÕES DE UPSELL DISPONÍVEIS (use suggest_upsell se adequado):\n" +
       upsellSuggestions
         .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName})`)
         .join("\n");
-    const sysMsg = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
-    messages[0] = { ...sysMsg, content: sysMsg.content + upsellHint };
+  }
+
+  // Anti-loop: tell AI which products were already suggested in this conversation
+  if (alreadySuggestedIds.size > 0) {
+    sysAddendum +=
+      "\n\nPRODUTOS JÁ SUGERIDOS NESTA CONVERSA (não repita):\n" +
+      [...alreadySuggestedIds].map((id) => `  • ${id}`).join("\n");
+  }
+
+  if (sysAddendum) {
+    messages[0] = { ...sysMsg, content: sysMsg.content + sysAddendum };
   }
 
   // 7. OpenAI tool-call loop

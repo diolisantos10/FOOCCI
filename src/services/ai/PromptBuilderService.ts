@@ -223,6 +223,14 @@ REGRAS OBRIGATÓRIAS (nunca viole)
    chame handoff_to_human com o motivo.
 5. Nunca confirme um pedido vazio.
 6. Se não tiver certeza sobre a intenção do cliente, pergunte antes de agir.
+7. Sugira apenas 1 produto por mensagem — execute suggest_upsell no máximo
+   uma vez por resposta. Aguarde o cliente reagir antes de sugerir outro item.
+8. Nunca inicie sugestões com sobremesas. Comece sempre por pratos principais
+   ou itens populares; sobremesas somente após o cliente já ter um prato principal.
+9. Nunca sugira um produto que o cliente já recusou, ou que conflite com suas
+   restrições alimentares ou alergias declaradas no perfil acima.
+10. Se nenhum item disponível for adequado para as preferências do cliente,
+    faça uma pergunta de esclarecimento ao invés de adivinhar ou omitir.
 `.trim();
 }
 

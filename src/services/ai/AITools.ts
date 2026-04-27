@@ -29,6 +29,11 @@ export interface ToolContext {
   setDraftId: (id: string) => void;
   /** Callback to request human handoff. */
   requestHandoff: (reason: string) => void;
+  /**
+   * Guardrail: set to true once suggest_upsell is successfully called this turn.
+   * Prevents the AI from suggesting more than one product per response.
+   */
+  upsellSuggestedThisTurn: boolean;
 }
 
 // ─── tool result ──────────────────────────────────────────────
@@ -454,6 +459,14 @@ async function execSuggestUpsell(
   const menuItemId = args.menuItemId as string;
   if (!menuItemId) return { success: false, message: "menuItemId é obrigatório." };
 
+  // Guardrail: enforce single-suggestion-per-response rule (PART 4)
+  if (ctx.upsellSuggestedThisTurn) {
+    return {
+      success: false,
+      message: "Você já sugeriu um produto nesta resposta. Aguarde o cliente responder antes de sugerir outro item.",
+    };
+  }
+
   // Validate item belongs to this restaurant
   const item = await prisma.menuItem.findFirst({
     where: {
@@ -473,6 +486,9 @@ async function execSuggestUpsell(
   if (!item) {
     return { success: false, message: `Item "${menuItemId}" não encontrado no cardápio.` };
   }
+
+  // Mark suggestion as used for this turn (single-suggestion guardrail)
+  ctx.upsellSuggestedThisTurn = true;
 
   return {
     success: true,
