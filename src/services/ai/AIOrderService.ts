@@ -438,27 +438,45 @@ function buildGoalContext(
 ): string {
   const lines = [
     `\n\nCONTEXTO DE METAS (turno atual):`,
-    `  Pedido atual: R$ ${cartValue.toFixed(2)} | ${cartItemCount} ${cartItemCount === 1 ? "item" : "itens"}`,
-    `  Meta:         R$ ${targetTicket.toFixed(2)} | ${targetItems} itens`,
+    `  Pedido: R$ ${cartValue.toFixed(2)} | ${cartItemCount} ${cartItemCount === 1 ? "item" : "itens"}`,
+    `  Meta:   R$ ${targetTicket.toFixed(2)} | ${targetItems} itens`,
   ];
 
   if (valueGap > 0 || itemGap > 0) {
     const gaps: string[] = [];
-    if (valueGap > 0) gaps.push(`R$ ${valueGap.toFixed(2)} faltando em valor`);
-    if (itemGap > 0)  gaps.push(`${itemGap} ${itemGap === 1 ? "item faltando" : "itens faltando"}`);
-    lines.push(`  Gap: ${gaps.join(" | ")}`);
+    if (valueGap > 0) gaps.push(`R$ ${valueGap.toFixed(2)} em valor`);
+    if (itemGap > 0)  gaps.push(`${itemGap} ${itemGap === 1 ? "item" : "itens"}`);
+    lines.push(`  Gap:    ${gaps.join(" | ")}`);
+  }
 
-    if (valueGap > 0 && itemGap > 0) {
-      const lo = (valueGap * 0.4).toFixed(0);
-      const hi = valueGap.toFixed(0);
-      lines.push(`  → Sugira itens entre R$ ${lo}–R$ ${hi} para avançar em ambas as metas.`);
-    } else if (valueGap > 0) {
-      lines.push(`  → Priorize itens de maior valor para atingir a meta de ticket.`);
-    } else {
-      lines.push(`  → Priorize complementos de baixo custo para atingir a meta de itens.`);
-    }
+  // Explicit per-turn decision instruction — AI must follow this
+  lines.push("", "AÇÃO RECOMENDADA:");
+
+  if (valueGap > 0 && itemGap > 0) {
+    const lo = (valueGap * 0.4).toFixed(0);
+    const hi = valueGap.toFixed(0);
+    lines.push(
+      `  Gap de valor (R$ ${valueGap.toFixed(2)}) E gap de itens (${itemGap}) ativos.`,
+      `  → Prefira itens entre R$ ${lo}–R$ ${hi} das sugestões acima.`,
+      `  → Enquadre: "[item] vai muito bem com o que você já pediu e completa o combo."`,
+    );
+  } else if (valueGap > 0) {
+    lines.push(
+      `  Apenas gap de valor ativo (R$ ${valueGap.toFixed(2)} faltando). Meta de itens já atingida.`,
+      `  → Prefira o item de maior valor nas sugestões acima.`,
+      `  → Enquadre: "Para um pedido mais completo, uma ótima opção seria..."`,
+    );
+  } else if (itemGap > 0) {
+    lines.push(
+      `  Apenas gap de itens ativo (${itemGap} ${itemGap === 1 ? "item faltando" : "itens faltando"}). Ticket já atingido.`,
+      `  → Prefira complementos leves das sugestões (bebida, adicional, acompanhamento).`,
+      `  → Enquadre: "Para fechar, que tal adicionar [item] também?"`,
+    );
   } else {
-    lines.push(`  → Metas atingidas. Sugestões opcionais — foque em fechar o pedido.`);
+    lines.push(
+      `  Metas atingidas (R$ ${cartValue.toFixed(2)} | ${cartItemCount} itens).`,
+      `  → Priorize fechar o pedido. Não force nova sugestão neste turno.`,
+    );
   }
 
   return lines.join("\n");

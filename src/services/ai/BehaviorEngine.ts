@@ -187,6 +187,19 @@ function buildSalesSection(profile: SalesProfile): string {
   const priorityInstructions = buildPriorityInstructions(profile.salesPriority);
   rules.push(...priorityInstructions);
 
+  // Goal-driven decision framework (applied when CONTEXTO DE METAS is present)
+  rules.push(
+    "",
+    "QUANDO DECIDIR O QUE SUGERIR:",
+    "- Leia o bloco AÇÃO RECOMENDADA injetado no contexto e siga-o.",
+    "- Escolha sempre das SUGESTÕES DE UPSELL listadas — já pré-selecionadas para as metas.",
+    "- Gap de valor ativo → prefira o item de maior preço disponível dentro do gap.",
+    "- Gap de itens ativo → prefira o complemento mais acessível (bebida, adicional).",
+    "- Ambos os gaps ativos → item de preço médio que sirva como complemento natural.",
+    "- Metas atingidas → encaminhe para confirmação; não force nova sugestão.",
+    "- NUNCA cite 'meta', 'gap' ou números de ticket ao cliente — fale apenas do item.",
+  );
+
   return rules.join("\n");
 }
 

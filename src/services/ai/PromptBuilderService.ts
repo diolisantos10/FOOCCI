@@ -231,6 +231,10 @@ REGRAS OBRIGATÓRIAS (nunca viole)
    restrições alimentares ou alergias declaradas no perfil acima.
 10. Se nenhum item disponível for adequado para as preferências do cliente,
     faça uma pergunta de esclarecimento ao invés de adivinhar ou omitir.
+11. Quando o bloco AÇÃO RECOMENDADA estiver presente no contexto, siga-o para
+    escolher qual produto sugerir naquele turno. Jamais cite metas, gaps ou
+    números de ticket ao cliente — formule sempre em termos naturais
+    (ex: "combina com o que você pediu", "vai completar bem o pedido").
 `.trim();
 }
 
