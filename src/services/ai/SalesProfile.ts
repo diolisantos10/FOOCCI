@@ -46,6 +46,12 @@ export interface SalesProfile {
   /** bestsellers | high_margin | promotions */
   salesPriority: SalesPriority;
 
+  // ── goal targets ──────────────────────────────────────────
+  /** Target order value in BRL — drives gap-aware upsell selection */
+  targetTicket: number;
+  /** Target item count per order — drives add-on prioritization */
+  targetItems: number;
+
   // ── communication style ───────────────────────────────────
   communication: CommunicationProfile;
 }
@@ -58,6 +64,10 @@ export interface SalesProfile {
  *
  * Handles missing / default values so callers never need to guard.
  */
+// Default targets derived from salesFocus — no DB field needed.
+const TICKET_BY_FOCUS: Record<SalesFocus, number> = { balanced: 80, ticket: 120, volume: 60 };
+const ITEMS_BY_FOCUS:  Record<SalesFocus, number> = { balanced: 3,  ticket: 2,   volume: 4  };
+
 export function buildSalesProfile(
   config: RestaurantBrandConfig,
   restaurantName: string
@@ -69,13 +79,18 @@ export function buildSalesProfile(
   // on the config take precedence — allowing fine-tuned customisation.
   const voiceBase = PERSONALITY_VOICE_MAP[preset];
 
+  const focus = (config.salesFocus ?? "balanced") as SalesFocus;
+
   return {
     personality: preset,
     restaurantName,
 
     upsellIntensity: (config.upsellIntensity ?? "medium") as UpsellIntensity,
-    salesFocus:      (config.salesFocus     ?? "balanced") as SalesFocus,
+    salesFocus:      focus,
     salesPriority:   (config.salesPriority  ?? "bestsellers") as SalesPriority,
+
+    targetTicket: TICKET_BY_FOCUS[focus] ?? 80,
+    targetItems:  ITEMS_BY_FOCUS[focus]  ?? 3,
 
     communication: {
       tone:        config.tone             ?? voiceBase.tone,

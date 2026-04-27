@@ -154,14 +154,23 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
   const customerDietary   = customerPrefs?.dietary   ?? [];
   const customerAllergies = customerPrefs?.allergies ?? [];
 
-  const upsellSuggestions = await UpsellEngine.suggest(
+  const upsellResult = await UpsellEngine.suggest(
     restaurantId,
     draftId,
     salesProfile.salesPriority,
     alreadySuggestedIds,
     customerDietary,
     customerAllergies,
+    salesProfile.targetTicket,
+    salesProfile.targetItems,
   );
+  const {
+    suggestions: upsellSuggestions,
+    cartValue,
+    cartItemCount,
+    valueGap,
+    itemGap,
+  } = upsellResult;
 
   // 6. Build messages
   const messages = await PromptBuilderService.build({
@@ -179,8 +188,17 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     sysAddendum +=
       "\n\nSUGESTÕES DE UPSELL DISPONÍVEIS (use suggest_upsell se adequado):\n" +
       upsellSuggestions
-        .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName})`)
+        .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName}) — ${s.reason}`)
         .join("\n");
+  }
+
+  // Goal context: cart state vs targets so AI frames suggestions strategically
+  if (cartItemCount > 0) {
+    sysAddendum += buildGoalContext(
+      cartValue, cartItemCount,
+      salesProfile.targetTicket, salesProfile.targetItems,
+      valueGap, itemGap,
+    );
   }
 
   // Anti-loop: tell AI which products were already suggested in this conversation
@@ -408,4 +426,40 @@ async function logTurn(params: {
 
 function safeJson(raw: string): unknown {
   try { return JSON.parse(raw); } catch { return raw; }
+}
+
+function buildGoalContext(
+  cartValue: number,
+  cartItemCount: number,
+  targetTicket: number,
+  targetItems: number,
+  valueGap: number,
+  itemGap: number,
+): string {
+  const lines = [
+    `\n\nCONTEXTO DE METAS (turno atual):`,
+    `  Pedido atual: R$ ${cartValue.toFixed(2)} | ${cartItemCount} ${cartItemCount === 1 ? "item" : "itens"}`,
+    `  Meta:         R$ ${targetTicket.toFixed(2)} | ${targetItems} itens`,
+  ];
+
+  if (valueGap > 0 || itemGap > 0) {
+    const gaps: string[] = [];
+    if (valueGap > 0) gaps.push(`R$ ${valueGap.toFixed(2)} faltando em valor`);
+    if (itemGap > 0)  gaps.push(`${itemGap} ${itemGap === 1 ? "item faltando" : "itens faltando"}`);
+    lines.push(`  Gap: ${gaps.join(" | ")}`);
+
+    if (valueGap > 0 && itemGap > 0) {
+      const lo = (valueGap * 0.4).toFixed(0);
+      const hi = valueGap.toFixed(0);
+      lines.push(`  → Sugira itens entre R$ ${lo}–R$ ${hi} para avançar em ambas as metas.`);
+    } else if (valueGap > 0) {
+      lines.push(`  → Priorize itens de maior valor para atingir a meta de ticket.`);
+    } else {
+      lines.push(`  → Priorize complementos de baixo custo para atingir a meta de itens.`);
+    }
+  } else {
+    lines.push(`  → Metas atingidas. Sugestões opcionais — foque em fechar o pedido.`);
+  }
+
+  return lines.join("\n");
 }
