@@ -53,7 +53,10 @@ export const AI_TOOL_DEFINITIONS: OpenAI.Chat.ChatCompletionTool[] = [
       name: "add_item",
       description:
         "Adiciona um item do cardápio ao pedido atual do cliente. " +
-        "Use o ID exato do item listado no cardápio.",
+        "OBRIGATÓRIO: antes de chamar, confirme que menuItemId existe no cardápio listado no prompt. " +
+        "ID inválido ou inventado retorna success:false. " +
+        "Se success:false, NÃO confirme o item — corrija o ID e tente UMA vez. " +
+        "Máximo 2 chamadas add_item por turno.",
       parameters: {
         type: "object",
         properties: {

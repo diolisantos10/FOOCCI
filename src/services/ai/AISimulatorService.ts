@@ -785,6 +785,7 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
   const toolCallsMade: TurnToolCall[] = [];
   let finalResponse = "";
   const loopMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages];
+  let addItemAttempts = 0;  // guard: max 2 add_item calls per turn
 
   for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
     // Per-call retry for 429 and network errors — up to MAX_SCENARIO_RETRIES attempts
@@ -842,6 +843,31 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
       );
 
       for (const tc of fnCalls) {
+        // Server-side guard: max 2 add_item calls per turn (original + 1 retry)
+        if (tc.function.name === "add_item") {
+          addItemAttempts++;
+          if (addItemAttempts > 2) {
+            const blocked = {
+              success: false,
+              message: "PARAR: limite de tentativas add_item atingido neste turno. " +
+                       "Responda ao cliente diretamente sem chamar add_item novamente.",
+            };
+            loopMessages.push({
+              role:         "tool",
+              tool_call_id: tc.id,
+              content:      JSON.stringify(blocked),
+            });
+            toolCallsMade.push({
+              name:       "add_item",
+              args:       {},
+              success:    false,
+              resultMsg:  blocked.message,
+              resultData: null,
+            });
+            continue;
+          }
+        }
+
         const result = await executeTool(tc.function.name, tc.function.arguments, toolCtx);
         let args: unknown = tc.function.arguments;
         try { args = JSON.parse(tc.function.arguments); } catch { /* keep raw */ }
