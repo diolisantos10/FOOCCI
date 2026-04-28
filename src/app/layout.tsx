@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { SessionProvider } from "@/components/providers/SessionProvider";
+import { AppVersionLogger } from "@/components/AppVersionLogger";
 import "./globals.css";
 
 const inter = localFont({
@@ -32,6 +33,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={inter.variable}>
       <body className="antialiased">
+        <AppVersionLogger />
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>

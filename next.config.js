@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
+const pkg = require("./package.json");
+
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION ?? pkg.version,
+  },
   // Strict mode for catching bugs early
   reactStrictMode: true,
 
@@ -38,6 +43,14 @@ const nextConfig = {
   // Applied to every route. Does not break app functionality.
   async headers() {
     return [
+      {
+        // Prevent browsers (especially mobile) from caching API responses
+        source: "/api/(.*)",
+        headers: [
+          { key: "Cache-Control", value: "no-store, max-age=0" },
+          { key: "Pragma", value: "no-cache" },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [
