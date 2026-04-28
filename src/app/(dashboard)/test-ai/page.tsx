@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
-import { ChatSimClient } from "../chat-sim/ChatSimClient";
+import { TestAIHubClient } from "./TestAIHubClient";
 
 export const metadata = { title: "Testar IA" };
 
@@ -25,7 +25,7 @@ export default async function TestAIPage() {
   const pedidoUrl = `${appOrigin}/pedido/${restaurant.slug}`;
 
   return (
-    <ChatSimClient
+    <TestAIHubClient
       restaurantName={restaurant.name}
       restaurantSlug={restaurant.slug}
       pedidoUrl={pedidoUrl}

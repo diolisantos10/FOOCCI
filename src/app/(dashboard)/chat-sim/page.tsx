@@ -25,10 +25,12 @@ export default async function ChatSimPage() {
   const pedidoUrl = `${appOrigin}/pedido/${restaurant.slug}`;
 
   return (
-    <ChatSimClient
-      restaurantName={restaurant.name}
-      restaurantSlug={restaurant.slug}
-      pedidoUrl={pedidoUrl}
-    />
+    <div className="h-[calc(100vh-56px)]">
+      <ChatSimClient
+        restaurantName={restaurant.name}
+        restaurantSlug={restaurant.slug}
+        pedidoUrl={pedidoUrl}
+      />
+    </div>
   );
 }

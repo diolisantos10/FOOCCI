@@ -326,7 +326,7 @@ export function ChatSimClient({ restaurantName, restaurantSlug, pedidoUrl }: Pro
   const chatWidth = viewMode === "mobile" ? "max-w-sm" : "max-w-full";
 
   return (
-    <div className="flex h-[calc(100vh-56px)] flex-col overflow-hidden bg-gray-50">
+    <div className="flex h-full flex-col overflow-hidden bg-gray-50">
       {/* ── Top bar ── */}
       <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-2.5 shadow-sm">
         <div className="min-w-0">
