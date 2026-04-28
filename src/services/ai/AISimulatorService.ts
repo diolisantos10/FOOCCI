@@ -95,7 +95,83 @@ export interface ScenarioResult {
   salesWeaknesses:  string[];       // alias for suggestions (legacy field)
 }
 
+// ─── analytical report types ──────────────────────────────────
+
+export interface SalesDiagnosis {
+  withMainItem:      number;  // 0–1 rate
+  withDrink:         number;  // 0–1 rate
+  withDessert:       number;  // 0–1 rate
+  fullCoverage:      number;  // 0–1 rate (main + drink + dessert)
+  avgItemsPerOrder:  number;
+  missedUpsells:     number;  // scenarios with cart>0 but zero upsell attempts
+}
+
+export interface RevenueAnalysis {
+  actualRevenue:      number;
+  potentialRevenue:   number;  // projected if all orders reached targetTicket
+  lostRevenueDrink:   number;  // scenarios without drink × EST_DRINK_VALUE
+  lostRevenueDessert: number;
+  lostRevenueTotal:   number;
+  avgActualTicket:    number;
+  avgPotentialTicket: number;
+  ticketGap:          number;
+}
+
+export type ErrorSeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+
+export interface PrioritizedError {
+  severity:    ErrorSeverity;
+  type:        string;
+  count:       number;
+  scenarios:   string[];
+  description: string;
+  impact:      string;
+}
+
+export interface ErrorPrioritization {
+  critical: PrioritizedError[];
+  high:     PrioritizedError[];
+  medium:   PrioritizedError[];
+  low:      PrioritizedError[];
+  total:    number;
+}
+
+export interface FlowBreakdown {
+  beforeMainItem: number;  // % got no main item at all
+  afterMainItem:  number;  // % got main but no drink suggested
+  duringUpsell:   number;  // % upsell offered but all rejected, no acceptance
+  beforeCheckout: number;  // % had items but never confirmed
+}
+
+export interface RefusalHandling {
+  repeatSuggestions:     number;  // 0–1 rate of no_repeat_suggestion failures
+  abandonedAfterRefusal: number;  // 0–1 rate of abandon after ≥1 rejection
+}
+
+export interface BehaviorAnalysis {
+  flowBreakdown:   FlowBreakdown;
+  refusalHandling: RefusalHandling;
+}
+
+export interface DetailedPerformanceScore {
+  overall:               number;  // 0–100
+  salesEffectiveness:    number;  // conversion + upsell acceptance + ticket growth
+  flowControl:           number;  // category coverage + turn efficiency
+  toolAccuracy:          number;  // tool call success rate + no hallucinations
+  restrictionCompliance: number;  // dietary + no-repeat compliance
+}
+
+export interface ActionableFix {
+  rank:    1 | 2 | 3;
+  problem: string;
+  why:     string;
+  fix:     string;
+  impact:  "high" | "medium" | "low";
+  metric:  string;
+}
+
 export interface SimulationReport {
+  // ── existing fields (preserved) ────────────────────────────
   overallScore:        number;
   scenarios:           ScenarioResult[];
   criticalBugs:        string[];
@@ -109,9 +185,18 @@ export interface SimulationReport {
   avgTurns:            number;
   abandonmentRate:     number;
   upsellAcceptanceRate: number;
-  realRevenue:         number;  // sum of finalCartValue for converted orders only
-  flowScore:           number;  // avg across all scenarios (0–1)
-  errorCount:          number;  // total failed tool calls across all scenarios
+  realRevenue:         number;
+  flowScore:           number;
+  errorCount:          number;
+
+  // ── analytical modules (new) ────────────────────────────────
+  salesDiagnosis:      SalesDiagnosis;
+  revenueAnalysis:     RevenueAnalysis;
+  errorPrioritization: ErrorPrioritization;
+  behaviorAnalysis:    BehaviorAnalysis;
+  performanceScore:    DetailedPerformanceScore;
+  actionableFixes:     ActionableFix[];
+  summary:             string;
 }
 
 type ProgressCallback = (info: { current: number; total: number; scenarioName: string }) => void;
@@ -965,62 +1050,83 @@ function runCheck(
 
 // ─── report builder ───────────────────────────────────────────
 
-function buildReport(results: ScenarioResult[], restaurantName: string): SimulationReport {
-  const overallScore = results.length > 0
-    ? results.reduce((sum, r) => sum + r.score, 0) / results.length
-    : 0;
+// Estimated average values for missing-revenue projection
+const EST_DRINK_VALUE   = 10;
+const EST_DESSERT_VALUE = 14;
+const DEFAULT_TARGET_TICKET = 80;
 
+function buildReport(results: ScenarioResult[], restaurantName: string): SimulationReport {
+  const n = results.length || 1;
+
+  // ── base metrics ──────────────────────────────────────────
+  const overallScore     = results.reduce((s, r) => s + r.score,                          0) / n;
+  const avgTicket        = results.reduce((s, r) => s + r.salesMetrics.finalCartValue,    0) / n;
+  const avgItems         = results.reduce((s, r) => s + r.salesMetrics.totalItems,        0) / n;
+  const avgTurns         = results.reduce((s, r) => s + r.totalTurns,                     0) / n;
+  const conversionRate   = results.filter((r) =>  r.salesMetrics.conversionSuccess).length / n;
+  const abandonmentRate  = results.filter((r) =>  r.abandoned).length / n;
+  const totalUpsellAttempts = results.reduce((s, r) => s + r.salesMetrics.upsellAttempts,      0);
+  const totalUpsellAccepted = results.reduce((s, r) => s + r.salesMetrics.acceptedUpsellsOnly, 0);
+  const upsellAcceptanceRate = totalUpsellAttempts > 0 ? totalUpsellAccepted / totalUpsellAttempts : 0;
+  const realRevenue      = results.filter((r) => r.salesMetrics.conversionSuccess)
+                                   .reduce((s, r) => s + r.salesMetrics.finalCartValue, 0);
+  const flowScore        = results.reduce((s, r) => s + r.salesMetrics.flowScore,   0) / n;
+  const errorCount       = results.reduce((s, r) => s + r.salesMetrics.errorCount,  0);
+
+  // ── legacy fields ─────────────────────────────────────────
   const criticalBugs: string[] = [];
   for (const r of results) {
     for (const c of r.checks) {
-      if (!c.passed) {
-        criticalBugs.push(`[${r.name}] ${c.detail}`);
-      }
+      if (!c.passed) criticalBugs.push(`[${r.name}] ${c.detail}`);
     }
   }
-
-  // Top 3 most common failure types
   const failTypeCounts = new Map<string, number>();
   for (const r of results) {
     for (const c of r.checks) {
-      if (!c.passed) {
-        failTypeCounts.set(c.label, (failTypeCounts.get(c.label) ?? 0) + 1);
-      }
+      if (!c.passed) failTypeCounts.set(c.label, (failTypeCounts.get(c.label) ?? 0) + 1);
     }
   }
   const topFixes = [...failTypeCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
+    .sort((a, b) => b[1] - a[1]).slice(0, 3)
     .map(([label, count]) => `${label} (${count} cenário${count > 1 ? "s" : ""})`);
 
   const safeToTest =
     overallScore >= 60 &&
     results.every((r) => r.status !== "failed") &&
-    !results.some(
-      (r) =>
-        r.status === "failed" &&
-        r.checks.some((c) => c.type === "dietary_respected"),
-    );
+    !results.some((r) => r.status === "failed" && r.checks.some((c) => c.type === "dietary_respected"));
 
-  const n = results.length || 1;
-  const avgTicket      = results.reduce((s, r) => s + r.salesMetrics.finalCartValue, 0) / n;
-  const avgItems       = results.reduce((s, r) => s + r.salesMetrics.totalItems,     0) / n;
-  const avgTurns       = results.reduce((s, r) => s + r.totalTurns,                  0) / n;
-  const conversionRate = results.filter((r) =>  r.salesMetrics.conversionSuccess).length / n;
-  const abandonmentRate = results.filter((r) => r.abandoned).length / n;
+  // ── 1. SALES DIAGNOSIS ────────────────────────────────────
+  const salesDiagnosis = buildSalesDiagnosis(results, n);
 
-  const totalUpsellAttempts = results.reduce((s, r) => s + r.salesMetrics.upsellAttempts,      0);
-  const totalUpsellAccepted = results.reduce((s, r) => s + r.salesMetrics.acceptedUpsellsOnly, 0);
-  const upsellAcceptanceRate = totalUpsellAttempts > 0 ? totalUpsellAccepted / totalUpsellAttempts : 0;
+  // ── 2. REVENUE ANALYSIS ───────────────────────────────────
+  const revenueAnalysis = buildRevenueAnalysis(results, n, avgTicket, realRevenue);
 
-  const realRevenue = results
-    .filter((r) => r.salesMetrics.conversionSuccess)
-    .reduce((s, r) => s + r.salesMetrics.finalCartValue, 0);
-  const flowScore  = results.reduce((s, r) => s + r.salesMetrics.flowScore, 0) / n;
-  const errorCount = results.reduce((s, r) => s + r.salesMetrics.errorCount, 0);
+  // ── 3. ERROR PRIORITIZATION ───────────────────────────────
+  const errorPrioritization = buildErrorPrioritization(results);
+
+  // ── 4. BEHAVIOR ANALYSIS ──────────────────────────────────
+  const behaviorAnalysis = buildBehaviorAnalysis(results, n);
+
+  // ── 5. DETAILED PERFORMANCE SCORE ────────────────────────
+  const performanceScore = buildPerformanceScore(
+    overallScore, conversionRate, upsellAcceptanceRate, avgTicket,
+    flowScore, avgTurns, errorCount, n, results,
+  );
+
+  // ── 6. TOP 3 ACTIONABLE FIXES ─────────────────────────────
+  const actionableFixes = buildActionableFixes(
+    salesDiagnosis, revenueAnalysis, errorPrioritization,
+    behaviorAnalysis, performanceScore, conversionRate,
+  );
+
+  // ── SUMMARY ───────────────────────────────────────────────
+  const summary = buildSummary(
+    overallScore, conversionRate, salesDiagnosis,
+    revenueAnalysis, performanceScore, actionableFixes,
+  );
 
   return {
-    overallScore,
+    overallScore: Math.round(overallScore),
     scenarios: results,
     criticalBugs,
     topFixes,
@@ -1036,7 +1142,323 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
     realRevenue,
     flowScore,
     errorCount,
+    salesDiagnosis,
+    revenueAnalysis,
+    errorPrioritization,
+    behaviorAnalysis,
+    performanceScore,
+    actionableFixes,
+    summary,
   };
+}
+
+// ─── analytical builders ──────────────────────────────────────
+
+function buildSalesDiagnosis(results: ScenarioResult[], n: number): SalesDiagnosis {
+  const withMainItem  = results.filter((r) => r.salesMetrics.totalItems > 0).length / n;
+  const withDrink     = results.filter((r) => r.salesMetrics.upsellsByType.drink   > 0).length / n;
+  const withDessert   = results.filter((r) => r.salesMetrics.upsellsByType.dessert > 0).length / n;
+  const fullCoverage  = results.filter((r) => r.salesMetrics.flowScore >= 0.99).length / n;
+  const avgItemsPerOrder = results.reduce((s, r) => s + r.salesMetrics.totalItems, 0) / n;
+  const missedUpsells = results.filter(
+    (r) => r.salesMetrics.totalItems > 0 && r.salesMetrics.upsellAttempts === 0
+  ).length;
+
+  return { withMainItem, withDrink, withDessert, fullCoverage, avgItemsPerOrder, missedUpsells };
+}
+
+function buildRevenueAnalysis(
+  results: ScenarioResult[],
+  n: number,
+  avgActualTicket: number,
+  actualRevenue: number,
+): RevenueAnalysis {
+  const withoutDrink    = results.filter((r) => r.salesMetrics.upsellsByType.drink   === 0);
+  const withoutDessert  = results.filter((r) => r.salesMetrics.upsellsByType.dessert === 0);
+
+  const lostRevenueDrink   = withoutDrink.length   * EST_DRINK_VALUE;
+  const lostRevenueDessert = withoutDessert.length * EST_DESSERT_VALUE;
+  const lostRevenueTotal   = lostRevenueDrink + lostRevenueDessert;
+
+  const potentialRevenue   = n * DEFAULT_TARGET_TICKET;
+  const avgPotentialTicket = DEFAULT_TARGET_TICKET;
+  const ticketGap          = Math.max(0, avgPotentialTicket - avgActualTicket);
+
+  return {
+    actualRevenue,
+    potentialRevenue,
+    lostRevenueDrink,
+    lostRevenueDessert,
+    lostRevenueTotal,
+    avgActualTicket,
+    avgPotentialTicket,
+    ticketGap,
+  };
+}
+
+function buildErrorPrioritization(results: ScenarioResult[]): ErrorPrioritization {
+  // Classify each failed check by severity
+  type CheckEntry = { severity: ErrorSeverity; type: string; description: string; impact: string };
+
+  const CHECK_SEVERITY: Record<CheckType, CheckEntry> = {
+    no_hallucination:    { severity: "CRITICAL", type: "hallucinated_item",     description: "IA inventou ID de item inexistente",              impact: "Pedido inválido — cliente recebe produto errado ou erro" },
+    dietary_respected:   { severity: "CRITICAL", type: "dietary_violation",     description: "Item incompatível com restrição alimentar sugerido", impact: "Risco de saúde / experiência inaceitável para o cliente" },
+    no_loop:             { severity: "HIGH",      type: "tool_loop",             description: "IA entrou em loop de chamadas de ferramenta",       impact: "Resposta falha ou travada — cliente recebe mensagem vazia" },
+    checkout_transition: { severity: "HIGH",      type: "missing_checkout",      description: "IA não encaminhou o pedido para confirmação",       impact: "Receita perdida — pedido não foi finalizado" },
+    no_repeat_suggestion:{ severity: "MEDIUM",    type: "repeated_suggestion",   description: "Mesmo produto sugerido mais de uma vez",           impact: "Má experiência — cliente sente pressão ou desorganização" },
+    relevant_suggestion: { severity: "MEDIUM",    type: "irrelevant_suggestion", description: "IA não sugeriu produto ou sugestão foi genérica",   impact: "Oportunidade de upsell perdida" },
+    clarification_asked: { severity: "MEDIUM",    type: "no_clarification",      description: "IA não perguntou antes de assumir intenção",        impact: "Pode resultar em pedido errado ou insatisfação" },
+    natural_tone:        { severity: "LOW",        type: "poor_tone",             description: "Tom de resposta inadequado ou muito curto",         impact: "Experiência abaixo do padrão — cliente pode desistir" },
+  };
+
+  const groups = new Map<string, { entry: CheckEntry; count: number; scenarios: string[] }>();
+
+  for (const r of results) {
+    for (const c of r.checks) {
+      if (!c.passed) {
+        const def = CHECK_SEVERITY[c.type];
+        if (!def) continue;
+        const existing = groups.get(def.type);
+        if (existing) {
+          existing.count++;
+          existing.scenarios.push(r.name);
+        } else {
+          groups.set(def.type, { entry: def, count: 1, scenarios: [r.name] });
+        }
+      }
+    }
+  }
+
+  const allErrors = [...groups.entries()].map(([, v]) => ({
+    severity:    v.entry.severity,
+    type:        v.entry.type,
+    count:       v.count,
+    scenarios:   v.scenarios,
+    description: v.entry.description,
+    impact:      v.entry.impact,
+  } satisfies PrioritizedError));
+
+  return {
+    critical: allErrors.filter((e) => e.severity === "CRITICAL").sort((a, b) => b.count - a.count),
+    high:     allErrors.filter((e) => e.severity === "HIGH").sort((a, b) => b.count - a.count),
+    medium:   allErrors.filter((e) => e.severity === "MEDIUM").sort((a, b) => b.count - a.count),
+    low:      allErrors.filter((e) => e.severity === "LOW").sort((a, b) => b.count - a.count),
+    total:    allErrors.reduce((s, e) => s + e.count, 0),
+  };
+}
+
+function buildBehaviorAnalysis(results: ScenarioResult[], n: number): BehaviorAnalysis {
+  const beforeMainItem = results.filter((r) => r.salesMetrics.totalItems === 0).length / n;
+
+  const afterMainItem  = results.filter(
+    (r) => r.salesMetrics.totalItems > 0 && r.salesMetrics.upsellsByType.drink === 0
+  ).length / n;
+
+  const duringUpsell   = results.filter(
+    (r) => r.salesMetrics.rejectedSuggestions > 0 && r.salesMetrics.acceptedUpsellsOnly === 0
+  ).length / n;
+
+  const beforeCheckout = results.filter(
+    (r) => r.salesMetrics.totalItems > 0 && !r.salesMetrics.conversionSuccess
+  ).length / n;
+
+  const repeatSuggestions = results.filter(
+    (r) => r.checks.some((c) => c.type === "no_repeat_suggestion" && !c.passed)
+  ).length / n;
+
+  const abandonedAfterRefusal = results.filter(
+    (r) => r.abandoned && r.salesMetrics.rejectedSuggestions > 0
+  ).length / n;
+
+  return {
+    flowBreakdown:   { beforeMainItem, afterMainItem, duringUpsell, beforeCheckout },
+    refusalHandling: { repeatSuggestions, abandonedAfterRefusal },
+  };
+}
+
+function buildPerformanceScore(
+  overallScore: number,
+  conversionRate: number,
+  upsellAcceptanceRate: number,
+  avgTicket: number,
+  flowScore: number,
+  avgTurns: number,
+  errorCount: number,
+  n: number,
+  results: ScenarioResult[],
+): DetailedPerformanceScore {
+  const hallucinationCount = results.filter(
+    (r) => r.checks.some((c) => c.type === "no_hallucination" && !c.passed)
+  ).length;
+  const dietaryViolations = results.filter(
+    (r) => r.checks.some((c) => c.type === "dietary_respected" && !c.passed)
+  ).length;
+  const repeatCount = results.filter(
+    (r) => r.checks.some((c) => c.type === "no_repeat_suggestion" && !c.passed)
+  ).length;
+
+  const totalToolCalls = results.reduce(
+    (s, r) => s + r.checks.filter((c) => c.type === "no_loop").length, 0
+  ) + errorCount || 1;
+
+  const errorRate          = Math.min(1, errorCount / (totalToolCalls * n));
+  const hallucinationRate  = hallucinationCount / n;
+  const dietaryViolRate    = dietaryViolations / n;
+  const repeatRate         = repeatCount / n;
+
+  const ticketScore        = Math.min(1, avgTicket / DEFAULT_TARGET_TICKET);
+  const turnEfficiency     = avgTurns > 0 ? Math.min(1, 8 / avgTurns) : 0.5;
+
+  const salesEffectiveness    = Math.round((conversionRate * 0.4 + upsellAcceptanceRate * 0.3 + ticketScore * 0.3) * 100);
+  const flowControl           = Math.round((flowScore * 0.6 + turnEfficiency * 0.4) * 100);
+  const toolAccuracy          = Math.round(((1 - errorRate) * 0.6 + (1 - hallucinationRate) * 0.4) * 100);
+  const restrictionCompliance = Math.round(((1 - dietaryViolRate) * 0.6 + (1 - repeatRate) * 0.4) * 100);
+
+  return {
+    overall: Math.round(overallScore),
+    salesEffectiveness:    Math.max(0, Math.min(100, salesEffectiveness)),
+    flowControl:           Math.max(0, Math.min(100, flowControl)),
+    toolAccuracy:          Math.max(0, Math.min(100, toolAccuracy)),
+    restrictionCompliance: Math.max(0, Math.min(100, restrictionCompliance)),
+  };
+}
+
+function buildActionableFixes(
+  diag:    SalesDiagnosis,
+  rev:     RevenueAnalysis,
+  errors:  ErrorPrioritization,
+  behav:   BehaviorAnalysis,
+  perf:    DetailedPerformanceScore,
+  conversionRate: number,
+): ActionableFix[] {
+  // Score each candidate fix by severity and frequency, pick top 3
+  type Candidate = Omit<ActionableFix, "rank">;
+
+  const candidates: Array<Candidate & { score: number }> = [];
+
+  // Critical errors first
+  if (errors.critical.length > 0) {
+    const top = errors.critical[0]!;
+    candidates.push({
+      score:   100 + top.count * 10,
+      problem: `${top.description} (${top.count} cenário${top.count > 1 ? "s" : ""})`,
+      why:     top.type === "hallucinated_item"
+        ? "A IA usa IDs de memória em vez de ler o cardápio — acontece quando a instrução 'use IDs exatos' não está sendo respeitada."
+        : "A IA não está cruzando o perfil do cliente com as restrições antes de chamar suggest_upsell.",
+      fix:     top.type === "hallucinated_item"
+        ? "Reforce a regra 15 no prompt: verificar o bloco CARDÁPIO antes de qualquer ID. Adicione um exemplo de ID correto e incorreto."
+        : "Adicione pré-verificação de dietary no prompt: antes de cada suggest_upsell, confirmar que o item não viola restrição declarada.",
+      impact:  "high",
+      metric:  "no_hallucination / dietary_respected",
+    });
+  }
+
+  // Missing drink suggests gap in category coverage
+  if (diag.withDrink < 0.5) {
+    candidates.push({
+      score:   80 + Math.round((1 - diag.withDrink) * 20),
+      problem: `Bebida sugerida em apenas ${Math.round(diag.withDrink * 100)}% dos cenários`,
+      why:     "A IA finaliza o pedido após o prato principal sem passar pela etapa de bebida. O MOTOR DE VENDAS não está sendo seguido na sequência correta.",
+      fix:     "Ajuste o bloco PASSO 1 do MOTOR DE VENDAS: deixe a verificação de bebida mais explícita. Exemplo: 'Se BEBIDA ausente → obrigatório sugerir antes de checkout'.",
+      impact:  "high",
+      metric:  `salesDiagnosis.withDrink — receita perdida estimada: R$ ${rev.lostRevenueDrink.toFixed(2)}`,
+    });
+  }
+
+  // Low conversion rate
+  if (conversionRate < 0.5) {
+    candidates.push({
+      score:   75 + Math.round((0.5 - conversionRate) * 50),
+      problem: `Taxa de conversão baixa: ${Math.round(conversionRate * 100)}% dos pedidos finalizados`,
+      why:     "A IA não está conduzindo as conversas para o checkout — abandona após recusas ou perde o fio do pedido em turnos longos.",
+      fix:     "Adicione um gatilho explícito no PASSO 3: após qualquer item adicionado + 2 recusas de upsell, chame confirm_order imediatamente.",
+      impact:  "high",
+      metric:  "conversionRate",
+    });
+  }
+
+  // High loop / missed checkout
+  if (behav.flowBreakdown.beforeCheckout > 0.3) {
+    candidates.push({
+      score:   70,
+      problem: `${Math.round(behav.flowBreakdown.beforeCheckout * 100)}% dos pedidos com itens não foram confirmados`,
+      why:     "A IA não detecta o momento certo para ir ao checkout — continua sugerindo em vez de fechar.",
+      fix:     "Adicione uma regra: se AÇÃO RECOMENDADA = 'metas atingidas' OU turnCount >= 6 com itens no carrinho → chamar confirm_order.",
+      impact:  "high",
+      metric:  "behaviorAnalysis.flowBreakdown.beforeCheckout",
+    });
+  }
+
+  // Repeated suggestions
+  if (behav.refusalHandling.repeatSuggestions > 0.2) {
+    candidates.push({
+      score:   60,
+      problem: `Sugestões repetidas em ${Math.round(behav.refusalHandling.repeatSuggestions * 100)}% dos cenários`,
+      why:     "A IA não registra internamente quais itens foram recusados. Sem memória de recusa, repete o mesmo produto.",
+      fix:     "O bloco PRODUTOS JÁ SUGERIDOS já existe — certifique-se que itens recusados são adicionados ao alreadySuggestedIds. Reforce a regra 9 no prompt.",
+      impact:  "medium",
+      metric:  "behaviorAnalysis.refusalHandling.repeatSuggestions",
+    });
+  }
+
+  // Low tool accuracy
+  if (perf.toolAccuracy < 70) {
+    candidates.push({
+      score:   55,
+      problem: `Precisão de ferramentas abaixo de 70% (atual: ${perf.toolAccuracy})`,
+      why:     "Alto número de chamadas de ferramenta com falha — provavelmente IDs inválidos ou chamadas fora de ordem.",
+      fix:     "Habilite retry automático: quando add_item falhar com 'não encontrado', a IA deve reler o CARDÁPIO e tentar com ID correto antes de desistir.",
+      impact:  "medium",
+      metric:  "performanceScore.toolAccuracy",
+    });
+  }
+
+  // Missing dessert (lower priority if drink is already missing)
+  if (diag.withDessert < 0.3 && diag.withDrink >= 0.5) {
+    candidates.push({
+      score:   50,
+      problem: `Sobremesa nunca sugerida (apenas ${Math.round(diag.withDessert * 100)}% dos cenários)`,
+      why:     "A IA fecha o pedido após prato + bebida sem completar o ciclo com sobremesa.",
+      fix:     "No PASSO 1 do MOTOR DE VENDAS, adicione verificação de sobremesa como terceira etapa obrigatória antes do checkout.",
+      impact:  "medium",
+      metric:  `salesDiagnosis.withDessert — receita perdida estimada: R$ ${rev.lostRevenueDessert.toFixed(2)}`,
+    });
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  const top3 = candidates.slice(0, 3);
+
+  return top3.map((c, i) => ({
+    rank:    (i + 1) as 1 | 2 | 3,
+    problem: c.problem,
+    why:     c.why,
+    fix:     c.fix,
+    impact:  c.impact,
+    metric:  c.metric,
+  }));
+}
+
+function buildSummary(
+  overallScore:    number,
+  conversionRate:  number,
+  diag:            SalesDiagnosis,
+  rev:             RevenueAnalysis,
+  perf:            DetailedPerformanceScore,
+  fixes:           ActionableFix[],
+): string {
+  const scoreLabel  = overallScore >= 70 ? "satisfatório" : overallScore >= 50 ? "mediano" : "crítico";
+  const drinkPct    = Math.round(diag.withDrink * 100);
+  const convPct     = Math.round(conversionRate * 100);
+  const topFix      = fixes[0]?.problem ?? "nenhuma falha crítica identificada";
+  const lostStr     = rev.lostRevenueTotal > 0 ? ` Receita potencial não capturada: R$ ${rev.lostRevenueTotal.toFixed(2)} por rodada.` : "";
+
+  return (
+    `Score geral ${Math.round(overallScore)}/100 (${scoreLabel}). ` +
+    `Taxa de conversão: ${convPct}% — bebida sugerida em ${drinkPct}% dos cenários.${lostStr} ` +
+    `Efetividade de vendas: ${perf.salesEffectiveness}/100 · Controle de fluxo: ${perf.flowControl}/100 · ` +
+    `Precisão de ferramentas: ${perf.toolAccuracy}/100 · Conformidade de restrições: ${perf.restrictionCompliance}/100. ` +
+    `Prioridade máxima: ${topFix}.`
+  );
 }
 
 function buildErrorResult(scenario: ScenarioDef, error: string): ScenarioResult {
