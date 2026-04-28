@@ -187,17 +187,17 @@ function buildSalesSection(profile: SalesProfile): string {
   const priorityInstructions = buildPriorityInstructions(profile.salesPriority);
   rules.push(...priorityInstructions);
 
-  // Goal-driven decision framework (applied when CONTEXTO DE METAS is present)
+  // Goal-driven decision framework
   rules.push(
     "",
     "QUANDO DECIDIR O QUE SUGERIR:",
-    "- Leia o bloco AÇÃO RECOMENDADA injetado no contexto e siga-o.",
-    "- Escolha sempre das SUGESTÕES DE UPSELL listadas — já pré-selecionadas para as metas.",
-    "- Gap de valor ativo → prefira o item de maior preço disponível dentro do gap.",
+    "- Analise o pedido atual: identifique qual categoria ainda está ausente (prato → bebida → sobremesa).",
+    "- Priorize sempre a categoria ausente de maior prioridade antes de sugerir qualquer complemento.",
+    "- Se o bloco AÇÃO RECOMENDADA estiver no contexto, siga-o — já está alinhado com essa lógica.",
+    "- Gap de valor ativo → prefira o item de maior preço dentro da categoria ausente.",
     "- Gap de itens ativo → prefira o complemento mais acessível (bebida, adicional).",
-    "- Ambos os gaps ativos → item de preço médio que sirva como complemento natural.",
-    "- Metas atingidas → encaminhe para confirmação; não force nova sugestão.",
-    "- NUNCA cite 'meta', 'gap' ou números de ticket ao cliente — fale apenas do item.",
+    "- Todas as categorias cobertas → encaminhe para confirmação; não force mais sugestões.",
+    "- NUNCA cite 'meta', 'gap' ou números de ticket ao cliente — fale apenas do item e do porquê faz sentido.",
     "",
     "EXECUÇÃO VISUAL (obrigatório):",
     "- Mencionou um produto? Execute suggest_upsell no mesmo turno, sem exceção.",
@@ -260,9 +260,9 @@ function buildMediumUpsellRules(personality: PersonalityPreset): string[] {
       ];
     case "aggressive":
       return [
-        "- Ofereça um complemento estratégico antes de cada fechamento.",
-        "- Sequência ideal: prato principal → bebida → sobremesa.",
-        "- Após 1 recusa, tente uma última vez com outro argumento. Após 2 recusas, respeite.",
+        "- Antes de fechar, cubra as categorias ausentes: prato → bebida → sobremesa.",
+        "- Se o cliente recusar uma categoria, avance para a próxima — não insista na mesma.",
+        "- Após 2 recusas totais, respeite e finalize.",
       ];
     default:
       return [
@@ -277,26 +277,27 @@ function buildHighUpsellRules(personality: PersonalityPreset): string[] {
   switch (personality) {
     case "aggressive":
       return [
-        "- Seu objetivo é maximizar o ticket. Toda conversa tem uma oportunidade de upsell.",
-        "- Sempre sugira um complemento ANTES de apresentar o resumo do pedido.",
-        "- Sequência obrigatória: prato → bebida → sobremesa → combo/promo.",
-        "- Utilize dados de popularidade: 'Nosso item mais pedido hoje é...'",
-        "- Após recusa, tente com argumento diferente uma vez. Após 2 recusas, feche o pedido.",
-        "- Crie senso de oportunidade: 'Hoje especialmente temos...', 'Enquanto estiver disponível...'",
+        "- Seu objetivo é maximizar o ticket. Toda conversa tem uma oportunidade de venda.",
+        "- Siga sempre a sequência: prato principal → bebida → sobremesa. Não pule etapas.",
+        "- Após cada item adicionado, analise o que ainda falta e sugira imediatamente.",
+        "- Se o cliente recusar bebida, tente a sobremesa. Se recusar a sobremesa, tente um adicional.",
+        "- Após 2 recusas em categorias diferentes, encaminhe para confirmação.",
+        "- Use argumentos contextuais: 'Combina perfeitamente com o que você escolheu', 'Nosso mais pedido hoje'.",
       ];
     case "young":
       return [
         "- Seja o melhor hype person do restaurante — cada item é incrível!",
-        "- Sempre sugira um adicional com energia máxima antes de fechar.",
+        "- Siga a sequência prato → bebida → sobremesa com energia total.",
+        "- Se recusar bebida, salte para sobremesa com entusiasmo renovado.",
         "- Use FOMO sutilmente: 'Esse tá bombando hoje 🔥', 'Todo mundo tá pedindo...'",
-        "- Após 2 recusas, comemore o pedido mesmo assim.",
+        "- Após 2 recusas em categorias diferentes, comemore o pedido mesmo assim.",
       ];
     default:
       return [
-        "- Proativamente sugira itens complementares e promoções disponíveis.",
-        "- Ofereça pelo menos 1-2 complementos antes de fechar o pedido.",
-        "- Persista com um segundo argumento após a primeira recusa.",
-        "- Após 2 recusas, finalize o pedido sem mais insistência.",
+        "- Proativamente cubra todas as categorias: prato → bebida → sobremesa.",
+        "- Após cada recusa, mude de categoria — não repita a mesma categoria recusada.",
+        "- Ofereça ao menos 2 categorias antes de fechar o pedido.",
+        "- Após 2 recusas em categorias diferentes, finalize sem mais insistência.",
       ];
   }
 }
