@@ -258,6 +258,20 @@ function SummaryCard({ report }: { report: SimulationReport }) {
         : "—",
       warn: report.upsellAcceptanceRate > 0 && report.upsellAcceptanceRate < 0.3,
     },
+    {
+      label: "Receita real",
+      value: report.realRevenue > 0 ? `R$ ${report.realRevenue.toFixed(2)}` : "—",
+    },
+    {
+      label: "Flow score",
+      value: `${(report.flowScore * 100).toFixed(0)}%`,
+      warn: report.flowScore < 0.5,
+    },
+    {
+      label: "Erros totais",
+      value: String(report.errorCount),
+      warn: report.errorCount > 5,
+    },
   ];
 
   return (

@@ -65,6 +65,9 @@ export interface SalesMetrics {
   conversionSuccess:    boolean;
   acceptedUpsellsOnly:  number;  // add_item calls that originated from suggest_upsell
   upsellValueGenerated: number;  // price × qty for each accepted upsell item
+  flowScore:            number;  // 0–1: main item (0.34) + drink suggested (0.33) + dessert suggested (0.33)
+  errorCount:           number;  // total failed tool calls
+  upsellsByType:        { drink: number; dessert: number; addon: number };
 }
 
 export interface CartSnapshot {
@@ -104,6 +107,9 @@ export interface SimulationReport {
   avgTurns:            number;
   abandonmentRate:     number;
   upsellAcceptanceRate: number;
+  realRevenue:         number;  // sum of finalCartValue for converted orders only
+  flowScore:           number;  // avg across all scenarios (0–1)
+  errorCount:          number;  // total failed tool calls across all scenarios
 }
 
 type ProgressCallback = (info: { current: number; total: number; scenarioName: string }) => void;
@@ -273,11 +279,15 @@ export class AISimulatorService {
       select: { name: true },
     });
 
-    // Load full menu for evaluation (name + ingredients per item)
+    // Load full menu for evaluation (name + ingredients + category per item)
     const menu = await prisma.menuItem.findMany({
       where: { isActive: true, category: { restaurantId } },
-      select: { id: true, name: true, ingredients: true, price: true },
+      select: { id: true, name: true, ingredients: true, price: true, category: { select: { name: true } } },
     });
+
+    const menuById = new Map<string, { categoryName: string }>(
+      menu.map((m) => [m.id, { categoryName: m.category?.name ?? "" }] as [string, { categoryName: string }]),
+    );
 
     const scenarios = generateScenarios(10);
     const results: ScenarioResult[] = [];
@@ -286,7 +296,7 @@ export class AISimulatorService {
       const scenario = scenarios[i]!;
       onProgress({ current: i + 1, total: scenarios.length, scenarioName: scenario.name });
 
-      const result = await runScenario(scenario, restaurantId, menu).catch((err) => {
+      const result = await runScenario(scenario, restaurantId, menu, menuById).catch((err) => {
         console.error(`[AISimulator] Scenario "${scenario.id}" failed:`, err);
         return buildErrorResult(scenario, String(err));
       });
@@ -305,6 +315,7 @@ async function runScenario(
   scenario: ScenarioDef,
   restaurantId: string,
   menu: Array<{ id: string; name: string; ingredients: string | null; price: unknown }>,
+  menuById: Map<string, { categoryName: string }>,
 ): Promise<ScenarioResult> {
   // Create sandbox records
   const runId = `SIM_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -387,6 +398,7 @@ async function runScenario(
       allToolCalls,
       finalCart?.value ?? 0,
       finalCart?.items ?? 0,
+      menuById,
     );
   } finally {
     await cleanupSimulation(customer.id, conversation.id);
@@ -887,6 +899,12 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
   const totalUpsellAccepted = results.reduce((s, r) => s + r.salesMetrics.acceptedUpsellsOnly, 0);
   const upsellAcceptanceRate = totalUpsellAttempts > 0 ? totalUpsellAccepted / totalUpsellAttempts : 0;
 
+  const realRevenue = results
+    .filter((r) => r.salesMetrics.conversionSuccess)
+    .reduce((s, r) => s + r.salesMetrics.finalCartValue, 0);
+  const flowScore  = results.reduce((s, r) => s + r.salesMetrics.flowScore, 0) / n;
+  const errorCount = results.reduce((s, r) => s + r.salesMetrics.errorCount, 0);
+
   return {
     overallScore,
     scenarios: results,
@@ -901,6 +919,9 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
     avgTurns,
     abandonmentRate,
     upsellAcceptanceRate,
+    realRevenue,
+    flowScore,
+    errorCount,
   };
 }
 
@@ -930,6 +951,37 @@ function buildErrorResult(scenario: ScenarioDef, error: string): ScenarioResult 
 
 // ─── sales metrics helpers ────────────────────────────────────
 
+function classifyUpsellType(categoryName: string): "drink" | "dessert" | "addon" {
+  const lower = categoryName.toLowerCase();
+  if (/bebida|suco|drink|refri|água|cerveja|vinho|refrigerante/.test(lower)) return "drink";
+  if (/sobremesa|doce|dessert|sorvete|torta|pudim|brigadeiro/.test(lower)) return "dessert";
+  return "addon";
+}
+
+function computeFlowScore(
+  toolCalls: Array<{ name: string; args: unknown; success: boolean }>,
+  menuById: Map<string, { categoryName: string }>,
+): number {
+  const hasMainItem = toolCalls.some((tc) => tc.name === "add_item" && tc.success);
+
+  const suggestedIds = toolCalls
+    .filter((tc) => tc.name === "suggest_upsell" && tc.success)
+    .map((tc) => (tc.args as Record<string, unknown>)?.menuItemId as string | undefined)
+    .filter((id): id is string => !!id);
+
+  const hasDrinkSuggested = suggestedIds.some((id) => {
+    const item = menuById.get(id);
+    return item && classifyUpsellType(item.categoryName) === "drink";
+  });
+
+  const hasDessertSuggested = suggestedIds.some((id) => {
+    const item = menuById.get(id);
+    return item && classifyUpsellType(item.categoryName) === "dessert";
+  });
+
+  return (hasMainItem ? 0.34 : 0) + (hasDrinkSuggested ? 0.33 : 0) + (hasDessertSuggested ? 0.33 : 0);
+}
+
 function emptyMetrics(): SalesMetrics {
   return {
     finalCartValue:       0,
@@ -940,6 +992,9 @@ function emptyMetrics(): SalesMetrics {
     conversionSuccess:    false,
     acceptedUpsellsOnly:  0,
     upsellValueGenerated: 0,
+    flowScore:            0,
+    errorCount:           0,
+    upsellsByType:        { drink: 0, dessert: 0, addon: 0 },
   };
 }
 
@@ -948,9 +1003,11 @@ async function getCartSnapshot(
   restaurantId: string,
 ): Promise<{ value: number; itemCount: number }> {
   try {
+    // No status filter — after confirm_order the draft is no longer OPEN,
+    // but we still need its final value for metrics.
     const draft = await prisma.orderDraft.findFirst({
-      where:   { customerId, restaurantId, status: "OPEN" },
-      orderBy: { createdAt: "desc" },
+      where:   { customerId, restaurantId },
+      orderBy: { updatedAt: "desc" },
       select:  {
         subtotal: true,
         items:    { select: { quantity: true } },
@@ -969,6 +1026,7 @@ function computeSalesMetrics(
   toolCalls: Array<{ name: string; args: unknown; success: boolean; resultData: unknown }>,
   finalCartValue: number,
   totalItems: number,
+  menuById: Map<string, { categoryName: string }>,
 ): SalesMetrics {
   // IDs successfully shown via suggest_upsell
   const suggestedIds = new Set<string>();
@@ -1005,6 +1063,17 @@ function computeSalesMetrics(
     (tc) => tc.name === "confirm_order" && tc.success,
   );
 
+  // Upsells classified by category type
+  const upsellsByType = { drink: 0, dessert: 0, addon: 0 };
+  for (const id of suggestedIds) {
+    const item = menuById.get(id);
+    const type = classifyUpsellType(item?.categoryName ?? "");
+    upsellsByType[type]++;
+  }
+
+  const flowScore  = computeFlowScore(toolCalls, menuById);
+  const errorCount = toolCalls.filter((tc) => !tc.success).length;
+
   return {
     finalCartValue,
     totalItems,
@@ -1014,6 +1083,9 @@ function computeSalesMetrics(
     conversionSuccess,
     acceptedUpsellsOnly,
     upsellValueGenerated,
+    flowScore,
+    errorCount,
+    upsellsByType,
   };
 }
 
