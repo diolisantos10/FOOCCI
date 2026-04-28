@@ -527,7 +527,8 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
 
   if (upsellSuggestions.length > 0 && brandConfig.upsellStyle !== "none") {
     sysAddendum +=
-      "\n\nSUGESTÕES DE UPSELL DISPONÍVEIS (use suggest_upsell se adequado):\n" +
+      "\n\nSUGESTÕES DE UPSELL — CHAME suggest_upsell AGORA (obrigatório neste turno):\n" +
+      "Selecione o item mais adequado abaixo e execute suggest_upsell antes de responder.\n" +
       upsellSuggestions
         .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName}) — ${s.reason}`)
         .join("\n");
@@ -605,6 +606,29 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
 
     finalResponse = message.content ?? "";
     break;
+  }
+
+  // Fail-safe: if suggestions exist and AI skipped suggest_upsell entirely,
+  // fire it now for the top suggestion (mirrors AIOrderService logic).
+  // Covers the silent-skip case where AI responded but didn't mention any product.
+  if (
+    upsellSuggestions.length > 0 &&
+    brandConfig.upsellStyle !== "none" &&
+    !toolCallsMade.some((tc) => tc.name === "suggest_upsell")
+  ) {
+    const top = upsellSuggestions[0]!;
+    const fsResult = await executeTool(
+      "suggest_upsell",
+      JSON.stringify({ menuItemId: top.menuItemId }),
+      toolCtx,
+    );
+    toolCallsMade.push({
+      name:       "suggest_upsell",
+      args:       { menuItemId: top.menuItemId },
+      success:    fsResult.success,
+      resultMsg:  fsResult.message,
+      resultData: fsResult.data ?? null,
+    });
   }
 
   // Save AI response as OUTBOUND (so next turn sees conversation history)

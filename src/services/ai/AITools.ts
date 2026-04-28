@@ -141,15 +141,17 @@ export const AI_TOOL_DEFINITIONS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "suggest_upsell",
       description:
-        "Obtém detalhes de um item complementar para sugerir ao cliente. " +
-        "Use IDs fornecidos pelo UpsellEngine ou do cardápio. " +
-        "Retorna nome e preço para você formular a sugestão.",
+        "Exibe um card visual do produto para o cliente e registra a sugestão de upsell. " +
+        "OBRIGATÓRIO: execute esta ferramenta toda vez que quiser sugerir um item adicional. " +
+        "Sem esta chamada o produto NÃO aparece para o cliente — a sugestão não existe. " +
+        "Fluxo correto: 1 frase de introdução natural → suggest_upsell com o ID exato. " +
+        "NUNCA mencione um produto no texto sem chamar esta ferramenta no mesmo turno.",
       parameters: {
         type: "object",
         properties: {
           menuItemId: {
             type: "string",
-            description: "ID do item do cardápio a sugerir.",
+            description: "ID exato do item do cardápio a sugerir (campo [ID: ...]).",
           },
         },
         required: ["menuItemId"],

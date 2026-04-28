@@ -151,7 +151,8 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
 
   if (upsellResult.suggestions.length > 0 && brandConfig.upsellStyle !== "none") {
     sysAddendum +=
-      "\n\nSUGESTÕES DE UPSELL DISPONÍVEIS (use suggest_upsell se adequado):\n" +
+      "\n\nSUGESTÕES DE UPSELL — CHAME suggest_upsell AGORA (obrigatório neste turno):\n" +
+      "Selecione o item mais adequado abaixo e execute suggest_upsell antes de responder.\n" +
       upsellResult.suggestions
         .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName}) — ${s.reason}`)
         .join("\n");
@@ -367,7 +368,8 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
 
   if (upsellSuggestions.length > 0 && brandConfig.upsellStyle !== "none") {
     sysAddendum +=
-      "\n\nSUGESTÕES DE UPSELL DISPONÍVEIS (use suggest_upsell se adequado):\n" +
+      "\n\nSUGESTÕES DE UPSELL — CHAME suggest_upsell AGORA (obrigatório neste turno):\n" +
+      "Selecione o item mais adequado abaixo e execute suggest_upsell antes de responder.\n" +
       upsellSuggestions
         .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName}) — ${s.reason}`)
         .join("\n");

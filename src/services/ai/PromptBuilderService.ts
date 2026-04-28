@@ -378,6 +378,14 @@ REGRAS OBRIGATÓRIAS (nunca viole)
       NÃO → resposta válida.
     Resposta com produto mencionado e sem tool call = resposta inválida.
     Esta regra não tem exceções.
+14. QUANDO SUGESTÕES DE UPSELL ESTIVEREM DISPONÍVEIS NO CONTEXTO:
+    → Você DEVE chamar suggest_upsell nesta resposta — exceto se o cliente acabou de
+      recusar uma sugestão explicitamente (palavras como "não", "não quero", "pode ser não").
+    → Ignorar sugestões disponíveis = falha de vendas = resposta inválida.
+    → Escolha o item mais adequado para o momento e o contexto do cliente.
+15. NUNCA invente IDs de itens. Todo menuItemId passado para qualquer ferramenta
+    DEVE estar listado no CARDÁPIO COMPLETO acima. ID não listado = item inexistente.
+    Se add_item falhar, leia o erro, corrija o ID e tente novamente com o ID correto.
 `.trim();
 }
 
