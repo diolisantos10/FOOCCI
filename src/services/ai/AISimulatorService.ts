@@ -443,6 +443,7 @@ export class AISimulatorService {
     onProgress: ProgressCallback,
     onResult: ResultCallback,
   ): Promise<SimulationReport> {
+    console.log("[AISimulator] SIMULATOR VERSION: retry-enabled");
     const restaurant = await prisma.restaurant.findUnique({
       where: { id: restaurantId },
       select: { name: true },
