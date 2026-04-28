@@ -89,29 +89,62 @@ export function AISimulatorClient() {
       <div className="max-w-5xl mx-auto space-y-6">
 
         {/* Header */}
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Simulador da IA de Vendas</h1>
             <p className="text-sm text-gray-500 mt-1">
               Testa automaticamente a IA com 10 perfis de clientes usando o cardápio e configuração reais.
             </p>
           </div>
-          <button
-            onClick={runSimulations}
-            disabled={state === "running"}
-            className="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg
-                       hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
-                       transition-colors flex items-center gap-2"
-          >
-            {state === "running" ? (
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Download buttons — visible only after simulation completes */}
+            {state === "done" && report && (
               <>
-                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Executando...
+                <button
+                  onClick={() => downloadJSON(report)}
+                  title="Baixar relatório completo (JSON)"
+                  className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
+                             hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5"
+                >
+                  ⬇ JSON
+                </button>
+                <button
+                  onClick={() => downloadSummary(report)}
+                  title="Baixar resumo legível (TXT)"
+                  className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
+                             hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5"
+                >
+                  ⬇ Resumo
+                </button>
+                <button
+                  onClick={() => downloadCSV(report)}
+                  title="Baixar tabela de resultados (CSV)"
+                  className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
+                             hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5"
+                >
+                  ⬇ CSV
+                </button>
               </>
-            ) : (
-              "▶ Rodar simulações"
             )}
-          </button>
+            <button
+              onClick={runSimulations}
+              disabled={state === "running"}
+              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg
+                         hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
+                         transition-colors flex items-center gap-2"
+            >
+              {state === "running" ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Executando...
+                </>
+              ) : state === "done" ? (
+                "↺ Rodar novamente"
+              ) : (
+                "▶ Rodar simulações"
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Progress bar */}
@@ -345,6 +378,145 @@ function CheckRow({ check }: { check: CheckResult }) {
     </div>
   );
 }
+
+// ─── export helpers ───────────────────────────────────────────
+
+function slugify(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function fileTimestamp(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toISOString().slice(0, 10);
+  const time = d.toISOString().slice(11, 19).replace(/:/g, "-");
+  return `${date}-${time}`;
+}
+
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement("a");
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadJSON(report: SimulationReport): void {
+  const ts       = fileTimestamp(report.ranAt);
+  const name     = slugify(report.restaurantName);
+  const filename = `simulation-report-${ts}-${name}.json`;
+  triggerDownload(
+    new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }),
+    filename,
+  );
+}
+
+function downloadSummary(report: SimulationReport): void {
+  const ts         = fileTimestamp(report.ranAt);
+  const name       = slugify(report.restaurantName);
+  const filename   = `simulation-summary-${ts}-${name}.txt`;
+  const dateStr    = new Date(report.ranAt).toLocaleString("pt-BR");
+  const passed     = report.scenarios.filter((s) => s.status === "passed").length;
+  const warned     = report.scenarios.filter((s) => s.status === "warning").length;
+  const failed     = report.scenarios.filter((s) => s.status === "failed").length;
+
+  const lines: string[] = [
+    "═══════════════════════════════════════════════",
+    "   RELATÓRIO DO SIMULADOR DE IA DE VENDAS",
+    "═══════════════════════════════════════════════",
+    `Restaurante : ${report.restaurantName}`,
+    `Executado em: ${dateStr}`,
+    "",
+    "─── RESULTADO GERAL ────────────────────────────",
+    `Score geral       : ${report.overallScore.toFixed(1)} / 10`,
+    `Pronto para testar: ${report.safeToTest ? "SIM ✓" : "NÃO ✗"}`,
+    `Cenários aprovados: ${passed} / ${report.scenarios.length}`,
+    `Cenários atenção  : ${warned}`,
+    `Cenários falha    : ${failed}`,
+    "",
+  ];
+
+  if (report.topFixes.length > 0) {
+    lines.push("─── PRINCIPAIS CORREÇÕES NECESSÁRIAS ──────────");
+    report.topFixes.forEach((fix, i) => lines.push(`  ${i + 1}. ${fix}`));
+    lines.push("");
+  }
+
+  lines.push("─── RESULTADOS POR CENÁRIO ─────────────────────");
+  report.scenarios.forEach((s) => {
+    const icon = s.status === "passed" ? "✓" : s.status === "warning" ? "⚠" : "✗";
+    lines.push(`${icon} [${s.score.toFixed(1)}/10] ${s.name}`);
+    lines.push(`   ${s.description}`);
+    if (s.issues.length > 0) {
+      s.issues.forEach((issue) => lines.push(`   ⚠ ${issue}`));
+    }
+    lines.push("");
+  });
+
+  if (report.criticalBugs.length > 0) {
+    lines.push("─── BUGS CRÍTICOS ──────────────────────────────");
+    report.criticalBugs.forEach((bug) => lines.push(`  • ${bug}`));
+    lines.push("");
+  }
+
+  triggerDownload(
+    new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" }),
+    filename,
+  );
+}
+
+function downloadCSV(report: SimulationReport): void {
+  const ts       = fileTimestamp(report.ranAt);
+  const name     = slugify(report.restaurantName);
+  const filename = `simulation-csv-${ts}-${name}.csv`;
+
+  const headers = [
+    "Cenário",
+    "Score",
+    "Status",
+    "Upsell Tentativas",
+    "Loop Detectado",
+    "Checkout Executado",
+    "Problemas",
+  ];
+
+  const rows = report.scenarios.map((s) => {
+    const allToolCalls = s.transcript.flatMap((t) => t.toolCalls);
+    const upsellAttempts = allToolCalls.filter((tc) => tc.name === "suggest_upsell").length;
+    const loopCheck      = s.checks.find((c) => c.type === "no_loop");
+    const loopDetected   = loopCheck ? !loopCheck.passed : false;
+    const checkoutCheck  = s.checks.find((c) => c.type === "checkout_transition");
+    const checkoutOk     = checkoutCheck
+      ? checkoutCheck.passed
+      : allToolCalls.some((tc) => tc.name === "confirm_order");
+    const statusLabel =
+      s.status === "passed" ? "Aprovado" :
+      s.status === "warning" ? "Atenção"  : "Falha";
+
+    return [
+      s.name,
+      s.score.toFixed(1),
+      statusLabel,
+      String(upsellAttempts),
+      loopDetected ? "Sim" : "Não",
+      checkoutOk   ? "Sim" : "Não",
+      s.issues.join(" | "),
+    ];
+  });
+
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const csv = [headers, ...rows]
+    .map((row) => row.map(escape).join(","))
+    .join("\r\n");
+
+  // BOM prefix so Excel opens with correct encoding
+  triggerDownload(
+    new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }),
+    filename,
+  );
+}
+
+// ─── transcript bubble ────────────────────────────────────────
 
 function TranscriptBubble({
   turn,
