@@ -19,6 +19,7 @@ import { prisma } from "@/lib/prisma";
 import type { RestaurantBrandConfig } from "@prisma/client";
 import type OpenAI from "openai";
 import { buildSalesProfile } from "./SalesProfile";
+import type { SalesProfile } from "./SalesProfile";
 import { buildBehaviorBlock } from "./BehaviorEngine";
 
 // ─── types ────────────────────────────────────────────────────
@@ -263,6 +264,7 @@ function buildSystemPrompt(params: {
   const menuBlock = buildMenuBlock(menuCategories);
   const draftBlock = buildDraftBlock(draft);
   const customerBlock = buildCustomerBlock(customer);
+  const goalsBlock = buildGoalsBlock(profile, draft);
 
   const personaBlock = buildPersonaBlock(brandConfig.brandPersona);
 
@@ -293,6 +295,11 @@ PEDIDO ATUAL DO CLIENTE
 ${draftBlock}
 
 ══════════════════════════════════════
+CONTEXTO DE METAS
+══════════════════════════════════════
+${goalsBlock}
+
+══════════════════════════════════════
 PERFIL DO CLIENTE
 ══════════════════════════════════════
 ${customerBlock}
@@ -302,24 +309,28 @@ MOTOR DE VENDAS (execute mentalmente antes de cada resposta)
 ══════════════════════════════════════
 Seu objetivo é aumentar o valor total do pedido adicionando itens e cobrindo categorias.
 
-PASSO 1 — DIAGNÓSTICO DO PEDIDO:
-Antes de responder, analise o pedido atual e identifique o que está faltando:
+PASSO 1 — DIAGNÓSTICO (leia CONTEXTO DE METAS acima, depois decida):
+  a) Gap de valor aberto?  → Priorize itens de maior preço dentro das categorias ausentes.
+  b) Gap de itens aberto?  → Priorize complementos acessíveis que aumentem a contagem.
+  c) Ambos os gaps abertos? → Escolha item que cubra categoria ausente E tenha preço elevado.
+  d) Metas atingidas?      → Encaminhe para confirmação; não force mais sugestões.
+
+  Dentro de cada gap, siga a ordem de categorias:
   • Tem PRATO PRINCIPAL?   → Se não, prioridade máxima: sugira um prato.
   • Tem BEBIDA?            → Se não (e já tem prato), prioridade alta: sugira uma bebida.
   • Tem SOBREMESA?         → Se não (e já tem prato + bebida), prioridade média: sugira uma sobremesa.
-  • Todas cobertas?        → Encaminhe para confirmação do pedido.
 
 PASSO 2 — DECISÃO POR TURNO:
-  1. Identifique a próxima categoria ausente (ordem: prato → bebida → sobremesa).
-  2. Escolha o item mais relevante daquela categoria com base no que o cliente já pediu.
+  1. Leia a AÇÃO RECOMENDADA no bloco CONTEXTO DE METAS — ela já resolve (a)/(b)/(c)/(d).
+  2. Escolha o item de maior valor disponível na categoria recomendada.
   3. Formule 1 frase curta, contextual e natural para introduzir a sugestão.
   4. Execute suggest_upsell imediatamente — nunca mencione o item sem a ferramenta.
 
 PASSO 3 — APÓS RECUSA:
-  • O cliente recusou uma categoria? NÃO DESISTA — mude de estratégia:
-    → Tente outra categoria ainda não coberta.
-    → Ou ofereça um adicional/complemento diferente da mesma categoria.
-    → Somente após 2 recusas na mesma categoria, avance para confirmação.
+  • O cliente recusou? NÃO DESISTA — mude de estratégia:
+    → Se havia gap de valor: tente item de categoria diferente ainda ausente.
+    → Se havia gap de itens: tente complemento mais barato ou adicional.
+    → Somente após 2 recusas em categorias diferentes, avance para confirmação.
   • Nunca repita um item que já foi recusado.
   • Nunca force — seja natural e respeitoso.
 
@@ -540,6 +551,52 @@ function buildCustomerBlock(customer: CustomerInfo): string {
     if (customer.preferences.notes) {
       lines.push(`Notas: ${customer.preferences.notes}`);
     }
+  }
+
+  return lines.join("\n");
+}
+
+function buildGoalsBlock(profile: SalesProfile, draft: DraftData): string {
+  const fmt = (n: number) => `R$ ${n.toFixed(2)}`;
+
+  if (!draft || draft.items.length === 0) {
+    return [
+      `Meta de ticket : ${fmt(profile.targetTicket)}   Meta de itens: ${profile.targetItems}`,
+      `Pedido atual   : ${fmt(0)} | 0 itens`,
+      ``,
+      `AÇÃO RECOMENDADA: Pedido vazio — ajude o cliente a escolher um prato principal antes de qualquer sugestão.`,
+    ].join("\n");
+  }
+
+  const cartValue = draft.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
+  const cartCount = draft.items.reduce((s, i) => s + i.quantity, 0);
+  const valueGap  = Math.max(0, profile.targetTicket - cartValue);
+  const itemGap   = Math.max(0, profile.targetItems  - cartCount);
+
+  const valueStatus = valueGap > 0 ? `${fmt(valueGap)} abaixo da meta` : "Meta atingida ✓";
+  const itemStatus  = itemGap  > 0 ? `${itemGap} ${itemGap === 1 ? "item" : "itens"} abaixo da meta` : "Meta atingida ✓";
+
+  const lines = [
+    `Meta de ticket : ${fmt(profile.targetTicket)}   Meta de itens: ${profile.targetItems}`,
+    `Pedido atual   : ${fmt(cartValue)} | ${cartCount} ${cartCount === 1 ? "item" : "itens"}`,
+    `Gap de valor   : ${valueStatus}`,
+    `Gap de itens   : ${itemStatus}`,
+    ``,
+  ];
+
+  if (valueGap > 0 && itemGap > 0) {
+    lines.push(`AÇÃO RECOMENDADA: Gaps de valor (${fmt(valueGap)}) e itens (${itemGap}) abertos.`);
+    lines.push(`→ Escolha item de categoria ausente com o maior preço disponível — cobre os dois gaps ao mesmo tempo.`);
+  } else if (valueGap > 0) {
+    lines.push(`AÇÃO RECOMENDADA: Gap de valor ativo (${fmt(valueGap)} até a meta).`);
+    lines.push(`→ Prefira o item de maior preço dentro da próxima categoria ausente.`);
+    lines.push(`→ Se todas as categorias já estiverem cobertas, sugira upgrade ou adicional premium.`);
+  } else if (itemGap > 0) {
+    lines.push(`AÇÃO RECOMENDADA: Gap de itens ativo (${itemGap} ${itemGap === 1 ? "item" : "itens"} até a meta).`);
+    lines.push(`→ Prefira complementos acessíveis que aumentem a contagem sem resistência (bebida, adicional).`);
+  } else {
+    lines.push(`AÇÃO RECOMENDADA: Metas atingidas (valor ✓ e itens ✓).`);
+    lines.push(`→ Encaminhe para confirmação do pedido. Não force mais sugestões.`);
   }
 
   return lines.join("\n");
