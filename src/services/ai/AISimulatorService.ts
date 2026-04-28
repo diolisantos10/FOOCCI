@@ -26,6 +26,7 @@ import { getAlreadySuggestedIds } from "./ConversationGuardrails";
 import { isBlockedByDietary } from "./ConversationGuardrails";
 import { ConversationStatus } from "@prisma/client";
 import type OpenAI from "openai";
+import { generateScenarios } from "./ScenarioGenerator";
 
 const MAX_TOOL_ITERATIONS = 6;
 
@@ -94,9 +95,9 @@ export interface SimulationReport {
 type ProgressCallback = (info: { current: number; total: number; scenarioName: string }) => void;
 type ResultCallback   = (result: ScenarioResult) => void;
 
-// ─── scenario definitions ─────────────────────────────────────
+// ─── scenario definition (exported for ScenarioGenerator) ────
 
-interface ScenarioDef {
+export interface ScenarioDef {
   id: string;
   name: string;
   description: string;
@@ -106,97 +107,6 @@ interface ScenarioDef {
   allergies?: string[];
   checks: CheckType[];
 }
-
-const SCENARIOS: ScenarioDef[] = [
-  {
-    id: "indeciso",
-    name: "Cliente indeciso",
-    description: "Diz que não sabe o que pedir",
-    expectedBehavior: "IA guia com recomendação de produto",
-    turns: [{ customer: "não sei o que pedir, me ajuda?" }],
-    checks: ["relevant_suggestion", "no_hallucination", "natural_tone"],
-  },
-  {
-    id: "para_dois",
-    name: "Cliente para 2 pessoas",
-    description: "Pede para duas pessoas",
-    expectedBehavior: "IA sugere opções adequadas para compartilhar",
-    turns: [{ customer: "é pra duas pessoas, o que você indica?" }],
-    checks: ["relevant_suggestion", "no_hallucination", "natural_tone"],
-  },
-  {
-    id: "economico",
-    name: "Cliente econômico",
-    description: "Quer gastar pouco",
-    expectedBehavior: "IA sugere opções mais acessíveis",
-    turns: [{ customer: "quero gastar pouco, tem opção mais em conta?" }],
-    checks: ["relevant_suggestion", "no_hallucination"],
-  },
-  {
-    id: "premium",
-    name: "Cliente premium",
-    description: "Quer o melhor do cardápio",
-    expectedBehavior: "IA sugere itens de maior valor",
-    turns: [{ customer: "quero algo bom, pode ser mais completo, sem me preocupar com preço" }],
-    checks: ["relevant_suggestion", "no_hallucination", "natural_tone"],
-  },
-  {
-    id: "vegetariano",
-    name: "Cliente vegetariano",
-    description: "Pergunta por opções vegetarianas",
-    expectedBehavior: "IA sugere apenas itens sem carne/peixe",
-    dietary: ["vegetariano"],
-    turns: [{ customer: "tem opção vegetariana?" }],
-    checks: ["relevant_suggestion", "no_hallucination", "dietary_respected"],
-  },
-  {
-    id: "sem_peixe_cru",
-    name: "Cliente sem peixe cru",
-    description: "Quer salmão mas não cru",
-    expectedBehavior: "IA NÃO sugere sashimi ou peixe cru",
-    allergies: ["sashimi", "peixe cru"],
-    turns: [{ customer: "quero salmão, mas não cru — tem opção grelhada?" }],
-    checks: ["no_hallucination", "dietary_respected"],
-  },
-  {
-    id: "recusa_upsell",
-    name: "Cliente que recusa upsell",
-    description: "Recusa a primeira sugestão da IA",
-    expectedBehavior: "IA aceita a recusa e não repete o mesmo produto",
-    turns: [
-      { customer: "quero fazer um pedido" },
-      { customer: "não, obrigado, acho que já tá bom" },
-    ],
-    checks: ["no_loop", "no_repeat_suggestion", "no_hallucination"],
-  },
-  {
-    id: "pergunta_categoria",
-    name: "Cliente pergunta por categoria",
-    description: "Pergunta sobre sobremesas disponíveis",
-    expectedBehavior: "IA responde com itens reais do cardápio",
-    turns: [{ customer: "o que tem de sobremesa?" }],
-    checks: ["no_hallucination", "natural_tone"],
-  },
-  {
-    id: "finalizando",
-    name: "Cliente tentando finalizar",
-    description: "Cliente indica que terminou e quer fechar",
-    expectedBehavior: "IA encaminha para confirmação sem empurrar mais itens",
-    turns: [
-      { customer: "quero fazer um pedido" },
-      { customer: "acho que é isso mesmo, pode fechar o pedido" },
-    ],
-    checks: ["no_loop", "no_hallucination", "checkout_transition"],
-  },
-  {
-    id: "confuso",
-    name: "Cliente confuso",
-    description: "Envia mensagens vagas e sem contexto",
-    expectedBehavior: "IA pede esclarecimento em vez de inventar",
-    turns: [{ customer: "hmm... aquele negócio... não sei... talvez aquilo lá que vi" }],
-    checks: ["clarification_asked", "no_hallucination"],
-  },
-];
 
 // ─── check labels ─────────────────────────────────────────────
 
@@ -230,11 +140,12 @@ export class AISimulatorService {
       select: { id: true, name: true, ingredients: true, price: true },
     });
 
+    const scenarios = generateScenarios(10);
     const results: ScenarioResult[] = [];
 
-    for (let i = 0; i < SCENARIOS.length; i++) {
-      const scenario = SCENARIOS[i]!;
-      onProgress({ current: i + 1, total: SCENARIOS.length, scenarioName: scenario.name });
+    for (let i = 0; i < scenarios.length; i++) {
+      const scenario = scenarios[i]!;
+      onProgress({ current: i + 1, total: scenarios.length, scenarioName: scenario.name });
 
       const result = await runScenario(scenario, restaurantId, menu).catch((err) => {
         console.error(`[AISimulator] Scenario "${scenario.id}" failed:`, err);
@@ -746,8 +657,11 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
   const safeToTest =
     overallScore >= 6 &&
     results.every((r) => r.status !== "failed") &&
-    !results.some((r) => r.id === "vegetariano" && r.status === "failed") &&
-    !results.some((r) => r.id === "sem_peixe_cru" && r.status === "failed");
+    !results.some(
+      (r) =>
+        r.status === "failed" &&
+        r.checks.some((c) => c.type === "dietary_respected"),
+    );
 
   const n = results.length || 1;
   const avgTicket      = results.reduce((s, r) => s + r.salesMetrics.finalCartValue, 0) / n;
