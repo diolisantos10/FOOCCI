@@ -13,7 +13,7 @@ jobs:
       - name: Validate RAILWAY_TOKEN
         run: |
           if [ -z "${{ secrets.RAILWAY_TOKEN }}" ]; then
-            echo "::error::RAILWAY_TOKEN secret is not set. Add it in GitHub → Settings → Secrets → Actions."
+            echo "::error::RAILWAY_TOKEN secret is not set."
             exit 1
           fi
 
@@ -25,15 +25,14 @@ jobs:
           echo "Branch : ${{ github.ref_name }}"
           echo "Commit : ${{ github.sha }}"
           echo "Actor  : ${{ github.actor }}"
-          echo "Trigger: ${{ github.event_name }}"
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli@latest
+        run: npm install -g @railway/cli
 
       - name: Deploy to Railway
         run: |
           echo "Deploying to Railway..."
-          railway up --detach
+          railway up --service CRM_RESTURANTE --detach
           echo "Deploy triggered successfully."
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
