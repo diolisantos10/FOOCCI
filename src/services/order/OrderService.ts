@@ -26,6 +26,7 @@ export type OrderWithDetails = Order & {
     city: string;
     state: string;
   } | null;
+  orderDraft: { conversationId: string | null } | null;
 };
 
 // Legal forward transitions only
@@ -79,6 +80,7 @@ export class OrderService {
               state: true,
             },
           },
+          orderDraft: { select: { conversationId: true } },
         },
         orderBy: { createdAt: "desc" },
         skip,

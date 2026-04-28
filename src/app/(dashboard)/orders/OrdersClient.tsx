@@ -48,6 +48,7 @@ interface MockOrder {
   address: string;
   items: OrderItem[];
   profile?: CustomerProfile;
+  conversationId?: string | null;
 }
 
 // ─── API response type (from GET /api/orders) ─────────────────
@@ -76,6 +77,7 @@ interface ApiOrder {
   } | null;
   items: ApiOrderItem[];
   payment: { method: string } | null;
+  orderDraft?: { conversationId?: string | null } | null;
 }
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -128,6 +130,7 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
       totalOrders: o.customer.totalOrders,
       totalSpend:  parseFloat(o.customer.totalSpend),
     },
+    conversationId: o.orderDraft?.conversationId ?? null,
   };
 }
 
@@ -632,6 +635,15 @@ function OrderCard({
             >
               Cancelar
             </button>
+            {order.conversationId && (
+              <a
+                href={`/atendimento?conv=${order.conversationId}`}
+                onClick={(e) => e.stopPropagation()}
+                className="ml-auto flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                💬 Abrir conversa
+              </a>
+            )}
           </div>
         )}
       </div>
@@ -896,6 +908,14 @@ function DetailPanel({
           <div className="space-y-1.5">
             <Row label="Telefone" value={order.phone} />
             {order.email && <Row label="E-mail" value={order.email} />}
+            {order.conversationId && (
+              <a
+                href={`/atendimento?conv=${order.conversationId}`}
+                className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                💬 Abrir conversa no Chat
+              </a>
+            )}
           </div>
         </div>
 

@@ -15,6 +15,20 @@ type ConvStatus = "OPEN" | "BOT" | "HUMAN" | "RESOLVED";
 type Channel = "WHATSAPP" | "EMAIL" | "SMS";
 type StatusFilter = "ALL" | "OPEN" | "HUMAN" | "RESOLVED";
 
+interface ActiveOrderItem {
+  name:     string;
+  quantity: number;
+  price:    string;
+}
+
+interface ActiveOrder {
+  id:     string;
+  status: string;
+  total:  string;
+  type:   string;
+  items:  ActiveOrderItem[];
+}
+
 interface ConvSummary {
   id: string;
   status: ConvStatus;
@@ -111,7 +125,13 @@ function initials(name: string): string {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function AtendimentoClient({ userId }: { userId: string }) {
+export function AtendimentoClient({
+  userId,
+  initialConvId,
+}: {
+  userId:        string;
+  initialConvId?: string;
+}) {
   // ── State ──────────────────────────────────────────────────────────────────
   const [conversations, setConversations] = useState<ConvSummary[]>([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -119,6 +139,8 @@ export function AtendimentoClient({ userId }: { userId: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [thread, setThread] = useState<ConvDetail | null>(null);
   const [loadingThread, setLoadingThread] = useState(false);
+
+  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
 
   // Mobile navigation: "list" shows the conversation list, "thread" shows the active thread
   const [mobileView, setMobileView] = useState<"list" | "thread">("list");
@@ -177,15 +199,31 @@ export function AtendimentoClient({ userId }: { userId: string }) {
     }
   }, []);
 
+  // Deep-link: auto-select conversation from URL param on mount
+  useEffect(() => {
+    if (initialConvId) {
+      setSelectedId(initialConvId);
+      setMobileView("thread");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!selectedId) {
       setThread(null);
+      setActiveOrder(null);
       return;
     }
     setLoadingThread(true);
     fetchThread(selectedId).finally(() => setLoadingThread(false));
     // mark as read
     fetch(`/api/conversations/${selectedId}/read`, { method: "POST" }).catch(() => {});
+    // fetch active order for this conversation's customer
+    fetch(`/api/conversations/${selectedId}/order`)
+      .then((r) => r.json())
+      .then((res: { success: boolean; data: ActiveOrder | null }) => {
+        setActiveOrder(res.success ? (res.data ?? null) : null);
+      })
+      .catch(() => setActiveOrder(null));
     // poll thread
     const id = setInterval(() => fetchThread(selectedId), 4000);
     return () => clearInterval(id);
@@ -451,6 +489,7 @@ export function AtendimentoClient({ userId }: { userId: string }) {
             onSend={handleSend}
             bottomRef={bottomRef}
             onBack={handleMobileBack}
+            activeOrder={activeOrder}
           />
         ) : null}
       </section>
@@ -472,6 +511,51 @@ interface ThreadPanelProps {
   onSend: (e: FormEvent) => void;
   bottomRef: React.RefObject<HTMLDivElement>;
   onBack?: () => void;
+  activeOrder?: ActiveOrder | null;
+}
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  PENDING:          "Novo",
+  AWAITING_PAYMENT: "Aguard. pagamento",
+  CONFIRMED:        "Confirmado",
+  PREPARING:        "Preparando",
+  READY:            "Pronto",
+  OUT_FOR_DELIVERY: "Em entrega",
+};
+
+function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
+  const total  = parseFloat(order.total);
+  const label  = ORDER_STATUS_LABELS[order.status] ?? order.status;
+  const items  = order.items.slice(0, 3);
+  const more   = order.items.length - items.length;
+
+  return (
+    <div className="mt-2 flex items-start gap-2.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-orange-600">
+            Pedido ativo
+          </span>
+          <span className="rounded-full bg-orange-100 border border-orange-200 px-1.5 py-px text-[10px] font-semibold text-orange-700">
+            {label}
+          </span>
+        </div>
+        <p className="mt-0.5 truncate text-xs text-orange-700">
+          {items.map((i) => `${i.quantity}× ${i.name}`).join(" · ")}
+          {more > 0 && ` +${more}`}
+        </p>
+        <p className="mt-0.5 text-xs font-bold text-orange-800">
+          Total: R$ {total.toFixed(2).replace(".", ",")}
+        </p>
+      </div>
+      <a
+        href="/orders"
+        className="shrink-0 rounded-lg bg-orange-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-orange-600 transition-colors"
+      >
+        Ver pedido
+      </a>
+    </div>
+  );
 }
 
 function ThreadPanel({
@@ -485,6 +569,7 @@ function ThreadPanel({
   onSend,
   bottomRef,
   onBack,
+  activeOrder,
 }: ThreadPanelProps) {
   const badge = getHandlerBadge(thread);
   const channel = CHANNEL_META[thread.channel] ?? { label: thread.channel, icon: "💬" };
@@ -579,6 +664,9 @@ function ThreadPanel({
             </button>
           )}
         </div>
+
+        {/* Row 3: active order panel */}
+        {activeOrder && <ActiveOrderPanel order={activeOrder} />}
       </div>
 
       {/* ── Message thread ────────────────────────────────────────────── */}

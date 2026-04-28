@@ -6,14 +6,18 @@ import { AtendimentoClient } from "./AtendimentoClient";
 
 export const metadata = { title: "Atendimento" };
 
-export default async function AtendimentoPage() {
+export default async function AtendimentoPage({
+  searchParams,
+}: {
+  searchParams: { conv?: string };
+}) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
   return (
     <>
       <TopBar title="Atendimento" />
-      <AtendimentoClient userId={session.user.id} />
+      <AtendimentoClient userId={session.user.id} initialConvId={searchParams.conv} />
     </>
   );
 }
