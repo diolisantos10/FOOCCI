@@ -253,9 +253,6 @@ function nextCustomerMessage(
           return pickMsg(MSGS.change);
         }
         return state.hasOrdered ? pickMsg(MSGS.checkout) : pickMsg(MSGS.continue);
-
-      case "impaciente":
-        return pickMsg(MSGS.hurry);
     }
   }
 
