@@ -22,11 +22,12 @@ interface ActiveOrderItem {
 }
 
 interface ActiveOrder {
-  id:     string;
-  status: string;
-  total:  string;
-  type:   string;
-  items:  ActiveOrderItem[];
+  id:        string;
+  status:    string;
+  total:     string;
+  type:      string;
+  createdAt: string;
+  items:     ActiveOrderItem[];
 }
 
 interface ConvSummary {
@@ -514,46 +515,150 @@ interface ThreadPanelProps {
   activeOrder?: ActiveOrder | null;
 }
 
-const ORDER_STATUS_LABELS: Record<string, string> = {
-  PENDING:          "Novo",
-  AWAITING_PAYMENT: "Aguard. pagamento",
-  CONFIRMED:        "Confirmado",
-  PREPARING:        "Preparando",
-  READY:            "Pronto",
-  OUT_FOR_DELIVERY: "Em entrega",
+// ── ActiveOrderPanel ──────────────────────────────────────────
+
+const DELAY_MINUTES = 20;
+
+interface StatusMeta {
+  label: string;
+  badge: string; // tailwind classes for the badge
+  dot?:  string; // optional animated dot color
+}
+
+const STATUS_META: Record<string, StatusMeta> = {
+  PENDING:          { label: "Aguardando",        badge: "bg-amber-100  border-amber-200  text-amber-800"  },
+  AWAITING_PAYMENT: { label: "Aguard. pagamento", badge: "bg-yellow-100 border-yellow-200 text-yellow-800" },
+  CONFIRMED:        { label: "Confirmado",        badge: "bg-blue-100   border-blue-200   text-blue-800"   },
+  PREPARING:        { label: "Em preparo",        badge: "bg-orange-100 border-orange-200 text-orange-800" },
+  READY:            { label: "Pronto",            badge: "bg-teal-100   border-teal-200   text-teal-800"   },
+  OUT_FOR_DELIVERY: { label: "Em entrega",        badge: "bg-purple-100 border-purple-200 text-purple-800" },
 };
 
+const DELAYED_META: StatusMeta = {
+  label: "Atrasado",
+  badge: "bg-red-100 border-red-200 text-red-700",
+  dot:   "bg-red-500",
+};
+
+function isDelayed(createdAt: string, status: string): boolean {
+  const terminal = ["DELIVERED", "CANCELLED", "READY", "OUT_FOR_DELIVERY"];
+  if (terminal.includes(status)) return false;
+  return (Date.now() - new Date(createdAt).getTime()) > DELAY_MINUTES * 60_000;
+}
+
 function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
-  const total  = parseFloat(order.total);
-  const label  = ORDER_STATUS_LABELS[order.status] ?? order.status;
-  const items  = order.items.slice(0, 3);
-  const more   = order.items.length - items.length;
+  const [status,     setStatus]     = useState(order.status);
+  const [updating,   setUpdating]   = useState<string | null>(null); // which action is loading
+  const [errorMsg,   setErrorMsg]   = useState<string | null>(null);
+
+  const total   = parseFloat(order.total);
+  const items   = order.items.slice(0, 3);
+  const more    = order.items.length - items.length;
+  const delayed = isDelayed(order.createdAt, status);
+  const meta    = delayed ? DELAYED_META : (STATUS_META[status] ?? { label: status, badge: "bg-gray-100 border-gray-200 text-gray-600" });
+
+  async function applyAction(nextStatus: string, actionKey: string) {
+    setUpdating(actionKey);
+    setErrorMsg(null);
+    try {
+      const res  = await fetch(`/api/orders/${order.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ status: nextStatus }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        setStatus(nextStatus);
+      } else {
+        setErrorMsg(json.error ?? "Erro ao atualizar");
+      }
+    } catch {
+      setErrorMsg("Falha de rede");
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  const canConfirm = ["PENDING", "AWAITING_PAYMENT"].includes(status);
+  const canReady   = ["CONFIRMED", "PREPARING"].includes(status);
+  const canCancel  = !["READY", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"].includes(status);
+  const isTerminal = ["DELIVERED", "CANCELLED"].includes(status);
 
   return (
-    <div className="mt-2 flex items-start gap-2.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-orange-600">
-            Pedido ativo
-          </span>
-          <span className="rounded-full bg-orange-100 border border-orange-200 px-1.5 py-px text-[10px] font-semibold text-orange-700">
-            {label}
-          </span>
-        </div>
-        <p className="mt-0.5 truncate text-xs text-orange-700">
+    <div className="mt-2 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+
+      {/* Header row */}
+      <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+          Pedido ativo
+        </span>
+        <span className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-px text-[10px] font-semibold ${meta.badge}`}>
+          {delayed && (
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+          )}
+          {meta.label}
+        </span>
+        <span className="ml-auto text-[10px] text-gray-400 tabular-nums">
+          {Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60_000)} min
+        </span>
+        <a
+          href="/orders"
+          className="rounded-lg border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-500 hover:bg-gray-100 transition-colors"
+        >
+          Ver pedido
+        </a>
+      </div>
+
+      {/* Items + total */}
+      <div className="px-3 py-2">
+        <p className="truncate text-xs text-gray-600">
           {items.map((i) => `${i.quantity}× ${i.name}`).join(" · ")}
-          {more > 0 && ` +${more}`}
+          {more > 0 && <span className="text-gray-400"> +{more}</span>}
         </p>
-        <p className="mt-0.5 text-xs font-bold text-orange-800">
-          Total: R$ {total.toFixed(2).replace(".", ",")}
+        <p className="mt-0.5 text-xs font-bold text-gray-800">
+          R$ {total.toFixed(2).replace(".", ",")}
         </p>
       </div>
-      <a
-        href="/orders"
-        className="shrink-0 rounded-lg bg-orange-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-orange-600 transition-colors"
-      >
-        Ver pedido
-      </a>
+
+      {/* Quick actions */}
+      {!isTerminal && (
+        <div className="flex gap-1.5 flex-wrap border-t border-gray-100 bg-gray-50 px-3 py-2">
+          {canConfirm && (
+            <button
+              onClick={() => applyAction("CONFIRMED", "confirm")}
+              disabled={updating !== null}
+              className="rounded-lg bg-blue-500 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+            >
+              {updating === "confirm" ? "…" : "Confirmar pedido"}
+            </button>
+          )}
+          {canReady && (
+            <button
+              onClick={() => applyAction("READY", "ready")}
+              disabled={updating !== null}
+              className="rounded-lg bg-teal-500 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-teal-600 disabled:opacity-50 transition-colors"
+            >
+              {updating === "ready" ? "…" : "Marcar como pronto"}
+            </button>
+          )}
+          {canCancel && (
+            <button
+              onClick={() => applyAction("CANCELLED", "cancel")}
+              disabled={updating !== null}
+              className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+            >
+              {updating === "cancel" ? "…" : "Cancelar pedido"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Error */}
+      {errorMsg && (
+        <p className="border-t border-red-100 bg-red-50 px-3 py-1.5 text-[11px] text-red-600">
+          {errorMsg}
+        </p>
+      )}
     </div>
   );
 }
