@@ -1,24 +1,22 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import QRCode from "qrcode";
 
-// ─── External Test Panel ──────────────────────────────────────
+interface Props {
+  restaurantName: string;
+  restaurantSlug: string;
+  pedidoUrl:      string;
+}
 
-function ExternalTestPanel({
-  pedidoUrl,
-  viewMode,
-}: {
-  pedidoUrl: string;
-  viewMode:  "desktop" | "mobile";
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [copied, setCopied]   = useState(false);
+export function TestAIHubClient({ restaurantName, pedidoUrl }: Props) {
+  const canvasRef   = useRef<HTMLCanvasElement>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!canvasRef.current || !pedidoUrl) return;
     QRCode.toCanvas(canvasRef.current, pedidoUrl, {
-      width:  180,
+      width:  200,
       margin: 2,
       color:  { dark: "#111827", light: "#ffffff" },
     }).catch(() => {});
@@ -31,188 +29,177 @@ function ExternalTestPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-indigo-100 bg-white shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-2 border-b border-indigo-50 bg-indigo-50 px-4 py-3">
-        <span className="text-base leading-none">🔗</span>
-        <div>
-          <p className="text-sm font-semibold text-indigo-900">Teste externo</p>
-          <p className="text-[10px] text-indigo-500">
-            Visão {viewMode === "mobile" ? "mobile" : "desktop"} · abre fora do painel
-          </p>
-        </div>
-      </div>
-
-      <div className="p-4 space-y-4">
-        {/* QR Code */}
-        <div className="flex justify-center">
-          <canvas
-            ref={canvasRef}
-            className="rounded-xl border border-gray-200"
-          />
-        </div>
-
-        {/* URL */}
-        <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-            Link direto
-          </p>
-          <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5">
-            <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-gray-600">
-              {pedidoUrl}
-            </span>
-          </div>
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={copy}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-          >
-            {copied ? "✓ Copiado!" : "📋 Copiar link"}
-          </button>
-          <a
-            href={pedidoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            ↗ Abrir no navegador
-          </a>
-        </div>
-
-        {/* Hint */}
-        <p className="text-[10px] text-gray-400 leading-relaxed text-center">
-          📱 Escaneie o QR Code com um celular para testar a experiência do cliente sem estar logado no painel.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main HUB ─────────────────────────────────────────────────
-
-interface Props {
-  restaurantName: string;
-  restaurantSlug: string;
-  pedidoUrl:      string;
-}
-
-export function TestAIHubClient({ restaurantName, restaurantSlug, pedidoUrl }: Props) {
-  const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
-  const [iframeKey, setIframeKey] = useState(0);
-
-  const restart = useCallback(() => setIframeKey((k) => k + 1), []);
-
-  return (
     <div className="flex h-[calc(100vh-56px)] flex-col overflow-hidden bg-gray-50">
 
-      {/* ── Top bar ──────────────────────────────────────────── */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-2.5 shadow-sm">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-900 truncate">Testar IA</p>
-          <p className="text-[11px] text-gray-400 truncate">{restaurantName}</p>
+      {/* ── Top bar ───────────────────────────────────────────── */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6 py-3 shadow-sm">
+        <div>
+          <p className="text-sm font-bold text-gray-900">Testar IA</p>
+          <p className="text-[11px] text-gray-400">{restaurantName}</p>
         </div>
-
-        {/* Desktop / Mobile toggle */}
-        <div className="ml-auto flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-          <button
-            onClick={() => setViewMode("desktop")}
-            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-              viewMode === "desktop"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-400 hover:text-gray-600"
-            }`}
-          >
-            Desktop
-          </button>
-          <button
-            onClick={() => setViewMode("mobile")}
-            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-              viewMode === "mobile"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-400 hover:text-gray-600"
-            }`}
-          >
-            Mobile
-          </button>
-        </div>
-
-        {/* Restart */}
-        <button
-          onClick={restart}
-          className="flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-orange-600 transition-colors"
+        <a
+          href="/chat-sim"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 transition-colors"
         >
-          Iniciar teste
-        </button>
+          ▶ Nova sessão de teste
+        </a>
       </div>
 
       {/* ── Body ─────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 gap-6 overflow-y-auto px-6 py-6">
 
-        {/* ── Left: Chat preview ───────────────────────────── */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {viewMode === "desktop" ? (
-            /* Desktop — iframe fills full area */
-            <iframe
-              key={`desktop-${iframeKey}`}
-              src="/chat-sim"
-              className="flex-1 w-full border-0"
-              title="Simulação IA — Desktop"
-            />
-          ) : (
-            /* Mobile — phone frame centered */
-            <div className="flex flex-1 items-center justify-center bg-gray-200 p-6">
+        {/* ── Left column ─────────────────────────────────── */}
+        <div className="flex flex-1 flex-col gap-6">
+
+          {/* DESKTOP TEST */}
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="border-b border-gray-100 bg-gray-50 px-5 py-3 flex items-center gap-2">
+              <span className="text-base">🖥️</span>
+              <div>
+                <p className="text-sm font-bold text-gray-800">Teste — Desktop</p>
+                <p className="text-[11px] text-gray-400">Abre o agente em uma nova aba do navegador</p>
+              </div>
+            </div>
+            <div className="px-5 py-5 flex items-center justify-between gap-4">
+              <p className="text-sm text-gray-500 max-w-md">
+                Clique no botão para abrir a interface de teste do agente IA. A sessão inicia automaticamente e simula uma conversa real pelo WhatsApp — sem enviar mensagens.
+              </p>
+              <a
+                href="/chat-sim"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-orange-600 transition-colors"
+              >
+                ↗ Abrir teste no navegador
+              </a>
+            </div>
+          </div>
+
+          {/* MOBILE TEST */}
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="border-b border-gray-100 bg-gray-50 px-5 py-3 flex items-center gap-2">
+              <span className="text-base">📱</span>
+              <div>
+                <p className="text-sm font-bold text-gray-800">Teste — Celular</p>
+                <p className="text-[11px] text-gray-400">Escaneie o QR Code para abrir no celular</p>
+              </div>
+            </div>
+            <div className="px-5 py-5 flex items-center gap-8">
+              {/* Phone mockup */}
               <div
-                className="flex flex-col overflow-hidden rounded-[2.5rem] shadow-2xl"
+                className="shrink-0 flex flex-col items-center justify-center rounded-[2rem] shadow-xl"
                 style={{
-                  width:  390,
-                  height: 720,
-                  border: "10px solid #1f2937",
+                  width: 160,
+                  height: 280,
+                  border: "8px solid #1f2937",
                   background: "#1f2937",
                 }}
               >
-                {/* Fake status bar */}
-                <div className="flex items-center justify-between bg-gray-800 px-5 py-1.5 text-[10px] font-medium text-white shrink-0">
-                  <span>9:41</span>
-                  <div className="flex items-center gap-1">
-                    <span>▲</span>
-                    <span>WiFi</span>
-                    <span>🔋</span>
+                <div className="w-full bg-gray-800 py-1 text-center text-[9px] text-white font-medium rounded-t-[1.4rem]">
+                  9:41
+                </div>
+                <div className="flex-1 w-full bg-gray-50 flex flex-col items-center justify-center gap-2 p-3">
+                  <div className="h-7 w-7 rounded-full bg-orange-100 flex items-center justify-center text-base">🍕</div>
+                  <p className="text-[9px] font-semibold text-gray-700 text-center">{restaurantName}</p>
+                  <div className="w-full space-y-1.5 mt-1">
+                    <div className="rounded-xl bg-white border border-gray-200 px-2 py-1 text-[8px] text-gray-500 shadow-sm">Olá! O que deseja pedir?</div>
+                    <div className="rounded-xl bg-orange-500 px-2 py-1 text-[8px] text-white text-right shadow-sm">Quero 1 pizza!</div>
                   </div>
                 </div>
-                <iframe
-                  key={`mobile-${iframeKey}`}
-                  src="/chat-sim"
-                  className="flex-1 w-full border-0 bg-white"
-                  title="Simulação IA — Mobile"
-                  style={{ borderRadius: "0 0 1.8rem 1.8rem" }}
-                />
+                <div className="w-full bg-gray-800 py-1 text-center text-[9px] text-white rounded-b-[1.4rem]">
+                  ●
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  Escaneie o QR Code com o celular para abrir a <strong>página de pedido real do cliente</strong>.
+                  <br /><br />
+                  Para testar o agente WhatsApp no celular, abra o link da página de pedido no navegador mobile.
+                </p>
+                <a
+                  href={pedidoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors w-fit"
+                >
+                  ↗ Abrir no celular
+                </a>
               </div>
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* ── Right: External test panel ───────────────────── */}
-        <div className="w-72 shrink-0 overflow-y-auto border-l border-gray-200 bg-white p-4 space-y-4">
-          <ExternalTestPanel pedidoUrl={pedidoUrl} viewMode={viewMode} />
-
-          {/* Pipeline note */}
-          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-            <p className="text-[10px] font-semibold text-gray-600 mb-1">Pipeline ativa</p>
-            <p className="text-[10px] text-gray-500 leading-relaxed">
-              <strong>AIOrderService</strong> via{" "}
-              <code className="text-[9px]">PromptBuilderService</code> +{" "}
-              <code className="text-[9px]">UpsellEngine</code> +{" "}
-              <code className="text-[9px]">AI_TOOL_DEFINITIONS</code>
-            </p>
-            <p className="mt-1 text-[10px] text-gray-400">
+          {/* Pipeline info */}
+          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm px-5 py-4">
+            <p className="text-xs font-bold text-gray-700 mb-1">Pipeline ativa</p>
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              O teste usa <strong>AIOrderService</strong> via{" "}
+              <code className="rounded bg-gray-100 px-1 py-0.5 text-[10px]">PromptBuilderService</code> +{" "}
+              <code className="rounded bg-gray-100 px-1 py-0.5 text-[10px]">UpsellEngine</code> +{" "}
+              <code className="rounded bg-gray-100 px-1 py-0.5 text-[10px]">AI_TOOL_DEFINITIONS</code> — exatamente a mesma pipeline de produção.
               Nenhuma mensagem é enviada ao WhatsApp.
             </p>
           </div>
         </div>
 
+        {/* ── Right column: QR + links ─────────────────────── */}
+        <div className="w-72 shrink-0 flex flex-col gap-4">
+
+          <div className="rounded-2xl border border-indigo-100 bg-white shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-indigo-50 bg-indigo-50 px-4 py-3">
+              <span className="text-base">🔗</span>
+              <div>
+                <p className="text-sm font-semibold text-indigo-900">Link público / QR</p>
+                <p className="text-[10px] text-indigo-500">Página real de pedido do cliente</p>
+              </div>
+            </div>
+
+            <div className="p-4 flex flex-col items-center gap-4">
+              {/* QR Code */}
+              <div className="rounded-xl bg-white p-2 shadow-sm ring-1 ring-gray-100">
+                <canvas ref={canvasRef} className="block rounded-lg" />
+              </div>
+
+              {/* URL */}
+              <div className="w-full">
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  Link direto
+                </p>
+                <input
+                  readOnly
+                  value={pedidoUrl}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 font-mono text-[10px] text-gray-600 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="w-full flex flex-col gap-2">
+                <button
+                  onClick={copy}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+                >
+                  {copied ? "✓ Copiado!" : "📋 Copiar link"}
+                </button>
+                <a
+                  href={pedidoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  ↗ Abrir no navegador
+                </a>
+              </div>
+
+              <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+                📱 Escaneie o QR Code com um celular para testar a experiência do cliente sem estar logado no painel.
+              </p>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
   );
