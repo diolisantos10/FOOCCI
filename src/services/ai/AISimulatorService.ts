@@ -430,10 +430,10 @@ const CHECK_LABELS: Record<CheckType, string> = {
   natural_tone:         "Tom de resposta adequado",
 };
 
-const BATCH_SIZE        = 5;
-const BATCH_DELAY_MS    = 3_000;  // pause between batches to respect TPM limits
-const RETRY_DELAY_MS    = 2_000;  // wait before retrying a 429 scenario
-const MAX_SCENARIO_RETRIES = 2;
+const BATCH_SIZE           = 5;
+const BATCH_DELAY_MS       = 3_000;   // pause between batches to respect TPM limits
+const MAX_SCENARIO_RETRIES = 3;       // max retries per scenario (covers 429 + network errors)
+const TURN_TIMEOUT_MS      = 12_000;  // abort each OpenAI call after 12 s
 
 // ─── public service ───────────────────────────────────────────
 
@@ -496,18 +496,39 @@ export class AISimulatorService {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-function isRateLimitError(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
+/** Returns true for any error that is worth retrying (429, network, timeout). */
+function isRetryableError(err: unknown): boolean {
+  if (!err) return false;
+
+  // AbortError — our own timeout signal fired
+  if (err instanceof Error && err.name === "AbortError") return true;
+
+  // TypeError covers "fetch failed", "network error", ECONNRESET wrapped by the SDK
+  if (err instanceof TypeError) return true;
+
+  if (typeof err !== "object") return false;
   const e = err as Record<string, unknown>;
-  // OpenAI SDK surfaces 429s as { status: 429 } or { error: { type: "rate_limit_exceeded" } }
+
+  // OpenAI SDK 429 shapes
   if (e["status"] === 429) return true;
   const inner = e["error"] as Record<string, unknown> | undefined;
   if (inner?.["type"] === "rate_limit_exceeded") return true;
-  if (typeof e["message"] === "string" && e["message"].includes("429")) return true;
+
+  // Message-based fallbacks
+  const msg = typeof e["message"] === "string" ? e["message"] : "";
+  if (msg.includes("429"))         return true;
+  if (msg.includes("fetch failed")) return true;
+  if (msg.includes("ECONNRESET"))  return true;
+  if (msg.includes("network error")) return true;
+  if (msg.includes("timeout"))     return true;
+
   return false;
 }
 
-// Wraps runScenario with exponential-backoff retry on 429 errors.
+/** Delay schedule: 1 s, 2 s, 4 s (index = attempt number starting at 0). */
+const RETRY_DELAYS_MS = [1_000, 2_000, 4_000] as const;
+
+// Wraps runScenario with exponential-backoff retry on 429 and network errors.
 async function runScenarioWithRetry(
   scenario: ScenarioDef,
   restaurantId: string,
@@ -520,17 +541,21 @@ async function runScenarioWithRetry(
       return await runScenario(scenario, restaurantId, menu, menuById);
     } catch (err) {
       lastErr = err;
-      if (isRateLimitError(err) && attempt < MAX_SCENARIO_RETRIES) {
-        const wait = RETRY_DELAY_MS * (attempt + 1);  // 2 s, then 4 s
-        console.warn(`[AISimulator] 429 on "${scenario.id}" (attempt ${attempt + 1}) — retrying in ${wait}ms`);
+      if (isRetryableError(err) && attempt < MAX_SCENARIO_RETRIES) {
+        const wait = RETRY_DELAYS_MS[attempt] ?? 4_000;
+        const errType = err instanceof Error ? err.constructor.name : typeof err;
+        console.warn(
+          `[AISimulator] Retryable error on scenario "${scenario.id}" ` +
+          `(attempt ${attempt + 1}/${MAX_SCENARIO_RETRIES}, type=${errType}) — retrying in ${wait}ms`,
+        );
         await sleep(wait);
         continue;
       }
-      // Non-429 error or retries exhausted — fall through
       break;
     }
   }
-  console.error(`[AISimulator] Scenario "${scenario.id}" failed after retries:`, lastErr);
+  const errType = lastErr instanceof Error ? lastErr.constructor.name : typeof lastErr;
+  console.error(`[AISimulator] Scenario "${scenario.id}" failed after ${MAX_SCENARIO_RETRIES} retries (type=${errType}):`, lastErr);
   return buildErrorResult(scenario, String(lastErr));
 }
 
@@ -760,29 +785,40 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
   const loopMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages];
 
   for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
-    // Per-call retry for 429s — up to 2 attempts with 2 s gap
+    // Per-call retry for 429 and network errors — up to MAX_SCENARIO_RETRIES attempts
     let response: Awaited<ReturnType<typeof openai.chat.completions.create>>;
     let callAttempt = 0;
     while (true) {
+      const abort = new AbortController();
+      const timeoutId = setTimeout(() => abort.abort(), TURN_TIMEOUT_MS);
       try {
-        response = await openai.chat.completions.create({
-          model:       brandConfig.aiModel,
-          messages:    loopMessages,
-          tools:       AI_TOOL_DEFINITIONS,
-          tool_choice: "auto",
-          max_tokens:  resolveMaxTokens(salesProfile),
-          temperature: 0.3,
-        });
+        response = await openai.chat.completions.create(
+          {
+            model:       brandConfig.aiModel,
+            messages:    loopMessages,
+            tools:       AI_TOOL_DEFINITIONS,
+            tool_choice: "auto",
+            max_tokens:  resolveMaxTokens(salesProfile),
+            temperature: 0.3,
+          },
+          { signal: abort.signal },
+        );
+        clearTimeout(timeoutId);
         break;  // success
       } catch (err) {
+        clearTimeout(timeoutId);
         callAttempt++;
-        if (isRateLimitError(err) && callAttempt <= MAX_SCENARIO_RETRIES) {
-          const wait = RETRY_DELAY_MS * callAttempt;
-          console.warn(`[AISimulator] 429 on turn call (attempt ${callAttempt}) — waiting ${wait}ms`);
+        if (isRetryableError(err) && callAttempt <= MAX_SCENARIO_RETRIES) {
+          const wait = RETRY_DELAYS_MS[callAttempt - 1] ?? 4_000;
+          const errType = err instanceof Error ? err.constructor.name : typeof err;
+          console.warn(
+            `[AISimulator] Retryable error on turn call for conversation "${conversationId}" ` +
+            `(attempt ${callAttempt}/${MAX_SCENARIO_RETRIES}, type=${errType}) — retrying in ${wait}ms`,
+          );
           await sleep(wait);
           continue;
         }
-        throw err;  // non-429 or retries exhausted
+        throw err;  // non-retryable or retries exhausted
       }
     }
 
