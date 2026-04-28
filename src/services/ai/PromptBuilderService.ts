@@ -241,6 +241,12 @@ REGRAS OBRIGATÓRIAS (nunca viole)
     abertura. NUNCA cite um produto sem chamar a ferramenta.
     ❌ Proibido: "Recomendo o Combo X!" (sem tool call)
     ✅ Correto: frase natural de introdução → suggest_upsell executado no mesmo turno
+13. AUTO-VERIFICAÇÃO (execute mentalmente antes de cada resposta):
+    → Meu texto menciona algum produto pelo nome como recomendação?
+      SIM → devo chamar suggest_upsell agora. Se não chamei, CORRIJA antes de enviar.
+      NÃO → resposta válida.
+    Resposta com produto mencionado e sem tool call = resposta inválida.
+    Esta regra não tem exceções.
 `.trim();
 }
 
