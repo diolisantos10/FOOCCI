@@ -74,31 +74,36 @@ export interface CartSnapshot {
 }
 
 export interface ScenarioResult {
-  id: string;
-  name: string;
-  description: string;
+  id:               string;
+  name:             string;
+  description:      string;
   expectedBehavior: string;
-  status: "passed" | "warning" | "failed";
-  score: number;
-  transcript: TurnTranscript[];
-  checks: CheckResult[];
-  issues: string[];
-  salesMetrics: SalesMetrics;
-  cartEvolution: CartSnapshot[]; // cart state after each AI turn
-  totalTurns: number;
+  status:           "passed" | "warning" | "failed";
+  score:            number;
+  transcript:       TurnTranscript[];
+  checks:           CheckResult[];
+  issues:           string[];
+  salesMetrics:     SalesMetrics;
+  cartEvolution:    CartSnapshot[];
+  totalTurns:       number;
+  abandoned:        boolean;        // true when conversation ended without confirm_order
+  salesWeaknesses:  string[];       // commercial observations beyond pass/fail checks
 }
 
 export interface SimulationReport {
-  overallScore: number;
-  scenarios: ScenarioResult[];
-  criticalBugs: string[];
-  topFixes: string[];
-  safeToTest: boolean;
-  ranAt: string;
-  restaurantName: string;
-  avgTicket:       number;
-  avgItems:        number;
-  conversionRate:  number;
+  overallScore:        number;
+  scenarios:           ScenarioResult[];
+  criticalBugs:        string[];
+  topFixes:            string[];
+  safeToTest:          boolean;
+  ranAt:               string;
+  restaurantName:      string;
+  avgTicket:           number;
+  avgItems:            number;
+  conversionRate:      number;
+  avgTurns:            number;
+  abandonmentRate:     number;
+  upsellAcceptanceRate: number;
 }
 
 type ProgressCallback = (info: { current: number; total: number; scenarioName: string }) => void;
@@ -611,6 +616,42 @@ function buildGoalContextAddendum(
 
 // ─── evaluation ───────────────────────────────────────────────
 
+function computeSalesWeaknesses(
+  metrics: SalesMetrics,
+  totalTurns: number,
+): string[] {
+  const w: string[] = [];
+
+  if (!metrics.conversionSuccess) {
+    w.push("Pedido não finalizado — cliente não converteu");
+  }
+
+  if (metrics.finalCartValue === 0 && totalTurns >= 4) {
+    w.push("Carrinho vazio após vários turnos — IA não conseguiu iniciar o pedido");
+  }
+
+  if (metrics.upsellAttempts === 0 && totalTurns >= 3) {
+    w.push("Nenhuma sugestão de upsell oferecida durante toda a conversa");
+  }
+
+  if (metrics.upsellAttempts > 0 && metrics.acceptedUpsellsOnly === 0) {
+    w.push("Upsell foi tentado mas nenhum foi aceito — sugestões podem estar fora de contexto");
+  }
+
+  const acceptRate = metrics.upsellAttempts > 0
+    ? metrics.acceptedUpsellsOnly / metrics.upsellAttempts
+    : null;
+  if (acceptRate !== null && acceptRate < 0.3 && metrics.upsellAttempts >= 2) {
+    w.push(`Baixa taxa de aceitação de upsell: ${(acceptRate * 100).toFixed(0)}%`);
+  }
+
+  if (totalTurns >= 10 && !metrics.conversionSuccess) {
+    w.push("Conversa muito longa sem conclusão — IA não conduziu para checkout a tempo");
+  }
+
+  return w;
+}
+
 function evaluateScenario(
   scenario: ScenarioDef,
   transcript: TurnTranscript[],
@@ -636,7 +677,9 @@ function evaluateScenario(
   const status: ScenarioResult["status"] =
     score >= 7 ? "passed" : score >= 5 ? "warning" : "failed";
 
-  const totalTurns = transcript.filter((t) => t.role === "customer").length;
+  const totalTurns      = transcript.filter((t) => t.role === "customer").length;
+  const abandoned       = !salesMetrics.conversionSuccess;
+  const salesWeaknesses = computeSalesWeaknesses(salesMetrics, totalTurns);
 
   return {
     id:               scenario.id,
@@ -651,6 +694,8 @@ function evaluateScenario(
     salesMetrics,
     cartEvolution,
     totalTurns,
+    abandoned,
+    salesWeaknesses,
   };
 }
 
@@ -834,7 +879,13 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
   const n = results.length || 1;
   const avgTicket      = results.reduce((s, r) => s + r.salesMetrics.finalCartValue, 0) / n;
   const avgItems       = results.reduce((s, r) => s + r.salesMetrics.totalItems,     0) / n;
-  const conversionRate = results.filter((r) => r.salesMetrics.conversionSuccess).length / n;
+  const avgTurns       = results.reduce((s, r) => s + r.totalTurns,                  0) / n;
+  const conversionRate = results.filter((r) =>  r.salesMetrics.conversionSuccess).length / n;
+  const abandonmentRate = results.filter((r) => r.abandoned).length / n;
+
+  const totalUpsellAttempts = results.reduce((s, r) => s + r.salesMetrics.upsellAttempts,      0);
+  const totalUpsellAccepted = results.reduce((s, r) => s + r.salesMetrics.acceptedUpsellsOnly, 0);
+  const upsellAcceptanceRate = totalUpsellAttempts > 0 ? totalUpsellAccepted / totalUpsellAttempts : 0;
 
   return {
     overallScore,
@@ -847,6 +898,9 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
     avgTicket,
     avgItems,
     conversionRate,
+    avgTurns,
+    abandonmentRate,
+    upsellAcceptanceRate,
   };
 }
 
@@ -865,10 +919,12 @@ function buildErrorResult(scenario: ScenarioDef, error: string): ScenarioResult 
       passed: false,
       detail: `Erro durante simulação: ${error}`,
     })),
-    issues:        [`Erro de execução: ${error}`],
-    salesMetrics:  emptyMetrics(),
-    cartEvolution: [],
-    totalTurns:    0,
+    issues:          [`Erro de execução: ${error}`],
+    salesMetrics:    emptyMetrics(),
+    cartEvolution:   [],
+    totalTurns:      0,
+    abandoned:       true,
+    salesWeaknesses: [`Simulação interrompida por erro: ${error}`],
   };
 }
 
