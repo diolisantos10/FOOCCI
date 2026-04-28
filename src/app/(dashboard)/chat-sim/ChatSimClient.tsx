@@ -198,9 +198,11 @@ interface Props {
   restaurantName: string;
   restaurantSlug: string;
   pedidoUrl:      string;
+  /** When true: hides the internal top bar and side panel (used by TestAIHubClient). */
+  embedded?:      boolean;
 }
 
-export function ChatSimClient({ restaurantName, restaurantSlug, pedidoUrl }: Props) {
+export function ChatSimClient({ restaurantName, restaurantSlug, pedidoUrl, embedded = false }: Props) {
   const [session,    setSession]    = useState<Session | null>(null);
   const [messages,   setMessages]   = useState<ChatMessage[]>([]);
   const [cart,       setCart]       = useState<CartState>({ value: 0, items: 0 });
@@ -322,13 +324,13 @@ export function ChatSimClient({ restaurantName, restaurantSlug, pedidoUrl }: Pro
     }
   }
 
-  // Chat window width based on view mode
-  const chatWidth = viewMode === "mobile" ? "max-w-sm" : "max-w-full";
+  // Chat window width: full when embedded (hub controls the view mode), otherwise based on local toggle
+  const chatWidth = embedded ? "max-w-full" : (viewMode === "mobile" ? "max-w-sm" : "max-w-full");
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-gray-50">
-      {/* ── Top bar ── */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-2.5 shadow-sm">
+      {/* ── Top bar — hidden when embedded inside TestAIHubClient ── */}
+      {!embedded && <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-2.5 shadow-sm">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900 truncate">Chat Sim</p>
           <p className="text-[11px] text-gray-400 truncate">{restaurantName}</p>
@@ -378,7 +380,7 @@ export function ChatSimClient({ restaurantName, restaurantSlug, pedidoUrl }: Pro
         >
           {starting ? "Criando..." : "Nova sessão"}
         </button>
-      </div>
+      </div>}
 
       {/* ── Body ── */}
       <div className="flex flex-1 gap-0 overflow-hidden">
@@ -511,8 +513,8 @@ export function ChatSimClient({ restaurantName, restaurantSlug, pedidoUrl }: Pro
           </div>
         </div>
 
-        {/* ── Side panel ── */}
-        <div
+        {/* ── Side panel — hidden when embedded inside TestAIHubClient ── */}
+        {!embedded && <div
           className={`shrink-0 w-64 flex-col gap-3 overflow-y-auto border-l border-gray-200 bg-white p-3 lg:flex ${
             sideOpen ? "flex absolute right-0 top-[56px] bottom-0 z-20 shadow-lg" : "hidden"
           }`}
@@ -545,7 +547,7 @@ export function ChatSimClient({ restaurantName, restaurantSlug, pedidoUrl }: Pro
               Nenhuma mensagem é enviada ao WhatsApp.
             </p>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );
