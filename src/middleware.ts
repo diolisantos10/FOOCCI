@@ -30,6 +30,7 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/pedido(\/.*)?$/,            // Public AI ordering experience API
   /^\/api\/payments\/stone\/webhook$/, // Stone webhook (public, verified by HMAC)
   /^\/api\/media(\/.*)?$/,             // Public media (product images stored in DB)
+  /^\/api\/health$/,                   // Health check (post-deploy validation)
 ];
 
 function isPublicPath(pathname: string): boolean {
