@@ -421,15 +421,17 @@ function SalesMetricsRow({ metrics }: { metrics: SalesMetrics }) {
       value: metrics.totalItems > 0 ? String(metrics.totalItems) : "—",
     },
     {
-      label: "Upsells",
+      label: "Upsells aceitos",
       value: metrics.upsellAttempts > 0
-        ? `${metrics.acceptedSuggestions}/${metrics.upsellAttempts} (${acceptRate})`
+        ? `${metrics.acceptedUpsellsOnly}/${metrics.upsellAttempts} (${acceptRate})`
         : "—",
     },
     {
-      label: "Conversão",
-      value: metrics.conversionSuccess ? "✓ Sim" : "✗ Não",
-      highlight: metrics.conversionSuccess,
+      label: "Receita upsell",
+      value: metrics.upsellValueGenerated > 0
+        ? `R$ ${metrics.upsellValueGenerated.toFixed(2)}`
+        : "—",
+      highlight: metrics.upsellValueGenerated > 0,
     },
   ];
 
@@ -545,8 +547,9 @@ function downloadCSV(report: SimulationReport): void {
     "Ticket Final (R$)",
     "Itens",
     "Upsell Tentativas",
-    "Aceitos",
+    "Upsells Aceitos",
     "Taxa de Aceitação",
+    "Valor Gerado por Upsell (R$)",
     "Receita Score",
     "Loop Detectado",
     "Conversão",
@@ -574,11 +577,12 @@ function downloadCSV(report: SimulationReport): void {
       m.finalCartValue > 0 ? m.finalCartValue.toFixed(2) : "0.00",
       String(m.totalItems),
       String(m.upsellAttempts),
-      String(m.acceptedSuggestions),
+      String(m.acceptedUpsellsOnly),
       acceptRate,
+      m.upsellValueGenerated > 0 ? m.upsellValueGenerated.toFixed(2) : "0.00",
       revenueScore,
-      loopDetected            ? "Sim" : "Não",
-      m.conversionSuccess     ? "Sim" : "Não",
+      loopDetected        ? "Sim" : "Não",
+      m.conversionSuccess ? "Sim" : "Não",
       s.issues.join(" | "),
     ];
   });

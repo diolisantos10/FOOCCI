@@ -55,12 +55,14 @@ export interface TurnTranscript {
 }
 
 export interface SalesMetrics {
-  finalCartValue:      number;
-  totalItems:          number;
-  upsellAttempts:      number;
-  acceptedSuggestions: number;
-  rejectedSuggestions: number;
-  conversionSuccess:   boolean;
+  finalCartValue:       number;
+  totalItems:           number;
+  upsellAttempts:       number;
+  acceptedSuggestions:  number;
+  rejectedSuggestions:  number;
+  conversionSuccess:    boolean;
+  acceptedUpsellsOnly:  number;  // add_item calls that originated from suggest_upsell
+  upsellValueGenerated: number;  // price × qty for each accepted upsell item
 }
 
 export interface ScenarioResult {
@@ -286,7 +288,7 @@ async function runScenario(
   });
 
   const transcript: TurnTranscript[] = [];
-  const allToolCalls: Array<{ name: string; args: unknown; success: boolean; resultMsg: string }> = [];
+  const allToolCalls: TurnToolCall[] = [];
   let salesMetrics: SalesMetrics = emptyMetrics();
 
   try {
@@ -334,10 +336,11 @@ interface TurnParams {
 }
 
 interface TurnToolCall {
-  name:      string;
-  args:      unknown;
-  success:   boolean;
-  resultMsg: string;
+  name:       string;
+  args:       unknown;
+  success:    boolean;
+  resultMsg:  string;
+  resultData: unknown;
 }
 
 interface TurnResult {
@@ -482,10 +485,11 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
         try { args = JSON.parse(tc.function.arguments); } catch { /* keep raw */ }
 
         toolCallsMade.push({
-          name:      tc.function.name,
+          name:       tc.function.name,
           args,
-          success:   result.success,
-          resultMsg: result.message,
+          success:    result.success,
+          resultMsg:  result.message,
+          resultData: result.data ?? null,
         });
 
         loopMessages.push({
@@ -788,12 +792,14 @@ function buildErrorResult(scenario: ScenarioDef, error: string): ScenarioResult 
 
 function emptyMetrics(): SalesMetrics {
   return {
-    finalCartValue:      0,
-    totalItems:          0,
-    upsellAttempts:      0,
-    acceptedSuggestions: 0,
-    rejectedSuggestions: 0,
-    conversionSuccess:   false,
+    finalCartValue:       0,
+    totalItems:           0,
+    upsellAttempts:       0,
+    acceptedSuggestions:  0,
+    rejectedSuggestions:  0,
+    conversionSuccess:    false,
+    acceptedUpsellsOnly:  0,
+    upsellValueGenerated: 0,
   };
 }
 
@@ -820,11 +826,11 @@ async function getCartSnapshot(
 }
 
 function computeSalesMetrics(
-  toolCalls: Array<{ name: string; args: unknown; success: boolean }>,
+  toolCalls: Array<{ name: string; args: unknown; success: boolean; resultData: unknown }>,
   finalCartValue: number,
   totalItems: number,
 ): SalesMetrics {
-  // IDs successfully suggested via suggest_upsell
+  // IDs successfully shown via suggest_upsell
   const suggestedIds = new Set<string>();
   for (const tc of toolCalls) {
     if (tc.name === "suggest_upsell" && tc.success) {
@@ -835,18 +841,27 @@ function computeSalesMetrics(
 
   const upsellAttempts = suggestedIds.size;
 
-  // Accepted = add_item that matches a previously suggested ID
-  const acceptedSuggestions = toolCalls.filter(
+  // add_item calls that originated from a prior suggest_upsell
+  const acceptedUpsellCalls = toolCalls.filter(
     (tc) =>
       tc.name === "add_item" &&
       tc.success &&
-      suggestedIds.has(
-        (tc.args as Record<string, unknown>)?.menuItemId as string,
-      ),
-  ).length;
+      suggestedIds.has((tc.args as Record<string, unknown>)?.menuItemId as string),
+  );
 
-  const rejectedSuggestions = Math.max(0, upsellAttempts - acceptedSuggestions);
-  const conversionSuccess    = toolCalls.some(
+  const acceptedUpsellsOnly  = acceptedUpsellCalls.length;
+  const acceptedSuggestions  = acceptedUpsellsOnly; // same — for report compatibility
+
+  // Value generated exclusively by accepted upsell items (price × qty from result.data)
+  const upsellValueGenerated = acceptedUpsellCalls.reduce((sum, tc) => {
+    const d = tc.resultData as Record<string, unknown> | null;
+    const price = Number(d?.price ?? 0);
+    const qty   = Number(d?.quantity ?? 1);
+    return sum + price * qty;
+  }, 0);
+
+  const rejectedSuggestions = Math.max(0, upsellAttempts - acceptedUpsellsOnly);
+  const conversionSuccess   = toolCalls.some(
     (tc) => tc.name === "confirm_order" && tc.success,
   );
 
@@ -857,6 +872,8 @@ function computeSalesMetrics(
     acceptedSuggestions,
     rejectedSuggestions,
     conversionSuccess,
+    acceptedUpsellsOnly,
+    upsellValueGenerated,
   };
 }
 
