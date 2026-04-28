@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { SimulationReport, ScenarioResult, CheckResult } from "@/services/ai/AISimulatorService";
+import type { SimulationReport, ScenarioResult, CheckResult, SalesMetrics } from "@/services/ai/AISimulatorService";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -235,6 +235,28 @@ function SummaryCard({ report }: { report: SimulationReport }) {
         </div>
       </div>
 
+      {/* Global sales stats */}
+      <div className="grid grid-cols-3 gap-3 pt-1 border-t border-gray-100">
+        <div className="text-center">
+          <p className="text-xs text-gray-400 mb-0.5">Ticket médio</p>
+          <p className="text-lg font-bold text-gray-800">
+            {report.avgTicket > 0 ? `R$ ${report.avgTicket.toFixed(2)}` : "—"}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs text-gray-400 mb-0.5">Itens médios</p>
+          <p className="text-lg font-bold text-gray-800">
+            {report.avgItems > 0 ? report.avgItems.toFixed(1) : "—"}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs text-gray-400 mb-0.5">Taxa de conversão</p>
+          <p className="text-lg font-bold text-gray-800">
+            {(report.conversionRate * 100).toFixed(0)}%
+          </p>
+        </div>
+      </div>
+
       {/* Top fixes */}
       {report.topFixes.length > 0 && (
         <div>
@@ -316,8 +338,11 @@ function ScenarioCard({
       {isExpanded && (
         <div className="border-t border-inherit px-4 pb-4 space-y-4">
 
+          {/* Sales metrics strip */}
+          <SalesMetricsRow metrics={result.salesMetrics} />
+
           {/* Expected behavior */}
-          <div className="pt-3">
+          <div>
             <p className="text-xs text-gray-500 font-medium mb-1">Comportamento esperado</p>
             <p className="text-sm text-gray-700">{result.expectedBehavior}</p>
           </div>
@@ -375,6 +400,49 @@ function CheckRow({ check }: { check: CheckResult }) {
         </span>
         <span className="text-gray-400 ml-1">— {check.detail}</span>
       </div>
+    </div>
+  );
+}
+
+// ─── sales metrics row ────────────────────────────────────────
+
+function SalesMetricsRow({ metrics }: { metrics: SalesMetrics }) {
+  const acceptRate = metrics.upsellAttempts > 0
+    ? ((metrics.acceptedSuggestions / metrics.upsellAttempts) * 100).toFixed(0) + "%"
+    : "—";
+
+  const items: Array<{ label: string; value: string; highlight?: boolean }> = [
+    {
+      label: "Ticket final",
+      value: metrics.finalCartValue > 0 ? `R$ ${metrics.finalCartValue.toFixed(2)}` : "—",
+    },
+    {
+      label: "Itens",
+      value: metrics.totalItems > 0 ? String(metrics.totalItems) : "—",
+    },
+    {
+      label: "Upsells",
+      value: metrics.upsellAttempts > 0
+        ? `${metrics.acceptedSuggestions}/${metrics.upsellAttempts} (${acceptRate})`
+        : "—",
+    },
+    {
+      label: "Conversão",
+      value: metrics.conversionSuccess ? "✓ Sim" : "✗ Não",
+      highlight: metrics.conversionSuccess,
+    },
+  ];
+
+  return (
+    <div className="pt-3 grid grid-cols-4 gap-2">
+      {items.map((item) => (
+        <div key={item.label} className="bg-gray-50 rounded-lg px-3 py-2 text-center">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">{item.label}</p>
+          <p className={`text-sm font-semibold ${item.highlight ? "text-green-600" : "text-gray-700"}`}>
+            {item.value}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -474,21 +542,27 @@ function downloadCSV(report: SimulationReport): void {
     "Cenário",
     "Score",
     "Status",
+    "Ticket Final (R$)",
+    "Itens",
     "Upsell Tentativas",
+    "Aceitos",
+    "Taxa de Aceitação",
+    "Receita Score",
     "Loop Detectado",
-    "Checkout Executado",
+    "Conversão",
     "Problemas",
   ];
 
   const rows = report.scenarios.map((s) => {
-    const allToolCalls = s.transcript.flatMap((t) => t.toolCalls);
-    const upsellAttempts = allToolCalls.filter((tc) => tc.name === "suggest_upsell").length;
-    const loopCheck      = s.checks.find((c) => c.type === "no_loop");
-    const loopDetected   = loopCheck ? !loopCheck.passed : false;
-    const checkoutCheck  = s.checks.find((c) => c.type === "checkout_transition");
-    const checkoutOk     = checkoutCheck
-      ? checkoutCheck.passed
-      : allToolCalls.some((tc) => tc.name === "confirm_order");
+    const m           = s.salesMetrics;
+    const acceptRate  = m.upsellAttempts > 0
+      ? ((m.acceptedSuggestions / m.upsellAttempts) * 100).toFixed(0) + "%"
+      : "0%";
+    const revenueScore = report.avgTicket > 0
+      ? (m.finalCartValue / report.avgTicket * 10).toFixed(1)
+      : "—";
+    const loopCheck  = s.checks.find((c) => c.type === "no_loop");
+    const loopDetected = loopCheck ? !loopCheck.passed : false;
     const statusLabel =
       s.status === "passed" ? "Aprovado" :
       s.status === "warning" ? "Atenção"  : "Falha";
@@ -497,9 +571,14 @@ function downloadCSV(report: SimulationReport): void {
       s.name,
       s.score.toFixed(1),
       statusLabel,
-      String(upsellAttempts),
-      loopDetected ? "Sim" : "Não",
-      checkoutOk   ? "Sim" : "Não",
+      m.finalCartValue > 0 ? m.finalCartValue.toFixed(2) : "0.00",
+      String(m.totalItems),
+      String(m.upsellAttempts),
+      String(m.acceptedSuggestions),
+      acceptRate,
+      revenueScore,
+      loopDetected            ? "Sim" : "Não",
+      m.conversionSuccess     ? "Sim" : "Não",
       s.issues.join(" | "),
     ];
   });

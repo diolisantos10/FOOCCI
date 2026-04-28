@@ -54,6 +54,15 @@ export interface TurnTranscript {
   toolCalls: Array<{ name: string; success: boolean; detail: string }>;
 }
 
+export interface SalesMetrics {
+  finalCartValue:      number;
+  totalItems:          number;
+  upsellAttempts:      number;
+  acceptedSuggestions: number;
+  rejectedSuggestions: number;
+  conversionSuccess:   boolean;
+}
+
 export interface ScenarioResult {
   id: string;
   name: string;
@@ -64,6 +73,7 @@ export interface ScenarioResult {
   transcript: TurnTranscript[];
   checks: CheckResult[];
   issues: string[];
+  salesMetrics: SalesMetrics;
 }
 
 export interface SimulationReport {
@@ -74,6 +84,9 @@ export interface SimulationReport {
   safeToTest: boolean;
   ranAt: string;
   restaurantName: string;
+  avgTicket:       number;
+  avgItems:        number;
+  conversionRate:  number;
 }
 
 type ProgressCallback = (info: { current: number; total: number; scenarioName: string }) => void;
@@ -274,6 +287,7 @@ async function runScenario(
 
   const transcript: TurnTranscript[] = [];
   const allToolCalls: Array<{ name: string; args: unknown; success: boolean; resultMsg: string }> = [];
+  let salesMetrics: SalesMetrics = emptyMetrics();
 
   try {
     for (const turn of scenario.turns) {
@@ -299,11 +313,15 @@ async function runScenario(
         })),
       });
     }
+
+    // Capture real cart state before sandbox is deleted
+    const cart = await getCartSnapshot(customer.id, restaurantId);
+    salesMetrics = computeSalesMetrics(allToolCalls, cart.value, cart.itemCount);
   } finally {
     await cleanupSimulation(customer.id, conversation.id);
   }
 
-  return evaluateScenario(scenario, transcript, allToolCalls, menu);
+  return evaluateScenario(scenario, transcript, allToolCalls, menu, salesMetrics);
 }
 
 // ─── turn executor ────────────────────────────────────────────
@@ -530,6 +548,7 @@ function evaluateScenario(
   transcript: TurnTranscript[],
   toolCalls: Array<{ name: string; args: unknown; success: boolean; resultMsg: string }>,
   menu: Array<{ id: string; name: string; ingredients: string | null }>,
+  salesMetrics: SalesMetrics,
 ): ScenarioResult {
   const lastAiTurn   = [...transcript].reverse().find((t) => t.role === "ai");
   const lastAiText   = lastAiTurn?.content ?? "";
@@ -557,6 +576,7 @@ function evaluateScenario(
     transcript,
     checks,
     issues,
+    salesMetrics,
   };
 }
 
@@ -725,6 +745,11 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
     !results.some((r) => r.id === "vegetariano" && r.status === "failed") &&
     !results.some((r) => r.id === "sem_peixe_cru" && r.status === "failed");
 
+  const n = results.length || 1;
+  const avgTicket      = results.reduce((s, r) => s + r.salesMetrics.finalCartValue, 0) / n;
+  const avgItems       = results.reduce((s, r) => s + r.salesMetrics.totalItems,     0) / n;
+  const conversionRate = results.filter((r) => r.salesMetrics.conversionSuccess).length / n;
+
   return {
     overallScore,
     scenarios: results,
@@ -733,6 +758,9 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
     safeToTest,
     ranAt: new Date().toISOString(),
     restaurantName,
+    avgTicket,
+    avgItems,
+    conversionRate,
   };
 }
 
@@ -751,7 +779,84 @@ function buildErrorResult(scenario: ScenarioDef, error: string): ScenarioResult 
       passed: false,
       detail: `Erro durante simulação: ${error}`,
     })),
-    issues: [`Erro de execução: ${error}`],
+    issues:       [`Erro de execução: ${error}`],
+    salesMetrics: emptyMetrics(),
+  };
+}
+
+// ─── sales metrics helpers ────────────────────────────────────
+
+function emptyMetrics(): SalesMetrics {
+  return {
+    finalCartValue:      0,
+    totalItems:          0,
+    upsellAttempts:      0,
+    acceptedSuggestions: 0,
+    rejectedSuggestions: 0,
+    conversionSuccess:   false,
+  };
+}
+
+async function getCartSnapshot(
+  customerId: string,
+  restaurantId: string,
+): Promise<{ value: number; itemCount: number }> {
+  try {
+    const draft = await prisma.orderDraft.findFirst({
+      where:   { customerId, restaurantId, status: "OPEN" },
+      orderBy: { createdAt: "desc" },
+      select:  {
+        subtotal: true,
+        items:    { select: { quantity: true } },
+      },
+    });
+    return {
+      value:     Number(draft?.subtotal ?? 0),
+      itemCount: draft?.items.reduce((s, i) => s + i.quantity, 0) ?? 0,
+    };
+  } catch {
+    return { value: 0, itemCount: 0 };
+  }
+}
+
+function computeSalesMetrics(
+  toolCalls: Array<{ name: string; args: unknown; success: boolean }>,
+  finalCartValue: number,
+  totalItems: number,
+): SalesMetrics {
+  // IDs successfully suggested via suggest_upsell
+  const suggestedIds = new Set<string>();
+  for (const tc of toolCalls) {
+    if (tc.name === "suggest_upsell" && tc.success) {
+      const id = (tc.args as Record<string, unknown>)?.menuItemId as string | undefined;
+      if (id) suggestedIds.add(id);
+    }
+  }
+
+  const upsellAttempts = suggestedIds.size;
+
+  // Accepted = add_item that matches a previously suggested ID
+  const acceptedSuggestions = toolCalls.filter(
+    (tc) =>
+      tc.name === "add_item" &&
+      tc.success &&
+      suggestedIds.has(
+        (tc.args as Record<string, unknown>)?.menuItemId as string,
+      ),
+  ).length;
+
+  const rejectedSuggestions = Math.max(0, upsellAttempts - acceptedSuggestions);
+  const conversionSuccess    = toolCalls.some(
+    (tc) => tc.name === "confirm_order" && tc.success,
+  );
+
+  return {
+    finalCartValue,
+    totalItems,
+    upsellAttempts,
+    acceptedSuggestions,
+    rejectedSuggestions,
+    conversionSuccess,
   };
 }
 
