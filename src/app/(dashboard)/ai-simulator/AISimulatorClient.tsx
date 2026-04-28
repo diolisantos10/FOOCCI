@@ -219,8 +219,8 @@ export function AISimulatorClient() {
 // ─── summary card ─────────────────────────────────────────────
 
 function SummaryCard({ report }: { report: SimulationReport }) {
-  const scoreColor = report.overallScore >= 7
-    ? "text-green-600" : report.overallScore >= 5
+  const scoreColor = report.overallScore >= 70
+    ? "text-green-600" : report.overallScore >= 50
     ? "text-yellow-600" : "text-red-600";
 
   const safeBadge = report.safeToTest
@@ -281,7 +281,7 @@ function SummaryCard({ report }: { report: SimulationReport }) {
         <div>
           <p className="text-xs text-gray-500 uppercase tracking-wide">Score geral</p>
           <p className={`text-4xl font-bold ${scoreColor}`}>
-            {report.overallScore.toFixed(1)}<span className="text-xl text-gray-400"> / 10</span>
+            {report.overallScore.toFixed(0)}<span className="text-xl text-gray-400"> / 100</span>
           </p>
         </div>
         <div className={`px-4 py-2 rounded-lg border text-sm font-semibold flex items-center gap-2 ${safeBadge.bg}`}>
@@ -373,7 +373,7 @@ function ScenarioCard({
         </div>
         <div className="flex items-center gap-3">
           <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusConfig.badge}`}>
-            {result.score.toFixed(1)} / 10
+            {result.score.toFixed(0)} / 100
           </span>
           <span className="text-gray-400 text-sm">{isExpanded ? "▲" : "▼"}</span>
         </div>
@@ -639,7 +639,7 @@ function downloadSummary(report: SimulationReport): void {
     "└─────────────────────────────────────────────────────┘",
     "",
     "─── MÉTRICAS GERAIS ──────────────────────────────────",
-    `  Score geral       : ${report.overallScore.toFixed(1)} / 10`,
+    `  Score geral       : ${report.overallScore.toFixed(0)} / 100`,
     `  Cenários aprovados: ${passed} / ${report.scenarios.length}`,
     `  Cenários atenção  : ${warned}`,
     `  Cenários com falha: ${failed}`,
@@ -661,7 +661,7 @@ function downloadSummary(report: SimulationReport): void {
   lines.push("─── PIORES CENÁRIOS ──────────────────────────────────");
   worst.forEach((s, i) => {
     const icon = s.status === "failed" ? "✗" : "⚠";
-    lines.push(`  ${i + 1}. ${icon} [${s.score.toFixed(1)}/10] ${s.name}`);
+    lines.push(`  ${i + 1}. ${icon} [${s.score.toFixed(0)}/100] ${s.name}`);
     if (s.salesWeaknesses.length > 0) {
       lines.push(`       → ${s.salesWeaknesses[0]}`);
     }
@@ -670,7 +670,7 @@ function downloadSummary(report: SimulationReport): void {
 
   lines.push("─── MELHORES CENÁRIOS ────────────────────────────────");
   best.forEach((s, i) => {
-    lines.push(`  ${i + 1}. ✓ [${s.score.toFixed(1)}/10] ${s.name}`);
+    lines.push(`  ${i + 1}. ✓ [${s.score.toFixed(0)}/100] ${s.name}`);
     if (s.salesMetrics.conversionSuccess) {
       lines.push(`       → Pedido confirmado em ${s.totalTurns} turnos — R$ ${s.salesMetrics.finalCartValue.toFixed(2)}`);
     }
@@ -686,7 +686,7 @@ function downloadSummary(report: SimulationReport): void {
   lines.push("─── DETALHES POR CENÁRIO ─────────────────────────────");
   report.scenarios.forEach((s) => {
     const icon = s.status === "passed" ? "✓" : s.status === "warning" ? "⚠" : "✗";
-    lines.push(`${icon} [${s.score.toFixed(1)}/10] ${s.name}`);
+    lines.push(`${icon} [${s.score.toFixed(0)}/100] ${s.name}`);
     lines.push(`   ${s.description}`);
     lines.push(`   Turnos: ${s.totalTurns} | Ticket: R$ ${s.salesMetrics.finalCartValue.toFixed(2)} | ${s.abandoned ? "Abandonou" : "Converteu"}`);
     if (s.issues.length > 0) {

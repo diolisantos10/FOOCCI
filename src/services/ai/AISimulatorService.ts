@@ -30,6 +30,7 @@ import type OpenAI from "openai";
 import { generateScenarios } from "./ScenarioGenerator";
 
 const MAX_TOOL_ITERATIONS = 6;
+const MIN_SIM_TURNS       = 6;
 
 // ─── public types ─────────────────────────────────────────────
 
@@ -82,15 +83,16 @@ export interface ScenarioResult {
   description:      string;
   expectedBehavior: string;
   status:           "passed" | "warning" | "failed";
-  score:            number;
+  score:            number;         // 0–100
   transcript:       TurnTranscript[];
   checks:           CheckResult[];
   issues:           string[];
+  suggestions:      string[];       // improvement suggestions (structured report field)
   salesMetrics:     SalesMetrics;
   cartEvolution:    CartSnapshot[];
   totalTurns:       number;
   abandoned:        boolean;        // true when conversation ended without confirm_order
-  salesWeaknesses:  string[];       // commercial observations beyond pass/fail checks
+  salesWeaknesses:  string[];       // alias for suggestions (legacy field)
 }
 
 export interface SimulationReport {
@@ -121,7 +123,7 @@ export interface BehaviorProfile {
   intent:    "fome" | "curioso" | "direto" | "indeciso";
   budget:    "baixo" | "médio" | "alto";
   groupSize: "solo" | "dupla" | "família";
-  behavior:  "aceita_upsell" | "recusa_upsell" | "ignora" | "muda_de_ideia";
+  behavior:  "aceita_upsell" | "recusa_upsell" | "ignora" | "muda_de_ideia" | "impaciente";
 }
 
 export interface ScenarioDef {
@@ -160,14 +162,16 @@ function initCustomerState(): CustomerState {
 
 // Message pools for simulated customer reactions
 const MSGS = {
-  accept:   ["ok, pode adicionar sim", "boa sugestão, pode colocar", "vou querer esse também", "pode incluir, gostei", "sim, quero esse"],
-  reject:   ["não, obrigado, tô bem assim", "dispensa, tá bom como tá", "não preciso de mais", "obrigado mas não"],
-  ignore:   ["aliás, vocês aceitam cartão?", "quanto tempo leva a entrega?", "tem promoção hoje?", "vocês têm embalagem pra viagem?"],
-  change:   ["na verdade espera, quero mudar o pedido", "esquece o que eu disse, quero outra coisa", "muda tudo, quero repensar", "me dá uma segunda opinião"],
-  continue: ["o que mais você recomenda?", "tem mais alguma coisa boa?", "e de bebida tem o quê?", "pode sugerir mais alguma coisa?"],
-  checkout: ["acho que é isso, pode fechar o pedido", "tô satisfeito, pode confirmar", "pode finalizar o pedido", "pronto, pode fechar"],
-  answer:   ["sim, pode ser", "isso mesmo", "qualquer coisa serve", "o que você recomendar tá ótimo", "pode mandar"],
-  abandon:  ["desculpa, vou pensar mais e volto depois", "na verdade vou deixar pra outra hora", "obrigado, mas por enquanto não"],
+  accept:      ["ok, pode adicionar sim", "boa sugestão, pode colocar", "vou querer esse também", "pode incluir, gostei", "sim, quero esse", "perfeito, bota aí", "pode sim, adorei a sugestão"],
+  reject:      ["não, obrigado, tô bem assim", "dispensa, tá bom como tá", "não preciso de mais", "obrigado mas não", "pode deixar, já tá ótimo", "não vai precisar, valeu"],
+  ignore:      ["aliás, vocês aceitam cartão?", "quanto tempo leva a entrega?", "tem promoção hoje?", "vocês têm embalagem pra viagem?", "tem desconto pra pedido acima de certo valor?", "entregam no meu bairro?", "tem programa de fidelidade?"],
+  change:      ["na verdade espera, quero mudar o pedido", "esquece o que eu disse, quero outra coisa", "muda tudo, quero repensar", "me dá uma segunda opinião", "tô achando que vou querer outra coisa", "me mostra mais opções antes de confirmar"],
+  continue:    ["o que mais você recomenda?", "tem mais alguma coisa boa?", "e de bebida tem o quê?", "pode sugerir mais alguma coisa?", "o que vai bem com o que eu escolhi?", "tem alguma coisa especial hoje?"],
+  checkout:    ["acho que é isso, pode fechar o pedido", "tô satisfeito, pode confirmar", "pode finalizar o pedido", "pronto, pode fechar", "tá bom assim, fecha pra mim", "pode confirmar tudo"],
+  answer:      ["sim, pode ser", "isso mesmo", "qualquer coisa serve", "o que você recomendar tá ótimo", "pode mandar", "tá bom assim", "por favor"],
+  abandon:     ["desculpa, vou pensar mais e volto depois", "na verdade vou deixar pra outra hora", "obrigado, mas por enquanto não", "vou passar mais tarde", "deixa pra amanhã"],
+  hurry:       ["pode confirmar logo?", "tô com pressa, fecha o pedido", "rápido por favor, vai confirmar?", "fecha logo, tô sem tempo", "pode agilizar?"],
+  postConfirm: ["ótimo! em quanto tempo chega?", "confirmado, qual o prazo de entrega?", "perfeito! vocês entregam aqui na região?", "massa! vou aguardar então"],
 };
 
 function pickMsg(pool: string[]): string {
@@ -188,8 +192,13 @@ function nextCustomerMessage(
   lastAiText: string,
   lastToolCalls: TurnToolCall[],
 ): string | null {
-  // AI confirmed the order → end conversation
-  if (lastToolCalls.some((tc) => tc.name === "confirm_order" && tc.success)) return null;
+  const confirmed = lastToolCalls.some((tc) => tc.name === "confirm_order" && tc.success);
+
+  // Order confirmed — if min turns reached, end; otherwise customer asks a post-confirm question
+  if (confirmed) {
+    if (state.turnCount >= MIN_SIM_TURNS) return null;
+    return pickMsg(MSGS.postConfirm);
+  }
 
   // Hard cap
   if (state.turnCount >= MAX_SIM_TURNS) return null;
@@ -200,6 +209,14 @@ function nextCustomerMessage(
 
   const hadUpsell = lastToolCalls.some((tc) => tc.name === "suggest_upsell" && tc.success);
   if (hadUpsell) state.upsellsOffered++;
+
+  // Impatient customer: push hard to checkout from turn 3
+  if (profile.behavior === "impaciente") {
+    if (state.turnCount >= 3) {
+      return state.hasOrdered ? pickMsg(MSGS.hurry) : pickMsg(MSGS.checkout);
+    }
+    return addedItem ? pickMsg(MSGS.hurry) : pickMsg(MSGS.continue);
+  }
 
   // Late-game: push hard to a conclusion after turn 9
   if (state.turnCount >= 9) {
@@ -217,14 +234,14 @@ function nextCustomerMessage(
         return pickMsg(MSGS.checkout);
 
       case "recusa_upsell":
-        if (state.upsellsRejected < 1) {
+        if (state.upsellsRejected < 2) {
           state.upsellsRejected++;
           return pickMsg(MSGS.reject);
         }
         return pickMsg(MSGS.checkout);
 
       case "ignora":
-        if (state.ignoreCount < 2) {
+        if (state.ignoreCount < 3) {
           state.ignoreCount++;
           return pickMsg(MSGS.ignore);
         }
@@ -236,19 +253,22 @@ function nextCustomerMessage(
           return pickMsg(MSGS.change);
         }
         return state.hasOrdered ? pickMsg(MSGS.checkout) : pickMsg(MSGS.continue);
+
+      case "impaciente":
+        return pickMsg(MSGS.hurry);
     }
   }
 
   // AI added an item but no upsell — continue or close depending on turn depth
   if (addedItem) {
-    return state.turnCount < 5 ? pickMsg(MSGS.continue) : pickMsg(MSGS.checkout);
+    return state.turnCount < MIN_SIM_TURNS ? pickMsg(MSGS.continue) : pickMsg(MSGS.checkout);
   }
 
   // AI asked a question — give a cooperative answer
   if (lastAiText.includes("?")) return pickMsg(MSGS.answer);
 
   // Default: keep the conversation moving
-  return state.hasOrdered && state.turnCount >= 4
+  return state.hasOrdered && state.turnCount >= MIN_SIM_TURNS
     ? pickMsg(MSGS.checkout)
     : pickMsg(MSGS.continue);
 }
@@ -685,11 +705,21 @@ function evaluateScenario(
   }
 
   const passedCount = checks.filter((c) => c.passed).length;
-  const score       = checks.length > 0 ? (passedCount / checks.length) * 10 : 10;
-  const status: ScenarioResult["status"] =
-    score >= 7 ? "passed" : score >= 5 ? "warning" : "failed";
+  const checkRate   = checks.length > 0 ? passedCount / checks.length : 1;
+  const totalTurns  = transcript.filter((t) => t.role === "customer").length;
 
-  const totalTurns      = transcript.filter((t) => t.role === "customer").length;
+  // Multi-factor score 0–100:
+  // checks 60% + conversion 20% + upsell 10% + efficiency 10% − error penalty
+  let score = checkRate * 60;
+  if (salesMetrics.conversionSuccess)        score += 20;
+  if (salesMetrics.acceptedUpsellsOnly > 0)  score += 10;
+  if (salesMetrics.conversionSuccess && totalTurns <= 8) score += 10;
+  score -= Math.min(20, salesMetrics.errorCount * 5);
+  score  = Math.round(Math.max(0, Math.min(100, score)));
+
+  const status: ScenarioResult["status"] =
+    score >= 70 ? "passed" : score >= 50 ? "warning" : "failed";
+
   const abandoned       = !salesMetrics.conversionSuccess;
   const salesWeaknesses = computeSalesWeaknesses(salesMetrics, totalTurns);
 
@@ -703,6 +733,7 @@ function evaluateScenario(
     transcript,
     checks,
     issues,
+    suggestions:      salesWeaknesses,
     salesMetrics,
     cartEvolution,
     totalTurns,
@@ -880,7 +911,7 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
     .map(([label, count]) => `${label} (${count} cenário${count > 1 ? "s" : ""})`);
 
   const safeToTest =
-    overallScore >= 6 &&
+    overallScore >= 60 &&
     results.every((r) => r.status !== "failed") &&
     !results.some(
       (r) =>
@@ -941,6 +972,7 @@ function buildErrorResult(scenario: ScenarioDef, error: string): ScenarioResult 
       detail: `Erro durante simulação: ${error}`,
     })),
     issues:          [`Erro de execução: ${error}`],
+    suggestions:     [`Simulação interrompida por erro: ${error}`],
     salesMetrics:    emptyMetrics(),
     cartEvolution:   [],
     totalTurns:      0,
