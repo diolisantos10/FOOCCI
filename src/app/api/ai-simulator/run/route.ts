@@ -1,7 +1,8 @@
 /**
  * POST /api/ai-simulator/run
  *
- * Starts a 20-scenario simulation run as a detached background task.
+ * Starts a simulation run as a detached background task.
+ * Accepts optional { scenarioCount: number } body (min 1, max 50, default 10).
  * Streams live progress as Server-Sent Events while the client is connected.
  * The job continues running even if the client disconnects — results are stored
  * in SimulationJobStore and accessible via GET /api/ai-simulator/status.
@@ -28,6 +29,18 @@ export async function POST(req: NextRequest) {
   const { restaurantId } = ctx;
   const encoder = new TextEncoder();
 
+  // Parse and validate scenarioCount (min 1, max 50, default 10)
+  let scenarioCount = 10;
+  try {
+    const body = await req.json() as { scenarioCount?: unknown };
+    const raw  = Number(body?.scenarioCount);
+    if (Number.isFinite(raw) && raw >= 1 && raw <= 50) {
+      scenarioCount = Math.floor(raw);
+    }
+  } catch {
+    // missing or non-JSON body — use default
+  }
+
   const stream = new ReadableStream({
     async start(controller) {
       const send = (data: object) => {
@@ -38,12 +51,13 @@ export async function POST(req: NextRequest) {
         }
       };
 
-      // Initialise store entry with placeholder total (updated on first progress event)
-      SimulationJobStore.start(restaurantId, 20);
+      // Initialise store entry with the chosen scenario count
+      SimulationJobStore.start(restaurantId, scenarioCount);
 
       try {
         const report = await AISimulatorService.run(
           restaurantId,
+          scenarioCount,
           (progress) => {
             SimulationJobStore.updateProgress(restaurantId, progress);
             send({ type: "progress", ...progress });

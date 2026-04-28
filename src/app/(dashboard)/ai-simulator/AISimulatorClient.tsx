@@ -21,13 +21,20 @@ interface ProgressInfo {
 
 // ─── main client ──────────────────────────────────────────────
 
+const SCENARIO_PRESETS = [
+  { label: "Rápido (5 cenários)",   value: 5  },
+  { label: "Padrão (10 cenários)",  value: 10 },
+  { label: "Stress (20 cenários)",  value: 20 },
+] as const;
+
 export function AISimulatorClient() {
-  const [state,    setState]    = useState<RunState>("idle");
-  const [progress, setProgress] = useState<ProgressInfo | null>(null);
-  const [results,  setResults]  = useState<ScenarioResult[]>([]);
-  const [report,   setReport]   = useState<SimulationReport | null>(null);
-  const [errMsg,   setErrMsg]   = useState<string>("");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [state,         setState]         = useState<RunState>("idle");
+  const [progress,      setProgress]      = useState<ProgressInfo | null>(null);
+  const [results,       setResults]       = useState<ScenarioResult[]>([]);
+  const [report,        setReport]        = useState<SimulationReport | null>(null);
+  const [errMsg,        setErrMsg]        = useState<string>("");
+  const [expanded,      setExpanded]      = useState<Set<string>>(new Set());
+  const [scenarioCount, setScenarioCount] = useState<number>(10);
 
   const runSimulations = useCallback(async () => {
     setState("running");
@@ -38,7 +45,11 @@ export function AISimulatorClient() {
     setExpanded(new Set());
 
     try {
-      const response = await fetch("/api/ai-simulator/run", { method: "POST" });
+      const response = await fetch("/api/ai-simulator/run", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ scenarioCount }),
+      });
       if (!response.ok || !response.body) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -79,7 +90,7 @@ export function AISimulatorClient() {
       setErrMsg(String(err));
       setState("error");
     }
-  }, []);
+  }, [scenarioCount]);
 
   const toggleExpanded = (id: string) => {
     setExpanded((prev) => {
@@ -103,6 +114,20 @@ export function AISimulatorClient() {
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {/* Scenario count selector */}
+            <select
+              value={scenarioCount}
+              onChange={(e) => setScenarioCount(Number(e.target.value))}
+              disabled={state === "running"}
+              className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg
+                         hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed
+                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {SCENARIO_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+
             {/* Download buttons — visible only after simulation completes */}
             {state === "done" && report && (
               <>
@@ -158,7 +183,7 @@ export function AISimulatorClient() {
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex justify-between text-sm text-gray-600 mb-2">
               <span>Executando: <strong>{progress.scenarioName}</strong></span>
-              <span>{progress.current} / {progress.total}</span>
+              <span>{progress.current} / {progress.total} cenários</span>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-2">
               <div
