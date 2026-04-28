@@ -30,6 +30,15 @@ export interface PromptContext {
   brandConfig: RestaurantBrandConfig;
 }
 
+export interface WebPromptContext {
+  restaurantId: string;
+  customerId?: string;
+  customerName?: string | null;
+  history: Array<{ role: "user" | "assistant"; content: string }>;
+  cart: Array<{ name: string; price: number; qty: number }>;
+  brandConfig: RestaurantBrandConfig;
+}
+
 // ─── service ─────────────────────────────────────────────────
 
 export class PromptBuilderService {
@@ -122,6 +131,84 @@ export class PromptBuilderService {
       .map((msg): OpenAI.Chat.ChatCompletionMessageParam => ({
         role: msg.direction === "INBOUND" ? "user" : "assistant",
         content: msg.content,
+      }));
+
+    return [{ role: "system", content: systemPrompt }, ...historyMessages];
+  }
+
+  /**
+   * Build the messages array for the stateless web ordering widget.
+   * Uses history and cart from the HTTP request instead of loading them from DB.
+   */
+  static async buildForWeb(
+    ctx: WebPromptContext
+  ): Promise<OpenAI.Chat.ChatCompletionMessageParam[]> {
+    const [restaurant, customer, menuCategories] = await Promise.all([
+      prisma.restaurant.findUnique({
+        where: { id: ctx.restaurantId },
+        select: { name: true, phone: true, address: true, timezone: true },
+      }),
+      ctx.customerId
+        ? prisma.customer.findUnique({
+            where: { id: ctx.customerId },
+            select: {
+              name: true,
+              totalOrders: true,
+              totalSpend: true,
+              lastOrderAt: true,
+              preferences: { select: { dietary: true, allergies: true, notes: true } },
+            },
+          })
+        : Promise.resolve(null),
+      prisma.menuCategory.findMany({
+        where: { restaurantId: ctx.restaurantId, isActive: true },
+        orderBy: { sortOrder: "asc" },
+        include: {
+          items: {
+            where: { isActive: true },
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, name: true, description: true, ingredients: true, price: true },
+          },
+        },
+      }),
+    ]);
+
+    if (!restaurant) {
+      throw new Error(`PromptBuilder: could not load restaurant ${ctx.restaurantId}`);
+    }
+
+    const resolvedCustomer: CustomerInfo | null = customer
+      ? customer
+      : ctx.customerName
+        ? {
+            name: ctx.customerName,
+            totalOrders: 0,
+            totalSpend: { toString: () => "0" },
+            lastOrderAt: null,
+            preferences: null,
+          }
+        : null;
+
+    const systemPrompt = buildSystemPrompt({
+      restaurant,
+      customer: resolvedCustomer ?? {
+        name: "Cliente",
+        totalOrders: 0,
+        totalSpend: { toString: () => "0" },
+        lastOrderAt: null,
+        preferences: null,
+      },
+      menuCategories,
+      draft: buildWebDraft(ctx.cart),
+      brandConfig: ctx.brandConfig,
+    });
+
+    const capped = ctx.history.slice(-ctx.brandConfig.maxHistoryMessages);
+    const historyMessages = capped
+      .filter((m) => m.content.trim().length > 0)
+      .map((m): OpenAI.Chat.ChatCompletionMessageParam => ({
+        role: m.role,
+        content: m.content,
       }));
 
     return [{ role: "system", content: systemPrompt }, ...historyMessages];
@@ -431,4 +518,25 @@ function buildContextBlock(params: Parameters<typeof buildSystemPrompt>[0]): str
     buildDraftBlock(params.draft),
     buildCustomerBlock(params.customer),
   ].join("\n\n");
+}
+
+function buildWebDraft(
+  cart: Array<{ name: string; price: number; qty: number }>
+): DraftData {
+  if (cart.length === 0) return null;
+
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  return {
+    id: "web-cart",
+    fulfillmentType: "WEB",
+    subtotal: { toString: () => subtotal.toFixed(2) },
+    totalAmount: { toString: () => subtotal.toFixed(2) },
+    items: cart.map((item) => ({
+      id: item.name,
+      quantity: item.qty,
+      unitPrice: { toString: () => item.price.toFixed(2) },
+      notes: null,
+      menuItem: { name: item.name, price: { toString: () => item.price.toFixed(2) } },
+    })),
+  };
 }

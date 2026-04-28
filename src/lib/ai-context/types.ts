@@ -146,7 +146,7 @@ export interface OperationalContext {
   customerName:   string | null;
   /**
    * Current sales phase — controls whether checkout language is allowed.
-   * Set by resolveSalesPhase() in runner.ts after the orchestrator gate.
+   * Set by resolveSalesPhase() in the AI pipeline after the orchestrator gate.
    */
   salesPhase:     SalesPhase;
   /**

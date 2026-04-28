@@ -32,6 +32,30 @@ import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
 import { getAlreadySuggestedIds } from "./ConversationGuardrails";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
+import type { OrderStage } from "@/lib/agent/types";
+
+// ─── web turn types (replaces runner.ts) ──────────────────────
+
+export interface AIWebTurnInput {
+  restaurantId:    string;
+  message:         string;
+  history:         Array<{ role: "user" | "assistant"; content: string }>;
+  cart?:           Array<{ name: string; price: number; qty: number }>;
+  stage?:          OrderStage;
+  upsellOffered?:  "drink" | "dessert" | null;
+  deliveryMethod?: "delivery" | "pickup" | null;
+  address?:        string | null;
+  paymentMethod?:  string | null;
+  customerId?:     string;
+  customerPhone?:  string;
+  customerName?:   string | null;
+  categoryIntro?:  { name: string; description: string } | null;
+}
+
+export interface AIWebTurnOutput {
+  reply: string;
+  suggestedItemName?: string;
+}
 
 const MAX_TOOL_ITERATIONS = 6;
 
@@ -57,6 +81,163 @@ export class AIOrderService {
       );
     }
   }
+
+  /**
+   * Process a single AI turn for the stateless web ordering widget.
+   * Replaces the legacy runner.ts / runAITurn pipeline.
+   *
+   * Pipeline:
+   *   1. Load brand config via BrandConfigService
+   *   2. Build sales profile
+   *   3. UpsellEngine.suggest — goal-driven suggestion candidates
+   *   4. PromptBuilderService.buildForWeb — unified system prompt + history
+   *   5. Inject upsell hints into system message
+   *   6. OpenAI call with AI_TOOL_DEFINITIONS active
+   *   7. Tool-call loop (suggest_upsell tracked; other tools deferred to client)
+   *   8. Return { reply, suggestedItemName }
+   */
+  static async runWebTurn(input: AIWebTurnInput): Promise<AIWebTurnOutput> {
+    return runWebTurnInternal(input);
+  }
+}
+
+// ─── web turn (unified pipeline, stateless HTTP) ──────────────
+
+async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutput> {
+  const {
+    restaurantId,
+    message,
+    history,
+    cart          = [],
+    customerId,
+    customerName  = null,
+  } = input;
+
+  // 1. Brand config
+  const [brandConfig, restaurantRow] = await Promise.all([
+    BrandConfigService.getOrDefault(restaurantId),
+    prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
+  ]);
+  const restaurantName = restaurantRow?.name ?? "";
+
+  // 2. Sales profile
+  const salesProfile = buildSalesProfile(brandConfig, restaurantName);
+
+  // 3. UpsellEngine — null draftId returns empty result for anonymous web sessions
+  const upsellResult = await UpsellEngine.suggest(
+    restaurantId,
+    null,
+    salesProfile.salesPriority,
+    new Set<string>(),
+    [],
+    [],
+    salesProfile.targetTicket,
+    salesProfile.targetItems,
+  );
+
+  // 4. PromptBuilderService — unified system prompt + request history
+  const messages = await PromptBuilderService.buildForWeb({
+    restaurantId,
+    customerId,
+    customerName,
+    history,
+    cart,
+    brandConfig,
+  });
+
+  // 5. Inject upsell hints into system message
+  const sysMsg = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
+  let sysAddendum = "";
+
+  if (upsellResult.suggestions.length > 0 && brandConfig.upsellStyle !== "none") {
+    sysAddendum +=
+      "\n\nSUGESTÕES DE UPSELL DISPONÍVEIS (use suggest_upsell se adequado):\n" +
+      upsellResult.suggestions
+        .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName}) — ${s.reason}`)
+        .join("\n");
+  }
+
+  if (sysAddendum) {
+    messages[0] = { ...sysMsg, content: sysMsg.content + sysAddendum };
+  }
+
+  // 6. OpenAI call with AI_TOOL_DEFINITIONS active
+  const loopMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    ...messages,
+    { role: "user", content: message.trim() },
+  ];
+
+  let finalResponse = "";
+  let suggestedItemName: string | undefined;
+
+  for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+    const response = await openai.chat.completions.create({
+      model: brandConfig.aiModel,
+      messages: loopMessages,
+      tools: AI_TOOL_DEFINITIONS,
+      tool_choice: "auto",
+      max_tokens: resolveMaxTokens(salesProfile),
+      temperature: 0.3,
+    });
+
+    const choice = response.choices[0];
+    if (!choice) break;
+
+    const { finish_reason, message: assistantMsg } = choice;
+    loopMessages.push(assistantMsg);
+
+    if (finish_reason === "stop" || finish_reason === "length") {
+      finalResponse = assistantMsg.content ?? "";
+      break;
+    }
+
+    if (finish_reason === "tool_calls" && assistantMsg.tool_calls) {
+      const functionCalls = assistantMsg.tool_calls.filter(
+        (tc): tc is Extract<typeof tc, { type: "function"; function: { name: string; arguments: string } }> =>
+          tc.type === "function" && "function" in tc
+      );
+
+      for (const toolCall of functionCalls) {
+        const toolName = toolCall.function.name;
+        let toolResult: { success: boolean; message: string; data?: unknown };
+
+        if (toolName === "suggest_upsell") {
+          // 7. Track suggested item for the response
+          const args = safeJson(toolCall.function.arguments) as Record<string, unknown>;
+          const hit = upsellResult.suggestions.find((s) => s.menuItemId === args.menuItemId);
+          if (hit) suggestedItemName = hit.name;
+          toolResult = { success: true, message: `Sugestão registrada: ${hit?.name ?? args.menuItemId}` };
+        } else {
+          // Other tools are deferred to the client in the stateless web flow
+          toolResult = { success: true, message: "Ação registrada — processada pelo cliente." };
+        }
+
+        loopMessages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(toolResult),
+        });
+      }
+      continue;
+    }
+
+    finalResponse = assistantMsg.content ?? "";
+    break;
+  }
+
+  // Fail-safe: if AI mentioned a suggestion by name but didn't call suggest_upsell
+  if (finalResponse && !suggestedItemName) {
+    const hit = upsellResult.suggestions.find(
+      (s) => s.name.length >= 4 &&
+        normalizeText(finalResponse).includes(normalizeText(s.name))
+    );
+    if (hit) suggestedItemName = hit.name;
+  }
+
+  return {
+    reply: finalResponse || "Desculpe, não consegui processar sua mensagem. 😅",
+    suggestedItemName,
+  };
 }
 
 // ─── core turn logic ──────────────────────────────────────────

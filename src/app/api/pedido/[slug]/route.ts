@@ -4,13 +4,13 @@
  * Public (no auth) API for the external ordering experience.
  *
  * GET  — return the restaurant menu
- * POST — AI sales agent, powered by runAITurn() (src/lib/ai-context/runner)
+ * POST — AI sales agent, powered by AIOrderService.runWebTurn()
  */
 
 import { NextRequest } from "next/server";
 import { prisma }      from "@/lib/prisma";
 import { ok, badRequest, serverError } from "@/lib/api-response";
-import { runAITurn }   from "@/lib/ai-context/runner";
+import { AIOrderService } from "@/services/ai/AIOrderService";
 import type { OrderStage } from "@/lib/agent/types";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
@@ -120,7 +120,7 @@ export async function POST(
     if (!message?.trim())        return badRequest("message is required.");
     if (!Array.isArray(history)) return badRequest("history must be an array.");
 
-    const { reply, suggestedItemName } = await runAITurn({
+    const { reply, suggestedItemName } = await AIOrderService.runWebTurn({
       restaurantId:  restaurant.id,
       message:       message.trim(),
       history,
