@@ -40,7 +40,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // Verify webhook authenticity
-  const configResult = await EvolutionConfigService.findRestaurantByInstance(instanceName);
+  let configResult: Awaited<ReturnType<typeof EvolutionConfigService.findRestaurantByInstance>>;
+  try {
+    configResult = await EvolutionConfigService.findRestaurantByInstance(instanceName);
+  } catch (err) {
+    // decrypt() throws if ENCRYPTION_KEY is missing/wrong — log and absorb.
+    console.error("[webhook/evolution] Config lookup failed (check ENCRYPTION_KEY):", err);
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
   if (!configResult.ok) {
     // Unknown instance — respond 200 to avoid error loops but do not process.
     console.warn(`[webhook/evolution] Unknown instance: ${instanceName}`);
