@@ -41,10 +41,8 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Atendimento",
     items: [
-      { href: "/orders",      label: "Pedidos",     icon: "📋" },
-      { href: "/atendimento", label: "Chat",         icon: "🎧" },
-      { href: "/menu",        label: "Cardápio",    icon: "🍽" },
-      { href: "/agente-ia",   label: "Agente IA",   icon: "🤖" },
+      { href: "/orders",      label: "Pedidos", icon: "📋" },
+      { href: "/atendimento", label: "Chat",    icon: "🎧" },
     ],
   },
   {
@@ -58,8 +56,8 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Plataforma",
     items: [
+      { href: "/chat-sim",      label: "Testar IA",      icon: "💬" },
       { href: "/ai-simulator",  label: "Simulador IA",   icon: "🔬" },
-      { href: "/chat-sim",      label: "Chat Sim",       icon: "💬" },
       { href: "/settings",      label: "Configurações",  icon: "⚙️" },
       { href: "/integracoes",   label: "Integrações",    icon: "🔌" },
     ],
