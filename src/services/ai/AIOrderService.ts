@@ -288,6 +288,37 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
 
   const latencyMs = Date.now() - startMs;
 
+  // ── Fail-safe: speech ↔ tool sync ────────────────────────────
+  // If the AI mentioned a suggestion product by name but did not call
+  // suggest_upsell, auto-fire the tool so the UI card always appears.
+  // Silent to the user — the WhatsApp message is unaffected.
+  if (
+    finalResponse &&
+    !handoffRequested &&
+    !toolCallsMade.some((tc) => tc.name === "suggest_upsell")
+  ) {
+    const hit = upsellSuggestions.find(
+      (s) => s.name.length >= 4 &&
+        normalizeText(finalResponse).includes(normalizeText(s.name))
+    );
+    if (hit) {
+      console.info(
+        `[AIOrderService] fail-safe suggest_upsell for "${hit.name}" (text mention without tool call)`
+      );
+      const fsResult = await executeTool(
+        "suggest_upsell",
+        JSON.stringify({ menuItemId: hit.menuItemId }),
+        toolCtx,
+      );
+      toolCallsMade.push({
+        name:    "suggest_upsell",
+        args:    { menuItemId: hit.menuItemId },
+        result:  fsResult,
+        success: fsResult.success,
+      });
+    }
+  }
+
   // 8. Handle handoff
   if (handoffRequested) {
     await prisma.conversation.update({
@@ -426,6 +457,11 @@ async function logTurn(params: {
 
 function safeJson(raw: string): unknown {
   try { return JSON.parse(raw); } catch { return raw; }
+}
+
+// Strip accents + lowercase for robust product-name matching.
+function normalizeText(text: string): string {
+  return text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
 function buildGoalContext(
