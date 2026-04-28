@@ -24,10 +24,6 @@ import {
   KeyboardEvent,
 } from "react";
 
-import type { QAScenario, QAAction } from "@/lib/qa/types";
-import { allScenarios } from "@/lib/qa/scenarios";
-import { CRITICAL_SCENARIO_IDS } from "@/lib/qa/critical-scenarios";
-import { QAPanel } from "./QAPanel";
 import { ExternalTestPanel } from "./ExternalTestPanel";
 
 // ─── types ────────────────────────────────────────────────────
@@ -139,51 +135,6 @@ const findMainCat = (menu: MenuCategory[]) => {
   const s = findDessertCat(menu);
   return menu.find((c) => c !== d && c !== s) ?? menu[0] ?? null;
 };
-const findCatByType = (
-  menu: MenuCategory[],
-  type: "main" | "drink" | "dessert",
-): MenuCategory | null => {
-  if (type === "drink")   return findBeverageCat(menu);
-  if (type === "dessert") return findDessertCat(menu);
-  return findMainCat(menu);
-};
-
-function findReplayProduct(
-  products: Product[],
-  name: string,
-  fallbackCategoryId?: string,
-): Product | null {
-  const lc = name.toLowerCase();
-  const exact   = products.find((p) => p.name.toLowerCase() === lc);
-  if (exact) return exact;
-  const partial = products.find(
-    (p) => p.name.toLowerCase().includes(lc) || lc.includes(p.name.toLowerCase()),
-  );
-  if (partial) return partial;
-  if (fallbackCategoryId) {
-    return products.find((p) => p.categoryId === fallbackCategoryId) ?? null;
-  }
-  return products[0] ?? null;
-}
-
-// ─── Replay step type (internal to replay, never sent to server) ──
-
-type ReplayStep = QAAction | { type: "_address_details"; text: string };
-
-function expandForReplay(actions: QAAction[]): ReplayStep[] {
-  const steps: ReplayStep[] = [];
-  for (const action of actions) {
-    // Inline assertions are state-machine concepts — skip in DOM replay
-    if (action.type.startsWith("assert_")) continue;
-    steps.push(action);
-    // input_address bundles line1 + optional line2; expand to two steps
-    if (action.type === "input_address" && action.line2) {
-      steps.push({ type: "_address_details", text: action.line2 });
-    }
-  }
-  return steps;
-}
-
 function parseStreetLine(raw: string): { street: string; number: string } {
   const m = raw.trim().match(/^(.*?),?\s*(\d+\S*)\s*$/);
   return m
@@ -899,14 +850,8 @@ export default function ChatSimPage() {
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [paymentLinkStatus, setPaymentLinkStatus] = useState<PaymentLinkStatus>("loading");
 
-  // ── App mode + QA replay ─────────────────────────────────────
-  const [appMode, setAppMode] = useState<"human" | "automatic">("human");
+  // ── View mode ────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<"mobile" | "desktop">("mobile");
-  const [replayScenario,  setReplayScenario]  = useState<QAScenario | null>(null);
-  const [replayStep,      setReplayStep]      = useState(0);
-  const [replayActions,   setReplayActions]   = useState<ReplayStep[]>([]);
-  const isReplayingRef        = useRef(false);
-  const executeReplayStepRef  = useRef<((step: ReplayStep) => void) | null>(null);
 
   // ── Active upsell (derived from upsellState) ─────────────────
   const activeUpsell = useMemo((): "drink" | "dessert" | null => {
@@ -930,8 +875,6 @@ export default function ChatSimPage() {
       stageSnap: Stage = stage,
       upsellOfferedSnap: "drink" | "dessert" | null = activeUpsell,
     ) => {
-      // During replay: suppress all AI/network calls — state transitions only
-      if (isReplayingRef.current) return;
       setUi("thinking");
       const trimmed = text.trim();
 
@@ -1273,168 +1216,6 @@ export default function ChatSimPage() {
     sendText("Editar pedido", cart, "BROWSE", activeUpsell);
   }, [cart, activeUpsell, sendText]);
 
-  // ── QA Replay ────────────────────────────────────────────────
-  //
-  // executeReplayStepRef is re-assigned on every render so it always
-  // closes over the latest handlers and state — the "live ref" pattern.
-
-  executeReplayStepRef.current = (step: ReplayStep) => {
-    switch (step.type) {
-      case "add_product": {
-        const prod = findReplayProduct(products, step.productName);
-        if (prod) handleItemAdd(prod);
-        break;
-      }
-      case "add_first_from_category": {
-        const cat  = findCatByType(menu, step.categoryType);
-        const prod = cat ? products.find((p) => p.categoryId === cat.id) : null;
-        if (prod) handleItemAdd(prod);
-        break;
-      }
-      case "remove_product": {
-        const item = cart.find(
-          (c) => c.name.toLowerCase() === step.productName.toLowerCase(),
-        );
-        if (item) removeItem(item.id);
-        break;
-      }
-      case "switch_category": {
-        const cat = findCatByType(menu, step.categoryType);
-        if (cat) setSelectedCategoryId(cat.id);
-        break;
-      }
-      case "open_product_modal": {
-        const prod = findReplayProduct(products, step.productName);
-        if (prod) setSelectedProduct(prod);
-        break;
-      }
-      case "close_modal":
-        setSelectedProduct(null);
-        break;
-      case "finalize":
-        handleFinalizeClick();
-        break;
-      case "accept_upsell": {
-        // Add first product from the currently-highlighted upsell category,
-        // then advance the upsell sequence by calling finalize again.
-        const prod = products.find((p) => p.categoryId === selectedCategoryId) ?? products[0];
-        if (prod) handleItemAdd(prod);
-        setTimeout(() => handleFinalizeClick(), 380);
-        break;
-      }
-      case "refuse_upsell":
-        handleFinalizeClick();
-        break;
-      case "select_delivery":
-        handleDeliveryMethod(step.method);
-        break;
-      case "input_address":
-        handleAddressInput(step.line1);
-        break;
-      case "_address_details":
-        handleAddressDetails(step.text);
-        break;
-      case "confirm_address":
-        handleAddressConfirm();
-        break;
-      case "input_name":
-        handleNameInput(step.name);
-        break;
-      case "select_payment_mode":
-        handlePaymentMode(step.mode);
-        break;
-      case "select_payment_method_sub":
-        handlePaymentMethodSub(step.method);
-        break;
-      case "select_payment":
-        // Legacy action: map old method to new two-step flow
-        {
-          const legacyMode: PaymentMode =
-            deliveryMethod === "pickup" ? "pay_on_pickup" : "pay_on_delivery";
-          const legacySubMap: Record<string, PaymentMethodSub> = {
-            pix: "pix_in_person",
-            cartao: "card_machine",
-            dinheiro: "cash",
-          };
-          const legacySub = legacySubMap[step.method] ?? "cash";
-          handlePaymentMode(legacyMode);
-          setTimeout(() => handlePaymentMethodSub(legacySub), 380);
-        }
-        break;
-      case "confirm_order":
-        handleFinalConfirm();
-        break;
-      case "go_back_to_browse":
-        handleBackToBrowse();
-        break;
-      default:
-        break;
-    }
-  };
-
-  // Replay effect — fires one step every 700ms
-  useEffect(() => {
-    if (!replayScenario) return;
-
-    if (replayStep >= replayActions.length) {
-      // All steps done
-      isReplayingRef.current = false;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uid(),
-          role: "assistant" as const,
-          content: `✅ Replay concluído: "${replayScenario.name}"`,
-          ts: new Date(),
-        },
-      ]);
-      setReplayScenario(null);
-      return;
-    }
-
-    const step = replayActions[replayStep];
-    if (!step) return;
-
-    const timer = setTimeout(() => {
-      executeReplayStepRef.current?.(step);
-      setReplayStep((s) => s + 1);
-    }, 700);
-
-    return () => clearTimeout(timer);
-  }, [replayScenario, replayStep, replayActions]);
-
-  const startReplay = useCallback((scenario: QAScenario) => {
-    // Full simulator reset
-    setCart([]);
-    setStage("BROWSE");
-    setMessages([
-      {
-        id: uid(),
-        role: "assistant" as const,
-        content: `🔄 Reproduzindo: "${scenario.name}"`,
-        ts: new Date(),
-      },
-    ]);
-    setHistory([]);
-    setDeliveryMethod(null);
-    setAddress({ street: "", number: "", neighborhood: "", complement: "" });
-    setAddressConfirmed(false);
-    setCustomerName("");
-    setPaymentMode(null);
-    setPaymentMethodSub(null);
-    setOrderId(null);
-    setPaymentUrl(null);
-    setPaymentLinkStatus("loading");
-    setUpsellState({ offeredDrink: false, offeredDessert: false, refusedDrink: false, refusedDessert: false, lastUpsellCategory: null });
-    setSelectedProduct(null);
-
-    const expanded = expandForReplay(scenario.actions);
-    isReplayingRef.current = true;
-    setReplayActions(expanded);
-    setReplayStep(0);
-    setReplayScenario(scenario);
-  }, []);
-
   // ── Text input submission ─────────────────────────────────────
 
   const handleSubmit = useCallback(
@@ -1496,68 +1277,33 @@ export default function ChatSimPage() {
     /* Outer shell */
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-gray-200">
 
-      {/* ── Mode toggle strip ──────────────────────────────── */}
+      {/* ── View mode strip ────────────────────────────────── */}
       <div className="shrink-0 flex items-center gap-1.5 border-b border-gray-300 bg-white px-4 py-2">
         <span className="mr-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-          Modo
+          Visão
         </span>
-        {(["human", "automatic"] as const).map((m) => (
+        {(["mobile", "desktop"] as const).map((v) => (
           <button
-            key={m}
-            onClick={() => setAppMode(m)}
+            key={v}
+            onClick={() => setViewMode(v)}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-              appMode === m
+              viewMode === v
                 ? "bg-[#128c7e] text-white shadow-sm"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            {m === "human" ? "👤 Humano" : "🤖 Automático"}
+            {v === "mobile" ? "📱 Mobile" : "🖥️ Desktop"}
           </button>
         ))}
-
-        {/* View mode switcher — only in human mode */}
-        {appMode === "human" && (
-          <>
-            <span className="mx-2 h-4 w-px shrink-0 bg-gray-200" />
-            <span className="mr-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-              Visão
-            </span>
-            {(["mobile", "desktop"] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setViewMode(v)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                  viewMode === v
-                    ? "bg-[#128c7e] text-white shadow-sm"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {v === "mobile" ? "📱 Mobile" : "🖥️ Desktop"}
-              </button>
-            ))}
-          </>
-        )}
-
-        {replayScenario && (
-          <span className="ml-auto animate-pulse text-xs font-medium text-orange-600">
-            ▶ Reproduzindo {replayStep}/{replayActions.length}
-          </span>
-        )}
       </div>
 
       {/* ── Content area ───────────────────────────────────── */}
-      <div
-        className={`flex flex-1 gap-6 overflow-auto p-4 ${
-          appMode === "human" ? "items-start justify-center" : ""
-        }`}
-      >
+      <div className="flex flex-1 items-start justify-center gap-6 overflow-auto p-4">
 
       {/* ── Frame wrapper — width varies by view mode ──────── */}
       <div
         className={`flex h-full items-center ${
-          appMode === "automatic"
-            ? "w-[390px] shrink-0"
-            : viewMode === "desktop"
+          viewMode === "desktop"
             ? "w-full max-w-[960px]"
             : "w-full max-w-[390px]"
         }`}
@@ -1566,14 +1312,14 @@ export default function ChatSimPage() {
         data-testid="phone-frame"
         data-stage={stage}
         className={`relative flex h-full w-full flex-col overflow-hidden bg-white ${
-          viewMode === "mobile" || appMode === "automatic"
+          viewMode === "mobile"
             ? "sm:rounded-[2rem] sm:border-[6px] sm:border-gray-800 sm:shadow-2xl"
             : "rounded-2xl border border-gray-200 shadow-2xl"
         }`}
       >
 
         {/* Browser chrome — desktop preview only */}
-        {viewMode === "desktop" && appMode !== "automatic" && (
+        {viewMode === "desktop" && (
           <div className="shrink-0 flex items-center gap-2.5 border-b border-gray-200 bg-gray-100 px-3 py-2">
             <div className="flex gap-1.5 shrink-0">
               <span className="h-3 w-3 rounded-full bg-red-400" />
@@ -1594,7 +1340,7 @@ export default function ChatSimPage() {
           <div>
             <p className="text-sm font-bold text-white">FOOCCI</p>
             <p className="text-[10px] text-green-200">
-              Simulador · Visão {viewMode === "desktop" && appMode !== "automatic" ? "desktop" : "mobile"}
+              Simulador · Visão {viewMode === "desktop" ? "desktop" : "mobile"}
             </p>
           </div>
         </div>
@@ -1635,7 +1381,7 @@ export default function ChatSimPage() {
           {stage === "BROWSE" && selectedCat && (
             <div data-testid="browse-area" className="border-t border-gray-100 py-2">
               <div className={`px-3 pb-1 gap-3 ${
-                viewMode === "desktop" && appMode !== "automatic"
+                viewMode === "desktop"
                   ? "flex flex-wrap"
                   : "flex overflow-x-auto"
               }`}>
@@ -1780,24 +1526,8 @@ export default function ChatSimPage() {
 
       </div> {/* phone frame wrapper */}
 
-      {/* ── External test panel — human mode only ──────────── */}
-      {appMode === "human" && (
-        <ExternalTestPanel slug={slug} viewMode={viewMode} />
-      )}
-
-      {/* ── QA Panel — automatic mode only ─────────────────── */}
-      {appMode === "automatic" && (
-        <div className="flex-1 h-full overflow-y-auto">
-          <QAPanel
-            scenarios={allScenarios}
-            criticalScenarioIds={CRITICAL_SCENARIO_IDS}
-            onReplay={startReplay}
-            replayingScenarioId={replayScenario?.id ?? null}
-            replayStep={replayStep}
-            replayTotal={replayActions.length}
-          />
-        </div>
-      )}
+      {/* ── External test panel ────────────────────────────── */}
+      <ExternalTestPanel slug={slug} viewMode={viewMode} />
 
       </div> {/* content area */}
 
