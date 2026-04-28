@@ -1,34 +1,24 @@
 name: Deploy to Railway
 
-# Fires on every push/merge to the production default branch.
-# Railway's native GitHub integration is NOT used — it reliably missed
-# branches with slashes in the name (e.g. claude/remove-legacy-runner-q8iXa).
-# This workflow calls the Railway Deploy Hook directly instead.
-
 on:
   push:
-    branches:
-      - claude/remove-legacy-runner-q8iXa
-  workflow_dispatch:        # allows one-click manual trigger from GitHub Actions UI
-    inputs:
-      reason:
-        description: "Reason for manual deploy"
-        required: false
-        default: "Manual force deploy"
 
 jobs:
   deploy:
-    name: Trigger Railway deploy
+    name: Deploy to Railway
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
 
     steps:
-      - name: Validate secret is set
+      - name: Validate RAILWAY_TOKEN
         run: |
-          if [ -z "${{ secrets.RAILWAY_WEBHOOK_URL }}" ]; then
-            echo "::error::RAILWAY_WEBHOOK_URL secret is not set. Add it in GitHub → Settings → Secrets → Actions."
+          if [ -z "${{ secrets.RAILWAY_TOKEN }}" ]; then
+            echo "::error::RAILWAY_TOKEN secret is not set. Add it in GitHub → Settings → Secrets → Actions."
             exit 1
           fi
+
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Log deploy context
         run: |
@@ -36,29 +26,14 @@ jobs:
           echo "Commit : ${{ github.sha }}"
           echo "Actor  : ${{ github.actor }}"
           echo "Trigger: ${{ github.event_name }}"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Reason : ${{ inputs.reason }}"
-          fi
 
-      - name: Trigger Railway deploy hook
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli@latest
+
+      - name: Deploy to Railway
         run: |
-          echo "Calling Railway deploy hook..."
-          HTTP_STATUS=$(curl -s -o /tmp/railway_response.txt -w "%{http_code}" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            "${{ secrets.RAILWAY_WEBHOOK_URL }}")
-
-          echo "HTTP status: $HTTP_STATUS"
-          cat /tmp/railway_response.txt || true
-
-          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "202" ]; then
-            echo "::error::Railway deploy hook returned unexpected status: $HTTP_STATUS"
-            exit 1
-          fi
-
-          echo "Railway deploy triggered successfully."
-
-      - name: Confirm
-        run: |
-          echo "Deploy dispatched for commit ${{ github.sha }} on branch ${{ github.ref_name }}."
-          echo "Monitor progress at: https://railway.app"
+          echo "Deploying to Railway..."
+          railway up --detach
+          echo "Deploy triggered successfully."
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
