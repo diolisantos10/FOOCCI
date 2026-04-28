@@ -56,7 +56,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Plataforma",
     items: [
-      { href: "/chat-sim",      label: "Testar IA",      icon: "💬" },
+      { href: "/test-ai",       label: "Testar IA",      icon: "💬" },
       { href: "/ai-simulator",  label: "Simulador IA",   icon: "🔬" },
       { href: "/settings",      label: "Configurações",  icon: "⚙️" },
       { href: "/integracoes",   label: "Integrações",    icon: "🔌" },
