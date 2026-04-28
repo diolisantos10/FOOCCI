@@ -41,8 +41,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Atendimento",
     items: [
-      { href: "/orders",      label: "Pedidos", icon: "📋" },
-      { href: "/atendimento", label: "Chat",    icon: "🎧" },
+      { href: "/orders",      label: "Pedidos",   icon: "📋" },
+      { href: "/atendimento", label: "Chat",       icon: "🎧" },
+      { href: "/menu",        label: "Cardápio",   icon: "🍽️" },
+      { href: "/agente-ia",   label: "Agente IA",  icon: "🤖" },
     ],
   },
   {
