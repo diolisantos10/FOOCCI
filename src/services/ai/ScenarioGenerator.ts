@@ -21,14 +21,15 @@
  * Nothing here touches AIOrderService, UpsellEngine or production logic.
  */
 
-import type { CheckType, ScenarioDef } from "./AISimulatorService";
+import type { BehaviorProfile, CheckType, ScenarioDef } from "./AISimulatorService";
 
 // ─── dimension types ──────────────────────────────────────────
 
-type Intent    = "fome" | "curioso" | "direto" | "indeciso";
-type Budget    = "baixo" | "médio" | "alto";
-type GroupSize = "solo" | "dupla" | "família";
-type Behavior  = "aceita_upsell" | "recusa_upsell" | "ignora" | "muda_de_ideia";
+// Intent, budget, groupSize are local aliases; behavior reuses the exported BehaviorProfile type
+type Intent    = BehaviorProfile["intent"];
+type Budget    = BehaviorProfile["budget"];
+type GroupSize = BehaviorProfile["groupSize"];
+type Behavior  = BehaviorProfile["behavior"];
 
 interface DietaryConfig {
   label:     string;   // human-readable, used as display name
@@ -233,18 +234,14 @@ function buildFirstTurn(dims: Dimensions): string {
   return `${opener}, ${suffix}.`;
 }
 
-function buildSecondTurn(dims: Dimensions): string | null {
-  // "direto" + "aceita" flows to checkout naturally — no extra customer turn needed
-  if (dims.intent === "direto" && dims.behavior === "aceita_upsell") return null;
-  return pick(BEHAVIOR_TURN2[dims.behavior]);
-}
-
 // ─── check selection ──────────────────────────────────────────
+// In the multi-turn loop the behavior engine drives all follow-up turns,
+// so checks are selected purely from the scenario dimensions.
 
-function selectChecks(dims: Dimensions, hasTwoTurns: boolean): CheckType[] {
+function selectChecks(dims: Dimensions): CheckType[] {
   const checks = new Set<CheckType>(["no_hallucination"]);
 
-  // Intents that expect a proactive suggestion from the AI
+  // Intents that expect a proactive product suggestion from the AI
   if (["fome", "indeciso", "curioso"].includes(dims.intent)) {
     checks.add("relevant_suggestion");
     checks.add("natural_tone");
@@ -253,26 +250,28 @@ function selectChecks(dims: Dimensions, hasTwoTurns: boolean): CheckType[] {
   // Dietary restriction must be respected in every suggestion
   if (dims.dietary) {
     checks.add("dietary_respected");
-    checks.add("relevant_suggestion"); // something valid must be suggested
-  }
-
-  // Accept behavior expects a good suggestion to have been made first
-  if (dims.behavior === "aceita_upsell") {
     checks.add("relevant_suggestion");
   }
 
-  // Rejection or change-of-mind verifies AI doesn't loop or repeat
+  // Accept behavior — a good suggestion must be made for the customer to accept
+  if (dims.behavior === "aceita_upsell") {
+    checks.add("relevant_suggestion");
+    // Multi-turn with accept behavior should eventually confirm the order
+    checks.add("checkout_transition");
+  }
+
+  // Rejection or change-of-mind — AI must not loop or repeat the same product
   if (dims.behavior === "recusa_upsell" || dims.behavior === "muda_de_ideia") {
     checks.add("no_repeat_suggestion");
     checks.add("no_loop");
   }
 
-  // "direto" + second turn implies customer said they were done → expect checkout
-  if (dims.intent === "direto" && hasTwoTurns) {
+  // "direto" intent → customer came to order, expect checkout to happen
+  if (dims.intent === "direto") {
     checks.add("checkout_transition");
   }
 
-  // Indeciso who then ignores the AI → AI should ask a clarifying question
+  // Indeciso who ignores → AI should ask a clarifying question at some point
   if (dims.behavior === "ignora" && dims.intent === "indeciso") {
     checks.add("clarification_asked");
   }
@@ -381,17 +380,10 @@ function buildCombinationPool(): Dimensions[] {
  * text will differ.
  */
 export function generateScenarios(count: number = 10): ScenarioDef[] {
-  const pool    = shuffle(buildCombinationPool());
-  const runTag  = Date.now().toString(36).slice(-4);
+  const pool   = shuffle(buildCombinationPool());
+  const runTag = Date.now().toString(36).slice(-4);
 
   return pool.slice(0, count).map((dims, idx) => {
-    const turn1  = buildFirstTurn(dims);
-    const turn2  = buildSecondTurn(dims);
-    const turns: Array<{ customer: string }> = [{ customer: turn1 }];
-    if (turn2) turns.push({ customer: turn2 });
-
-    const checks = selectChecks(dims, turns.length > 1);
-
     const dietaryTag = dims.dietary ? `_${dims.dietary.label.replace(/ /g, "")}` : "";
     const id = `${dims.intent}_${dims.budget}_${dims.groupSize}${dietaryTag}_${dims.behavior}_${runTag}${idx}`;
 
@@ -400,10 +392,16 @@ export function generateScenarios(count: number = 10): ScenarioDef[] {
       name:             buildName(dims),
       description:      buildDescription(dims),
       expectedBehavior: buildExpectedBehavior(dims),
-      turns,
+      openingMessage:   buildFirstTurn(dims),
+      behaviorProfile: {
+        intent:    dims.intent,
+        budget:    dims.budget,
+        groupSize: dims.groupSize,
+        behavior:  dims.behavior,
+      },
       dietary:   dims.dietary?.dietary.length   ? dims.dietary.dietary   : undefined,
       allergies: dims.dietary?.allergies.length ? dims.dietary.allergies : undefined,
-      checks,
+      checks:    selectChecks(dims),
     };
   });
 }
