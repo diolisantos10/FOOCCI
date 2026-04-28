@@ -430,6 +430,11 @@ const CHECK_LABELS: Record<CheckType, string> = {
   natural_tone:         "Tom de resposta adequado",
 };
 
+const BATCH_SIZE        = 5;
+const BATCH_DELAY_MS    = 3_000;  // pause between batches to respect TPM limits
+const RETRY_DELAY_MS    = 2_000;  // wait before retrying a 429 scenario
+const MAX_SCENARIO_RETRIES = 2;
+
 // ─── public service ───────────────────────────────────────────
 
 export class AISimulatorService {
@@ -456,21 +461,77 @@ export class AISimulatorService {
     const scenarios = generateScenarios(20);
     const results: ScenarioResult[] = [];
 
-    for (let i = 0; i < scenarios.length; i++) {
-      const scenario = scenarios[i]!;
-      onProgress({ current: i + 1, total: scenarios.length, scenarioName: scenario.name });
+    // ── Batch execution: BATCH_SIZE scenarios per batch ───────────
+    // Partial results are emitted after each scenario so the job store
+    // always has up-to-date data even if the client disconnects mid-run.
+    const batches: typeof scenarios[] = [];
+    for (let i = 0; i < scenarios.length; i += BATCH_SIZE) {
+      batches.push(scenarios.slice(i, i + BATCH_SIZE));
+    }
 
-      const result = await runScenario(scenario, restaurantId, menu, menuById).catch((err) => {
-        console.error(`[AISimulator] Scenario "${scenario.id}" failed:`, err);
-        return buildErrorResult(scenario, String(err));
-      });
+    let scenarioIndex = 0;
+    for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+      const batch = batches[batchIdx]!;
 
-      results.push(result);
-      onResult(result);
+      for (const scenario of batch) {
+        onProgress({ current: scenarioIndex + 1, total: scenarios.length, scenarioName: scenario.name });
+
+        const result = await runScenarioWithRetry(scenario, restaurantId, menu, menuById);
+        results.push(result);
+        onResult(result);
+        scenarioIndex++;
+      }
+
+      // Pause between batches (skip after the last one)
+      if (batchIdx < batches.length - 1) {
+        await sleep(BATCH_DELAY_MS);
+      }
     }
 
     return buildReport(results, restaurant?.name ?? restaurantId);
   }
+}
+
+// ─── helpers ──────────────────────────────────────────────────
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function isRateLimitError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as Record<string, unknown>;
+  // OpenAI SDK surfaces 429s as { status: 429 } or { error: { type: "rate_limit_exceeded" } }
+  if (e["status"] === 429) return true;
+  const inner = e["error"] as Record<string, unknown> | undefined;
+  if (inner?.["type"] === "rate_limit_exceeded") return true;
+  if (typeof e["message"] === "string" && e["message"].includes("429")) return true;
+  return false;
+}
+
+// Wraps runScenario with exponential-backoff retry on 429 errors.
+async function runScenarioWithRetry(
+  scenario: ScenarioDef,
+  restaurantId: string,
+  menu: Array<{ id: string; name: string; ingredients: string | null; price: unknown }>,
+  menuById: Map<string, { categoryName: string }>,
+): Promise<ScenarioResult> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= MAX_SCENARIO_RETRIES; attempt++) {
+    try {
+      return await runScenario(scenario, restaurantId, menu, menuById);
+    } catch (err) {
+      lastErr = err;
+      if (isRateLimitError(err) && attempt < MAX_SCENARIO_RETRIES) {
+        const wait = RETRY_DELAY_MS * (attempt + 1);  // 2 s, then 4 s
+        console.warn(`[AISimulator] 429 on "${scenario.id}" (attempt ${attempt + 1}) — retrying in ${wait}ms`);
+        await sleep(wait);
+        continue;
+      }
+      // Non-429 error or retries exhausted — fall through
+      break;
+    }
+  }
+  console.error(`[AISimulator] Scenario "${scenario.id}" failed after retries:`, lastErr);
+  return buildErrorResult(scenario, String(lastErr));
 }
 
 // ─── scenario runner ──────────────────────────────────────────
@@ -699,14 +760,31 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
   const loopMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages];
 
   for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
-    const response = await openai.chat.completions.create({
-      model:       brandConfig.aiModel,
-      messages:    loopMessages,
-      tools:       AI_TOOL_DEFINITIONS,
-      tool_choice: "auto",
-      max_tokens:  resolveMaxTokens(salesProfile),
-      temperature: 0.3,
-    });
+    // Per-call retry for 429s — up to 2 attempts with 2 s gap
+    let response: Awaited<ReturnType<typeof openai.chat.completions.create>>;
+    let callAttempt = 0;
+    while (true) {
+      try {
+        response = await openai.chat.completions.create({
+          model:       brandConfig.aiModel,
+          messages:    loopMessages,
+          tools:       AI_TOOL_DEFINITIONS,
+          tool_choice: "auto",
+          max_tokens:  resolveMaxTokens(salesProfile),
+          temperature: 0.3,
+        });
+        break;  // success
+      } catch (err) {
+        callAttempt++;
+        if (isRateLimitError(err) && callAttempt <= MAX_SCENARIO_RETRIES) {
+          const wait = RETRY_DELAY_MS * callAttempt;
+          console.warn(`[AISimulator] 429 on turn call (attempt ${callAttempt}) — waiting ${wait}ms`);
+          await sleep(wait);
+          continue;
+        }
+        throw err;  // non-429 or retries exhausted
+      }
+    }
 
     const choice = response.choices[0];
     if (!choice) break;
