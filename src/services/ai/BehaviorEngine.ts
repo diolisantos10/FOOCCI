@@ -198,6 +198,10 @@ function buildSalesSection(profile: SalesProfile): string {
     "- Ambos os gaps ativos → item de preço médio que sirva como complemento natural.",
     "- Metas atingidas → encaminhe para confirmação; não force nova sugestão.",
     "- NUNCA cite 'meta', 'gap' ou números de ticket ao cliente — fale apenas do item.",
+    "",
+    "EXECUÇÃO VISUAL (obrigatório):",
+    "- Mencionou um produto? Execute suggest_upsell no mesmo turno, sem exceção.",
+    "- Texto introduz, ferramenta exibe. Os dois juntos, sempre.",
   );
 
   return rules.join("\n");
