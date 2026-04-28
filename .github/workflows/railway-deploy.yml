@@ -1,0 +1,57 @@
+name: Deploy to Railway
+
+# Fires on every push/merge to the production default branch.
+# Railway's native GitHub integration is NOT used — it reliably missed
+# branches with slashes in the name (e.g. claude/fresh-debug-session).
+# This workflow calls the Railway Deploy Hook directly instead.
+
+on:
+  push:
+    branches:
+      - claude/fresh-debug-session
+  workflow_dispatch:        # allows one-click manual trigger from GitHub Actions UI
+    inputs:
+      reason:
+        description: "Reason for manual deploy"
+        required: false
+        default: "Manual force deploy"
+
+jobs:
+  deploy:
+    name: Trigger Railway deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Log deploy context
+        run: |
+          echo "Branch : ${{ github.ref_name }}"
+          echo "Commit : ${{ github.sha }}"
+          echo "Actor  : ${{ github.actor }}"
+          echo "Trigger: ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Reason : ${{ inputs.reason }}"
+          fi
+
+      - name: Trigger Railway deploy hook
+        run: |
+          echo "Calling Railway deploy hook..."
+          HTTP_STATUS=$(curl -s -o /tmp/railway_response.txt -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            "${{ secrets.RAILWAY_WEBHOOK_URL }}")
+
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/railway_response.txt || true
+
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "202" ]; then
+            echo "::error::Railway deploy hook returned unexpected status: $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Railway deploy triggered successfully."
+
+      - name: Confirm
+        run: |
+          echo "Deploy dispatched for commit ${{ github.sha }} on branch ${{ github.ref_name }}."
+          echo "Monitor progress at: https://railway.app"
