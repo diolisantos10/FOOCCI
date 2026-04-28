@@ -1,20 +1,23 @@
 /**
  * POST /api/ai-simulator/run
  *
- * Streams simulation progress + results as Server-Sent Events.
- * Each event is a JSON object on a `data:` line.
+ * Starts a 20-scenario simulation run as a detached background task.
+ * Streams live progress as Server-Sent Events while the client is connected.
+ * The job continues running even if the client disconnects — results are stored
+ * in SimulationJobStore and accessible via GET /api/ai-simulator/status.
  *
- * Event types:
- *   { type: "progress", current, total, scenarioName }
+ * Event types while connected:
+ *   { type: "progress",        current, total, scenarioName }
  *   { type: "scenario_result", result: ScenarioResult }
- *   { type: "report", report: SimulationReport }
- *   { type: "error", message }
+ *   { type: "report",          report: SimulationReport }
+ *   { type: "error",           message }
  */
 
 import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { unauthorized } from "@/lib/api-response";
 import { AISimulatorService } from "@/services/ai/AISimulatorService";
+import { SimulationJobStore } from "@/services/ai/SimulationJobStore";
 
 export const maxDuration = 300;
 
@@ -31,20 +34,32 @@ export async function POST(req: NextRequest) {
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         } catch {
-          // client disconnected
+          // client disconnected — job continues via SimulationJobStore
         }
       };
+
+      // Initialise store entry with placeholder total (updated on first progress event)
+      SimulationJobStore.start(restaurantId, 20);
 
       try {
         const report = await AISimulatorService.run(
           restaurantId,
-          (progress) => send({ type: "progress", ...progress }),
-          (result)   => send({ type: "scenario_result", result }),
+          (progress) => {
+            SimulationJobStore.updateProgress(restaurantId, progress);
+            send({ type: "progress", ...progress });
+          },
+          (result) => {
+            SimulationJobStore.addResult(restaurantId, result);
+            send({ type: "scenario_result", result });
+          },
         );
+        SimulationJobStore.complete(restaurantId, report);
         send({ type: "report", report });
       } catch (err) {
+        const msg = String(err);
+        SimulationJobStore.fail(restaurantId, msg);
         console.error("[POST /api/ai-simulator/run]", err);
-        send({ type: "error", message: String(err) });
+        send({ type: "error", message: msg });
       } finally {
         controller.close();
       }
@@ -53,9 +68,9 @@ export async function POST(req: NextRequest) {
 
   return new Response(stream, {
     headers: {
-      "Content-Type":    "text/event-stream",
-      "Cache-Control":   "no-cache, no-transform",
-      "Connection":      "keep-alive",
+      "Content-Type":      "text/event-stream",
+      "Cache-Control":     "no-cache, no-transform",
+      "Connection":        "keep-alive",
       "X-Accel-Buffering": "no",
     },
   });

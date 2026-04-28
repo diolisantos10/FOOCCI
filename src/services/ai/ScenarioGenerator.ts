@@ -16,14 +16,20 @@
  *  8. Cliente Impaciente    — direto    · médio · solo    · impaciente
  */
 
-import type { BehaviorProfile, CheckType, ScenarioDef } from "./AISimulatorService";
+import type { BehaviorProfile, VariationLayer, CheckType, ScenarioDef } from "./AISimulatorService";
 
 // ─── dimension types ──────────────────────────────────────────
 
-type Intent    = BehaviorProfile["intent"];
-type Budget    = BehaviorProfile["budget"];
-type GroupSize = BehaviorProfile["groupSize"];
-type Behavior  = BehaviorProfile["behavior"];
+type Intent           = BehaviorProfile["intent"];
+type Budget           = BehaviorProfile["budget"];
+type GroupSize        = BehaviorProfile["groupSize"];
+type Behavior         = BehaviorProfile["behavior"];
+type IndecisionLevel  = VariationLayer["indecisionLevel"];
+type BudgetSensitivity = VariationLayer["budgetSensitivity"];
+type Patience         = VariationLayer["patience"];
+type UpsellOpenness   = VariationLayer["upsellOpenness"];
+
+const PATIENCE_MAX_TURNS: Record<Patience, number> = { short: 5, long: 10 };
 
 interface DietaryConfig {
   label:     string;
@@ -37,6 +43,8 @@ interface Dimensions {
   groupSize: GroupSize;
   dietary:   DietaryConfig | null;
   behavior:  Behavior;
+  // When set, variation is fixed; otherwise randomized in buildScenario
+  variation?: Partial<VariationLayer>;
 }
 
 // ─── message pools ────────────────────────────────────────────
@@ -213,6 +221,29 @@ const BEHAVIOR_TURN2: Record<Behavior, string[]> = {
     "Sem demora, pode confirmar?",
     "Agiliza aí, tô sem tempo",
   ],
+  recusa_depois_aceita: [
+    "hmm deixa eu pensar…",
+    "não sei se preciso disso agora",
+    "talvez não... me convence",
+  ],
+  pergunta_primeiro: [
+    "antes de decidir, tenho algumas dúvidas",
+    "me tira umas dúvidas antes de pedir",
+    "posso fazer umas perguntas primeiro?",
+  ],
+};
+
+// Variation-aware opening modifiers
+const INDECISION_SUFFIXES: Record<IndecisionLevel, string[]> = {
+  low:    ["", ""],  // no extra text
+  medium: [", mas estou em dúvida", ", só não sei exatamente o quê"],
+  high:   [", mas tô completamente perdido", ", e realmente não sei nada do que quero", ", me ajuda muito porque não sei por onde começar"],
+};
+
+const BUDGET_PRESSURE_SUFFIXES: Record<BudgetSensitivity, string[]> = {
+  low:    [""],
+  medium: [" (tentando não gastar demais)", " sem exagerar no valor"],
+  high:   [" — preciso que seja bem em conta", " — orçamento muito apertado hoje", " — sem poder gastar nada a mais"],
 };
 
 // ─── random helpers ───────────────────────────────────────────
@@ -232,9 +263,13 @@ function shuffle<T>(arr: T[]): T[] {
 
 // ─── message composers ────────────────────────────────────────
 
-function buildFirstTurn(dims: Dimensions): string {
+function buildFirstTurn(dims: Dimensions, variation: VariationLayer): string {
   const budget = pick(BUDGET_MODIFIERS[dims.budget]);
   const group  = pick(GROUP_MODIFIERS[dims.groupSize]);
+
+  // Variation suffixes add texture without changing core intent
+  const indecisionSuffix   = pick(INDECISION_SUFFIXES[variation.indecisionLevel]);
+  const budgetPressureSufx = pick(BUDGET_PRESSURE_SUFFIXES[variation.budgetSensitivity]);
 
   // Impatient opener is always direct
   if (dims.behavior === "impaciente") {
@@ -246,6 +281,12 @@ function buildFirstTurn(dims: Dimensions): string {
     return pick(openers);
   }
 
+  // Pre-order questioner starts with a question
+  if (dims.behavior === "pergunta_primeiro") {
+    const opener = pick(INTENT_OPENERS[dims.intent]);
+    return `${opener}, ${budget}, ${group}. Antes de pedir, posso te fazer uma pergunta?`;
+  }
+
   const suffix =
     dims.budget === "médio" && Math.random() < 0.4 ? group : `${budget}, ${group}`;
 
@@ -255,17 +296,17 @@ function buildFirstTurn(dims: Dimensions): string {
 
     if (dims.intent === "indeciso") {
       const blend = pick(["e não sei bem o que escolher", "mas tô em dúvida no que pedir", "e tô indeciso"]);
-      return `${dietaryLine} ${blend}. ${suffix}.`;
+      return `${dietaryLine} ${blend}${indecisionSuffix}. ${suffix}${budgetPressureSufx}.`;
     }
     if (dims.intent === "fome") {
       const hunger = pick(["e tô com muita fome", "— tô faminto"]);
-      return `${dietaryLine} ${hunger}. ${suffix}.`;
+      return `${dietaryLine} ${hunger}. ${suffix}${budgetPressureSufx}.`;
     }
-    return `${dietaryLine}. ${suffix}.`;
+    return `${dietaryLine}. ${suffix}${budgetPressureSufx}.`;
   }
 
   const opener = pick(INTENT_OPENERS[dims.intent]);
-  return `${opener}, ${suffix}.`;
+  return `${opener}${indecisionSuffix}, ${suffix}${budgetPressureSufx}.`;
 }
 
 // ─── check selection ──────────────────────────────────────────
@@ -288,7 +329,7 @@ function selectChecks(dims: Dimensions): CheckType[] {
     checks.add("checkout_transition");
   }
 
-  if (dims.behavior === "recusa_upsell" || dims.behavior === "muda_de_ideia") {
+  if (["recusa_upsell", "muda_de_ideia", "recusa_depois_aceita"].includes(dims.behavior)) {
     checks.add("no_repeat_suggestion");
     checks.add("no_loop");
   }
@@ -331,11 +372,13 @@ const GROUP_LABELS: Record<GroupSize, string> = {
 };
 
 const BEHAVIOR_LABELS: Record<Behavior, string> = {
-  aceita_upsell: "aceita sugestão",
-  recusa_upsell: "recusa sugestão",
-  ignora:        "ignora e muda assunto",
-  muda_de_ideia: "muda de ideia",
-  impaciente:    "impaciente / com pressa",
+  aceita_upsell:        "aceita sugestão",
+  recusa_upsell:        "recusa sugestão",
+  ignora:               "ignora e muda assunto",
+  muda_de_ideia:        "muda de ideia",
+  impaciente:           "impaciente / com pressa",
+  recusa_depois_aceita: "recusa primeiro, aceita depois",
+  pergunta_primeiro:    "pergunta antes de comprar",
 };
 
 function buildName(dims: Dimensions): string {
@@ -367,11 +410,13 @@ function buildExpectedBehavior(dims: Dimensions): string {
   }
 
   switch (dims.behavior) {
-    case "aceita_upsell":  parts.push("Confirmar upsell aceito sem pressionar"); break;
-    case "recusa_upsell":  parts.push("Aceitar recusa sem insistir nem repetir produto"); break;
-    case "ignora":         parts.push("Responder desvio e retomar o pedido"); break;
-    case "muda_de_ideia":  parts.push("Adaptar pedido sem repetir itens anteriores"); break;
-    case "impaciente":     parts.push("Fechar pedido rapidamente sem enrolação"); break;
+    case "aceita_upsell":        parts.push("Confirmar upsell aceito sem pressionar"); break;
+    case "recusa_upsell":        parts.push("Aceitar recusa sem insistir nem repetir produto"); break;
+    case "ignora":               parts.push("Responder desvio e retomar o pedido"); break;
+    case "muda_de_ideia":        parts.push("Adaptar pedido sem repetir itens anteriores"); break;
+    case "impaciente":           parts.push("Fechar pedido rapidamente sem enrolação"); break;
+    case "recusa_depois_aceita": parts.push("Persistir com segunda sugestão após recusa inicial"); break;
+    case "pergunta_primeiro":    parts.push("Responder perguntas antes de iniciar o pedido"); break;
   }
 
   return parts.join(". ");
@@ -379,26 +424,43 @@ function buildExpectedBehavior(dims: Dimensions): string {
 
 // ─── scenario builder ─────────────────────────────────────────
 
+const ALL_INDECISION:   IndecisionLevel[]   = ["low", "medium", "high"];
+const ALL_BUDGET_SENS:  BudgetSensitivity[] = ["low", "medium", "high"];
+const ALL_PATIENCE:     Patience[]          = ["short", "long"];
+const ALL_UPSELL_OPEN:  UpsellOpenness[]    = ["closed", "neutral", "open"];
+
+function randomVariation(overrides?: Partial<VariationLayer>): VariationLayer {
+  return {
+    indecisionLevel:   overrides?.indecisionLevel   ?? pick(ALL_INDECISION),
+    budgetSensitivity: overrides?.budgetSensitivity ?? pick(ALL_BUDGET_SENS),
+    patience:          overrides?.patience          ?? pick(ALL_PATIENCE),
+    upsellOpenness:    overrides?.upsellOpenness    ?? pick(ALL_UPSELL_OPEN),
+  };
+}
+
 function buildScenario(dims: Dimensions, idx: number, tag: string): ScenarioDef {
-  const runTag    = Date.now().toString(36).slice(-4);
+  const variation  = randomVariation(dims.variation);
+  const runTag     = Date.now().toString(36).slice(-4);
   const dietaryTag = dims.dietary ? `_${dims.dietary.label.replace(/ /g, "")}` : "";
   const id = `${dims.intent}_${dims.budget}_${dims.groupSize}${dietaryTag}_${dims.behavior}_${tag}${runTag}${idx}`;
 
   return {
     id,
     name:             buildName(dims),
-    description:      buildDescription(dims),
+    description:      `${buildDescription(dims)} · paciência:${variation.patience} · upsell:${variation.upsellOpenness}`,
     expectedBehavior: buildExpectedBehavior(dims),
-    openingMessage:   buildFirstTurn(dims),
+    openingMessage:   buildFirstTurn(dims, variation),
     behaviorProfile: {
       intent:    dims.intent,
       budget:    dims.budget,
       groupSize: dims.groupSize,
       behavior:  dims.behavior,
+      variation,
     },
     dietary:   dims.dietary?.dietary.length   ? dims.dietary.dietary   : undefined,
     allergies: dims.dietary?.allergies.length ? dims.dietary.allergies : undefined,
     checks:    selectChecks(dims),
+    maxTurns:  PATIENCE_MAX_TURNS[variation.patience],
   };
 }
 
@@ -408,21 +470,29 @@ const VEGAN_CONFIG = DIETARY_CONFIGS.find((d) => d.label === "vegano") ?? DIETAR
 
 const FIXED_PROFILE_DIMS: Dimensions[] = [
   // 1. Indecisive customer
-  { intent: "indeciso", budget: "médio",  groupSize: "solo",    dietary: null,        behavior: "ignora"        },
+  { intent: "indeciso", budget: "médio",  groupSize: "solo",    dietary: null,        behavior: "ignora",               variation: { patience: "long",  upsellOpenness: "neutral" } },
   // 2. Price-sensitive customer
-  { intent: "direto",   budget: "baixo",  groupSize: "solo",    dietary: null,        behavior: "recusa_upsell" },
+  { intent: "direto",   budget: "baixo",  groupSize: "solo",    dietary: null,        behavior: "recusa_upsell",        variation: { patience: "short", upsellOpenness: "closed",  budgetSensitivity: "high" } },
   // 3. Hungry direct buyer
-  { intent: "fome",     budget: "médio",  groupSize: "solo",    dietary: null,        behavior: "aceita_upsell" },
-  // 4. Upsell-resistant customer
-  { intent: "direto",   budget: "alto",   groupSize: "solo",    dietary: null,        behavior: "recusa_upsell" },
-  // 5. High-ticket customer
-  { intent: "curioso",  budget: "alto",   groupSize: "dupla",   dietary: null,        behavior: "aceita_upsell" },
+  { intent: "fome",     budget: "médio",  groupSize: "solo",    dietary: null,        behavior: "aceita_upsell",        variation: { patience: "long",  upsellOpenness: "open" } },
+  // 4. Upsell-resistant premium
+  { intent: "direto",   budget: "alto",   groupSize: "solo",    dietary: null,        behavior: "recusa_upsell",        variation: { patience: "short", upsellOpenness: "closed" } },
+  // 5. High-ticket couple
+  { intent: "curioso",  budget: "alto",   groupSize: "dupla",   dietary: null,        behavior: "aceita_upsell",        variation: { patience: "long",  upsellOpenness: "open" } },
   // 6. Group order (family)
-  { intent: "fome",     budget: "alto",   groupSize: "família", dietary: null,        behavior: "muda_de_ideia" },
+  { intent: "fome",     budget: "alto",   groupSize: "família", dietary: null,        behavior: "muda_de_ideia",        variation: { patience: "long",  indecisionLevel: "high" } },
   // 7. Dietary restriction (vegan)
-  { intent: "indeciso", budget: "médio",  groupSize: "solo",    dietary: VEGAN_CONFIG, behavior: "aceita_upsell" },
+  { intent: "indeciso", budget: "médio",  groupSize: "solo",    dietary: VEGAN_CONFIG, behavior: "aceita_upsell",       variation: { patience: "long",  upsellOpenness: "open" } },
   // 8. Impatient customer
-  { intent: "direto",   budget: "médio",  groupSize: "solo",    dietary: null,        behavior: "impaciente"    },
+  { intent: "direto",   budget: "médio",  groupSize: "solo",    dietary: null,        behavior: "impaciente",           variation: { patience: "short" } },
+  // 9. Rejects first, warms up (tests upsell persistence)
+  { intent: "curioso",  budget: "médio",  groupSize: "dupla",   dietary: null,        behavior: "recusa_depois_aceita", variation: { patience: "long",  upsellOpenness: "neutral" } },
+  // 10. Questions before ordering (tests AI's ability to handle pre-order doubts)
+  { intent: "indeciso", budget: "baixo",  groupSize: "solo",    dietary: null,        behavior: "pergunta_primeiro",    variation: { patience: "long",  indecisionLevel: "high",  budgetSensitivity: "high" } },
+  // 11. Dietary (sem lactose) + direct + short patience
+  { intent: "direto",   budget: "médio",  groupSize: "solo",    dietary: DIETARY_CONFIGS.find((d) => d.label === "sem lactose") ?? null, behavior: "aceita_upsell", variation: { patience: "short", upsellOpenness: "neutral" } },
+  // 12. Hungry premium + changes mind (tests re-selection without repeat)
+  { intent: "fome",     budget: "alto",   groupSize: "solo",    dietary: null,        behavior: "muda_de_ideia",        variation: { patience: "long",  indecisionLevel: "medium", upsellOpenness: "open" } },
 ];
 
 // ─── combination pool (for random extras) ────────────────────
@@ -430,7 +500,7 @@ const FIXED_PROFILE_DIMS: Dimensions[] = [
 const ALL_INTENTS:   Intent[]    = ["fome", "curioso", "direto", "indeciso"];
 const ALL_BUDGETS:   Budget[]    = ["baixo", "médio", "alto"];
 const ALL_GROUPS:    GroupSize[] = ["solo", "dupla", "família"];
-const ALL_BEHAVIORS: Behavior[]  = ["aceita_upsell", "recusa_upsell", "ignora", "muda_de_ideia", "impaciente"];
+const ALL_BEHAVIORS: Behavior[]  = ["aceita_upsell", "recusa_upsell", "ignora", "muda_de_ideia", "impaciente", "recusa_depois_aceita", "pergunta_primeiro"];
 
 function buildCombinationPool(): Dimensions[] {
   const pool: Dimensions[] = [];
