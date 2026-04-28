@@ -2,13 +2,13 @@ name: Deploy to Railway
 
 # Fires on every push/merge to the production default branch.
 # Railway's native GitHub integration is NOT used — it reliably missed
-# branches with slashes in the name (e.g. claude/fresh-debug-session).
+# branches with slashes in the name (e.g. claude/remove-legacy-runner-q8iXa).
 # This workflow calls the Railway Deploy Hook directly instead.
 
 on:
   push:
     branches:
-      - claude/fresh-debug-session
+      - claude/remove-legacy-runner-q8iXa
   workflow_dispatch:        # allows one-click manual trigger from GitHub Actions UI
     inputs:
       reason:
@@ -23,6 +23,13 @@ jobs:
     timeout-minutes: 5
 
     steps:
+      - name: Validate secret is set
+        run: |
+          if [ -z "${{ secrets.RAILWAY_WEBHOOK_URL }}" ]; then
+            echo "::error::RAILWAY_WEBHOOK_URL secret is not set. Add it in GitHub → Settings → Secrets → Actions."
+            exit 1
+          fi
+
       - name: Log deploy context
         run: |
           echo "Branch : ${{ github.ref_name }}"
