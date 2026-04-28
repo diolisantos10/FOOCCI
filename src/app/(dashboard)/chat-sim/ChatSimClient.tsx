@@ -151,13 +151,15 @@ function ExternalTestPanel({
               rel="noopener noreferrer"
               className="flex-1 rounded-lg bg-orange-500 px-2 py-1.5 text-center text-[11px] font-medium text-white hover:bg-orange-600 transition-colors"
             >
-              Abrir
+              Abrir no navegador
             </a>
           </div>
+          <p className="text-[10px] text-gray-400 text-center">
+            📱 Escaneie o QR para abrir no celular
+          </p>
         </div>
         <p className="text-[10px] text-gray-400 text-center">
-          Esta página usa a pipeline pública (<code>/pedido</code>).<br />
-          O Chat Sim testa a pipeline WhatsApp (AIOrderService).
+          Esta página usa a pipeline pública (<code>/pedido</code>).
         </p>
       </div>
     </div>

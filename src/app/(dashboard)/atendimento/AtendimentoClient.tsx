@@ -79,12 +79,20 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
 
 // ── Priority helpers ──────────────────────────────────────────────────────────
 
+type PriorityLevel = "critical" | "attention" | "ok";
+
 function handlerPriority(c: ConvSummary): number {
   if (c.status === "OPEN" && c.unreadCount > 0) return 0; // Aguardando humano
   if (c.status === "HUMAN")                     return 1; // Em atendimento
   if (c.status === "OPEN")                      return 2; // Aberta
   if (c.status === "BOT")                       return 3; // IA
   return 4; // RESOLVED
+}
+
+function convPriorityLevel(c: ConvSummary): PriorityLevel {
+  if (c.status === "OPEN" && c.unreadCount > 0) return "critical";
+  if (c.status === "OPEN" || c.status === "HUMAN") return "attention";
+  return "ok";
 }
 
 type HandlerBadge = { label: string; cls: string };
@@ -379,18 +387,21 @@ export function AtendimentoClient({
                 const isSelected = conv.id === selectedId;
                 const isWaiting =
                   conv.status === "OPEN" && conv.unreadCount > 0;
+                const priority = convPriorityLevel(conv);
 
                 return (
                   <li key={conv.id}>
                     <button
                       type="button"
                       onClick={() => handleSelectConv(conv.id)}
-                      className={`w-full px-3 py-3 text-left transition-colors ${
+                      className={`w-full px-3 py-3 text-left transition-colors border-l-2 ${
                         isSelected
-                          ? "bg-orange-50 border-l-2 border-orange-500"
-                          : isWaiting
-                          ? "bg-red-50/40 hover:bg-red-50/70"
-                          : "hover:bg-gray-50"
+                          ? "bg-orange-50 border-orange-500"
+                          : priority === "critical"
+                          ? "border-red-400 bg-red-50/40 hover:bg-red-50/70"
+                          : priority === "attention"
+                          ? "border-amber-400 hover:bg-amber-50/30"
+                          : "border-transparent hover:bg-gray-50"
                       }`}
                     >
                       <div className="flex items-start gap-2.5">
@@ -417,6 +428,12 @@ export function AtendimentoClient({
                           </div>
 
                           <div className="mt-0.5 flex items-center gap-1.5">
+                            {/* Priority dot */}
+                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                              priority === "critical" ? "bg-red-500 animate-pulse" :
+                              priority === "attention" ? "bg-amber-400" :
+                              "bg-green-400"
+                            }`} />
                             {/* Channel */}
                             <span className="text-[10px] text-gray-400">
                               {CHANNEL_META[conv.channel]?.icon ?? "💬"}
@@ -546,16 +563,23 @@ function isDelayed(createdAt: string, status: string): boolean {
   return (Date.now() - new Date(createdAt).getTime()) > DELAY_MINUTES * 60_000;
 }
 
+function orderPriorityLevel(status: string, createdAt: string): PriorityLevel {
+  if (isDelayed(createdAt, status)) return "critical";
+  if (["PENDING", "AWAITING_PAYMENT"].includes(status)) return "attention";
+  return "ok";
+}
+
 function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
   const [status,     setStatus]     = useState(order.status);
   const [updating,   setUpdating]   = useState<string | null>(null); // which action is loading
   const [errorMsg,   setErrorMsg]   = useState<string | null>(null);
 
-  const total   = parseFloat(order.total);
-  const items   = order.items.slice(0, 3);
-  const more    = order.items.length - items.length;
-  const delayed = isDelayed(order.createdAt, status);
-  const meta    = delayed ? DELAYED_META : (STATUS_META[status] ?? { label: status, badge: "bg-gray-100 border-gray-200 text-gray-600" });
+  const total    = parseFloat(order.total);
+  const items    = order.items.slice(0, 3);
+  const more     = order.items.length - items.length;
+  const delayed  = isDelayed(order.createdAt, status);
+  const meta     = delayed ? DELAYED_META : (STATUS_META[status] ?? { label: status, badge: "bg-gray-100 border-gray-200 text-gray-600" });
+  const priority = orderPriorityLevel(status, order.createdAt);
 
   async function applyAction(nextStatus: string, actionKey: string) {
     setUpdating(actionKey);
@@ -585,7 +609,31 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
   const isTerminal = ["DELIVERED", "CANCELLED"].includes(status);
 
   return (
-    <div className="mt-2 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+    <div className={`mt-2 rounded-xl border-2 overflow-hidden shadow-sm ${
+      priority === "critical"
+        ? "border-red-400 bg-red-50/30"
+        : priority === "attention"
+        ? "border-amber-400 bg-white"
+        : "border-gray-200 bg-white"
+    }`}>
+
+      {/* Priority banner */}
+      <div className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold border-b ${
+        priority === "critical"
+          ? "bg-red-100 text-red-700 border-red-200"
+          : priority === "attention"
+          ? "bg-amber-50 text-amber-700 border-amber-100"
+          : "bg-green-50 text-green-700 border-green-100"
+      }`}>
+        <span>{priority === "critical" ? "🔴" : priority === "attention" ? "🟡" : "🟢"}</span>
+        <span>
+          {priority === "critical"
+            ? "Pedido atrasado — agir agora"
+            : priority === "attention"
+            ? "Aguardando confirmação"
+            : "Em preparo"}
+        </span>
+      </div>
 
       {/* Header row */}
       <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
