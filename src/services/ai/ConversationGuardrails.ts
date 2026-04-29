@@ -147,3 +147,40 @@ export async function getAlreadySuggestedItems(
   });
   return rows;
 }
+
+// ── Drink attempt tracking ────────────────────────────────────────────────────
+
+/**
+ * Returns the number of distinct drink items suggested via suggest_upsell
+ * in prior turns of this conversation (does not include the current turn).
+ * A "drink" is any item whose category is neither a main dish nor a dessert.
+ */
+export async function getDrinkAttemptCount(conversationId: string): Promise<number> {
+  const logs = await prisma.aIInteractionLog.findMany({
+    where:  { conversationId },
+    select: { toolCalls: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const suggestedIds = new Set<string>();
+  for (const log of logs) {
+    if (!Array.isArray(log.toolCalls)) continue;
+    for (const call of log.toolCalls as Array<{ name: string; args?: unknown }>) {
+      if (call.name === "suggest_upsell" && call.args && typeof call.args === "object") {
+        const args = call.args as Record<string, unknown>;
+        if (typeof args.menuItemId === "string") suggestedIds.add(args.menuItemId);
+      }
+    }
+  }
+
+  if (suggestedIds.size === 0) return 0;
+
+  const items = await prisma.menuItem.findMany({
+    where:  { id: { in: [...suggestedIds] } },
+    select: { id: true, category: { select: { name: true } } },
+  });
+
+  return items.filter(
+    (item) => !isMainCategory(item.category.name) && !isDessertCategory(item.category.name),
+  ).length;
+}

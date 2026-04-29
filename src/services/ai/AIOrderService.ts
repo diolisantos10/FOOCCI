@@ -29,7 +29,7 @@ import { AIInteractionLogger } from "./AIInteractionLogger";
 import { buildSalesProfile } from "./SalesProfile";
 import { resolveMaxTokens } from "./BehaviorEngine";
 import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
-import { getAlreadySuggestedItems, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
+import { getDrinkAttemptCount, getAlreadySuggestedItems, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
 import type { OrderStage } from "@/lib/agent/types";
@@ -362,20 +362,24 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     setDraftId: (id) => { draftId = id; toolCtx.draftId = id; },
     requestHandoff: (reason) => { handoffRequested = true; handoffReason = reason; },
     upsellSuggestedThisTurn: false,
+    drinkAttemptsThisTurn:   0,
+    drinkAttemptsPriorTurns: 0, // overwritten below after parallel query
   };
 
   // 5. Build sales profile + guardrail data + upsell context
   const salesProfile = buildSalesProfile(brandConfig, restaurantName);
 
   // Load guardrail data in parallel with the existing profile build
-  const [alreadySuggestedItems, customerPrefs] = await Promise.all([
+  const [alreadySuggestedItems, customerPrefs, drinkAttemptsPriorTurns] = await Promise.all([
     getAlreadySuggestedItems(conversationId),
     prisma.customerPreference.findUnique({
       where:  { customerId },
       select: { dietary: true, allergies: true },
     }),
+    getDrinkAttemptCount(conversationId),
   ]);
   const alreadySuggestedIds = new Set<string>(alreadySuggestedItems.map((i: { id: string }) => i.id));
+  toolCtx.drinkAttemptsPriorTurns = drinkAttemptsPriorTurns;
 
   const customerDietary   = customerPrefs?.dietary   ?? [];
   const customerAllergies = customerPrefs?.allergies ?? [];

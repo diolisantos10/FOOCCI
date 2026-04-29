@@ -15,6 +15,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { isDessertCategory, isMainCategory } from "./ConversationGuardrails";
 import type OpenAI from "openai";
 
 // ─── tool context ─────────────────────────────────────────────
@@ -34,6 +35,15 @@ export interface ToolContext {
    * Prevents the AI from suggesting more than one product per response.
    */
   upsellSuggestedThisTurn: boolean;
+  /**
+   * Drink Priority Engine: number of drink suggest_upsell calls made in THIS turn.
+   * Combined with drinkAttemptsPriorTurns to enforce the 2-attempt minimum gate.
+   */
+  drinkAttemptsThisTurn: number;
+  /**
+   * Drink attempts made in all previous turns of this conversation (loaded at turn start).
+   */
+  drinkAttemptsPriorTurns: number;
 }
 
 // ─── tool result ──────────────────────────────────────────────
@@ -366,7 +376,11 @@ async function execConfirmOrder(
 
   const draft = await prisma.orderDraft.findUnique({
     where: { id: ctx.draftId },
-    include: { items: true },
+    include: {
+      items: {
+        include: { menuItem: { include: { category: { select: { name: true } } } } },
+      },
+    },
   });
 
   if (!draft || draft.status !== "OPEN") {
@@ -374,6 +388,31 @@ async function execConfirmOrder(
   }
   if (draft.items.length === 0) {
     return { success: false, message: "Não é possível confirmar um pedido sem itens." };
+  }
+
+  // Drink Priority Engine — hard gate (server-side, not prompt-dependent)
+  const hasMainItem = draft.items.some(
+    (di) => di.menuItem && isMainCategory(di.menuItem.category.name),
+  );
+  const cartHasDrink = draft.items.some(
+    (di) => di.menuItem
+      && !isMainCategory(di.menuItem.category.name)
+      && !isDessertCategory(di.menuItem.category.name),
+  );
+  const totalDrinkAttempts = ctx.drinkAttemptsPriorTurns + ctx.drinkAttemptsThisTurn;
+
+  if (!hasMainItem) {
+    return { success: false, message: "Não é possível confirmar sem prato principal no pedido." };
+  }
+  if (!cartHasDrink && totalDrinkAttempts < 2) {
+    const remaining = 2 - totalDrinkAttempts;
+    return {
+      success: false,
+      message:
+        `⚠️ DRINK GATE: bebida ainda não foi coberta (${totalDrinkAttempts}/2 tentativas). ` +
+        `Faça ${remaining} tentativa(s) de bebida — chame suggest_upsell com uma bebida AGORA. ` +
+        `confirm_order bloqueado até cobertura mínima.`,
+    };
   }
 
   // Update fulfillment type on draft
@@ -494,6 +533,10 @@ async function execSuggestUpsell(
 
   // Mark suggestion as used for this turn (single-suggestion guardrail)
   ctx.upsellSuggestedThisTurn = true;
+
+  // Drink Priority Engine: track drink attempts so confirm_order gate can enforce minimum
+  const isDrink = !isMainCategory(item.category.name) && !isDessertCategory(item.category.name);
+  if (isDrink) ctx.drinkAttemptsThisTurn += 1;
 
   return {
     success: true,
