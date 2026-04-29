@@ -65,21 +65,24 @@ const MAX_TOOL_ITERATIONS = 6;
 // Determines the current upsell stage from cart state + available suggestions.
 // Stage 3 = drink not yet attempted; Stage 4 = dessert not yet attempted;
 // "none" = cart empty (Stage 1/2) or both already covered (Stage 5+).
-type UpsellStage = 3 | 4 | "none";
+type UpsellStage = "food" | 3 | 4 | "none";
 
 function inferUpsellStage(
   cartItemCount: number,
   suggestions: Array<{ categoryName: string }>,
 ): UpsellStage {
   if (cartItemCount === 0) return "none";
-  // Drink = any category that is neither a main course nor a dessert
+  // Food expansion: main-category items still available (suggest more food before complements)
+  const hasFood = suggestions.some((s) => isMainCategory(s.categoryName));
+  if (hasFood) return "food";
+  // Drink stage: non-main, non-dessert categories (only reached when food candidates exhausted)
   const hasDrink = suggestions.some(
     (s) => !isMainCategory(s.categoryName) && !isDessertCategory(s.categoryName),
   );
   if (hasDrink) return 3;
   const hasDessert = suggestions.some((s) => isDessertCategory(s.categoryName));
   if (hasDessert) return 4;
-  return "none"; // Stage 5+ — both categories covered or attempted
+  return "none";
 }
 
 // ─── public API ───────────────────────────────────────────────
@@ -413,7 +416,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
 
   // Determine current stage so we only inject upsell hints when appropriate
   const upsellStage   = inferUpsellStage(cartItemCount, upsellSuggestions);
-  const upsellAllowed = upsellStage === 3 || upsellStage === 4;
+  const upsellAllowed = upsellStage === "food" || upsellStage === 3 || upsellStage === 4;
 
   // 6. Build messages — pass UpsellEngine metrics so PromptBuilder has single source of truth
   const messages = await PromptBuilderService.build({

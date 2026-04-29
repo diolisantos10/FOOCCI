@@ -238,13 +238,17 @@ const MAX_SIM_TURNS = 12;
 
 // ─── upsell stage inference (mirrors AIOrderService) ─────────
 
-type UpsellStage = 3 | 4 | "none";
+type UpsellStage = "food" | 3 | 4 | "none";
 
 function inferUpsellStage(
   cartItemCount: number,
   suggestions: Array<{ categoryName: string }>,
 ): UpsellStage {
   if (cartItemCount === 0) return "none";
+  // Food expansion: main-category items still available (suggest more food before complements)
+  const hasFood = suggestions.some((s) => isMainCategory(s.categoryName));
+  if (hasFood) return "food";
+  // Drink stage: non-main, non-dessert categories (only reached when food candidates exhausted)
   const hasDrink = suggestions.some(
     (s) => !isMainCategory(s.categoryName) && !isDessertCategory(s.categoryName),
   );

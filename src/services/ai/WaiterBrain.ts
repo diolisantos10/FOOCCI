@@ -30,12 +30,13 @@ export type NextAction =
   | "ASK_QUESTION"
   | "RECOMMEND_MAIN"
   | "ADD_ITEM"
+  | "EXPAND_FOOD"
   | "SUGGEST_UPSELL"
   | "CONFIRM_ORDER";
 
 export interface WaiterState {
   cartItemCount: number;
-  upsellStage: 3 | 4 | "none";
+  upsellStage: "food" | 3 | 4 | "none";
   drinkAttemptsPrior: number;
 }
 
@@ -135,12 +136,25 @@ export function classifyIntent(userMessage: string): CustomerIntent {
 export function decideNextAction(
   state: WaiterState,
   intent: CustomerIntent,
-  hasCandidates: boolean,
+  candidates: UpsellSuggestion[],
 ): NextAction {
-  // Priority 1 — CHECKOUT intent (highest override)
+  const foodCandidates    = candidates.filter((c) => isMainCategory(c.categoryName));
+  const drinkCandidates   = candidates.filter(
+    (c) => !isMainCategory(c.categoryName) && !isDessertCategory(c.categoryName),
+  );
+  const dessertCandidates = candidates.filter((c) => isDessertCategory(c.categoryName));
+
+  // Priority 1 — CHECKOUT intent: skip food expansion → complement phase (drink → dessert → confirm)
   if (intent === "CHECKOUT") {
-    // Can't confirm an empty cart — ask what the customer wants instead
     if (state.cartItemCount === 0) return "ASK_QUESTION";
+    // Offer drink once if not yet attempted (complement phase entry)
+    if (drinkCandidates.length > 0 && state.drinkAttemptsPrior === 0) {
+      return "SUGGEST_UPSELL";
+    }
+    // Offer dessert if drink already done and dessert available
+    if (state.upsellStage === 4 && dessertCandidates.length > 0) {
+      return "SUGGEST_UPSELL";
+    }
     return "CONFIRM_ORDER";
   }
 
@@ -150,7 +164,7 @@ export function decideNextAction(
   // Priority 3 — Empty cart: must get main item before anything else
   if (state.cartItemCount === 0) {
     if (intent === "NEED_RECOMMENDATION" || intent === "PRICE_SENSITIVE") {
-      return hasCandidates ? "RECOMMEND_MAIN" : "ASK_QUESTION";
+      return candidates.length > 0 ? "RECOMMEND_MAIN" : "ASK_QUESTION";
     }
     return "ASK_QUESTION";
   }
@@ -158,12 +172,15 @@ export function decideNextAction(
   // Priority 4 — Browsing/exploring: answer contextually, don't push
   if (intent === "CATEGORY_BROWSING") return "ASK_QUESTION";
 
-  // Priority 5 — Upsell funnel (lowest): only when cart has items
+  // Priority 5 — Upsell funnel: food expansion first, drink/dessert only via CHECKOUT path
+  if (state.upsellStage === "food") {
+    return foodCandidates.length > 0 ? "EXPAND_FOOD" : "CONFIRM_ORDER";
+  }
+  // Stages 3/4 reached without CHECKOUT signal means food candidates exhausted — just confirm
   if (state.upsellStage === 3 || state.upsellStage === 4) {
-    return hasCandidates ? "SUGGEST_UPSELL" : "CONFIRM_ORDER";
+    return "CONFIRM_ORDER";
   }
 
-  // All categories covered or no candidates left — close
   return "CONFIRM_ORDER";
 }
 
@@ -231,8 +248,31 @@ export function buildWaiterDirective(
       break;
     }
 
+    case "EXPAND_FOOD": {
+      const foodCandidates = candidates.filter((c) => isMainCategory(c.categoryName));
+      const pick = priceSensitive
+        ? [...foodCandidates].sort((a, b) => a.price - b.price)[0]
+        : foodCandidates[0];
+      if (pick) {
+        lines.push(
+          "FASE: EXPANSÃO DO PEDIDO — sugira mais comida antes de oferecer complementos.",
+          "PRODUTO SUGERIDO (complementar ao que já foi pedido):",
+          `  • [ID: ${pick.menuItemId}] ${pick.name} — R$ ${pick.price.toFixed(2)}`,
+          "→ Formato: [nome] + [1 benefício curto] + [pergunta de confirmação].",
+          "→ Execute suggest_upsell com o ID acima.",
+          "→ PROIBIDO nesta fase: oferecer bebida, sobremesa ou qualquer complemento líquido/doce.",
+          "→ Bebida e sobremesa são oferecidos SOMENTE após sinal de fechamento do cliente.",
+        );
+      } else {
+        lines.push("→ Sem itens de comida disponíveis para expansão. Execute confirm_order imediatamente.");
+      }
+      break;
+    }
+
     case "SUGGEST_UPSELL": {
-      const isDrinkStage = state.upsellStage === 3;
+      // isDrinkStage: explicit stage 3, OR food stage bypassed by CHECKOUT intent (complement phase)
+      const isDrinkStage = state.upsellStage === 3 ||
+        (state.upsellStage === "food" && drinkCandidates.length > 0);
       const pool = isDrinkStage
         ? (drinkCandidates.length > 0 ? drinkCandidates : candidates)
         : (dessertCandidates.length > 0 ? dessertCandidates : candidates);
@@ -288,7 +328,7 @@ export function decide(input: WaiterBrainInput): WaiterDecision {
   const { userMessage, state, candidates } = input;
   const intent         = classifyIntent(userMessage);
   const priceSensitive = intent === "PRICE_SENSITIVE";
-  const action         = decideNextAction(state, intent, candidates.length > 0);
+  const action         = decideNextAction(state, intent, candidates);
   const directive      = buildWaiterDirective(intent, action, state, candidates, priceSensitive);
   return { intent, action, directive };
 }
