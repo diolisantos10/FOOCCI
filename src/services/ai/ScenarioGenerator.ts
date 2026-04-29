@@ -1,19 +1,24 @@
 /**
  * ScenarioGenerator
  *
- * Always generates the 8 fixed customer profiles required by the stress-test
- * engine, then fills remaining slots with random combinations from the 864+
- * entry pool so no two runs are identical.
+ * Holds 12 canonical fixed customer profiles (FIXED_PROFILE_DIMS).
+ * generateScenarios(count) slices the pool to exactly `count` scenarios:
+ *   count ≤ 12 → first `count` fixed profiles
+ *   count >  12 → all 12 fixed + random extras from the 864+ combination pool
  *
- * Fixed profiles (always run):
- *  1. Cliente Indeciso      — indeciso  · médio · solo    · ignora
- *  2. Cliente Econômico     — direto    · baixo · solo    · recusa_upsell
- *  3. Faminto Direto        — fome      · médio · solo    · aceita_upsell
- *  4. Anti-Upsell           — direto    · alto  · solo    · recusa_upsell
- *  5. Cliente Premium       — curioso   · alto  · dupla   · aceita_upsell
- *  6. Pedido em Grupo       — fome      · alto  · família · muda_de_ideia
- *  7. Restrição Vegana      — indeciso  · médio · solo    · vegano · aceita_upsell
- *  8. Cliente Impaciente    — direto    · médio · solo    · impaciente
+ * Fixed profiles (canonical pool, in order):
+ *  1.  Cliente Indeciso          — indeciso  · médio · solo    · ignora
+ *  2.  Cliente Econômico         — direto    · baixo · solo    · recusa_upsell
+ *  3.  Faminto Direto            — fome      · médio · solo    · aceita_upsell
+ *  4.  Anti-Upsell               — direto    · alto  · solo    · recusa_upsell
+ *  5.  Cliente Premium           — curioso   · alto  · dupla   · aceita_upsell
+ *  6.  Pedido em Grupo           — fome      · alto  · família · muda_de_ideia
+ *  7.  Restrição Vegana          — indeciso  · médio · solo    · vegano · aceita_upsell
+ *  8.  Cliente Impaciente        — direto    · médio · solo    · impaciente
+ *  9.  Recusa depois aceita      — curioso   · médio · dupla   · recusa_depois_aceita
+ *  10. Perguntas antes de pedir  — indeciso  · baixo · solo    · pergunta_primeiro
+ *  11. Sem lactose + direto      — direto    · médio · solo    · sem lactose · aceita_upsell
+ *  12. Faminto premium           — fome      · alto  · solo    · muda_de_ideia
  */
 
 import type { BehaviorProfile, VariationLayer, CheckType, ScenarioDef } from "./AISimulatorService";
@@ -464,7 +469,7 @@ function buildScenario(dims: Dimensions, idx: number, tag: string): ScenarioDef 
   };
 }
 
-// ─── 8 fixed profiles ─────────────────────────────────────────
+// ─── 12 fixed profiles (canonical pool) ──────────────────────
 
 const VEGAN_CONFIG = DIETARY_CONFIGS.find((d) => d.label === "vegano") ?? DIETARY_CONFIGS[1]!;
 
@@ -534,17 +539,21 @@ function buildCombinationPool(): Dimensions[] {
 /**
  * Generate scenarios for one simulator run.
  *
- * Always includes the 8 fixed customer profiles (indecisive, price-sensitive,
- * hungry direct buyer, upsell-resistant, high-ticket, group order, dietary
- * restriction, impatient). If `count` > 8, fills the remainder with random
- * combinations from the pool so no two runs are identical.
+ * FIXED_PROFILE_DIMS holds 12 canonical profiles that cover the core
+ * customer archetypes. `count` controls how many actually run:
+ *   - count ≤ 12 → first `count` fixed profiles (deterministic subset)
+ *   - count >  12 → all 12 fixed + (count-12) random extras from the pool
+ *
+ * This ensures Rápido=5, Padrão=10, Completo=20 all run exactly that many.
  */
 export function generateScenarios(count: number = 10): ScenarioDef[] {
-  const fixed  = FIXED_PROFILE_DIMS.map((dims, idx) => buildScenario(dims, idx, "fix"));
-  const extras = Math.max(0, count - fixed.length);
+  const fixed = FIXED_PROFILE_DIMS.map((dims, idx) => buildScenario(dims, idx, "fix"));
 
-  if (extras === 0) return fixed;
+  if (count <= fixed.length) {
+    return fixed.slice(0, count);
+  }
 
+  const extras = count - fixed.length;
   const random = shuffle(buildCombinationPool())
     .slice(0, extras)
     .map((dims, idx) => buildScenario(dims, fixed.length + idx, "rnd"));

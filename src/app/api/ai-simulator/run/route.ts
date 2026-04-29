@@ -2,7 +2,7 @@
  * POST /api/ai-simulator/run
  *
  * Starts a simulation run as a detached background task.
- * Accepts optional { scenarioCount: number } body (min 1, max 50, default 10).
+ * Accepts optional { scenarioCount: number } body — must be 5, 10, or 20 (default 10).
  * Streams live progress as Server-Sent Events while the client is connected.
  * The job continues running even if the client disconnects — results are stored
  * in SimulationJobStore and accessible via GET /api/ai-simulator/status.
@@ -29,13 +29,17 @@ export async function POST(req: NextRequest) {
   const { restaurantId } = ctx;
   const encoder = new TextEncoder();
 
-  // Parse and validate scenarioCount (min 1, max 50, default 10)
-  let scenarioCount = 10;
+  // Parse and clamp scenarioCount to allowed preset values (default 10)
+  const ALLOWED_COUNTS = [5, 10, 20] as const;
+  let scenarioCount: 5 | 10 | 20 = 10;
   try {
     const body = await req.json() as { scenarioCount?: unknown };
-    const raw  = Number(body?.scenarioCount);
-    if (Number.isFinite(raw) && raw >= 1 && raw <= 50) {
-      scenarioCount = Math.floor(raw);
+    const raw  = Math.floor(Number(body?.scenarioCount));
+    if (ALLOWED_COUNTS.includes(raw as 5 | 10 | 20)) {
+      scenarioCount = raw as 5 | 10 | 20;
+    } else if (Number.isFinite(raw) && raw > 0) {
+      // Clamp to nearest allowed value
+      scenarioCount = raw <= 7 ? 5 : raw <= 15 ? 10 : 20;
     }
   } catch {
     // missing or non-JSON body — use default
