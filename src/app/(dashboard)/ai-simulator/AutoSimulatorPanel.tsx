@@ -214,6 +214,7 @@ export function AutoSimulatorPanel() {
   useEffect(() => {
     void fetchConfig();
     void fetchHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const patchConfig = useCallback(async (patch: Partial<AutoConfig>) => {
@@ -357,7 +358,7 @@ export function AutoSimulatorPanel() {
       ) : history.length === 0 ? (
         <div className="text-center py-16 space-y-2">
           <p className="text-gray-500 text-sm font-medium">Nenhuma execução ainda</p>
-          <p className="text-gray-400 text-xs">Clique em "Rodar agora" para iniciar a primeira simulação automática.</p>
+          <p className="text-gray-400 text-xs">Clique em &quot;Rodar agora&quot; para iniciar a primeira simulação automática.</p>
         </div>
       ) : (
         <div className="grid grid-cols-[220px_1fr] gap-4 min-h-[400px]">
