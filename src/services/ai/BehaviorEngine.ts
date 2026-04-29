@@ -178,12 +178,14 @@ function buildSalesSection(profile: SalesProfile): string {
   // Universal mandatory sequence — applies regardless of profile/intensity
   rules.push(
     "",
-    "SEQUÊNCIA OBRIGATÓRIA DE CATEGORIAS (todos os perfis, sem exceção):",
-    "- Prato principal no pedido? Se não → ajude a escolher um antes de qualquer outra sugestão.",
-    "- Já tem prato, mas bebida ainda não tentada? → DEVE sugerir bebida neste turno.",
-    "- Bebida já tentada, mas sobremesa ainda não tentada? → DEVE sugerir sobremesa neste turno.",
-    "- Bebida E sobremesa já tentadas (aceitas ou recusadas)? → Encaminhe para checkout.",
-    "- Esta sequência prevalece sobre estilo, intensidade e preferências do perfil.",
+    "SEQUÊNCIA OBRIGATÓRIA DE CATEGORIAS (todos os perfis, todas as intensidades):",
+    "- Estado A: sem prato → ajude a escolher um prato. Nada mais.",
+    "- Estado B: tem prato, bebida não tentada → DEVE sugerir bebida NESTE TURNO.",
+    "  Se cliente quer fechar → INTERCEPÇÃO: proponha bebida antes, NÃO confirme pedido.",
+    "- Estado C: bebida tentada, sobremesa não tentada → DEVE sugerir sobremesa NESTE TURNO.",
+    "  Se cliente quer fechar → INTERCEPÇÃO: proponha sobremesa antes, NÃO confirme pedido.",
+    "- Estado D: bebida E sobremesa tentadas → checkout liberado.",
+    "- Esta sequência tem prioridade absoluta sobre estilo, intensidade e persona.",
   );
 
   // Core upsell behavior based on intensity
@@ -223,7 +225,11 @@ function buildUpsellInstructions(profile: SalesProfile): string[] {
   const { upsellIntensity, personality, communication } = profile;
 
   if (communication.upsellStyle === "none") {
-    return ["- Não faça sugestões adicionais. Foque apenas em completar o pedido solicitado."];
+    return [
+      "- Estilo de upsell desativado: não force sugestões além do necessário.",
+      "- Porém, o FLUXO OBRIGATÓRIO do MOTOR DE VENDAS ainda se aplica:",
+      "  bebida e sobremesa devem ser tentadas uma vez antes do checkout.",
+    ];
   }
 
   switch (upsellIntensity) {
@@ -353,9 +359,10 @@ function buildPriorityInstructions(priority: SalesPriority): string[] {
 function buildClosingSection(profile: SalesProfile): string {
   const rules: string[] = [
     "AO CONFIRMAR O PEDIDO",
-    "- Sinais de checkout ('pode fechar', 'confirma', 'é isso', 'tá bom assim', etc.) → chame confirm_order AGORA.",
-    "- Não faça perguntas adicionais nem repita o resumo antes de chamar a ferramenta.",
-    "- confirm_order gera o resumo automaticamente.",
+    "- confirm_order só pode ser chamado no ESTADO D (bebida e sobremesa já tentadas).",
+    "- Se cliente quer fechar mas faltam categorias → use o script de INTERCEPÇÃO do MOTOR DE VENDAS.",
+    "- Quando ESTADO D e cliente confirmar → chame confirm_order. Sem perguntas extras.",
+    "- confirm_order gera o resumo automaticamente — não repita manualmente.",
   ];
 
   switch (profile.personality) {
