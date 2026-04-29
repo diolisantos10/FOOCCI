@@ -58,6 +58,8 @@ model Restaurant {
   crmAutomations     CRMAutomation[]
   crmActionLogs      CRMActionLog[]
   crmProfile         RestaurantCRMProfile?
+  autoSimulatorConfig AutoSimulatorConfig?
+  simulationRuns      SimulationRun[]
 
   @@map("restaurants")
 }
@@ -1177,4 +1179,44 @@ model RestaurantCRMProfile {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("restaurant_crm_profiles")
+}
+
+// ═══════════════════════════════════════════
+//  AUTO SIMULATOR
+// ═══════════════════════════════════════════
+
+model AutoSimulatorConfig {
+  id              String    @id @default(cuid())
+  restaurantId    String    @unique
+  enabled         Boolean   @default(false)
+  intervalMinutes Int       @default(60)
+  scenarioCount   Int       @default(10)
+  lastRunAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("auto_simulator_configs")
+}
+
+model SimulationRun {
+  id                String   @id @default(cuid())
+  restaurantId      String
+  ranAt             DateTime @default(now())
+  scenarioCount     Int
+  overallScore      Float
+  conversionRate    Float
+  attachRateDrink   Float
+  attachRateDessert Float
+  errorSummary      Json
+  analysis          Json
+  insight           String
+  suggestedPrompt   String   @db.Text
+  triggeredBy       String   @default("scheduler")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, ranAt])
+  @@map("simulation_runs")
 }

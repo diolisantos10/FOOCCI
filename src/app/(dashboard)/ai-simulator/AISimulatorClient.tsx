@@ -9,6 +9,7 @@ import type {
   CartSnapshot,
 } from "@/services/ai/AISimulatorService";
 import type { ParsedPrompt } from "@/services/ai/PromptParser";
+import { AutoSimulatorPanel } from "./AutoSimulatorPanel";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -22,7 +23,7 @@ interface ProgressInfo {
 
 // ─── main client ──────────────────────────────────────────────
 
-type ActiveTab = "standard" | "lab";
+type ActiveTab = "standard" | "lab" | "auto";
 
 const SCENARIO_PRESETS = [
   { label: "Rápido (5 cenários)",   value: 5  },
@@ -143,6 +144,16 @@ export function AISimulatorClient() {
           >
             <span>⚗</span> Prompt Lab
           </button>
+          <button
+            onClick={() => setActiveTab("auto")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTab === "auto"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            <span>⏱</span> Auto
+          </button>
         </div>
 
         {/* ─── Standard tab ──────────────────────────────────────── */}
@@ -212,6 +223,11 @@ export function AISimulatorClient() {
         {/* ─── Prompt Lab tab ────────────────────────────────────── */}
         {activeTab === "lab" && (
           <PromptLabPanel />
+        )}
+
+        {/* ─── Auto Simulator tab ─────────────────────────────────── */}
+        {activeTab === "auto" && (
+          <AutoSimulatorPanel />
         )}
       </div>
     </div>
