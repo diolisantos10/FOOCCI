@@ -29,7 +29,7 @@ import { AIInteractionLogger } from "./AIInteractionLogger";
 import { buildSalesProfile } from "./SalesProfile";
 import { resolveMaxTokens } from "./BehaviorEngine";
 import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
-import { getAlreadySuggestedIds, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
+import { getAlreadySuggestedItems, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
 import type { OrderStage } from "@/lib/agent/types";
@@ -368,13 +368,14 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
   const salesProfile = buildSalesProfile(brandConfig, restaurantName);
 
   // Load guardrail data in parallel with the existing profile build
-  const [alreadySuggestedIds, customerPrefs] = await Promise.all([
-    getAlreadySuggestedIds(conversationId),
+  const [alreadySuggestedItems, customerPrefs] = await Promise.all([
+    getAlreadySuggestedItems(conversationId),
     prisma.customerPreference.findUnique({
       where:  { customerId },
       select: { dietary: true, allergies: true },
     }),
   ]);
+  const alreadySuggestedIds = new Set<string>(alreadySuggestedItems.map((i: { id: string }) => i.id));
 
   const customerDietary   = customerPrefs?.dietary   ?? [];
   const customerAllergies = customerPrefs?.allergies ?? [];
@@ -423,11 +424,16 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
         .join("\n");
   }
 
-  // Anti-loop: tell AI which products were already suggested in this conversation
-  if (alreadySuggestedIds.size > 0) {
+  // Anti-repeat: list already-suggested items by name+ID so AI can match
+  // them against the conversation context and never repeat or re-pitch.
+  if (alreadySuggestedItems.length > 0) {
     sysAddendum +=
-      "\n\nPRODUTOS JÁ SUGERIDOS NESTA CONVERSA (não repita):\n" +
-      [...alreadySuggestedIds].map((id) => `  • ${id}`).join("\n");
+      "\n\nITENS JÁ SUGERIDOS NESTA CONVERSA (alreadySuggestedIds + rejectedIds — PROIBIDO repetir):\n" +
+      alreadySuggestedItems
+        .map((i: { id: string; name: string }) => `  • ${i.name} [ID: ${i.id}]`)
+        .join("\n") +
+      "\n  → Estes itens NÃO devem aparecer novamente como sugestão, independente do estágio." +
+      "\n  → Se não houver item novo disponível em uma categoria → PULE a categoria inteira.";
   }
 
   if (sysAddendum) {

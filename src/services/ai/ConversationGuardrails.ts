@@ -126,3 +126,24 @@ export async function getAlreadySuggestedIds(conversationId: string): Promise<Se
 
   return suggested;
 }
+
+export interface SuggestedItem {
+  id:   string;
+  name: string;
+}
+
+/**
+ * Same as getAlreadySuggestedIds but enriched with product names from the
+ * menu catalog, so the AI can match items to conversation context by name.
+ */
+export async function getAlreadySuggestedItems(
+  conversationId: string,
+): Promise<SuggestedItem[]> {
+  const ids = await getAlreadySuggestedIds(conversationId);
+  if (ids.size === 0) return [];
+  const rows = await prisma.menuItem.findMany({
+    where:  { id: { in: [...ids] } },
+    select: { id: true, name: true },
+  });
+  return rows;
+}
