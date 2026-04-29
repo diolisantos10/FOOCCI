@@ -178,26 +178,19 @@ function buildSalesSection(profile: SalesProfile): string {
   // Universal mandatory sequence — applies regardless of profile/intensity
   rules.push(
     "",
-    "SEQUÊNCIA OBRIGATÓRIA (prioridade absoluta sobre estilo e persona):",
-    "- Classifique o cliente: BROWSING (navegando) ou GUIDED (pediu ajuda).",
-    "- BROWSING: silencioso até seleção; depois confirme brevemente + sugira próximo passo.",
-    "- GUIDED: conduza o pedido com confiança, mova rápido.",
-    "- Gap-based: após cada seleção, pergunte 'O que falta nesta refeição?'",
-    "- Estágio 1/2: sem prato → ajude a escolher. Se indeciso → 1 pergunta de qualificação.",
-    "- Estágio 3: prato no carrinho, bebida não no carrinho → OBRIGATÓRIO 2 tentativas de bebida.",
-    "  1ª: bebida compatível. Se recusar → 2ª: subcategoria diferente (suco↔refrigerante↔cerveja).",
-    "  Checkout BLOQUEADO até 2 tentativas.",
-    "- Estágio 4: bebida tentada, sobremesa não tentada → DEVE sugerir sobremesa NESTE TURNO.",
-    "- Estágio 5: cobertura completa → REVISÃO. 'Confere seu pedido 👇'. PROIBIDO novo upsell.",
-    "  Ao confirmar → confirm_order AGORA. Prioridade máxima = fechar.",
+    "FUNIL STATE-DRIVEN (prioridade absoluta sobre estilo e persona):",
+    "- Leia sempre o STATE antes de agir: selectedItems, uncoveredCategories, upsellAttempts, stage.",
+    "- Ordem fixa: MAIN ITEM → DRINK → DESSERT → CHECKOUT. Nunca pular. Nunca voltar.",
+    "- Sem prato: sugira 1 item claro. Não liste opções.",
+    "- Com prato, sem bebida: sugira bebida AGORA. Obrigatório.",
+    "- Com prato + bebida tentada, sem sobremesa: sugira sobremesa AGORA. Obrigatório.",
+    "- Recusa_1 → alternativa diferente. Recusa_2 → pare categoria. Recusa_3 → checkout.",
     "",
-    "FINAL INTENT LOCK (prioridade sobre tudo — avalie ANTES do estágio):",
-    "- Sinal de fechamento = 'pode fechar' / 'finaliza' / 'tá bom assim' / 'fecha' / 'confirma' /",
-    "  'é isso' / 'só isso' / 'pronto' / 'quero fechar' / 'já tá bom' / 'manda' / similar.",
-    "- QUANDO DETECTADO: state.stage = CHECKOUT. Transição permanente.",
-    "- Bebida JÁ tentada (≥1) → confirm_order IMEDIATO. Proibido sugerir qualquer produto.",
-    "- Bebida NÃO tentada (0 tentativas) → UMA tentativa de bebida → confirm_order.",
-    "- PROIBIDO no estágio CHECKOUT: nova categoria, sobremesa, perguntas, voltar etapa.",
+    "REGRA 10 — FINAL INTENT LOCK (prioridade máxima):",
+    "- Sinal de fechamento → state.stage = CHECKOUT. Permanente.",
+    "- Bebida 0 tentativas → 1 tentativa → confirm_order.",
+    "- Qualquer outro caso → confirm_order IMEDIATO.",
+    "- PROIBIDO no CHECKOUT: sugestão, nova categoria, pergunta, retroceder.",
   );
 
   // Core upsell behavior based on intensity
@@ -216,18 +209,16 @@ function buildSalesSection(profile: SalesProfile): string {
   rules.push(
     "",
     "QUANDO DECIDIR O QUE SUGERIR:",
-    "- Verifique o estado: qual categoria (bebida/sobremesa) ainda não foi tentada nesta conversa?",
-    "- Siga o FLUXO OBRIGATÓRIO do MOTOR DE VENDAS — ele define o próximo passo com precisão.",
-    "- Se o bloco AÇÃO RECOMENDADA estiver no contexto, siga-o para escolher o item dentro da categoria.",
-    "- Gap de valor ativo → prefira o item de maior preço dentro da categoria obrigatória.",
-    "- Gap de itens ativo → prefira o complemento mais acessível na categoria obrigatória.",
-    "- Bebida + sobremesa tentadas → encaminhe para confirmação; não force mais sugestões.",
-    "- NUNCA cite 'meta', 'gap' ou números de ticket ao cliente — fale do item e do contexto.",
+    "- Leia o STATE: qual etapa do funil está ativa? (MAIN → DRINK → DESSERT)",
+    "- Se AÇÃO RECOMENDADA estiver no contexto, use-a para escolher o item dentro da etapa ativa.",
+    "- Gap de valor → prefira o item de maior preço dentro da etapa obrigatória.",
+    "- Etapa completa → avance. Nunca force sugestão fora da etapa.",
+    "- NUNCA cite 'meta', 'gap' ou números de ticket — fale do item e do contexto.",
     "",
     "EXECUÇÃO VISUAL (obrigatório):",
-    "- Mencionou um produto? Execute suggest_upsell no mesmo turno, sem exceção.",
+    "- Mencionou produto? Execute suggest_upsell no mesmo turno, sem exceção.",
     "- Texto introduz, ferramenta exibe. Os dois juntos, sempre.",
-    "- Antes de suggest_upsell ou add_item: confirme que o ID existe no CARDÁPIO do prompt.",
+    "- Antes de suggest_upsell ou add_item: confirme que o ID existe no CARDÁPIO.",
   );
 
   return rules.join("\n");
@@ -239,7 +230,7 @@ function buildUpsellInstructions(profile: SalesProfile): string[] {
   if (communication.upsellStyle === "none") {
     return [
       "- Estilo de upsell desativado: não force sugestões além do necessário.",
-      "- Porém, o FLUXO OBRIGATÓRIO do MOTOR DE VENDAS ainda se aplica:",
+      "- Porém, o FUNIL STATE-DRIVEN ainda se aplica:",
       "  bebida e sobremesa devem ser tentadas uma vez antes do checkout.",
     ];
   }
@@ -371,12 +362,12 @@ function buildPriorityInstructions(priority: SalesPriority): string[] {
 function buildClosingSection(profile: SalesProfile): string {
   const rules: string[] = [
     "AO CONFIRMAR O PEDIDO",
-    "- FINAL INTENT LOCK: sinal de fechamento → state.stage = CHECKOUT IMEDIATO.",
-    "- No estágio CHECKOUT + bebida já coberta → confirm_order IMEDIATO.",
-    "- No estágio CHECKOUT + bebida 0 tentativas → 1 tentativa de bebida → confirm_order.",
-    "- Fora do lock: confirm_order só após cobertura mínima da bebida.",
-    "- Quando cliente confirmar → chame confirm_order. Sem perguntas extras.",
-    "- confirm_order gera o resumo automaticamente — não repita manualmente.",
+    "- Siga REGRA 10 (FINAL INTENT LOCK): sinal de fechamento → state.stage = CHECKOUT.",
+    "- CHECKOUT + bebida coberta → confirm_order IMEDIATO.",
+    "- CHECKOUT + bebida 0 tentativas → 1 tentativa → confirm_order.",
+    "- Fora do lock: confirm_order só após funil completo (MAIN + DRINK + DESSERT tentados).",
+    "- Ao confirmar → chame confirm_order. Sem perguntas extras.",
+    "- confirm_order gera o resumo automaticamente — não repita.",
   ];
 
   switch (profile.personality) {
