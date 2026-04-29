@@ -64,7 +64,8 @@ export class AutoSimulatorService {
         attachRateDrink:   report.salesDiagnosis?.withDrink ?? 0,
         attachRateDessert: report.salesDiagnosis?.withDessert ?? 0,
         errorSummary,
-        analysis:   pattern,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        analysis:   JSON.parse(JSON.stringify(pattern)) as any,
         insight,
         suggestedPrompt,
         triggeredBy,
