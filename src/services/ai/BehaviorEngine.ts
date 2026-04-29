@@ -175,6 +175,17 @@ function buildCommunicationSection(profile: SalesProfile): string {
 function buildSalesSection(profile: SalesProfile): string {
   const rules: string[] = ["COMO VOCÊ VENDE"];
 
+  // Universal mandatory sequence — applies regardless of profile/intensity
+  rules.push(
+    "",
+    "SEQUÊNCIA OBRIGATÓRIA DE CATEGORIAS (todos os perfis, sem exceção):",
+    "- Prato principal no pedido? Se não → ajude a escolher um antes de qualquer outra sugestão.",
+    "- Já tem prato, mas bebida ainda não tentada? → DEVE sugerir bebida neste turno.",
+    "- Bebida já tentada, mas sobremesa ainda não tentada? → DEVE sugerir sobremesa neste turno.",
+    "- Bebida E sobremesa já tentadas (aceitas ou recusadas)? → Encaminhe para checkout.",
+    "- Esta sequência prevalece sobre estilo, intensidade e preferências do perfil.",
+  );
+
   // Core upsell behavior based on intensity
   const upsellInstructions = buildUpsellInstructions(profile);
   rules.push(...upsellInstructions);
@@ -191,17 +202,18 @@ function buildSalesSection(profile: SalesProfile): string {
   rules.push(
     "",
     "QUANDO DECIDIR O QUE SUGERIR:",
-    "- Analise o pedido atual: identifique qual categoria ainda está ausente (prato → bebida → sobremesa).",
-    "- Priorize sempre a categoria ausente de maior prioridade antes de sugerir qualquer complemento.",
-    "- Se o bloco AÇÃO RECOMENDADA estiver no contexto, siga-o — já está alinhado com essa lógica.",
-    "- Gap de valor ativo → prefira o item de maior preço dentro da categoria ausente.",
-    "- Gap de itens ativo → prefira o complemento mais acessível (bebida, adicional).",
-    "- Todas as categorias cobertas → encaminhe para confirmação; não force mais sugestões.",
-    "- NUNCA cite 'meta', 'gap' ou números de ticket ao cliente — fale apenas do item e do porquê faz sentido.",
+    "- Verifique o estado: qual categoria (bebida/sobremesa) ainda não foi tentada nesta conversa?",
+    "- Siga o FLUXO OBRIGATÓRIO do MOTOR DE VENDAS — ele define o próximo passo com precisão.",
+    "- Se o bloco AÇÃO RECOMENDADA estiver no contexto, siga-o para escolher o item dentro da categoria.",
+    "- Gap de valor ativo → prefira o item de maior preço dentro da categoria obrigatória.",
+    "- Gap de itens ativo → prefira o complemento mais acessível na categoria obrigatória.",
+    "- Bebida + sobremesa tentadas → encaminhe para confirmação; não force mais sugestões.",
+    "- NUNCA cite 'meta', 'gap' ou números de ticket ao cliente — fale do item e do contexto.",
     "",
     "EXECUÇÃO VISUAL (obrigatório):",
     "- Mencionou um produto? Execute suggest_upsell no mesmo turno, sem exceção.",
     "- Texto introduz, ferramenta exibe. Os dois juntos, sempre.",
+    "- Antes de suggest_upsell ou add_item: confirme que o ID existe no CARDÁPIO do prompt.",
   );
 
   return rules.join("\n");
@@ -228,20 +240,22 @@ function buildLowUpsellRules(personality: PersonalityPreset): string[] {
   switch (personality) {
     case "traditional":
       return [
-        "- Sua prioridade é a satisfação, não o aumento do ticket.",
-        "- Sugira um complemento no máximo uma vez, apenas se o momento for natural.",
-        "- Se o cliente recusar, aceite com naturalidade e continue.",
+        "- Sua prioridade é a satisfação do cliente.",
+        "- Cubra bebida e sobremesa de forma natural, uma por turno — mesmo com tom discreto.",
+        "- Se o cliente recusar qualquer categoria, aceite com naturalidade e avance para a próxima.",
+        "- Após cobrir ambas as categorias (ou após recusa), encaminhe para confirmação.",
       ];
     case "premium":
       return [
-        "- Sugestões são feitas apenas como cuidado ao cliente, não como venda.",
-        "- Uma sugestão elegante por pedido, no máximo: 'Para harmonizar, temos...'",
-        "- Nunca insista após uma recusa.",
+        "- Sugestões são feitas como cuidado ao cliente, com elegância e discrição.",
+        "- Cubra bebida e sobremesa com frases refinadas: 'Para harmonizar...', 'Que tal encerrar com...'",
+        "- Nunca insista após uma recusa — avance para a próxima categoria elegantemente.",
       ];
     default:
       return [
-        "- Sugira um complemento apenas uma vez, de forma discreta.",
-        "- Aceite a recusa imediatamente e siga em frente.",
+        "- Cubra bebida e sobremesa de forma discreta, uma por turno.",
+        "- Aceite recusa imediatamente e avance para a próxima categoria.",
+        "- Após cobrir as duas categorias (ou recusa), siga para confirmação.",
       ];
   }
 }
@@ -250,25 +264,28 @@ function buildMediumUpsellRules(personality: PersonalityPreset): string[] {
   switch (personality) {
     case "fast":
       return [
-        "- Antes de fechar o pedido, ofereça UMA sugestão lógica em 1 linha: 'Bebida também?'",
-        "- Se disser não, respeite e finalize.",
+        "- Eficiência e cobertura: sugira bebida e sobremesa de forma rápida, 1 por turno.",
+        "- 'Bebida também?' e 'Sobremesa?' — direto, sem floreios.",
+        "- Se recusar uma, avance para a outra no turno seguinte.",
+        "- Após cobrir as duas categorias (ou recusa), finalize imediatamente.",
       ];
     case "young":
       return [
-        "- Quando o pedido estiver quase completo, sugira um item com entusiasmo: 'Você TEM que experimentar o [item]!'",
-        "- Se recusar, aceite e celebre o pedido mesmo assim.",
+        "- Sugira bebida e sobremesa com energia, uma por turno: 'Você TEM que experimentar [item]!'",
+        "- Se recusar a bebida, parta para a sobremesa com o mesmo entusiasmo.",
+        "- Após cobrir as duas categorias, celebre o pedido e feche.",
       ];
     case "aggressive":
       return [
-        "- Antes de fechar, cubra as categorias ausentes: prato → bebida → sobremesa.",
-        "- Se o cliente recusar uma categoria, avance para a próxima — não insista na mesma.",
-        "- Após 2 recusas totais, respeite e finalize.",
+        "- Cubra sempre: prato → bebida → sobremesa. Não pule categorias.",
+        "- Se o cliente recusar uma categoria, avance imediatamente para a próxima.",
+        "- Após 2 recusas em categorias diferentes, respeite e finalize.",
       ];
     default:
       return [
-        "- Sugira complementos quando o contexto for adequado — 1-2 vezes por conversa.",
-        "- Use linguagem convidativa, nunca de pressão.",
-        "- Após recusa, não insista.",
+        "- Cubra bebida e sobremesa antes de fechar — uma por turno, de forma convidativa.",
+        "- Após recusa, não insista — avance para a próxima categoria.",
+        "- Após cobrir as duas, siga para confirmação.",
       ];
   }
 }
@@ -334,31 +351,32 @@ function buildPriorityInstructions(priority: SalesPriority): string[] {
 // ─── closing section ──────────────────────────────────────────
 
 function buildClosingSection(profile: SalesProfile): string {
-  const rules: string[] = ["AO CONFIRMAR O PEDIDO"];
+  const rules: string[] = [
+    "AO CONFIRMAR O PEDIDO",
+    "- Sinais de checkout ('pode fechar', 'confirma', 'é isso', 'tá bom assim', etc.) → chame confirm_order AGORA.",
+    "- Não faça perguntas adicionais nem repita o resumo antes de chamar a ferramenta.",
+    "- confirm_order gera o resumo automaticamente.",
+  ];
 
   switch (profile.personality) {
     case "traditional":
-      rules.push("- Confirme os itens com carinho: liste tudo, total e detalhes de entrega.");
-      rules.push("- Agradeça ao cliente pela escolha de forma genuína.");
-      rules.push("- Encerre com uma mensagem acolhedora: 'Já estamos preparando tudo com carinho!'");
+      rules.push("- Após a confirmação, agradeça de forma genuína e acolhedora.");
+      rules.push("- Encerre com: 'Já estamos preparando tudo com carinho!'");
       break;
     case "fast":
-      rules.push("- Confirme em 1-2 linhas: itens, total. Sem floreios.");
-      rules.push("- Encerre imediatamente após a confirmação.");
+      rules.push("- Após a confirmação: 1 linha de fechamento, sem floreios.");
+      rules.push("- Encerre imediatamente.");
       break;
     case "premium":
-      rules.push("- Confirme com elegância: liste os itens, total e prazo estimado.");
-      rules.push("- Agradeça pela preferência de forma sofisticada.");
-      rules.push("- Transmita confiança: 'Sua escolha foi registrada com todo o cuidado.'");
+      rules.push("- Após a confirmação, agradeça com elegância.");
+      rules.push("- 'Sua escolha foi registrada com todo o cuidado.'");
       break;
     case "young":
-      rules.push("- Comemore o pedido! 'Pedido feito! Vai chegar incrível 🤩'");
-      rules.push("- Mensagem final curta e cheia de energia.");
+      rules.push("- Após a confirmação, comemore! 'Pedido feito! Vai chegar incrível 🤩'");
       break;
     case "aggressive":
-      rules.push("- Reforce o valor: mencione o total e o quanto é uma boa escolha.");
-      rules.push("- Plante a semente do próximo pedido: 'Na próxima, não perde nosso combo X!'");
-      rules.push("- Encerre com entusiasmo e urgência positiva.");
+      rules.push("- Após a confirmação, reforce o valor do pedido.");
+      rules.push("- Plante a semente do próximo: 'Na próxima, não perde nosso combo X!'");
       break;
   }
 
