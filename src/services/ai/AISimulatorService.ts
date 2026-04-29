@@ -23,14 +23,14 @@ import { UpsellEngine } from "./UpsellEngine";
 import { buildSalesProfile } from "./SalesProfile";
 import { resolveMaxTokens } from "./BehaviorEngine";
 import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
-import { getAlreadySuggestedIds } from "./ConversationGuardrails";
-import { isBlockedByDietary } from "./ConversationGuardrails";
+import { getDrinkAttemptCount, getAlreadySuggestedItems, isBlockedByDietary, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
+import * as WaiterBrain from "./WaiterBrain";
+import type { UpsellSuggestion } from "./UpsellEngine";
 import { ConversationStatus } from "@prisma/client";
 import type OpenAI from "openai";
 import { generateScenarios } from "./ScenarioGenerator";
 
 const MAX_TOOL_ITERATIONS = 6;
-const MIN_SIM_TURNS       = 8;  // full flow needs ~8 turns: entry→main→drink→dessert→review→confirm
 
 // ─── public types ─────────────────────────────────────────────
 
@@ -236,6 +236,24 @@ export interface ScenarioDef {
 
 const MAX_SIM_TURNS = 12;
 
+// ─── upsell stage inference (mirrors AIOrderService) ─────────
+
+type UpsellStage = 3 | 4 | "none";
+
+function inferUpsellStage(
+  cartItemCount: number,
+  suggestions: Array<{ categoryName: string }>,
+): UpsellStage {
+  if (cartItemCount === 0) return "none";
+  const hasDrink = suggestions.some(
+    (s) => !isMainCategory(s.categoryName) && !isDessertCategory(s.categoryName),
+  );
+  if (hasDrink) return 3;
+  const hasDessert = suggestions.some((s) => isDessertCategory(s.categoryName));
+  if (hasDessert) return 4;
+  return "none";
+}
+
 interface CustomerState {
   turnCount:       number;
   hasOrdered:      boolean;
@@ -257,15 +275,40 @@ function initCustomerState(): CustomerState {
   };
 }
 
-// Message pools for simulated customer reactions
+// Message pools for simulated customer reactions.
+// Short answers (~40-50% of each relevant pool) reflect real WhatsApp behavior.
 const MSGS = {
-  accept:      ["ok, pode adicionar sim", "boa sugestão, pode colocar", "vou querer esse também", "pode incluir, gostei", "sim, quero esse", "perfeito, bota aí", "pode sim, adorei a sugestão"],
-  reject:      ["não, obrigado, tô bem assim", "dispensa, tá bom como tá", "não preciso de mais", "obrigado mas não", "pode deixar, já tá ótimo", "não vai precisar, valeu"],
-  ignore:      ["aliás, vocês aceitam cartão?", "quanto tempo leva a entrega?", "tem promoção hoje?", "vocês têm embalagem pra viagem?", "tem desconto pra pedido acima de certo valor?", "entregam no meu bairro?", "tem programa de fidelidade?"],
-  change:      ["na verdade espera, quero mudar o pedido", "esquece o que eu disse, quero outra coisa", "muda tudo, quero repensar", "me dá uma segunda opinião", "tô achando que vou querer outra coisa", "me mostra mais opções antes de confirmar"],
-  continue:    ["o que mais você recomenda?", "tem mais alguma coisa boa?", "e de bebida tem o quê?", "pode sugerir mais alguma coisa?", "o que vai bem com o que eu escolhi?", "tem alguma coisa especial hoje?"],
-  checkout:    ["acho que é isso, pode fechar o pedido", "tô satisfeito, pode confirmar", "pode finalizar o pedido", "pronto, pode fechar", "tá bom assim, fecha pra mim", "pode confirmar tudo"],
-  answer:      ["sim, pode ser", "isso mesmo", "qualquer coisa serve", "o que você recomendar tá ótimo", "pode mandar", "tá bom assim", "por favor"],
+  accept: [
+    // longer
+    "ok, pode adicionar sim", "boa sugestão, pode colocar", "vou querer esse também",
+    "pode incluir, gostei", "sim, quero esse", "perfeito, bota aí", "pode sim, adorei a sugestão",
+    // short (~50%)
+    "sim", "pode", "ok", "isso", "👍", "quero", "bora",
+  ],
+  reject: [
+    // longer
+    "não, obrigado, tô bem assim", "dispensa, tá bom como tá", "não preciso de mais",
+    "obrigado mas não", "pode deixar, já tá ótimo", "não vai precisar, valeu",
+    // short (~45%)
+    "não", "dispensa", "tô bem", "deixa", "pode não",
+  ],
+  ignore:   ["aliás, vocês aceitam cartão?", "quanto tempo leva a entrega?", "tem promoção hoje?", "vocês têm embalagem pra viagem?", "tem desconto pra pedido acima de certo valor?", "entregam no meu bairro?", "tem programa de fidelidade?"],
+  change:   ["na verdade espera, quero mudar o pedido", "esquece o que eu disse, quero outra coisa", "muda tudo, quero repensar", "me dá uma segunda opinião", "tô achando que vou querer outra coisa", "me mostra mais opções antes de confirmar"],
+  continue: [
+    // longer
+    "o que mais você recomenda?", "tem mais alguma coisa boa?", "e de bebida tem o quê?",
+    "pode sugerir mais alguma coisa?", "o que vai bem com o que eu escolhi?", "tem alguma coisa especial hoje?",
+    // short (~40%)
+    "e mais?", "tem mais?", "o que mais?", "mais alguma coisa?",
+  ],
+  checkout: ["acho que é isso, pode fechar o pedido", "tô satisfeito, pode confirmar", "pode finalizar o pedido", "pronto, pode fechar", "tá bom assim, fecha pra mim", "pode confirmar tudo"],
+  answer: [
+    // longer
+    "sim, pode ser", "isso mesmo", "qualquer coisa serve", "o que você recomendar tá ótimo",
+    "pode mandar", "tá bom assim", "por favor",
+    // short (~42%)
+    "sim", "pode", "ok", "isso", "tá",
+  ],
   abandon:     ["desculpa, vou pensar mais e volto depois", "na verdade vou deixar pra outra hora", "obrigado, mas por enquanto não", "vou passar mais tarde", "deixa pra amanhã"],
   hurry:         ["pode confirmar logo?", "tô com pressa, fecha o pedido", "rápido por favor, vai confirmar?", "fecha logo, tô sem tempo", "pode agilizar?"],
   postConfirm:   ["ótimo! em quanto tempo chega?", "confirmado, qual o prazo de entrega?", "perfeito! vocês entregam aqui na região?", "massa! vou aguardar então"],
@@ -306,10 +349,9 @@ function nextCustomerMessage(
   const confirmed = lastToolCalls.some((tc) => tc.name === "confirm_order" && tc.success);
   const { variation } = profile;
 
-  // Order confirmed — end or ask a brief post-confirm question
+  // Order confirmed — end immediately. No artificial continuation.
   if (confirmed) {
-    if (state.turnCount >= MIN_SIM_TURNS) return null;
-    return pickMsg(MSGS.postConfirm);
+    return null;
   }
 
   // Hard cap from patience setting
@@ -403,16 +445,16 @@ function nextCustomerMessage(
     }
   }
 
-  // AI added an item but no upsell — continue or close depending on turn depth
+  // AI added an item but no upsell — continue early, push to checkout after turn 5
   if (addedItem) {
-    return state.turnCount < MIN_SIM_TURNS ? pickMsg(MSGS.continue) : pickMsg(MSGS.checkout);
+    return state.turnCount < 5 ? pickMsg(MSGS.continue) : pickMsg(MSGS.checkout);
   }
 
   // AI asked a question — give a cooperative answer
   if (lastAiText.includes("?")) return pickMsg(MSGS.answer);
 
   // Default: keep the conversation moving
-  return state.hasOrdered && state.turnCount >= MIN_SIM_TURNS
+  return state.hasOrdered && state.turnCount >= 5
     ? pickMsg(MSGS.checkout)
     : pickMsg(MSGS.continue);
 }
@@ -728,14 +770,17 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
     drinkGateBlocked:        false,
   };
 
-  // Guardrail data
-  const [alreadySuggestedIds, customerPrefs] = await Promise.all([
-    getAlreadySuggestedIds(conversationId),
+  // Guardrail data — mirrors AIOrderService parallel query
+  const [alreadySuggestedItems, customerPrefs, drinkAttemptsPriorTurns] = await Promise.all([
+    getAlreadySuggestedItems(conversationId),
     prisma.customerPreference.findUnique({
       where:  { customerId },
       select: { dietary: true, allergies: true },
     }),
+    getDrinkAttemptCount(conversationId),
   ]);
+  const alreadySuggestedIds = new Set<string>(alreadySuggestedItems.map((i: { id: string }) => i.id));
+  toolCtx.drinkAttemptsPriorTurns = drinkAttemptsPriorTurns;
 
   const customerDietary   = customerPrefs?.dietary   ?? [];
   const customerAllergies = customerPrefs?.allergies ?? [];
@@ -753,6 +798,8 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
   );
   const { suggestions: upsellSuggestions, cartValue, cartItemCount, valueGap, itemGap } = upsellResult;
 
+  const upsellStage = inferUpsellStage(cartItemCount, upsellSuggestions);
+
   // Build messages (real PromptBuilderService)
   const messages = await PromptBuilderService.build({
     conversationId,
@@ -761,25 +808,63 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
     brandConfig,
   });
 
-  // System addenda (mirrors AIOrderService logic exactly)
+  // System addenda — exact production order: WaiterBrain → goal context → dietary → already-suggested
   const sysMsg = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
   let sysAddendum = "";
 
-  if (upsellSuggestions.length > 0 && brandConfig.upsellStyle !== "none") {
-    sysAddendum +=
-      "\n\nSUGESTÕES DE UPSELL — CHAME suggest_upsell AGORA (obrigatório neste turno):\n" +
-      "Selecione o item mais adequado abaixo e execute suggest_upsell antes de responder.\n" +
-      upsellSuggestions
-        .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName}) — ${s.reason}`)
-        .join("\n");
-  }
+  // WaiterBrain: main item fallback for empty cart (UpsellEngine requires a draft to return results)
+  const mainItemFallback: UpsellSuggestion[] = cartItemCount === 0
+    ? await (async () => {
+        const rows = await prisma.menuItem.findMany({
+          where:   { isActive: true, category: { restaurantId } },
+          include: { category: { select: { name: true } } },
+          take: 20,
+        });
+        return rows
+          .filter((i) => isMainCategory(i.category.name))
+          .slice(0, 3)
+          .map((i) => ({
+            menuItemId:   i.id,
+            name:         i.name,
+            price:        Number(i.price),
+            categoryName: i.category.name,
+            reason:       "prato principal",
+          }));
+      })()
+    : [];
+
+  const waiterCandidates = cartItemCount === 0 ? mainItemFallback : upsellSuggestions;
+  const waiterDecision = WaiterBrain.decide({
+    userMessage: customerMessage,
+    state: { cartItemCount, upsellStage, drinkAttemptsPrior: drinkAttemptsPriorTurns },
+    candidates: brandConfig.upsellStyle !== "none" ? waiterCandidates : [],
+  });
+  sysAddendum += waiterDecision.directive;
+
   if (cartItemCount > 0) {
     sysAddendum += buildGoalContextAddendum(cartValue, cartItemCount, salesProfile.targetTicket, salesProfile.targetItems, valueGap, itemGap);
   }
-  if (alreadySuggestedIds.size > 0) {
+
+  if (customerDietary.length > 0 || customerAllergies.length > 0) {
+    const lines: string[] = [];
+    if (customerDietary.length > 0)   lines.push(`Restrições: ${customerDietary.join(", ")}`);
+    if (customerAllergies.length > 0) lines.push(`Alergias: ${customerAllergies.join(", ")}`);
     sysAddendum +=
-      "\n\nPRODUTOS JÁ SUGERIDOS NESTA CONVERSA (não repita):\n" +
-      [...alreadySuggestedIds].map((id) => `  • ${id}`).join("\n");
+      "\n\n⚠️ RESTRIÇÕES ALIMENTARES ATIVAS (filtro obrigatório neste turno):\n" +
+      lines.map((l) => `  ${l}`).join("\n") +
+      "\n  → PROIBIDO sugerir, mencionar ou adicionar qualquer item incompatível." +
+      "\n  → Se não houver opções compatíveis: responda 'Hoje não temos opções compatíveis" +
+      " com essa restrição' — nunca sugira substituto não verificado.";
+  }
+
+  if (alreadySuggestedItems.length > 0) {
+    sysAddendum +=
+      "\n\nITENS JÁ SUGERIDOS NESTA CONVERSA (alreadySuggestedIds + rejectedIds — PROIBIDO repetir):\n" +
+      alreadySuggestedItems
+        .map((i: { id: string; name: string }) => `  • ${i.name} [ID: ${i.id}]`)
+        .join("\n") +
+      "\n  → Estes itens NÃO devem aparecer novamente como sugestão, independente do estágio." +
+      "\n  → Se não houver item novo disponível em uma categoria → PULE a categoria inteira.";
   }
 
   if (sysAddendum) {
@@ -902,27 +987,17 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
     break;
   }
 
-  // Fail-safe: if suggestions exist and AI skipped suggest_upsell entirely,
-  // fire it now for the top suggestion (mirrors AIOrderService logic).
-  // Covers the silent-skip case where AI responded but didn't mention any product.
+  // Observe-only: log when AI skipped suggest_upsell without explicitly calling it.
+  // No auto-fire — AI only gets credit for tools it actually called (matches production).
   if (
     upsellSuggestions.length > 0 &&
     brandConfig.upsellStyle !== "none" &&
     !toolCallsMade.some((tc) => tc.name === "suggest_upsell")
   ) {
-    const top = upsellSuggestions[0]!;
-    const fsResult = await executeTool(
-      "suggest_upsell",
-      JSON.stringify({ menuItemId: top.menuItemId }),
-      toolCtx,
+    console.warn(
+      `[AISimulator] [MISSED-UPSELL] conversationId="${conversationId}" ` +
+      `reason="model did not call suggest_upsell — missed upsell opportunity recorded"`,
     );
-    toolCallsMade.push({
-      name:       "suggest_upsell",
-      args:       { menuItemId: top.menuItemId },
-      success:    fsResult.success,
-      resultMsg:  fsResult.message,
-      resultData: fsResult.data ?? null,
-    });
   }
 
   // Save AI response as OUTBOUND (so next turn sees conversation history)
@@ -1004,7 +1079,7 @@ function evaluateScenario(
   transcript: TurnTranscript[],
   toolCalls: Array<{ name: string; args: unknown; success: boolean; resultMsg: string }>,
   perTurnCalls: TurnToolCall[][],
-  menu: Array<{ id: string; name: string; ingredients: string | null }>,
+  menu: Array<{ id: string; name: string; ingredients: string | null; price: unknown }>,
   salesMetrics: SalesMetrics,
   cartEvolution: CartSnapshot[],
 ): ScenarioResult {
@@ -1024,13 +1099,23 @@ function evaluateScenario(
   const totalTurns  = transcript.filter((t) => t.role === "customer").length;
 
   // Multi-factor score 0–100:
-  // checks 60% + conversion 20% + upsell 10% + efficiency 10% − error penalty
+  // checks 60% + conversion 20% + upsell 10% + efficiency 10% − error penalty − UX penalty
   let score = checkRate * 60;
   if (salesMetrics.conversionSuccess)        score += 20;
   if (salesMetrics.acceptedUpsellsOnly > 0)  score += 10;
   if (salesMetrics.conversionSuccess && totalTurns <= 8) score += 10;
   score -= Math.min(20, salesMetrics.errorCount * 5);
-  score  = Math.round(Math.max(0, Math.min(100, score)));
+
+  // UX penalties: behaviors that harm customer experience regardless of tool success
+  const { penalty: uxPenalty, violations: uxViolations } = computeUxPenalty(
+    scenario, transcript, toolCalls, menu,
+  );
+  score -= uxPenalty;
+  if (uxViolations.length > 0) {
+    issues.push(...uxViolations.map((v) => `[UX] ${v.description} (-${v.penalty}pts)`));
+  }
+
+  score = Math.round(Math.max(0, Math.min(100, score)));
 
   const status: ScenarioResult["status"] =
     score >= 70 ? "passed" : score >= 50 ? "warning" : "failed";
@@ -1084,17 +1169,22 @@ function runCheck(
 
     case "relevant_suggestion": {
       const hasToolSuggestion = toolCalls.some(
-        (tc) => (tc.name === "suggest_upsell" || tc.name === "add_item") && tc.success
+        (tc) => tc.name === "suggest_upsell" && tc.success
       );
-      const hasTextualContent = lastAiText.length > 50;
+      // Check if AI text explicitly mentions a real menu item by name
+      const normalizedText = lastAiText.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+      const mentionedMenuItem = menu.some(
+        (item) => item.name.length >= 4 &&
+          normalizedText.includes(item.name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""))
+      );
       return {
         type, label,
-        passed: hasToolSuggestion || hasTextualContent,
+        passed: hasToolSuggestion || mentionedMenuItem,
         detail: hasToolSuggestion
-          ? "IA sugeriu produto via ferramenta"
-          : hasTextualContent
-          ? "IA respondeu com conteúdo (sem tool call)"
-          : "IA não sugeriu nenhum produto e resposta foi vazia",
+          ? "IA sugeriu produto via suggest_upsell"
+          : mentionedMenuItem
+          ? "IA mencionou produto real do cardápio no texto (sem tool call)"
+          : "IA não chamou suggest_upsell nem mencionou item real do cardápio",
       };
     }
 
@@ -1158,41 +1248,121 @@ function runCheck(
     }
 
     case "checkout_transition": {
-      const confirmed = toolCalls.some((tc) => tc.name === "confirm_order");
-      const mentionedCheckout = /confirm|finaliz|pedido concluíd|resumo/i.test(lastAiText);
+      const confirmedSuccess = toolCalls.some((tc) => tc.name === "confirm_order" && tc.success);
+      const confirmedAttempt = toolCalls.some((tc) => tc.name === "confirm_order");
       return {
         type, label,
-        passed: confirmed || mentionedCheckout,
-        detail: confirmed
-          ? "IA chamou confirm_order"
-          : mentionedCheckout
-          ? "IA mencionou confirmação no texto (sem tool call)"
-          : "IA não encaminhou para confirmação do pedido",
+        passed: confirmedAttempt,
+        detail: confirmedSuccess
+          ? "IA executou confirm_order com sucesso"
+          : confirmedAttempt
+          ? "IA chamou confirm_order (falhou — possível DRINK GATE ou carrinho vazio)"
+          : "IA não chamou confirm_order — texto sozinho não conta como checkout",
       };
     }
 
     case "clarification_asked": {
       const hasQuestion = lastAiText.includes("?");
+      // Must be a qualification question about the customer's preference/context,
+      // not just any sentence ending in "?" (e.g., "Posso confirmar?" is not a clarification).
+      const qualificationPattern = /prefer|lev[eo]|complet|fom[ei]|divid|sozinho|só para voc|quantas|pra quantos|vai dividir|como prefer|que tipo|qual prefer|qual opção|pra você|o que você|mais leve|mais complet/i;
+      const isQualificationQuestion = hasQuestion && qualificationPattern.test(lastAiText);
       return {
         type, label,
-        passed: hasQuestion,
-        detail: hasQuestion
-          ? "IA pediu esclarecimento ao cliente"
-          : "IA não fez pergunta de esclarecimento — pode ter inventado contexto",
+        passed: isQualificationQuestion,
+        detail: isQualificationQuestion
+          ? "IA fez pergunta de qualificação relevante sobre a preferência do cliente"
+          : hasQuestion
+          ? "IA fez uma pergunta mas não foi de qualificação sobre preferência"
+          : "IA não fez pergunta de esclarecimento",
       };
     }
 
     case "natural_tone": {
-      const adequate = lastAiText.trim().length > 20;
-      return {
-        type, label,
-        passed: adequate,
-        detail: adequate
-          ? "Resposta tem comprimento e conteúdo adequados"
-          : "Resposta muito curta ou vazia",
-      };
+      const trimmed = lastAiText.trim();
+      if (trimmed.length === 0) {
+        return { type, label, passed: false, detail: "Resposta vazia" };
+      }
+      if (trimmed.length < 15) {
+        return { type, label, passed: false, detail: `Resposta muito curta (${trimmed.length} chars)` };
+      }
+      if (trimmed.length > 800) {
+        return { type, label, passed: false, detail: `Resposta excessivamente longa (${trimmed.length} chars) — parece monólogo robótico` };
+      }
+      // Detect repetitive generation: many sentences with identical 30-char prefix
+      const sentences = trimmed.split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 0);
+      const uniquePrefixes = new Set(sentences.map((s) => s.toLowerCase().slice(0, 30)));
+      if (sentences.length >= 4 && uniquePrefixes.size / sentences.length < 0.5) {
+        return { type, label, passed: false, detail: "Resposta com padrão repetitivo — possível loop de geração" };
+      }
+      return { type, label, passed: true, detail: "Resposta com comprimento e estrutura adequados" };
     }
   }
+}
+
+// ─── UX penalty engine ────────────────────────────────────────
+
+interface UxViolation {
+  description: string;
+  penalty:     number;
+}
+
+function computeUxPenalty(
+  scenario: ScenarioDef,
+  transcript: TurnTranscript[],
+  toolCalls: Array<{ name: string; args: unknown; success: boolean; resultMsg: string }>,
+  menu: Array<{ id: string; name: string; price: unknown }>,
+): { penalty: number; violations: UxViolation[] } {
+  const violations: UxViolation[] = [];
+
+  // 1. Empty AI response turns — each empty turn costs 5pts, capped at 10
+  const emptyAiTurns = transcript.filter((t) => t.role === "ai" && t.content.trim().length === 0);
+  if (emptyAiTurns.length > 0) {
+    const p = Math.min(10, emptyAiTurns.length * 5);
+    violations.push({ description: `${emptyAiTurns.length} turno(s) com resposta vazia`, penalty: p });
+  }
+
+  // 2. Checkout-lock violations: add_item or suggest_upsell blocked after checkout started
+  const checkoutLocked = toolCalls.filter(
+    (tc) => !tc.success && tc.resultMsg?.includes("BLOQUEADO: pedido em fase de confirmação"),
+  );
+  if (checkoutLocked.length > 0) {
+    const p = Math.min(9, checkoutLocked.length * 3);
+    violations.push({ description: `${checkoutLocked.length} chamada(s) bloqueada(s) por checkout lock`, penalty: p });
+  }
+
+  // 3. confirm_order loop: hard-limit hit in same turn
+  const confirmLoops = toolCalls.filter(
+    (tc) => tc.name === "confirm_order" && !tc.success &&
+      tc.resultMsg?.includes("PARAR: confirm_order já foi tentado"),
+  );
+  if (confirmLoops.length > 0) {
+    const p = Math.min(10, confirmLoops.length * 5);
+    violations.push({ description: `confirm_order em loop: ${confirmLoops.length} chamada(s) extras bloqueadas`, penalty: p });
+  }
+
+  // 4. Budget mismatch: premium item suggested to budget=baixo customer
+  if (scenario.behaviorProfile.budget === "baixo" && menu.length > 0) {
+    const avgPrice = menu.reduce((s, m) => s + Number(m.price), 0) / menu.length;
+    const premiumThreshold = avgPrice * 1.6;
+    const suggestedIds = toolCalls
+      .filter((tc) => tc.name === "suggest_upsell" && tc.success)
+      .map((tc) => (tc.args as Record<string, unknown>)?.menuItemId as string | undefined)
+      .filter((id): id is string => !!id);
+    const premiumCount = suggestedIds.filter((id) => {
+      const item = menu.find((m) => m.id === id);
+      return item && Number(item.price) > premiumThreshold;
+    }).length;
+    if (premiumCount > 0) {
+      violations.push({
+        description: `${premiumCount} item(s) premium sugerido(s) a cliente com orçamento baixo`,
+        penalty: 5,
+      });
+    }
+  }
+
+  const totalPenalty = Math.min(20, violations.reduce((s, v) => s + v.penalty, 0));
+  return { penalty: totalPenalty, violations };
 }
 
 // ─── report builder ───────────────────────────────────────────
