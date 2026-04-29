@@ -191,12 +191,13 @@ function buildSalesSection(profile: SalesProfile): string {
     "- Estágio 5: cobertura completa → REVISÃO. 'Confere seu pedido 👇'. PROIBIDO novo upsell.",
     "  Ao confirmar → confirm_order AGORA. Prioridade máxima = fechar.",
     "",
-    "CHECKOUT LOCK (prioridade sobre tudo — avalie ANTES do estágio):",
+    "FINAL INTENT LOCK (prioridade sobre tudo — avalie ANTES do estágio):",
     "- Sinal de fechamento = 'pode fechar' / 'finaliza' / 'tá bom assim' / 'fecha' / 'confirma' /",
     "  'é isso' / 'só isso' / 'pronto' / 'quero fechar' / 'já tá bom' / 'manda' / similar.",
-    "- Bebida JÁ sugerida (≥1 tentativa) → confirm_order IMEDIATO. Sem novas sugestões.",
-    "- Bebida NÃO sugerida ainda → UMA última tentativa de bebida → confirm_order na resposta seguinte.",
-    "- PROIBIDO após sinal: nova categoria, sobremesa, perguntas, voltar etapa.",
+    "- QUANDO DETECTADO: state.stage = CHECKOUT. Transição permanente.",
+    "- Bebida JÁ tentada (≥1) → confirm_order IMEDIATO. Proibido sugerir qualquer produto.",
+    "- Bebida NÃO tentada (0 tentativas) → UMA tentativa de bebida → confirm_order.",
+    "- PROIBIDO no estágio CHECKOUT: nova categoria, sobremesa, perguntas, voltar etapa.",
   );
 
   // Core upsell behavior based on intensity
@@ -370,9 +371,10 @@ function buildPriorityInstructions(priority: SalesPriority): string[] {
 function buildClosingSection(profile: SalesProfile): string {
   const rules: string[] = [
     "AO CONFIRMAR O PEDIDO",
-    "- CHECKOUT LOCK: sinal de fechamento + bebida já coberta → confirm_order IMEDIATO.",
-    "- CHECKOUT LOCK: sinal de fechamento + bebida ainda não tentada → 1 tentativa → confirm_order.",
-    "- Fora do lock: confirm_order só após cobertura completa (bebida tentada).",
+    "- FINAL INTENT LOCK: sinal de fechamento → state.stage = CHECKOUT IMEDIATO.",
+    "- No estágio CHECKOUT + bebida já coberta → confirm_order IMEDIATO.",
+    "- No estágio CHECKOUT + bebida 0 tentativas → 1 tentativa de bebida → confirm_order.",
+    "- Fora do lock: confirm_order só após cobertura mínima da bebida.",
     "- Quando cliente confirmar → chame confirm_order. Sem perguntas extras.",
     "- confirm_order gera o resumo automaticamente — não repita manualmente.",
   ];
