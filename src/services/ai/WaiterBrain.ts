@@ -54,6 +54,17 @@ export interface WaiterBrainInput {
 
 // ─── intent patterns (pt-BR) ─────────────────────────────────
 
+// Short standalone affirmatives — 1-2 words, no need for full patterns
+const AFFIRMATIVE_SHORTS = new Set([
+  "sim", "pode", "ok", "isso", "quero", "bora", "👍", "perfeito",
+  "ótimo", "boa", "certo", "claro", "vai", "manda", "coloca",
+]);
+
+// Short standalone refusals — advance the funnel, no more suggestions
+const REFUSAL_SHORTS = new Set([
+  "não", "nao", "n", "dispensa", "dispenso", "nope",
+]);
+
 const CHECKOUT_PATTERNS = [
   "pode fechar", "pode confirmar", "pode ir", "fechar pedido",
   "finaliza", "finalizar", "confirma", "confirmar",
@@ -102,11 +113,20 @@ export function classifyIntent(userMessage: string): CustomerIntent {
   const msg = userMessage.toLowerCase().trim();
   if (!msg) return "EXPLORING";
 
+  // Short standalone messages (≤2 words): check affirmatives/refusals before patterns.
+  // Avoids misclassifying "sim" as EXPLORING when the customer is accepting a suggestion.
+  const wordCount = msg.split(/\s+/).length;
+  if (wordCount <= 2) {
+    const clean = msg.replace(/[!?.,'"]/g, "").trim();
+    if (AFFIRMATIVE_SHORTS.has(clean)) return "DIRECT_ORDER";
+    if (REFUSAL_SHORTS.has(clean))     return "CHECKOUT";
+  }
+
   if (CHECKOUT_PATTERNS.some((p) => msg.includes(p)))          return "CHECKOUT";
-  if (PRICE_PATTERNS.some((p) => msg.includes(p)))              return "PRICE_SENSITIVE";
-  if (RECOMMENDATION_PATTERNS.some((p) => msg.includes(p)))    return "NEED_RECOMMENDATION";
-  if (DIRECT_ORDER_PATTERNS.some((p) => msg.includes(p)))      return "DIRECT_ORDER";
-  if (BROWSING_PATTERNS.some((p) => msg.includes(p)))          return "CATEGORY_BROWSING";
+  if (PRICE_PATTERNS.some((p) => msg.includes(p)))             return "PRICE_SENSITIVE";
+  if (RECOMMENDATION_PATTERNS.some((p) => msg.includes(p)))   return "NEED_RECOMMENDATION";
+  if (DIRECT_ORDER_PATTERNS.some((p) => msg.includes(p)))     return "DIRECT_ORDER";
+  if (BROWSING_PATTERNS.some((p) => msg.includes(p)))         return "CATEGORY_BROWSING";
   return "EXPLORING";
 }
 
@@ -117,11 +137,17 @@ export function decideNextAction(
   intent: CustomerIntent,
   hasCandidates: boolean,
 ): NextAction {
-  // These intents override the funnel
-  if (intent === "CHECKOUT")     return "CONFIRM_ORDER";
+  // Priority 1 — CHECKOUT intent (highest override)
+  if (intent === "CHECKOUT") {
+    // Can't confirm an empty cart — ask what the customer wants instead
+    if (state.cartItemCount === 0) return "ASK_QUESTION";
+    return "CONFIRM_ORDER";
+  }
+
+  // Priority 2 — DIRECT ORDER (customer named or accepted a specific item)
   if (intent === "DIRECT_ORDER") return "ADD_ITEM";
 
-  // Empty cart — focus on getting the main item
+  // Priority 3 — Empty cart: must get main item before anything else
   if (state.cartItemCount === 0) {
     if (intent === "NEED_RECOMMENDATION" || intent === "PRICE_SENSITIVE") {
       return hasCandidates ? "RECOMMEND_MAIN" : "ASK_QUESTION";
@@ -129,13 +155,15 @@ export function decideNextAction(
     return "ASK_QUESTION";
   }
 
-  // Cart has items — CATEGORY_BROWSING doesn't force upsell
+  // Priority 4 — Browsing/exploring: answer contextually, don't push
   if (intent === "CATEGORY_BROWSING") return "ASK_QUESTION";
 
-  // All other intents follow the funnel
+  // Priority 5 — Upsell funnel (lowest): only when cart has items
   if (state.upsellStage === 3 || state.upsellStage === 4) {
     return hasCandidates ? "SUGGEST_UPSELL" : "CONFIRM_ORDER";
   }
+
+  // All categories covered or no candidates left — close
   return "CONFIRM_ORDER";
 }
 
@@ -164,17 +192,19 @@ export function buildWaiterDirective(
   switch (action) {
     case "CONFIRM_ORDER":
       lines.push(
-        "→ Execute confirm_order AGORA.",
-        "→ Se DRINK GATE bloquear: ofereça 1 bebida rápida → depois confirm_order.",
-        "→ PROIBIDO: nova sugestão, nova pergunta, novo produto.",
+        "→ Execute confirm_order AGORA. confirm_order gera o resumo — não repita os itens.",
+        "→ Se DRINK GATE bloquear: 1 pergunta de bebida direta → depois confirm_order imediato.",
+        "→ PROIBIDO: nova sugestão, nova pergunta, novo produto, qualquer texto além do fechamento.",
+        "→ Resposta máxima: 1 frase de fechamento + confirm_order.",
       );
       break;
 
     case "ADD_ITEM":
       lines.push(
-        "→ Cliente pediu item específico.",
-        "→ Localize o ID exato no CARDÁPIO e execute add_item imediatamente.",
-        "→ Após success:true: confirme brevemente e avance para próxima etapa do funil.",
+        "→ Cliente pediu item ou aceitou sugestão ('sim'/'ok'/'pode'/'isso').",
+        "→ Se a mensagem foi curta: identifique o item da última sugestão no histórico.",
+        "→ Localize o ID exato no CARDÁPIO → execute add_item.",
+        "→ Após success:true: 1 frase curta de confirmação → avance o funil sem pausar.",
       );
       break;
 
@@ -187,8 +217,10 @@ export function buildWaiterDirective(
         lines.push(
           "PRODUTO RECOMENDADO:",
           `  • [ID: ${pick.menuItemId}] ${pick.name} — R$ ${pick.price.toFixed(2)}`,
-          "→ Recomende com 1 frase natural e confiante. Execute suggest_upsell com este ID.",
-          "→ NÃO liste alternativas. NÃO pergunte — RECOMENDE com convicção.",
+          "→ Formato obrigatório: [nome] + [1 benefício curto] + [pergunta de confirmação].",
+          "→ Exemplo: 'O [Prato X] é perfeito pra você. Mando?'",
+          "→ Execute suggest_upsell com o ID acima. NUNCA liste mais de 1 produto.",
+          "→ SEMPRE termine com a pergunta de confirmação — sem ela o cliente não confirma.",
         );
       } else {
         lines.push(
@@ -207,15 +239,23 @@ export function buildWaiterDirective(
       const pick = priceSensitive
         ? [...pool].sort((a, b) => a.price - b.price)[0]
         : pool[0];
+
+      const drinkAttemptsNote = isDrinkStage && state.drinkAttemptsPrior >= 1
+        ? "  ⚠️ Esta é a 2ª tentativa de bebida. Se recusar → avance para sobremesa e nunca mais tente bebida."
+        : "";
+
       if (pick) {
         lines.push(
           `PRODUTO (${isDrinkStage ? "bebida" : "sobremesa"}):`,
           `  • [ID: ${pick.menuItemId}] ${pick.name} — R$ ${pick.price.toFixed(2)}`,
-          "→ Introduza com 1 frase natural. Execute suggest_upsell com este ID.",
-          "→ Se recusar: aceite imediatamente e avance. Não repita a categoria.",
+          "→ 1 frase curta de introdução + suggest_upsell. Sem explicação longa.",
+          `→ Limite: ${isDrinkStage ? "máx 2 tentativas de bebida" : "máx 1 tentativa de sobremesa"}.`,
+          "→ Recusa: aceite imediatamente, troque de categoria. NUNCA insista.",
+          "→ 2ª recusa em qualquer categoria → execute confirm_order direto.",
+          ...(drinkAttemptsNote ? [drinkAttemptsNote] : []),
         );
       } else {
-        lines.push("→ Sem candidato para sugestão. Execute confirm_order.");
+        lines.push("→ Sem candidato para sugestão. Execute confirm_order imediatamente.");
       }
       break;
     }
@@ -223,16 +263,16 @@ export function buildWaiterDirective(
     case "ASK_QUESTION":
       if (state.cartItemCount === 0) {
         lines.push(
-          "→ Faça UMA pergunta de qualificação (escolha a mais relevante):",
+          "→ Faça UMA única pergunta de qualificação — a mais relevante para o contexto:",
           "  'Prefere algo mais leve ou mais completo?'",
+          "  'Tá com fome ou quer algo rápido?'",
           "  'É só pra você ou vai dividir?'",
-          "  'Está com mais fome ou quer algo rápido?'",
-          "→ 1 pergunta apenas. Não liste produtos. Aguarde resposta.",
+          "→ UMA pergunta. Zero produtos listados. Zero explicações. Aguarde resposta.",
         );
       } else {
         lines.push(
-          "→ Responda contextualmente. Não pressione.",
-          "→ Se o cliente mostrar interesse: recomende com convicção.",
+          "→ Responda diretamente ao que o cliente pediu. Sem pressão.",
+          "→ Se mostrar interesse → recomende 1 item com convicção e pergunta de confirmação.",
         );
       }
       break;
