@@ -115,6 +115,8 @@ export class ChatSimService {
       setDraftId:     (id) => { draftId = id; toolCtx.draftId = id; },
       requestHandoff: ()   => { handoffRequested = true; },
       upsellSuggestedThisTurn: false,
+      drinkAttemptsThisTurn:   0,
+      drinkAttemptsPriorTurns: 0,
     };
 
     const [alreadySuggestedIds, customerPrefs] = await Promise.all([

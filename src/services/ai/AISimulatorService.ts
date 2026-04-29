@@ -721,6 +721,8 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
     setDraftId:     (id) => { draftId = id; toolCtx.draftId = id; },
     requestHandoff: ()   => { handoffRequested = true; },
     upsellSuggestedThisTurn: false,
+    drinkAttemptsThisTurn:   0,
+    drinkAttemptsPriorTurns: 0,
   };
 
   // Guardrail data
