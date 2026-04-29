@@ -29,7 +29,7 @@ import { AIInteractionLogger } from "./AIInteractionLogger";
 import { buildSalesProfile } from "./SalesProfile";
 import { resolveMaxTokens } from "./BehaviorEngine";
 import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
-import { getAlreadySuggestedIds } from "./ConversationGuardrails";
+import { getAlreadySuggestedIds, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
 import type { OrderStage } from "@/lib/agent/types";
@@ -58,6 +58,27 @@ export interface AIWebTurnOutput {
 }
 
 const MAX_TOOL_ITERATIONS = 6;
+
+// ─── stage inference ──────────────────────────────────────────
+// Determines the current upsell stage from cart state + available suggestions.
+// Stage 3 = drink not yet attempted; Stage 4 = dessert not yet attempted;
+// "none" = cart empty (Stage 1/2) or both already covered (Stage 5+).
+type UpsellStage = 3 | 4 | "none";
+
+function inferUpsellStage(
+  cartItemCount: number,
+  suggestions: Array<{ categoryName: string }>,
+): UpsellStage {
+  if (cartItemCount === 0) return "none";
+  // Drink = any category that is neither a main course nor a dessert
+  const hasDrink = suggestions.some(
+    (s) => !isMainCategory(s.categoryName) && !isDessertCategory(s.categoryName),
+  );
+  if (hasDrink) return 3;
+  const hasDessert = suggestions.some((s) => isDessertCategory(s.categoryName));
+  if (hasDessert) return 4;
+  return "none"; // Stage 5+ — both categories covered or attempted
+}
 
 // ─── public API ───────────────────────────────────────────────
 
@@ -145,11 +166,14 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     brandConfig,
   });
 
-  // 5. Inject upsell hints into system message
+  // 5. Inject upsell hints — only in Stage 3 or 4 (same gate as WhatsApp pipeline)
+  const webUpsellStage  = inferUpsellStage(upsellResult.cartItemCount, upsellResult.suggestions);
+  const webUpsellAllowed = webUpsellStage === 3 || webUpsellStage === 4;
+
   const sysMsg = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
   let sysAddendum = "";
 
-  if (upsellResult.suggestions.length > 0 && brandConfig.upsellStyle !== "none") {
+  if (webUpsellAllowed && upsellResult.suggestions.length > 0 && brandConfig.upsellStyle !== "none") {
     sysAddendum +=
       "\n\nSUGESTÕES DE UPSELL — CHAME suggest_upsell AGORA (obrigatório neste turno):\n" +
       "Selecione o item mais adequado abaixo e execute suggest_upsell antes de responder.\n" +
@@ -170,6 +194,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
 
   let finalResponse = "";
   let suggestedItemName: string | undefined;
+  let addItemAttempts = 0;  // guard: max 2 add_item calls per turn (unified with WhatsApp)
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     const response = await openai.chat.completions.create({
@@ -201,6 +226,24 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
       for (const toolCall of functionCalls) {
         const toolName = toolCall.function.name;
         let toolResult: { success: boolean; message: string; data?: unknown };
+
+        // Server-side guard: max 2 add_item calls per turn (same as WhatsApp)
+        if (toolName === "add_item") {
+          addItemAttempts++;
+          if (addItemAttempts > 2) {
+            toolResult = {
+              success: false,
+              message: "PARAR: limite de tentativas add_item atingido neste turno. " +
+                       "Responda ao cliente diretamente sem chamar add_item novamente.",
+            };
+            loopMessages.push({
+              role: "tool",
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(toolResult),
+            });
+            continue;
+          }
+        }
 
         if (toolName === "suggest_upsell") {
           // 7. Track suggested item for the response
@@ -354,34 +397,30 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     itemGap,
   } = upsellResult;
 
-  // 6. Build messages
+  // Determine current stage so we only inject upsell hints when appropriate
+  const upsellStage   = inferUpsellStage(cartItemCount, upsellSuggestions);
+  const upsellAllowed = upsellStage === 3 || upsellStage === 4;
+
+  // 6. Build messages — pass UpsellEngine metrics so PromptBuilder has single source of truth
   const messages = await PromptBuilderService.build({
     conversationId,
     restaurantId,
     customerId,
     brandConfig,
+    upsellMetrics: { cartValue, cartItemCount, valueGap, itemGap },
   });
 
-  // Inject upsell hints + guardrail context into system message
+  // Inject upsell hints into system message — ONLY in Stage 3 or 4
   const sysMsg = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
   let sysAddendum = "";
 
-  if (upsellSuggestions.length > 0 && brandConfig.upsellStyle !== "none") {
+  if (upsellAllowed && upsellSuggestions.length > 0 && brandConfig.upsellStyle !== "none") {
     sysAddendum +=
       "\n\nSUGESTÕES DE UPSELL — CHAME suggest_upsell AGORA (obrigatório neste turno):\n" +
       "Selecione o item mais adequado abaixo e execute suggest_upsell antes de responder.\n" +
       upsellSuggestions
         .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName}) — ${s.reason}`)
         .join("\n");
-  }
-
-  // Goal context: cart state vs targets so AI frames suggestions strategically
-  if (cartItemCount > 0) {
-    sysAddendum += buildGoalContext(
-      cartValue, cartItemCount,
-      salesProfile.targetTicket, salesProfile.targetItems,
-      valueGap, itemGap,
-    );
   }
 
   // Anti-loop: tell AI which products were already suggested in this conversation
@@ -400,7 +439,8 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
   let completionTokens = 0;
   const toolCallsMade: Array<{ name: string; args: unknown; result: unknown; success: boolean }> = [];
   let finalResponse = "";
-  let addItemAttempts = 0;  // guard: max 2 add_item calls per turn
+  let addItemAttempts = 0;            // guard: max 2 add_item calls per turn
+  let upsellTriggeredBy: "model" | "fail_safe" | null = null;
 
   const loopMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages];
 
@@ -496,13 +536,19 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
 
   const latencyMs = Date.now() - startMs;
 
+  // Track whether the model itself triggered suggest_upsell
+  if (toolCallsMade.some((tc) => tc.name === "suggest_upsell")) {
+    upsellTriggeredBy = "model";
+  }
+
   // ── Fail-safe: speech ↔ tool sync ────────────────────────────
-  // If the AI mentioned a suggestion product by name but did not call
-  // suggest_upsell, auto-fire the tool so the UI card always appears.
-  // Silent to the user — the WhatsApp message is unaffected.
+  // Only active in Stage 3 or 4 (where suggest_upsell is expected).
+  // If the AI mentioned a product by name but did not call suggest_upsell,
+  // auto-fire the tool so the UI card always appears.
   if (
     finalResponse &&
     !handoffRequested &&
+    upsellAllowed &&                                         // Stage 3 or 4 only
     !toolCallsMade.some((tc) => tc.name === "suggest_upsell")
   ) {
     const hit = upsellSuggestions.find(
@@ -511,7 +557,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     );
     if (hit) {
       console.info(
-        `[AIOrderService] fail-safe suggest_upsell for "${hit.name}" (text mention without tool call)`
+        `[AIOrderService] [FAIL-SAFE TRIGGERED] stage=${upsellStage} product="${hit.name}" reason="model did not call tool"`
       );
       const fsResult = await executeTool(
         "suggest_upsell",
@@ -524,8 +570,21 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
         result:  fsResult,
         success: fsResult.success,
       });
+      upsellTriggeredBy = "fail_safe";
     }
   }
+
+  // ── Per-turn decision log ─────────────────────────────────────
+  const conflictDetected =
+    (!upsellAllowed && toolCallsMade.some((tc) => tc.name === "suggest_upsell")) ||
+    (upsellStage === "none" && toolCallsMade.some((tc) => tc.name === "confirm_order" && !tc.success));
+  console.info("[AIOrderService] [TURN DECISION]", JSON.stringify({
+    stage:               upsellStage,
+    upsell_allowed:      upsellAllowed,
+    upsell_triggered_by: upsellTriggeredBy,
+    action_source:       "promptbuilder",
+    conflict_detected:   conflictDetected,
+  }));
 
   // 8. Handle handoff
   if (handoffRequested) {
@@ -672,56 +731,6 @@ function normalizeText(text: string): string {
   return text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
-function buildGoalContext(
-  cartValue: number,
-  cartItemCount: number,
-  targetTicket: number,
-  targetItems: number,
-  valueGap: number,
-  itemGap: number,
-): string {
-  const lines = [
-    `\n\nCONTEXTO DE METAS (turno atual):`,
-    `  Pedido: R$ ${cartValue.toFixed(2)} | ${cartItemCount} ${cartItemCount === 1 ? "item" : "itens"}`,
-    `  Meta:   R$ ${targetTicket.toFixed(2)} | ${targetItems} itens`,
-  ];
-
-  if (valueGap > 0 || itemGap > 0) {
-    const gaps: string[] = [];
-    if (valueGap > 0) gaps.push(`R$ ${valueGap.toFixed(2)} em valor`);
-    if (itemGap > 0)  gaps.push(`${itemGap} ${itemGap === 1 ? "item" : "itens"}`);
-    lines.push(`  Gap:    ${gaps.join(" | ")}`);
-  }
-
-  // Explicit per-turn decision instruction — AI must follow this
-  lines.push("", "AÇÃO RECOMENDADA:");
-
-  if (valueGap > 0 && itemGap > 0) {
-    const lo = (valueGap * 0.4).toFixed(0);
-    const hi = valueGap.toFixed(0);
-    lines.push(
-      `  Gap de valor (R$ ${valueGap.toFixed(2)}) E gap de itens (${itemGap}) ativos.`,
-      `  → Prefira itens entre R$ ${lo}–R$ ${hi} das sugestões acima.`,
-      `  → Enquadre: "[item] vai muito bem com o que você já pediu e completa o combo."`,
-    );
-  } else if (valueGap > 0) {
-    lines.push(
-      `  Apenas gap de valor ativo (R$ ${valueGap.toFixed(2)} faltando). Meta de itens já atingida.`,
-      `  → Prefira o item de maior valor nas sugestões acima.`,
-      `  → Enquadre: "Para um pedido mais completo, uma ótima opção seria..."`,
-    );
-  } else if (itemGap > 0) {
-    lines.push(
-      `  Apenas gap de itens ativo (${itemGap} ${itemGap === 1 ? "item faltando" : "itens faltando"}). Ticket já atingido.`,
-      `  → Prefira complementos leves das sugestões (bebida, adicional, acompanhamento).`,
-      `  → Enquadre: "Para fechar, que tal adicionar [item] também?"`,
-    );
-  } else {
-    lines.push(
-      `  Metas atingidas (R$ ${cartValue.toFixed(2)} | ${cartItemCount} itens).`,
-      `  → Priorize fechar o pedido. Não force nova sugestão neste turno.`,
-    );
-  }
-
-  return lines.join("\n");
-}
+// buildGoalContext removed — goal context is now generated exclusively by
+// PromptBuilderService.buildGoalsBlock() using UpsellEngine metrics passed
+// via PromptContext.upsellMetrics. Single source of truth.

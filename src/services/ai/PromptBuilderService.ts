@@ -26,9 +26,16 @@ import { buildBehaviorBlock } from "./BehaviorEngine";
 
 export interface PromptContext {
   conversationId: string;
-  restaurantId: string;
-  customerId: string;
-  brandConfig: RestaurantBrandConfig;
+  restaurantId:   string;
+  customerId:     string;
+  brandConfig:    RestaurantBrandConfig;
+  /** Cart metrics from UpsellEngine — avoids double DB computation inside buildGoalsBlock. */
+  upsellMetrics?: {
+    cartValue:     number;
+    cartItemCount: number;
+    valueGap:      number;
+    itemGap:       number;
+  };
 }
 
 export interface WebPromptContext {
@@ -124,6 +131,7 @@ export class PromptBuilderService {
       menuCategories,
       draft: draftData,
       brandConfig: ctx.brandConfig,
+      upsellMetrics: ctx.upsellMetrics,
     });
 
     // Conversation history — oldest first, newest last
@@ -245,13 +253,14 @@ type DraftData = {
 } | null;
 
 function buildSystemPrompt(params: {
-  restaurant: RestaurantInfo;
-  customer: CustomerInfo;
+  restaurant:    RestaurantInfo;
+  customer:      CustomerInfo;
   menuCategories: CategoryWithItems[];
-  draft: DraftData;
-  brandConfig: RestaurantBrandConfig;
+  draft:         DraftData;
+  brandConfig:   RestaurantBrandConfig;
+  upsellMetrics?: { cartValue: number; cartItemCount: number; valueGap: number; itemGap: number };
 }): string {
-  const { restaurant, customer, menuCategories, draft, brandConfig } = params;
+  const { restaurant, customer, menuCategories, draft, brandConfig, upsellMetrics } = params;
 
   // If the owner supplied a full override, use it with context injection
   if (brandConfig.systemPromptOverride) {
@@ -264,7 +273,7 @@ function buildSystemPrompt(params: {
   const menuBlock = buildMenuBlock(menuCategories);
   const draftBlock = buildDraftBlock(draft);
   const customerBlock = buildCustomerBlock(customer);
-  const goalsBlock = buildGoalsBlock(profile, draft);
+  const goalsBlock = buildGoalsBlock(profile, draft, upsellMetrics);
 
   const personaBlock = buildPersonaBlock(brandConfig.brandPersona);
 
@@ -654,10 +663,20 @@ function buildCustomerBlock(customer: CustomerInfo): string {
   return lines.join("\n");
 }
 
-function buildGoalsBlock(profile: SalesProfile, draft: DraftData): string {
+function buildGoalsBlock(
+  profile:  SalesProfile,
+  draft:    DraftData,
+  metrics?: { cartValue: number; cartItemCount: number; valueGap: number; itemGap: number },
+): string {
   const fmt = (n: number) => `R$ ${n.toFixed(2)}`;
 
-  if (!draft || draft.items.length === 0) {
+  // Prefer pre-computed UpsellEngine metrics (single source of truth).
+  // Fall back to draft-based calculation for web / override cases.
+  const cartCount = metrics?.cartItemCount
+    ?? draft?.items.reduce((s, i) => s + i.quantity, 0)
+    ?? 0;
+
+  if (cartCount === 0) {
     return [
       `Meta de ticket : ${fmt(profile.targetTicket)}   Meta de itens: ${profile.targetItems}`,
       `Pedido atual   : ${fmt(0)} | 0 itens`,
@@ -666,10 +685,11 @@ function buildGoalsBlock(profile: SalesProfile, draft: DraftData): string {
     ].join("\n");
   }
 
-  const cartValue = draft.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
-  const cartCount = draft.items.reduce((s, i) => s + i.quantity, 0);
-  const valueGap  = Math.max(0, profile.targetTicket - cartValue);
-  const itemGap   = Math.max(0, profile.targetItems  - cartCount);
+  const cartValue = metrics?.cartValue
+    ?? draft?.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0)
+    ?? 0;
+  const valueGap = metrics?.valueGap ?? Math.max(0, profile.targetTicket - cartValue);
+  const itemGap  = metrics?.itemGap  ?? Math.max(0, profile.targetItems  - cartCount);
 
   const valueStatus = valueGap > 0 ? `${fmt(valueGap)} abaixo da meta` : "Meta atingida ✓";
   const itemStatus  = itemGap  > 0 ? `${itemGap} ${itemGap === 1 ? "item" : "itens"} abaixo da meta` : "Meta atingida ✓";
