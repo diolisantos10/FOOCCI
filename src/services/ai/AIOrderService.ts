@@ -30,6 +30,8 @@ import { buildSalesProfile } from "./SalesProfile";
 import { resolveMaxTokens } from "./BehaviorEngine";
 import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
 import { getDrinkAttemptCount, getAlreadySuggestedItems, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
+import * as WaiterBrain from "./WaiterBrain";
+import type { UpsellSuggestion } from "./UpsellEngine";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
 import type { OrderStage } from "@/lib/agent/types";
@@ -373,13 +375,18 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
   const salesProfile = buildSalesProfile(brandConfig, restaurantName);
 
   // Load guardrail data in parallel with the existing profile build
-  const [alreadySuggestedItems, customerPrefs, drinkAttemptsPriorTurns] = await Promise.all([
+  const [alreadySuggestedItems, customerPrefs, drinkAttemptsPriorTurns, lastUserMessage] = await Promise.all([
     getAlreadySuggestedItems(conversationId),
     prisma.customerPreference.findUnique({
       where:  { customerId },
       select: { dietary: true, allergies: true },
     }),
     getDrinkAttemptCount(conversationId),
+    prisma.message.findFirst({
+      where:   { conversationId, direction: "INBOUND" },
+      orderBy: { sentAt: "desc" },
+      select:  { content: true },
+    }).then((m) => m?.content ?? ""),
   ]);
   const alreadySuggestedIds = new Set<string>(alreadySuggestedItems.map((i: { id: string }) => i.id));
   toolCtx.drinkAttemptsPriorTurns = drinkAttemptsPriorTurns;
@@ -422,14 +429,40 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
   const sysMsg = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
   let sysAddendum = "";
 
-  if (upsellAllowed && upsellSuggestions.length > 0 && brandConfig.upsellStyle !== "none") {
-    sysAddendum +=
-      "\n\nSUGESTÕES DE UPSELL — CHAME suggest_upsell AGORA (obrigatório neste turno):\n" +
-      "Selecione o item mais adequado abaixo e execute suggest_upsell antes de responder.\n" +
-      upsellSuggestions
-        .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName}) — ${s.reason}`)
-        .join("\n");
-  }
+  // WaiterBrain: when cart is empty UpsellEngine returns nothing (requires a draft).
+  // Load main item candidates directly so RECOMMEND_MAIN has products to offer.
+  const mainItemFallback: UpsellSuggestion[] = cartItemCount === 0
+    ? await (async () => {
+        const rows = await prisma.menuItem.findMany({
+          where:   { isActive: true, category: { restaurantId } },
+          include: { category: { select: { name: true } } },
+          take: 20,
+        });
+        return rows
+          .filter((i) => isMainCategory(i.category.name))
+          .slice(0, 3)
+          .map((i) => ({
+            menuItemId:   i.id,
+            name:         i.name,
+            price:        Number(i.price),
+            categoryName: i.category.name,
+            reason:       "prato principal",
+          }));
+      })()
+    : [];
+
+  // WaiterBrain — intent-driven decision for this turn
+  const waiterCandidates = cartItemCount === 0 ? mainItemFallback : upsellSuggestions;
+  const waiterDecision = WaiterBrain.decide({
+    userMessage: lastUserMessage,
+    state: {
+      cartItemCount,
+      upsellStage,
+      drinkAttemptsPrior: drinkAttemptsPriorTurns,
+    },
+    candidates: brandConfig.upsellStyle !== "none" ? waiterCandidates : [],
+  });
+  sysAddendum += waiterDecision.directive;
 
   // Dietary hard rule — inject restrictions as a non-negotiable filter block.
   // UpsellEngine already filters suggest_upsell candidates; this addendum
@@ -595,9 +628,10 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     (upsellStage === "none" && toolCallsMade.some((tc) => tc.name === "confirm_order" && !tc.success));
   console.info("[AIOrderService] [TURN DECISION]", JSON.stringify({
     stage:               upsellStage,
+    intent:              waiterDecision.intent,
+    action:              waiterDecision.action,
     upsell_allowed:      upsellAllowed,
     upsell_triggered_by: upsellTriggeredBy,
-    action_source:       "promptbuilder",
     conflict_detected:   conflictDetected,
   }));
 
