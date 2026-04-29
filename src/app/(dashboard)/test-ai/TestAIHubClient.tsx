@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import QRCode from "qrcode";
 import { ChatSimClient } from "../chat-sim/ChatSimClient";
+import { TestViewportWrapper, type ViewMode } from "./TestViewportWrapper";
 
-type ViewMode = "mobile" | "desktop";
+const LS_KEY = "foocci_testViewMode";
 
 interface Props {
   restaurantName: string;
@@ -132,9 +133,18 @@ function AIStatusCard() {
 // ─── Main hub ─────────────────────────────────────────────────────────────────
 
 export function TestAIHubClient({ restaurantName, restaurantSlug, pedidoUrl }: Props) {
-  const [viewMode,    setViewMode]    = useState<ViewMode>("mobile");
+  const [viewMode,    setViewMode]    = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "mobile";
+    const saved = localStorage.getItem(LS_KEY);
+    return saved === "desktop" ? "desktop" : "mobile";
+  });
   const [sessionKey,  setSessionKey]  = useState(0);
   const [toolsOpen,   setToolsOpen]   = useState(false);
+
+  // Persist view mode preference
+  useEffect(() => {
+    localStorage.setItem(LS_KEY, viewMode);
+  }, [viewMode]);
 
   const newSession = useCallback(() => setSessionKey((k) => k + 1), []);
 
@@ -198,56 +208,15 @@ export function TestAIHubClient({ restaurantName, restaurantSlug, pedidoUrl }: P
 
         {/* LEFT — 70% — chat testing area */}
         <div className="flex min-w-0 flex-1 overflow-hidden">
-          {viewMode === "desktop" ? (
-
-            /* Desktop: full-width chat, max 900px centred */
-            <div className="mx-auto flex w-full max-w-[900px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-              <ChatSimClient
-                key={sessionKey}
-                restaurantName={restaurantName}
-                restaurantSlug={restaurantSlug}
-                pedidoUrl={pedidoUrl}
-                embedded
-              />
-            </div>
-
-          ) : (
-
-            /* Mobile: realistic phone frame, centred */
-            <div className="flex flex-1 items-center justify-center overflow-auto">
-              <div
-                className="flex shrink-0 flex-col overflow-hidden shadow-2xl"
-                style={{
-                  width:        390,
-                  height:       700,
-                  borderRadius: "2.5rem",
-                  border:       "10px solid #0f172a",
-                  background:   "#0f172a",
-                }}
-              >
-                {/* Simulated status bar */}
-                <div className="flex shrink-0 items-center justify-between bg-slate-900 px-5 py-1.5 text-[10px] font-semibold text-white">
-                  <span>9:41</span>
-                  <span className="text-white/50">●●● WiFi 🔋</span>
-                </div>
-
-                {/* Chat area */}
-                <div
-                  className="flex-1 overflow-hidden"
-                  style={{ borderRadius: "0 0 1.8rem 1.8rem", background: "#fff" }}
-                >
-                  <ChatSimClient
-                    key={sessionKey}
-                    restaurantName={restaurantName}
-                    restaurantSlug={restaurantSlug}
-                    pedidoUrl={pedidoUrl}
-                    embedded
-                  />
-                </div>
-              </div>
-            </div>
-
-          )}
+          <TestViewportWrapper mode={viewMode}>
+            <ChatSimClient
+              key={sessionKey}
+              restaurantName={restaurantName}
+              restaurantSlug={restaurantSlug}
+              pedidoUrl={pedidoUrl}
+              embedded
+            />
+          </TestViewportWrapper>
         </div>
 
         {/* RIGHT — 30% — tools panel
