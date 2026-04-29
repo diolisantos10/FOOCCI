@@ -560,3 +560,49 @@ export function generateScenarios(count: number = 10): ScenarioDef[] {
 
   return [...fixed, ...random];
 }
+
+// ─── public API: prompt-lab entry point ───────────────────────
+
+/**
+ * Public dimension descriptor used by Prompt Lab.
+ * Decoupled from the internal Dimensions type so callers
+ * don't need to know about DietaryConfig internals.
+ */
+export interface ScenarioDimensions {
+  intent:       BehaviorProfile["intent"];
+  budget:       BehaviorProfile["budget"];
+  groupSize:    BehaviorProfile["groupSize"];
+  behavior:     BehaviorProfile["behavior"];
+  /** Dietary label matching DIETARY_CONFIGS — e.g. "vegano", "sem glúten". */
+  dietaryLabel?: string;
+  /** Variation overrides — unspecified fields are randomised per scenario. */
+  variation?:   Partial<VariationLayer>;
+}
+
+/**
+ * Build `count` ScenarioDefs from a fixed dimension set.
+ * Each call to buildScenario re-randomises the unspecified VariationLayer
+ * fields, so multiple scenarios from the same dims naturally differ in
+ * opening message texture and patience level.
+ */
+export function generateScenariosFromDims(
+  dims: ScenarioDimensions,
+  count: number,
+): ScenarioDef[] {
+  const dietaryConfig = dims.dietaryLabel
+    ? (DIETARY_CONFIGS.find((d) => d.label === dims.dietaryLabel) ?? null)
+    : null;
+
+  const privateDims: Dimensions = {
+    intent:    dims.intent,
+    budget:    dims.budget,
+    groupSize: dims.groupSize,
+    behavior:  dims.behavior,
+    dietary:   dietaryConfig,
+    variation: dims.variation,
+  };
+
+  return Array.from({ length: count }, (_, idx) =>
+    buildScenario(privateDims, idx, "lab"),
+  );
+}

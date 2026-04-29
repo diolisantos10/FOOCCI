@@ -480,13 +480,24 @@ const TURN_TIMEOUT_MS      = 25_000;  // abort each OpenAI call after 25 s (comp
 // ─── public service ───────────────────────────────────────────
 
 export class AISimulatorService {
+  static async runScenarios(
+    restaurantId: string,
+    scenarios: ScenarioDef[],
+    onProgress: ProgressCallback,
+    onResult: ResultCallback,
+  ): Promise<SimulationReport> {
+    return AISimulatorService.run(restaurantId, 0, onProgress, onResult, scenarios);
+  }
+
   static async run(
     restaurantId: string,
     scenarioCount: number,
     onProgress: ProgressCallback,
     onResult: ResultCallback,
+    prebuiltScenarios?: ScenarioDef[],
   ): Promise<SimulationReport> {
-    console.log(`[AISimulator] SIMULATOR VERSION: retry-enabled | scenarioCount=${scenarioCount}`);
+    const actualCount = prebuiltScenarios?.length ?? scenarioCount;
+    console.log(`[AISimulator] SIMULATOR VERSION: retry-enabled | scenarioCount=${actualCount}`);
     const restaurant = await prisma.restaurant.findUnique({
       where: { id: restaurantId },
       select: { name: true },
@@ -502,7 +513,7 @@ export class AISimulatorService {
       menu.map((m) => [m.id, { categoryName: m.category?.name ?? "" }] as [string, { categoryName: string }]),
     );
 
-    const scenarios = generateScenarios(scenarioCount);
+    const scenarios = prebuiltScenarios ?? generateScenarios(scenarioCount);
     const results: ScenarioResult[] = [];
 
     // ── Batch execution: BATCH_SIZE scenarios per batch ───────────

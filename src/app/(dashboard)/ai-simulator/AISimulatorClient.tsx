@@ -8,6 +8,7 @@ import type {
   SalesMetrics,
   CartSnapshot,
 } from "@/services/ai/AISimulatorService";
+import type { ParsedPrompt } from "@/services/ai/PromptParser";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -21,6 +22,8 @@ interface ProgressInfo {
 
 // ─── main client ──────────────────────────────────────────────
 
+type ActiveTab = "standard" | "lab";
+
 const SCENARIO_PRESETS = [
   { label: "Rápido (5 cenários)",   value: 5  },
   { label: "Padrão (10 cenários)",  value: 10 },
@@ -28,6 +31,9 @@ const SCENARIO_PRESETS = [
 ] as const;
 
 export function AISimulatorClient() {
+  const [activeTab, setActiveTab] = useState<ActiveTab>("standard");
+
+  // ── standard tab state ──────────────────────────────────────
   const [state,         setState]         = useState<RunState>("idle");
   const [progress,      setProgress]      = useState<ProgressInfo | null>(null);
   const [results,       setResults]       = useState<ScenarioResult[]>([]);
@@ -110,133 +116,390 @@ export function AISimulatorClient() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Simulador da IA de Vendas</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Testa automaticamente a IA com 10 perfis de clientes usando o cardápio e configuração reais.
+              Testa automaticamente a IA com perfis de clientes usando o cardápio e configuração reais.
             </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Scenario count selector */}
-            <select
-              value={scenarioCount}
-              onChange={(e) => setScenarioCount(Number(e.target.value))}
-              disabled={state === "running"}
-              className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg
-                         hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed
-                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {SCENARIO_PRESETS.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-
-            {/* Download buttons — visible only after simulation completes */}
-            {state === "done" && report && (
-              <>
-                <button
-                  onClick={() => downloadJSON(report)}
-                  title="Baixar relatório completo (JSON)"
-                  className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
-                             hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5"
-                >
-                  ⬇ JSON
-                </button>
-                <button
-                  onClick={() => downloadSummary(report)}
-                  title="Baixar resumo legível (TXT)"
-                  className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
-                             hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5"
-                >
-                  ⬇ Resumo
-                </button>
-                <button
-                  onClick={() => downloadCSV(report)}
-                  title="Baixar tabela de resultados (CSV)"
-                  className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
-                             hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5"
-                >
-                  ⬇ CSV
-                </button>
-              </>
-            )}
-            <button
-              onClick={runSimulations}
-              disabled={state === "running"}
-              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg
-                         hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
-                         transition-colors flex items-center gap-2"
-            >
-              {state === "running" ? (
-                <>
-                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Executando...
-                </>
-              ) : state === "done" ? (
-                "↺ Rodar novamente"
-              ) : (
-                "▶ Rodar simulações"
-              )}
-            </button>
           </div>
         </div>
 
-        {/* Progress bar */}
-        {state === "running" && progress && (
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex justify-between text-sm text-gray-600 mb-2">
-              <span>Executando: <strong>{progress.scenarioName}</strong></span>
-              <span>{progress.current} / {progress.total} cenários</span>
+        {/* Tabs */}
+        <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-1 w-fit">
+          <button
+            onClick={() => setActiveTab("standard")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "standard"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            Simulação Padrão
+          </button>
+          <button
+            onClick={() => setActiveTab("lab")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTab === "lab"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            <span>⚗</span> Prompt Lab
+          </button>
+        </div>
+
+        {/* ─── Standard tab ──────────────────────────────────────── */}
+        {activeTab === "standard" && (
+          <>
+            {/* Controls */}
+            <div className="flex items-center justify-end gap-2">
+              <select
+                value={scenarioCount}
+                onChange={(e) => setScenarioCount(Number(e.target.value))}
+                disabled={state === "running"}
+                className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg
+                           hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed
+                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {SCENARIO_PRESETS.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
+              </select>
+
+              {state === "done" && report && (
+                <>
+                  <button onClick={() => downloadJSON(report)} title="Baixar relatório completo (JSON)"
+                    className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
+                               hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5">
+                    ⬇ JSON
+                  </button>
+                  <button onClick={() => downloadSummary(report)} title="Baixar resumo legível (TXT)"
+                    className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
+                               hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5">
+                    ⬇ Resumo
+                  </button>
+                  <button onClick={() => downloadCSV(report)} title="Baixar tabela de resultados (CSV)"
+                    className="px-3 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded-lg
+                               hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-1.5">
+                    ⬇ CSV
+                  </button>
+                </>
+              )}
+              <button
+                onClick={runSimulations}
+                disabled={state === "running"}
+                className="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg
+                           hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
+                           transition-colors flex items-center gap-2"
+              >
+                {state === "running" ? (
+                  <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Executando...</>
+                ) : state === "done" ? "↺ Rodar novamente" : "▶ Rodar simulações"}
+              </button>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2">
-              <div
-                className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${(progress.current / progress.total) * 100}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-400 mt-2">
-              Isso pode levar ~60–90 segundos. As respostas aparecem à medida que cada cenário termina.
-            </p>
-          </div>
+
+            <SimulationResultsPanel
+              state={state}
+              progress={progress}
+              results={results}
+              report={report}
+              errMsg={errMsg}
+              expanded={expanded}
+              toggleExpanded={toggleExpanded}
+              emptyLabel="Nenhuma simulação executada ainda"
+              emptyHint='Clique em "Rodar simulações" para começar.'
+            />
+          </>
         )}
 
-        {/* Error */}
-        {state === "error" && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-            <strong>Erro ao executar simulações:</strong> {errMsg}
-          </div>
-        )}
-
-        {/* Summary report */}
-        {report && (
-          <SummaryCard report={report} />
-        )}
-
-        {/* Scenario results */}
-        {results.length > 0 && (
-          <div>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Resultados por cenário
-            </h2>
-            <div className="space-y-3">
-              {results.map((r) => (
-                <ScenarioCard
-                  key={r.id}
-                  result={r}
-                  isExpanded={expanded.has(r.id)}
-                  onToggle={() => toggleExpanded(r.id)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {state === "idle" && (
-          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400">
-            <div className="text-4xl mb-3">🤖</div>
-            <p className="font-medium text-gray-600">Nenhuma simulação executada ainda</p>
-            <p className="text-sm mt-1">Clique em &quot;Rodar simulações&quot; para começar.</p>
-          </div>
+        {/* ─── Prompt Lab tab ────────────────────────────────────── */}
+        {activeTab === "lab" && (
+          <PromptLabPanel />
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── simulation results panel (shared) ───────────────────────
+
+function SimulationResultsPanel({
+  state,
+  progress,
+  results,
+  report,
+  errMsg,
+  expanded,
+  toggleExpanded,
+  emptyLabel,
+  emptyHint,
+}: {
+  state:          RunState;
+  progress:       ProgressInfo | null;
+  results:        ScenarioResult[];
+  report:         SimulationReport | null;
+  errMsg:         string;
+  expanded:       Set<string>;
+  toggleExpanded: (id: string) => void;
+  emptyLabel:     string;
+  emptyHint:      string;
+}) {
+  return (
+    <>
+      {state === "running" && progress && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex justify-between text-sm text-gray-600 mb-2">
+            <span>Executando: <strong>{progress.scenarioName}</strong></span>
+            <span>{progress.current} / {progress.total} cenários</span>
+          </div>
+          <div className="w-full bg-gray-100 rounded-full h-2">
+            <div
+              className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+              style={{ width: `${(progress.current / progress.total) * 100}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Isso pode levar ~60–90 segundos. As respostas aparecem à medida que cada cenário termina.
+          </p>
+        </div>
+      )}
+
+      {state === "error" && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+          <strong>Erro ao executar simulações:</strong> {errMsg}
+        </div>
+      )}
+
+      {report && <SummaryCard report={report} />}
+
+      {results.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Resultados por cenário
+          </h2>
+          <div className="space-y-3">
+            {results.map((r) => (
+              <ScenarioCard
+                key={r.id}
+                result={r}
+                isExpanded={expanded.has(r.id)}
+                onToggle={() => toggleExpanded(r.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {state === "idle" && (
+        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400">
+          <div className="text-4xl mb-3">🤖</div>
+          <p className="font-medium text-gray-600">{emptyLabel}</p>
+          <p className="text-sm mt-1">{emptyHint}</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── prompt lab panel ─────────────────────────────────────────
+
+const LAB_EXAMPLES = [
+  "cliente quer algo barato",
+  "cliente indeciso",
+  "cliente quer fechar rápido",
+  "cliente nunca comeu aqui",
+  "cliente vegano com pressa",
+  "casal curioso, orçamento alto",
+  "cliente impaciente, só quer o básico",
+  "família com restrição de lactose",
+];
+
+const VARIATION_PRESETS: Array<{ label: string; value: 1 | 5 | 10 }> = [
+  { label: "1 cenário",    value: 1  },
+  { label: "5 variações",  value: 5  },
+  { label: "10 variações", value: 10 },
+];
+
+function PromptLabPanel() {
+  const [labState,    setLabState]    = useState<RunState>("idle");
+  const [labProgress, setLabProgress] = useState<ProgressInfo | null>(null);
+  const [labResults,  setLabResults]  = useState<ScenarioResult[]>([]);
+  const [labReport,   setLabReport]   = useState<SimulationReport | null>(null);
+  const [labErr,      setLabErr]      = useState<string>("");
+  const [labExpanded, setLabExpanded] = useState<Set<string>>(new Set());
+  const [parsedInfo,  setParsedInfo]  = useState<ParsedPrompt | null>(null);
+  const [prompt,      setPrompt]      = useState<string>("");
+  const [varCount,    setVarCount]    = useState<1 | 5 | 10>(1);
+  const runLab = useCallback(async (count: 1 | 5 | 10) => {
+    if (!prompt.trim()) return;
+    setVarCount(count);
+    setLabState("running");
+    setLabProgress(null);
+    setLabResults([]);
+    setLabReport(null);
+    setLabErr("");
+    setLabExpanded(new Set());
+    setParsedInfo(null);
+
+    try {
+      const response = await fetch("/api/ai-simulator/prompt-lab", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ userPrompt: prompt, variationCount: count }),
+      });
+      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+
+      const reader  = response.body.getReader();
+      const decoder = new TextDecoder();
+      let   buffer  = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const event = JSON.parse(line.slice(6)) as Record<string, unknown>;
+            if (event.type === "parsed") {
+              setParsedInfo(event.parsed as ParsedPrompt);
+            } else if (event.type === "progress") {
+              setLabProgress(event as unknown as ProgressInfo);
+            } else if (event.type === "scenario_result") {
+              setLabResults((prev) => [...prev, event.result as ScenarioResult]);
+            } else if (event.type === "report") {
+              setLabReport(event.report as SimulationReport);
+              setLabState("done");
+            } else if (event.type === "error") {
+              setLabErr(String(event.message));
+              setLabState("error");
+            }
+          } catch {
+            // malformed SSE line — skip
+          }
+        }
+      }
+    } catch (err) {
+      setLabErr(String(err));
+      setLabState("error");
+    }
+  }, [prompt]);
+
+  const toggleExpanded = (id: string) => {
+    setLabExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isRunning = labState === "running";
+
+  return (
+    <div className="space-y-4">
+      {/* Input card */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            Descreva o cenário de teste
+          </label>
+          <p className="text-xs text-gray-400 mb-2">
+            Escreva em linguagem natural — o parser extrai intenção, orçamento, comportamento e restrições.
+          </p>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            disabled={isRunning}
+            placeholder='Ex: "cliente indeciso que nunca comeu aqui" ou "cliente com pressa, quer algo barato"'
+            rows={3}
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-800
+                       placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500
+                       focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed resize-none"
+          />
+        </div>
+
+        {/* Example chips */}
+        <div className="flex flex-wrap gap-1.5">
+          <span className="text-xs text-gray-400 self-center mr-1">Exemplos:</span>
+          {LAB_EXAMPLES.map((ex) => (
+            <button
+              key={ex}
+              onClick={() => setPrompt(ex)}
+              disabled={isRunning}
+              className="px-2.5 py-1 text-xs bg-gray-100 text-gray-600 rounded-full
+                         hover:bg-blue-50 hover:text-blue-700 transition-colors disabled:opacity-50"
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+
+        {/* Run buttons */}
+        <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
+          <span className="text-xs text-gray-400 mr-1">Rodar:</span>
+          {VARIATION_PRESETS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => runLab(p.value)}
+              disabled={isRunning || !prompt.trim()}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors
+                         flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
+                           labState === "running" && varCount === p.value
+                             ? "bg-blue-600 text-white"
+                             : "bg-blue-600 text-white hover:bg-blue-700"
+                         }`}
+            >
+              {isRunning && varCount === p.value ? (
+                <><span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />{p.label}</>
+              ) : (
+                <>▶ {p.label}</>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Parse preview — shown after first run */}
+      {parsedInfo && (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-2">
+          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+            Interpretação do prompt
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: "Intenção",     value: parsedInfo.intent },
+              { label: "Orçamento",    value: parsedInfo.budget },
+              { label: "Grupo",        value: parsedInfo.groupSize },
+              { label: "Comportamento", value: parsedInfo.behavior },
+              { label: "Paciência",    value: parsedInfo.patience },
+              { label: "Abertura",     value: parsedInfo.upsellOpenness },
+              ...(parsedInfo.dietary ? [{ label: "Restrição", value: parsedInfo.dietary }] : []),
+            ].map(({ label, value }) => (
+              <span key={label} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-blue-100 rounded-full text-xs text-gray-700">
+                <span className="text-blue-500 font-medium">{label}:</span> {value}
+              </span>
+            ))}
+          </div>
+          <p className="text-xs text-blue-600">
+            Sinais: {parsedInfo.signals.join(" · ")}
+          </p>
+        </div>
+      )}
+
+      {/* Results */}
+      <SimulationResultsPanel
+        state={labState}
+        progress={labProgress}
+        results={labResults}
+        report={labReport}
+        errMsg={labErr}
+        expanded={labExpanded}
+        toggleExpanded={toggleExpanded}
+        emptyLabel="Nenhum teste executado ainda"
+        emptyHint="Escreva um cenário e clique em Rodar."
+      />
     </div>
   );
 }
