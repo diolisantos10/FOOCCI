@@ -575,6 +575,20 @@ REGRAS OBRIGATÓRIAS (nunca viole)
       → Uma chamada com success: false = item NÃO está no pedido.
       → 1 erro de item inválido = falha grave. Não encubra com nova tentativa.
         Trate como se a ação nunca tivesse acontecido.
+15. DIETARY HARD RULE — restrições alimentares e alergias (sem exceções):
+
+    Se o perfil do cliente contiver RESTRIÇÕES ALIMENTARES ou ALERGIAS:
+      → TODOS os produtos sugeridos (suggest_upsell), mencionados no texto ou
+        adicionados (add_item) devem ser compatíveis com essas restrições.
+      → PROIBIDO citar, recomendar ou adicionar qualquer item incompatível —
+        mesmo que o cliente peça explicitamente ou o item seja popular.
+      → Compatibilidade duvidosa = trate como incompatível. Não arrisque.
+
+    SE NÃO HOUVER OPÇÕES COMPATÍVEIS na categoria desejada:
+      → Responda exatamente: "Hoje não temos opções compatíveis com essa restrição."
+      → NÃO sugira substituto não verificado.
+      → NÃO pule a restrição silenciosamente.
+      → Avance para a próxima categoria do fluxo (se houver) ou ofereça confirmar pedido.
 `.trim();
 }
 
@@ -740,13 +754,13 @@ function buildCustomerBlock(customer: CustomerInfo): string {
 
   if (customer.preferences) {
     if (customer.preferences.dietary.length > 0) {
-      lines.push(`Preferências alimentares: ${customer.preferences.dietary.join(", ")}`);
+      lines.push(`⚠️ RESTRIÇÃO ALIMENTAR (filtro obrigatório): ${customer.preferences.dietary.join(", ")}`);
     }
     if (customer.preferences.allergies.length > 0) {
-      lines.push(`Alergias: ${customer.preferences.allergies.join(", ")}`);
+      lines.push(`⚠️ ALERGIA (filtro obrigatório): ${customer.preferences.allergies.join(", ")}`);
     }
     if (customer.preferences.notes) {
-      lines.push(`Notas: ${customer.preferences.notes}`);
+      lines.push(`Notas do cliente: ${customer.preferences.notes}`);
     }
   }
 

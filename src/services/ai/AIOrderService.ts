@@ -424,6 +424,21 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
         .join("\n");
   }
 
+  // Dietary hard rule — inject restrictions as a non-negotiable filter block.
+  // UpsellEngine already filters suggest_upsell candidates; this addendum
+  // covers free-text mentions and add_item calls that bypass UpsellEngine.
+  if (customerDietary.length > 0 || customerAllergies.length > 0) {
+    const lines: string[] = [];
+    if (customerDietary.length > 0)   lines.push(`Restrições: ${customerDietary.join(", ")}`);
+    if (customerAllergies.length > 0) lines.push(`Alergias: ${customerAllergies.join(", ")}`);
+    sysAddendum +=
+      "\n\n⚠️ RESTRIÇÕES ALIMENTARES ATIVAS (filtro obrigatório neste turno):\n" +
+      lines.map((l) => `  ${l}`).join("\n") +
+      "\n  → PROIBIDO sugerir, mencionar ou adicionar qualquer item incompatível." +
+      "\n  → Se não houver opções compatíveis: responda 'Hoje não temos opções compatíveis" +
+      " com essa restrição' — nunca sugira substituto não verificado.";
+  }
+
   // Anti-repeat: list already-suggested items by name+ID so AI can match
   // them against the conversation context and never repeat or re-pitch.
   if (alreadySuggestedItems.length > 0) {
