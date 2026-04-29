@@ -178,15 +178,18 @@ function buildSalesSection(profile: SalesProfile): string {
   // Universal mandatory sequence — applies regardless of profile/intensity
   rules.push(
     "",
-    "SEQUÊNCIA DE ESTÁGIOS (obrigatória para todos os perfis e intensidades):",
+    "SEQUÊNCIA OBRIGATÓRIA (prioridade absoluta sobre estilo e persona):",
+    "- Classifique o cliente: BROWSING (navegando) ou GUIDED (pediu ajuda).",
+    "- BROWSING: silencioso até seleção; depois confirme brevemente + sugira próximo passo.",
+    "- GUIDED: conduza o pedido com confiança, mova rápido.",
+    "- Gap-based: após cada seleção, pergunte 'O que falta nesta refeição?'",
     "- Estágio 1/2: sem prato → ajude a escolher. Se indeciso → 1 pergunta de qualificação.",
     "- Estágio 3: prato no carrinho, bebida não tentada → DEVE sugerir bebida NESTE TURNO.",
     "  Intercepção se cliente quer fechar: proponha bebida primeiro, NÃO chame confirm_order.",
     "- Estágio 4: bebida tentada, sobremesa não tentada → DEVE sugerir sobremesa NESTE TURNO.",
     "  Intercepção se cliente quer fechar: proponha sobremesa primeiro, NÃO chame confirm_order.",
-    "- Estágio 5: cobertura completa → REVISÃO. Mensagem: 'Confere seu pedido 👇'. PROIBIDO novo upsell.",
+    "- Estágio 5: cobertura completa → REVISÃO. 'Confere seu pedido 👇'. PROIBIDO novo upsell.",
     "  Ao confirmar → confirm_order AGORA. Prioridade máxima = fechar.",
-    "- Esta sequência tem prioridade absoluta sobre estilo, intensidade e persona.",
   );
 
   // Core upsell behavior based on intensity
