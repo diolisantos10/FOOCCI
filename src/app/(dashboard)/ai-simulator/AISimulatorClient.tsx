@@ -576,6 +576,11 @@ function SummaryCard({ report }: { report: SimulationReport }) {
       value: String(report.errorCount),
       warn: report.errorCount > 5,
     },
+    {
+      label: "Pós-checkout ok",
+      value: `${(report.checkoutCompletionRate * 100).toFixed(0)}%`,
+      warn: report.checkoutCompletionRate < 0.5,
+    },
   ];
 
   return (
@@ -746,9 +751,24 @@ function ScenarioCard({
                 Transcrição completa ({result.totalTurns} turnos)
               </p>
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {result.transcript.map((turn, i) => (
-                  <TranscriptBubble key={i} turn={turn} />
-                ))}
+                {result.transcript.map((turn, i) => {
+                  const prevPhase = result.transcript[i - 1]?.phase;
+                  const showDivider = turn.phase === "post_checkout" && prevPhase !== "post_checkout";
+                  return (
+                    <div key={i}>
+                      {showDivider && (
+                        <div className="flex items-center gap-2 py-1">
+                          <div className="flex-1 h-px bg-amber-200" />
+                          <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                            Pós-checkout
+                          </span>
+                          <div className="flex-1 h-px bg-amber-200" />
+                        </div>
+                      )}
+                      <TranscriptBubble turn={turn} />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -820,6 +840,19 @@ function SalesMetricsRow({
         ? `R$ ${metrics.upsellValueGenerated.toFixed(2)}`
         : "—",
       color: metrics.upsellValueGenerated > 0 ? "text-green-600" : undefined,
+    },
+    {
+      label: "Pós-checkout",
+      value: metrics.postCheckoutCompleted
+        ? "Completo"
+        : metrics.postCheckoutDropPhase === "not_reached"
+        ? "—"
+        : `Drop: ${metrics.postCheckoutDropPhase}`,
+      color: metrics.postCheckoutCompleted
+        ? "text-green-600"
+        : metrics.postCheckoutDropPhase !== "not_reached"
+        ? "text-orange-500"
+        : undefined,
     },
   ];
 
@@ -954,6 +987,11 @@ function downloadSummary(report: SimulationReport): void {
     `  Turnos médios     : ${report.avgTurns.toFixed(1)}`,
     `  Aceitação upsell  : ${(report.upsellAcceptanceRate * 100).toFixed(0)}%`,
     "",
+    "─── PÓS-CHECKOUT ──────────────────────────────────────",
+    `  Fluxo completo    : ${(report.checkoutCompletionRate * 100).toFixed(0)}%`,
+    `  Drop no endereço  : ${(report.dropDuringAddress * 100).toFixed(0)}%`,
+    `  Drop no pagamento : ${(report.dropDuringPayment * 100).toFixed(0)}%`,
+    "",
   ];
 
   if (top5Failures.length > 0) {
@@ -1026,6 +1064,8 @@ function downloadCSV(report: SimulationReport): void {
     "acceptanceRate",
     "abandonment",
     "loopDetected",
+    "postCheckoutCompleted",
+    "postCheckoutDropPhase",
   ];
 
   const rows = report.scenarios.map((s) => {
@@ -1049,6 +1089,8 @@ function downloadCSV(report: SimulationReport): void {
       acceptRate,
       s.abandoned ? "true" : "false",
       loopDetected,
+      m.postCheckoutCompleted ? "true" : "false",
+      m.postCheckoutDropPhase ?? "not_reached",
     ];
   });
 
@@ -1069,7 +1111,7 @@ function downloadCSV(report: SimulationReport): void {
 function TranscriptBubble({
   turn,
 }: {
-  turn: { role: "customer" | "ai"; content: string; toolCalls: Array<{ name: string; success: boolean; detail: string }> };
+  turn: { role: "customer" | "ai"; content: string; toolCalls: Array<{ name: string; success: boolean; detail: string }>; phase?: string };
 }) {
   const isAI = turn.role === "ai";
   return (

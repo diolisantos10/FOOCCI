@@ -332,6 +332,7 @@ function selectChecks(dims: Dimensions): CheckType[] {
   if (dims.behavior === "aceita_upsell") {
     checks.add("relevant_suggestion");
     checks.add("checkout_transition");
+    checks.add("post_checkout_completed");
   }
 
   if (["recusa_upsell", "muda_de_ideia", "recusa_depois_aceita"].includes(dims.behavior)) {
@@ -342,10 +343,16 @@ function selectChecks(dims: Dimensions): CheckType[] {
   if (dims.behavior === "impaciente") {
     checks.add("checkout_transition");
     checks.add("no_loop");
+    checks.add("post_checkout_completed");
   }
 
   if (dims.intent === "direto") {
     checks.add("checkout_transition");
+    checks.add("post_checkout_completed");
+  }
+
+  if (dims.intent === "fome") {
+    checks.add("post_checkout_completed");
   }
 
   if (dims.behavior === "ignora" && dims.intent === "indeciso") {

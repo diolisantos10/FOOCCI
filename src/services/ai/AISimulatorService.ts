@@ -42,7 +42,16 @@ export type CheckType =
   | "no_loop"
   | "checkout_transition"
   | "clarification_asked"
-  | "natural_tone";
+  | "natural_tone"
+  | "post_checkout_completed";
+
+export type PostCheckoutDropPhase =
+  | "not_reached"   // confirm_order never called
+  | "delivery_type" // stopped before delivery choice
+  | "address"       // stopped before address provided (delivery only)
+  | "name"          // stopped before name provided
+  | "payment"       // stopped before payment method
+  | "complete";     // full lifecycle finished
 
 export interface CheckResult {
   type: CheckType;
@@ -55,20 +64,24 @@ export interface TurnTranscript {
   role: "customer" | "ai";
   content: string;
   toolCalls: Array<{ name: string; success: boolean; detail: string }>;
+  /** Marks turns that belong to the post-confirm lifecycle (address / name / payment). */
+  phase?: "ordering" | "post_checkout";
 }
 
 export interface SalesMetrics {
-  finalCartValue:       number;
-  totalItems:           number;
-  upsellAttempts:       number;
-  acceptedSuggestions:  number;
-  rejectedSuggestions:  number;
-  conversionSuccess:    boolean;
-  acceptedUpsellsOnly:  number;  // add_item calls that originated from suggest_upsell
-  upsellValueGenerated: number;  // price × qty for each accepted upsell item
-  flowScore:            number;  // 0–1: main item (0.34) + drink suggested (0.33) + dessert suggested (0.33)
-  errorCount:           number;  // total failed tool calls
-  upsellsByType:        { drink: number; dessert: number; addon: number };
+  finalCartValue:        number;
+  totalItems:            number;
+  upsellAttempts:        number;
+  acceptedSuggestions:   number;
+  rejectedSuggestions:   number;
+  conversionSuccess:     boolean;
+  acceptedUpsellsOnly:   number;  // add_item calls that originated from suggest_upsell
+  upsellValueGenerated:  number;  // price × qty for each accepted upsell item
+  flowScore:             number;  // 0–1: main item (0.34) + drink suggested (0.33) + dessert suggested (0.33)
+  errorCount:            number;  // total failed tool calls
+  upsellsByType:         { drink: number; dessert: number; addon: number };
+  postCheckoutCompleted: boolean;           // full lifecycle (delivery + name + payment) done
+  postCheckoutDropPhase: PostCheckoutDropPhase; // where the post-checkout flow stopped
 }
 
 export interface CartSnapshot {
@@ -189,6 +202,11 @@ export interface SimulationReport {
   flowScore:           number;
   errorCount:          number;
 
+  // ── post-checkout lifecycle (new) ───────────────────────────
+  checkoutCompletionRate: number; // full post-checkout lifecycle completion rate
+  dropDuringAddress:      number; // 0–1 rate of drop at address step (delivery orders)
+  dropDuringPayment:      number; // 0–1 rate of drop at payment step
+
   // ── analytical modules (new) ────────────────────────────────
   salesDiagnosis:      SalesDiagnosis;
   revenueAnalysis:     RevenueAnalysis;
@@ -258,6 +276,18 @@ function inferUpsellStage(
   return "none";
 }
 
+interface PostCheckoutState {
+  phase:             "not_started" | "in_progress" | "complete" | "dropped";
+  collectedDelivery: boolean;
+  collectedAddress:  boolean;
+  collectedName:     boolean;
+  collectedPayment:  boolean;
+  turnsSinceConfirm: number;
+  deliveryType:      "DELIVERY" | "PICKUP";
+  paymentType:       "pix" | "cartao" | "entrega";
+  dropPhase:         PostCheckoutDropPhase;
+}
+
 interface CustomerState {
   turnCount:       number;
   hasOrdered:      boolean;
@@ -268,14 +298,32 @@ interface CustomerState {
   ignoreCount:     number;
   questionsAsked:  number;  // pergunta_primeiro: how many questions sent so far
   refusedOnce:     boolean; // recusa_depois_aceita: first refusal already done
+  postCheckout:    PostCheckoutState;
 }
 
 function initCustomerState(): CustomerState {
+  // Randomize delivery (60% delivery) and payment method
+  const deliveryType: PostCheckoutState["deliveryType"] = Math.random() < 0.6 ? "DELIVERY" : "PICKUP";
+  const roll = Math.random();
+  const paymentType: PostCheckoutState["paymentType"] =
+    roll < 0.5 ? "pix" : roll < 0.8 ? "cartao" : "entrega";
+
   return {
     turnCount: 0, hasOrdered: false,
     upsellsOffered: 0, upsellsAccepted: 0, upsellsRejected: 0,
     hasChangedMind: false, ignoreCount: 0,
     questionsAsked: 0, refusedOnce: false,
+    postCheckout: {
+      phase: "not_started",
+      collectedDelivery: false,
+      collectedAddress:  false,
+      collectedName:     false,
+      collectedPayment:  false,
+      turnsSinceConfirm: 0,
+      deliveryType,
+      paymentType,
+      dropPhase: "not_reached",
+    },
   };
 }
 
@@ -315,7 +363,7 @@ const MSGS = {
   ],
   abandon:     ["desculpa, vou pensar mais e volto depois", "na verdade vou deixar pra outra hora", "obrigado, mas por enquanto não", "vou passar mais tarde", "deixa pra amanhã"],
   hurry:         ["pode confirmar logo?", "tô com pressa, fecha o pedido", "rápido por favor, vai confirmar?", "fecha logo, tô sem tempo", "pode agilizar?"],
-  postConfirm:   ["ótimo! em quanto tempo chega?", "confirmado, qual o prazo de entrega?", "perfeito! vocês entregam aqui na região?", "massa! vou aguardar então"],
+  postConfirm:   ["ótimo! em quanto tempo chega?", "confirmado, qual o prazo de entrega?", "perfeito! vocês entregam aqui na região?", "massa! vou aguardar então", "certo!", "ok, aguardo"],
   // recusa_depois_aceita: first refuses, then warms up
   softReject:    ["hmm, deixa eu pensar um pouco", "não sei se preciso disso agora", "talvez não... me diz mais sobre esse item", "acho que não... o que faz esse ser bom?"],
   warmAccept:    ["sabe que vai, pode colocar", "tá bom, vou querer sim", "convenceu, pode adicionar", "por que não? coloca aí", "ok tá, me empolguei — pode incluir"],
@@ -329,6 +377,27 @@ const MSGS = {
     "tem alguma versão menor ou meia-porção?",
     "vocês aceitam cartão na entrega?",
   ],
+  // ── post-checkout phase ────────────────────────────────────
+  deliveryEntry_delivery: [
+    "entrega", "quero entrega", "pode mandar aqui pra mim",
+    "vai de entrega mesmo", "manda pra minha casa",
+  ],
+  deliveryEntry_pickup: [
+    "vou buscar", "retirada", "prefiro retirar", "vou pegar eu mesmo", "pode deixar pra retirada",
+  ],
+  addressData: [
+    "Rua das Flores, 123, apto 45, Jardim América",
+    "Av. Brasil, 500, Centro",
+    "Rua São Paulo, 77, bloco B apto 12, Vila Nova",
+    "Rua do Comércio, 89, sala 3, Centro",
+    "Rua Tiradentes, 210, apto 302, Boa Vista",
+    "Rua das Acácias, 34, Pinheiros",
+    "Av. Paulista, 1500, conjunto 104, Bela Vista",
+  ],
+  nameData: ["João", "Maria", "Carlos", "Ana", "Pedro", "Fernanda", "Lucas", "Juliana", "Rafael", "Camila"],
+  paymentPix:       ["pix", "pode ser pix", "vou pagar no pix", "pix por favor"],
+  paymentCard:      ["cartão de crédito", "cartão", "débito", "pode colocar no cartão"],
+  paymentOnDelivery: ["pagar na entrega", "pago quando chegar", "dinheiro na entrega", "na entrega mesmo"],
 };
 
 function pickMsg(pool: string[]): string {
@@ -343,6 +412,18 @@ function pickMsg(pool: string[]): string {
  *
  * Returns null to signal the conversation should end (order confirmed or abandoned).
  */
+const MAX_POST_CHECKOUT_TURNS = 6;
+
+// Returns true when the AI response appears to contain a payment link or final confirmation.
+function hasPaymentSignal(text: string): boolean {
+  return /https?:\/\/|pay\.?link|link.*pag|pix\.[a-z]|qr.*cod/i.test(text);
+}
+
+// Returns true when the AI has confirmed that the post-checkout flow is done.
+function hasCompletionSignal(text: string): boolean {
+  return /(aguardando|pedido (foi |está )?(confirmado|registrado|encaminhado)|obrigado.*pedido|em breve.*entregamos|até logo|até mais)/i.test(text);
+}
+
 function nextCustomerMessage(
   state: CustomerState,
   profile: BehaviorProfile,
@@ -352,11 +433,105 @@ function nextCustomerMessage(
 ): string | null {
   const confirmed = lastToolCalls.some((tc) => tc.name === "confirm_order" && tc.success);
   const { variation } = profile;
+  const pc = state.postCheckout;
 
-  // Order confirmed — end immediately. No artificial continuation.
-  if (confirmed) {
-    return null;
+  // ── Post-checkout phase gate ──────────────────────────────
+  // Completed / dropped → end conversation
+  if (pc.phase === "complete" || pc.phase === "dropped") return null;
+
+  // confirm_order just succeeded → kick off post-checkout phase
+  if (confirmed && pc.phase === "not_started") {
+    pc.phase = "in_progress";
+    return pickMsg(MSGS.postConfirm);
   }
+
+  // Actively in post-checkout → respond to what the AI is asking
+  if (pc.phase === "in_progress") {
+    pc.turnsSinceConfirm++;
+
+    // Payment link sent by AI → auto-complete
+    if (hasPaymentSignal(lastAiText)) {
+      pc.collectedPayment = true;
+      pc.phase    = "complete";
+      pc.dropPhase = "complete";
+      return null;
+    }
+
+    // AI gave a final "all done" message after collecting data
+    if (pc.collectedPayment && hasCompletionSignal(lastAiText)) {
+      pc.phase    = "complete";
+      pc.dropPhase = "complete";
+      return null;
+    }
+
+    // "pagar na entrega" path: after customer declared it → next AI acknowledgment = done
+    if (pc.collectedPayment && pc.paymentType === "entrega") {
+      pc.phase    = "complete";
+      pc.dropPhase = "complete";
+      return null;
+    }
+
+    // Hard cap on post-checkout turns
+    if (pc.turnsSinceConfirm > MAX_POST_CHECKOUT_TURNS) {
+      pc.phase = "dropped";
+      if (!pc.collectedDelivery)                                     pc.dropPhase = "delivery_type";
+      else if (!pc.collectedAddress && pc.deliveryType === "DELIVERY") pc.dropPhase = "address";
+      else if (!pc.collectedName)                                    pc.dropPhase = "name";
+      else if (!pc.collectedPayment)                                 pc.dropPhase = "payment";
+      else { pc.phase = "complete"; pc.dropPhase = "complete"; }
+      return null;
+    }
+
+    const lower = lastAiText.toLowerCase();
+
+    // Delivery type question
+    if (
+      !pc.collectedDelivery &&
+      /entrega|retirada|buscar|delivery|pickup|como gostaria|vai retirar|levar.*endereço|seu endereço/i.test(lower)
+    ) {
+      pc.collectedDelivery = true;
+      return pc.deliveryType === "DELIVERY"
+        ? pickMsg(MSGS.deliveryEntry_delivery)
+        : pickMsg(MSGS.deliveryEntry_pickup);
+    }
+
+    // Address question (only for delivery)
+    if (
+      !pc.collectedAddress &&
+      pc.deliveryType === "DELIVERY" &&
+      /endereço|rua|bairro|logradouro|complemento|número|cep|para onde|onde (fica|mora|voc)/i.test(lower)
+    ) {
+      pc.collectedAddress = true;
+      return pickMsg(MSGS.addressData);
+    }
+
+    // Name question
+    if (
+      !pc.collectedName &&
+      /nome|como você se chama|qual é o seu nome|confirmar.*nome|seu nome|pra quem/i.test(lower)
+    ) {
+      pc.collectedName = true;
+      return pickMsg(MSGS.nameData);
+    }
+
+    // Payment question
+    if (
+      !pc.collectedPayment &&
+      /pagamento|pagar|pix|cartão|forma de|transferência|como vai pagar|meio de|vai pagar/i.test(lower)
+    ) {
+      pc.collectedPayment = true;
+      switch (pc.paymentType) {
+        case "pix":    return pickMsg(MSGS.paymentPix);
+        case "cartao": return pickMsg(MSGS.paymentCard);
+        case "entrega": return pickMsg(MSGS.paymentOnDelivery);
+      }
+    }
+
+    // AI said something else in post-checkout → acknowledge generically
+    return pickMsg(MSGS.postConfirm);
+  }
+
+  // ── Normal ordering phase below ───────────────────────────
 
   // Hard cap from patience setting
   if (state.turnCount >= maxTurns) return null;
@@ -466,14 +641,15 @@ function nextCustomerMessage(
 // ─── check labels ─────────────────────────────────────────────
 
 const CHECK_LABELS: Record<CheckType, string> = {
-  relevant_suggestion:  "Sugestão de produto relevante",
-  no_hallucination:     "Sem produtos inventados",
-  dietary_respected:    "Restrições alimentares respeitadas",
-  no_repeat_suggestion: "Sem repetição de sugestões",
-  no_loop:              "Sem loops de tool calls",
-  checkout_transition:  "Transição para checkout",
-  clarification_asked:  "Pediu esclarecimento em vez de adivinhar",
-  natural_tone:         "Tom de resposta adequado",
+  relevant_suggestion:     "Sugestão de produto relevante",
+  no_hallucination:        "Sem produtos inventados",
+  dietary_respected:       "Restrições alimentares respeitadas",
+  no_repeat_suggestion:    "Sem repetição de sugestões",
+  no_loop:                 "Sem loops de tool calls",
+  checkout_transition:     "Transição para checkout",
+  clarification_asked:     "Pediu esclarecimento em vez de adivinhar",
+  natural_tone:            "Tom de resposta adequado",
+  post_checkout_completed: "Fluxo pós-checkout completo (entrega + nome + pagamento)",
 };
 
 const BATCH_SIZE           = 5;
@@ -666,10 +842,17 @@ async function runScenario(
   try {
     const cState = initCustomerState();
     let nextMsg: string | null = scenario.openingMessage;
+    let inPostCheckout = false; // flips true after confirm_order succeeds
 
-    while (nextMsg !== null && cState.turnCount < scenario.maxTurns) {
+    // The while loop continues past scenario.maxTurns if post-checkout is in progress.
+    // Post-checkout has its own internal turn cap (MAX_POST_CHECKOUT_TURNS).
+    while (
+      nextMsg !== null &&
+      (cState.turnCount < scenario.maxTurns || cState.postCheckout.phase === "in_progress")
+    ) {
       // Customer sends message
-      transcript.push({ role: "customer", content: nextMsg, toolCalls: [] });
+      const turnPhase: TurnTranscript["phase"] = inPostCheckout ? "post_checkout" : "ordering";
+      transcript.push({ role: "customer", content: nextMsg, toolCalls: [], phase: turnPhase });
 
       // AI responds (real production logic)
       const turnResult = await executeSimulatedTurn({
@@ -682,6 +865,11 @@ async function runScenario(
       allToolCalls.push(...turnResult.toolCalls);
       perTurnCalls.push(turnResult.toolCalls);
 
+      // Detect confirm_order success to flip post-checkout phase marker
+      const justConfirmed = turnResult.toolCalls.some(
+        (tc) => tc.name === "confirm_order" && tc.success,
+      );
+
       transcript.push({
         role:      "ai",
         content:   turnResult.text,
@@ -690,7 +878,11 @@ async function runScenario(
           success: tc.success,
           detail:  tc.resultMsg,
         })),
+        phase: turnPhase,
       });
+
+      // Flip to post-checkout phase AFTER recording the confirm_order AI turn
+      if (justConfirmed) inPostCheckout = true;
 
       // Capture cart state after each AI turn
       const snap = await getCartSnapshot(customer.id, restaurantId);
@@ -708,6 +900,7 @@ async function runScenario(
       finalCart?.value ?? 0,
       finalCart?.items ?? 0,
       menuById,
+      cState.postCheckout,
     );
   } finally {
     await cleanupSimulation(customer.id, conversation.id);
@@ -1103,7 +1296,7 @@ function evaluateScenario(
   const checks: CheckResult[] = [];
 
   for (const checkType of scenario.checks) {
-    const r = runCheck(checkType, toolCalls, perTurnCalls, lastAiText, scenario, menu);
+    const r = runCheck(checkType, toolCalls, perTurnCalls, lastAiText, scenario, menu, salesMetrics);
     checks.push(r);
     if (!r.passed) issues.push(r.detail);
   }
@@ -1163,6 +1356,7 @@ function runCheck(
   lastAiText: string,
   scenario: ScenarioDef,
   menu: Array<{ id: string; name: string; ingredients: string | null }>,
+  salesMetrics: SalesMetrics,
 ): CheckResult {
   const label = CHECK_LABELS[type];
 
@@ -1311,6 +1505,25 @@ function runCheck(
       }
       return { type, label, passed: true, detail: "Resposta com comprimento e estrutura adequados" };
     }
+
+    case "post_checkout_completed": {
+      const { postCheckoutCompleted, postCheckoutDropPhase } = salesMetrics;
+      if (postCheckoutCompleted) {
+        return { type, label, passed: true, detail: "Fluxo pós-checkout concluído (entrega + nome + pagamento coletados)" };
+      }
+      const phaseLabels: Record<PostCheckoutDropPhase, string> = {
+        not_reached:   "pedido não foi confirmado (confirm_order não chamado)",
+        delivery_type: "tipo de entrega não coletado",
+        address:       "endereço não coletado (entrega a domicílio)",
+        name:          "nome do cliente não coletado",
+        payment:       "método de pagamento não coletado",
+        complete:      "completo",  // shouldn't reach here
+      };
+      return {
+        type, label, passed: false,
+        detail: `Pós-checkout incompleto — parou em: ${phaseLabels[postCheckoutDropPhase]}`,
+      };
+    }
   }
 }
 
@@ -1404,6 +1617,19 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
   const flowScore        = results.reduce((s, r) => s + r.salesMetrics.flowScore,   0) / n;
   const errorCount       = results.reduce((s, r) => s + r.salesMetrics.errorCount,  0);
 
+  // ── post-checkout lifecycle ───────────────────────────────
+  const convertedResults = results.filter((r) => r.salesMetrics.conversionSuccess);
+  const nConverted = convertedResults.length || 1;
+  const checkoutCompletionRate = results.filter(
+    (r) => r.salesMetrics.postCheckoutCompleted,
+  ).length / n;
+  const dropDuringAddress = convertedResults.filter(
+    (r) => r.salesMetrics.postCheckoutDropPhase === "address",
+  ).length / nConverted;
+  const dropDuringPayment = convertedResults.filter(
+    (r) => r.salesMetrics.postCheckoutDropPhase === "payment",
+  ).length / nConverted;
+
   // ── legacy fields ─────────────────────────────────────────
   const criticalBugs: string[] = [];
   for (const r of results) {
@@ -1473,6 +1699,9 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
     realRevenue,
     flowScore,
     errorCount,
+    checkoutCompletionRate,
+    dropDuringAddress,
+    dropDuringPayment,
     salesDiagnosis,
     revenueAnalysis,
     errorPrioritization,
@@ -1532,14 +1761,15 @@ function buildErrorPrioritization(results: ScenarioResult[]): ErrorPrioritizatio
   type CheckEntry = { severity: ErrorSeverity; type: string; description: string; impact: string };
 
   const CHECK_SEVERITY: Record<CheckType, CheckEntry> = {
-    no_hallucination:    { severity: "CRITICAL", type: "hallucinated_item",     description: "IA inventou ID de item inexistente",              impact: "Pedido inválido — cliente recebe produto errado ou erro" },
-    dietary_respected:   { severity: "CRITICAL", type: "dietary_violation",     description: "Item incompatível com restrição alimentar sugerido", impact: "Risco de saúde / experiência inaceitável para o cliente" },
-    no_loop:             { severity: "HIGH",      type: "tool_loop",             description: "IA entrou em loop de chamadas de ferramenta",       impact: "Resposta falha ou travada — cliente recebe mensagem vazia" },
-    checkout_transition: { severity: "HIGH",      type: "missing_checkout",      description: "IA não encaminhou o pedido para confirmação",       impact: "Receita perdida — pedido não foi finalizado" },
-    no_repeat_suggestion:{ severity: "MEDIUM",    type: "repeated_suggestion",   description: "Mesmo produto sugerido mais de uma vez",           impact: "Má experiência — cliente sente pressão ou desorganização" },
-    relevant_suggestion: { severity: "MEDIUM",    type: "irrelevant_suggestion", description: "IA não sugeriu produto ou sugestão foi genérica",   impact: "Oportunidade de upsell perdida" },
-    clarification_asked: { severity: "MEDIUM",    type: "no_clarification",      description: "IA não perguntou antes de assumir intenção",        impact: "Pode resultar em pedido errado ou insatisfação" },
-    natural_tone:        { severity: "LOW",        type: "poor_tone",             description: "Tom de resposta inadequado ou muito curto",         impact: "Experiência abaixo do padrão — cliente pode desistir" },
+    no_hallucination:        { severity: "CRITICAL", type: "hallucinated_item",        description: "IA inventou ID de item inexistente",                   impact: "Pedido inválido — cliente recebe produto errado ou erro" },
+    dietary_respected:       { severity: "CRITICAL", type: "dietary_violation",        description: "Item incompatível com restrição alimentar sugerido",    impact: "Risco de saúde / experiência inaceitável para o cliente" },
+    no_loop:                 { severity: "HIGH",     type: "tool_loop",                description: "IA entrou em loop de chamadas de ferramenta",            impact: "Resposta falha ou travada — cliente recebe mensagem vazia" },
+    checkout_transition:     { severity: "HIGH",     type: "missing_checkout",         description: "IA não encaminhou o pedido para confirmação",            impact: "Receita perdida — pedido não foi finalizado" },
+    post_checkout_completed: { severity: "HIGH",     type: "incomplete_post_checkout", description: "IA não completou o fluxo pós-checkout (entrega/pagamento)", impact: "Pedido confirmado mas dados de entrega/pagamento não coletados" },
+    no_repeat_suggestion:    { severity: "MEDIUM",   type: "repeated_suggestion",      description: "Mesmo produto sugerido mais de uma vez",                impact: "Má experiência — cliente sente pressão ou desorganização" },
+    relevant_suggestion:     { severity: "MEDIUM",   type: "irrelevant_suggestion",    description: "IA não sugeriu produto ou sugestão foi genérica",        impact: "Oportunidade de upsell perdida" },
+    clarification_asked:     { severity: "MEDIUM",   type: "no_clarification",         description: "IA não perguntou antes de assumir intenção",             impact: "Pode resultar em pedido errado ou insatisfação" },
+    natural_tone:            { severity: "LOW",      type: "poor_tone",                description: "Tom de resposta inadequado ou muito curto",              impact: "Experiência abaixo do padrão — cliente pode desistir" },
   };
 
   const groups = new Map<string, { entry: CheckEntry; count: number; scenarios: string[] }>();
@@ -1852,17 +2082,19 @@ function computeFlowScore(
 
 function emptyMetrics(): SalesMetrics {
   return {
-    finalCartValue:       0,
-    totalItems:           0,
-    upsellAttempts:       0,
-    acceptedSuggestions:  0,
-    rejectedSuggestions:  0,
-    conversionSuccess:    false,
-    acceptedUpsellsOnly:  0,
-    upsellValueGenerated: 0,
-    flowScore:            0,
-    errorCount:           0,
-    upsellsByType:        { drink: 0, dessert: 0, addon: 0 },
+    finalCartValue:        0,
+    totalItems:            0,
+    upsellAttempts:        0,
+    acceptedSuggestions:   0,
+    rejectedSuggestions:   0,
+    conversionSuccess:     false,
+    acceptedUpsellsOnly:   0,
+    upsellValueGenerated:  0,
+    flowScore:             0,
+    errorCount:            0,
+    upsellsByType:         { drink: 0, dessert: 0, addon: 0 },
+    postCheckoutCompleted: false,
+    postCheckoutDropPhase: "not_reached",
   };
 }
 
@@ -1895,6 +2127,7 @@ function computeSalesMetrics(
   finalCartValue: number,
   totalItems: number,
   menuById: Map<string, { categoryName: string }>,
+  postCheckout: PostCheckoutState,
 ): SalesMetrics {
   // IDs successfully shown via suggest_upsell
   const suggestedIds = new Set<string>();
@@ -1954,6 +2187,8 @@ function computeSalesMetrics(
     flowScore,
     errorCount,
     upsellsByType,
+    postCheckoutCompleted: postCheckout.phase === "complete",
+    postCheckoutDropPhase: postCheckout.dropPhase,
   };
 }
 
