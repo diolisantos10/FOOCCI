@@ -368,7 +368,6 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     drinkAttemptsPriorTurns: 0, // overwritten below after parallel query
     confirmOrderAttempts:    0,
     checkoutIntent:          false,
-    drinkGateBlocked:        false,
   };
 
   // 5. Build sales profile + guardrail data + upsell context

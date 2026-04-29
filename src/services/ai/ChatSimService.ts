@@ -119,7 +119,6 @@ export class ChatSimService {
       drinkAttemptsPriorTurns: 0,
       confirmOrderAttempts:    0,
       checkoutIntent:          false,
-      drinkGateBlocked:        false,
     };
 
     const [alreadySuggestedIds, customerPrefs] = await Promise.all([

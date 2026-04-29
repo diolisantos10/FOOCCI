@@ -193,7 +193,7 @@ export function buildWaiterDirective(
     case "CONFIRM_ORDER":
       lines.push(
         "→ Execute confirm_order AGORA. confirm_order gera o resumo — não repita os itens.",
-        "→ Se DRINK GATE bloquear: 1 pergunta de bebida direta → depois confirm_order imediato.",
+        "→ confirm_order aceita qualquer carrinho não-vazio — upsell é opcional, não bloqueia.",
         "→ PROIBIDO: nova sugestão, nova pergunta, novo produto, qualquer texto além do fechamento.",
         "→ Resposta máxima: 1 frase de fechamento + confirm_order.",
       );

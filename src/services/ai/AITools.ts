@@ -50,14 +50,9 @@ export interface ToolContext {
   confirmOrderAttempts: number;
   /**
    * True after the first confirm_order attempt this turn.
-   * Blocks add_item and suggest_upsell (except DRINK GATE recovery).
+   * Blocks add_item and suggest_upsell once checkout is in progress.
    */
   checkoutIntent: boolean;
-  /**
-   * True if confirm_order was blocked by DRINK GATE this turn.
-   * Allows one suggest_upsell call for drink recovery while checkoutIntent is active.
-   */
-  drinkGateBlocked: boolean;
 }
 
 // ─── tool result ──────────────────────────────────────────────
@@ -422,32 +417,6 @@ async function execConfirmOrder(
     return { success: false, message: "Não é possível confirmar um pedido sem itens." };
   }
 
-  // Drink Priority Engine — hard gate (server-side, not prompt-dependent)
-  const hasMainItem = draft.items.some(
-    (di) => di.menuItem && isMainCategory(di.menuItem.category.name),
-  );
-  const cartHasDrink = draft.items.some(
-    (di) => di.menuItem
-      && !isMainCategory(di.menuItem.category.name)
-      && !isDessertCategory(di.menuItem.category.name),
-  );
-  const totalDrinkAttempts = ctx.drinkAttemptsPriorTurns + ctx.drinkAttemptsThisTurn;
-
-  if (!hasMainItem) {
-    return { success: false, message: "Não é possível confirmar sem prato principal no pedido." };
-  }
-  if (!cartHasDrink && totalDrinkAttempts < 2) {
-    const remaining = 2 - totalDrinkAttempts;
-    ctx.drinkGateBlocked = true;
-    return {
-      success: false,
-      message:
-        `⚠️ DRINK GATE: bebida ainda não foi coberta (${totalDrinkAttempts}/2 tentativas). ` +
-        `Faça ${remaining} tentativa(s) de bebida — chame suggest_upsell com uma bebida AGORA. ` +
-        `confirm_order bloqueado até cobertura mínima.`,
-    };
-  }
-
   // Update fulfillment type on draft
   await prisma.orderDraft.update({
     where: { id: ctx.draftId },
@@ -544,11 +513,11 @@ async function execSuggestUpsell(
     };
   }
 
-  // Checkout lock: suggest_upsell only allowed during DRINK GATE recovery
-  if (ctx.checkoutIntent && !ctx.drinkGateBlocked) {
+  // Checkout lock: once checkout is in progress, upsell is blocked
+  if (ctx.checkoutIntent) {
     return {
       success: false,
-      message: "BLOQUEADO: pedido em fase de confirmação. suggest_upsell não permitido exceto para recuperação do DRINK GATE.",
+      message: "BLOQUEADO: pedido em fase de confirmação. suggest_upsell não é permitido após sinal de fechamento.",
     };
   }
 

@@ -369,9 +369,9 @@ function buildClosingSection(profile: SalesProfile): string {
   const rules: string[] = [
     "AO CONFIRMAR O PEDIDO",
     "- Siga REGRA 10 (FINAL INTENT LOCK): sinal de fechamento → state.stage = CHECKOUT.",
-    "- CHECKOUT + bebida coberta → confirm_order IMEDIATO.",
-    "- CHECKOUT + bebida 0 tentativas → 1 tentativa → confirm_order.",
-    "- Fora do lock: confirm_order só após funil completo (MAIN + DRINK + DESSERT tentados).",
+    "- CHECKOUT + bebida não tentada → pode oferecer 1× como sugestão → confirm_order independente da resposta.",
+    "- Qualquer outro caso → confirm_order IMEDIATO.",
+    "- confirm_order aceita qualquer carrinho não-vazio. Upsell é opcional — não bloqueia o fechamento.",
     "- Ao confirmar → chame confirm_order. Sem perguntas extras.",
     "- confirm_order gera o resumo automaticamente — não repita.",
   ];

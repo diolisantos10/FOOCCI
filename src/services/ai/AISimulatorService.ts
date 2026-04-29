@@ -778,7 +778,6 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
     drinkAttemptsPriorTurns: 0,
     confirmOrderAttempts:    0,
     checkoutIntent:          false,
-    drinkGateBlocked:        false,
   };
 
   // Guardrail data — mirrors AIOrderService parallel query
@@ -1267,7 +1266,7 @@ function runCheck(
         detail: confirmedSuccess
           ? "IA executou confirm_order com sucesso"
           : confirmedAttempt
-          ? "IA chamou confirm_order (falhou — possível DRINK GATE ou carrinho vazio)"
+          ? "IA chamou confirm_order (falhou — carrinho vazio ou erro de tool)"
           : "IA não chamou confirm_order — texto sozinho não conta como checkout",
       };
     }
