@@ -30,7 +30,7 @@ import type OpenAI from "openai";
 import { generateScenarios } from "./ScenarioGenerator";
 
 const MAX_TOOL_ITERATIONS = 6;
-const MIN_SIM_TURNS       = 6;
+const MIN_SIM_TURNS       = 8;  // full flow needs ~8 turns: entry→main→drink→dessert→review→confirm
 
 // ─── public types ─────────────────────────────────────────────
 
@@ -433,7 +433,7 @@ const CHECK_LABELS: Record<CheckType, string> = {
 const BATCH_SIZE           = 5;
 const BATCH_DELAY_MS       = 3_000;   // pause between batches to respect TPM limits
 const MAX_SCENARIO_RETRIES = 3;       // max retries per scenario (covers 429 + network errors)
-const TURN_TIMEOUT_MS      = 12_000;  // abort each OpenAI call after 12 s
+const TURN_TIMEOUT_MS      = 25_000;  // abort each OpenAI call after 25 s (complex prompts need more time)
 
 // ─── public service ───────────────────────────────────────────
 
