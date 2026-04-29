@@ -723,6 +723,9 @@ async function executeSimulatedTurn(params: TurnParams): Promise<TurnResult> {
     upsellSuggestedThisTurn: false,
     drinkAttemptsThisTurn:   0,
     drinkAttemptsPriorTurns: 0,
+    confirmOrderAttempts:    0,
+    checkoutIntent:          false,
+    drinkGateBlocked:        false,
   };
 
   // Guardrail data

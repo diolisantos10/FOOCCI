@@ -364,6 +364,9 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     upsellSuggestedThisTurn: false,
     drinkAttemptsThisTurn:   0,
     drinkAttemptsPriorTurns: 0, // overwritten below after parallel query
+    confirmOrderAttempts:    0,
+    checkoutIntent:          false,
+    drinkGateBlocked:        false,
   };
 
   // 5. Build sales profile + guardrail data + upsell context
@@ -566,14 +569,13 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     upsellTriggeredBy = "model";
   }
 
-  // ── Fail-safe: speech ↔ tool sync ────────────────────────────
-  // Only active in Stage 3 or 4 (where suggest_upsell is expected).
-  // If the AI mentioned a product by name but did not call suggest_upsell,
-  // auto-fire the tool so the UI card always appears.
+  // ── Speech ↔ tool audit (observe-only) ───────────────────────
+  // Log when AI mentioned a product name without calling suggest_upsell.
+  // Silent auto-execution is disabled — AI handles it on the next turn.
   if (
     finalResponse &&
     !handoffRequested &&
-    upsellAllowed &&                                         // Stage 3 or 4 only
+    upsellAllowed &&
     !toolCallsMade.some((tc) => tc.name === "suggest_upsell")
   ) {
     const hit = upsellSuggestions.find(
@@ -581,21 +583,9 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
         normalizeText(finalResponse).includes(normalizeText(s.name))
     );
     if (hit) {
-      console.info(
-        `[AIOrderService] [FAIL-SAFE TRIGGERED] stage=${upsellStage} product="${hit.name}" reason="model did not call tool"`
+      console.warn(
+        `[AIOrderService] [SPEECH-TOOL-MISMATCH] stage=${upsellStage} product="${hit.name}" reason="model mentioned product without calling suggest_upsell — no auto-fire"`
       );
-      const fsResult = await executeTool(
-        "suggest_upsell",
-        JSON.stringify({ menuItemId: hit.menuItemId }),
-        toolCtx,
-      );
-      toolCallsMade.push({
-        name:    "suggest_upsell",
-        args:    { menuItemId: hit.menuItemId },
-        result:  fsResult,
-        success: fsResult.success,
-      });
-      upsellTriggeredBy = "fail_safe";
     }
   }
 

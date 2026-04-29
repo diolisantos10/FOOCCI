@@ -44,6 +44,20 @@ export interface ToolContext {
    * Drink attempts made in all previous turns of this conversation (loaded at turn start).
    */
   drinkAttemptsPriorTurns: number;
+  /**
+   * Number of confirm_order calls made this turn. Hard limit: 1. Prevents confirm_order loops.
+   */
+  confirmOrderAttempts: number;
+  /**
+   * True after the first confirm_order attempt this turn.
+   * Blocks add_item and suggest_upsell (except DRINK GATE recovery).
+   */
+  checkoutIntent: boolean;
+  /**
+   * True if confirm_order was blocked by DRINK GATE this turn.
+   * Allows one suggest_upsell call for drink recovery while checkoutIntent is active.
+   */
+  drinkGateBlocked: boolean;
 }
 
 // ─── tool result ──────────────────────────────────────────────
@@ -237,6 +251,14 @@ async function execAddItem(
     return { success: false, message: "Quantidade deve ser um inteiro >= 1." };
   }
 
+  // Checkout lock: no new items after confirm_order has been attempted this turn
+  if (ctx.checkoutIntent) {
+    return {
+      success: false,
+      message: "BLOQUEADO: pedido em fase de confirmação. Não é possível adicionar itens.",
+    };
+  }
+
   // Safety: validate item belongs to this restaurant
   const menuItem = await prisma.menuItem.findFirst({
     where: {
@@ -368,6 +390,16 @@ async function execConfirmOrder(
   args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<ToolResult> {
+  // Hard limit: max 1 confirm_order call per turn — prevents retry loops
+  if (ctx.confirmOrderAttempts >= 1) {
+    return {
+      success: false,
+      message: "PARAR: confirm_order já foi tentado neste turno. Não repetir.",
+    };
+  }
+  ctx.confirmOrderAttempts += 1;
+  ctx.checkoutIntent = true;
+
   const fulfillmentType = (args.fulfillmentType as string) ?? "PICKUP";
 
   if (!ctx.draftId) {
@@ -406,6 +438,7 @@ async function execConfirmOrder(
   }
   if (!cartHasDrink && totalDrinkAttempts < 2) {
     const remaining = 2 - totalDrinkAttempts;
+    ctx.drinkGateBlocked = true;
     return {
       success: false,
       message:
@@ -508,6 +541,14 @@ async function execSuggestUpsell(
     return {
       success: false,
       message: "Você já sugeriu um produto nesta resposta. Aguarde o cliente responder antes de sugerir outro item.",
+    };
+  }
+
+  // Checkout lock: suggest_upsell only allowed during DRINK GATE recovery
+  if (ctx.checkoutIntent && !ctx.drinkGateBlocked) {
+    return {
+      success: false,
+      message: "BLOQUEADO: pedido em fase de confirmação. suggest_upsell não permitido exceto para recuperação do DRINK GATE.",
     };
   }
 
