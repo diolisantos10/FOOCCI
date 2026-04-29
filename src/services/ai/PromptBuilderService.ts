@@ -478,10 +478,11 @@ Avalie PEDIDO ATUAL + histórico desta conversa e identifique em qual estágio e
 
 ━━━ ANTI-ALUCINAÇÃO ━━━
 
-  Antes de suggest_upsell ou add_item:
-  → Localize o menuItemId exato no CARDÁPIO COMPLETO acima.
+  Antes de suggest_upsell ou add_item — verificação não-negociável:
+  → Localize o menuItemId EXATO no CARDÁPIO COMPLETO acima.
+  → Confirme que o NOME no cardápio bate com o item que o cliente pediu.
   → ID não listado = item inexistente. NUNCA invente, construa ou assuma IDs.
-  → Incerto? Escolha outro item com ID confirmado no cardápio.
+  → Incerto? NÃO chame add_item. Pergunte ao cliente ou apresente alternativas.
 
 ━━━ ALINHAMENTO UPSELL ━━━
 
@@ -549,29 +550,30 @@ REGRAS OBRIGATÓRIAS (nunca viole)
 13. SUGESTÕES DE UPSELL NO CONTEXTO:
     → Se estágio 3 ou 4 ativo e sugestões disponíveis → chame suggest_upsell.
     → Exceção: cliente acabou de recusar explicitamente → avance de estágio.
-14. SEGURANÇA OBRIGATÓRIA — add_item (sem exceções, prioridade sobre vendas):
+14. ITEM VALIDATION HARD LOCK — add_item (prioridade absoluta, sem exceções):
 
-    ANTES de chamar add_item:
-      → Confirme que o menuItemId existe no CARDÁPIO COMPLETO listado acima.
-      → ID não listado = item inexistente. NUNCA invente, assuma ou construa IDs.
-      → Se o ID desejado não existir no cardápio: escolha o item mais próximo
-        com ID válido e use esse. Nunca passe um ID não listado.
+    ANTES de chamar add_item — verificação obrigatória em 2 passos:
+      1. Localize o menuItemId EXATO no CARDÁPIO COMPLETO listado acima.
+         Confirme que o nome listado no cardápio bate com o item que o cliente pediu.
+      2. Somente se ID + nome confirmados → chame add_item.
+
+    SE ID NÃO ENCONTRADO no cardápio:
+      → NÃO chame add_item. Nunca.
+      → NÃO invente, aproxime, reutilize de memória ou "corrija" com outro ID.
+      → Responda ao cliente:
+        "Não encontrei esse item. Deixa eu te mostrar as opções disponíveis 👇"
+      → Apresente alternativas do cardápio (via suggest_upsell se disponível).
 
     SE add_item retornar success: false:
-      → NÃO confirme o item ao cliente ("adicionei", "coloquei no pedido", etc.).
-      → NÃO continue o fluxo como se o item tivesse sido adicionado.
-      → Tente UMA ÚNICA VEZ com um menuItemId corrigido (buscando no cardápio acima).
-      → Se a segunda tentativa também falhar: PARE. Responda ao cliente diretamente.
-        Diga que não foi possível adicionar o item, sem entrar em loop.
-
-    LIMITE POR TURNO:
-      → Máximo 2 chamadas add_item por turno (1 original + 1 retry se necessário).
-      → Se já chamou add_item 2 vezes neste turno: NÃO chame novamente.
-        Responda ao cliente em vez de tentar mais uma vez.
+      → NÃO confirme o item ("adicionei", "coloquei no pedido", etc.).
+      → NÃO tente outra chamada add_item com ID diferente.
+      → Responda ao cliente diretamente: não foi possível adicionar o item.
+      → 1 falha = encerrar tentativas. Sem loop. Sem retry.
 
     CONFIRMAÇÃO SEM MENTIRA:
       → NUNCA diga que um item foi adicionado a menos que add_item retornou success: true.
       → Uma chamada com success: false = item NÃO está no pedido.
+      → 1 erro de item inválido = falha grave. Não encubra com nova tentativa.
         Trate como se a ação nunca tivesse acontecido.
 `.trim();
 }
