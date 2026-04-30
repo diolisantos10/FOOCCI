@@ -165,31 +165,49 @@ const BASE_DIRECTIVE = `
 
 function buildUserMessageDirective(cartItemIds: string[], cartValue: number): string {
   const hasItems = cartItemIds.length > 0;
-  const lines = [
+  const contextLine = hasItems
+    ? `CONTEXTO: cliente tem ${cartItemIds.length} item(ns) no carrinho (R$ ${cartValue.toFixed(2)}).`
+    : "CONTEXTO: carrinho vazio.";
+
+  return [
     BASE_DIRECTIVE,
     "",
-    hasItems
-      ? `CONTEXTO: cliente tem ${cartItemIds.length} item(ns) no carrinho (R$ ${cartValue.toFixed(2)}).`
-      : "CONTEXTO: carrinho vazio.",
+    contextLine,
     "",
-    "DECISÃO DESTE TURNO:",
+    "VOCÊ É UM GARÇOM — SIGA ESTAS ETAPAS NESTE TURNO:",
+    "",
+    "ETAPA 1 — EXTRAIA A INTENÇÃO DO CLIENTE:",
+    "  Leia o que o cliente disse e identifique o que ele quer comer/beber.",
+    "  Exemplos de intenção:",
+    '    "algo leve"    → pratos leves, saladas, entradas',
+    '    "quero salada" → categoria saladas',
+    '    "com fome"     → pratos principais, combos',
+    '    "algo rápido"  → itens simples e rápidos',
+    '    "algo doce"    → sobremesas',
+    '    "quero beber"  → bebidas',
+    "",
+    "ETAPA 2 — ENCONTRE O ITEM NO CARDÁPIO:",
+    "  Leia o cardápio completo acima.",
+    "  Para cada item verifique: nome, descrição E ingredientes.",
+    "  Encontre o item que MELHOR corresponde à intenção extraída.",
+    "",
+    "ETAPA 3 — SUGIRA (OBRIGATÓRIO):",
+    "  → Execute suggest_upsell com o ID do item encontrado.",
+    "  → NUNCA mencione o item só no texto sem chamar suggest_upsell.",
+    "",
+    "ETAPA 4 — CONFIRME:",
+    "  Escreva 1 frase curta (max 1 linha) que:",
+    '    • reflete o que o cliente pediu (ex: "Esse aqui é leve e bem fresquinho 👇")',
+    "    • convida a confirmar — sem fazer perguntas abertas",
+    "",
+    "SE NÃO HOUVER INTENÇÃO CLARA:",
+    "  → Faça UMA pergunta com 2 opções:",
+    '    Exemplo: "Prefere algo leve ou mais completo? 👇"',
+    "  → NÃO sugira nenhum produto sem antes entender o que o cliente quer.",
     hasItems
-      ? [
-          "  → Cliente enviou mensagem com itens no carrinho.",
-          "  → Responda diretamente ao que perguntou.",
-          "  → Se houver oportunidade → sugira 1 item via suggest_upsell.",
-          "  → Não force checkout — deixe o cliente decidir.",
-        ].join("\n")
-      : [
-          "  → Carrinho vazio: responda diretamente ao que o cliente enviou.",
-          "  → Se o cliente pediu sugestões ou escolheu uma preferência, diga algo como",
-          "     'Separei algumas opções pra você 👇' e use suggest_upsell — NADA MAIS.",
-          "  → NUNCA implique que um item foi adicionado — isso só acontece quando o CLIENTE toca no '+'.",
-          "  → PROIBIDO fazer perguntas abertas que exijam digitação de resposta.",
-          "  → Mantenha a resposta em até 2 linhas.",
-        ].join("\n"),
-  ];
-  return lines.join("\n");
+      ? "  → Com itens no carrinho: responda ao que perguntou, sugira 1 complemento se houver oportunidade."
+      : "",
+  ].filter((l) => l !== "").join("\n");
 }
 
 function buildCategoryIntentDirective(intent: "light" | "complete"): string {
@@ -321,7 +339,7 @@ function handleUserMessage(input: V2Input): V2Output {
     aiDirective,
     // Qualification buttons only shown on first free-text message with empty cart.
     // Exactly 2 options per UX spec — no "surprise me".
-    options: hasItems ? undefined : ["🥗 Algo leve", "🍽️ Refeição completa"],
+    options: hasItems ? undefined : ["Leve", "Completo"],
   };
 }
 

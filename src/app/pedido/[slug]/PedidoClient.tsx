@@ -1219,7 +1219,7 @@ export function PedidoClient({
         // When context already chosen this session → suppress qualification options (no re-ask).
         // Otherwise → show API-provided qualification choices (first time only).
         const finalOptions: string[] | undefined = hasShownCards
-          ? ["✅ Adicionar ao pedido", "🔄 Ver outras opções"]
+          ? ["Quero", "Ver outra opção"]
           : apiOptions.length > 0 && !contextChosenRef.current
           ? apiOptions
           : undefined;
@@ -1440,7 +1440,7 @@ export function PedidoClient({
             if (items.length > 0) setSuggestedProducts(items);
           }
           guidedStepRef.current = "main";
-          addMsg("Prefere algo leve ou uma refeição completa? 🍽️", ["🥗 Algo leve", "🍽️ Refeição completa"]);
+          addMsg("Prefere algo leve ou uma refeição completa? 🍽️", ["Leve", "Completo"]);
           break;
 
         case "main": {
@@ -1524,14 +1524,14 @@ export function PedidoClient({
         return;
       }
 
-      // "Ver outras opções" → local: clear grid, return to catalog
-      if (text.startsWith("🔄")) {
+      // "Ver outra opção" → local: clear grid, return to catalog
+      if (text === "Ver outra opção") {
         setSuggestedProducts([]);
         return;
       }
 
-      // "Adicionar ao pedido" → local: add first shown product to cart
-      if (text.startsWith("✅")) {
+      // "Quero" → local: add first shown product to cart
+      if (text === "Quero") {
         const firstItem = suggestedProducts[0];
         if (firstItem) {
           if (firstItem.hasVariants) setSelectedProduct(firstItem);
