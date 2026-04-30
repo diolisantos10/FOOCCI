@@ -66,12 +66,18 @@ export type SimStage =
 
 /** Hidden purchase intent that drives the simulated customer's decisions. */
 export interface CustomerGoal {
+  // ── core decision fields ───────────────────────────────────
   groupSize:         1 | 2 | 3 | 4 | "family";
   budgetMax:         number;               // max spend in BRL
   desiredMealType:   "quick" | "complete" | "premium" | "cheap" | "sharing";
   deliveryIntent:    "delivery" | "pickup";
   paymentPreference: "pix" | "card" | "cash";
   opennessToUpsell:  "low" | "medium" | "high";
+  decisionStyle:     "quick" | "deliberate" | "impulsive" | "analytical";
+  // ── archetype metadata (human-readable, for reports) ──────
+  context:               string;  // e.g. "Família de fim de semana"
+  goal:                  string;  // e.g. "Jantar completo para 4 pessoas"
+  finalizationCondition: string;  // e.g. "Mínimo 3 itens e ticket ≥ R$ 90"
 }
 
 /** Aggregate stage performance across all scenarios in a run. */
@@ -155,6 +161,7 @@ export interface ScenarioResult {
   abandonmentReason?:              string;
   budgetUsed:                      number;
   budgetExceeded:                  boolean;
+  budgetRespected:                 boolean;  // final cart value ≤ budgetMax
 }
 
 // ─── analytical report types ──────────────────────────────────
@@ -274,6 +281,7 @@ export interface SimulationReport {
   goalSatisfactionRate:          number;  // 0–1: scenarios where goal was satisfied
   customerInitiatedFinalization: number;  // 0–1: scenarios where customer sent finalize signal
   budgetExceededRate:            number;  // 0–1: scenarios where cart exceeded budgetMax
+  budgetRespectedRate:           number;  // 0–1: scenarios where final cart ≤ budgetMax
 }
 
 type ProgressCallback = (info: { current: number; total: number; scenarioName: string }) => void;
@@ -468,10 +476,14 @@ const MSGS = {
   paymentOnDelivery: ["pagar na entrega", "pago quando chegar", "dinheiro na entrega", "na entrega mesmo"],
   // ── goal-driven finalization (natural customer-initiated closing) ──
   finalize: [
+    // natural closing — goal satisfied
+    "acho que já tá bom",
+    "vou fechar aqui",
+    "já temos o suficiente",
+    "vou finalizar",
     "beleza, vou finalizar",
     "acho que é isso",
     "fechei aqui",
-    "vou clicar em finalizar",
     "pronto, pode seguir",
     "acho que tô satisfeito, pode fechar",
     "é isso mesmo, finaliza aí",
@@ -480,6 +492,20 @@ const MSGS = {
     "pode confirmar, já escolhi o que queria",
     "tô satisfeito com a escolha, pode fechar",
     "já tô bem com isso, finaliza",
+    // group/family variants
+    "acho que pedimos tudo",
+    "é suficiente pra todo mundo",
+    "tá na medida certa pra nós",
+    "já tem o que precisa pra todo mundo",
+    // budget-aware closing
+    "tô dentro do que eu queria gastar, pode fechar",
+    "já tá ótimo assim, não precisa de mais nada",
+    "perfeito, já é o suficiente",
+    // short/direct variants (for impaciente/direto profiles)
+    "fecha",
+    "tá bom",
+    "pronto",
+    "é isso",
   ],
 };
 
@@ -1106,6 +1132,7 @@ async function runScenario(
       abandonmentReason:               cState.abandonmentReason,
       budgetUsed:                      finalCartValue,
       budgetExceeded:                  finalCartValue > scenario.customerGoal.budgetMax,
+      budgetRespected:                 finalCartValue <= scenario.customerGoal.budgetMax,
     };
   } finally {
     await cleanupSimulation(customer.id, conversation.id);
@@ -1124,6 +1151,7 @@ interface GoalContext {
   abandonmentReason?:              string;
   budgetUsed:                      number;
   budgetExceeded:                  boolean;
+  budgetRespected:                 boolean;
 }
 
 /** Returns true when the simulated conversation should stop for the given testDepth. */
@@ -1595,12 +1623,14 @@ function evaluateScenario(
     ? detectFailureStage(salesMetrics, checks, stagesReached, testDepth)
     : undefined;
 
+  const finalBudgetUsed = cartEvolution.at(-1)?.value ?? 0;
   const gc = goalContext ?? {
     customerGoal:                    scenario.customerGoal,
     goalSatisfied:                   false,
     finalizationTriggeredByCustomer: false,
-    budgetUsed:                      cartEvolution.at(-1)?.value ?? 0,
-    budgetExceeded:                  false,
+    budgetUsed:                      finalBudgetUsed,
+    budgetExceeded:                  finalBudgetUsed > scenario.customerGoal.budgetMax,
+    budgetRespected:                 finalBudgetUsed <= scenario.customerGoal.budgetMax,
   };
 
   return {
@@ -1627,6 +1657,7 @@ function evaluateScenario(
     abandonmentReason:               gc.abandonmentReason,
     budgetUsed:                      gc.budgetUsed,
     budgetExceeded:                  gc.budgetExceeded,
+    budgetRespected:                 gc.budgetRespected,
   };
 }
 
@@ -2038,6 +2069,7 @@ function buildReport(
   const goalSatisfactionRate          = results.filter((r) => r.goalSatisfied).length / n;
   const customerInitiatedFinalization = results.filter((r) => r.finalizationTriggeredByCustomer).length / n;
   const budgetExceededRate            = results.filter((r) => r.budgetExceeded).length / n;
+  const budgetRespectedRate           = results.filter((r) => r.budgetRespected).length / n;
 
   return {
     overallScore: Math.round(overallScore),
@@ -2072,6 +2104,7 @@ function buildReport(
     goalSatisfactionRate,
     customerInitiatedFinalization,
     budgetExceededRate,
+    budgetRespectedRate,
   };
 }
 
@@ -2427,6 +2460,7 @@ function buildErrorResult(scenario: ScenarioDef, error: string): ScenarioResult 
     abandonmentReason:               "execution_error",
     budgetUsed:                      0,
     budgetExceeded:                  false,
+    budgetRespected:                 true,
   };
 }
 

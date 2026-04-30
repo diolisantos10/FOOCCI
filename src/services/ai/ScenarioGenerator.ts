@@ -438,6 +438,76 @@ function buildExpectedBehavior(dims: Dimensions): string {
 
 const BUDGET_MAX: Record<Budget, number> = { baixo: 60, médio: 120, alto: 210 };
 
+// Archetype context labels derived from budget × intent × groupSize
+function buildContext(dims: Dimensions): string {
+  if (dims.groupSize === "família") {
+    return dims.budget === "alto" ? "Família Premium" : "Família Econômica";
+  }
+  if (dims.groupSize === "dupla") {
+    return dims.budget === "alto" ? "Casal Premium" : "Casal Moderado";
+  }
+  if (dims.behavior === "impaciente") return "Decisor Rápido";
+  if (dims.behavior === "pergunta_primeiro") return "Comprador Analítico";
+  if (dims.intent === "fome" && dims.budget === "alto") return "Faminto Premium";
+  if (dims.intent === "fome") return "Faminto Direto";
+  if (dims.intent === "curioso" && dims.budget === "alto") return "Explorador Premium";
+  if (dims.intent === "curioso") return "Explorador Moderado";
+  if (dims.intent === "direto" && dims.budget === "baixo") return "Comprador Econômico";
+  if (dims.intent === "direto" && dims.budget === "alto") return "Comprador High Ticket";
+  if (dims.intent === "indeciso" && dims.budget === "baixo") return "Indeciso com Orçamento";
+  if (dims.intent === "indeciso") return "Cliente Indeciso";
+  return "Cliente Padrão";
+}
+
+// Human-readable buying purpose
+function buildGoalLabel(desiredMealType: CustomerGoal["desiredMealType"], groupSize: CustomerGoal["groupSize"]): string {
+  const numericGroup = groupSize === "family" ? 4 : groupSize;
+  switch (desiredMealType) {
+    case "quick":
+      return "Refeição rápida e prática";
+    case "cheap":
+      return "Refeição econômica dentro do orçamento";
+    case "premium":
+      return numericGroup >= 2 ? "Experiência gastronômica premium para o grupo" : "Experiência gastronômica premium";
+    case "sharing":
+      return numericGroup >= 4 ? "Refeição completa para a família" : "Refeição para dividir a dois";
+    case "complete":
+      return numericGroup >= 2 ? `Refeição completa para ${numericGroup} pessoas` : "Refeição completa e satisfatória";
+  }
+}
+
+// Decision style from intent + behavior
+function buildDecisionStyle(dims: Dimensions): CustomerGoal["decisionStyle"] {
+  if (dims.behavior === "impaciente") return "quick";
+  if (dims.behavior === "pergunta_primeiro") return "analytical";
+  if (dims.intent === "fome") return "impulsive";
+  if (dims.intent === "direto") return "quick";
+  if (dims.intent === "curioso") return "analytical";
+  if (dims.intent === "indeciso") return "deliberate";
+  return "deliberate";
+}
+
+// Human-readable finalization condition
+function buildFinalizationCondition(
+  desiredMealType: CustomerGoal["desiredMealType"],
+  groupSize: CustomerGoal["groupSize"],
+  budgetMax: number,
+): string {
+  const numericGroup = groupSize === "family" ? 4 : groupSize;
+  const minItems = numericGroup >= 4 ? 3 : numericGroup >= 2 ? 2 : 1;
+  switch (desiredMealType) {
+    case "quick":
+    case "cheap":
+      return `1 item dentro do orçamento de R$ ${budgetMax.toFixed(0)}`;
+    case "complete":
+      return `Mínimo ${minItems} item(ns) e ticket ≥ R$ ${(budgetMax * 0.45).toFixed(0)}`;
+    case "sharing":
+      return `Mínimo ${Math.max(minItems, 2)} itens e ticket ≥ R$ ${(budgetMax * 0.45).toFixed(0)}`;
+    case "premium":
+      return `Mínimo ${minItems} item(ns) e ticket ≥ R$ ${(budgetMax * 0.60).toFixed(0)}`;
+  }
+}
+
 function buildCustomerGoal(dims: Dimensions, variation: VariationLayer): CustomerGoal {
   const groupSize: CustomerGoal["groupSize"] =
     dims.groupSize === "família" ? "family"
@@ -465,7 +535,15 @@ function buildCustomerGoal(dims: Dimensions, variation: VariationLayer): Custome
     : dims.behavior === "recusa_upsell" || variation.upsellOpenness === "closed" ? "low"
     : "medium";
 
-  return { groupSize, budgetMax, desiredMealType, deliveryIntent, paymentPreference, opennessToUpsell };
+  const decisionStyle     = buildDecisionStyle(dims);
+  const context           = buildContext(dims);
+  const goal              = buildGoalLabel(desiredMealType, groupSize);
+  const finalizationCondition = buildFinalizationCondition(desiredMealType, groupSize, budgetMax);
+
+  return {
+    groupSize, budgetMax, desiredMealType, deliveryIntent, paymentPreference,
+    opennessToUpsell, decisionStyle, context, goal, finalizationCondition,
+  };
 }
 
 // ─── scenario builder ─────────────────────────────────────────
