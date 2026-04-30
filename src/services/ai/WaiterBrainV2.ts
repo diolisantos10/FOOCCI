@@ -177,10 +177,10 @@ function buildUserMessageDirective(cartItemIds: string[], cartValue: number): st
           "  → Não force checkout — deixe o cliente decidir.",
         ].join("\n")
       : [
-          "  → Carrinho vazio: faça UMA pergunta de qualificação antes de sugerir.",
-          "  → Ex: 'Prefere algo mais leve ou mais completo?'",
-          "  → Após a resposta → sugira 1 item via suggest_upsell.",
-          "  → NUNCA sugira antes de qualificar.",
+          "  → Carrinho vazio: responda diretamente ao que o cliente enviou.",
+          "  → Sugira 1 item via suggest_upsell se houver oportunidade natural.",
+          "  → PROIBIDO fazer perguntas abertas que exijam digitação de resposta.",
+          "  → Mantenha a resposta em até 2 linhas.",
         ].join("\n"),
   ];
   return lines.join("\n");

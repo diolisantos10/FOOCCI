@@ -24,6 +24,8 @@ interface ChatMessage {
   suggestedItemName?: string;
   /** V2: product IDs to render as suggestion cards below this message. */
   cards?: string[];
+  /** Quick-reply buttons rendered below the message — tapping sends the text as user input. */
+  options?: string[];
 }
 
 interface MenuItemVariant {
@@ -275,7 +277,13 @@ function computeResumeStage(
 
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
-function Bubble({ msg }: { msg: ChatMessage }) {
+function Bubble({
+  msg,
+  onOptionSelect,
+}: {
+  msg: ChatMessage;
+  onOptionSelect?: (text: string) => void;
+}) {
   const isUser = msg.role === "user";
   if (msg.content.trim() === "") return null;
   return (
@@ -291,6 +299,19 @@ function Bubble({ msg }: { msg: ChatMessage }) {
         <p className={`mt-1 text-right text-[10px] ${isUser ? "text-green-700" : "text-gray-400"}`}>
           {formatTime(msg.ts)}
         </p>
+        {!isUser && msg.options && msg.options.length > 0 && onOptionSelect && (
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {msg.options.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => onOptionSelect(opt)}
+                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-green-50 hover:border-green-300 hover:text-green-800 active:scale-95 transition-all"
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1205,7 +1226,16 @@ export function PedidoClient({
     const greeting = name
       ? `Bem-vindo, ${name}! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`
       : `Bem-vindo! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`;
-    pushAssistantMessage(greeting);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        role: "assistant" as const,
+        content: greeting,
+        ts: new Date(),
+        options: ["Quero sugestão ✨", "Ver cardápio 📋"],
+      },
+    ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryPhase]);
 
@@ -1334,6 +1364,15 @@ export function PedidoClient({
     silentUntilRef.current = Date.now() + SILENT_COOLDOWN_MS;
     pushAssistantMessage("Perfeito 😊 fica à vontade — qualquer coisa é só me chamar.");
   }, [pushAssistantMessage]);
+
+  // ── Option button handler — tapping a quick-reply acts as a user message ──
+  const handleOptionSelect = useCallback(
+    (text: string) => {
+      if (ui === "thinking") return;
+      sendText(text, cart, stage, activeUpsell);
+    },
+    [cart, stage, activeUpsell, sendText, ui],
+  );
 
   // ── Checkout permission handlers ──────────────────────────────────
 
@@ -1991,7 +2030,7 @@ export function PedidoClient({
           )}
 
           {messages.map((msg) => (
-            <Bubble key={msg.id} msg={msg} />
+            <Bubble key={msg.id} msg={msg} onOptionSelect={handleOptionSelect} />
           ))}
 
           {/* Passive permission prompt — soft ask before AI engages */}
@@ -2114,7 +2153,6 @@ export function PedidoClient({
           <div className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
             {suggestedProducts.length > 0 ? (
               <div className="px-3 pt-2 pb-1">
-                <p className="mb-1.5 text-xs font-semibold text-orange-700">Combina com seu pedido 👇</p>
                 <div
                   className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
                   style={{ scrollbarWidth: "none" }}
@@ -2254,7 +2292,6 @@ export function PedidoClient({
               {suggestedProducts.length > 0 ? (
                 <>
                   <div className="mb-3 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-orange-700">Combina com seu pedido 👇</p>
                     <button
                       onClick={() => setSuggestedProducts([])}
                       className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
