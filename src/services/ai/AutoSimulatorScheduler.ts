@@ -3,7 +3,8 @@
  *
  * Background singleton that polls AutoSimulatorConfig every 60 s.
  * For each enabled config that is due (lastRunAt + intervalMinutes <= now),
- * it fires an AutoSimulatorService.executeRun without blocking the tick loop.
+ * it delegates to AutoSimulatorService.enqueue() which owns the per-restaurant
+ * lock — preventing duplicates from both scheduler and manual API calls.
  *
  * Started once from src/instrumentation.ts on server boot.
  * Safe to call start() multiple times — idempotent.
@@ -14,7 +15,6 @@ import { AutoSimulatorService } from "./AutoSimulatorService";
 
 export class AutoSimulatorScheduler {
   private static handle: ReturnType<typeof setInterval> | null = null;
-  private static running = new Set<string>(); // restaurantIds currently being processed
 
   static start(): void {
     if (this.handle !== null) return;
@@ -43,39 +43,18 @@ export class AutoSimulatorScheduler {
       });
 
       for (const cfg of configs) {
-        if (this.running.has(cfg.restaurantId)) continue;
+        if (AutoSimulatorService.isRunning(cfg.restaurantId)) continue;
 
         const dueAt = cfg.lastRunAt
           ? new Date(cfg.lastRunAt.getTime() + cfg.intervalMinutes * 60_000)
           : new Date(0); // never run → due immediately
 
         if (now >= dueAt) {
-          void this.runForRestaurant(cfg.restaurantId, cfg.scenarioCount);
+          AutoSimulatorService.enqueue(cfg.restaurantId, cfg.scenarioCount, "scheduler");
         }
       }
     } catch (err) {
       console.error("[AutoSimulatorScheduler] Tick error:", err);
-    }
-  }
-
-  private static async runForRestaurant(
-    restaurantId: string,
-    scenarioCount: number,
-  ): Promise<void> {
-    this.running.add(restaurantId);
-    console.log(
-      `[AutoSimulatorScheduler] Run started — restaurant=${restaurantId} scenarios=${scenarioCount}`,
-    );
-    try {
-      await AutoSimulatorService.executeRun(restaurantId, scenarioCount, "scheduler");
-      console.log(`[AutoSimulatorScheduler] Run complete — restaurant=${restaurantId}`);
-    } catch (err) {
-      console.error(
-        `[AutoSimulatorScheduler] Run failed — restaurant=${restaurantId}:`,
-        err,
-      );
-    } finally {
-      this.running.delete(restaurantId);
     }
   }
 }

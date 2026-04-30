@@ -19,6 +19,45 @@ import { generateInsight } from "./InsightGenerator";
 export type TriggerSource = "scheduler" | "manual";
 
 export class AutoSimulatorService {
+  // Shared in-memory lock — prevents concurrent runs for the same restaurant
+  // from any source (scheduler OR manual API call).
+  private static readonly activeLocks = new Set<string>();
+
+  static isRunning(restaurantId: string): boolean {
+    return this.activeLocks.has(restaurantId);
+  }
+
+  /**
+   * Fire-and-forget: starts a run in the background without blocking the caller.
+   * Returns false (and does nothing) if the restaurant already has a run in progress.
+   */
+  static enqueue(
+    restaurantId: string,
+    scenarioCount: number,
+    triggeredBy: TriggerSource,
+  ): boolean {
+    if (this.activeLocks.has(restaurantId)) return false;
+    void this.runWithLock(restaurantId, scenarioCount, triggeredBy);
+    return true;
+  }
+
+  private static async runWithLock(
+    restaurantId: string,
+    scenarioCount: number,
+    triggeredBy: TriggerSource,
+  ): Promise<void> {
+    this.activeLocks.add(restaurantId);
+    console.log(`[AutoSimulatorService] Run started — restaurant=${restaurantId} source=${triggeredBy}`);
+    try {
+      await this.executeRun(restaurantId, scenarioCount, triggeredBy);
+      console.log(`[AutoSimulatorService] Run complete — restaurant=${restaurantId}`);
+    } catch (err) {
+      console.error(`[AutoSimulatorService] Run failed — restaurant=${restaurantId}:`, err);
+    } finally {
+      this.activeLocks.delete(restaurantId);
+    }
+  }
+
   /**
    * Run a simulation, analyze results, store the run record, and return it.
    * Safe to call concurrently for different restaurants.

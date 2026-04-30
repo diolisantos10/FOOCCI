@@ -232,27 +232,77 @@ export function AutoSimulatorPanel() {
     }
   }, []);
 
+  // Poll status every 3 s while a run is in progress; refresh data on completion.
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch("/api/auto-simulator/status");
+        if (!res.ok) return;
+        const json = await res.json() as { success: boolean; data: { isRunning: boolean } };
+        if (!json.success || json.data.isRunning) return;
+        setRunning(false);
+        const [cfgRes, histRes] = await Promise.all([
+          fetch("/api/auto-simulator/config"),
+          fetch("/api/auto-simulator/history"),
+        ]);
+        const cfgJson  = await cfgRes.json()  as { success: boolean; data: AutoConfig };
+        const histJson = await histRes.json() as { success: boolean; data: SimRunRecord[] };
+        if (cfgJson.success)  setConfig(cfgJson.data);
+        if (histJson.success) {
+          setHistory(histJson.data);
+          if (histJson.data.length > 0) setSelectedRun(histJson.data[0]!);
+        }
+      } catch { /* ignore */ }
+    }, 3_000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  // Refresh history + config every 30 s to surface runs triggered by the scheduler.
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (running) return;
+      try {
+        const [cfgRes, histRes] = await Promise.all([
+          fetch("/api/auto-simulator/config"),
+          fetch("/api/auto-simulator/history"),
+        ]);
+        const cfgJson  = await cfgRes.json()  as { success: boolean; data: AutoConfig };
+        const histJson = await histRes.json() as { success: boolean; data: SimRunRecord[] };
+        if (cfgJson.success) setConfig(cfgJson.data);
+        if (histJson.success) {
+          setHistory((prev) => {
+            if (prev[0]?.id === histJson.data[0]?.id) return prev;
+            return histJson.data;
+          });
+          setSelectedRun((prev) => prev ?? (histJson.data[0] ?? null));
+        }
+      } catch { /* ignore */ }
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [running]);
+
   const runNow = useCallback(async () => {
+    if (running) return;
     setRunning(true);
     setRunErr("");
     try {
-      const res = await fetch("/api/auto-simulator/run", {
+      const res  = await fetch("/api/auto-simulator/run", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ scenarioCount: config?.scenarioCount ?? 10 }),
       });
-      if (!res.ok) { setRunErr(`HTTP ${res.status}`); return; }
-      const json = await res.json() as { success: boolean; data: SimRunRecord };
-      if (json.success) {
-        setHistory((prev) => [json.data, ...prev].slice(0, 20));
-        setSelectedRun(json.data);
+      const json = await res.json() as { success: boolean; data: { queued: boolean; reason?: string } };
+      if (!json.success || !json.data.queued) {
+        setRunning(false);
+        setRunErr(json.data?.reason === "already_running" ? "Simulação já em andamento" : `Erro HTTP ${res.status}`);
       }
+      // If queued, running=true stays — polling effect above detects completion
     } catch (err) {
-      setRunErr(String(err));
-    } finally {
       setRunning(false);
+      setRunErr(String(err));
     }
-  }, [config]);
+  }, [config, running]);
 
   if (loadingCfg) {
     return (
