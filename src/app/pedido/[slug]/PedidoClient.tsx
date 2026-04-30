@@ -2256,7 +2256,7 @@ export function PedidoClient({
             <div>
               <p className="text-base font-bold text-gray-800">Finalizando seu pedido</p>
               <p className="mt-1 text-sm text-gray-500">
-                Continue no chat ao lado para confirmar endereço e pagamento.
+                Siga os passos abaixo para concluir seu pedido.
               </p>
             </div>
             {stage !== "DONE" && (
