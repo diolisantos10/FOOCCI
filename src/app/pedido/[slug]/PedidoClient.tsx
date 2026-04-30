@@ -1296,41 +1296,46 @@ export function PedidoClient({
   // ── Passive permission prompt ─────────────────────────────────────
   // After PASSIVE_TRIGGER_MS of inactivity, gently ask permission to suggest.
   // Fires only for passive users (cart ≤ 1 item, no recent rejection, BROWSE).
+  // Never fires while the suggestion grid is already showing (user is reviewing cards).
   useEffect(() => {
     if (!SALES_BEHAVIOR.passivePermissionPrompt) return;
     if (entryPhase !== "browsing" || stage !== "BROWSE") return;
     if (aiPermState !== "idle") return;
+    if (suggestedProducts.length > 0) return;
 
     const id = setInterval(() => {
       if (aiPermState !== "idle") return;
       if (permPromptCountRef.current >= 2) return; // max 2 prompts per session
       if (Date.now() < silentUntilRef.current) return;
       if (cart.reduce((s, i) => s + i.qty, 0) > 1) return;
+      if (suggestedProducts.length > 0) return; // double-check inside interval
       if (Date.now() - lastActivityRef.current < PASSIVE_TRIGGER_MS) return;
       permPromptCountRef.current += 1;
       setAiPermState("pending");
     }, 2_000);
     return () => clearInterval(id);
-  // aiPermState and cart intentionally included — prompt must re-evaluate when they change
-  }, [entryPhase, stage, aiPermState, cart]);
+  // aiPermState, cart and suggestedProducts intentionally included
+  }, [entryPhase, stage, aiPermState, cart, suggestedProducts]);
 
   // ── First-item trigger ────────────────────────────────────────────
   // When the cart reaches exactly 1 item and the user is passive (idle),
   // start a 3 s countdown then show the permission prompt.
+  // Skipped when the suggestion grid is already active — no double-prompting.
   useEffect(() => {
     if (
       cart.length !== 1 ||
       aiPermState !== "idle" ||
       stage !== "BROWSE" ||
       entryPhase !== "browsing" ||
-      permPromptCountRef.current >= 2
+      permPromptCountRef.current >= 2 ||
+      suggestedProducts.length > 0
     ) return;
     const t = setTimeout(() => {
       permPromptCountRef.current += 1;
       setAiPermState("pending");
     }, 3_000);
     return () => clearTimeout(t);
-  }, [cart.length, aiPermState, stage, entryPhase]);
+  }, [cart.length, aiPermState, stage, entryPhase, suggestedProducts.length]);
 
   // ── Reset consultive after a suggestion is shown ("already suggested") ──
   // Once the product grid shows AI-picked cards in consultive mode, the job
