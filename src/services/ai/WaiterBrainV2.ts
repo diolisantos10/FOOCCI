@@ -285,8 +285,8 @@ function handleUserMessage(input: V2Input): V2Output {
     requiresAI:  true,
     aiDirective: buildUserMessageDirective(input.cartItemIds, input.cartValue),
     // When cart is empty the AI may need to qualify the customer's preference.
-    // Attach predefined buttons so the answer never requires typing.
-    options: hasItems ? undefined : ["🌿 Algo leve", "🍽️ Refeição completa", "😲 Me surpreende!"],
+    // Exactly 2 buttons — no "surprise me" option per UX spec.
+    options: hasItems ? undefined : ["🥗 Algo leve", "🍽️ Refeição completa"],
   };
 }
 

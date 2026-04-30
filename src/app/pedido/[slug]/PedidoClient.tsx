@@ -996,8 +996,9 @@ export function PedidoClient({
   // checkout-prompt → checkout upsell permission prompt visible
   type AIPermState = "idle" | "pending" | "consultive" | "silent" | "checkout-prompt";
   const [aiPermState, setAiPermState] = useState<AIPermState>("idle");
-  const silentUntilRef    = useRef<number>(0);  // epoch ms when silence expires
-  const permPromptCountRef = useRef<number>(0); // passive prompts shown this session (max 2)
+  const silentUntilRef    = useRef<number>(0);     // epoch ms when silence expires
+  const permPromptCountRef = useRef<number>(0);    // passive prompts shown this session (max 2)
+  const contextChosenRef  = useRef<boolean>(false); // true once user picks light/complete — no re-ask
   // Type of upsell pending at checkout ("drink" | "dessert")
   const [checkoutPromptType, setCheckoutPromptType] = useState<"drink" | "dessert" | null>(null);
 
@@ -1199,7 +1200,7 @@ export function PedidoClient({
                 ? [
                     ...resolved,
                     ...itemCat.items.filter((i) => !resolved.some((r) => r.id === i.id)),
-                  ].slice(0, 8)
+                  ].slice(0, 4)
                 : resolved;
               setSuggestedProducts(expanded);
             } else {
@@ -1208,11 +1209,12 @@ export function PedidoClient({
           }
         }
 
-        // When products are shown, replace qualification options with action buttons.
-        // Otherwise use whatever the API returned (e.g., initial qualification choices).
+        // When products are shown → action buttons.
+        // When context already chosen this session → suppress qualification options (no re-ask).
+        // Otherwise → show API-provided qualification choices (first time only).
         const finalOptions: string[] | undefined = hasShownCards
           ? ["✅ Adicionar ao pedido", "🔄 Ver outras opções"]
-          : apiOptions.length > 0
+          : apiOptions.length > 0 && !contextChosenRef.current
           ? apiOptions
           : undefined;
 
@@ -1270,8 +1272,8 @@ export function PedidoClient({
     greetedRef.current = true;
     const name = identifiedName;
     const greeting = name
-      ? `Bem-vindo, ${name}! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`
-      : `Bem-vindo! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`;
+      ? `Olá, ${name}! Como vai? 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo.`
+      : `Olá! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo.`;
     setMessages((prev) => [
       ...prev,
       {
@@ -1436,8 +1438,10 @@ export function PedidoClient({
         return;
       }
 
-      // Category-intent options (e.g. "🌿 Algo leve") → clear previous products
-      // so the grid doesn't linger while AI loads, then expand to full category on response.
+      // Category-intent options (e.g. "🥗 Algo leve") → lock context for this session,
+      // clear previous products so grid doesn't linger while AI loads, then expand to
+      // full category on response.
+      contextChosenRef.current = true;
       setSuggestedProducts([]);
       sendText(text, cart, stage, activeUpsell, { expandToCategory: true });
     },
@@ -1993,7 +1997,7 @@ export function PedidoClient({
     stage === "ADDRESS_INPUT"   ? "Ex: Rua das Flores, 123" :
     stage === "ADDRESS_DETAILS" ? "Ex: Vila Madalena, apto 42" :
     stage === "ASK_NAME"        ? "Seu nome…" :
-    "Digite uma mensagem…";
+    "Peça uma sugestão ou diga o que você quer…";
 
   // ── Render ────────────────────────────────────────────────────────
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
@@ -2275,10 +2279,9 @@ export function PedidoClient({
                 onClick={() => { setSuggestedProducts([]); handleCategorySelect(cat); }}
                 className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium min-h-[36px] transition-all ${
                   selectedCategoryId === cat.id
-                    ? "text-white shadow-sm"
+                    ? "bg-gray-700 text-white shadow-sm"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95"
                 }`}
-                style={selectedCategoryId === cat.id ? { backgroundColor: 'var(--brand-primary)' } : undefined}
               >
                 {categoryEmoji(cat.name)} {cat.name}
               </button>
@@ -2408,10 +2411,9 @@ export function PedidoClient({
                   onClick={() => { setSuggestedProducts([]); handleCategorySelect(cat); }}
                   className={`rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
                     selectedCategoryId === cat.id
-                      ? "text-white shadow-sm"
+                      ? "bg-gray-700 text-white shadow-sm"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95"
                   }`}
-                  style={selectedCategoryId === cat.id ? { backgroundColor: 'var(--brand-primary)' } : undefined}
                 >
                   {categoryEmoji(cat.name)} {cat.name}
                 </button>
