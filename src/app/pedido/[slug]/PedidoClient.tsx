@@ -23,6 +23,8 @@ interface ChatMessage {
   content: string;
   ts: Date;
   suggestedItemName?: string;
+  /** V2: product IDs to render as suggestion cards below this message. */
+  cards?: string[];
 }
 
 interface MenuItemVariant {
@@ -277,41 +279,82 @@ function computeResumeStage(
 function Bubble({
   msg,
   suggestedItem,
+  cardItems,
   onOpenSuggested,
+  onOpenCard,
 }: {
   msg: ChatMessage;
   suggestedItem?: MenuItem | null;
+  cardItems?: MenuItem[];
   onOpenSuggested?: () => void;
+  onOpenCard?: (item: MenuItem) => void;
 }) {
   const isUser = msg.role === "user";
+
+  // V2 card strip — show multiple product cards in a horizontal scroll row
+  const showCards = !isUser && cardItems && cardItems.length > 0;
+  // Legacy single-item suggestion (fallback when no V2 cards)
+  const showLegacy = !isUser && !showCards && suggestedItem?.imageUrl && onOpenSuggested;
+
   return (
     <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-      <div
-        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
-          isUser
-            ? "rounded-br-sm bg-[#dcf8c6] text-gray-900"
-            : "rounded-bl-sm bg-white text-gray-900"
-        }`}
-      >
-        <p style={{ whiteSpace: "pre-wrap" }}>{msg.content}</p>
-        <p className={`mt-1 text-right text-[10px] ${isUser ? "text-green-700" : "text-gray-400"}`}>
-          {formatTime(msg.ts)}
-        </p>
-      </div>
-      {!isUser && suggestedItem?.imageUrl && onOpenSuggested && (
+      {msg.content.trim() !== "" && (
+        <div
+          className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
+            isUser
+              ? "rounded-br-sm bg-[#dcf8c6] text-gray-900"
+              : "rounded-bl-sm bg-white text-gray-900"
+          }`}
+        >
+          <p style={{ whiteSpace: "pre-wrap" }}>{msg.content}</p>
+          <p className={`mt-1 text-right text-[10px] ${isUser ? "text-green-700" : "text-gray-400"}`}>
+            {formatTime(msg.ts)}
+          </p>
+        </div>
+      )}
+
+      {/* V2: horizontal card strip */}
+      {showCards && (
+        <div className="mt-1.5 ml-1 flex gap-2 overflow-x-auto pb-1 max-w-[90vw] lg:max-w-[360px]">
+          {cardItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onOpenCard?.(item)}
+              className="shrink-0 flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition-transform text-left"
+            >
+              {item.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={item.imageUrl} alt={item.name} className="h-12 w-12 rounded-lg object-cover shrink-0" />
+              ) : (
+                <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center text-2xl shrink-0">
+                  {categoryEmoji(item.name)}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-900 truncate max-w-[120px]">{item.name}</p>
+                <p className="text-xs text-gray-500">R$ {item.price.toFixed(2).replace(".", ",")}</p>
+                <p className="text-[10px] text-orange-500 font-medium">Ver produto →</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Legacy single-item suggestion */}
+      {showLegacy && (
         <button
           onClick={onOpenSuggested}
           className="mt-1.5 ml-1 flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition-transform"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={suggestedItem.imageUrl}
-            alt={suggestedItem.name}
+            src={suggestedItem!.imageUrl!}
+            alt={suggestedItem!.name}
             className="h-12 w-12 rounded-lg object-cover shrink-0"
           />
           <div className="text-left min-w-0">
-            <p className="text-xs font-semibold text-gray-900 truncate max-w-[140px]">{suggestedItem.name}</p>
-            <p className="text-xs text-gray-500">R$ {suggestedItem.price.toFixed(2).replace(".", ",")}</p>
+            <p className="text-xs font-semibold text-gray-900 truncate max-w-[140px]">{suggestedItem!.name}</p>
+            <p className="text-xs text-gray-500">R$ {suggestedItem!.price.toFixed(2).replace(".", ",")}</p>
             <p className="text-[10px] text-orange-500 font-medium">Ver produto →</p>
           </div>
         </button>
@@ -1093,19 +1136,29 @@ export function PedidoClient({
       cartSnap: CartItem[],
       stageSnap: Stage,
       upsellOfferedSnap: "drink" | "dessert" | null,
+      options?: {
+        event?:       "ON_ENTRY" | "ON_MENU_MODE" | "ON_USER_MESSAGE" | "ON_ITEM_ADDED" | "ON_CART_UPDATED" | "ON_IDLE" | "ON_CHECKOUT_STARTED" | "AFTER_CHECKOUT";
+        lastAddedId?: string;
+        silent?:      boolean; // when true: no user bubble (for system-triggered events)
+      },
     ) => {
+      const event       = options?.event ?? "ON_USER_MESSAGE";
+      const lastAddedId = options?.lastAddedId;
+      const silent      = options?.silent ?? false;
+
       setUi("thinking");
       const trimmed = text.trim();
 
-      setMessages((prev) => [
-        ...prev,
-        { id: uid(), role: "user" as const, content: trimmed, ts: new Date() },
-      ]);
+      if (!silent && trimmed) {
+        setMessages((prev) => [
+          ...prev,
+          { id: uid(), role: "user" as const, content: trimmed, ts: new Date() },
+        ]);
+      }
 
-      const newHistory: HistoryEntry[] = [
-        ...history,
-        { role: "user" as const, content: trimmed },
-      ];
+      const newHistory: HistoryEntry[] = trimmed
+        ? [...history, { role: "user" as const, content: trimmed }]
+        : [...history];
 
       const addrStr = deliveryMethod === "delivery" ? formatAddress(address) : null;
       const pmStr   = resolvePaymentMethod(paymentMode, paymentMethodSub);
@@ -1115,7 +1168,7 @@ export function PedidoClient({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message:        trimmed,
+            message:        trimmed || " ",
             history,
             cart:           cartSnap,
             stage:          stageSnap,
@@ -1126,18 +1179,26 @@ export function PedidoClient({
             customerName:   customerName || null,
             customerPhone:  effectiveCustomerPhone,
             customerId:     resolvedCustomerId ?? undefined,
+            event,
+            lastAddedId,
           }),
         });
 
         const data  = await res.json();
-        const reply: string = data?.data?.reply || "Desculpe, algo deu errado 😅";
+        const reply: string             = data?.data?.reply ?? "";
+        const cards: string[]           = Array.isArray(data?.data?.cards) ? data.data.cards : [];
         const suggestedItemName: string | undefined = data?.data?.suggestedItemName ?? undefined;
 
-        setMessages((prev) => [
-          ...prev,
-          { id: uid(), role: "assistant" as const, content: reply, ts: new Date(), suggestedItemName },
-        ]);
-        setHistory([...newHistory, { role: "assistant" as const, content: reply }]);
+        // Only push an AI bubble if there's actual content (message or cards)
+        if (reply || cards.length > 0) {
+          setMessages((prev) => [
+            ...prev,
+            { id: uid(), role: "assistant" as const, content: reply, ts: new Date(), suggestedItemName, cards },
+          ]);
+        }
+        if (reply) {
+          setHistory([...newHistory, { role: "assistant" as const, content: reply }]);
+        }
       } catch {
         setMessages((prev) => [
           ...prev,
@@ -1147,7 +1208,7 @@ export function PedidoClient({
         setUi("idle");
       }
     },
-    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, effectiveCustomerPhone],
+    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, effectiveCustomerPhone, resolvedCustomerId],
   );
 
   // ── Deterministic message helpers ─────────────────────────────────
@@ -1173,11 +1234,13 @@ export function PedidoClient({
   useEffect(() => {
     if (entryPhase !== "browsing" || categories.length === 0 || greetedRef.current) return;
     greetedRef.current = true;
+    // V2: ON_ENTRY fires when customer first opens the ordering experience
     sendText(
       identifiedName ? `Olá! Meu nome é ${identifiedName}.` : "Olá!",
       [],
       "BROWSE",
       null,
+      { event: "ON_ENTRY" },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryPhase, categories]);
@@ -1191,7 +1254,13 @@ export function PedidoClient({
         ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
         : [...cart, { id: item.id, name: item.name, price: item.price, qty: 1 }];
       setCart(newCart);
-      sendText(`Adicionar ${item.name}`, newCart, stage, activeUpsell);
+      // V2: emit ON_ITEM_ADDED (silent user side) OR ON_CART_UPDATED when 2+ items
+      const newItemCount = newCart.reduce((s, i) => s + i.qty, 0);
+      const v2Event = newItemCount >= 2 ? "ON_CART_UPDATED" : "ON_ITEM_ADDED";
+      sendText(`Adicionar ${item.name}`, newCart, stage, activeUpsell, {
+        event: v2Event,
+        lastAddedId: item.id,
+      });
     },
     [cart, stage, activeUpsell, sendText],
   );
@@ -1854,17 +1923,22 @@ export function PedidoClient({
           )}
 
           {messages.map((msg) => {
+            const allItems = categories.flatMap((c) => c.items);
             const suggestedItem = msg.suggestedItemName
-              ? categories.flatMap((c) => c.items).find(
-                  (i) => i.name.toLowerCase() === msg.suggestedItemName!.toLowerCase()
-                ) ?? null
+              ? allItems.find((i) => i.name.toLowerCase() === msg.suggestedItemName!.toLowerCase()) ?? null
               : null;
+            // V2: resolve card product IDs → MenuItem objects
+            const cardItems = msg.cards && msg.cards.length > 0
+              ? msg.cards.map((id) => allItems.find((i) => i.id === id)).filter((i): i is MenuItem => !!i)
+              : undefined;
             return (
               <Bubble
                 key={msg.id}
                 msg={msg}
                 suggestedItem={suggestedItem}
+                cardItems={cardItems}
                 onOpenSuggested={suggestedItem ? () => setSelectedProduct(suggestedItem) : undefined}
+                onOpenCard={(item) => setSelectedProduct(item)}
               />
             );
           })}

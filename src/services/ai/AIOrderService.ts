@@ -31,6 +31,8 @@ import { resolveMaxTokens } from "./BehaviorEngine";
 import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
 import { getDrinkAttemptCount, getAlreadySuggestedItems, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
 import * as WaiterBrain from "./WaiterBrain";
+import * as WaiterBrainV2 from "./WaiterBrainV2";
+import type { V2Event, V2CatalogItem } from "./WaiterBrainV2";
 import type { UpsellSuggestion } from "./UpsellEngine";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
@@ -42,7 +44,7 @@ export interface AIWebTurnInput {
   restaurantId:    string;
   message:         string;
   history:         Array<{ role: "user" | "assistant"; content: string }>;
-  cart?:           Array<{ name: string; price: number; qty: number }>;
+  cart?:           Array<{ id?: string; name: string; price: number; qty: number }>;
   stage?:          OrderStage;
   upsellOffered?:  "drink" | "dessert" | null;
   deliveryMethod?: "delivery" | "pickup" | null;
@@ -52,11 +54,19 @@ export interface AIWebTurnInput {
   customerPhone?:  string;
   customerName?:   string | null;
   categoryIntro?:  { name: string; description: string } | null;
+  // ── V2 event-driven fields ───────────────────────────────────
+  /** Event that triggered this turn (WaiterBrainV2). Defaults to ON_USER_MESSAGE. */
+  event?:          V2Event;
+  /** Full flat catalog for card selection. Omit to skip V2 card logic. */
+  catalogItems?:   V2CatalogItem[];
+  /** ID of the last item added (used for ON_ITEM_ADDED complement selection). */
+  lastAddedId?:    string;
 }
 
 export interface AIWebTurnOutput {
-  reply: string;
-  suggestedItemName?: string;
+  reply:              string;
+  cards:              string[];  // product IDs to show as UI cards (V2)
+  suggestedItemName?: string;    // kept for backward-compat (name-match fallback)
 }
 
 const MAX_TOOL_ITERATIONS = 6;
@@ -137,7 +147,29 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     cart          = [],
     customerId,
     customerName  = null,
+    event         = "ON_USER_MESSAGE",
+    catalogItems  = [],
+    lastAddedId,
   } = input;
+
+  // ── WaiterBrainV2 decision (always first) ───────────────────
+  // Non-AI events return immediately — no OpenAI call needed.
+  const cartItemIds = cart.map((c) => c.id).filter((id): id is string => !!id);
+  const cartValue   = cart.reduce((s, c) => s + c.price * c.qty, 0);
+
+  const v2 = WaiterBrainV2.decide({
+    event,
+    cartItemIds,
+    cartValue,
+    lastAddedId,
+    catalog: catalogItems,
+  });
+
+  if (!v2.requiresAI) {
+    return { reply: v2.message, cards: v2.cards };
+  }
+
+  // ── AI pipeline (ON_USER_MESSAGE / AFTER_CHECKOUT) ──────────
 
   // 1. Brand config
   const [brandConfig, restaurantRow] = await Promise.all([
@@ -171,20 +203,22 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     brandConfig,
   });
 
-  // 5. Inject upsell hints — only in Stage 3 or 4 (same gate as WhatsApp pipeline)
-  const webUpsellStage  = inferUpsellStage(upsellResult.cartItemCount, upsellResult.suggestions);
-  const webUpsellAllowed = webUpsellStage === 3 || webUpsellStage === 4;
-
+  // 5. Inject V2 directive + optional upsell hints
   const sysMsg = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
-  let sysAddendum = "";
+  let sysAddendum = v2.aiDirective;
 
-  if (webUpsellAllowed && upsellResult.suggestions.length > 0 && brandConfig.upsellStyle !== "none") {
-    sysAddendum +=
-      "\n\nSUGESTÕES DE UPSELL — CHAME suggest_upsell AGORA (obrigatório neste turno):\n" +
-      "Selecione o item mais adequado abaixo e execute suggest_upsell antes de responder.\n" +
-      upsellResult.suggestions
-        .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName}) — ${s.reason}`)
-        .join("\n");
+  // Only inject upsell candidates for ON_USER_MESSAGE (not AFTER_CHECKOUT)
+  if (event !== "AFTER_CHECKOUT") {
+    const webUpsellStage  = inferUpsellStage(upsellResult.cartItemCount, upsellResult.suggestions);
+    const webUpsellAllowed = webUpsellStage === 3 || webUpsellStage === 4;
+
+    if (webUpsellAllowed && upsellResult.suggestions.length > 0 && brandConfig.upsellStyle !== "none") {
+      sysAddendum +=
+        "\n\nSUGESTÕES DE UPSELL (chame suggest_upsell se pertinente):\n" +
+        upsellResult.suggestions
+          .map((s) => `  • [ID: ${s.menuItemId}] ${s.name} — R$ ${s.price.toFixed(2)} (${s.categoryName})`)
+          .join("\n");
+    }
   }
 
   if (sysAddendum) {
@@ -199,7 +233,8 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
 
   let finalResponse = "";
   let suggestedItemName: string | undefined;
-  let addItemAttempts = 0;  // guard: max 2 add_item calls per turn (unified with WhatsApp)
+  const aiCards: string[] = [];  // product IDs collected from suggest_upsell calls
+  let addItemAttempts = 0;
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     const response = await openai.chat.completions.create({
@@ -232,7 +267,6 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
         const toolName = toolCall.function.name;
         let toolResult: { success: boolean; message: string; data?: unknown };
 
-        // Server-side guard: max 2 add_item calls per turn (same as WhatsApp)
         if (toolName === "add_item") {
           addItemAttempts++;
           if (addItemAttempts > 2) {
@@ -241,31 +275,24 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
               message: "PARAR: limite de tentativas add_item atingido neste turno. " +
                        "Responda ao cliente diretamente sem chamar add_item novamente.",
             };
-            loopMessages.push({
-              role: "tool",
-              tool_call_id: toolCall.id,
-              content: JSON.stringify(toolResult),
-            });
+            loopMessages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(toolResult) });
             continue;
           }
         }
 
         if (toolName === "suggest_upsell") {
-          // 7. Track suggested item for the response
           const args = safeJson(toolCall.function.arguments) as Record<string, unknown>;
-          const hit = upsellResult.suggestions.find((s) => s.menuItemId === args.menuItemId);
+          const itemId = args.menuItemId as string | undefined;
+          // Collect card ID from suggest_upsell (V2 cards)
+          if (itemId && !aiCards.includes(itemId)) aiCards.push(itemId);
+          const hit = upsellResult.suggestions.find((s) => s.menuItemId === itemId);
           if (hit) suggestedItemName = hit.name;
-          toolResult = { success: true, message: `Sugestão registrada: ${hit?.name ?? args.menuItemId}` };
+          toolResult = { success: true, message: `Sugestão registrada: ${hit?.name ?? itemId}` };
         } else {
-          // Other tools are deferred to the client in the stateless web flow
           toolResult = { success: true, message: "Ação registrada — processada pelo cliente." };
         }
 
-        loopMessages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(toolResult),
-        });
+        loopMessages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(toolResult) });
       }
       continue;
     }
@@ -274,7 +301,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     break;
   }
 
-  // Fail-safe: if AI mentioned a suggestion by name but didn't call suggest_upsell
+  // Fail-safe name match (backward compat only — V2 prefers aiCards)
   if (finalResponse && !suggestedItemName) {
     const hit = upsellResult.suggestions.find(
       (s) => s.name.length >= 4 &&
@@ -284,7 +311,8 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   }
 
   return {
-    reply: finalResponse || "Desculpe, não consegui processar sua mensagem. 😅",
+    reply:             finalResponse || "Desculpe, não consegui processar sua mensagem. 😅",
+    cards:             aiCards,
     suggestedItemName,
   };
 }

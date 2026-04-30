@@ -4,20 +4,25 @@
  * Public (no auth) API for the external ordering experience.
  *
  * GET  — return the restaurant menu
- * POST — AI sales agent, powered by AIOrderService.runWebTurn()
+ * POST — AI sales agent (WaiterBrainV2 event-driven), powered by AIOrderService.runWebTurn()
+ *
+ * V2 response always includes `cards: string[]` — product IDs to show as UI cards.
+ * Non-AI events (ON_ENTRY, ON_ITEM_ADDED, ON_IDLE, etc.) return immediately without
+ * an OpenAI call, making them fast and cost-free.
  */
 
 import { NextRequest } from "next/server";
 import { prisma }      from "@/lib/prisma";
 import { ok, badRequest, serverError } from "@/lib/api-response";
 import { AIOrderService } from "@/services/ai/AIOrderService";
+import type { V2Event } from "@/services/ai/WaiterBrainV2";
 import type { OrderStage } from "@/lib/agent/types";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 // ── Request shape ─────────────────────────────────────────────────────────────
 
 interface HistoryEntry { role: "user" | "assistant"; content: string; }
-interface CartItem     { name: string; price: number; qty: number; }
+interface CartItem     { id?: string; name: string; price: number; qty: number; }
 
 interface PedidoChatRequest {
   message:         string;
@@ -31,6 +36,9 @@ interface PedidoChatRequest {
   customerName?:   string | null;
   customerPhone?:  string | null;
   categoryIntro?:  { name: string; description: string } | null;
+  // ── V2 fields ─────────────────────────────────────────────────
+  event?:          V2Event;
+  lastAddedId?:    string;
 }
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -63,8 +71,8 @@ export async function GET(
     return ok({
       restaurantName: restaurant.name,
       categories: categories.map((c) => ({
-        id:      c.id,
-        name:    c.name,
+        id:       c.id,
+        name:     c.name,
         imageUrl: c.imageUrl ?? null,
         items: c.items.map((i) => ({
           id:          i.id,
@@ -115,14 +123,33 @@ export async function POST(
       customerName   = null,
       customerPhone  = null,
       categoryIntro  = null,
+      event          = "ON_USER_MESSAGE",
+      lastAddedId,
     } = body;
 
-    if (!message?.trim())        return badRequest("message is required.");
+    // ON_IDLE and non-AI events may arrive with an empty message
+    if (event === "ON_USER_MESSAGE" && !message?.trim()) {
+      return badRequest("message is required for ON_USER_MESSAGE.");
+    }
     if (!Array.isArray(history)) return badRequest("history must be an array.");
 
-    const { reply, suggestedItemName } = await AIOrderService.runWebTurn({
+    // Fetch flat catalog for WaiterBrainV2 card selection (lightweight query)
+    const catalogRows = await prisma.menuItem.findMany({
+      where:   { isActive: true, isAvailable: true, showInDelivery: true, category: { restaurantId: restaurant.id } },
+      orderBy: { sortOrder: "asc" },
+      select:  { id: true, name: true, price: true, sortOrder: true, category: { select: { name: true } } },
+    });
+    const catalogItems = catalogRows.map((i: typeof catalogRows[number]) => ({
+      id:           i.id,
+      name:         i.name,
+      categoryName: (i.category as { name: string } | null)?.name ?? "",
+      price:        Number(i.price),
+      sortOrder:    i.sortOrder ?? undefined,
+    }));
+
+    const { reply, cards, suggestedItemName } = await AIOrderService.runWebTurn({
       restaurantId:  restaurant.id,
-      message:       message.trim(),
+      message:       message?.trim() ?? "",
       history,
       cart,
       stage,
@@ -133,9 +160,12 @@ export async function POST(
       customerName,
       customerPhone:  customerPhone ?? undefined,
       categoryIntro,
+      event,
+      catalogItems,
+      lastAddedId,
     });
 
-    return ok({ reply, suggestedItemName: suggestedItemName ?? null });
+    return ok({ reply, cards, suggestedItemName: suggestedItemName ?? null });
   } catch (err) {
     console.error("[POST /api/pedido/[slug]]", err);
     return serverError("Erro interno ao processar mensagem.");
