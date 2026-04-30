@@ -161,9 +161,18 @@ export function decideNextAction(
   // Priority 2 — DIRECT ORDER (customer named or accepted a specific item)
   if (intent === "DIRECT_ORDER") return "ADD_ITEM";
 
-  // Priority 3 — Empty cart: must get main item before anything else
+  // Priority 3 — Empty cart: qualify before recommending
   if (state.cartItemCount === 0) {
-    if (intent === "NEED_RECOMMENDATION" || intent === "PRICE_SENSITIVE") {
+    if (intent === "PRICE_SENSITIVE") {
+      // Budget customer: recommend cheapest option directly
+      return candidates.length > 0 ? "RECOMMEND_MAIN" : "ASK_QUESTION";
+    }
+    if (intent === "NEED_RECOMMENDATION") {
+      // Customer unsure: always ask ONE qualifying question first, then recommend
+      return "ASK_QUESTION";
+    }
+    if (intent === "EXPLORING") {
+      // Customer may have answered a qualifying question in a prior turn; recommend now
       return candidates.length > 0 ? "RECOMMEND_MAIN" : "ASK_QUESTION";
     }
     return "ASK_QUESTION";
@@ -209,8 +218,10 @@ export function buildWaiterDirective(
   switch (action) {
     case "CONFIRM_ORDER":
       lines.push(
-        "→ Execute confirm_order AGORA. confirm_order gera o resumo — não repita os itens.",
-        "→ confirm_order aceita qualquer carrinho não-vazio — upsell é opcional, não bloqueia.",
+        "→ Verifique o histórico: suggest_upsell foi chamado ao menos 1× nesta conversa?",
+        "  SE NÃO → ofereça bebida 1× (suggest_upsell) antes de confirm_order.",
+        "  SE SIM ou cliente recusou → execute confirm_order AGORA.",
+        "→ confirm_order gera o resumo — não repita os itens.",
         "→ PROIBIDO: nova sugestão, nova pergunta, novo produto, qualquer texto além do fechamento.",
         "→ Resposta máxima: 1 frase de fechamento + confirm_order.",
       );
@@ -232,10 +243,12 @@ export function buildWaiterDirective(
         : pool[0];
       if (pick) {
         lines.push(
-          "PRODUTO RECOMENDADO:",
+          "PRODUTO RECOMENDADO (ancorado na preferência do cliente):",
           `  • [ID: ${pick.menuItemId}] ${pick.name} — R$ ${pick.price.toFixed(2)}`,
-          "→ Formato obrigatório: [nome] + [1 benefício curto] + [pergunta de confirmação].",
-          "→ Exemplo: 'O [Prato X] é perfeito pra você. Mando?'",
+          "→ Ancore a recomendação no que o cliente expressou (fome, orçamento, tamanho do grupo).",
+          "→ NUNCA recomende genericamente. Ex errado: 'Temos um ótimo prato!' — sem ancoragem.",
+          "→ Formato obrigatório: [nome] + [1 benefício ancorado na preferência] + [pergunta de confirmação].",
+          "→ Exemplo: 'O [Prato X] é leve e cai bem pra uma pessoa. Mando?'",
           "→ Execute suggest_upsell com o ID acima. NUNCA liste mais de 1 produto.",
           "→ SEMPRE termine com a pergunta de confirmação — sem ela o cliente não confirma.",
         );
@@ -303,10 +316,15 @@ export function buildWaiterDirective(
     case "ASK_QUESTION":
       if (state.cartItemCount === 0) {
         lines.push(
-          "→ Faça UMA única pergunta de qualificação — a mais relevante para o contexto:",
-          "  'Prefere algo mais leve ou mais completo?'",
-          "  'Tá com fome ou quer algo rápido?'",
-          "  'É só pra você ou vai dividir?'",
+          "→ Verifique o histórico da conversa:",
+          "  SE sua última mensagem foi uma pergunta de qualificação E o cliente acabou de responder:",
+          "    → Recomende 1 item ancorado na preferência que o cliente acabou de expressar.",
+          "    → Formato: [nome] + [1 benefício] + [pergunta de confirmação]. Execute suggest_upsell.",
+          "  SE ainda não fez nenhuma pergunta de qualificação:",
+          "    → Faça UMA pergunta — a mais relevante para o contexto:",
+          "    'Prefere algo mais leve ou mais completo?'",
+          "    'Tá com fome ou quer algo rápido?'",
+          "    'É só pra você ou vai dividir?'",
           "→ UMA pergunta. Zero produtos listados. Zero explicações. Aguarde resposta.",
         );
       } else {
