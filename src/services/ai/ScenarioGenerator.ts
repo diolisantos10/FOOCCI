@@ -21,7 +21,7 @@
  *  12. Faminto premium           — fome      · alto  · solo    · muda_de_ideia
  */
 
-import type { BehaviorProfile, VariationLayer, CheckType, ScenarioDef } from "./AISimulatorService";
+import type { BehaviorProfile, CustomerGoal, VariationLayer, CheckType, ScenarioDef } from "./AISimulatorService";
 
 // ─── dimension types ──────────────────────────────────────────
 
@@ -434,6 +434,40 @@ function buildExpectedBehavior(dims: Dimensions): string {
   return parts.join(". ");
 }
 
+// ─── customer goal builder ────────────────────────────────────
+
+const BUDGET_MAX: Record<Budget, number> = { baixo: 60, médio: 120, alto: 210 };
+
+function buildCustomerGoal(dims: Dimensions, variation: VariationLayer): CustomerGoal {
+  const groupSize: CustomerGoal["groupSize"] =
+    dims.groupSize === "família" ? "family"
+    : dims.groupSize === "dupla" ? 2 : 1;
+
+  const budgetMax = BUDGET_MAX[dims.budget];
+
+  const desiredMealType: CustomerGoal["desiredMealType"] =
+    dims.groupSize === "família"             ? "sharing"
+    : dims.budget === "alto"                 ? "premium"
+    : dims.budget === "baixo"                ? "cheap"
+    : dims.intent === "fome"                 ? "complete"
+    : dims.behavior === "impaciente"         ? "quick"
+    : "complete";
+
+  const deliveryIntent: CustomerGoal["deliveryIntent"] =
+    Math.random() < 0.6 ? "delivery" : "pickup";
+
+  const payRoll = Math.random();
+  const paymentPreference: CustomerGoal["paymentPreference"] =
+    payRoll < 0.5 ? "pix" : payRoll < 0.8 ? "card" : "cash";
+
+  const opennessToUpsell: CustomerGoal["opennessToUpsell"] =
+    dims.behavior === "aceita_upsell" || variation.upsellOpenness === "open"  ? "high"
+    : dims.behavior === "recusa_upsell" || variation.upsellOpenness === "closed" ? "low"
+    : "medium";
+
+  return { groupSize, budgetMax, desiredMealType, deliveryIntent, paymentPreference, opennessToUpsell };
+}
+
 // ─── scenario builder ─────────────────────────────────────────
 
 const ALL_INDECISION:   IndecisionLevel[]   = ["low", "medium", "high"];
@@ -469,10 +503,11 @@ function buildScenario(dims: Dimensions, idx: number, tag: string): ScenarioDef 
       behavior:  dims.behavior,
       variation,
     },
-    dietary:   dims.dietary?.dietary.length   ? dims.dietary.dietary   : undefined,
-    allergies: dims.dietary?.allergies.length ? dims.dietary.allergies : undefined,
-    checks:    selectChecks(dims),
-    maxTurns:  PATIENCE_MAX_TURNS[variation.patience],
+    dietary:      dims.dietary?.dietary.length   ? dims.dietary.dietary   : undefined,
+    allergies:    dims.dietary?.allergies.length ? dims.dietary.allergies : undefined,
+    checks:       selectChecks(dims),
+    maxTurns:     PATIENCE_MAX_TURNS[variation.patience],
+    customerGoal: buildCustomerGoal(dims, variation),
   };
 }
 

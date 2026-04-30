@@ -64,6 +64,16 @@ export type SimStage =
   | "checkout_trigger"
   | "checkout_completion";
 
+/** Hidden purchase intent that drives the simulated customer's decisions. */
+export interface CustomerGoal {
+  groupSize:         1 | 2 | 3 | 4 | "family";
+  budgetMax:         number;               // max spend in BRL
+  desiredMealType:   "quick" | "complete" | "premium" | "cheap" | "sharing";
+  deliveryIntent:    "delivery" | "pickup";
+  paymentPreference: "pix" | "card" | "cash";
+  opennessToUpsell:  "low" | "medium" | "high";
+}
+
 /** Aggregate stage performance across all scenarios in a run. */
 export interface StageScores {
   discovery:          number;  // 0–1 rate
@@ -138,6 +148,13 @@ export interface ScenarioResult {
   stagesReached:    SimStage[];
   /** Stage where the scenario failed (only set when status is "failed" or "warning"). */
   failureStage?:    SimStage;
+  // ── goal-driven customer model ─────────────────────────────────
+  customerGoal:                    CustomerGoal;
+  goalSatisfied:                   boolean;
+  finalizationTriggeredByCustomer: boolean;
+  abandonmentReason?:              string;
+  budgetUsed:                      number;
+  budgetExceeded:                  boolean;
 }
 
 // ─── analytical report types ──────────────────────────────────
@@ -252,6 +269,11 @@ export interface SimulationReport {
   stageScores:         StageScores;
   testDepth:           TestDepth;
   evaluationScope:     SimStage[];
+
+  // ── goal-driven customer model ────────────────────────────────
+  goalSatisfactionRate:          number;  // 0–1: scenarios where goal was satisfied
+  customerInitiatedFinalization: number;  // 0–1: scenarios where customer sent finalize signal
+  budgetExceededRate:            number;  // 0–1: scenarios where cart exceeded budgetMax
 }
 
 type ProgressCallback = (info: { current: number; total: number; scenarioName: string }) => void;
@@ -285,6 +307,7 @@ export interface ScenarioDef {
   allergies?:       string[];
   checks:           CheckType[];
   maxTurns:         number;  // derived from variation.patience
+  customerGoal:     CustomerGoal;
 }
 
 // ─── multi-turn constants & customer behavior engine ──────────
@@ -326,16 +349,22 @@ interface PostCheckoutState {
 }
 
 interface CustomerState {
-  turnCount:       number;
-  hasOrdered:      boolean;
-  upsellsOffered:  number;
-  upsellsAccepted: number;
-  upsellsRejected: number;
-  hasChangedMind:  boolean;
-  ignoreCount:     number;
-  questionsAsked:  number;  // pergunta_primeiro: how many questions sent so far
-  refusedOnce:     boolean; // recusa_depois_aceita: first refusal already done
-  postCheckout:    PostCheckoutState;
+  turnCount:            number;
+  hasOrdered:           boolean;
+  upsellsOffered:       number;
+  upsellsAccepted:      number;
+  upsellsRejected:      number;
+  hasChangedMind:       boolean;
+  ignoreCount:          number;
+  questionsAsked:       number;  // pergunta_primeiro: how many questions sent so far
+  refusedOnce:          boolean; // recusa_depois_aceita: first refusal already done
+  postCheckout:         PostCheckoutState;
+  // ── goal-driven tracking ──────────────────────────────────────
+  cartValue:            number;  // synced from cart snapshot after each AI turn
+  itemCount:            number;  // synced from cart snapshot after each AI turn
+  goalSatisfied:        boolean; // set true when goal satisfaction conditions are met
+  finalizationTriggered: boolean; // set true when customer sent a finalization message
+  abandonmentReason?:   string;
 }
 
 function initCustomerState(): CustomerState {
@@ -361,6 +390,8 @@ function initCustomerState(): CustomerState {
       paymentType,
       dropPhase: "not_reached",
     },
+    cartValue: 0, itemCount: 0,
+    goalSatisfied: false, finalizationTriggered: false,
   };
 }
 
@@ -435,10 +466,57 @@ const MSGS = {
   paymentPix:       ["pix", "pode ser pix", "vou pagar no pix", "pix por favor"],
   paymentCard:      ["cartão de crédito", "cartão", "débito", "pode colocar no cartão"],
   paymentOnDelivery: ["pagar na entrega", "pago quando chegar", "dinheiro na entrega", "na entrega mesmo"],
+  // ── goal-driven finalization (natural customer-initiated closing) ──
+  finalize: [
+    "beleza, vou finalizar",
+    "acho que é isso",
+    "fechei aqui",
+    "vou clicar em finalizar",
+    "pronto, pode seguir",
+    "acho que tô satisfeito, pode fechar",
+    "é isso mesmo, finaliza aí",
+    "tá bom assim, vou finalizar",
+    "pronto, encerra o pedido",
+    "pode confirmar, já escolhi o que queria",
+    "tô satisfeito com a escolha, pode fechar",
+    "já tô bem com isso, finaliza",
+  ],
 };
 
 function pickMsg(pool: string[]): string {
   return pool[Math.floor(Math.random() * pool.length)]!;
+}
+
+/** True when the simulated customer has achieved what they came for. */
+function isGoalSatisfied(goal: CustomerGoal, cartValue: number, itemCount: number, hasOrdered: boolean): boolean {
+  if (!hasOrdered || itemCount === 0) return false;
+  const numericGroup  = goal.groupSize === "family" ? 4 : goal.groupSize;
+  const minItems      = numericGroup >= 4 ? 3 : numericGroup >= 2 ? 2 : 1;
+  if (itemCount < minItems) return false;
+  switch (goal.desiredMealType) {
+    case "quick":
+    case "cheap":
+      return itemCount >= 1 && cartValue <= goal.budgetMax;
+    case "complete":
+      return itemCount >= minItems && cartValue >= goal.budgetMax * 0.45;
+    case "sharing":
+      return itemCount >= Math.max(minItems, 2) && cartValue >= goal.budgetMax * 0.45;
+    case "premium":
+      return itemCount >= minItems && cartValue >= goal.budgetMax * 0.60;
+  }
+}
+
+/** True when the customer should accept the current upsell suggestion. */
+function shouldAcceptUpsell(
+  goal: CustomerGoal,
+  cartValue: number,
+  upsellsAccepted: number,
+): boolean {
+  if (cartValue >= goal.budgetMax * 0.92) return false;
+  const maxAccepts = goal.opennessToUpsell === "high" ? 3 : goal.opennessToUpsell === "medium" ? 2 : 1;
+  if (upsellsAccepted >= maxAccepts) return false;
+  const p = goal.opennessToUpsell === "high" ? 0.82 : goal.opennessToUpsell === "medium" ? 0.52 : 0.22;
+  return Math.random() < p;
 }
 
 /**
@@ -464,6 +542,7 @@ function hasCompletionSignal(text: string): boolean {
 function nextCustomerMessage(
   state: CustomerState,
   profile: BehaviorProfile,
+  goal: CustomerGoal,
   lastAiText: string,
   lastToolCalls: TurnToolCall[],
   maxTurns: number,
@@ -473,182 +552,205 @@ function nextCustomerMessage(
   const pc = state.postCheckout;
 
   // ── Post-checkout phase gate ──────────────────────────────
-  // Completed / dropped → end conversation
   if (pc.phase === "complete" || pc.phase === "dropped") return null;
 
-  // confirm_order just succeeded → kick off post-checkout phase
   if (confirmed && pc.phase === "not_started") {
     pc.phase = "in_progress";
     return pickMsg(MSGS.postConfirm);
   }
 
-  // Actively in post-checkout → respond to what the AI is asking
   if (pc.phase === "in_progress") {
     pc.turnsSinceConfirm++;
 
-    // Payment link sent by AI → auto-complete
     if (hasPaymentSignal(lastAiText)) {
       pc.collectedPayment = true;
       pc.phase    = "complete";
       pc.dropPhase = "complete";
       return null;
     }
-
-    // AI gave a final "all done" message after collecting data
     if (pc.collectedPayment && hasCompletionSignal(lastAiText)) {
       pc.phase    = "complete";
       pc.dropPhase = "complete";
       return null;
     }
-
-    // "pagar na entrega" path: after customer declared it → next AI acknowledgment = done
     if (pc.collectedPayment && pc.paymentType === "entrega") {
       pc.phase    = "complete";
       pc.dropPhase = "complete";
       return null;
     }
-
-    // Hard cap on post-checkout turns
     if (pc.turnsSinceConfirm > MAX_POST_CHECKOUT_TURNS) {
       pc.phase = "dropped";
-      if (!pc.collectedDelivery)                                     pc.dropPhase = "delivery_type";
+      if (!pc.collectedDelivery)                                       pc.dropPhase = "delivery_type";
       else if (!pc.collectedAddress && pc.deliveryType === "DELIVERY") pc.dropPhase = "address";
-      else if (!pc.collectedName)                                    pc.dropPhase = "name";
-      else if (!pc.collectedPayment)                                 pc.dropPhase = "payment";
+      else if (!pc.collectedName)                                      pc.dropPhase = "name";
+      else if (!pc.collectedPayment)                                   pc.dropPhase = "payment";
       else { pc.phase = "complete"; pc.dropPhase = "complete"; }
       return null;
     }
 
     const lower = lastAiText.toLowerCase();
-
-    // Delivery type question
-    if (
-      !pc.collectedDelivery &&
-      /entrega|retirada|buscar|delivery|pickup|como gostaria|vai retirar|levar.*endereço|seu endereço/i.test(lower)
-    ) {
+    if (!pc.collectedDelivery &&
+      /entrega|retirada|buscar|delivery|pickup|como gostaria|vai retirar|levar.*endereço|seu endereço/i.test(lower)) {
       pc.collectedDelivery = true;
-      return pc.deliveryType === "DELIVERY"
+      return goal.deliveryIntent === "delivery"
         ? pickMsg(MSGS.deliveryEntry_delivery)
         : pickMsg(MSGS.deliveryEntry_pickup);
     }
-
-    // Address question (only for delivery)
-    if (
-      !pc.collectedAddress &&
-      pc.deliveryType === "DELIVERY" &&
-      /endereço|rua|bairro|logradouro|complemento|número|cep|para onde|onde (fica|mora|voc)/i.test(lower)
-    ) {
+    if (!pc.collectedAddress && pc.deliveryType === "DELIVERY" &&
+      /endereço|rua|bairro|logradouro|complemento|número|cep|para onde|onde (fica|mora|voc)/i.test(lower)) {
       pc.collectedAddress = true;
       return pickMsg(MSGS.addressData);
     }
-
-    // Name question
-    if (
-      !pc.collectedName &&
-      /nome|como você se chama|qual é o seu nome|confirmar.*nome|seu nome|pra quem/i.test(lower)
-    ) {
+    if (!pc.collectedName &&
+      /nome|como você se chama|qual é o seu nome|confirmar.*nome|seu nome|pra quem/i.test(lower)) {
       pc.collectedName = true;
       return pickMsg(MSGS.nameData);
     }
-
-    // Payment question
-    if (
-      !pc.collectedPayment &&
-      /pagamento|pagar|pix|cartão|forma de|transferência|como vai pagar|meio de|vai pagar/i.test(lower)
-    ) {
+    if (!pc.collectedPayment &&
+      /pagamento|pagar|pix|cartão|forma de|transferência|como vai pagar|meio de|vai pagar/i.test(lower)) {
       pc.collectedPayment = true;
-      switch (pc.paymentType) {
-        case "pix":    return pickMsg(MSGS.paymentPix);
-        case "cartao": return pickMsg(MSGS.paymentCard);
-        case "entrega": return pickMsg(MSGS.paymentOnDelivery);
-      }
+      const pref = goal.paymentPreference;
+      return pref === "pix"  ? pickMsg(MSGS.paymentPix)
+        : pref === "card"    ? pickMsg(MSGS.paymentCard)
+        : pickMsg(MSGS.paymentOnDelivery);
     }
-
-    // AI said something else in post-checkout → acknowledge generically
     return pickMsg(MSGS.postConfirm);
   }
 
-  // ── Normal ordering phase below ───────────────────────────
+  // ── Normal ordering phase — goal-driven ───────────────────
 
-  // Hard cap from patience setting
-  if (state.turnCount >= maxTurns) return null;
-
-  // Short-patience early exit: if short + enough turns + no order yet → give up or rush
-  if (variation.patience === "short" && state.turnCount >= 4) {
-    return state.hasOrdered ? pickMsg(MSGS.checkout) : pickMsg(MSGS.abandon);
+  // Hard turn cap
+  if (state.turnCount >= maxTurns) {
+    if (!state.abandonmentReason) state.abandonmentReason = "timeout";
+    return null;
   }
 
-  // Update state from what just happened
+  // Update state from last AI turn
   const addedItem = lastToolCalls.some((tc) => tc.name === "add_item" && tc.success);
   if (addedItem) state.hasOrdered = true;
 
   const hadUpsell = lastToolCalls.some((tc) => tc.name === "suggest_upsell" && tc.success);
   if (hadUpsell) state.upsellsOffered++;
 
-  // pergunta_primeiro: ask up to 2 questions before settling
+  // ── Goal check: customer finalizes when satisfied ──────────────
+  // Check BEFORE behavior-specific logic so goal always wins
+  if (isGoalSatisfied(goal, state.cartValue, state.itemCount, state.hasOrdered) && !state.finalizationTriggered) {
+    state.goalSatisfied       = true;
+    state.finalizationTriggered = true;
+    return pickMsg(MSGS.finalize);
+  }
+
+  // ── Behavior-specific texture: pergunta_primeiro ───────────────
   if (profile.behavior === "pergunta_primeiro") {
     if (!state.hasOrdered && state.questionsAsked < 2) {
       state.questionsAsked++;
       return pickMsg(MSGS.preOrderQ);
     }
-    // After questions, behave like aceita_upsell for the rest
     if (hadUpsell) {
-      state.upsellsAccepted++;
-      return pickMsg(MSGS.accept);
+      if (shouldAcceptUpsell(goal, state.cartValue, state.upsellsAccepted)) {
+        state.upsellsAccepted++;
+        return pickMsg(MSGS.accept);
+      }
+      state.upsellsRejected++;
+      return isGoalSatisfied(goal, state.cartValue, state.itemCount, state.hasOrdered)
+        ? (state.finalizationTriggered = true, pickMsg(MSGS.finalize))
+        : pickMsg(MSGS.reject);
     }
-    return addedItem ? pickMsg(MSGS.checkout) : pickMsg(MSGS.answer);
+    return addedItem ? pickMsg(MSGS.answer) : pickMsg(MSGS.answer);
   }
 
-  // Impatient customer: push hard to checkout from turn 3
+  // ── Behavior-specific texture: impaciente ─────────────────────
   if (profile.behavior === "impaciente") {
     if (state.turnCount >= 3) {
+      if (state.hasOrdered && !state.finalizationTriggered) {
+        state.finalizationTriggered = true;
+        return pickMsg(MSGS.finalize);
+      }
       return state.hasOrdered ? pickMsg(MSGS.hurry) : pickMsg(MSGS.checkout);
     }
     return addedItem ? pickMsg(MSGS.hurry) : pickMsg(MSGS.continue);
   }
 
-  // Late-game: push hard to a conclusion after turn 9
+  // ── Late-game timeout (non-impaciente) ────────────────────────
   if (state.turnCount >= 9) {
-    return state.hasOrdered ? pickMsg(MSGS.checkout) : pickMsg(MSGS.abandon);
+    if (state.hasOrdered && !state.finalizationTriggered) {
+      state.finalizationTriggered = true;
+      return pickMsg(MSGS.finalize);
+    }
+    state.abandonmentReason = state.abandonmentReason ?? "timeout_no_order";
+    return state.hasOrdered ? pickMsg(MSGS.finalize) : pickMsg(MSGS.abandon);
   }
 
-  // React to an upsell suggestion
+  // ── Short-patience early exit ─────────────────────────────────
+  if (variation.patience === "short" && state.turnCount >= 4) {
+    if (state.hasOrdered && !state.finalizationTriggered) {
+      state.finalizationTriggered = true;
+      return pickMsg(MSGS.finalize);
+    }
+    state.abandonmentReason = state.abandonmentReason ?? "short_patience";
+    return state.hasOrdered ? pickMsg(MSGS.finalize) : pickMsg(MSGS.abandon);
+  }
+
+  // ── Upsell response: goal-driven with behavior texture ────────
   if (hadUpsell) {
-    // upsellOpenness modulates how eagerly accept/refuse happens
-    const openness = variation.upsellOpenness;
+    // Hard budget gate: never accept if near/over budget
+    const overBudget = state.cartValue >= goal.budgetMax * 0.92;
 
     switch (profile.behavior) {
       case "aceita_upsell": {
-        const acceptThreshold = openness === "closed" ? 0.4 : openness === "open" ? 0.95 : 0.8;
-        if (state.upsellsAccepted < 2 && Math.random() < acceptThreshold) {
+        if (!overBudget && shouldAcceptUpsell(goal, state.cartValue, state.upsellsAccepted)) {
           state.upsellsAccepted++;
           return pickMsg(MSGS.accept);
+        }
+        // Goal satisfied? → finalize. Otherwise → checkout signal.
+        if (isGoalSatisfied(goal, state.cartValue, state.itemCount, state.hasOrdered)) {
+          state.goalSatisfied       = true;
+          state.finalizationTriggered = true;
+          return pickMsg(MSGS.finalize);
         }
         return pickMsg(MSGS.checkout);
       }
 
       case "recusa_upsell": {
-        const maxRefusals = openness === "open" ? 1 : openness === "closed" ? 3 : 2;
-        if (state.upsellsRejected < maxRefusals) {
+        const maxRefusals = variation.upsellOpenness === "open" ? 1
+          : variation.upsellOpenness === "closed" ? 3 : 2;
+        if (!overBudget && state.upsellsRejected < maxRefusals) {
           state.upsellsRejected++;
           return pickMsg(MSGS.reject);
+        }
+        if (isGoalSatisfied(goal, state.cartValue, state.itemCount, state.hasOrdered)) {
+          state.goalSatisfied       = true;
+          state.finalizationTriggered = true;
+          return pickMsg(MSGS.finalize);
         }
         return pickMsg(MSGS.checkout);
       }
 
       case "recusa_depois_aceita":
-        // First encounter: soft refusal. Second encounter: warm acceptance.
         if (!state.refusedOnce) {
           state.refusedOnce = true;
           return pickMsg(MSGS.softReject);
         }
-        state.upsellsAccepted++;
-        return pickMsg(MSGS.warmAccept);
+        if (!overBudget && shouldAcceptUpsell(goal, state.cartValue, state.upsellsAccepted)) {
+          state.upsellsAccepted++;
+          return pickMsg(MSGS.warmAccept);
+        }
+        if (isGoalSatisfied(goal, state.cartValue, state.itemCount, state.hasOrdered)) {
+          state.goalSatisfied       = true;
+          state.finalizationTriggered = true;
+          return pickMsg(MSGS.finalize);
+        }
+        return pickMsg(MSGS.checkout);
 
       case "ignora":
         if (state.ignoreCount < 3) {
           state.ignoreCount++;
           return pickMsg(MSGS.ignore);
+        }
+        if (isGoalSatisfied(goal, state.cartValue, state.itemCount, state.hasOrdered)) {
+          state.goalSatisfied       = true;
+          state.finalizationTriggered = true;
+          return pickMsg(MSGS.finalize);
         }
         return pickMsg(MSGS.checkout);
 
@@ -657,22 +759,38 @@ function nextCustomerMessage(
           state.hasChangedMind = true;
           return pickMsg(MSGS.change);
         }
+        if (isGoalSatisfied(goal, state.cartValue, state.itemCount, state.hasOrdered)) {
+          state.goalSatisfied       = true;
+          state.finalizationTriggered = true;
+          return pickMsg(MSGS.finalize);
+        }
         return state.hasOrdered ? pickMsg(MSGS.checkout) : pickMsg(MSGS.continue);
     }
   }
 
-  // AI added an item but no upsell — continue early, push to checkout after turn 5
+  // ── No upsell this turn: item added or AI asked something ────
   if (addedItem) {
+    // Re-check goal after item addition
+    if (isGoalSatisfied(goal, state.cartValue, state.itemCount, state.hasOrdered)) {
+      state.goalSatisfied       = true;
+      state.finalizationTriggered = true;
+      return pickMsg(MSGS.finalize);
+    }
     return state.turnCount < 5 ? pickMsg(MSGS.continue) : pickMsg(MSGS.checkout);
   }
 
-  // AI asked a question — give a cooperative answer
   if (lastAiText.includes("?")) return pickMsg(MSGS.answer);
 
-  // Default: keep the conversation moving
-  return state.hasOrdered && state.turnCount >= 5
-    ? pickMsg(MSGS.checkout)
-    : pickMsg(MSGS.continue);
+  // Default: keep conversation moving toward goal
+  if (state.hasOrdered && state.turnCount >= 5) {
+    if (isGoalSatisfied(goal, state.cartValue, state.itemCount, state.hasOrdered)) {
+      state.goalSatisfied       = true;
+      state.finalizationTriggered = true;
+      return pickMsg(MSGS.finalize);
+    }
+    return pickMsg(MSGS.checkout);
+  }
+  return pickMsg(MSGS.continue);
 }
 
 // ─── check labels ─────────────────────────────────────────────
@@ -880,6 +998,7 @@ async function runScenario(
   const cartEvolution: CartSnapshot[] = [];
   let salesMetrics: SalesMetrics = emptyMetrics();
   const stagesReached = new Set<SimStage>();
+  let goalContext: GoalContext | undefined;
 
   try {
     const cState = initCustomerState();
@@ -932,6 +1051,10 @@ async function runScenario(
 
       cState.turnCount++;
 
+      // Sync cart state into CustomerState so nextCustomerMessage can use it
+      cState.cartValue  = snap.value   ?? 0;
+      cState.itemCount  = snap.itemCount ?? 0;
+
       // ── Stage tracking ─────────────────────────────────────────
       // discovery: reached as soon as the AI produced its first response
       if (cState.turnCount >= 1) stagesReached.add("discovery");
@@ -960,7 +1083,7 @@ async function runScenario(
       }
 
       // Generate next customer message (returns null when conversation ends)
-      nextMsg = nextCustomerMessage(cState, scenario.behaviorProfile, turnResult.text, turnResult.toolCalls, scenario.maxTurns);
+      nextMsg = nextCustomerMessage(cState, scenario.behaviorProfile, scenario.customerGoal, turnResult.text, turnResult.toolCalls, scenario.maxTurns);
     }
 
     const finalCart = cartEvolution.at(-1);
@@ -974,14 +1097,33 @@ async function runScenario(
 
     // checkout_completion: post-checkout lifecycle fully done
     if (salesMetrics.postCheckoutCompleted) stagesReached.add("checkout_completion");
+
+    const finalCartValue = cartEvolution.at(-1)?.value ?? 0;
+    goalContext = {
+      customerGoal:                    scenario.customerGoal,
+      goalSatisfied:                   cState.goalSatisfied && salesMetrics.conversionSuccess,
+      finalizationTriggeredByCustomer: cState.finalizationTriggered && salesMetrics.conversionSuccess,
+      abandonmentReason:               cState.abandonmentReason,
+      budgetUsed:                      finalCartValue,
+      budgetExceeded:                  finalCartValue > scenario.customerGoal.budgetMax,
+    };
   } finally {
     await cleanupSimulation(customer.id, conversation.id);
   }
 
   return evaluateScenario(
     scenario, transcript, allToolCalls, perTurnCalls, menu, salesMetrics, cartEvolution,
-    [...stagesReached], testDepth,
+    [...stagesReached], testDepth, goalContext,
   );
+}
+
+interface GoalContext {
+  customerGoal:                    CustomerGoal;
+  goalSatisfied:                   boolean;
+  finalizationTriggeredByCustomer: boolean;
+  abandonmentReason?:              string;
+  budgetUsed:                      number;
+  budgetExceeded:                  boolean;
 }
 
 /** Returns true when the simulated conversation should stop for the given testDepth. */
@@ -1399,6 +1541,7 @@ function evaluateScenario(
   cartEvolution: CartSnapshot[],
   stagesReached: SimStage[] = [],
   testDepth: TestDepth = "full_checkout",
+  goalContext?: GoalContext,
 ): ScenarioResult {
   const lastAiTurn = [...transcript].reverse().find((t) => t.role === "ai");
   const lastAiText = lastAiTurn?.content ?? "";
@@ -1452,6 +1595,14 @@ function evaluateScenario(
     ? detectFailureStage(salesMetrics, checks, stagesReached, testDepth)
     : undefined;
 
+  const gc = goalContext ?? {
+    customerGoal:                    scenario.customerGoal,
+    goalSatisfied:                   false,
+    finalizationTriggeredByCustomer: false,
+    budgetUsed:                      cartEvolution.at(-1)?.value ?? 0,
+    budgetExceeded:                  false,
+  };
+
   return {
     id:               scenario.id,
     name:             scenario.name,
@@ -1470,6 +1621,12 @@ function evaluateScenario(
     salesWeaknesses,
     stagesReached,
     failureStage,
+    customerGoal:                    gc.customerGoal,
+    goalSatisfied:                   gc.goalSatisfied,
+    finalizationTriggeredByCustomer: gc.finalizationTriggeredByCustomer,
+    abandonmentReason:               gc.abandonmentReason,
+    budgetUsed:                      gc.budgetUsed,
+    budgetExceeded:                  gc.budgetExceeded,
   };
 }
 
@@ -1877,6 +2034,11 @@ function buildReport(
   // ── 7. STAGE SCORES ───────────────────────────────────────
   const stageScores = buildStageScores(results, n);
 
+  // ── 8. GOAL AGGREGATES ────────────────────────────────────
+  const goalSatisfactionRate          = results.filter((r) => r.goalSatisfied).length / n;
+  const customerInitiatedFinalization = results.filter((r) => r.finalizationTriggeredByCustomer).length / n;
+  const budgetExceededRate            = results.filter((r) => r.budgetExceeded).length / n;
+
   return {
     overallScore: Math.round(overallScore),
     scenarios: results,
@@ -1907,6 +2069,9 @@ function buildReport(
     stageScores,
     testDepth,
     evaluationScope,
+    goalSatisfactionRate,
+    customerInitiatedFinalization,
+    budgetExceededRate,
   };
 }
 
@@ -2252,10 +2417,16 @@ function buildErrorResult(scenario: ScenarioDef, error: string): ScenarioResult 
     salesMetrics:    emptyMetrics(),
     cartEvolution:   [],
     totalTurns:      0,
-    abandoned:       true,
-    salesWeaknesses: [`Simulação interrompida por erro: ${error}`],
-    stagesReached:   [],
-    failureStage:    "discovery",
+    abandoned:                       true,
+    salesWeaknesses:                 [`Simulação interrompida por erro: ${error}`],
+    stagesReached:                   [],
+    failureStage:                    "discovery",
+    customerGoal:                    scenario.customerGoal,
+    goalSatisfied:                   false,
+    finalizationTriggeredByCustomer: false,
+    abandonmentReason:               "execution_error",
+    budgetUsed:                      0,
+    budgetExceeded:                  false,
   };
 }
 
