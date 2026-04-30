@@ -165,6 +165,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     cartValue,
     lastAddedId,
     catalog: catalogItems,
+    message,
   });
 
   if (!v2.requiresAI) {

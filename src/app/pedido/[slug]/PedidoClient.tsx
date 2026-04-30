@@ -1997,7 +1997,7 @@ export function PedidoClient({
     stage === "ADDRESS_INPUT"   ? "Ex: Rua das Flores, 123" :
     stage === "ADDRESS_DETAILS" ? "Ex: Vila Madalena, apto 42" :
     stage === "ASK_NAME"        ? "Seu nome…" :
-    "Peça uma sugestão ou diga o que você quer…";
+    "Peça uma sugestão…";
 
   // ── Render ────────────────────────────────────────────────────────
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);

@@ -53,6 +53,7 @@ export interface V2Input {
   cartValue:    number;      // current cart subtotal in BRL
   lastAddedId?: string;      // for ON_ITEM_ADDED: the item just added
   catalog:      V2CatalogItem[];
+  message?:     string;      // raw user message (for intent detection)
 }
 
 export interface V2Output {
@@ -191,6 +192,27 @@ function buildUserMessageDirective(cartItemIds: string[], cartValue: number): st
   return lines.join("\n");
 }
 
+function buildCategoryIntentDirective(intent: "light" | "complete"): string {
+  const isLight = intent === "light";
+  return [
+    BASE_DIRECTIVE,
+    "",
+    `CONTEXTO: cliente escolheu "${isLight ? "ALGO LEVE" : "REFEIÇÃO COMPLETA"}". Carrinho vazio.`,
+    "",
+    "OBRIGATÓRIO NESTE TURNO:",
+    `  → Responda com 1 frase curta (max 1 linha): ex. "${isLight
+      ? "Aqui estão algumas opções leves pra você 👇"
+      : "Ótima escolha! Aqui estão opções para uma refeição completa 👇"}"`,
+    `  → Chame suggest_upsell 2 a 3 vezes, cada vez com um item ${isLight
+      ? "LEVE (entradas, saladas, peixes, pratos leves — SEM combos, SEM grelhados pesados)"
+      : "COMPLETO (combos, pratos principais, grelhados, massas, teppan, yakisoba — SEM entradas avulsas leves)"}`,
+    "  → NUNCA sugira apenas 1 item — SEMPRE 2 a 3 suggest_upsell calls neste turno.",
+    "  → PROIBIDO misturar categorias (leve com completo ou vice-versa).",
+    "  → PROIBIDO fazer perguntas.",
+    "  → PROIBIDO dizer que adicionou — você SUGERE, o cliente adiciona.",
+  ].join("\n");
+}
+
 function buildAfterCheckoutDirective(): string {
   return [
     BASE_DIRECTIVE,
@@ -279,13 +301,26 @@ function handleAfterCheckout(): V2Output {
 
 function handleUserMessage(input: V2Input): V2Output {
   const hasItems = input.cartItemIds.length > 0;
+  const msg = (input.message ?? "").toLowerCase();
+
+  // Detect category intent from qualifier buttons.
+  // When detected, use the multi-suggest category directive instead of the generic one.
+  let aiDirective: string;
+  if (!hasItems && /leve|light|🥗/u.test(msg)) {
+    aiDirective = buildCategoryIntentDirective("light");
+  } else if (!hasItems && /completa|completo|refeição|complete|🍽/u.test(msg)) {
+    aiDirective = buildCategoryIntentDirective("complete");
+  } else {
+    aiDirective = buildUserMessageDirective(input.cartItemIds, input.cartValue);
+  }
+
   return {
-    message:     "",
-    cards:       [],
-    requiresAI:  true,
-    aiDirective: buildUserMessageDirective(input.cartItemIds, input.cartValue),
-    // When cart is empty the AI may need to qualify the customer's preference.
-    // Exactly 2 buttons — no "surprise me" option per UX spec.
+    message:    "",
+    cards:      [],
+    requiresAI: true,
+    aiDirective,
+    // Qualification buttons only shown on first free-text message with empty cart.
+    // Exactly 2 options per UX spec — no "surprise me".
     options: hasItems ? undefined : ["🥗 Algo leve", "🍽️ Refeição completa"],
   };
 }
