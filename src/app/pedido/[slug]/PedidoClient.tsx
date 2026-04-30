@@ -275,89 +275,23 @@ function computeResumeStage(
 
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
-function Bubble({
-  msg,
-  suggestedItem,
-  cardItems,
-  onOpenSuggested,
-  onOpenCard,
-}: {
-  msg: ChatMessage;
-  suggestedItem?: MenuItem | null;
-  cardItems?: MenuItem[];
-  onOpenSuggested?: () => void;
-  onOpenCard?: (item: MenuItem) => void;
-}) {
+function Bubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === "user";
-
-  // V2 card strip — show multiple product cards in a horizontal scroll row
-  const showCards = !isUser && cardItems && cardItems.length > 0;
-  // Legacy single-item suggestion (fallback when no V2 cards)
-  const showLegacy = !isUser && !showCards && suggestedItem?.imageUrl && onOpenSuggested;
-
+  if (msg.content.trim() === "") return null;
   return (
-    <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-      {msg.content.trim() !== "" && (
-        <div
-          className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
-            isUser
-              ? "rounded-br-sm bg-[#dcf8c6] text-gray-900"
-              : "rounded-bl-sm bg-white text-gray-900"
-          }`}
-        >
-          <p style={{ whiteSpace: "pre-wrap" }}>{msg.content}</p>
-          <p className={`mt-1 text-right text-[10px] ${isUser ? "text-green-700" : "text-gray-400"}`}>
-            {formatTime(msg.ts)}
-          </p>
-        </div>
-      )}
-
-      {/* V2: horizontal card strip */}
-      {showCards && (
-        <div className="mt-1.5 ml-1 flex gap-2 overflow-x-auto pb-1 max-w-[90vw] lg:max-w-[360px]">
-          {cardItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onOpenCard?.(item)}
-              className="shrink-0 flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition-transform text-left"
-            >
-              {item.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.imageUrl} alt={item.name} className="h-12 w-12 rounded-lg object-cover shrink-0" />
-              ) : (
-                <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center text-2xl shrink-0">
-                  {categoryEmoji(item.name)}
-                </div>
-              )}
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-900 truncate max-w-[120px]">{item.name}</p>
-                <p className="text-xs text-gray-500">R$ {item.price.toFixed(2).replace(".", ",")}</p>
-                <p className="text-[10px] text-orange-500 font-medium">Ver produto →</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Legacy single-item suggestion */}
-      {showLegacy && (
-        <button
-          onClick={onOpenSuggested}
-          className="mt-1.5 ml-1 flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition-transform"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={suggestedItem!.imageUrl!}
-            alt={suggestedItem!.name}
-            className="h-12 w-12 rounded-lg object-cover shrink-0"
-          />
-          <div className="text-left min-w-0">
-            <p className="text-xs font-semibold text-gray-900 truncate max-w-[140px]">{suggestedItem!.name}</p>
-            <p className="text-xs text-gray-500">R$ {suggestedItem!.price.toFixed(2).replace(".", ",")}</p>
-            <p className="text-[10px] text-orange-500 font-medium">Ver produto →</p>
-          </div>
-        </button>
-      )}
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
+          isUser
+            ? "rounded-br-sm bg-[#dcf8c6] text-gray-900"
+            : "rounded-bl-sm bg-white text-gray-900"
+        }`}
+      >
+        <p style={{ whiteSpace: "pre-wrap" }}>{msg.content}</p>
+        <p className={`mt-1 text-right text-[10px] ${isUser ? "text-green-700" : "text-gray-400"}`}>
+          {formatTime(msg.ts)}
+        </p>
+      </div>
     </div>
   );
 }
@@ -1154,11 +1088,8 @@ export function PedidoClient({
         const cards: string[]           = Array.isArray(data?.data?.cards) ? data.data.cards : [];
         const suggestedItemName: string | undefined = data?.data?.suggestedItemName ?? undefined;
 
-        // Grid promotion: ON_ITEM_ADDED / ON_CART_UPDATED / ON_IDLE during BROWSE.
-        // Cards are shown visually in the product grid — not inside the chat bubble.
-        const GRID_EVENTS = new Set<string>(["ON_ITEM_ADDED", "ON_CART_UPDATED", "ON_IDLE"]);
-        const promoteToGrid = cards.length > 0 && GRID_EVENTS.has(event) && stageSnap === "BROWSE";
-        if (promoteToGrid) {
+        // Always promote cards to the product grid during BROWSE — never into chat bubbles.
+        if (cards.length > 0 && stageSnap === "BROWSE") {
           const flat     = categories.flatMap((c) => c.items);
           const resolved = cards
             .map((id) => flat.find((i) => i.id === id))
@@ -1166,13 +1097,10 @@ export function PedidoClient({
           if (resolved.length > 0) setSuggestedProducts(resolved);
         }
 
-        // Cards go into the chat bubble only when NOT promoted to the product grid
-        const msgCards = promoteToGrid ? undefined : (cards.length > 0 ? cards : undefined);
-
-        if (reply || msgCards) {
+        if (reply) {
           setMessages((prev) => [
             ...prev,
-            { id: uid(), role: "assistant" as const, content: reply, ts: new Date(), suggestedItemName, cards: msgCards },
+            { id: uid(), role: "assistant" as const, content: reply, ts: new Date() },
           ]);
         }
         if (reply) {
@@ -1912,26 +1840,9 @@ export function PedidoClient({
             </>
           )}
 
-          {messages.map((msg) => {
-            const allItems = categories.flatMap((c) => c.items);
-            const suggestedItem = msg.suggestedItemName
-              ? allItems.find((i) => i.name.toLowerCase() === msg.suggestedItemName!.toLowerCase()) ?? null
-              : null;
-            // V2: resolve card product IDs → MenuItem objects
-            const cardItems = msg.cards && msg.cards.length > 0
-              ? msg.cards.map((id) => allItems.find((i) => i.id === id)).filter((i): i is MenuItem => !!i)
-              : undefined;
-            return (
-              <Bubble
-                key={msg.id}
-                msg={msg}
-                suggestedItem={suggestedItem}
-                cardItems={cardItems}
-                onOpenSuggested={suggestedItem ? () => setSelectedProduct(suggestedItem) : undefined}
-                onOpenCard={(item) => setSelectedProduct(item)}
-              />
-            );
-          })}
+          {messages.map((msg) => (
+            <Bubble key={msg.id} msg={msg} />
+          ))}
           {ui === "thinking" && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>
@@ -1977,7 +1888,7 @@ export function PedidoClient({
           </div>
         )}
 
-        {/* Promotion banners — shown when browsing, above category tabs */}
+        {/* Mobile: promotion banners — above product area */}
         {stage === "BROWSE" && entryPhase === "browsing" && banners.length > 0 && (
           <div className="lg:hidden shrink-0 flex flex-col gap-2 px-3 pt-2">
             {banners.map((b) => (
@@ -1993,20 +1904,66 @@ export function PedidoClient({
           </div>
         )}
 
-        {/* Mobile-only: category tabs — only during browsing */}
+        {/* Mobile: unified product area — suggestions OR category items, never both */}
+        {stage === "BROWSE" && entryPhase === "browsing" && (
+          <div className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
+            {suggestedProducts.length > 0 ? (
+              <div className="px-3 pt-2 pb-1">
+                <p className="mb-1.5 text-xs font-semibold text-orange-700">Combina com seu pedido 👇</p>
+                <div
+                  className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
+                  style={{ scrollbarWidth: "none" }}
+                >
+                  {suggestedProducts.map((item) => (
+                    <ProductCard
+                      key={item.id}
+                      item={item}
+                      qty={itemCartQty(item, cart)}
+                      onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                      onOpen={() => setSelectedProduct(item)}
+                    />
+                  ))}
+                </div>
+                <button
+                  onClick={() => setSuggestedProducts([])}
+                  className="py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  ← Voltar ao cardápio
+                </button>
+              </div>
+            ) : currentCategoryItems.length > 0 ? (
+              <div
+                className="flex gap-3 overflow-x-auto px-3 py-1 [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {currentCategoryItems.map((item) => (
+                  <ProductCard
+                    key={item.id}
+                    item={item}
+                    qty={itemCartQty(item, cart)}
+                    onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                    onOpen={() => setSelectedProduct(item)}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Mobile: category carousel — compact, sticky above CartBar/input */}
         {stage === "BROWSE" && entryPhase === "browsing" && categories.length > 0 && (
           <div
-            className="lg:hidden shrink-0 flex overflow-x-auto gap-3 border-t border-gray-200 bg-white px-3 py-2.5 [&::-webkit-scrollbar]:hidden"
+            className="lg:hidden shrink-0 flex overflow-x-auto gap-2 border-t border-gray-200 bg-white px-3 py-1.5 [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarWidth: "none" }}
           >
             {categories.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => handleCategorySelect(cat)}
-                className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-base font-semibold min-h-[44px] transition-all ${
+                onClick={() => { setSuggestedProducts([]); handleCategorySelect(cat); }}
+                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium min-h-[36px] transition-all ${
                   selectedCategoryId === cat.id
                     ? "text-white shadow-sm"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95"
                 }`}
                 style={selectedCategoryId === cat.id ? { backgroundColor: 'var(--brand-primary)' } : undefined}
               >
@@ -2016,48 +1973,7 @@ export function PedidoClient({
           </div>
         )}
 
-        {/* Mobile-only: AI suggestion strip — renders above product grid, not in chat */}
-        {stage === "BROWSE" && entryPhase === "browsing" && suggestedProducts.length > 0 && (
-          <div className="lg:hidden shrink-0 border-t border-orange-100 bg-orange-50 px-3 pt-2 pb-2">
-            <p className="mb-1.5 text-xs font-semibold text-orange-700">Combina com seu pedido 👇</p>
-            <div
-              className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
-              style={{ scrollbarWidth: "none" }}
-            >
-              {suggestedProducts.map((item) => (
-                <ProductCard
-                  key={item.id}
-                  item={item}
-                  qty={itemCartQty(item, cart)}
-                  onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
-                  onOpen={() => setSelectedProduct(item)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Mobile-only: product grid (horizontal scroll) */}
-        {stage === "BROWSE" && entryPhase === "browsing" && currentCategoryItems.length > 0 && (
-          <div className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
-            <div
-              className="flex gap-3 overflow-x-auto px-3 py-1 [&::-webkit-scrollbar]:hidden"
-              style={{ scrollbarWidth: "none" }}
-            >
-              {currentCategoryItems.map((item) => (
-                <ProductCard
-                  key={item.id}
-                  item={item}
-                  qty={itemCartQty(item, cart)}
-                  onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
-                  onOpen={() => setSelectedProduct(item)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Mobile-only: CartBar — visible in all entry phases so bottom is anchored */}
+        {/* Mobile: CartBar — always visible during BROWSE */}
         {stage === "BROWSE" && (
           <div className="lg:hidden">
             <CartBar cart={cart} onFinalize={handleFinalizeClick} upsellPending={upsellPending} />
@@ -2111,25 +2027,7 @@ export function PedidoClient({
       <div className="hidden lg:flex lg:w-1/2 flex-col overflow-hidden bg-gray-50 min-w-0">
         {stage === "BROWSE" ? (
           <>
-            {/* Category nav */}
-            <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-white px-5 py-3">
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => handleCategorySelect(cat)}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                    selectedCategoryId === cat.id
-                      ? "text-white shadow-sm"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95"
-                  }`}
-                  style={selectedCategoryId === cat.id ? { backgroundColor: 'var(--brand-primary)' } : undefined}
-                >
-                  {categoryEmoji(cat.name)} {cat.name}
-                </button>
-              ))}
-            </div>
-
-            {/* Product grid — CSS grid, fills available space */}
+            {/* Product area — fills available space, scrollable */}
             <div className="flex-1 overflow-y-auto p-5">
               {/* Desktop promotion banners */}
               {banners.length > 0 && (
@@ -2146,19 +2044,32 @@ export function PedidoClient({
                   ))}
                 </div>
               )}
-              {suggestedProducts.length > 0 && (
-                <div className="mb-4 rounded-xl bg-orange-50 border border-orange-100 px-3 py-2.5">
-                  <p className="mb-2 text-xs font-semibold text-orange-700">Combina com seu pedido 👇</p>
-                  <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+
+              {/* Unified product display — suggestions OR category items, never both */}
+              {suggestedProducts.length > 0 ? (
+                <>
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-orange-700">Combina com seu pedido 👇</p>
+                    <button
+                      onClick={() => setSuggestedProducts([])}
+                      className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      ← Voltar ao cardápio
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
                     {suggestedProducts.map((item) => (
-                      <ProductCard key={item.id} item={item} qty={itemCartQty(item, cart)}
+                      <DesktopProductCard
+                        key={item.id}
+                        item={item}
+                        qty={itemCartQty(item, cart)}
                         onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
-                        onOpen={() => setSelectedProduct(item)} />
+                        onOpen={() => setSelectedProduct(item)}
+                      />
                     ))}
                   </div>
-                </div>
-              )}
-              {currentCategoryItems.length > 0 ? (
+                </>
+              ) : currentCategoryItems.length > 0 ? (
                 <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
                   {currentCategoryItems.map((item) => (
                     <DesktopProductCard
@@ -2175,6 +2086,24 @@ export function PedidoClient({
                   <p className="text-sm text-gray-400">Nenhum item nesta categoria.</p>
                 </div>
               )}
+            </div>
+
+            {/* Category nav — compact, sticky at bottom above the scrollable grid */}
+            <div className="shrink-0 flex flex-wrap items-center gap-2 border-t border-gray-100 bg-white px-5 py-2.5">
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => { setSuggestedProducts([]); handleCategorySelect(cat); }}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
+                    selectedCategoryId === cat.id
+                      ? "text-white shadow-sm"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95"
+                  }`}
+                  style={selectedCategoryId === cat.id ? { backgroundColor: 'var(--brand-primary)' } : undefined}
+                >
+                  {categoryEmoji(cat.name)} {cat.name}
+                </button>
+              ))}
             </div>
           </>
         ) : (
