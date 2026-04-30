@@ -283,7 +283,7 @@ function buildMediumUpsellRules(personality: PersonalityPreset): string[] {
       return [
         "- Expanda o pedido com mais comida de forma rápida antes do fechamento.",
         "- Ao sinal de fechamento: 'Bebida também?' e 'Sobremesa?' — direto, sem floreios.",
-        "- Se recusar bebida, ofereça sobremesa. Se recusar sobremesa, finalize imediatamente.",
+        "- Se recusar bebida, ofereça sobremesa. Se recusar sobremesa, respeite — o cliente decide quando fechar.",
       ];
     case "young":
       return [
@@ -330,7 +330,7 @@ function buildHighUpsellRules(personality: PersonalityPreset): string[] {
         "- Fase 1: proativamente expanda o pedido com mais comida após cada item adicionado.",
         "- Fase 2 (fechamento): ofereça bebida e sobremesa antes de confirmar.",
         "- Após cada recusa, mude de categoria — não repita a mesma categoria recusada.",
-        "- Após os complementos (ou recusas), finalize sem mais insistência.",
+        "- Após os complementos (ou recusas), pare as sugestões — deixe o cliente decidir quando fechar.",
       ];
   }
 }
@@ -347,7 +347,7 @@ function buildFocusInstructions(focus: SalesFocus): string[] {
     case "volume":
       return [
         "- Sua métrica de sucesso é fechar o maior número de pedidos.",
-        "- Priorize finalizar pedidos rapidamente. Não prolongue a conversa.",
+        "- Responda com objetividade. O fechamento é iniciativa do cliente — não apresse.",
         "- Upsell só se não atrasar o fechamento.",
       ];
   }

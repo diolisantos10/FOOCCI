@@ -256,7 +256,7 @@ function handleIdle(input: V2Input): V2Output {
 
 function handleCheckoutStarted(): V2Output {
   return {
-    message:    "Perfeito 😊\nVamos finalizar rapidinho 👇",
+    message:    "Perfeito 😊\nSe já estiver tudo certo, pode finalizar 👇",
     cards:      [],
     requiresAI: false,
     aiDirective: "",

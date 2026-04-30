@@ -1423,7 +1423,7 @@ export function PedidoClient({
       sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
     } else {
       // Resuming a prior checkout — jump straight with the step-specific prompt.
-      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Vamos finalizar? 👇");
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Se já estiver tudo certo, pode finalizar 👇");
     }
   }, [cart, categories, stage, upsellState, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, sendText, pushAssistantMessage]);
 
