@@ -10,6 +10,12 @@ import type {
   TestDepth,
   SimStage,
 } from "@/services/ai/AISimulatorService";
+import type {
+  RealConversationReport,
+  ClassifiedConversation,
+  ConversationPattern,
+  ConversationClass,
+} from "@/services/ai/RealConversationService";
 import type { ParsedPrompt } from "@/services/ai/PromptParser";
 import { AutoSimulatorPanel } from "./AutoSimulatorPanel";
 
@@ -25,7 +31,7 @@ interface ProgressInfo {
 
 // ─── main client ──────────────────────────────────────────────
 
-type ActiveTab = "standard" | "lab" | "auto";
+type ActiveTab = "standard" | "lab" | "auto" | "real";
 
 const SCENARIO_PRESETS = [
   { label: "Rápido (5 cenários)",   value: 5  },
@@ -165,6 +171,16 @@ export function AISimulatorClient() {
           >
             <span>⏱</span> Auto
           </button>
+          <button
+            onClick={() => setActiveTab("real")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTab === "real"
+                ? "bg-green-600 text-white"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            <span>📊</span> Dados Reais
+          </button>
         </div>
 
         {/* ─── Standard tab ──────────────────────────────────────── */}
@@ -258,7 +274,273 @@ export function AISimulatorClient() {
         {activeTab === "auto" && (
           <AutoSimulatorPanel />
         )}
+
+        {/* ─── Real Data tab ──────────────────────────────────────── */}
+        {activeTab === "real" && (
+          <RealDataPanel />
+        )}
       </div>
+    </div>
+  );
+}
+
+// ─── real data panel ─────────────────────────────────────────
+
+const CLASS_CONFIG: Record<ConversationClass, { label: string; color: string; bg: string }> = {
+  high_conversion: { label: "Alta conversão",  color: "text-green-700",  bg: "bg-green-50 border-green-200"  },
+  low_conversion:  { label: "Baixa conversão", color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200" },
+  abandoned:       { label: "Abandonada",      color: "text-red-700",    bg: "bg-red-50 border-red-200"       },
+  high_ticket:     { label: "Ticket alto",     color: "text-blue-700",   bg: "bg-blue-50 border-blue-200"     },
+  low_ticket:      { label: "Ticket baixo",    color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
+};
+
+const PATTERN_ICON: Record<string, string> = {
+  positive: "↑",
+  negative: "↓",
+  neutral:  "→",
+};
+
+function RealDataPanel() {
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [report,    setReport]    = useState<RealConversationReport | null>(null);
+  const [errMsg,    setErrMsg]    = useState<string>("");
+  const [limit,     setLimit]     = useState<number>(50);
+
+  const load = useCallback(async () => {
+    setLoadState("loading");
+    setReport(null);
+    setErrMsg("");
+    try {
+      const res = await fetch(`/api/ai-simulator/real-data?limit=${limit}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as RealConversationReport;
+      setReport(data);
+      setLoadState("done");
+    } catch (err) {
+      setErrMsg(String(err));
+      setLoadState("error");
+    }
+  }, [limit]);
+
+  return (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="flex items-end gap-3 justify-end">
+        <div className="flex flex-col gap-0.5">
+          <label className="text-xs text-gray-400 px-1">Conversas analisadas</label>
+          <select
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value))}
+            disabled={loadState === "loading"}
+            className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg
+                       hover:border-gray-300 disabled:opacity-50
+                       focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          >
+            {[25, 50, 100, 200].map((v) => (
+              <option key={v} value={v}>Últimas {v}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={load}
+          disabled={loadState === "loading"}
+          className="px-5 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-lg
+                     hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed
+                     transition-colors flex items-center gap-2"
+        >
+          {loadState === "loading" ? (
+            <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Analisando...</>
+          ) : loadState === "done" ? "↺ Recarregar" : "📊 Analisar conversas reais"}
+        </button>
+      </div>
+
+      {loadState === "error" && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+          <strong>Erro ao carregar:</strong> {errMsg}
+        </div>
+      )}
+
+      {loadState === "idle" && (
+        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400">
+          <div className="text-4xl mb-3">📊</div>
+          <p className="font-medium text-gray-600">Análise de conversas reais</p>
+          <p className="text-sm mt-1">
+            Classifica conversas de clientes reais, extrai padrões e compara o desempenho da IA.
+            Nenhum dado pessoal é exposto.
+          </p>
+        </div>
+      )}
+
+      {report && report.total === 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400">
+          <div className="text-4xl mb-3">🔍</div>
+          <p className="font-medium text-gray-600">Nenhuma conversa real encontrada</p>
+          <p className="text-sm mt-1">As conversas aparecerão aqui após clientes interagirem via WhatsApp.</p>
+        </div>
+      )}
+
+      {report && report.total > 0 && (
+        <>
+          {/* Summary metrics */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Conversas analisadas</p>
+                <p className="text-4xl font-bold text-gray-900">{report.total}</p>
+              </div>
+              <p className="text-xs text-gray-400">
+                {new Date(report.generatedAt).toLocaleString("pt-BR")}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-gray-100">
+              {[
+                { label: "Taxa de conversão",  value: `${(report.conversionRate   * 100).toFixed(0)}%`, warn: report.conversionRate < 0.5  },
+                { label: "Ticket médio",        value: `R$ ${report.avgCartValue.toFixed(0)}`,            warn: report.avgCartValue < 30     },
+                { label: "Turnos médios",       value: report.avgTurns.toFixed(1),                        warn: report.avgTurns > 10         },
+                { label: "Cobertura de upsell", value: `${(report.upsellCoverageRate * 100).toFixed(0)}%`, warn: report.upsellCoverageRate < 0.5 },
+              ].map((s) => (
+                <div key={s.label} className="text-center">
+                  <p className="text-xs text-gray-400 mb-0.5">{s.label}</p>
+                  <p className={`text-xl font-bold ${s.warn ? "text-orange-500" : "text-gray-800"}`}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Class breakdown */}
+            <div className="pt-3 border-t border-gray-100">
+              <p className="text-sm font-semibold text-gray-700 mb-3">Distribuição de conversas</p>
+              <div className="flex flex-wrap gap-2">
+                {(Object.entries(report.classBreakdown) as [ConversationClass, number][])
+                  .filter(([, count]) => count > 0)
+                  .map(([cls, count]) => {
+                    const cfg = CLASS_CONFIG[cls];
+                    return (
+                      <span key={cls} className={`px-3 py-1 rounded-full text-xs font-medium border ${cfg.bg} ${cfg.color}`}>
+                        {cfg.label}: <strong>{count}</strong>
+                      </span>
+                    );
+                  })}
+              </div>
+            </div>
+          </div>
+
+          {/* Patterns */}
+          {report.patterns.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+              <p className="text-sm font-semibold text-gray-700">Padrões identificados</p>
+              <div className="space-y-3">
+                {report.patterns.map((p, i) => (
+                  <PatternRow key={i} pattern={p} total={report.total} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Top conversations */}
+          {report.topConversations.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                Melhores conversas
+              </p>
+              {report.topConversations.map((c) => (
+                <ConversationRow key={c.id} conv={c} />
+              ))}
+            </div>
+          )}
+
+          {/* Bottom conversations */}
+          {report.bottomConversations.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                Piores conversas
+              </p>
+              {report.bottomConversations.map((c) => (
+                <ConversationRow key={c.id} conv={c} variant="bottom" />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PatternRow({ pattern, total }: { pattern: ConversationPattern; total: number }) {
+  const pct = Math.round(pattern.frequency * 100);
+  const icon = PATTERN_ICON[pattern.impact];
+  const textColor = pattern.impact === "positive"
+    ? "text-green-700"
+    : pattern.impact === "negative"
+    ? "text-red-700"
+    : "text-gray-700";
+  const barColor = pattern.impact === "positive"
+    ? "bg-green-400"
+    : pattern.impact === "negative"
+    ? "bg-red-400"
+    : "bg-gray-300";
+
+  return (
+    <div className="flex items-start gap-3">
+      <span className={`text-base font-bold mt-0.5 ${textColor}`}>{icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex justify-between items-baseline gap-2 mb-1">
+          <p className={`text-sm font-medium ${textColor}`}>{pattern.description}</p>
+          <span className="text-xs text-gray-500 shrink-0">{pattern.count} / {total}</span>
+        </div>
+        {pattern.metric && (
+          <p className="text-xs text-gray-500 mb-1">{pattern.metric}</p>
+        )}
+        <div className="w-full bg-gray-100 rounded-full h-1.5">
+          <div className={`${barColor} h-1.5 rounded-full`} style={{ width: `${Math.min(100, pct)}%` }} />
+        </div>
+      </div>
+      <span className="text-xs font-bold text-gray-500 shrink-0">{pct}%</span>
+    </div>
+  );
+}
+
+function ConversationRow({
+  conv,
+  variant = "top",
+}: {
+  conv:    ClassifiedConversation;
+  variant?: "top" | "bottom";
+}) {
+  const cfg = CLASS_CONFIG[conv.label];
+  const scoreBg = conv.score >= 70
+    ? "bg-green-100 text-green-700"
+    : conv.score >= 50
+    ? "bg-yellow-100 text-yellow-700"
+    : "bg-red-100 text-red-700";
+
+  return (
+    <div className={`rounded-xl border p-4 space-y-2 ${variant === "bottom" ? "bg-red-50 border-red-200" : "bg-white border-gray-200"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
+            {cfg.label}
+          </span>
+          <span className="text-xs text-gray-400 truncate">{conv.customerLabel}</span>
+        </div>
+        <span className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${scoreBg}`}>
+          {conv.score} / 100
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+        <span>Ticket: <strong className="text-gray-700">R$ {conv.cartValue.toFixed(0)}</strong></span>
+        <span>Turnos: <strong className="text-gray-700">{conv.turns}</strong></span>
+        <span>Upsell: <strong className="text-gray-700">{conv.upsellAttempts} tentativa{conv.upsellAttempts !== 1 ? "s" : ""}, {conv.upsellAccepted} aceita{conv.upsellAccepted !== 1 ? "s" : ""}</strong></span>
+        {conv.drinkAttempted   && <span className="text-blue-600">✓ bebida</span>}
+        {conv.dessertAttempted && <span className="text-purple-600">✓ sobremesa</span>}
+      </div>
+
+      {conv.preview && (
+        <p className="text-xs text-gray-500 italic border-t border-gray-100 pt-2 line-clamp-2">
+          "{conv.preview}"
+        </p>
+      )}
     </div>
   );
 }
