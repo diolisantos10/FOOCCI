@@ -878,7 +878,7 @@ const SALES_BEHAVIOR: SalesBehavior = {
 const CARD_ALLOWED_EVENTS = new Set<string>(["ON_USER_MESSAGE"]);
 
 // Passive trigger: seconds of inactivity before permission prompt fires.
-const PASSIVE_TRIGGER_MS   = 10_000; // 10 s
+const PASSIVE_TRIGGER_MS   = 5_000;  // 5 s
 // After declining, how long before the prompt may appear again.
 const SILENT_COOLDOWN_MS   = 5 * 60 * 1000; // 5 min
 
@@ -1246,6 +1246,33 @@ export function PedidoClient({
     return () => clearInterval(id);
   // aiPermState and cart intentionally included — prompt must re-evaluate when they change
   }, [entryPhase, stage, aiPermState, cart]);
+
+  // ── First-item trigger ────────────────────────────────────────────
+  // When the cart reaches exactly 1 item and the user is passive (idle),
+  // start a 3 s countdown then show the permission prompt.
+  useEffect(() => {
+    if (
+      cart.length !== 1 ||
+      aiPermState !== "idle" ||
+      stage !== "BROWSE" ||
+      entryPhase !== "browsing" ||
+      permPromptCountRef.current >= 2
+    ) return;
+    const t = setTimeout(() => {
+      permPromptCountRef.current += 1;
+      setAiPermState("pending");
+    }, 3_000);
+    return () => clearTimeout(t);
+  }, [cart.length, aiPermState, stage, entryPhase]);
+
+  // ── Reset consultive after a suggestion is shown ("already suggested") ──
+  // Once the product grid shows AI-picked cards in consultive mode, the job
+  // is done — return to idle so the system goes back to observing.
+  useEffect(() => {
+    if (suggestedProducts.length > 0 && aiPermState === "consultive") {
+      setAiPermState("idle");
+    }
+  }, [suggestedProducts.length, aiPermState]);
 
   // Clear grid suggestions when cart is emptied or customer leaves BROWSE
   useEffect(() => {
