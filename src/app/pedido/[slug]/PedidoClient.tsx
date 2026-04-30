@@ -974,6 +974,9 @@ export function PedidoClient({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Tracks categories already introduced this session — prevents repeated intros.
   const visitedCategoryIds = useRef<Set<string>>(new Set());
+  // ── Idle timer refs ───────────────────────────────────────────────
+  const lastActivityRef = useRef<number>(Date.now());
+  const idleFiredRef    = useRef<boolean>(false);
 
   // ── Menu nav ──────────────────────────────────────────────────────
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
@@ -1137,14 +1140,16 @@ export function PedidoClient({
       stageSnap: Stage,
       upsellOfferedSnap: "drink" | "dessert" | null,
       options?: {
-        event?:       "ON_ENTRY" | "ON_MENU_MODE" | "ON_USER_MESSAGE" | "ON_ITEM_ADDED" | "ON_CART_UPDATED" | "ON_IDLE" | "ON_CHECKOUT_STARTED" | "AFTER_CHECKOUT";
-        lastAddedId?: string;
-        silent?:      boolean; // when true: no user bubble (for system-triggered events)
+        event?:         "ON_ENTRY" | "ON_MENU_MODE" | "ON_USER_MESSAGE" | "ON_ITEM_ADDED" | "ON_CART_UPDATED" | "ON_IDLE" | "ON_CHECKOUT_STARTED" | "AFTER_CHECKOUT";
+        lastAddedId?:   string;
+        silent?:        boolean;
+        categoryIntro?: { name: string; description: string };
       },
     ) => {
-      const event       = options?.event ?? "ON_USER_MESSAGE";
-      const lastAddedId = options?.lastAddedId;
-      const silent      = options?.silent ?? false;
+      const event         = options?.event ?? "ON_USER_MESSAGE";
+      const lastAddedId   = options?.lastAddedId;
+      const silent        = options?.silent ?? false;
+      const categoryIntro = options?.categoryIntro;
 
       setUi("thinking");
       const trimmed = text.trim();
@@ -1181,6 +1186,7 @@ export function PedidoClient({
             customerId:     resolvedCustomerId ?? undefined,
             event,
             lastAddedId,
+            categoryIntro: categoryIntro ?? null,
           }),
         });
 
@@ -1245,6 +1251,27 @@ export function PedidoClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryPhase, categories]);
 
+  // ── Idle timer — fires ON_IDLE after 45 s of inactivity during BROWSE ─────
+  // sendText/cart/activeUpsell are intentionally omitted from deps: the effect
+  // must NOT restart on cart changes (that would reset the timer on every item add).
+  // lastActivityRef is updated imperatively from handleSubmit / handleItemAdd.
+  useEffect(() => {
+    if (entryPhase !== "browsing" || stage !== "BROWSE") {
+      idleFiredRef.current = false;
+      return;
+    }
+    const IDLE_MS = 45_000;
+    const id = setInterval(() => {
+      if (idleFiredRef.current) return;
+      if (Date.now() - lastActivityRef.current >= IDLE_MS) {
+        idleFiredRef.current = true;
+        sendText("", cart, "BROWSE", activeUpsell, { event: "ON_IDLE", silent: true });
+      }
+    }, 5_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryPhase, stage]);
+
   // ── Handlers ──────────────────────────────────────────────────────
 
   const handleItemAdd = useCallback(
@@ -1254,6 +1281,8 @@ export function PedidoClient({
         ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
         : [...cart, { id: item.id, name: item.name, price: item.price, qty: 1 }];
       setCart(newCart);
+      lastActivityRef.current = Date.now();
+      idleFiredRef.current    = false;
       // V2: emit ON_ITEM_ADDED (silent user side) OR ON_CART_UPDATED when 2+ items
       const newItemCount = newCart.reduce((s, i) => s + i.qty, 0);
       const v2Event = newItemCount >= 2 ? "ON_CART_UPDATED" : "ON_ITEM_ADDED";
@@ -1275,53 +1304,30 @@ export function PedidoClient({
         : [...cart, { id: cartId, name: cartName, price: variant.price, qty: 1 }];
       setCart(newCart);
       setSelectedProduct(null);
-      sendText(`Adicionar ${cartName}`, newCart, stage, activeUpsell);
+      lastActivityRef.current = Date.now();
+      idleFiredRef.current    = false;
+      // V2: match handleItemAdd event routing
+      const newItemCount = newCart.reduce((s, i) => s + i.qty, 0);
+      const v2Event = newItemCount >= 2 ? "ON_CART_UPDATED" : "ON_ITEM_ADDED";
+      sendText(`Adicionar ${cartName}`, newCart, stage, activeUpsell, {
+        event:       v2Event,
+        lastAddedId: item.id,
+      });
     },
     [cart, stage, activeUpsell, sendText],
   );
 
-  // Sends a category intro to the AI WITHOUT showing a user bubble in chat.
-  // The AI receives the category name + description via the system prompt preamble
-  // and presents the category naturally — no "Ver categoria:" event narration.
+  // Sends a category intro via the standard sendText path so cards are preserved
+  // and history is updated consistently. No user bubble is shown (silent: true).
   const sendCategoryIntro = useCallback(
-    async (cat: MenuCategory) => {
+    (cat: MenuCategory) => {
       if (!cat.description) return;
-      setUi("thinking");
-      // Category name is used as the user message for history continuity,
-      // but is NOT rendered as a chat bubble.
-      const catMsg = cat.name;
-      const newHistory: HistoryEntry[] = [
-        ...history,
-        { role: "user" as const, content: catMsg },
-      ];
-      try {
-        const res = await fetch(`/api/pedido/${slug}`, {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({
-            message:       catMsg,
-            history,
-            cart,
-            stage:         "BROWSE" as Stage,
-            upsellOffered: activeUpsell,
-            deliveryMethod,
-            categoryIntro: { name: cat.name, description: cat.description },
-          }),
-        });
-        const data = await res.json();
-        const reply: string = data?.data?.reply || "Desculpe, algo deu errado 😅";
-        setMessages((prev) => [
-          ...prev,
-          { id: uid(), role: "assistant" as const, content: reply, ts: new Date() },
-        ]);
-        setHistory([...newHistory, { role: "assistant" as const, content: reply }]);
-      } catch {
-        // silent — don't disrupt browsing on category intro failure
-      } finally {
-        setUi("idle");
-      }
+      sendText(cat.name, cart, "BROWSE", activeUpsell, {
+        silent:        true,
+        categoryIntro: { name: cat.name, description: cat.description },
+      });
     },
-    [slug, history, cart, activeUpsell, deliveryMethod],
+    [cart, activeUpsell, sendText],
   );
 
   // Category tab click — selects the category and, on first visit, triggers a
@@ -1389,12 +1395,15 @@ export function PedidoClient({
     setUpsellState((prev) => ({ ...prev, lastUpsellCategory: null }));
     const resumeStage = computeResumeStage(deliveryMethod, address, customerName, paymentMode, paymentMethodSub);
     setStage(resumeStage);
-    // First entry into checkout (all data fresh) gets a warmer bridge from the AI flow.
-    // Resuming after "Voltar ao cardápio" jumps directly with the step-specific prompt.
-    const entryMsg = resumeStage === "DELIVERY_TYPE"
-      ? "Boa pedida! 🙌 Vai receber em casa ou prefere retirar? 👇"
-      : CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Vamos finalizar? 👇";
-    pushAssistantMessage(entryMsg);
+    if (resumeStage === "DELIVERY_TYPE") {
+      // First checkout entry — emit ON_CHECKOUT_STARTED (silent, no user bubble).
+      // WaiterBrainV2 returns a short deterministic bridge message; the DELIVERY_TYPE
+      // panel renders the delivery/pickup buttons independently of this.
+      sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
+    } else {
+      // Resuming a prior checkout — jump straight with the step-specific prompt.
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Vamos finalizar? 👇");
+    }
   }, [cart, categories, stage, upsellState, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, sendText, pushAssistantMessage]);
 
   const handleDeliveryMethod = useCallback(
@@ -1556,7 +1565,9 @@ export function PedidoClient({
     setStage("BROWSE");
     setOrderId(null);
     setUpsellState({ offeredDrink: false, offeredDessert: false, lastUpsellCategory: null });
-    sendText("Ver cardápio", cart, "BROWSE", activeUpsell);
+    lastActivityRef.current = Date.now();
+    idleFiredRef.current    = false;
+    sendText("", cart, "BROWSE", activeUpsell, { event: "ON_MENU_MODE", silent: true });
   }, [cart, activeUpsell, sendText]);
 
   // ── Input submit ──────────────────────────────────────────────────
@@ -1567,11 +1578,27 @@ export function PedidoClient({
     setInputText("");
     // Blur to dismiss keyboard after sending — prevents layout staying collapsed
     inputRef.current?.blur();
+    // Any user message resets the idle timer
+    lastActivityRef.current = Date.now();
+    idleFiredRef.current    = false;
 
     switch (stage) {
       case "ADDRESS_INPUT":   handleAddressInput(text);   break;
       case "ADDRESS_DETAILS": handleAddressDetails(text); break;
       case "ASK_NAME":        handleNameInput(text);      break;
+      // Post-order: route to AFTER_CHECKOUT directive (logistics-only, no product suggestions)
+      case "DONE":
+      case "PAYMENT_LINK":
+        sendText(text, cart, stage, activeUpsell, { event: "AFTER_CHECKOUT" });
+        break;
+      // Checkout button stages: guard against sales AI firing during checkout
+      case "DELIVERY_TYPE":
+      case "ADDRESS_CONFIRM":
+      case "PAYMENT":
+      case "PAYMENT_METHOD":
+      case "REVIEW_ORDER":
+        sendText(text, cart, stage, activeUpsell, { event: "AFTER_CHECKOUT" });
+        break;
       default: sendText(text, cart, stage, activeUpsell); break;
     }
   }
