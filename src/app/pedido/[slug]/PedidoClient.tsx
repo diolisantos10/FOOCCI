@@ -1156,23 +1156,36 @@ export function PedidoClient({
 
         const data    = await res.json();
         const reply: string    = data?.data?.reply   ?? "";
-        const cards: string[]  = Array.isArray(data?.data?.cards)   ? data.data.cards   : [];
+        const rawCards: string[]  = Array.isArray(data?.data?.cards)   ? data.data.cards   : [];
         const apiOptions: string[] = Array.isArray(data?.data?.options) ? data.data.options : [];
-        // suggestedItemName (legacy name-match field) is intentionally ignored — the
-        // grid renders only the exact IDs the AI returned, with no fallback substitution.
 
-        // Promote cards to the product grid — strictly what the AI specified.
-        // expandToCategory: fill grid with the whole category (AI's pick first, then rest).
+        // Promote cards to the product grid.
+        // Text-match fallback: when AI mentions a product name in text but does not call
+        // suggest_upsell (speech-tool mismatch), find that product in the catalog by name
+        // and treat it as an implicit card — so the grid ALWAYS stays in sync with the chat.
         const isCheckoutIntent = upsellOfferedSnap !== null;
         const allowCards =
           CARD_ALLOWED_EVENTS.has(event) ||
           (SALES_BEHAVIOR.suggestOnCheckoutIntent && isCheckoutIntent);
+
+        const flat = categories.flatMap((c) => c.items);
+        let effectiveCards = rawCards;
+
+        if (allowCards && rawCards.length === 0 && reply && stageSnap === "BROWSE") {
+          const nr = reply.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+          const hit = flat.find((item) => {
+            if (item.name.length < 4) return false;
+            const nn = item.name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+            return nr.includes(nn);
+          });
+          if (hit) effectiveCards = [hit.id];
+        }
+
         let hasShownCards = false;
 
-        if (allowCards && cards.length > 0 && stageSnap === "BROWSE") {
-          const flat = categories.flatMap((c) => c.items);
+        if (allowCards && effectiveCards.length > 0 && stageSnap === "BROWSE") {
           const seen = new Set<string>();
-          const resolved = cards
+          const resolved = effectiveCards
             .filter((id) => { const first = !seen.has(id); seen.add(id); return first; })
             .map((id) => flat.find((i) => i.id === id))
             .filter((i): i is MenuItem => !!i);
@@ -1198,7 +1211,7 @@ export function PedidoClient({
         // When products are shown, replace qualification options with action buttons.
         // Otherwise use whatever the API returned (e.g., initial qualification choices).
         const finalOptions: string[] | undefined = hasShownCards
-          ? ["✅ Adicionar item selecionado", "🔄 Ver mais opções"]
+          ? ["✅ Adicionar ao pedido", "🔄 Ver outras opções"]
           : apiOptions.length > 0
           ? apiOptions
           : undefined;
