@@ -848,6 +848,33 @@ function PhoneEntryCard({
   );
 }
 
+// ── Sales behavior control ────────────────────────────────────────────────────
+// Governs how assertively the AI engages during browsing.
+// The menu is the primary experience; AI is support only.
+
+type SalesBehavior = {
+  aggressiveness:          "low" | "medium" | "high";
+  autoSuggestions:         boolean; // promote AI cards to product grid automatically
+  interruptNavigation:     boolean; // auto-switch category tabs
+  suggestOnAdd:            boolean; // call AI when user adds an item
+  suggestOnIdle:           boolean; // call AI after inactivity
+  suggestOnCheckoutIntent: boolean; // show AI suggestions when user taps Finalizar
+};
+
+const SALES_BEHAVIOR: SalesBehavior = {
+  aggressiveness:          "low",
+  autoSuggestions:         false,
+  interruptNavigation:     false,
+  suggestOnAdd:            false,
+  suggestOnIdle:           false,
+  suggestOnCheckoutIntent: true,
+};
+
+// Events whose card results may be promoted to the product grid.
+// ON_USER_MESSAGE: user explicitly asked for something.
+// Checkout-intent upsell uses upsellOfferedSnap, handled separately.
+const CARD_ALLOWED_EVENTS = new Set<string>(["ON_USER_MESSAGE"]);
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function PedidoClient({
@@ -1005,9 +1032,10 @@ export function PedidoClient({
   );
 
   // ── Tab / salesPhase sync ─────────────────────────────────────────
-  // When an upsell phase becomes active, always pin the category tab to the
-  // matching category so the AI's suggestion and the visible menu stay aligned.
+  // Auto-switch is disabled (interruptNavigation: false) — the AI suggests via
+  // text only; the user navigates categories on their own terms.
   useEffect(() => {
+    if (!SALES_BEHAVIOR.interruptNavigation) return;
     const phase = upsellState.lastUpsellCategory;
     if (!phase) return;
     const target =
@@ -1088,8 +1116,13 @@ export function PedidoClient({
         const cards: string[]           = Array.isArray(data?.data?.cards) ? data.data.cards : [];
         const suggestedItemName: string | undefined = data?.data?.suggestedItemName ?? undefined;
 
-        // Always promote cards to the product grid during BROWSE — never into chat bubbles.
-        if (cards.length > 0 && stageSnap === "BROWSE") {
+        // Promote cards to the product grid only for explicit user requests or
+        // checkout-intent upsells. Never on item-add, idle, or category events.
+        const isCheckoutIntent = upsellOfferedSnap !== null;
+        const allowCards =
+          CARD_ALLOWED_EVENTS.has(event) ||
+          (SALES_BEHAVIOR.suggestOnCheckoutIntent && isCheckoutIntent);
+        if (allowCards && cards.length > 0 && stageSnap === "BROWSE") {
           const flat     = categories.flatMap((c) => c.items);
           const resolved = cards
             .map((id) => flat.find((i) => i.id === id))
@@ -1163,6 +1196,7 @@ export function PedidoClient({
     const IDLE_MS = 45_000;
     const id = setInterval(() => {
       if (idleFiredRef.current) return;
+      if (!SALES_BEHAVIOR.suggestOnIdle) return;
       if (Date.now() - lastActivityRef.current >= IDLE_MS) {
         idleFiredRef.current = true;
         sendText("", cart, "BROWSE", activeUpsell, { event: "ON_IDLE", silent: true });
@@ -1188,15 +1222,9 @@ export function PedidoClient({
       setCart(newCart);
       lastActivityRef.current = Date.now();
       idleFiredRef.current    = false;
-      // V2: emit ON_ITEM_ADDED (silent user side) OR ON_CART_UPDATED when 2+ items
-      const newItemCount = newCart.reduce((s, i) => s + i.qty, 0);
-      const v2Event = newItemCount >= 2 ? "ON_CART_UPDATED" : "ON_ITEM_ADDED";
-      sendText(`Adicionar ${item.name}`, newCart, stage, activeUpsell, {
-        event: v2Event,
-        lastAddedId: item.id,
-      });
+      // suggestOnAdd: false — AI is not called on item add; cart updates silently.
     },
-    [cart, stage, activeUpsell, sendText],
+    [cart],
   );
 
   const handleVariantAdd = useCallback(
@@ -1211,15 +1239,9 @@ export function PedidoClient({
       setSelectedProduct(null);
       lastActivityRef.current = Date.now();
       idleFiredRef.current    = false;
-      // V2: match handleItemAdd event routing
-      const newItemCount = newCart.reduce((s, i) => s + i.qty, 0);
-      const v2Event = newItemCount >= 2 ? "ON_CART_UPDATED" : "ON_ITEM_ADDED";
-      sendText(`Adicionar ${cartName}`, newCart, stage, activeUpsell, {
-        event:       v2Event,
-        lastAddedId: item.id,
-      });
+      // suggestOnAdd: false — AI is not called on variant add; cart updates silently.
     },
-    [cart, stage, activeUpsell, sendText],
+    [cart],
   );
 
   // Sends a category intro via the standard sendText path so cards are preserved
@@ -1274,20 +1296,16 @@ export function PedidoClient({
     const hasDessert = dessertCat ? dessertCat.items.some((i) => cartIds.has(i.id)) : false;
 
     // ── DRINK phase ──────────────────────────────────────────────────────────
-    // Offer once if no drink is in the cart and we haven't offered yet.
-    // A second click (with or without drink added) falls through to DESSERT/checkout.
+    // AI suggests via text — no category auto-switch (interruptNavigation: false).
     if (!hasDrink && !upsellState.offeredDrink && drinkCat) {
-      setSelectedCategoryId(drinkCat.id);
       setUpsellState((prev) => ({ ...prev, offeredDrink: true, lastUpsellCategory: "drink" }));
       sendText("Quero finalizar o pedido", cart, "BROWSE", "drink");
       return;
     }
 
     // ── DESSERT phase ────────────────────────────────────────────────────────
-    // Drink phase resolved (item added OR skipped) → offer dessert once.
     const drinkResolved = hasDrink || upsellState.offeredDrink;
     if (drinkResolved && !hasDessert && !upsellState.offeredDessert && dessertCat) {
-      setSelectedCategoryId(dessertCat.id);
       setUpsellState((prev) => ({ ...prev, offeredDessert: true, lastUpsellCategory: "dessert" }));
       sendText("Quero finalizar o pedido", cart, "BROWSE", "dessert");
       return;
