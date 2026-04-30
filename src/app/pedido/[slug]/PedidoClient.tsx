@@ -1132,21 +1132,26 @@ export function PedidoClient({
         });
 
         const data  = await res.json();
-        const reply: string             = data?.data?.reply ?? "";
-        const cards: string[]           = Array.isArray(data?.data?.cards) ? data.data.cards : [];
-        const suggestedItemName: string | undefined = data?.data?.suggestedItemName ?? undefined;
+        const reply: string   = data?.data?.reply ?? "";
+        const cards: string[] = Array.isArray(data?.data?.cards) ? data.data.cards : [];
+        // suggestedItemName (legacy name-match field) is intentionally ignored — the
+        // grid renders only the exact IDs the AI returned, with no fallback substitution.
 
-        // Promote cards to the product grid only for explicit user requests or
-        // checkout-intent upsells. Never on item-add, idle, or category events.
+        // Promote cards to the product grid — strictly what the AI specified.
+        // No fallback, no automatic fill-in, no substitution for unresolved IDs.
         const isCheckoutIntent = upsellOfferedSnap !== null;
         const allowCards =
           CARD_ALLOWED_EVENTS.has(event) ||
           (SALES_BEHAVIOR.suggestOnCheckoutIntent && isCheckoutIntent);
         if (allowCards && cards.length > 0 && stageSnap === "BROWSE") {
-          const flat     = categories.flatMap((c) => c.items);
+          const flat = categories.flatMap((c) => c.items);
+          const seen = new Set<string>();
           const resolved = cards
+            .filter((id) => { const first = !seen.has(id); seen.add(id); return first; })
             .map((id) => flat.find((i) => i.id === id))
             .filter((i): i is MenuItem => !!i);
+          // Only update grid when at least one AI-specified product was found.
+          // Never append, blend, or replace with products the AI did not name.
           if (resolved.length > 0) setSuggestedProducts(resolved);
         }
 
