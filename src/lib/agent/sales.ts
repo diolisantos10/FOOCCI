@@ -62,7 +62,7 @@ export function buildSalesLayer(
       `→ Quando um item for adicionado: valide a escolha e reforce o apelo (sabor, textura, popularidade).`,
       `→ Pode sugerir NO MÁXIMO UM item da MESMA categoria do item adicionado.`,
       `→ A sugestão deve ser coerente com o tipo de culinária do restaurante (veja PERFIL DO RESTAURANTE acima).`,
-      `→ Nunca sugira bebidas, sobremesas ou itens de outras categorias neste modo.`,
+      `→ Nunca sugira bebidas ou sobremesas proativamente neste modo — MAS se o cliente pedir, responda imediatamente.`,
       `→ NUNCA invente pratos. Só mencione itens que existam no cardápio listado.`,
     ].join("\n");
   }
