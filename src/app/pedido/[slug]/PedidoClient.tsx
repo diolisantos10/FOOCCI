@@ -13,7 +13,6 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
-import { SuggestionSheet } from "./SuggestionMode";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -915,44 +914,6 @@ function PhoneEntryCard({
   );
 }
 
-// ── ChoiceCard ────────────────────────────────────────────────────────────────
-// Entry decision: "Ver cardápio" vs "Me sugere algo".
-// Rendered as a bottom control panel, not a floating card.
-
-function ChoiceCard({
-  onMenu,
-  onSuggest,
-}: {
-  name: string | null;
-  onMenu: () => void;
-  onSuggest: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2 max-w-sm w-full">
-      <button
-          onClick={onMenu}
-          className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
-        >
-          <span className="text-xl leading-none">📋</span>
-          <div>
-            <p className="font-semibold">Ver cardápio</p>
-            <p className="text-xs font-normal text-gray-400">Escolha na hora</p>
-          </div>
-        </button>
-        <button
-          onClick={onSuggest}
-          className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-left text-sm font-semibold text-green-700 hover:bg-green-100 transition-colors"
-        >
-          <span className="text-xl leading-none">✨</span>
-          <div>
-            <p className="font-semibold">Me sugere algo</p>
-            <p className="text-xs font-normal text-green-500">Deixa eu escolher pra você</p>
-          </div>
-        </button>
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function PedidoClient({
@@ -1010,23 +971,20 @@ export function PedidoClient({
   );
 
   // ── Entry / identification ─────────────────────────────────────────
-  const [entryPhase, setEntryPhase] = useState<"identifying" | "choosing" | "browsing">(() => {
+  const [entryPhase, setEntryPhase] = useState<"identifying" | "browsing">(() => {
     if (typeof window === "undefined") return "browsing";
     if (sessionStorage.getItem(`foocci-entry-${slug}`)) return "browsing";
-    if (knownCustomerPhone) return "choosing";
-    if (storedCustomer) return "choosing"; // already identified via QR modal
+    if (knownCustomerPhone) return "browsing";
+    if (storedCustomer) return "browsing";
     return "identifying";
   });
   const [identifiedName, setIdentifiedName] = useState<string | null>(
     knownCustomerName ?? storedCustomer?.name ?? null,
   );
-  const [showSuggestion, setShowSuggestion] = useState(false);
-
-  function enterBrowsing(mode: "menu" | "suggest", name?: string | null) {
+  function enterBrowsing(name?: string | null) {
     sessionStorage.setItem(`foocci-entry-${slug}`, "1");
     if (name) { setIdentifiedName(name); setCustomerName(name); }
     setEntryPhase("browsing");
-    if (mode === "suggest") setShowSuggestion(true);
   }
 
   // customerId state updated when PhoneEntryCard resolves identity client-side
@@ -1034,9 +992,8 @@ export function PedidoClient({
   const resolvedCustomerId = effectiveCustomerId ?? sessionCustomerId;
 
   function handlePhoneIdentified(name: string | null, customerId?: string) {
-    if (name) { setIdentifiedName(name); setCustomerName(name); }
     if (customerId) setSessionCustomerId(customerId);
-    setEntryPhase("choosing");
+    enterBrowsing(name);
   }
 
   // ── Stage / flow ──────────────────────────────────────────────────
@@ -1251,21 +1208,20 @@ export function PedidoClient({
     ]);
   }, []);
 
-  // ── Initial greeting (fires once user enters browsing phase) ─────────────
-  const greetedRef = useRef(false);
+  // ── Welcome message (fires once, first time user enters browsing) ────────
+  const greetedRef = useRef(
+    typeof window !== "undefined" && !!sessionStorage.getItem(`foocci-entry-${slug}`)
+  );
   useEffect(() => {
-    if (entryPhase !== "browsing" || categories.length === 0 || greetedRef.current) return;
+    if (entryPhase !== "browsing" || greetedRef.current) return;
     greetedRef.current = true;
-    // V2: ON_ENTRY fires when customer first opens the ordering experience
-    sendText(
-      identifiedName ? `Olá! Meu nome é ${identifiedName}.` : "Olá!",
-      [],
-      "BROWSE",
-      null,
-      { event: "ON_ENTRY" },
-    );
+    const name = identifiedName;
+    const greeting = name
+      ? `Bem-vindo, ${name}! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`
+      : `Bem-vindo! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`;
+    pushAssistantMessage(greeting);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entryPhase, categories]);
+  }, [entryPhase]);
 
   // ── Idle timer — fires ON_IDLE after 45 s of inactivity during BROWSE ─────
   // sendText/cart/activeUpsell are intentionally omitted from deps: the effect
@@ -1951,23 +1907,9 @@ export function PedidoClient({
                 </div>
               </div>
               <div className="flex justify-start">
-                <PhoneEntryCard slug={slug} onIdentified={handlePhoneIdentified} onSkip={() => setEntryPhase("choosing")} />
+                <PhoneEntryCard slug={slug} onIdentified={handlePhoneIdentified} onSkip={() => enterBrowsing(null)} />
               </div>
             </>
-          )}
-
-          {/* Entry decision inside chat — "Como você prefere pedir?" */}
-          {entryPhase === "choosing" && (
-            <div className="space-y-2">
-              <div className="flex justify-start">
-                <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-sm leading-relaxed shadow-sm text-gray-900">
-                  {identifiedName ? `Oi, ${identifiedName}! 😊 ` : "Olá! 😊 "}Como você prefere pedir?
-                </div>
-              </div>
-              <div className="flex justify-start">
-                <ChoiceCard name={identifiedName} onMenu={() => enterBrowsing("menu")} onSuggest={() => enterBrowsing("suggest")} />
-              </div>
-            </div>
           )}
 
           {messages.map((msg) => {
@@ -2124,18 +2066,6 @@ export function PedidoClient({
 
         {/* Checkout panels (address / payment / review / done) */}
         {renderCheckoutPanel()}
-
-        {/* Suggestion button — above text input, inside chat panel */}
-        {stage === "BROWSE" && entryPhase === "browsing" && (
-          <div className="shrink-0 border-t border-gray-200 bg-white px-3 pt-2 pb-1">
-            <button
-              onClick={() => setShowSuggestion(true)}
-              className="w-full rounded-xl border border-green-200 bg-green-50 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 active:scale-[0.98] transition-all"
-            >
-              ✨ Me sugere algo
-            </button>
-          </div>
-        )}
 
         {/* Text input */}
         {showInput && (
@@ -2300,16 +2230,6 @@ export function PedidoClient({
           onRemove={(id) => setCart((prev) => prev.filter((c) => c.id !== id))}
           onFinalize={handleFinalizeClick}
           onClose={() => setCartOpen(false)}
-        />
-      )}
-
-      {/* Suggestion sheet — guided 3-step recommendation flow */}
-      {showSuggestion && (
-        <SuggestionSheet
-          categories={categories}
-          onAdd={handleItemAdd}
-          onView={(item) => setSelectedProduct(item)}
-          onClose={() => setShowSuggestion(false)}
         />
       )}
 
