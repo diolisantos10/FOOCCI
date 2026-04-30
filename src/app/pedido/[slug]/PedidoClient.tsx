@@ -863,7 +863,7 @@ type SalesBehavior = {
 };
 
 const SALES_BEHAVIOR: SalesBehavior = {
-  aggressiveness:           "low",
+  aggressiveness:           "medium",
   autoSuggestions:          false,
   interruptNavigation:      false,
   suggestOnAdd:             false,
@@ -968,13 +968,17 @@ export function PedidoClient({
   const [stage, setStage] = useState<Stage>("BROWSE");
 
   // ── AI permission state ───────────────────────────────────────────
-  // idle      → timer running, prompt not yet shown
-  // pending   → permission prompt visible, awaiting user choice
-  // consultive→ user accepted — AI may suggest
-  // silent    → user declined — AI stays quiet until cooldown expires
-  type AIPermState = "idle" | "pending" | "consultive" | "silent";
+  // idle            → timer running, prompt not yet shown
+  // pending         → passive permission prompt visible (during browsing)
+  // consultive      → user accepted — AI may suggest
+  // silent          → user declined — AI stays quiet until cooldown
+  // checkout-prompt → checkout upsell permission prompt visible
+  type AIPermState = "idle" | "pending" | "consultive" | "silent" | "checkout-prompt";
   const [aiPermState, setAiPermState] = useState<AIPermState>("idle");
-  const silentUntilRef = useRef<number>(0); // epoch ms when silence expires
+  const silentUntilRef    = useRef<number>(0);  // epoch ms when silence expires
+  const permPromptCountRef = useRef<number>(0); // passive prompts shown this session (max 2)
+  // Type of upsell pending at checkout ("drink" | "dessert")
+  const [checkoutPromptType, setCheckoutPromptType] = useState<"drink" | "dessert" | null>(null);
 
   // ── Upsell engine ─────────────────────────────────────────────────
   // offeredDrink / offeredDessert: set to true once that phase has been
@@ -1232,9 +1236,11 @@ export function PedidoClient({
 
     const id = setInterval(() => {
       if (aiPermState !== "idle") return;
+      if (permPromptCountRef.current >= 2) return; // max 2 prompts per session
       if (Date.now() < silentUntilRef.current) return;
       if (cart.reduce((s, i) => s + i.qty, 0) > 1) return;
       if (Date.now() - lastActivityRef.current < PASSIVE_TRIGGER_MS) return;
+      permPromptCountRef.current += 1;
       setAiPermState("pending");
     }, 2_000);
     return () => clearInterval(id);
@@ -1297,6 +1303,32 @@ export function PedidoClient({
     pushAssistantMessage("Perfeito 😊 fica à vontade — qualquer coisa é só me chamar.");
   }, [pushAssistantMessage]);
 
+  // ── Checkout permission handlers ──────────────────────────────────
+
+  const handleCheckoutPermAccept = useCallback(() => {
+    const type = checkoutPromptType;
+    setAiPermState("consultive");
+    setCheckoutPromptType(null);
+    if (type) {
+      sendText("Quero finalizar o pedido", cart, "BROWSE", type);
+    }
+  }, [checkoutPromptType, cart, sendText]);
+
+  const handleCheckoutPermDecline = useCallback(() => {
+    setAiPermState("idle");
+    setCheckoutPromptType(null);
+    // Mark both upsell phases as done so the next Finalizar goes straight to checkout.
+    setUpsellState((prev) => ({ ...prev, offeredDrink: true, offeredDessert: true, lastUpsellCategory: null }));
+    // Proceed to checkout immediately — no need for another Finalizar tap.
+    const resumeStage = computeResumeStage(deliveryMethod, address, customerName, paymentMode, paymentMethodSub);
+    setStage(resumeStage);
+    if (resumeStage === "DELIVERY_TYPE") {
+      sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
+    } else {
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Se já estiver tudo certo, pode finalizar 👇");
+    }
+  }, [deliveryMethod, address, customerName, paymentMode, paymentMethodSub, cart, sendText, pushAssistantMessage]);
+
   // Sends a category intro via the standard sendText path so cards are preserved
   // and history is updated consistently. No user bubble is shown (silent: true).
   const sendCategoryIntro = useCallback(
@@ -1328,11 +1360,13 @@ export function PedidoClient({
   );
 
   const handleFinalizeClick = useCallback(() => {
-    // Checkout intent exits silent mode — AI is always allowed to engage at checkout.
+    // Dismiss any passive prompt when user taps Finalizar.
     if (aiPermState === "silent" || aiPermState === "pending") {
       silentUntilRef.current = 0;
       setAiPermState("idle");
     }
+    // If checkout permission prompt already showing, ignore repeated taps.
+    if (aiPermState === "checkout-prompt") return;
 
     if (cart.length === 0) {
       setMessages((prev) => [
@@ -1354,19 +1388,20 @@ export function PedidoClient({
     const hasDrink   = drinkCat   ? drinkCat.items.some((i)   => cartIds.has(i.id)) : false;
     const hasDessert = dessertCat ? dessertCat.items.some((i) => cartIds.has(i.id)) : false;
 
-    // ── DRINK phase ──────────────────────────────────────────────────────────
-    // AI suggests via text — no category auto-switch (interruptNavigation: false).
+    // ── DRINK phase — permission-gated (MEDIUM behavior) ─────────────────────
     if (!hasDrink && !upsellState.offeredDrink && drinkCat) {
       setUpsellState((prev) => ({ ...prev, offeredDrink: true, lastUpsellCategory: "drink" }));
-      sendText("Quero finalizar o pedido", cart, "BROWSE", "drink");
+      setCheckoutPromptType("drink");
+      setAiPermState("checkout-prompt");
       return;
     }
 
-    // ── DESSERT phase ────────────────────────────────────────────────────────
+    // ── DESSERT phase — permission-gated (MEDIUM behavior) ───────────────────
     const drinkResolved = hasDrink || upsellState.offeredDrink;
     if (drinkResolved && !hasDessert && !upsellState.offeredDessert && dessertCat) {
       setUpsellState((prev) => ({ ...prev, offeredDessert: true, lastUpsellCategory: "dessert" }));
-      sendText("Quero finalizar o pedido", cart, "BROWSE", "dessert");
+      setCheckoutPromptType("dessert");
+      setAiPermState("checkout-prompt");
       return;
     }
 
@@ -1563,9 +1598,10 @@ export function PedidoClient({
     // Any user message resets the idle timer
     lastActivityRef.current = Date.now();
     idleFiredRef.current    = false;
-    // Exit silent mode the moment the user initiates conversation
-    if (aiPermState === "silent" || aiPermState === "pending") {
+    // Exit passive states the moment the user initiates conversation
+    if (aiPermState === "silent" || aiPermState === "pending" || aiPermState === "checkout-prompt") {
       silentUntilRef.current = 0;
+      setCheckoutPromptType(null);
       setAiPermState("consultive");
     }
 
@@ -1926,7 +1962,7 @@ export function PedidoClient({
             <Bubble key={msg.id} msg={msg} />
           ))}
 
-          {/* Permission prompt — soft ask before AI engages passively */}
+          {/* Passive permission prompt — soft ask before AI engages */}
           {aiPermState === "pending" && stage === "BROWSE" && entryPhase === "browsing" && (
             <div className="flex justify-start">
               <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3">
@@ -1946,6 +1982,34 @@ export function PedidoClient({
                     className="flex-1 rounded-xl py-2 text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
                   >
                     Prefiro continuar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Checkout permission prompt — ask before upsell at Finalizar */}
+          {aiPermState === "checkout-prompt" && stage === "BROWSE" && (
+            <div className="flex justify-start">
+              <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3">
+                <p className="text-sm text-gray-900 mb-3 leading-relaxed">
+                  {checkoutPromptType === "drink"
+                    ? "Antes de finalizar, posso sugerir uma bebida para acompanhar? 👇"
+                    : "Que tal uma sobremesa para fechar com chave de ouro? 👇"}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCheckoutPermAccept}
+                    className="flex-1 rounded-xl py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                    style={{ backgroundColor: 'var(--brand-primary)' }}
+                  >
+                    Ver sugestão ✨
+                  </button>
+                  <button
+                    onClick={handleCheckoutPermDecline}
+                    className="flex-1 rounded-xl py-2 text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
+                  >
+                    Finalizar agora
                   </button>
                 </div>
               </div>
