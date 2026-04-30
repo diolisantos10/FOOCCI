@@ -1102,16 +1102,18 @@ export function PedidoClient({
       stageSnap: Stage,
       upsellOfferedSnap: "drink" | "dessert" | null,
       options?: {
-        event?:         "ON_ENTRY" | "ON_MENU_MODE" | "ON_USER_MESSAGE" | "ON_ITEM_ADDED" | "ON_CART_UPDATED" | "ON_IDLE" | "ON_CHECKOUT_STARTED" | "AFTER_CHECKOUT";
-        lastAddedId?:   string;
-        silent?:        boolean;
-        categoryIntro?: { name: string; description: string };
+        event?:            "ON_ENTRY" | "ON_MENU_MODE" | "ON_USER_MESSAGE" | "ON_ITEM_ADDED" | "ON_CART_UPDATED" | "ON_IDLE" | "ON_CHECKOUT_STARTED" | "AFTER_CHECKOUT";
+        lastAddedId?:      string;
+        silent?:           boolean;
+        categoryIntro?:    { name: string; description: string };
+        expandToCategory?: boolean;
       },
     ) => {
-      const event         = options?.event ?? "ON_USER_MESSAGE";
-      const lastAddedId   = options?.lastAddedId;
-      const silent        = options?.silent ?? false;
-      const categoryIntro = options?.categoryIntro;
+      const event            = options?.event ?? "ON_USER_MESSAGE";
+      const lastAddedId      = options?.lastAddedId;
+      const silent           = options?.silent ?? false;
+      const categoryIntro    = options?.categoryIntro;
+      const expandToCategory = options?.expandToCategory ?? false;
 
       setUi("thinking");
       const trimmed = text.trim();
@@ -1160,11 +1162,13 @@ export function PedidoClient({
         // grid renders only the exact IDs the AI returned, with no fallback substitution.
 
         // Promote cards to the product grid — strictly what the AI specified.
-        // No fallback, no automatic fill-in, no substitution for unresolved IDs.
+        // expandToCategory: fill grid with the whole category (AI's pick first, then rest).
         const isCheckoutIntent = upsellOfferedSnap !== null;
         const allowCards =
           CARD_ALLOWED_EVENTS.has(event) ||
           (SALES_BEHAVIOR.suggestOnCheckoutIntent && isCheckoutIntent);
+        let hasShownCards = false;
+
         if (allowCards && cards.length > 0 && stageSnap === "BROWSE") {
           const flat = categories.flatMap((c) => c.items);
           const seen = new Set<string>();
@@ -1172,10 +1176,32 @@ export function PedidoClient({
             .filter((id) => { const first = !seen.has(id); seen.add(id); return first; })
             .map((id) => flat.find((i) => i.id === id))
             .filter((i): i is MenuItem => !!i);
-          // Only update grid when at least one AI-specified product was found.
-          // Never append, blend, or replace with products the AI did not name.
-          if (resolved.length > 0) setSuggestedProducts(resolved);
+
+          if (resolved.length > 0) {
+            hasShownCards = true;
+            if (expandToCategory) {
+              const firstItem = resolved[0]!;
+              const itemCat = categories.find((c) => c.items.some((i) => i.id === firstItem.id));
+              const expanded = itemCat
+                ? [
+                    ...resolved,
+                    ...itemCat.items.filter((i) => !resolved.some((r) => r.id === i.id)),
+                  ].slice(0, 8)
+                : resolved;
+              setSuggestedProducts(expanded);
+            } else {
+              setSuggestedProducts(resolved);
+            }
+          }
         }
+
+        // When products are shown, replace qualification options with action buttons.
+        // Otherwise use whatever the API returned (e.g., initial qualification choices).
+        const finalOptions: string[] | undefined = hasShownCards
+          ? ["✅ Adicionar item selecionado", "🔄 Ver mais opções"]
+          : apiOptions.length > 0
+          ? apiOptions
+          : undefined;
 
         if (reply) {
           setMessages((prev) => [
@@ -1185,7 +1211,7 @@ export function PedidoClient({
               role: "assistant" as const,
               content: reply,
               ts: new Date(),
-              options: apiOptions.length > 0 ? apiOptions : undefined,
+              options: finalOptions,
             },
           ]);
         }
@@ -1201,7 +1227,7 @@ export function PedidoClient({
         setUi("idle");
       }
     },
-    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, effectiveCustomerPhone, resolvedCustomerId],
+    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, effectiveCustomerPhone, resolvedCustomerId, categories],
   );
 
   // ── Deterministic message helpers ─────────────────────────────────
@@ -1375,9 +1401,29 @@ export function PedidoClient({
   const handleOptionSelect = useCallback(
     (text: string) => {
       if (ui === "thinking") return;
-      sendText(text, cart, stage, activeUpsell);
+
+      // "Ver mais opções" → local action: clear suggestion grid, return to catalog
+      if (text.startsWith("🔄")) {
+        setSuggestedProducts([]);
+        return;
+      }
+
+      // "Adicionar item selecionado" → local action: add first suggestion to cart
+      if (text.startsWith("✅")) {
+        const firstItem = suggestedProducts[0];
+        if (firstItem) {
+          if (firstItem.hasVariants) setSelectedProduct(firstItem);
+          else handleItemAdd(firstItem);
+        }
+        return;
+      }
+
+      // Category-intent options (e.g. "🌿 Algo leve") → clear previous products
+      // so the grid doesn't linger while AI loads, then expand to full category on response.
+      setSuggestedProducts([]);
+      sendText(text, cart, stage, activeUpsell, { expandToCategory: true });
     },
-    [cart, stage, activeUpsell, sendText, ui],
+    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd],
   );
 
   // ── Checkout permission handlers ──────────────────────────────────
