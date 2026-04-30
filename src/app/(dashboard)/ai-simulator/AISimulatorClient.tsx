@@ -889,8 +889,10 @@ function SummaryCard({ report }: { report: SimulationReport }) {
     },
     {
       label: "Pós-checkout ok",
-      value: `${(report.checkoutCompletionRate * 100).toFixed(0)}%`,
-      warn: report.checkoutCompletionRate < 0.5,
+      value: report.testDepth === "full_checkout"
+        ? `${(report.checkoutCompletionRate * 100).toFixed(0)}%`
+        : "N/A",
+      warn: report.testDepth === "full_checkout" && report.checkoutCompletionRate < 0.5,
     },
   ];
 
@@ -973,7 +975,17 @@ const STAGE_LABELS: Record<string, string> = {
   checkoutCompletion: "Checkout completo",
 };
 
-const TEST_DEPTH_STAGE_MAP: Record<TestDepth, string> = {
+// Ordered list of stageScores keys — used to determine which are in scope
+const STAGE_SCORE_ORDER = [
+  "discovery",
+  "foodExpansion",
+  "upsellExecution",
+  "checkoutTransition",
+  "checkoutCompletion",
+] as const;
+
+// Deepest stageScores key that is within each testDepth
+const DEPTH_MAX_SCORE_KEY: Record<TestDepth, string> = {
   discovery:        "discovery",
   first_item:       "discovery",
   food_expansion:   "foodExpansion",
@@ -988,30 +1000,50 @@ function StageBreakdownChart({
   scores:    SimulationReport["stageScores"];
   testDepth: TestDepth;
 }) {
-  const entries = Object.entries(scores) as [string, number][];
-  const weakestKey = entries.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
-  const depthTarget = TEST_DEPTH_STAGE_MAP[testDepth];
+  const maxInScopeKey  = DEPTH_MAX_SCORE_KEY[testDepth];
+  const maxInScopeIdx  = STAGE_SCORE_ORDER.indexOf(maxInScopeKey as typeof STAGE_SCORE_ORDER[number]);
+  const isInScope = (key: string) =>
+    STAGE_SCORE_ORDER.indexOf(key as typeof STAGE_SCORE_ORDER[number]) <= maxInScopeIdx;
+
+  const entries    = Object.entries(scores) as [string, number][];
+  const inScope    = entries.filter(([k]) => isInScope(k));
+  const weakestKey = inScope.length > 0
+    ? inScope.reduce((a, b) => (b[1] < a[1] ? b : a))[0]
+    : null;
 
   return (
     <div className="pt-3 border-t border-gray-100">
       <p className="text-sm font-semibold text-gray-700 mb-3">Breakdown por etapa</p>
       <div className="space-y-2">
         {entries.map(([key, value]) => {
-          const pct     = Math.round(value * 100);
-          const isWeak  = key === weakestKey && value < 0.8;
-          const isDepth = key === depthTarget && testDepth !== "full_checkout";
-          const barColor = isWeak
-            ? "bg-red-400"
-            : pct >= 80
-            ? "bg-green-400"
-            : "bg-yellow-400";
+          const inScopeEntry = isInScope(key);
+          const isDepthTarget = key === maxInScopeKey && testDepth !== "full_checkout";
+
+          if (!inScopeEntry) {
+            return (
+              <div key={key}>
+                <div className="flex justify-between text-xs mb-0.5">
+                  <span className="font-medium text-gray-300">
+                    {STAGE_LABELS[key] ?? key}
+                    <span className="ml-1 text-gray-300 italic">— não avaliado</span>
+                  </span>
+                  <span className="text-gray-300">N/A</span>
+                </div>
+                <div className="w-full bg-gray-50 rounded-full h-1.5" />
+              </div>
+            );
+          }
+
+          const pct      = Math.round(value * 100);
+          const isWeak   = key === weakestKey && value < 0.8;
+          const barColor = isWeak ? "bg-red-400" : pct >= 80 ? "bg-green-400" : "bg-yellow-400";
           return (
             <div key={key}>
               <div className="flex justify-between text-xs mb-0.5">
                 <span className={`font-medium ${isWeak ? "text-red-600" : "text-gray-600"}`}>
                   {STAGE_LABELS[key] ?? key}
-                  {isWeak  && " ⚠ mais fraca"}
-                  {isDepth && " ← profundidade alvo"}
+                  {isWeak       && " ⚠ mais fraca"}
+                  {isDepthTarget && " ← profundidade alvo"}
                 </span>
                 <span className={`font-bold ${isWeak ? "text-red-600" : "text-gray-700"}`}>{pct}%</span>
               </div>

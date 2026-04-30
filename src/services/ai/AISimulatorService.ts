@@ -251,6 +251,7 @@ export interface SimulationReport {
   // ── stage analytics ──────────────────────────────────────────
   stageScores:         StageScores;
   testDepth:           TestDepth;
+  evaluationScope:     SimStage[];
 }
 
 type ProgressCallback = (info: { current: number; total: number; scenarioName: string }) => void;
@@ -979,7 +980,7 @@ async function runScenario(
 
   return evaluateScenario(
     scenario, transcript, allToolCalls, perTurnCalls, menu, salesMetrics, cartEvolution,
-    [...stagesReached],
+    [...stagesReached], testDepth,
   );
 }
 
@@ -997,6 +998,24 @@ function shouldStopAtDepth(
     case "full_checkout":    return false;
   }
 }
+
+/** Stages that are within scope for each testDepth value. */
+const DEPTH_TO_STAGES: Record<TestDepth, SimStage[]> = {
+  discovery:        ["discovery"],
+  first_item:       ["discovery", "first_item_added"],
+  food_expansion:   ["discovery", "first_item_added", "food_expansion"],
+  checkout_trigger: ["discovery", "first_item_added", "food_expansion", "upsell_execution", "checkout_trigger"],
+  full_checkout:    ["discovery", "first_item_added", "food_expansion", "upsell_execution", "checkout_trigger", "checkout_completion"],
+};
+
+/** Quality checks that are relevant for each testDepth value. */
+const DEPTH_TO_CHECKS: Record<TestDepth, CheckType[]> = {
+  discovery:        ["no_hallucination", "dietary_respected", "relevant_suggestion", "natural_tone", "clarification_asked"],
+  first_item:       ["no_hallucination", "dietary_respected", "relevant_suggestion", "natural_tone", "clarification_asked", "no_loop"],
+  food_expansion:   ["no_hallucination", "dietary_respected", "relevant_suggestion", "natural_tone", "clarification_asked", "no_loop", "no_repeat_suggestion"],
+  checkout_trigger: ["no_hallucination", "dietary_respected", "relevant_suggestion", "natural_tone", "clarification_asked", "no_loop", "no_repeat_suggestion", "checkout_transition"],
+  full_checkout:    ["no_hallucination", "dietary_respected", "relevant_suggestion", "natural_tone", "clarification_asked", "no_loop", "no_repeat_suggestion", "checkout_transition", "post_checkout_completed"],
+};
 
 // ─── turn executor ────────────────────────────────────────────
 
@@ -1379,13 +1398,16 @@ function evaluateScenario(
   salesMetrics: SalesMetrics,
   cartEvolution: CartSnapshot[],
   stagesReached: SimStage[] = [],
+  testDepth: TestDepth = "full_checkout",
 ): ScenarioResult {
   const lastAiTurn = [...transcript].reverse().find((t) => t.role === "ai");
   const lastAiText = lastAiTurn?.content ?? "";
   const issues: string[] = [];
   const checks: CheckResult[] = [];
 
+  const scopeChecks = DEPTH_TO_CHECKS[testDepth];
   for (const checkType of scenario.checks) {
+    if (!scopeChecks.includes(checkType)) continue;
     const r = runCheck(checkType, toolCalls, perTurnCalls, lastAiText, scenario, menu, salesMetrics);
     checks.push(r);
     if (!r.passed) issues.push(r.detail);
@@ -1395,12 +1417,19 @@ function evaluateScenario(
   const checkRate   = checks.length > 0 ? passedCount / checks.length : 1;
   const totalTurns  = transcript.filter((t) => t.role === "customer").length;
 
-  // Multi-factor score 0–100:
-  // checks 60% + conversion 20% + upsell 10% + efficiency 10% − error penalty − UX penalty
-  let score = checkRate * 60;
-  if (salesMetrics.conversionSuccess)        score += 20;
-  if (salesMetrics.acceptedUpsellsOnly > 0)  score += 10;
-  if (salesMetrics.conversionSuccess && totalTurns <= 8) score += 10;
+  // Multi-factor score 0–100.
+  // For full-depth runs: checks 60% + conversion 20% + upsell 10% + efficiency 10%.
+  // For shallow runs (no checkout): checks 100% — conversion bonuses don't apply.
+  const includesCheckout = DEPTH_TO_STAGES[testDepth].includes("checkout_trigger");
+  let score: number;
+  if (includesCheckout) {
+    score = checkRate * 60;
+    if (salesMetrics.conversionSuccess)        score += 20;
+    if (salesMetrics.acceptedUpsellsOnly > 0)  score += 10;
+    if (salesMetrics.conversionSuccess && totalTurns <= 8) score += 10;
+  } else {
+    score = checkRate * 100;
+  }
   score -= Math.min(20, salesMetrics.errorCount * 5);
 
   // UX penalties: behaviors that harm customer experience regardless of tool success
@@ -1420,7 +1449,7 @@ function evaluateScenario(
   const abandoned       = !salesMetrics.conversionSuccess;
   const salesWeaknesses = computeSalesWeaknesses(salesMetrics, totalTurns);
   const failureStage    = status !== "passed"
-    ? detectFailureStage(salesMetrics, checks, stagesReached)
+    ? detectFailureStage(salesMetrics, checks, stagesReached, testDepth)
     : undefined;
 
   return {
@@ -1452,7 +1481,18 @@ function detectFailureStage(
   salesMetrics: SalesMetrics,
   checks: CheckResult[],
   stagesReached: SimStage[],
+  testDepth: TestDepth,
 ): SimStage {
+  const ORDER: SimStage[] = [
+    "discovery", "first_item_added", "food_expansion",
+    "upsell_execution", "checkout_trigger", "checkout_completion",
+  ];
+  const scopeStages  = DEPTH_TO_STAGES[testDepth];
+  const maxScopeStage = scopeStages[scopeStages.length - 1]!;
+  const maxScopeIdx  = ORDER.indexOf(maxScopeStage);
+  const clamp = (stage: SimStage): SimStage =>
+    ORDER[Math.min(ORDER.indexOf(stage), maxScopeIdx)] ?? maxScopeStage;
+
   const failedChecks = checks.filter((c) => !c.passed);
 
   // Dietary / hallucination violations are discovery-phase issues
@@ -1472,26 +1512,22 @@ function detectFailureStage(
 
   // No upsell was ever attempted → food_expansion never advanced to upsell
   if (salesMetrics.upsellAttempts === 0 && salesMetrics.totalItems > 0) {
-    return stagesReached.includes("food_expansion") ? "upsell_execution" : "food_expansion";
+    return clamp(stagesReached.includes("food_expansion") ? "upsell_execution" : "food_expansion");
   }
 
-  // No checkout reached
+  // No checkout reached — only report if checkout is in scope
   if (!salesMetrics.conversionSuccess) {
-    return stagesReached.includes("upsell_execution") ? "checkout_trigger" : "upsell_execution";
+    return clamp(stagesReached.includes("upsell_execution") ? "checkout_trigger" : "upsell_execution");
   }
 
   // Checkout started but post-checkout not completed
   if (salesMetrics.conversionSuccess && !salesMetrics.postCheckoutCompleted) {
-    return "checkout_completion";
+    return clamp("checkout_completion");
   }
 
-  // Fallback: deepest stage reached
-  const ORDER: SimStage[] = [
-    "discovery", "first_item_added", "food_expansion",
-    "upsell_execution", "checkout_trigger", "checkout_completion",
-  ];
+  // Fallback: deepest stage reached (clamped to scope)
   for (let i = ORDER.length - 1; i >= 0; i--) {
-    if (stagesReached.includes(ORDER[i]!)) return ORDER[i]!;
+    if (stagesReached.includes(ORDER[i]!)) return clamp(ORDER[i]!);
   }
   return "discovery";
 }
@@ -1768,18 +1804,23 @@ function buildReport(
   const flowScore        = results.reduce((s, r) => s + r.salesMetrics.flowScore,   0) / n;
   const errorCount       = results.reduce((s, r) => s + r.salesMetrics.errorCount,  0);
 
+  // ── evaluation scope ──────────────────────────────────────
+  const evaluationScope  = DEPTH_TO_STAGES[testDepth];
+  const isFullCheckout   = testDepth === "full_checkout";
+
   // ── post-checkout lifecycle ───────────────────────────────
+  // Only meaningful for full_checkout depth; zeroed out for shallower runs.
   const convertedResults = results.filter((r) => r.salesMetrics.conversionSuccess);
   const nConverted = convertedResults.length || 1;
-  const checkoutCompletionRate = results.filter(
-    (r) => r.salesMetrics.postCheckoutCompleted,
-  ).length / n;
-  const dropDuringAddress = convertedResults.filter(
-    (r) => r.salesMetrics.postCheckoutDropPhase === "address",
-  ).length / nConverted;
-  const dropDuringPayment = convertedResults.filter(
-    (r) => r.salesMetrics.postCheckoutDropPhase === "payment",
-  ).length / nConverted;
+  const checkoutCompletionRate = isFullCheckout
+    ? results.filter((r) => r.salesMetrics.postCheckoutCompleted).length / n
+    : 0;
+  const dropDuringAddress = isFullCheckout
+    ? convertedResults.filter((r) => r.salesMetrics.postCheckoutDropPhase === "address").length / nConverted
+    : 0;
+  const dropDuringPayment = isFullCheckout
+    ? convertedResults.filter((r) => r.salesMetrics.postCheckoutDropPhase === "payment").length / nConverted
+    : 0;
 
   // ── legacy fields ─────────────────────────────────────────
   const criticalBugs: string[] = [];
@@ -1865,6 +1906,7 @@ function buildReport(
     summary,
     stageScores,
     testDepth,
+    evaluationScope,
   };
 }
 
