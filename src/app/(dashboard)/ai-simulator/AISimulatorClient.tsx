@@ -538,7 +538,7 @@ function ConversationRow({
 
       {conv.preview && (
         <p className="text-xs text-gray-500 italic border-t border-gray-100 pt-2 line-clamp-2">
-          "{conv.preview}"
+          &ldquo;{conv.preview}&rdquo;
         </p>
       )}
     </div>
