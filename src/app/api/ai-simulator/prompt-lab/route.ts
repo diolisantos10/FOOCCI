@@ -19,7 +19,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { unauthorized } from "@/lib/api-response";
 import { parseTestPrompt } from "@/services/ai/PromptParser";
 import { generateScenariosFromDims } from "@/services/ai/ScenarioGenerator";
-import { AISimulatorService } from "@/services/ai/AISimulatorService";
+import { AISimulatorService, type TestDepth } from "@/services/ai/AISimulatorService";
 import { SimulationJobStore } from "@/services/ai/SimulationJobStore";
 
 export const maxDuration = 300;
@@ -34,17 +34,22 @@ export async function POST(req: NextRequest) {
   const { restaurantId } = ctx;
   const encoder = new TextEncoder();
 
+  const ALLOWED_DEPTHS: TestDepth[] = ["discovery", "first_item", "food_expansion", "checkout_trigger", "full_checkout"];
   let userPrompt: string    = "";
   let variationCount: VariationCount = 1;
+  let testDepth: TestDepth = "full_checkout";
 
   try {
-    const body = await req.json() as { userPrompt?: unknown; variationCount?: unknown };
+    const body = await req.json() as { userPrompt?: unknown; variationCount?: unknown; testDepth?: unknown };
     if (typeof body?.userPrompt === "string") {
       userPrompt = body.userPrompt.slice(0, 500).trim();
     }
     const rawCount = Number(body?.variationCount);
     if ((ALLOWED_VARIATION_COUNTS as readonly number[]).includes(rawCount)) {
       variationCount = rawCount as VariationCount;
+    }
+    if (typeof body?.testDepth === "string" && ALLOWED_DEPTHS.includes(body.testDepth as TestDepth)) {
+      testDepth = body.testDepth as TestDepth;
     }
   } catch {
     // use defaults
@@ -102,6 +107,7 @@ export async function POST(req: NextRequest) {
             SimulationJobStore.addResult(restaurantId, result);
             send({ type: "scenario_result", result });
           },
+          testDepth,
         );
         SimulationJobStore.complete(restaurantId, report);
         send({ type: "report", report });

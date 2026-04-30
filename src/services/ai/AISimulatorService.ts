@@ -45,6 +45,34 @@ export type CheckType =
   | "natural_tone"
   | "post_checkout_completed";
 
+// ─── stage control types ──────────────────────────────────────
+
+/** How deep each simulated scenario should run before stopping. */
+export type TestDepth =
+  | "discovery"        // Stop after first AI response
+  | "first_item"       // Stop after first item added to cart
+  | "food_expansion"   // Stop after second food item added
+  | "checkout_trigger" // Stop after confirm_order is called
+  | "full_checkout";   // Run complete flow (default)
+
+/** Execution phases tracked per scenario. */
+export type SimStage =
+  | "discovery"
+  | "first_item_added"
+  | "food_expansion"
+  | "upsell_execution"
+  | "checkout_trigger"
+  | "checkout_completion";
+
+/** Aggregate stage performance across all scenarios in a run. */
+export interface StageScores {
+  discovery:          number;  // 0–1 rate
+  foodExpansion:      number;
+  upsellExecution:    number;
+  checkoutTransition: number;
+  checkoutCompletion: number;
+}
+
 export type PostCheckoutDropPhase =
   | "not_reached"   // confirm_order never called
   | "delivery_type" // stopped before delivery choice
@@ -106,6 +134,10 @@ export interface ScenarioResult {
   totalTurns:       number;
   abandoned:        boolean;        // true when conversation ended without confirm_order
   salesWeaknesses:  string[];       // alias for suggestions (legacy field)
+  /** Stages that were reached during this scenario's execution. */
+  stagesReached:    SimStage[];
+  /** Stage where the scenario failed (only set when status is "failed" or "warning"). */
+  failureStage?:    SimStage;
 }
 
 // ─── analytical report types ──────────────────────────────────
@@ -215,6 +247,10 @@ export interface SimulationReport {
   performanceScore:    DetailedPerformanceScore;
   actionableFixes:     ActionableFix[];
   summary:             string;
+
+  // ── stage analytics ──────────────────────────────────────────
+  stageScores:         StageScores;
+  testDepth:           TestDepth;
 }
 
 type ProgressCallback = (info: { current: number; total: number; scenarioName: string }) => void;
@@ -665,8 +701,9 @@ export class AISimulatorService {
     scenarios: ScenarioDef[],
     onProgress: ProgressCallback,
     onResult: ResultCallback,
+    testDepth: TestDepth = "full_checkout",
   ): Promise<SimulationReport> {
-    return AISimulatorService.run(restaurantId, 0, onProgress, onResult, scenarios);
+    return AISimulatorService.run(restaurantId, 0, onProgress, onResult, scenarios, testDepth);
   }
 
   static async run(
@@ -675,9 +712,10 @@ export class AISimulatorService {
     onProgress: ProgressCallback,
     onResult: ResultCallback,
     prebuiltScenarios?: ScenarioDef[],
+    testDepth: TestDepth = "full_checkout",
   ): Promise<SimulationReport> {
     const actualCount = prebuiltScenarios?.length ?? scenarioCount;
-    console.log(`[AISimulator] SIMULATOR VERSION: retry-enabled | scenarioCount=${actualCount}`);
+    console.log(`[AISimulator] SIMULATOR VERSION: retry-enabled | scenarioCount=${actualCount} | testDepth=${testDepth}`);
     const restaurant = await prisma.restaurant.findUnique({
       where: { id: restaurantId },
       select: { name: true },
@@ -711,7 +749,7 @@ export class AISimulatorService {
       for (const scenario of batch) {
         onProgress({ current: scenarioIndex + 1, total: scenarios.length, scenarioName: scenario.name });
 
-        const result = await runScenarioWithRetry(scenario, restaurantId, menu, menuById);
+        const result = await runScenarioWithRetry(scenario, restaurantId, menu, menuById, testDepth);
         results.push(result);
         onResult(result);
         scenarioIndex++;
@@ -723,7 +761,7 @@ export class AISimulatorService {
       }
     }
 
-    return buildReport(results, restaurant?.name ?? restaurantId);
+    return buildReport(results, restaurant?.name ?? restaurantId, testDepth);
   }
 }
 
@@ -769,11 +807,12 @@ async function runScenarioWithRetry(
   restaurantId: string,
   menu: Array<{ id: string; name: string; ingredients: string | null; price: unknown }>,
   menuById: Map<string, { categoryName: string }>,
+  testDepth: TestDepth = "full_checkout",
 ): Promise<ScenarioResult> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= MAX_SCENARIO_RETRIES; attempt++) {
     try {
-      return await runScenario(scenario, restaurantId, menu, menuById);
+      return await runScenario(scenario, restaurantId, menu, menuById, testDepth);
     } catch (err) {
       lastErr = err;
       if (isRetryableError(err) && attempt < MAX_SCENARIO_RETRIES) {
@@ -801,6 +840,7 @@ async function runScenario(
   restaurantId: string,
   menu: Array<{ id: string; name: string; ingredients: string | null; price: unknown }>,
   menuById: Map<string, { categoryName: string }>,
+  testDepth: TestDepth = "full_checkout",
 ): Promise<ScenarioResult> {
   // Create sandbox records
   const runId = `SIM_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -838,6 +878,7 @@ async function runScenario(
   const perTurnCalls: TurnToolCall[][] = []; // tool calls per AI turn, for loop detection
   const cartEvolution: CartSnapshot[] = [];
   let salesMetrics: SalesMetrics = emptyMetrics();
+  const stagesReached = new Set<SimStage>();
 
   try {
     const cState = initCustomerState();
@@ -890,6 +931,33 @@ async function runScenario(
 
       cState.turnCount++;
 
+      // ── Stage tracking ─────────────────────────────────────────
+      // discovery: reached as soon as the AI produced its first response
+      if (cState.turnCount >= 1) stagesReached.add("discovery");
+
+      // first_item_added: cart has at least 1 item
+      if ((snap.itemCount ?? 0) >= 1) stagesReached.add("first_item_added");
+
+      // food_expansion: cart has 2+ items (second food added)
+      if ((snap.itemCount ?? 0) >= 2) stagesReached.add("food_expansion");
+
+      // upsell_execution: suggest_upsell called for drink or dessert
+      const hasUpsell = allToolCalls.some(
+        (tc) => tc.name === "suggest_upsell" && tc.success,
+      );
+      if (hasUpsell) stagesReached.add("upsell_execution");
+
+      // checkout_trigger: confirm_order succeeded
+      const hasCheckout = allToolCalls.some(
+        (tc) => tc.name === "confirm_order" && tc.success,
+      );
+      if (hasCheckout) stagesReached.add("checkout_trigger");
+
+      // ── TestDepth stop gate ────────────────────────────────────
+      if (testDepth !== "full_checkout" && shouldStopAtDepth(testDepth, stagesReached, inPostCheckout)) {
+        break;
+      }
+
       // Generate next customer message (returns null when conversation ends)
       nextMsg = nextCustomerMessage(cState, scenario.behaviorProfile, turnResult.text, turnResult.toolCalls, scenario.maxTurns);
     }
@@ -902,11 +970,32 @@ async function runScenario(
       menuById,
       cState.postCheckout,
     );
+
+    // checkout_completion: post-checkout lifecycle fully done
+    if (salesMetrics.postCheckoutCompleted) stagesReached.add("checkout_completion");
   } finally {
     await cleanupSimulation(customer.id, conversation.id);
   }
 
-  return evaluateScenario(scenario, transcript, allToolCalls, perTurnCalls, menu, salesMetrics, cartEvolution);
+  return evaluateScenario(
+    scenario, transcript, allToolCalls, perTurnCalls, menu, salesMetrics, cartEvolution,
+    [...stagesReached],
+  );
+}
+
+/** Returns true when the simulated conversation should stop for the given testDepth. */
+function shouldStopAtDepth(
+  depth: TestDepth,
+  stagesReached: Set<SimStage>,
+  inPostCheckout: boolean,
+): boolean {
+  switch (depth) {
+    case "discovery":        return stagesReached.has("discovery");
+    case "first_item":       return stagesReached.has("first_item_added");
+    case "food_expansion":   return stagesReached.has("food_expansion");
+    case "checkout_trigger": return stagesReached.has("checkout_trigger") || inPostCheckout;
+    case "full_checkout":    return false;
+  }
 }
 
 // ─── turn executor ────────────────────────────────────────────
@@ -1289,6 +1378,7 @@ function evaluateScenario(
   menu: Array<{ id: string; name: string; ingredients: string | null; price: unknown }>,
   salesMetrics: SalesMetrics,
   cartEvolution: CartSnapshot[],
+  stagesReached: SimStage[] = [],
 ): ScenarioResult {
   const lastAiTurn = [...transcript].reverse().find((t) => t.role === "ai");
   const lastAiText = lastAiTurn?.content ?? "";
@@ -1329,6 +1419,9 @@ function evaluateScenario(
 
   const abandoned       = !salesMetrics.conversionSuccess;
   const salesWeaknesses = computeSalesWeaknesses(salesMetrics, totalTurns);
+  const failureStage    = status !== "passed"
+    ? detectFailureStage(salesMetrics, checks, stagesReached)
+    : undefined;
 
   return {
     id:               scenario.id,
@@ -1346,7 +1439,61 @@ function evaluateScenario(
     totalTurns,
     abandoned,
     salesWeaknesses,
+    stagesReached,
+    failureStage,
   };
+}
+
+/**
+ * Identifies the stage at which the scenario first broke down.
+ * Used to localize failures for diagnostics.
+ */
+function detectFailureStage(
+  salesMetrics: SalesMetrics,
+  checks: CheckResult[],
+  stagesReached: SimStage[],
+): SimStage {
+  const failedChecks = checks.filter((c) => !c.passed);
+
+  // Dietary / hallucination violations are discovery-phase issues
+  if (failedChecks.some((c) => c.type === "dietary_respected" || c.type === "no_hallucination")) {
+    return "discovery";
+  }
+
+  // No items in cart at all → discovery or first_item failed
+  if (salesMetrics.totalItems === 0) {
+    return stagesReached.includes("discovery") ? "first_item_added" : "discovery";
+  }
+
+  // Relevant suggestion failed → discovery
+  if (failedChecks.some((c) => c.type === "relevant_suggestion")) {
+    return "discovery";
+  }
+
+  // No upsell was ever attempted → food_expansion never advanced to upsell
+  if (salesMetrics.upsellAttempts === 0 && salesMetrics.totalItems > 0) {
+    return stagesReached.includes("food_expansion") ? "upsell_execution" : "food_expansion";
+  }
+
+  // No checkout reached
+  if (!salesMetrics.conversionSuccess) {
+    return stagesReached.includes("upsell_execution") ? "checkout_trigger" : "upsell_execution";
+  }
+
+  // Checkout started but post-checkout not completed
+  if (salesMetrics.conversionSuccess && !salesMetrics.postCheckoutCompleted) {
+    return "checkout_completion";
+  }
+
+  // Fallback: deepest stage reached
+  const ORDER: SimStage[] = [
+    "discovery", "first_item_added", "food_expansion",
+    "upsell_execution", "checkout_trigger", "checkout_completion",
+  ];
+  for (let i = ORDER.length - 1; i >= 0; i--) {
+    if (stagesReached.includes(ORDER[i]!)) return ORDER[i]!;
+  }
+  return "discovery";
 }
 
 function runCheck(
@@ -1599,7 +1746,11 @@ const EST_DRINK_VALUE   = 10;
 const EST_DESSERT_VALUE = 14;
 const DEFAULT_TARGET_TICKET = 80;
 
-function buildReport(results: ScenarioResult[], restaurantName: string): SimulationReport {
+function buildReport(
+  results: ScenarioResult[],
+  restaurantName: string,
+  testDepth: TestDepth = "full_checkout",
+): SimulationReport {
   const n = results.length || 1;
 
   // ── base metrics ──────────────────────────────────────────
@@ -1682,6 +1833,9 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
     revenueAnalysis, performanceScore, actionableFixes,
   );
 
+  // ── 7. STAGE SCORES ───────────────────────────────────────
+  const stageScores = buildStageScores(results, n);
+
   return {
     overallScore: Math.round(overallScore),
     scenarios: results,
@@ -1709,10 +1863,24 @@ function buildReport(results: ScenarioResult[], restaurantName: string): Simulat
     performanceScore,
     actionableFixes,
     summary,
+    stageScores,
+    testDepth,
   };
 }
 
 // ─── analytical builders ──────────────────────────────────────
+
+function buildStageScores(results: ScenarioResult[], n: number): StageScores {
+  const rate = (stage: SimStage) =>
+    results.filter((r) => r.stagesReached.includes(stage)).length / n;
+  return {
+    discovery:          rate("discovery"),
+    foodExpansion:      rate("food_expansion"),
+    upsellExecution:    rate("upsell_execution"),
+    checkoutTransition: rate("checkout_trigger"),
+    checkoutCompletion: rate("checkout_completion"),
+  };
+}
 
 function buildSalesDiagnosis(results: ScenarioResult[], n: number): SalesDiagnosis {
   const withMainItem  = results.filter((r) => r.salesMetrics.totalItems > 0).length / n;
@@ -2044,6 +2212,8 @@ function buildErrorResult(scenario: ScenarioDef, error: string): ScenarioResult 
     totalTurns:      0,
     abandoned:       true,
     salesWeaknesses: [`Simulação interrompida por erro: ${error}`],
+    stagesReached:   [],
+    failureStage:    "discovery",
   };
 }
 

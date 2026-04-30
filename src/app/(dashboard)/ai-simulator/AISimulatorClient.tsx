@@ -7,6 +7,8 @@ import type {
   CheckResult,
   SalesMetrics,
   CartSnapshot,
+  TestDepth,
+  SimStage,
 } from "@/services/ai/AISimulatorService";
 import type { ParsedPrompt } from "@/services/ai/PromptParser";
 import { AutoSimulatorPanel } from "./AutoSimulatorPanel";
@@ -31,6 +33,14 @@ const SCENARIO_PRESETS = [
   { label: "Stress (20 cenários)",  value: 20 },
 ] as const;
 
+const TEST_DEPTH_PRESETS: Array<{ label: string; value: TestDepth }> = [
+  { label: "Descoberta",        value: "discovery"        },
+  { label: "Primeiro item",     value: "first_item"       },
+  { label: "Food expansion",    value: "food_expansion"   },
+  { label: "Gatilho checkout",  value: "checkout_trigger" },
+  { label: "Fluxo completo",    value: "full_checkout"    },
+];
+
 export function AISimulatorClient() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("standard");
 
@@ -42,6 +52,7 @@ export function AISimulatorClient() {
   const [errMsg,        setErrMsg]        = useState<string>("");
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set());
   const [scenarioCount, setScenarioCount] = useState<number>(10);
+  const [testDepth,     setTestDepth]     = useState<TestDepth>("full_checkout");
 
   const runSimulations = useCallback(async () => {
     setState("running");
@@ -55,7 +66,7 @@ export function AISimulatorClient() {
       const response = await fetch("/api/ai-simulator/run", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ scenarioCount }),
+        body:    JSON.stringify({ scenarioCount, testDepth }),
       });
       if (!response.ok || !response.body) {
         throw new Error(`HTTP ${response.status}`);
@@ -97,7 +108,7 @@ export function AISimulatorClient() {
       setErrMsg(String(err));
       setState("error");
     }
-  }, [scenarioCount]);
+  }, [scenarioCount, testDepth]);
 
   const toggleExpanded = (id: string) => {
     setExpanded((prev) => {
@@ -161,18 +172,36 @@ export function AISimulatorClient() {
           <>
             {/* Controls */}
             <div className="flex items-center justify-end gap-2">
-              <select
-                value={scenarioCount}
-                onChange={(e) => setScenarioCount(Number(e.target.value))}
-                disabled={state === "running"}
-                className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg
-                           hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed
-                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {SCENARIO_PRESETS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-              </select>
+              <div className="flex flex-col items-start gap-0.5">
+                <label className="text-xs text-gray-400 px-1">Profundidade</label>
+                <select
+                  value={testDepth}
+                  onChange={(e) => setTestDepth(e.target.value as TestDepth)}
+                  disabled={state === "running"}
+                  className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg
+                             hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed
+                             focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  {TEST_DEPTH_PRESETS.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col items-start gap-0.5">
+                <label className="text-xs text-gray-400 px-1">Cenários</label>
+                <select
+                  value={scenarioCount}
+                  onChange={(e) => setScenarioCount(Number(e.target.value))}
+                  disabled={state === "running"}
+                  className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg
+                             hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {SCENARIO_PRESETS.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
 
               {state === "done" && report && (
                 <>
@@ -642,6 +671,9 @@ function SummaryCard({ report }: { report: SimulationReport }) {
         </details>
       )}
 
+      {/* Stage breakdown */}
+      {report.stageScores && <StageBreakdownChart scores={report.stageScores} testDepth={report.testDepth} />}
+
       <p className="text-xs text-gray-400">
         {report.restaurantName} · Executado em {new Date(report.ranAt).toLocaleString("pt-BR")}
       </p>
@@ -649,7 +681,79 @@ function SummaryCard({ report }: { report: SimulationReport }) {
   );
 }
 
+// ─── stage breakdown chart ────────────────────────────────────
+
+const STAGE_LABELS: Record<string, string> = {
+  discovery:          "Descoberta",
+  foodExpansion:      "Food expansion",
+  upsellExecution:    "Upsell executado",
+  checkoutTransition: "Checkout ativado",
+  checkoutCompletion: "Checkout completo",
+};
+
+const TEST_DEPTH_STAGE_MAP: Record<TestDepth, string> = {
+  discovery:        "discovery",
+  first_item:       "discovery",
+  food_expansion:   "foodExpansion",
+  checkout_trigger: "checkoutTransition",
+  full_checkout:    "checkoutCompletion",
+};
+
+function StageBreakdownChart({
+  scores,
+  testDepth,
+}: {
+  scores:    SimulationReport["stageScores"];
+  testDepth: TestDepth;
+}) {
+  const entries = Object.entries(scores) as [string, number][];
+  const weakestKey = entries.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
+  const depthTarget = TEST_DEPTH_STAGE_MAP[testDepth];
+
+  return (
+    <div className="pt-3 border-t border-gray-100">
+      <p className="text-sm font-semibold text-gray-700 mb-3">Breakdown por etapa</p>
+      <div className="space-y-2">
+        {entries.map(([key, value]) => {
+          const pct     = Math.round(value * 100);
+          const isWeak  = key === weakestKey && value < 0.8;
+          const isDepth = key === depthTarget && testDepth !== "full_checkout";
+          const barColor = isWeak
+            ? "bg-red-400"
+            : pct >= 80
+            ? "bg-green-400"
+            : "bg-yellow-400";
+          return (
+            <div key={key}>
+              <div className="flex justify-between text-xs mb-0.5">
+                <span className={`font-medium ${isWeak ? "text-red-600" : "text-gray-600"}`}>
+                  {STAGE_LABELS[key] ?? key}
+                  {isWeak  && " ⚠ mais fraca"}
+                  {isDepth && " ← profundidade alvo"}
+                </span>
+                <span className={`font-bold ${isWeak ? "text-red-600" : "text-gray-700"}`}>{pct}%</span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-1.5">
+                <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── scenario card ────────────────────────────────────────────
+
+const FAILURE_STAGE_LABELS: Record<SimStage, string> = {
+  discovery:          "Descoberta",
+  first_item_added:   "Primeiro item",
+  food_expansion:     "Food expansion",
+  upsell_execution:   "Upsell",
+  checkout_trigger:   "Checkout ativado",
+  checkout_completion: "Pós-checkout",
+};
 
 function ScenarioCard({
   result,
@@ -678,6 +782,11 @@ function ScenarioCard({
           <div>
             <p className="font-semibold text-gray-800 text-sm">{result.name}</p>
             <p className="text-xs text-gray-500">{result.description}</p>
+            {result.failureStage && (
+              <p className="text-xs text-red-500 mt-0.5 font-medium">
+                Falhou em: {FAILURE_STAGE_LABELS[result.failureStage] ?? result.failureStage}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-3">

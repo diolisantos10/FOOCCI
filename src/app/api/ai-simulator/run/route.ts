@@ -17,7 +17,7 @@
 import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { unauthorized } from "@/lib/api-response";
-import { AISimulatorService } from "@/services/ai/AISimulatorService";
+import { AISimulatorService, type TestDepth } from "@/services/ai/AISimulatorService";
 import { SimulationJobStore } from "@/services/ai/SimulationJobStore";
 
 export const maxDuration = 300;
@@ -29,11 +29,13 @@ export async function POST(req: NextRequest) {
   const { restaurantId } = ctx;
   const encoder = new TextEncoder();
 
-  // Parse and clamp scenarioCount to allowed preset values (default 10)
+  // Parse and clamp scenarioCount + testDepth (defaults: 10, full_checkout)
   const ALLOWED_COUNTS = [5, 10, 20] as const;
+  const ALLOWED_DEPTHS: TestDepth[] = ["discovery", "first_item", "food_expansion", "checkout_trigger", "full_checkout"];
   let scenarioCount: 5 | 10 | 20 = 10;
+  let testDepth: TestDepth = "full_checkout";
   try {
-    const body = await req.json() as { scenarioCount?: unknown };
+    const body = await req.json() as { scenarioCount?: unknown; testDepth?: unknown };
     const raw  = Math.floor(Number(body?.scenarioCount));
     if (ALLOWED_COUNTS.includes(raw as 5 | 10 | 20)) {
       scenarioCount = raw as 5 | 10 | 20;
@@ -41,8 +43,11 @@ export async function POST(req: NextRequest) {
       // Clamp to nearest allowed value
       scenarioCount = raw <= 7 ? 5 : raw <= 15 ? 10 : 20;
     }
+    if (typeof body?.testDepth === "string" && ALLOWED_DEPTHS.includes(body.testDepth as TestDepth)) {
+      testDepth = body.testDepth as TestDepth;
+    }
   } catch {
-    // missing or non-JSON body — use default
+    // missing or non-JSON body — use defaults
   }
 
   const stream = new ReadableStream({
@@ -70,6 +75,8 @@ export async function POST(req: NextRequest) {
             SimulationJobStore.addResult(restaurantId, result);
             send({ type: "scenario_result", result });
           },
+          undefined,
+          testDepth,
         );
         SimulationJobStore.complete(restaurantId, report);
         send({ type: "report", report });
