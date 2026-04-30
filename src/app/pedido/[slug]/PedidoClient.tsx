@@ -853,27 +853,34 @@ function PhoneEntryCard({
 // The menu is the primary experience; AI is support only.
 
 type SalesBehavior = {
-  aggressiveness:          "low" | "medium" | "high";
-  autoSuggestions:         boolean; // promote AI cards to product grid automatically
-  interruptNavigation:     boolean; // auto-switch category tabs
-  suggestOnAdd:            boolean; // call AI when user adds an item
-  suggestOnIdle:           boolean; // call AI after inactivity
-  suggestOnCheckoutIntent: boolean; // show AI suggestions when user taps Finalizar
+  aggressiveness:           "low" | "medium" | "high";
+  autoSuggestions:          boolean; // promote AI cards to product grid automatically
+  interruptNavigation:      boolean; // auto-switch category tabs
+  suggestOnAdd:             boolean; // call AI when user adds an item
+  suggestOnIdle:            boolean; // call AI directly after inactivity (legacy)
+  suggestOnCheckoutIntent:  boolean; // show AI suggestions when user taps Finalizar
+  passivePermissionPrompt:  boolean; // ask permission before suggesting to passive users
 };
 
 const SALES_BEHAVIOR: SalesBehavior = {
-  aggressiveness:          "low",
-  autoSuggestions:         false,
-  interruptNavigation:     false,
-  suggestOnAdd:            false,
-  suggestOnIdle:           false,
-  suggestOnCheckoutIntent: true,
+  aggressiveness:           "low",
+  autoSuggestions:          false,
+  interruptNavigation:      false,
+  suggestOnAdd:             false,
+  suggestOnIdle:            false,
+  suggestOnCheckoutIntent:  true,
+  passivePermissionPrompt:  true,
 };
 
 // Events whose card results may be promoted to the product grid.
 // ON_USER_MESSAGE: user explicitly asked for something.
 // Checkout-intent upsell uses upsellOfferedSnap, handled separately.
 const CARD_ALLOWED_EVENTS = new Set<string>(["ON_USER_MESSAGE"]);
+
+// Passive trigger: seconds of inactivity before permission prompt fires.
+const PASSIVE_TRIGGER_MS   = 10_000; // 10 s
+// After declining, how long before the prompt may appear again.
+const SILENT_COOLDOWN_MS   = 5 * 60 * 1000; // 5 min
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -959,6 +966,15 @@ export function PedidoClient({
 
   // ── Stage / flow ──────────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
+
+  // ── AI permission state ───────────────────────────────────────────
+  // idle      → timer running, prompt not yet shown
+  // pending   → permission prompt visible, awaiting user choice
+  // consultive→ user accepted — AI may suggest
+  // silent    → user declined — AI stays quiet until cooldown expires
+  type AIPermState = "idle" | "pending" | "consultive" | "silent";
+  const [aiPermState, setAiPermState] = useState<AIPermState>("idle");
+  const silentUntilRef = useRef<number>(0); // epoch ms when silence expires
 
   // ── Upsell engine ─────────────────────────────────────────────────
   // offeredDrink / offeredDessert: set to true once that phase has been
@@ -1206,6 +1222,25 @@ export function PedidoClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryPhase, stage]);
 
+  // ── Passive permission prompt ─────────────────────────────────────
+  // After PASSIVE_TRIGGER_MS of inactivity, gently ask permission to suggest.
+  // Fires only for passive users (cart ≤ 1 item, no recent rejection, BROWSE).
+  useEffect(() => {
+    if (!SALES_BEHAVIOR.passivePermissionPrompt) return;
+    if (entryPhase !== "browsing" || stage !== "BROWSE") return;
+    if (aiPermState !== "idle") return;
+
+    const id = setInterval(() => {
+      if (aiPermState !== "idle") return;
+      if (Date.now() < silentUntilRef.current) return;
+      if (cart.reduce((s, i) => s + i.qty, 0) > 1) return;
+      if (Date.now() - lastActivityRef.current < PASSIVE_TRIGGER_MS) return;
+      setAiPermState("pending");
+    }, 2_000);
+    return () => clearInterval(id);
+  // aiPermState and cart intentionally included — prompt must re-evaluate when they change
+  }, [entryPhase, stage, aiPermState, cart]);
+
   // Clear grid suggestions when cart is emptied or customer leaves BROWSE
   useEffect(() => {
     if (cart.length === 0 || stage !== "BROWSE") setSuggestedProducts([]);
@@ -1244,6 +1279,24 @@ export function PedidoClient({
     [cart],
   );
 
+  // ── Permission prompt handlers ────────────────────────────────────
+
+  const handlePermissionAccept = useCallback(() => {
+    setAiPermState("consultive");
+    // Trigger AI with ON_USER_MESSAGE so CARD_ALLOWED_EVENTS allows grid cards.
+    // silent: true keeps the user bubble hidden — the prompt IS the interaction.
+    sendText("me sugere algo que combina com o cardápio", cart, "BROWSE", activeUpsell, {
+      event: "ON_USER_MESSAGE",
+      silent: true,
+    });
+  }, [cart, activeUpsell, sendText]);
+
+  const handlePermissionDecline = useCallback(() => {
+    setAiPermState("silent");
+    silentUntilRef.current = Date.now() + SILENT_COOLDOWN_MS;
+    pushAssistantMessage("Perfeito 😊 fica à vontade — qualquer coisa é só me chamar.");
+  }, [pushAssistantMessage]);
+
   // Sends a category intro via the standard sendText path so cards are preserved
   // and history is updated consistently. No user bubble is shown (silent: true).
   const sendCategoryIntro = useCallback(
@@ -1275,6 +1328,12 @@ export function PedidoClient({
   );
 
   const handleFinalizeClick = useCallback(() => {
+    // Checkout intent exits silent mode — AI is always allowed to engage at checkout.
+    if (aiPermState === "silent" || aiPermState === "pending") {
+      silentUntilRef.current = 0;
+      setAiPermState("idle");
+    }
+
     if (cart.length === 0) {
       setMessages((prev) => [
         ...prev,
@@ -1504,6 +1563,11 @@ export function PedidoClient({
     // Any user message resets the idle timer
     lastActivityRef.current = Date.now();
     idleFiredRef.current    = false;
+    // Exit silent mode the moment the user initiates conversation
+    if (aiPermState === "silent" || aiPermState === "pending") {
+      silentUntilRef.current = 0;
+      setAiPermState("consultive");
+    }
 
     switch (stage) {
       case "ADDRESS_INPUT":   handleAddressInput(text);   break;
@@ -1861,6 +1925,33 @@ export function PedidoClient({
           {messages.map((msg) => (
             <Bubble key={msg.id} msg={msg} />
           ))}
+
+          {/* Permission prompt — soft ask before AI engages passively */}
+          {aiPermState === "pending" && stage === "BROWSE" && entryPhase === "browsing" && (
+            <div className="flex justify-start">
+              <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3">
+                <p className="text-sm text-gray-900 mb-3 leading-relaxed">
+                  Posso te sugerir algo que combina com o que você está vendo? 👇
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handlePermissionAccept}
+                    className="flex-1 rounded-xl py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                    style={{ backgroundColor: 'var(--brand-primary)' }}
+                  >
+                    Quero sugestão ✨
+                  </button>
+                  <button
+                    onClick={handlePermissionDecline}
+                    className="flex-1 rounded-xl py-2 text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
+                  >
+                    Prefiro continuar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {ui === "thinking" && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>
