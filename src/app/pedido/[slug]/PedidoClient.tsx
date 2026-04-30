@@ -987,6 +987,8 @@ export function PedidoClient({
   // ── Cart ──────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  // Products suggested by the AI — rendered in the product grid, not in chat.
+  const [suggestedProducts, setSuggestedProducts] = useState<MenuItem[]>([]);
 
   // ── Cross-flow identity: read what /qr/[slug] already stored ──────
   const [storedCustomer] = useState<{ phone: string; name: string; customerId?: string } | null>(() => {
@@ -1195,11 +1197,25 @@ export function PedidoClient({
         const cards: string[]           = Array.isArray(data?.data?.cards) ? data.data.cards : [];
         const suggestedItemName: string | undefined = data?.data?.suggestedItemName ?? undefined;
 
-        // Only push an AI bubble if there's actual content (message or cards)
-        if (reply || cards.length > 0) {
+        // Grid promotion: ON_ITEM_ADDED / ON_CART_UPDATED / ON_IDLE during BROWSE.
+        // Cards are shown visually in the product grid — not inside the chat bubble.
+        const GRID_EVENTS = new Set<string>(["ON_ITEM_ADDED", "ON_CART_UPDATED", "ON_IDLE"]);
+        const promoteToGrid = cards.length > 0 && GRID_EVENTS.has(event) && stageSnap === "BROWSE";
+        if (promoteToGrid) {
+          const flat     = categories.flatMap((c) => c.items);
+          const resolved = cards
+            .map((id) => flat.find((i) => i.id === id))
+            .filter((i): i is MenuItem => !!i);
+          if (resolved.length > 0) setSuggestedProducts(resolved);
+        }
+
+        // Cards go into the chat bubble only when NOT promoted to the product grid
+        const msgCards = promoteToGrid ? undefined : (cards.length > 0 ? cards : undefined);
+
+        if (reply || msgCards) {
           setMessages((prev) => [
             ...prev,
-            { id: uid(), role: "assistant" as const, content: reply, ts: new Date(), suggestedItemName, cards },
+            { id: uid(), role: "assistant" as const, content: reply, ts: new Date(), suggestedItemName, cards: msgCards },
           ]);
         }
         if (reply) {
@@ -1271,6 +1287,11 @@ export function PedidoClient({
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryPhase, stage]);
+
+  // Clear grid suggestions when cart is emptied or customer leaves BROWSE
+  useEffect(() => {
+    if (cart.length === 0 || stage !== "BROWSE") setSuggestedProducts([]);
+  }, [cart.length, stage]);
 
   // ── Handlers ──────────────────────────────────────────────────────
 
@@ -2053,6 +2074,27 @@ export function PedidoClient({
           </div>
         )}
 
+        {/* Mobile-only: AI suggestion strip — renders above product grid, not in chat */}
+        {stage === "BROWSE" && entryPhase === "browsing" && suggestedProducts.length > 0 && (
+          <div className="lg:hidden shrink-0 border-t border-orange-100 bg-orange-50 px-3 pt-2 pb-2">
+            <p className="mb-1.5 text-xs font-semibold text-orange-700">Combina com seu pedido 👇</p>
+            <div
+              className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {suggestedProducts.map((item) => (
+                <ProductCard
+                  key={item.id}
+                  item={item}
+                  qty={itemCartQty(item, cart)}
+                  onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                  onOpen={() => setSelectedProduct(item)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Mobile-only: product grid (horizontal scroll) */}
         {stage === "BROWSE" && entryPhase === "browsing" && currentCategoryItems.length > 0 && (
           <div className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
@@ -2172,6 +2214,18 @@ export function PedidoClient({
                       style={{ aspectRatio: "3/1" }}
                     />
                   ))}
+                </div>
+              )}
+              {suggestedProducts.length > 0 && (
+                <div className="mb-4 rounded-xl bg-orange-50 border border-orange-100 px-3 py-2.5">
+                  <p className="mb-2 text-xs font-semibold text-orange-700">Combina com seu pedido 👇</p>
+                  <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+                    {suggestedProducts.map((item) => (
+                      <ProductCard key={item.id} item={item} qty={itemCartQty(item, cart)}
+                        onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                        onOpen={() => setSelectedProduct(item)} />
+                    ))}
+                  </div>
                 </div>
               )}
               {currentCategoryItems.length > 0 ? (
