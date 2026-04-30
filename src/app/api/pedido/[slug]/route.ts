@@ -147,7 +147,7 @@ export async function POST(
       sortOrder:    i.sortOrder ?? undefined,
     }));
 
-    const { reply, cards, suggestedItemName } = await AIOrderService.runWebTurn({
+    const { reply, cards, suggestedItemName, options } = await AIOrderService.runWebTurn({
       restaurantId:  restaurant.id,
       message:       message?.trim() ?? "",
       history,
@@ -165,7 +165,7 @@ export async function POST(
       lastAddedId,
     });
 
-    return ok({ reply, cards, suggestedItemName: suggestedItemName ?? null });
+    return ok({ reply, cards, suggestedItemName: suggestedItemName ?? null, options: options ?? [] });
   } catch (err) {
     console.error("[POST /api/pedido/[slug]]", err);
     return serverError("Erro interno ao processar mensagem.");

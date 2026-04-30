@@ -60,6 +60,8 @@ export interface V2Output {
   cards:        string[]; // product IDs to render as UI cards
   requiresAI:   boolean;  // when true → caller must run OpenAI pipeline
   aiDirective:  string;   // injected into system prompt for AI events
+  /** Quick-reply buttons rendered below the response — each string is a tap-to-send label. */
+  options?:     string[];
 }
 
 // ─── category classifiers ─────────────────────────────────────
@@ -273,11 +275,15 @@ function handleAfterCheckout(): V2Output {
 }
 
 function handleUserMessage(input: V2Input): V2Output {
+  const hasItems = input.cartItemIds.length > 0;
   return {
-    message:    "",
-    cards:      [],
-    requiresAI: true,
+    message:     "",
+    cards:       [],
+    requiresAI:  true,
     aiDirective: buildUserMessageDirective(input.cartItemIds, input.cartValue),
+    // When cart is empty the AI may need to qualify the customer's preference.
+    // Attach predefined buttons so the answer never requires typing.
+    options: hasItems ? undefined : ["🌿 Algo leve", "🍽️ Refeição completa", "😲 Me surpreende!"],
   };
 }
 

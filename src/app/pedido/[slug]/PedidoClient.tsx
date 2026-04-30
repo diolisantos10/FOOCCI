@@ -1152,9 +1152,10 @@ export function PedidoClient({
           }),
         });
 
-        const data  = await res.json();
-        const reply: string   = data?.data?.reply ?? "";
-        const cards: string[] = Array.isArray(data?.data?.cards) ? data.data.cards : [];
+        const data    = await res.json();
+        const reply: string    = data?.data?.reply   ?? "";
+        const cards: string[]  = Array.isArray(data?.data?.cards)   ? data.data.cards   : [];
+        const apiOptions: string[] = Array.isArray(data?.data?.options) ? data.data.options : [];
         // suggestedItemName (legacy name-match field) is intentionally ignored — the
         // grid renders only the exact IDs the AI returned, with no fallback substitution.
 
@@ -1179,7 +1180,13 @@ export function PedidoClient({
         if (reply) {
           setMessages((prev) => [
             ...prev,
-            { id: uid(), role: "assistant" as const, content: reply, ts: new Date() },
+            {
+              id: uid(),
+              role: "assistant" as const,
+              content: reply,
+              ts: new Date(),
+              options: apiOptions.length > 0 ? apiOptions : undefined,
+            },
           ]);
         }
         if (reply) {
@@ -1233,7 +1240,6 @@ export function PedidoClient({
         role: "assistant" as const,
         content: greeting,
         ts: new Date(),
-        options: ["Quero sugestão ✨", "Ver cardápio 📋"],
       },
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps

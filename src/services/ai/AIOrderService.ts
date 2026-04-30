@@ -67,6 +67,8 @@ export interface AIWebTurnOutput {
   reply:              string;
   cards:              string[];  // product IDs to show as UI cards (V2)
   suggestedItemName?: string;    // kept for backward-compat (name-match fallback)
+  /** Quick-reply button labels to display below the AI message. */
+  options?:           string[];
 }
 
 const MAX_TOOL_ITERATIONS = 6;
@@ -166,7 +168,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   });
 
   if (!v2.requiresAI) {
-    return { reply: v2.message, cards: v2.cards };
+    return { reply: v2.message, cards: v2.cards, options: v2.options };
   }
 
   // ── AI pipeline (ON_USER_MESSAGE / AFTER_CHECKOUT) ──────────
@@ -314,6 +316,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     reply:             finalResponse || "Desculpe, não consegui processar sua mensagem. 😅",
     cards:             aiCards,
     suggestedItemName,
+    options:           v2.options,
   };
 }
 
