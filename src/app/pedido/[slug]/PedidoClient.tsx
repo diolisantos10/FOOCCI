@@ -940,6 +940,11 @@ export function PedidoClient({
   // Products suggested by the AI — rendered in the product grid, not in chat.
   const [suggestedProducts, setSuggestedProducts] = useState<MenuItem[]>([]);
 
+  // ── Guided flow mode ──────────────────────────────────────────────
+  // Activated when user accepts the "Can I suggest something?" prompt.
+  // Drives a fixed step sequence without calling the AI for each step.
+  const [guidedMode, setGuidedMode] = useState(false);
+
   // ── Cross-flow identity: read what /qr/[slug] already stored ──────
   const [storedCustomer] = useState<{ phone: string; name: string; customerId?: string } | null>(() => {
     if (typeof window === "undefined") return null;
@@ -999,6 +1004,7 @@ export function PedidoClient({
   const silentUntilRef    = useRef<number>(0);     // epoch ms when silence expires
   const permPromptCountRef = useRef<number>(0);    // passive prompts shown this session (max 2)
   const contextChosenRef  = useRef<boolean>(false); // true once user picks light/complete — no re-ask
+  const guidedStepRef     = useRef<"size" | "starters" | "main" | "drinks" | "dessert" | "done">("size");
   // Type of upsell pending at checkout ("drink" | "dessert")
   const [checkoutPromptType, setCheckoutPromptType] = useState<"drink" | "dessert" | null>(null);
 
@@ -1317,6 +1323,7 @@ export function PedidoClient({
     if (entryPhase !== "browsing" || stage !== "BROWSE") return;
     if (aiPermState !== "idle") return;
     if (suggestedProducts.length > 0) return;
+    if (guidedMode) return;
 
     const id = setInterval(() => {
       if (aiPermState !== "idle") return;
@@ -1324,13 +1331,14 @@ export function PedidoClient({
       if (Date.now() < silentUntilRef.current) return;
       if (cart.reduce((s, i) => s + i.qty, 0) > 1) return;
       if (suggestedProducts.length > 0) return; // double-check inside interval
+      if (guidedMode) return;
       if (Date.now() - lastActivityRef.current < PASSIVE_TRIGGER_MS) return;
       permPromptCountRef.current += 1;
       setAiPermState("pending");
     }, 2_000);
     return () => clearInterval(id);
-  // aiPermState, cart and suggestedProducts intentionally included
-  }, [entryPhase, stage, aiPermState, cart, suggestedProducts]);
+  // aiPermState, cart, suggestedProducts and guidedMode intentionally included
+  }, [entryPhase, stage, aiPermState, cart, suggestedProducts, guidedMode]);
 
   // ── First-item trigger ────────────────────────────────────────────
   // When the cart reaches exactly 1 item and the user is passive (idle),
@@ -1343,23 +1351,26 @@ export function PedidoClient({
       stage !== "BROWSE" ||
       entryPhase !== "browsing" ||
       permPromptCountRef.current >= 2 ||
-      suggestedProducts.length > 0
+      suggestedProducts.length > 0 ||
+      guidedMode
     ) return;
     const t = setTimeout(() => {
       permPromptCountRef.current += 1;
       setAiPermState("pending");
     }, 3_000);
     return () => clearTimeout(t);
-  }, [cart.length, aiPermState, stage, entryPhase, suggestedProducts.length]);
+  }, [cart.length, aiPermState, stage, entryPhase, suggestedProducts.length, guidedMode]);
 
   // ── Reset consultive after a suggestion is shown ("already suggested") ──
   // Once the product grid shows AI-picked cards in consultive mode, the job
   // is done — return to idle so the system goes back to observing.
+  // Skip during guided flow: guided mode manages aiPermState itself.
   useEffect(() => {
+    if (guidedMode) return;
     if (suggestedProducts.length > 0 && aiPermState === "consultive") {
       setAiPermState("idle");
     }
-  }, [suggestedProducts.length, aiPermState]);
+  }, [suggestedProducts.length, aiPermState, guidedMode]);
 
   // Clear grid suggestions when cart is emptied or customer leaves BROWSE
   useEffect(() => {
@@ -1399,17 +1410,100 @@ export function PedidoClient({
     [cart],
   );
 
+  // ── Guided flow step handler ──────────────────────────────────────
+  // Client-side state machine — no AI calls. Each step pushes a message with
+  // buttons and optionally fills the product grid from the local catalog.
+  const handleGuidedStep = useCallback(
+    (choice: string) => {
+      const step = guidedStepRef.current;
+      const n = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+      const addMsg = (content: string, opts?: string[]) => {
+        setMessages((prev) => [
+          ...prev,
+          { id: uid(), role: "assistant" as const, content, ts: new Date(), options: opts },
+        ]);
+      };
+
+      const catItems = (predicate: (name: string) => boolean): MenuItem[] =>
+        categories.filter((c) => predicate(c.name)).flatMap((c) => c.items).slice(0, 4);
+
+      switch (step) {
+        case "size":
+          guidedStepRef.current = "starters";
+          addMsg("Vai querer entrada? 🥗", ["Sim, quero entrada", "Direto ao prato"]);
+          break;
+
+        case "starters":
+          if (/entrada/i.test(choice)) {
+            const items = catItems((nm) => /entrada|aperitivo|petisco|salada|sashimi|tapas/i.test(n(nm)));
+            if (items.length > 0) setSuggestedProducts(items);
+          }
+          guidedStepRef.current = "main";
+          addMsg("Prefere algo leve ou uma refeição completa? 🍽️", ["🥗 Algo leve", "🍽️ Refeição completa"]);
+          break;
+
+        case "main": {
+          const isLight = /leve|🥗/u.test(choice);
+          const items = isLight
+            ? catItems((nm) =>
+                !/combo|completo/i.test(n(nm)) &&
+                !/bebida|drink|suco|refri|cerveja|vinho|água/i.test(n(nm)) &&
+                !/sobremesa|doce|gelado|sorvete/i.test(n(nm))
+              )
+            : catItems((nm) =>
+                /combo|completo|grilh|teppan|yakisoba|massa|pizza|hambur|prato principal/i.test(n(nm))
+              );
+          if (items.length > 0) setSuggestedProducts(items);
+          guidedStepRef.current = "drinks";
+          addMsg("Vai querer bebida? 🥤", ["Sim, quero bebida", "Não, obrigado"]);
+          break;
+        }
+
+        case "drinks":
+          if (/sim|bebida/i.test(choice)) {
+            const items = catItems((nm) => /bebida|drink|suco|refri|cerveja|vinho|água/i.test(n(nm)));
+            if (items.length > 0) setSuggestedProducts(items);
+          }
+          guidedStepRef.current = "dessert";
+          addMsg("Vai querer sobremesa? 🍰", ["Sim, quero sobremesa", "Não, obrigado"]);
+          break;
+
+        case "dessert":
+          if (/sim|sobremesa/i.test(choice)) {
+            const items = catItems((nm) => /sobremesa|doce|gelado|sorvete|torta/i.test(n(nm)));
+            if (items.length > 0) setSuggestedProducts(items);
+          }
+          guidedStepRef.current = "done";
+          setGuidedMode(false);
+          setAiPermState("idle");
+          addMsg("Tudo pronto! 🎉 Quando quiser finalizar, clique em Finalizar pedido 😊");
+          break;
+
+        default:
+          break;
+      }
+    },
+    [categories],
+  );
+
   // ── Permission prompt handlers ────────────────────────────────────
 
   const handlePermissionAccept = useCallback(() => {
     setAiPermState("consultive");
-    // Trigger AI with ON_USER_MESSAGE so CARD_ALLOWED_EVENTS allows grid cards.
-    // silent: true keeps the user bubble hidden — the prompt IS the interaction.
-    sendText("me sugere algo que combina com o cardápio", cart, "BROWSE", activeUpsell, {
-      event: "ON_USER_MESSAGE",
-      silent: true,
-    });
-  }, [cart, activeUpsell, sendText]);
+    setGuidedMode(true);
+    guidedStepRef.current = "size";
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        role: "assistant" as const,
+        content: "Para quantas pessoas é o pedido? 😊",
+        ts: new Date(),
+        options: ["Só eu", "2 a 3 pessoas", "4 ou mais"],
+      },
+    ]);
+  }, []);
 
   const handlePermissionDecline = useCallback(() => {
     setAiPermState("silent");
@@ -1417,18 +1511,26 @@ export function PedidoClient({
     pushAssistantMessage("Perfeito 😊 fica à vontade — qualquer coisa é só me chamar.");
   }, [pushAssistantMessage]);
 
-  // ── Option button handler — tapping a quick-reply acts as a user message ──
+  // ── Option button handler ─────────────────────────────────────────
+  // MODE 1 (GUIDED): routes to handleGuidedStep — no AI, pure state machine.
+  // MODE 2 (FREE CHAT): existing sendText path.
   const handleOptionSelect = useCallback(
     (text: string) => {
       if (ui === "thinking") return;
 
-      // "Ver mais opções" → local action: clear suggestion grid, return to catalog
+      // Guided flow mode: all button taps advance the step sequence
+      if (guidedMode) {
+        handleGuidedStep(text);
+        return;
+      }
+
+      // "Ver outras opções" → local: clear grid, return to catalog
       if (text.startsWith("🔄")) {
         setSuggestedProducts([]);
         return;
       }
 
-      // "Adicionar item selecionado" → local action: add first suggestion to cart
+      // "Adicionar ao pedido" → local: add first shown product to cart
       if (text.startsWith("✅")) {
         const firstItem = suggestedProducts[0];
         if (firstItem) {
@@ -1438,14 +1540,12 @@ export function PedidoClient({
         return;
       }
 
-      // Category-intent options (e.g. "🥗 Algo leve") → lock context for this session,
-      // clear previous products so grid doesn't linger while AI loads, then expand to
-      // full category on response.
+      // Free-chat qualifier buttons (🥗 / 🍽️) — AI call with category expansion
       contextChosenRef.current = true;
       setSuggestedProducts([]);
       sendText(text, cart, stage, activeUpsell, { expandToCategory: true });
     },
-    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd],
+    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, guidedMode, handleGuidedStep],
   );
 
   // ── Checkout permission handlers ──────────────────────────────────
