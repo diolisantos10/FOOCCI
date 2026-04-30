@@ -1,9 +1,27 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { FailurePattern } from "@/services/ai/FailureAnalyzer";
 
-// ─── types ────────────────────────────────────────────────────
+// ─── types ────────────────────────────────────────────────────────────────────
+
+type SimulatorStatus = "IDLE" | "RUNNING" | "SCHEDULED" | "PAUSED" | "ERROR";
+
+interface StatusResponse {
+  status:    SimulatorStatus;
+  isRunning: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  progress:  { current: number; total: number; pct: number; scenarioName: string } | null;
+  lastError: string | null;
+}
+
+interface AutoConfig {
+  enabled:         boolean;
+  intervalMinutes: number;
+  scenarioCount:   number;
+  lastRunAt:       string | null;
+}
 
 interface SimRunRecord {
   id:                string;
@@ -19,20 +37,14 @@ interface SimRunRecord {
   analysis:          FailurePattern;
 }
 
-interface AutoConfig {
-  enabled:         boolean;
-  intervalMinutes: number;
-  scenarioCount:   number;
-  lastRunAt:       string | null;
-}
+// ─── constants ────────────────────────────────────────────────────────────────
 
-// ─── impact badge ─────────────────────────────────────────────
-
-const IMPACT_COLORS: Record<string, string> = {
-  high:   "bg-red-100 text-red-700",
-  medium: "bg-orange-100 text-orange-700",
-  low:    "bg-green-100 text-green-700",
-  none:   "bg-gray-100 text-gray-500",
+const STATUS_META: Record<SimulatorStatus, { label: string; dot: string; badge: string }> = {
+  IDLE:      { label: "Inativo",          dot: "bg-gray-400",  badge: "bg-gray-100 text-gray-600"   },
+  RUNNING:   { label: "Rodando agora",    dot: "bg-blue-500",  badge: "bg-blue-100 text-blue-700"   },
+  SCHEDULED: { label: "Agendado",         dot: "bg-green-500", badge: "bg-green-100 text-green-700" },
+  PAUSED:    { label: "Pausado",          dot: "bg-amber-400", badge: "bg-amber-100 text-amber-700" },
+  ERROR:     { label: "Erro na execução", dot: "bg-red-500",   badge: "bg-red-100 text-red-700"     },
 };
 
 const FAILURE_LABELS: Record<string, string> = {
@@ -48,9 +60,34 @@ const FAILURE_LABELS: Record<string, string> = {
   none:                 "Sem problemas detectados",
 };
 
+const IMPACT_COLORS: Record<string, string> = {
+  high:   "bg-red-100 text-red-700",
+  medium: "bg-orange-100 text-orange-700",
+  low:    "bg-green-100 text-green-700",
+  none:   "bg-gray-100 text-gray-500",
+};
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+// ─── sub-components ───────────────────────────────────────────────────────────
+
+function StatusDot({ status }: { status: SimulatorStatus }) {
+  const { dot } = STATUS_META[status];
+  return (
+    <span className="relative flex h-3 w-3 shrink-0">
+      {status === "RUNNING" && (
+        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dot} opacity-75`} />
+      )}
+      <span className={`relative inline-flex rounded-full h-3 w-3 ${dot}`} />
+    </span>
+  );
+}
+
 function ImpactBadge({ pattern }: { pattern: FailurePattern }) {
   const colorClass = IMPACT_COLORS[pattern.impact] ?? IMPACT_COLORS.none;
-  const label      = FAILURE_LABELS[pattern.type]  ?? pattern.type;
+  const label      = FAILURE_LABELS[pattern.type] ?? pattern.type;
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>
       {pattern.type !== "none" && <span>{pattern.frequency}</span>}
@@ -58,8 +95,6 @@ function ImpactBadge({ pattern }: { pattern: FailurePattern }) {
     </span>
   );
 }
-
-// ─── metric card ──────────────────────────────────────────────
 
 function MetricCard({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
@@ -70,19 +105,16 @@ function MetricCard({ label, value, warn }: { label: string; value: string; warn
   );
 }
 
-// ─── copy button ──────────────────────────────────────────────
-
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
   return (
     <button
-      onClick={copy}
+      onClick={() => {
+        void navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
       className="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
     >
       {copied ? "✓ Copiado!" : "Copiar sugestão"}
@@ -90,12 +122,8 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-// ─── history row ──────────────────────────────────────────────
-
-function HistoryRow({ run, onClick, isSelected }: {
-  run:        SimRunRecord;
-  onClick:    () => void;
-  isSelected: boolean;
+function HistoryRow({ run, isSelected, onClick }: {
+  run: SimRunRecord; isSelected: boolean; onClick: () => void;
 }) {
   const score = Math.round(run.overallScore * 100);
   const scoreColor = score >= 75 ? "text-green-600" : score >= 50 ? "text-orange-500" : "text-red-600";
@@ -108,7 +136,7 @@ function HistoryRow({ run, onClick, isSelected }: {
     >
       <div className="flex-1 min-w-0">
         <p className="text-xs text-gray-400">
-          {new Date(run.ranAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+          {fmtTime(run.ranAt)}
           {run.triggeredBy === "manual" && (
             <span className="ml-1.5 px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-[10px] font-medium">manual</span>
           )}
@@ -122,27 +150,24 @@ function HistoryRow({ run, onClick, isSelected }: {
   );
 }
 
-// ─── run detail panel ─────────────────────────────────────────
-
 function RunDetail({ run }: { run: SimRunRecord }) {
   const score = Math.round(run.overallScore * 100);
   const scoreColor = score >= 75 ? "text-green-600" : score >= 50 ? "text-orange-500" : "text-red-600";
-
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs text-gray-400">
-            {new Date(run.ranAt).toLocaleString("pt-BR")} · {run.scenarioCount} cenários
-          </p>
+          <p className="text-xs text-gray-400">{fmtTime(run.ranAt)} · {run.scenarioCount} cenários</p>
           <ImpactBadge pattern={run.analysis} />
         </div>
-        <p className={`text-3xl font-bold ${scoreColor}`}>{score}<span className="text-base font-normal text-gray-400">%</span></p>
+        <p className={`text-3xl font-bold ${scoreColor}`}>
+          {score}<span className="text-base font-normal text-gray-400">%</span>
+        </p>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <MetricCard label="Conversão"  value={`${Math.round(run.conversionRate * 100)}%`}  warn={run.conversionRate < 0.5} />
-        <MetricCard label="Com bebida" value={`${Math.round(run.attachRateDrink * 100)}%`}  warn={run.attachRateDrink < 0.4} />
+        <MetricCard label="Conversão"   value={`${Math.round(run.conversionRate * 100)}%`}    warn={run.conversionRate < 0.5} />
+        <MetricCard label="Com bebida"  value={`${Math.round(run.attachRateDrink * 100)}%`}   warn={run.attachRateDrink < 0.4} />
         <MetricCard label="Com sobrem." value={`${Math.round(run.attachRateDessert * 100)}%`} warn={run.attachRateDessert < 0.3} />
       </div>
 
@@ -173,54 +198,80 @@ function RunDetail({ run }: { run: SimRunRecord }) {
   );
 }
 
-// ─── main panel ───────────────────────────────────────────────
+// ─── main panel ───────────────────────────────────────────────────────────────
 
 export function AutoSimulatorPanel() {
-  const [config,       setConfig]       = useState<AutoConfig | null>(null);
-  const [history,      setHistory]      = useState<SimRunRecord[]>([]);
-  const [selectedRun,  setSelectedRun]  = useState<SimRunRecord | null>(null);
-  const [loadingCfg,   setLoadingCfg]   = useState(true);
-  const [loadingHist,  setLoadingHist]  = useState(true);
-  const [running,      setRunning]      = useState(false);
-  const [runErr,       setRunErr]       = useState("");
-  const [savingCfg,    setSavingCfg]    = useState(false);
+  const [status,      setStatus]      = useState<StatusResponse | null>(null);
+  const [config,      setConfig]      = useState<AutoConfig | null>(null);
+  const [history,     setHistory]     = useState<SimRunRecord[]>([]);
+  const [selectedRun, setSelectedRun] = useState<SimRunRecord | null>(null);
+  const [savingCfg,   setSavingCfg]   = useState(false);
+  const [actionErr,   setActionErr]   = useState("");
+  const [initialLoad, setInitialLoad] = useState(true);
 
-  const fetchConfig = useCallback(async () => {
-    try {
-      const res = await fetch("/api/auto-simulator/config");
-      if (!res.ok) return;
-      const json = await res.json() as { success: boolean; data: AutoConfig };
-      if (json.success) setConfig(json.data);
-    } finally {
-      setLoadingCfg(false);
-    }
+  const wasRunningRef = useRef(false);
+
+  // ── Data fetchers ──────────────────────────────────────────────────────────
+
+  const refreshHistory = useCallback(async () => {
+    const res  = await fetch("/api/auto-simulator/history");
+    const json = await res.json() as { success: boolean; data: SimRunRecord[] };
+    if (!json.success) return;
+    setHistory(json.data);
+    setSelectedRun((prev) => {
+      if (prev) return prev; // keep selection
+      return json.data[0] ?? null;
+    });
   }, []);
 
-  const fetchHistory = useCallback(async () => {
-    setLoadingHist(true);
-    try {
-      const res = await fetch("/api/auto-simulator/history");
-      if (!res.ok) return;
-      const json = await res.json() as { success: boolean; data: SimRunRecord[] };
-      if (json.success) {
-        setHistory(json.data);
-        if (!selectedRun && json.data.length > 0) setSelectedRun(json.data[0]!);
-      }
-    } finally {
-      setLoadingHist(false);
-    }
-  }, [selectedRun]);
+  const refreshConfig = useCallback(async () => {
+    const res  = await fetch("/api/auto-simulator/config");
+    const json = await res.json() as { success: boolean; data: AutoConfig };
+    if (json.success) setConfig(json.data);
+  }, []);
+
+  // ── Status poll (every 5 s) ────────────────────────────────────────────────
 
   useEffect(() => {
-    void fetchConfig();
-    void fetchHistory();
+    let alive = true;
+
+    const poll = async () => {
+      try {
+        const res  = await fetch("/api/auto-simulator/status");
+        if (!res.ok || !alive) return;
+        const json = await res.json() as { success: boolean; data: StatusResponse };
+        if (!json.success || !alive) return;
+
+        setStatus(json.data);
+
+        const nowRunning = json.data.isRunning;
+        if (wasRunningRef.current && !nowRunning) {
+          // Run just finished — refresh config (lastRunAt) and history (new record)
+          void refreshConfig();
+          void refreshHistory();
+        }
+        wasRunningRef.current = nowRunning;
+      } catch { /* ignore network errors */ }
+    };
+
+    // Initial data load
+    const boot = async () => {
+      await Promise.all([poll(), refreshConfig(), refreshHistory()]);
+      if (alive) setInitialLoad(false);
+    };
+    void boot();
+
+    const id = setInterval(() => void poll(), 5_000);
+    return () => { alive = false; clearInterval(id); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Config patch ───────────────────────────────────────────────────────────
 
   const patchConfig = useCallback(async (patch: Partial<AutoConfig>) => {
     setSavingCfg(true);
     try {
-      const res = await fetch("/api/auto-simulator/config", {
+      const res  = await fetch("/api/auto-simulator/config", {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(patch),
@@ -232,79 +283,44 @@ export function AutoSimulatorPanel() {
     }
   }, []);
 
-  // Poll status every 3 s while a run is in progress; refresh data on completion.
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(async () => {
-      try {
-        const res = await fetch("/api/auto-simulator/status");
-        if (!res.ok) return;
-        const json = await res.json() as { success: boolean; data: { isRunning: boolean } };
-        if (!json.success || json.data.isRunning) return;
-        setRunning(false);
-        const [cfgRes, histRes] = await Promise.all([
-          fetch("/api/auto-simulator/config"),
-          fetch("/api/auto-simulator/history"),
-        ]);
-        const cfgJson  = await cfgRes.json()  as { success: boolean; data: AutoConfig };
-        const histJson = await histRes.json() as { success: boolean; data: SimRunRecord[] };
-        if (cfgJson.success)  setConfig(cfgJson.data);
-        if (histJson.success) {
-          setHistory(histJson.data);
-          if (histJson.data.length > 0) setSelectedRun(histJson.data[0]!);
-        }
-      } catch { /* ignore */ }
-    }, 3_000);
-    return () => clearInterval(id);
-  }, [running]);
+  // ── Action handlers ────────────────────────────────────────────────────────
 
-  // Refresh history + config every 30 s to surface runs triggered by the scheduler.
-  useEffect(() => {
-    const id = setInterval(async () => {
-      if (running) return;
-      try {
-        const [cfgRes, histRes] = await Promise.all([
-          fetch("/api/auto-simulator/config"),
-          fetch("/api/auto-simulator/history"),
-        ]);
-        const cfgJson  = await cfgRes.json()  as { success: boolean; data: AutoConfig };
-        const histJson = await histRes.json() as { success: boolean; data: SimRunRecord[] };
-        if (cfgJson.success) setConfig(cfgJson.data);
-        if (histJson.success) {
-          setHistory((prev) => {
-            if (prev[0]?.id === histJson.data[0]?.id) return prev;
-            return histJson.data;
-          });
-          setSelectedRun((prev) => prev ?? (histJson.data[0] ?? null));
-        }
-      } catch { /* ignore */ }
-    }, 30_000);
-    return () => clearInterval(id);
-  }, [running]);
+  const doAction = useCallback(async (endpoint: string) => {
+    setActionErr("");
+    try {
+      const res = await fetch(endpoint, { method: "POST" });
+      if (!res.ok) { setActionErr(`Erro HTTP ${res.status}`); return; }
+      await refreshConfig();
+    } catch (err) {
+      setActionErr(String(err));
+    }
+  }, [refreshConfig]);
 
   const runNow = useCallback(async () => {
-    if (running) return;
-    setRunning(true);
-    setRunErr("");
-    try {
-      const res  = await fetch("/api/auto-simulator/run", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ scenarioCount: config?.scenarioCount ?? 10 }),
-      });
-      const json = await res.json() as { success: boolean; data: { queued: boolean; reason?: string } };
-      if (!json.success || !json.data.queued) {
-        setRunning(false);
-        setRunErr(json.data?.reason === "already_running" ? "Simulação já em andamento" : `Erro HTTP ${res.status}`);
-      }
-      // If queued, running=true stays — polling effect above detects completion
-    } catch (err) {
-      setRunning(false);
-      setRunErr(String(err));
+    setActionErr("");
+    const res  = await fetch("/api/auto-simulator/run", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ scenarioCount: config?.scenarioCount ?? 10 }),
+    });
+    const json = await res.json() as { success: boolean; data: { queued: boolean; reason?: string } };
+    if (!json.success || !json.data.queued) {
+      setActionErr(
+        json.data?.reason === "already_running"
+          ? "Simulação já em andamento"
+          : `Erro HTTP ${res.status}`,
+      );
     }
-  }, [config, running]);
+    // polling effect detects start automatically via next /status tick
+  }, [config]);
 
-  if (loadingCfg) {
+  // ── Derived state ──────────────────────────────────────────────────────────
+
+  const simStatus  = status?.status ?? "IDLE";
+  const isRunning  = status?.isRunning ?? false;
+  const meta       = STATUS_META[simStatus];
+
+  if (initialLoad) {
     return (
       <div className="flex items-center justify-center py-16 text-gray-400 text-sm">
         <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mr-2" />
@@ -314,35 +330,66 @@ export function AutoSimulatorPanel() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* ── Config bar ─────────────────────────────────────────── */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap items-center gap-4">
-        {/* Enable toggle */}
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <button
-            role="switch"
-            aria-checked={config?.enabled ?? false}
-            disabled={savingCfg}
-            onClick={() => void patchConfig({ enabled: !(config?.enabled ?? false) })}
-            className={`relative inline-flex w-10 h-5.5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
-              ${config?.enabled ? "bg-blue-600" : "bg-gray-300"} disabled:opacity-50`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 self-center mx-0.5
-                ${config?.enabled ? "translate-x-5" : "translate-x-0"}`}
-            />
-          </button>
-          <span className="text-sm font-medium text-gray-700">
-            {config?.enabled ? "Agendamento ativo" : "Agendamento inativo"}
-          </span>
-        </label>
+    <div className="space-y-4">
 
+      {/* ── Status header ───────────────────────────────────────────────────── */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
+        {/* Status row */}
+        <div className="flex items-center gap-2">
+          <StatusDot status={simStatus} />
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${meta.badge}`}>
+            {meta.label}
+          </span>
+          {isRunning && (
+            <span className="text-xs text-gray-400 ml-1">
+              — cenário {status?.progress?.current ?? "…"} de {status?.progress?.total ?? "…"}
+            </span>
+          )}
+        </div>
+
+        {/* Progress bar */}
+        {isRunning && status?.progress && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-gray-500">
+              <span className="truncate max-w-xs">{status.progress.scenarioName || "Preparando…"}</span>
+              <span className="shrink-0 ml-2">{status.progress.pct}%</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                style={{ width: `${status.progress.pct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Time info */}
+        <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+          {status?.lastRunAt && (
+            <span>Última execução: <strong className="text-gray-700">{fmtTime(status.lastRunAt)}</strong></span>
+          )}
+          {status?.nextRunAt && simStatus === "SCHEDULED" && (
+            <span>Próxima execução: <strong className="text-gray-700">{fmtTime(status.nextRunAt)}</strong></span>
+          )}
+          {!status?.lastRunAt && <span className="text-gray-400">Nenhuma execução registrada</span>}
+        </div>
+
+        {/* Error */}
+        {simStatus === "ERROR" && status?.lastError && (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 font-mono">
+            {status.lastError}
+          </div>
+        )}
+      </div>
+
+      {/* ── Controls ────────────────────────────────────────────────────────── */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap items-center gap-3">
         {/* Interval */}
         <label className="flex items-center gap-2 text-sm text-gray-600">
           A cada
           <select
             value={config?.intervalMinutes ?? 60}
-            disabled={savingCfg || !(config?.enabled)}
+            disabled={savingCfg || isRunning}
             onChange={(e) => void patchConfig({ intervalMinutes: Number(e.target.value) })}
             className="px-2 py-1 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
           >
@@ -357,7 +404,7 @@ export function AutoSimulatorPanel() {
           Cenários:
           <select
             value={config?.scenarioCount ?? 10}
-            disabled={savingCfg}
+            disabled={savingCfg || isRunning}
             onChange={(e) => void patchConfig({ scenarioCount: Number(e.target.value) })}
             className="px-2 py-1 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
           >
@@ -367,52 +414,79 @@ export function AutoSimulatorPanel() {
           </select>
         </label>
 
-        {config?.lastRunAt && (
-          <p className="text-xs text-gray-400 ml-auto">
-            Última execução: {new Date(config.lastRunAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
-          </p>
-        )}
+        {/* Action buttons */}
+        <div className="flex items-center gap-2 ml-auto">
+          {/* Run now — disabled while running */}
+          <button
+            onClick={() => void runNow()}
+            disabled={isRunning}
+            title="Executar simulação agora"
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700
+                       disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+          >
+            ▶ Rodar agora
+          </button>
 
-        {/* Run now */}
-        <button
-          onClick={runNow}
-          disabled={running}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700
-                     disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 ml-auto"
-        >
-          {running ? (
-            <><span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Executando...</>
-          ) : "▶ Rodar agora"}
-        </button>
+          {/* Pause — only when SCHEDULED */}
+          {simStatus === "SCHEDULED" && (
+            <button
+              onClick={() => void doAction("/api/auto-simulator/pause")}
+              title="Pausar agendamento automático"
+              className="px-3 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              ⏸ Pausar
+            </button>
+          )}
+
+          {/* Resume — when PAUSED or ERROR */}
+          {(simStatus === "PAUSED" || simStatus === "ERROR" || simStatus === "IDLE") && (
+            <button
+              onClick={() => void doAction("/api/auto-simulator/resume")}
+              title="Ativar agendamento automático"
+              className="px-3 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              🔄 Ativar autopilot
+            </button>
+          )}
+
+          {/* Stop — only when RUNNING */}
+          {isRunning && (
+            <button
+              onClick={() => void doAction("/api/auto-simulator/stop")}
+              title="Encerrar execução atual após o cenário em curso"
+              className="px-3 py-2 border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors"
+            >
+              🛑 Parar
+            </button>
+          )}
+        </div>
       </div>
 
-      {runErr && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{runErr}</p>
+      {actionErr && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{actionErr}</p>
       )}
 
-      {/* ── Safety note ─────────────────────────────────────────── */}
+      {/* ── Safety note ─────────────────────────────────────────────────────── */}
       <div className="flex gap-2 items-start bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
         <span className="text-blue-500 text-base shrink-0">ℹ</span>
         <p className="text-xs text-blue-700 leading-relaxed">
           <strong>Modo seguro:</strong> O auto-simulador apenas analisa o comportamento da IA e gera sugestões.
-          Nenhuma alteração é aplicada automaticamente — copie o prompt sugerido e cole manualmente nas configurações de IA.
+          Nenhuma alteração é aplicada automaticamente — copie o prompt sugerido e cole manualmente.
         </p>
       </div>
 
-      {/* ── Main content ──────────────────────────────────────────── */}
-      {loadingHist ? (
-        <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
-          <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mr-2" />
-          Carregando histórico...
-        </div>
-      ) : history.length === 0 ? (
+      {/* ── History + detail ─────────────────────────────────────────────────── */}
+      {history.length === 0 ? (
         <div className="text-center py-16 space-y-2">
           <p className="text-gray-500 text-sm font-medium">Nenhuma execução ainda</p>
-          <p className="text-gray-400 text-xs">Clique em &quot;Rodar agora&quot; para iniciar a primeira simulação automática.</p>
+          <p className="text-gray-400 text-xs">
+            Clique em &quot;Rodar agora&quot; para iniciar a primeira simulação,
+            ou ative o autopilot para execuções automáticas.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-[220px_1fr] gap-4 min-h-[400px]">
-          {/* ── History sidebar ───────────────────────────────────── */}
+          {/* History sidebar */}
           <div className="bg-white border border-gray-200 rounded-xl p-2 overflow-y-auto max-h-[600px] space-y-0.5">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 py-1.5">Histórico</p>
             {history.map((run) => (
@@ -425,7 +499,7 @@ export function AutoSimulatorPanel() {
             ))}
           </div>
 
-          {/* ── Run detail ───────────────────────────────────────── */}
+          {/* Run detail */}
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             {selectedRun ? (
               <RunDetail run={selectedRun} />

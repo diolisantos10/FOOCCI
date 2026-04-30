@@ -2,11 +2,17 @@
  * AutoSimulatorService
  *
  * Orchestrates automated simulation runs:
- *   1. Calls AISimulatorService.run (no streaming needed)
+ *   1. Calls AISimulatorService.run (with live progress tracking)
  *   2. Analyzes the report via FailureAnalyzer
  *   3. Generates insight + prompt suggestion via InsightGenerator
  *   4. Persists the result in SimulationRun table
  *   5. Updates AutoSimulatorConfig.lastRunAt
+ *
+ * In-memory singletons (process lifetime):
+ *   activeLocks   — prevents concurrent runs per restaurant
+ *   runProgress   — live current/total for the status endpoint
+ *   stopRequested — signals runWithLock to abort after the next scenario
+ *   lastErrors    — stores the last failure message per restaurant
  *
  * Also provides CRUD helpers for config and history.
  */
@@ -17,19 +23,49 @@ import { analyzeReport } from "./FailureAnalyzer";
 import { generateInsight } from "./InsightGenerator";
 
 export type TriggerSource = "scheduler" | "manual";
+export type SimulatorStatus = "IDLE" | "RUNNING" | "SCHEDULED" | "PAUSED" | "ERROR";
+
+interface RunProgress {
+  current:      number;
+  total:        number;
+  scenarioName: string;
+  startedAt:    Date;
+  triggeredBy:  TriggerSource;
+}
 
 export class AutoSimulatorService {
-  // Shared in-memory lock — prevents concurrent runs for the same restaurant
-  // from any source (scheduler OR manual API call).
-  private static readonly activeLocks = new Set<string>();
+  private static readonly activeLocks   = new Set<string>();
+  private static readonly stopRequested = new Set<string>();
+  private static readonly runProgress   = new Map<string, RunProgress>();
+  private static readonly lastErrors    = new Map<string, string>();
+
+  // ─── Lock / progress accessors ───────────────────────────────────────────
 
   static isRunning(restaurantId: string): boolean {
     return this.activeLocks.has(restaurantId);
   }
 
+  static getProgress(restaurantId: string): RunProgress | null {
+    return this.runProgress.get(restaurantId) ?? null;
+  }
+
+  static requestStop(restaurantId: string): void {
+    this.stopRequested.add(restaurantId);
+  }
+
+  static getLastError(restaurantId: string): string | null {
+    return this.lastErrors.get(restaurantId) ?? null;
+  }
+
+  static clearLastError(restaurantId: string): void {
+    this.lastErrors.delete(restaurantId);
+  }
+
+  // ─── Enqueue (fire-and-forget) ────────────────────────────────────────────
+
   /**
-   * Fire-and-forget: starts a run in the background without blocking the caller.
-   * Returns false (and does nothing) if the restaurant already has a run in progress.
+   * Starts a run in the background without blocking the caller.
+   * Returns false if the restaurant already has a run in progress.
    */
   static enqueue(
     restaurantId: string,
@@ -41,22 +77,55 @@ export class AutoSimulatorService {
     return true;
   }
 
+  // ─── Internal execution ───────────────────────────────────────────────────
+
   private static async runWithLock(
     restaurantId: string,
     scenarioCount: number,
     triggeredBy: TriggerSource,
   ): Promise<void> {
+    const startedAt = new Date();
     this.activeLocks.add(restaurantId);
+    this.stopRequested.delete(restaurantId);
+    this.lastErrors.delete(restaurantId);
+    this.runProgress.set(restaurantId, {
+      current: 0, total: scenarioCount, scenarioName: "", startedAt, triggeredBy,
+    });
+
     console.log(`[AutoSimulatorService] Run started — restaurant=${restaurantId} source=${triggeredBy}`);
+
     try {
-      await this.executeRun(restaurantId, scenarioCount, triggeredBy);
+      await this.executeRun(restaurantId, scenarioCount, triggeredBy, (p) => {
+        // Abort signal: throw to interrupt AISimulatorService's scenario loop
+        if (this.stopRequested.has(restaurantId)) {
+          throw new Error("stopped by user request");
+        }
+        this.runProgress.set(restaurantId, {
+          current:      p.current,
+          total:        p.total,
+          scenarioName: p.scenarioName ?? "",
+          startedAt,
+          triggeredBy,
+        });
+      });
+
       console.log(`[AutoSimulatorService] Run complete — restaurant=${restaurantId}`);
     } catch (err) {
-      console.error(`[AutoSimulatorService] Run failed — restaurant=${restaurantId}:`, err);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "stopped by user request") {
+        console.log(`[AutoSimulatorService] Run stopped — restaurant=${restaurantId}`);
+      } else {
+        this.lastErrors.set(restaurantId, msg);
+        console.error(`[AutoSimulatorService] Run failed — restaurant=${restaurantId}:`, err);
+      }
     } finally {
+      this.runProgress.delete(restaurantId);
       this.activeLocks.delete(restaurantId);
+      this.stopRequested.delete(restaurantId);
     }
   }
+
+  // ─── Core run logic ───────────────────────────────────────────────────────
 
   /**
    * Run a simulation, analyze results, store the run record, and return it.
@@ -66,12 +135,12 @@ export class AutoSimulatorService {
     restaurantId: string,
     scenarioCount = 10,
     triggeredBy: TriggerSource = "scheduler",
+    onProgress?: (p: { current: number; total: number; scenarioName: string }) => void,
   ) {
-    // Run simulation — noop callbacks (no streaming needed for background runs)
     const report = await AISimulatorService.run(
       restaurantId,
       scenarioCount,
-      () => {},
+      (p) => onProgress?.(p),
       () => {},
     );
 
@@ -103,14 +172,14 @@ export class AutoSimulatorService {
         attachRateDrink:   report.salesDiagnosis?.withDrink ?? 0,
         attachRateDessert: report.salesDiagnosis?.withDessert ?? 0,
         errorSummary,
-        analysis:   JSON.parse(JSON.stringify(pattern)) as any,
+        analysis:   JSON.parse(JSON.stringify(pattern)) as Record<string, unknown>,
         insight,
         suggestedPrompt,
         triggeredBy,
       },
     });
 
-    // Update lastRunAt (upsert in case config doesn't exist yet)
+    // Update lastRunAt
     await prisma.autoSimulatorConfig.upsert({
       where:  { restaurantId },
       create: { restaurantId, lastRunAt: new Date() },
@@ -120,20 +189,7 @@ export class AutoSimulatorService {
     return run;
   }
 
-  static async getHistory(restaurantId: string, limit = 20) {
-    return prisma.simulationRun.findMany({
-      where:   { restaurantId },
-      orderBy: { ranAt: "desc" },
-      take:    limit,
-    });
-  }
-
-  static async getLatestRun(restaurantId: string) {
-    return prisma.simulationRun.findFirst({
-      where:   { restaurantId },
-      orderBy: { ranAt: "desc" },
-    });
-  }
+  // ─── Config helpers ───────────────────────────────────────────────────────
 
   static async getConfig(restaurantId: string) {
     const config = await prisma.autoSimulatorConfig.findUnique({
@@ -158,6 +214,35 @@ export class AutoSimulatorService {
       where:  { restaurantId },
       create: { restaurantId, ...data },
       update: data,
+    });
+  }
+
+  /** Derives enum status from live state + persisted config. */
+  static deriveStatus(
+    restaurantId: string,
+    config: { enabled: boolean; lastRunAt: Date | null },
+  ): SimulatorStatus {
+    if (this.activeLocks.has(restaurantId)) return "RUNNING";
+    if (this.lastErrors.has(restaurantId))  return "ERROR";
+    if (config.enabled)                      return "SCHEDULED";
+    if (config.lastRunAt)                    return "PAUSED";
+    return "IDLE";
+  }
+
+  // ─── History helpers ──────────────────────────────────────────────────────
+
+  static async getHistory(restaurantId: string, limit = 20) {
+    return prisma.simulationRun.findMany({
+      where:   { restaurantId },
+      orderBy: { ranAt: "desc" },
+      take:    limit,
+    });
+  }
+
+  static async getLatestRun(restaurantId: string) {
+    return prisma.simulationRun.findFirst({
+      where:   { restaurantId },
+      orderBy: { ranAt: "desc" },
     });
   }
 }
