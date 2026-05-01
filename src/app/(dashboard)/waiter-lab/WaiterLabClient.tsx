@@ -71,7 +71,6 @@ function buildAssertions(
   const catIds = new Set(catalog.map((i) => i.id));
   const out: Assertion[] = [];
 
-  // 1 — contract shape
   out.push({
     label: "Contrato normalizado (reply, cards, mode, options presentes)",
     pass:
@@ -81,57 +80,50 @@ function buildAssertions(
       Array.isArray(res.options),
   });
 
-  // 2 — mode valid
   out.push({
-    label: "mode é valor válido (BROWSE | SUGGESTION | INTERVENTION | CHECKOUT_SUPPORT)",
-    pass:  VALID_MODES.includes(res.mode as WaiterMode),
+    label:  "mode é valor válido (BROWSE | SUGGESTION | INTERVENTION | CHECKOUT_SUPPORT)",
+    pass:   VALID_MODES.includes(res.mode as WaiterMode),
     detail: res.mode,
   });
 
-  // 3 — message ≤ 2 lines (Rule 3)
   const nonEmptyLines = res.reply.split("\n").filter((l) => l.trim()).length;
   out.push({
-    label: "message ≤ 2 linhas não-vazias (Rule 3)",
-    pass:  nonEmptyLines <= 2,
+    label:  "message ≤ 2 linhas não-vazias (Rule 3)",
+    pass:   nonEmptyLines <= 2,
     detail: nonEmptyLines > 2 ? `${nonEmptyLines} linhas detectadas` : undefined,
   });
 
-  // 4 — no options[] alongside cards[] (Rule 9)
-  const noMixedCardsOptions = !(res.cards.length > 0 && res.options.length > 0);
+  const noMix = !(res.cards.length > 0 && res.options.length > 0);
   out.push({
-    label: "Sem options[] quando cards[] existe (Rule 9)",
-    pass:  noMixedCardsOptions,
-    detail: !noMixedCardsOptions
-      ? `cards=${res.cards.length}, options=${res.options.length}`
-      : undefined,
+    label:  "Sem options[] quando cards[] existe (Rule 9)",
+    pass:   noMix,
+    detail: !noMix ? `cards=${res.cards.length}, options=${res.options.length}` : undefined,
   });
 
-  // 5 — cards contain only catalog IDs (Rule 2)
   if (catalog.length > 0) {
-    const ghostIds = res.cards.filter((id) => !catIds.has(id));
+    const ghosts = res.cards.filter((id) => !catIds.has(id));
     out.push({
-      label: "cards[] contêm apenas IDs do catálogo atual (Rule 2)",
-      pass:  ghostIds.length === 0,
-      detail: ghostIds.length > 0 ? `IDs fantasma: ${ghostIds.join(", ")}` : undefined,
+      label:  "cards[] contêm apenas IDs do catálogo atual (Rule 2)",
+      pass:   ghosts.length === 0,
+      detail: ghosts.length > 0 ? `IDs fantasma: ${ghosts.join(", ")}` : undefined,
     });
   }
 
-  // 6 — ON_ITEM_ADDED forces cards=[], options=[] (Rule 7)
   if (event === "ON_ITEM_ADDED") {
     out.push({
-      label: "ON_ITEM_ADDED → cards=[] e options=[] (Rule 7)",
-      pass:  res.cards.length === 0 && res.options.length === 0,
-      detail: res.cards.length > 0 || res.options.length > 0
-        ? `cards=${res.cards.length}, options=${res.options.length}`
-        : undefined,
+      label:  "ON_ITEM_ADDED → cards=[] e options=[] (Rule 7)",
+      pass:   res.cards.length === 0 && res.options.length === 0,
+      detail:
+        res.cards.length > 0 || res.options.length > 0
+          ? `cards=${res.cards.length}, options=${res.options.length}`
+          : undefined,
     });
   }
 
-  // 7 — CHECKOUT_SUPPORT forces cards=[] (Rule 8)
   if (res.mode === "CHECKOUT_SUPPORT") {
     out.push({
-      label: "CHECKOUT_SUPPORT → cards=[] (Rule 8)",
-      pass:  res.cards.length === 0,
+      label:  "CHECKOUT_SUPPORT → cards=[] (Rule 8)",
+      pass:   res.cards.length === 0,
       detail: res.cards.length > 0 ? `cards=${res.cards.length}` : undefined,
     });
   }
@@ -139,48 +131,91 @@ function buildAssertions(
   return out;
 }
 
-// ── Quick-test button definitions ─────────────────────────────────────────────
+// ── Quick-test buttons ────────────────────────────────────────────────────────
 
 type QuickTest = {
-  label:     string;
-  event:     V2Event;
-  message:   string;
-  useFirstId?: boolean; // pass catalog[0].id as lastAddedId
+  label:      string;
+  event:      V2Event;
+  message:    string;
+  useFirstId?: boolean;
 };
 
 const QUICK_TESTS: QuickTest[] = [
-  { label: "Entry",                event: "ON_ENTRY",              message: ""                      },
-  { label: "Idle / Permission",    event: "ON_IDLE",               message: ""                      },
-  { label: "Permission Accepted",  event: "ON_PERMISSION_ACCEPT",  message: ""                      },
-  { label: "Permission Declined",  event: "ON_PERMISSION_DECLINED", message: ""                     },
-  { label: "Quero sugestão",       event: "ON_USER_MESSAGE",       message: "quero uma sugestão"    },
-  { label: "Leve",                 event: "ON_USER_MESSAGE",       message: "quero algo leve"       },
-  { label: "Completo",             event: "ON_USER_MESSAGE",       message: "quero algo completo"   },
-  { label: "Quero sobremesa",      event: "ON_USER_MESSAGE",       message: "quero uma sobremesa"   },
-  { label: "Quero bebida",         event: "ON_USER_MESSAGE",       message: "quero uma bebida"      },
-  { label: "Add first product",    event: "ON_ITEM_ADDED",         message: "", useFirstId: true     },
-  { label: "Checkout start",       event: "ON_CHECKOUT_STARTED",   message: ""                      },
-  { label: "After checkout",       event: "AFTER_CHECKOUT",        message: ""                      },
+  { label: "Entry",               event: "ON_ENTRY",              message: ""                     },
+  { label: "Idle / Permission",   event: "ON_IDLE",               message: ""                     },
+  { label: "Permission Accepted", event: "ON_PERMISSION_ACCEPT",  message: ""                     },
+  { label: "Permission Declined", event: "ON_PERMISSION_DECLINED", message: ""                    },
+  { label: "Quero sugestão",      event: "ON_USER_MESSAGE",       message: "quero uma sugestão"   },
+  { label: "Leve",                event: "ON_USER_MESSAGE",       message: "quero algo leve"      },
+  { label: "Completo",            event: "ON_USER_MESSAGE",       message: "quero algo completo"  },
+  { label: "Quero sobremesa",     event: "ON_USER_MESSAGE",       message: "quero uma sobremesa"  },
+  { label: "Quero bebida",        event: "ON_USER_MESSAGE",       message: "quero uma bebida"     },
+  { label: "Add first product",   event: "ON_ITEM_ADDED",         message: "", useFirstId: true    },
+  { label: "Checkout start",      event: "ON_CHECKOUT_STARTED",   message: ""                     },
+  { label: "After checkout",      event: "AFTER_CHECKOUT",        message: ""                     },
 ];
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+interface Props {
+  defaultSlug:    string | null;
+  restaurantName: string | null;
+  hasMenu:        boolean;
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }) {
-  const [slug,           setSlug]          = useState(defaultSlug);
-  const [activeSlug,     setActiveSlug]    = useState(defaultSlug);
-  const [iframeKey,      setIframeKey]     = useState(0);
-  const [catalog,        setCatalog]       = useState<CatalogItem[]>([]);
-  const [catalogError,   setCatalogError]  = useState<string | null>(null);
-  const [history,        setHistory]       = useState<HistoryEntry[]>([]);
-  const [labCart,        setLabCart]       = useState<LabCartItem[]>([]);
-  const [lastEvent,      setLastEvent]     = useState<V2Event | null>(null);
-  const [lastResponse,   setLastResponse]  = useState<LabResponse | null>(null);
-  const [typedMessage,   setTypedMessage]  = useState("");
-  const [isLoading,      setIsLoading]     = useState(false);
-  const [assertions,     setAssertions]    = useState<Assertion[]>([]);
-  const [showRaw,        setShowRaw]       = useState(false);
+export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }: Props) {
+  const [slug,          setSlug]         = useState(defaultSlug ?? "");
+  const [activeSlug,    setActiveSlug]   = useState(defaultSlug ?? "");
+  const [iframeKey,     setIframeKey]    = useState(0);
+  const [catalog,       setCatalog]      = useState<CatalogItem[]>([]);
+  const [catalogError,  setCatalogError] = useState<string | null>(null);
+  const [history,       setHistory]      = useState<HistoryEntry[]>([]);
+  const [labCart,       setLabCart]      = useState<LabCartItem[]>([]);
+  const [lastEvent,     setLastEvent]    = useState<V2Event | null>(null);
+  const [lastResponse,  setLastResponse] = useState<LabResponse | null>(null);
+  const [typedMessage,  setTypedMessage] = useState("");
+  const [isLoading,     setIsLoading]    = useState(false);
+  const [assertions,    setAssertions]   = useState<Assertion[]>([]);
+  const [showRaw,       setShowRaw]      = useState(false);
 
-  // Load catalog from GET /api/pedido/[slug]
+  // ── No restaurant / no menu guard ─────────────────────────────────────────
+
+  if (!defaultSlug) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+        <span className="text-4xl">🍽️</span>
+        <p className="text-lg font-semibold text-gray-700">
+          Nenhum restaurante encontrado
+        </p>
+        <p className="max-w-xs text-sm text-gray-400">
+          Faça login com uma conta que tenha um restaurante cadastrado para usar o Waiter Lab.
+        </p>
+      </div>
+    );
+  }
+
+  if (!hasMenu) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+        <span className="text-4xl">🍽️</span>
+        <p className="text-lg font-semibold text-gray-700">
+          Nenhum restaurante com cardápio encontrado para testar.
+        </p>
+        <p className="max-w-xs text-sm text-gray-400">
+          Adicione itens ao cardápio em{" "}
+          <a href="/menu" className="text-amber-600 underline hover:text-amber-500">
+            Cardápio
+          </a>{" "}
+          e volte aqui para testar o Waiter.
+        </p>
+      </div>
+    );
+  }
+
+  // ── Catalog loading ───────────────────────────────────────────────────────
+
   const loadCatalog = useCallback(async (targetSlug: string) => {
     setCatalogError(null);
     setCatalog([]);
@@ -200,10 +235,11 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
     }
   }, []);
 
-  // Load on mount
-  useEffect(() => { void loadCatalog(defaultSlug); }, [defaultSlug, loadCatalog]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadCatalog(defaultSlug); }, []);
 
-  // Fire a Waiter event against the real API
+  // ── Fire event ────────────────────────────────────────────────────────────
+
   const fireEvent = useCallback(
     async (event: V2Event, message = "", lastAddedId?: string) => {
       setIsLoading(true);
@@ -213,11 +249,7 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
           id: i.id, name: i.name, price: i.price, qty: i.qty,
         }));
         const body: Record<string, unknown> = {
-          event,
-          message,
-          history,
-          cart:  cartPayload,
-          stage: "BROWSE",
+          event, message, history, cart: cartPayload, stage: "BROWSE",
         };
         if (lastAddedId) body.lastAddedId = lastAddedId;
 
@@ -235,10 +267,8 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
         }
 
         const data = (await res.json()) as LabResponse;
-        // Update conversation history
-        if (message) setHistory((h) => [...h, { role: "user", content: message }]);
+        if (message) setHistory((h) => [...h, { role: "user",      content: message   }]);
         if (data.reply) setHistory((h) => [...h, { role: "assistant", content: data.reply }]);
-
         setLastResponse(data);
         setAssertions(buildAssertions(event, data, catalog));
       } catch (err) {
@@ -250,27 +280,31 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
     [activeSlug, history, labCart, catalog],
   );
 
-  // Handle slug load
-  const handleLoad = async () => {
-    const trimmed = slug.trim();
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  const handleLoad = async (targetSlug: string) => {
+    const trimmed = targetSlug.trim();
     if (!trimmed) return;
+    setSlug(trimmed);
     setActiveSlug(trimmed);
     await loadCatalog(trimmed);
-    resetSession(false); // reset state without changing iframeKey yet
-    setIframeKey((k) => k + 1);
-  };
-
-  // Reset lab session state
-  const resetSession = (reloadIframe = true) => {
     setHistory([]);
     setLabCart([]);
     setLastEvent(null);
     setLastResponse(null);
     setAssertions([]);
-    if (reloadIframe) setIframeKey((k) => k + 1);
+    setIframeKey((k) => k + 1);
   };
 
-  // Add a catalog item to the lab cart
+  const resetSession = () => {
+    setHistory([]);
+    setLabCart([]);
+    setLastEvent(null);
+    setLastResponse(null);
+    setAssertions([]);
+    setIframeKey((k) => k + 1);
+  };
+
   const addToLabCart = (item: CatalogItem) => {
     setLabCart((c) => {
       const existing = c.find((i) => i.id === item.id);
@@ -279,55 +313,67 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
     });
   };
 
-  const cartTotal = labCart.reduce((s, i) => s + i.price * i.qty, 0);
-  const passCount = assertions.filter((a) => a.pass === true).length;
-  const failCount = assertions.filter((a) => a.pass === false).length;
+  const cartTotal  = labCart.reduce((s, i) => s + i.price * i.qty, 0);
+  const passCount  = assertions.filter((a) => a.pass === true).length;
+  const failCount  = assertions.filter((a) => a.pass === false).length;
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-gray-950 text-gray-100 font-mono text-xs">
 
-      {/* ── Header ── */}
-      <header className="flex shrink-0 items-center gap-2 border-b border-gray-800 px-3 py-2">
+      {/* Header */}
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gray-800 px-3 py-2">
         <span className="rounded bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-950">
           Waiter Lab
         </span>
 
+        {/* Auto-load button — loads the owner's own restaurant */}
+        {defaultSlug && (
+          <button
+            onClick={() => void handleLoad(defaultSlug)}
+            className="rounded bg-gray-700 px-2 py-1 text-[10px] text-gray-200 hover:bg-gray-600 active:bg-gray-800"
+          >
+            ↺ Carregar restaurante atual
+            {restaurantName && (
+              <span className="ml-1 text-amber-400">({restaurantName})</span>
+            )}
+          </button>
+        )}
+
+        {/* Manual slug override */}
         <input
-          className="w-44 rounded bg-gray-800 px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-amber-500"
+          className="w-40 rounded bg-gray-800 px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-amber-500"
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
-          placeholder="slug do restaurante"
-          onKeyDown={(e) => { if (e.key === "Enter") void handleLoad(); }}
+          placeholder="outro slug…"
+          onKeyDown={(e) => { if (e.key === "Enter") void handleLoad(slug); }}
         />
         <button
-          onClick={() => void handleLoad()}
-          className="rounded bg-amber-500 px-2 py-1 text-[10px] font-bold uppercase text-gray-950 hover:bg-amber-400 active:bg-amber-600"
+          onClick={() => void handleLoad(slug)}
+          className="rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-400 hover:border-amber-600 hover:text-amber-300"
         >
           Carregar
         </button>
 
-        {catalogError && (
-          <span className="text-red-400">{catalogError}</span>
-        )}
+        {catalogError && <span className="text-red-400">{catalogError}</span>}
         {catalog.length > 0 && !catalogError && (
           <span className="text-green-400">
             {catalog.length} itens · <span className="text-gray-500">{activeSlug}</span>
           </span>
         )}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto">
           <button
-            onClick={() => resetSession()}
-            className="rounded border border-gray-700 px-2 py-1 text-[10px] uppercase text-gray-500 hover:border-red-700 hover:text-red-400"
+            onClick={resetSession}
+            className="rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-500 hover:border-red-700 hover:text-red-400"
           >
             Reset Session
           </button>
         </div>
       </header>
 
-      {/* ── Body ── */}
+      {/* Body */}
       <div className="flex flex-1 overflow-hidden">
 
         {/* Left — Real ordering UI iframe */}
@@ -348,7 +394,6 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
               title="Ordering UI"
               className="absolute inset-0 h-full w-full border-0"
               style={{
-                // Scale to simulate ~375px mobile inside the 288px panel
                 transform:       "scale(0.77)",
                 transformOrigin: "top left",
                 width:           "130%",
@@ -363,9 +408,7 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
 
           {/* Quick test buttons */}
           <div className="shrink-0 border-b border-gray-800 px-3 py-2">
-            <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">
-              Teste Rápido
-            </div>
+            <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Teste Rápido</div>
             <div className="flex flex-wrap gap-1.5">
               {QUICK_TESTS.map(({ label, event, message, useFirstId }) => (
                 <button
@@ -381,8 +424,6 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                 </button>
               ))}
             </div>
-
-            {/* Typed message input */}
             <div className="mt-2 flex gap-1.5">
               <input
                 className="flex-1 rounded bg-gray-800 px-2 py-1 text-xs text-gray-100 outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-amber-500"
@@ -411,7 +452,7 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
             </div>
           </div>
 
-          {/* Lower panel — two columns */}
+          {/* Response + Assertions + State */}
           <div className="flex flex-1 overflow-hidden">
 
             {/* Response column */}
@@ -419,12 +460,10 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-[10px] uppercase tracking-widest text-gray-600">Última Resposta</span>
                 {lastEvent && (
-                  <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-amber-400">
-                    {lastEvent}
-                  </span>
+                  <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-amber-400">{lastEvent}</span>
                 )}
                 {isLoading && (
-                  <span className="text-[10px] text-gray-500 animate-pulse">aguardando…</span>
+                  <span className="animate-pulse text-[10px] text-gray-500">aguardando…</span>
                 )}
               </div>
 
@@ -436,23 +475,18 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
 
               {lastResponse && !isLoading && (
                 <div className="space-y-3">
-                  {/* mode */}
                   <div>
                     <div className="mb-1 text-[10px] text-gray-600">mode</div>
                     <span className={`inline-block rounded px-2 py-0.5 text-[10px] font-bold uppercase ${MODE_COLORS[lastResponse.mode] ?? "bg-gray-800 text-gray-300"}`}>
                       {lastResponse.mode}
                     </span>
                   </div>
-
-                  {/* message */}
                   <div>
                     <div className="mb-1 text-[10px] text-gray-600">message</div>
-                    <div className="whitespace-pre-wrap rounded bg-gray-800 px-2 py-2 text-gray-200 leading-relaxed">
+                    <div className="whitespace-pre-wrap rounded bg-gray-800 px-2 py-2 leading-relaxed text-gray-200">
                       {lastResponse.reply}
                     </div>
                   </div>
-
-                  {/* cards */}
                   <div>
                     <div className="mb-1 text-[10px] text-gray-600">
                       cards[] <span className="text-gray-700">({lastResponse.cards.length})</span>
@@ -464,10 +498,7 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                         {lastResponse.cards.map((id) => {
                           const item = catalog.find((c) => c.id === id);
                           return (
-                            <div
-                              key={id}
-                              className={`rounded px-2 py-1 ${item ? "bg-gray-800 text-gray-300" : "bg-red-950 text-red-400"}`}
-                            >
+                            <div key={id} className={`rounded px-2 py-1 ${item ? "bg-gray-800 text-gray-300" : "bg-red-950 text-red-400"}`}>
                               <span className="text-gray-500">{id.slice(0, 8)}…</span>
                               {item ? (
                                 <span className="ml-2 text-gray-200">{item.name}</span>
@@ -480,8 +511,6 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                       </div>
                     )}
                   </div>
-
-                  {/* options */}
                   <div>
                     <div className="mb-1 text-[10px] text-gray-600">
                       options[] <span className="text-gray-700">({lastResponse.options.length})</span>
@@ -500,14 +529,12 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                       </div>
                     )}
                   </div>
-
-                  {/* Raw JSON toggle */}
                   <div>
                     <button
                       onClick={() => setShowRaw((v) => !v)}
                       className="text-[10px] text-gray-600 hover:text-gray-400"
                     >
-                      {showRaw ? "▲ ocultar" : "▼ raw JSON"}
+                      {showRaw ? "▲ ocultar raw" : "▼ raw JSON"}
                     </button>
                     {showRaw && (
                       <pre className="mt-1 overflow-x-auto rounded bg-gray-800 p-2 text-[10px] text-gray-500">
@@ -519,7 +546,7 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
               )}
             </div>
 
-            {/* Right column — Assertions + Lab state */}
+            {/* Right column — Assertions + State */}
             <div className="flex w-72 shrink-0 flex-col overflow-y-auto p-3">
 
               {/* Assertions */}
@@ -539,17 +566,12 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                 <div className="space-y-1">
                   {assertions.map((a, i) => (
                     <div key={i} className="flex items-start gap-1.5">
-                      <span className={`mt-px shrink-0 text-[11px] ${
-                        a.pass === true  ? "text-green-400" :
-                        a.pass === false ? "text-red-400"   : "text-gray-600"
-                      }`}>
+                      <span className={`mt-px shrink-0 text-[11px] ${a.pass === true ? "text-green-400" : a.pass === false ? "text-red-400" : "text-gray-600"}`}>
                         {a.pass === true ? "✓" : a.pass === false ? "✗" : "—"}
                       </span>
                       <span className={a.pass === false ? "text-red-300" : "text-gray-400"}>
                         {a.label}
-                        {a.detail && (
-                          <span className="ml-1 text-gray-600">({a.detail})</span>
-                        )}
+                        {a.detail && <span className="ml-1 text-gray-600">({a.detail})</span>}
                       </span>
                     </div>
                   ))}
@@ -570,7 +592,7 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                     onClick={() => setHistory([])}
                     className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-500 hover:border-red-700 hover:text-red-400"
                   >
-                    Clear Memory/History
+                    Clear Memory
                   </button>
                   <button
                     onClick={() => setIframeKey((k) => k + 1)}
@@ -581,9 +603,9 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                 </div>
               </div>
 
-              {/* Current session state */}
+              {/* Session state */}
               <div className="mb-4">
-                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Estado da Sessão Lab</div>
+                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Estado da Sessão</div>
                 <div className="space-y-1 text-[11px]">
                   <div>
                     <span className="text-gray-600">Último evento: </span>
@@ -592,33 +614,21 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                   <div>
                     <span className="text-gray-600">Modo atual: </span>
                     <span className={`font-bold ${
-                      lastResponse?.mode === "CHECKOUT_SUPPORT" ? "text-blue-400"  :
-                      lastResponse?.mode === "SUGGESTION"       ? "text-green-400" :
-                      lastResponse?.mode === "INTERVENTION"     ? "text-yellow-400": "text-gray-300"
+                      lastResponse?.mode === "CHECKOUT_SUPPORT" ? "text-blue-400"   :
+                      lastResponse?.mode === "SUGGESTION"       ? "text-green-400"  :
+                      lastResponse?.mode === "INTERVENTION"     ? "text-yellow-400" : "text-gray-300"
                     }`}>
                       {lastResponse?.mode ?? "—"}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Cards: </span>
-                    <span className="text-gray-300">{lastResponse?.cards.length ?? 0}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Options: </span>
-                    <span className="text-gray-300">{lastResponse?.options.length ?? 0}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Turnos no histórico: </span>
-                    <span className="text-gray-300">{history.length}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Catálogo carregado: </span>
-                    <span className="text-gray-300">{catalog.length} itens</span>
-                  </div>
+                  <div><span className="text-gray-600">Cards: </span><span className="text-gray-300">{lastResponse?.cards.length ?? 0}</span></div>
+                  <div><span className="text-gray-600">Options: </span><span className="text-gray-300">{lastResponse?.options.length ?? 0}</span></div>
+                  <div><span className="text-gray-600">Turnos: </span><span className="text-gray-300">{history.length}</span></div>
+                  <div><span className="text-gray-600">Catálogo: </span><span className="text-gray-300">{catalog.length} itens</span></div>
                 </div>
               </div>
 
-              {/* Lab cart state */}
+              {/* Lab cart */}
               <div className="mb-4">
                 <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">
                   Cart do Lab {labCart.length > 0 && <span className="text-gray-500">R$ {cartTotal.toFixed(2)}</span>}
@@ -632,19 +642,12 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                         <span className="text-gray-400">{item.name}</span>
                         <span className="flex items-center gap-2 text-gray-600">
                           x{item.qty}
-                          <button
-                            onClick={() => setLabCart((c) => c.filter((i) => i.id !== item.id))}
-                            className="text-[10px] text-gray-700 hover:text-red-500"
-                          >
-                            ✕
-                          </button>
+                          <button onClick={() => setLabCart((c) => c.filter((i) => i.id !== item.id))} className="text-[10px] hover:text-red-500">✕</button>
                         </span>
                       </div>
                     ))}
                   </div>
                 )}
-
-                {/* Add catalog items to lab cart */}
                 {catalog.length > 0 && (
                   <div className="mt-2">
                     <div className="mb-1 text-[10px] text-gray-700">Adicionar ao cart:</div>
@@ -653,10 +656,10 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                         <button
                           key={item.id}
                           onClick={() => addToLabCart(item)}
-                          className="rounded border border-gray-800 px-1.5 py-0.5 text-[10px] text-gray-600 hover:border-gray-600 hover:text-gray-300"
                           title={`R$ ${item.price.toFixed(2)}`}
+                          className="rounded border border-gray-800 px-1.5 py-0.5 text-[10px] text-gray-600 hover:border-gray-600 hover:text-gray-300"
                         >
-                          + {item.name.length > 14 ? item.name.slice(0, 14) + "…" : item.name}
+                          + {item.name.length > 14 ? `${item.name.slice(0, 14)}…` : item.name}
                         </button>
                       ))}
                     </div>
@@ -664,7 +667,7 @@ export default function WaiterLabClient({ defaultSlug }: { defaultSlug: string }
                 )}
               </div>
 
-              {/* IDs of suggested products resolved to names */}
+              {/* Resolved product names */}
               {lastResponse && lastResponse.cards.length > 0 && (
                 <div>
                   <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Produtos Sugeridos</div>

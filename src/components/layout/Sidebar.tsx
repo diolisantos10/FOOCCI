@@ -58,10 +58,11 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Plataforma",
     items: [
-      { href: "/test-ai", label: "Testar IA", icon: "💬", extraActivePaths: ["/chat-sim"] },
-      { href: "/ai-simulator",  label: "Simulador IA",   icon: "🔬" },
-      { href: "/settings",      label: "Configurações",  icon: "⚙️" },
-      { href: "/integracoes",   label: "Integrações",    icon: "🔌" },
+      { href: "/test-ai",     label: "Testar IA",    icon: "💬", extraActivePaths: ["/chat-sim"] },
+      { href: "/ai-simulator", label: "Simulador IA", icon: "🔬" },
+      { href: "/waiter-lab",  label: "Waiter Lab",   icon: "🧪" },
+      { href: "/settings",    label: "Configurações", icon: "⚙️" },
+      { href: "/integracoes", label: "Integrações",   icon: "🔌" },
     ],
   },
 ];
