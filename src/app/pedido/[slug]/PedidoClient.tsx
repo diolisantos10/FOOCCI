@@ -229,8 +229,8 @@ const CHECKOUT_ENTRY_PROMPT: Partial<Record<Stage, string>> = {
   ADDRESS_DETAILS: "Bairro (e complemento, se tiver) 👇",
   ADDRESS_CONFIRM: "Endereço certo? Confirma para seguir 👇",
   ASK_NAME:        "Como posso te chamar? 😊",
-  PAYMENT:         "Quase lá! Como quer pagar? 👇",
-  PAYMENT_METHOD:  "Escolhe a forma de pagamento 👇",
+  PAYMENT:         "Quer pagar agora ou na entrega? 👇",
+  PAYMENT_METHOD:  "Como prefere pagar? 👇",
   REVIEW_ORDER:    "Quase pronto! Confere e confirma 👇",
 };
 
@@ -1720,7 +1720,7 @@ export function PedidoClient({
       setCustomerName(text.trim());
       setStage("PAYMENT");
       // Use the name immediately — feels personal and confirms the AI heard it.
-      pushAssistantMessage(`Perfeito, ${firstName}! 🙌 Última etapa — como quer pagar? 👇`);
+      pushAssistantMessage(`Perfeito, ${firstName}! 🙌 Quer pagar agora ou na entrega? 👇`);
     },
     [pushUserMessage, pushAssistantMessage],
   );
@@ -1736,7 +1736,10 @@ export function PedidoClient({
         setStage("PAYMENT_METHOD");
         const label = mode === "pay_on_delivery" ? "🚪 Pagar na entrega" : "🏪 Pagar na retirada";
         pushUserMessage(label);
-        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT_METHOD"]!);
+        const methodPrompt = mode === "pay_on_delivery"
+          ? "Como prefere pagar na entrega? 👇"
+          : "Como prefere pagar na retirada? 👇";
+        pushAssistantMessage(methodPrompt);
       }
     },
     [pushUserMessage, pushAssistantMessage],
@@ -1916,7 +1919,7 @@ export function PedidoClient({
       const isPickup = deliveryMethod === "pickup";
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
-          <p className="mb-2 text-xs font-semibold text-gray-500">Como vai pagar?</p>
+          <p className="mb-2 text-xs font-semibold text-gray-500">Quer pagar agora ou na entrega?</p>
           <div className="flex flex-col gap-2">
             <button onClick={() => handlePaymentMode("pay_now")} className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-left text-sm font-semibold text-indigo-700 hover:bg-indigo-100">
               💳 Pagar agora — link de pagamento
@@ -1939,7 +1942,7 @@ export function PedidoClient({
     if (stage === "PAYMENT_METHOD") {
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
-          <p className="mb-2 text-xs font-semibold text-gray-500">Qual forma de pagamento?</p>
+          <p className="mb-2 text-xs font-semibold text-gray-500">{paymentMode === "pay_on_delivery" ? "Como prefere pagar na entrega?" : "Como prefere pagar na retirada?"}</p>
           <div className="flex flex-col gap-2">
             {(["card_machine", "pix_in_person", "cash"] as PaymentMethodSub[]).map((m) => {
               const labels = { card_machine: "💳 Cartão na maquininha", pix_in_person: "📱 Pix na entrega", cash: "💵 Dinheiro" };
