@@ -82,29 +82,33 @@ export interface V2Output {
 export type CustomerIntent =
   | "browsing_alone"
   | "wants_recommendation"
-  | "wants_light_food"
+  | "wants_light_option"        // was wants_light_food
   | "wants_complete_meal"
-  | "wants_for_group"
-  | "price_sensitive"
-  | "premium_experience"
-  | "asks_drink"
-  | "asks_dessert"
-  | "asks_pairing"
+  | "wants_group_order"         // was wants_for_group
+  | "wants_budget_option"       // was price_sensitive
+  | "wants_premium_option"      // was premium_experience
+  | "asks_for_drink"            // was asks_drink
+  | "asks_for_dessert"          // was asks_dessert
+  | "asks_for_pairing"          // was asks_pairing
+  | "asks_specific_product"
+  | "asks_category"
   | "checkout_intent"
   | "restriction_based"
   | "unclear";
 
 export type SalesOpportunity =
-  | "suggest_main_item"
-  | "suggest_combo"
-  | "suggest_group_option"
-  | "suggest_pairing"
+  | "recommend_first_product"   // was suggest_main_item
+  | "clarify_preference"        // was ask_clarifying_question
+  | "suggest_light_options"
+  | "suggest_complete_options"  // was suggest_combo
+  | "suggest_group_combo"       // was suggest_group_option
+  | "suggest_budget_option"
+  | "suggest_premium_upgrade"
   | "suggest_drink"
   | "suggest_dessert"
-  | "suggest_premium_upgrade"
-  | "ask_clarifying_question"
+  | "suggest_pairing"
   | "stay_quiet"
-  | "support_checkout";
+  | "checkout_support";         // was support_checkout
 
 export interface SalesAnalysis {
   customerIntent:   CustomerIntent;
@@ -126,10 +130,11 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
   const hasCart = input.cartItemIds.length > 0;
 
   // ── intent detection (deterministic keyword rules) ────────
+
   if (/\b(família|familia|grupo|[2-9]\s*pessoas?)\b/i.test(msg)) {
     return {
-      customerIntent:   "wants_for_group",
-      salesOpportunity: "suggest_group_option",
+      customerIntent:   "wants_group_order",
+      salesOpportunity: "suggest_group_combo",
       confidence:       0.9,
       reason:           "group/family keyword detected",
     };
@@ -137,7 +142,7 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
 
   if (/bebida|refri(gerante)?|água|suco|drink/i.test(msg)) {
     return {
-      customerIntent:   "asks_drink",
+      customerIntent:   "asks_for_drink",
       salesOpportunity: "suggest_drink",
       confidence:       0.9,
       reason:           "drink keyword detected",
@@ -146,7 +151,7 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
 
   if (/sobremesa|doce/i.test(msg)) {
     return {
-      customerIntent:   "asks_dessert",
+      customerIntent:   "asks_for_dessert",
       salesOpportunity: "suggest_dessert",
       confidence:       0.9,
       reason:           "dessert keyword detected",
@@ -155,8 +160,8 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
 
   if (/\bleve\b|light/i.test(msg)) {
     return {
-      customerIntent:   "wants_light_food",
-      salesOpportunity: "suggest_main_item",
+      customerIntent:   "wants_light_option",
+      salesOpportunity: "suggest_light_options",
       confidence:       0.85,
       reason:           "light-food keyword detected",
     };
@@ -165,7 +170,7 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
   if (/\bcompleto\b|\bcomplete\b|refeição completa/i.test(msg)) {
     return {
       customerIntent:   "wants_complete_meal",
-      salesOpportunity: "suggest_combo",
+      salesOpportunity: "suggest_complete_options",
       confidence:       0.85,
       reason:           "complete-meal keyword detected",
     };
@@ -173,35 +178,82 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
 
   if (/barato|econôm|econom|até\s*R?\$|em conta/i.test(msg)) {
     return {
-      customerIntent:   "price_sensitive",
-      salesOpportunity: "suggest_main_item",
+      customerIntent:   "wants_budget_option",
+      salesOpportunity: "suggest_budget_option",
       confidence:       0.85,
       reason:           "price-sensitivity keyword detected",
     };
   }
 
+  if (/melhor da casa|especial|premium|\btop\b|destaque|mais\s*caro|high.?end/i.test(msg)) {
+    return {
+      customerIntent:   "wants_premium_option",
+      salesOpportunity: "suggest_premium_upgrade",
+      confidence:       0.85,
+      reason:           "premium keyword detected",
+    };
+  }
+
   if (/combina|acompanha|vai bem|harmoniz/i.test(msg)) {
     return {
-      customerIntent:   "asks_pairing",
-      salesOpportunity: hasCart ? "suggest_pairing" : "ask_clarifying_question",
+      customerIntent:   "asks_for_pairing",
+      salesOpportunity: hasCart ? "suggest_pairing" : "clarify_preference",
       confidence:       0.85,
       reason:           "pairing keyword detected",
+    };
+  }
+
+  if (/finalizar|fechar|é isso|só isso|confirmar pedido/i.test(msg)) {
+    return {
+      customerIntent:   "checkout_intent",
+      salesOpportunity: "checkout_support",
+      confidence:       0.9,
+      reason:           "checkout intent keyword detected",
     };
   }
 
   if (/sugere|indica|recomenda|me ajud|o que (tem|você|vc)/i.test(msg)) {
     return {
       customerIntent:   "wants_recommendation",
-      salesOpportunity: hasCart ? "suggest_pairing" : "suggest_main_item",
+      salesOpportunity: hasCart ? "suggest_pairing" : "recommend_first_product",
       confidence:       0.8,
       reason:           "recommendation-request keyword detected",
     };
   }
 
+  // Specific product — check catalog for exact name match
+  if (input.catalog.length > 0 && msg.length >= 3) {
+    const hit = input.catalog.find(
+      (item) => item.name.length >= 4 && msg.includes(item.name.toLowerCase()),
+    );
+    if (hit) {
+      return {
+        customerIntent:   "asks_specific_product",
+        salesOpportunity: "recommend_first_product",
+        confidence:       0.95,
+        reason:           `specific product name "${hit.name}" found in message`,
+      };
+    }
+  }
+
+  // Category — check catalog for category name match
+  if (input.catalog.length > 0 && msg.length >= 3) {
+    const catNames = [...new Set(input.catalog.map((i) => i.categoryName))];
+    const hitCat   = catNames.find((c) => c.length >= 4 && msg.includes(c.toLowerCase()));
+    if (hitCat) {
+      return {
+        customerIntent:   "asks_category",
+        salesOpportunity: "recommend_first_product",
+        confidence:       0.85,
+        reason:           `category name "${hitCat}" found in message`,
+      };
+    }
+  }
+
   // Default: unclear → ask a clarifying question
   return {
     customerIntent:   "unclear",
-    salesOpportunity: "ask_clarifying_question",
+    salesOpportunity: "clarify_preference",
     confidence:       0.5,
     reason:           "no clear intent signal in message",
   };
@@ -629,6 +681,97 @@ export function analyzeMenuProfile(menuItems: V2CatalogItem[]): MenuProfile {
   };
 }
 
+// ─── menu analysis ────────────────────────────────────────────
+// Returns all items organized into semantic candidate buckets.
+// Restaurant-agnostic: works with any cuisine via analyzeMenuItem tags.
+
+export interface MenuAnalysis {
+  drinkCandidates:    TaggedItem[];
+  dessertCandidates:  TaggedItem[];
+  starterCandidates:  TaggedItem[];
+  mainCandidates:     TaggedItem[];
+  comboCandidates:    TaggedItem[];
+  groupCandidates:    TaggedItem[];
+  lightCandidates:    TaggedItem[];
+  completeCandidates: TaggedItem[];
+  premiumCandidates:  TaggedItem[];
+  budgetCandidates:   TaggedItem[];
+  pairingCandidates:  TaggedItem[];
+}
+
+/**
+ * Tags every menu item and bins them into semantic candidate arrays.
+ * Identical items can appear in multiple bins (e.g. a combo is also "complete").
+ * Callers use these bins to select appropriate cards for any intent.
+ */
+export function analyzeMenu(menuItems: V2CatalogItem[]): MenuAnalysis {
+  const tagged = tagCatalog(menuItems);
+  return {
+    drinkCandidates:    tagged.filter((i) => i.tags.includes("drink")),
+    dessertCandidates:  tagged.filter((i) => i.tags.includes("dessert")),
+    starterCandidates:  tagged.filter((i) => i.tags.includes("starter")),
+    mainCandidates:     tagged.filter((i) => i.tags.includes("main")),
+    comboCandidates:    tagged.filter((i) => i.tags.includes("combo")),
+    groupCandidates:    tagged.filter((i) => i.tags.includes("group") || i.tags.includes("combo")),
+    lightCandidates:    tagged.filter((i) => i.tags.includes("light")),
+    completeCandidates: tagged.filter((i) => i.tags.includes("complete")),
+    premiumCandidates:  tagged.filter((i) => i.tags.includes("premium")),
+    budgetCandidates:   tagged.filter((i) => i.tags.includes("cheap")),
+    pairingCandidates:  tagged.filter((i) => i.tags.includes("pairing_candidate")),
+  };
+}
+
+// ─── sales situation (full analysis in one call) ──────────────
+
+const NEED_DESCRIPTIONS: Partial<Record<CustomerIntent, string>> = {
+  browsing_alone:       "explorando o cardápio independentemente",
+  wants_recommendation: "quer uma recomendação",
+  wants_light_option:   "quer uma opção mais leve",
+  wants_complete_meal:  "quer uma refeição completa",
+  wants_group_order:    "fazendo pedido para um grupo",
+  wants_budget_option:  "busca bom custo-benefício",
+  wants_premium_option: "quer uma experiência premium",
+  asks_for_drink:       "quer uma bebida",
+  asks_for_dessert:     "quer uma sobremesa",
+  asks_for_pairing:     "quer algo que combine com o pedido atual",
+  asks_specific_product:"perguntando sobre um produto específico",
+  asks_category:        "perguntando sobre uma categoria do cardápio",
+  checkout_intent:      "pronto para finalizar o pedido",
+  restriction_based:    "tem restrições alimentares",
+  unclear:              "intenção não identificada — precisa de clarificação",
+};
+
+/** Full enriched analysis combining intent + menu + cart + strategy in one call. */
+export interface SalesSituation {
+  intent:     CustomerIntent;
+  need:       string;
+  opportunity: SalesOpportunity;
+  action:     SalesStrategy;
+  confidence: number;
+  reason:     string;
+}
+
+/**
+ * Sales Specialist core: combines intent detection, menu profiling, cart
+ * analysis, and strategy selection into one enriched output object.
+ * Pure function — no DB calls, no side effects.
+ */
+export function analyzeSalesSituation(input: V2Input): SalesSituation {
+  const analysis    = analyzeSalesContext(input);
+  const menuProfile = analyzeMenuProfile(input.catalog);
+  const cartAnal    = analyzeCart(input.cartItemIds, input.catalog);
+  const strategy    = chooseSalesStrategy(analysis, menuProfile, cartAnal);
+
+  return {
+    intent:      analysis.customerIntent,
+    need:        NEED_DESCRIPTIONS[analysis.customerIntent] ?? analysis.reason,
+    opportunity: analysis.salesOpportunity,
+    action:      strategy,
+    confidence:  analysis.confidence,
+    reason:      analysis.reason,
+  };
+}
+
 export type SalesStrategy =
   | "recommend_signature_item"
   | "recommend_budget_item"
@@ -652,30 +795,36 @@ export function chooseSalesStrategy(
   const { customerIntent } = analysis;
   const { opportunity }    = cartAnalysis;
 
-  // A) Price-sensitive — affordable items first, no premium push
-  if (customerIntent === "price_sensitive") return "recommend_budget_item";
+  // A) Budget — affordable items first, no premium push
+  if (customerIntent === "wants_budget_option") return "recommend_budget_item";
 
   // B) Group / family — combos when available
-  if (customerIntent === "wants_for_group")
+  if (customerIntent === "wants_group_order")
     return menuProfile.hasCombos ? "recommend_group_bundle" : "recommend_signature_item";
 
   // C) Premium intent
-  if (customerIntent === "premium_experience")
+  if (customerIntent === "wants_premium_option")
     return menuProfile.hasPremiumItems ? "recommend_premium_upgrade" : "recommend_signature_item";
 
   // D) Explicit pairing request — always cart-aware
-  if (customerIntent === "asks_pairing") return "recommend_pairing";
+  if (customerIntent === "asks_for_pairing") return "recommend_pairing";
 
   // E) Explicit category requests
-  if (customerIntent === "asks_drink")
+  if (customerIntent === "asks_for_drink")
     return menuProfile.hasDrinks   ? "recommend_drink"   : "ask_clarifying_question";
-  if (customerIntent === "asks_dessert")
+  if (customerIntent === "asks_for_dessert")
     return menuProfile.hasDesserts ? "recommend_dessert" : "ask_clarifying_question";
 
-  // Light / complete — map to available product shapes
-  if (customerIntent === "wants_light_food")    return "recommend_signature_item";
+  // Light — smallest/starter items
+  if (customerIntent === "wants_light_option") return "recommend_signature_item";
+
+  // Complete — full meal / combo
   if (customerIntent === "wants_complete_meal")
     return menuProfile.hasCombos ? "recommend_group_bundle" : "recommend_signature_item";
+
+  // Specific product or category mentioned — route to AI for best match
+  if (customerIntent === "asks_specific_product" || customerIntent === "asks_category")
+    return "recommend_signature_item";
 
   // Recommendation — let cart opportunity guide the pick
   if (customerIntent === "wants_recommendation") {
@@ -688,8 +837,9 @@ export function chooseSalesStrategy(
   // Checkout + restriction intents — stay quiet; other handlers own these
   if (customerIntent === "checkout_intent")   return "stay_quiet";
   if (customerIntent === "restriction_based") return "ask_clarifying_question";
+  if (customerIntent === "browsing_alone")    return "stay_quiet";
 
-  // F/G) Unclear / silent browsing — ask with buttons
+  // Unclear — ask with buttons
   return "ask_clarifying_question";
 }
 
@@ -970,7 +1120,7 @@ function handleUserMessage(input: V2Input): V2Output {
 
   // ── Deterministic paths (Sales Intelligence — no AI call) ────
   switch (analysis.customerIntent) {
-    case "wants_light_food": {
+    case "wants_light_option": {
       const cards = selectLightItems(catalog, cartItemIds, 3);
       if (cards.length > 0) return { message: "Separei algumas opções mais leves pra você 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
@@ -980,20 +1130,63 @@ function handleUserMessage(input: V2Input): V2Output {
       if (cards.length > 0) return { message: "Separei opções mais completas pra você 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
-    case "wants_for_group": {
+    case "wants_group_order": {
       const cards = selectGroupItems(catalog, cartItemIds, 3);
       if (cards.length > 0) return { message: "Pra compartilhar, essas opções fazem mais sentido 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
-    case "asks_dessert": {
+    case "wants_budget_option": {
+      const tagged  = tagCatalog(catalog);
+      const notCart = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert") && !cartItemIds.includes(i.id));
+      const cheap   = notCart.filter((i) => i.tags.includes("cheap")).sort(tagSort);
+      const cards   = (cheap.length > 0 ? cheap : notCart.sort(tagSort)).slice(0, 3).map((i) => i.id);
+      if (cards.length > 0) return { message: "Ótimas opções com bom custo-benefício 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      return noCardsFound();
+    }
+    case "wants_premium_option": {
+      const tagged    = tagCatalog(catalog);
+      const notCart   = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert") && !cartItemIds.includes(i.id));
+      const premium   = notCart.filter((i) => i.tags.includes("premium")).sort(tagSort);
+      const cards     = (premium.length > 0 ? premium : [...notCart].sort((a, b) => b.price - a.price)).slice(0, 3).map((i) => i.id);
+      if (cards.length > 0) return { message: "Uma experiência um pouco acima do padrão 👇", cards, mode: "INTERVENTION", options: [], requiresAI: false, aiDirective: "" };
+      return noCardsFound();
+    }
+    case "asks_for_dessert": {
       const cards = selectDessertItems(catalog, cartItemIds, 3);
       if (cards.length > 0) return { message: "Para adoçar o final 🍰", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
-    case "asks_drink": {
+    case "asks_for_drink": {
       const cards = selectDrinkItems(catalog, cartItemIds, 3);
       if (cards.length > 0) return { message: "Aqui estão as bebidas disponíveis 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
+    }
+    case "asks_for_pairing": {
+      const cards = selectPairingItems(catalog, cartItemIds, 3);
+      if (cards.length > 0) return { message: "Essas opções combinam bem com o que você escolheu 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      return noCardsFound();
+    }
+    case "asks_specific_product": {
+      // Find the exact product mentioned and show it directly
+      const msg = (input.message ?? "").toLowerCase();
+      const hit = catalog.find((i) => i.name.length >= 4 && msg.includes(i.name.toLowerCase()) && !cartItemIds.includes(i.id));
+      if (hit) return { message: "Separei essa opção pra você 👇", cards: [hit.id], mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      break; // fall through to AI if match not found in cards
+    }
+    case "asks_category": {
+      // Show top items from the mentioned category
+      const msg      = (input.message ?? "").toLowerCase();
+      const catNames = [...new Set(catalog.map((i) => i.categoryName))];
+      const hitCat   = catNames.find((c) => c.length >= 4 && msg.includes(c.toLowerCase()));
+      if (hitCat) {
+        const cards = catalog
+          .filter((i) => i.categoryName === hitCat && !cartItemIds.includes(i.id))
+          .sort(bySort)
+          .slice(0, 3)
+          .map((i) => i.id);
+        if (cards.length > 0) return { message: "Separei as opções dessa categoria 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      }
+      break;
     }
     case "unclear": {
       // Cart is empty → qualification buttons; cart has items → fall through to AI
@@ -1006,11 +1199,6 @@ function handleUserMessage(input: V2Input): V2Output {
       const cards = selectRecommendedItems(catalog, cartItemIds, 3);
       if (cards.length > 0) return { message: "Aqui vai o que faz mais sentido pra você agora 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       break;
-    }
-    case "asks_pairing": {
-      const cards = selectPairingItems(catalog, cartItemIds, 3);
-      if (cards.length > 0) return { message: "Essas opções combinam bem com o que você escolheu 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
-      return noCardsFound();
     }
     case "checkout_intent": {
       if (!hasItems) break;

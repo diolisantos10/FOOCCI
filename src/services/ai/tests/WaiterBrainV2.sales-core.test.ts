@@ -20,6 +20,8 @@ import {
   analyzeMenuItem,
   analyzeCart,
   analyzeMenuProfile,
+  analyzeMenu,
+  analyzeSalesSituation,
   chooseSalesStrategy,
   buildWaiterResponse,
   type V2CatalogItem,
@@ -510,7 +512,7 @@ describe("chooseSalesStrategy", () => {
   const catalog = makeBurgerCatalog();
   const menuProfile = analyzeMenuProfile(catalog);
 
-  it("price_sensitive → recommend_budget_item", () => {
+  it("wants_budget_option → recommend_budget_item", () => {
     const analysis = analyzeSalesContext(
       makeInput("ON_USER_MESSAGE", { message: "algo barato", catalog }),
     );
@@ -518,7 +520,7 @@ describe("chooseSalesStrategy", () => {
     expect(chooseSalesStrategy(analysis, menuProfile, ca)).toBe("recommend_budget_item");
   });
 
-  it("wants_for_group + menu has combos → recommend_group_bundle", () => {
+  it("wants_group_order + menu has combos → recommend_group_bundle", () => {
     const analysis = analyzeSalesContext(
       makeInput("ON_USER_MESSAGE", { message: "somos 4 pessoas", catalog }),
     );
@@ -526,7 +528,7 @@ describe("chooseSalesStrategy", () => {
     expect(chooseSalesStrategy(analysis, menuProfile, ca)).toBe("recommend_group_bundle");
   });
 
-  it("asks_drink + menu has drinks → recommend_drink", () => {
+  it("asks_for_drink + menu has drinks → recommend_drink", () => {
     const analysis = analyzeSalesContext(
       makeInput("ON_USER_MESSAGE", { message: "quero uma bebida", catalog }),
     );
@@ -534,7 +536,7 @@ describe("chooseSalesStrategy", () => {
     expect(chooseSalesStrategy(analysis, menuProfile, ca)).toBe("recommend_drink");
   });
 
-  it("asks_dessert + menu has desserts → recommend_dessert", () => {
+  it("asks_for_dessert + menu has desserts → recommend_dessert", () => {
     const analysis = analyzeSalesContext(
       makeInput("ON_USER_MESSAGE", { message: "quero uma sobremesa", catalog }),
     );
@@ -594,5 +596,230 @@ describe("buildWaiterResponse", () => {
       const res = buildWaiterResponse(s, ["any_id"]);
       expect(res.message.length).toBeGreaterThan(0);
     });
+  });
+});
+
+// ── 15. analyzeMenu — candidate buckets ──────────────────────────────────────
+
+describe("analyzeMenu", () => {
+  it("returns all required candidate arrays", () => {
+    const m = analyzeMenu(makeSushiCatalog());
+    expect(Array.isArray(m.drinkCandidates)).toBe(true);
+    expect(Array.isArray(m.dessertCandidates)).toBe(true);
+    expect(Array.isArray(m.starterCandidates)).toBe(true);
+    expect(Array.isArray(m.mainCandidates)).toBe(true);
+    expect(Array.isArray(m.comboCandidates)).toBe(true);
+    expect(Array.isArray(m.groupCandidates)).toBe(true);
+    expect(Array.isArray(m.lightCandidates)).toBe(true);
+    expect(Array.isArray(m.completeCandidates)).toBe(true);
+    expect(Array.isArray(m.premiumCandidates)).toBe(true);
+    expect(Array.isArray(m.budgetCandidates)).toBe(true);
+    expect(Array.isArray(m.pairingCandidates)).toBe(true);
+  });
+
+  it("drinkCandidates contains only drink-tagged items", () => {
+    const m = analyzeMenu(makeSushiCatalog());
+    expect(m.drinkCandidates.length).toBeGreaterThan(0);
+    m.drinkCandidates.forEach((i) => expect(i.tags).toContain("drink"));
+  });
+
+  it("dessertCandidates contains only dessert-tagged items", () => {
+    const m = analyzeMenu(makeSushiCatalog());
+    expect(m.dessertCandidates.length).toBeGreaterThan(0);
+    m.dessertCandidates.forEach((i) => expect(i.tags).toContain("dessert"));
+  });
+
+  it("comboCandidates contains combo-tagged items [burger menu]", () => {
+    const m = analyzeMenu(makeBurgerCatalog());
+    expect(m.comboCandidates.length).toBeGreaterThan(0);
+    m.comboCandidates.forEach((i) => expect(i.tags).toContain("combo"));
+  });
+
+  it("premiumCandidates are the highest-priced food items", () => {
+    const m = analyzeMenu(makeBurgerCatalog());
+    // Combo Família at R$89 is the most expensive → premium
+    expect(m.premiumCandidates.length).toBeGreaterThan(0);
+  });
+
+  it("all returned TaggedItem IDs exist in the source catalog", () => {
+    const catalog = makeItalianCatalog();
+    const m       = analyzeMenu(catalog);
+    const validIds = new Set(catalog.map((i) => i.id));
+    const allItems = [
+      ...m.drinkCandidates, ...m.dessertCandidates, ...m.starterCandidates,
+      ...m.mainCandidates,  ...m.comboCandidates,   ...m.groupCandidates,
+      ...m.lightCandidates, ...m.completeCandidates, ...m.premiumCandidates,
+      ...m.budgetCandidates, ...m.pairingCandidates,
+    ];
+    allItems.forEach((item) => expect(validIds.has(item.id)).toBe(true));
+  });
+});
+
+// ── 16. analyzeSalesSituation ─────────────────────────────────────────────────
+
+describe("analyzeSalesSituation", () => {
+  it("returns all required fields", () => {
+    const sit = analyzeSalesSituation(makeInput("ON_USER_MESSAGE", { message: "me sugere algo" }));
+    expect(sit).toHaveProperty("intent");
+    expect(sit).toHaveProperty("need");
+    expect(sit).toHaveProperty("opportunity");
+    expect(sit).toHaveProperty("action");
+    expect(sit).toHaveProperty("confidence");
+    expect(sit).toHaveProperty("reason");
+  });
+
+  it("confidence is between 0 and 1", () => {
+    const sit = analyzeSalesSituation(makeInput("ON_USER_MESSAGE", { message: "quero algo leve" }));
+    expect(sit.confidence).toBeGreaterThan(0);
+    expect(sit.confidence).toBeLessThanOrEqual(1);
+  });
+
+  it("drink message → intent=asks_for_drink", () => {
+    const sit = analyzeSalesSituation(makeInput("ON_USER_MESSAGE", { message: "quero uma bebida" }));
+    expect(sit.intent).toBe("asks_for_drink");
+    expect(sit.opportunity).toBe("suggest_drink");
+  });
+
+  it("dessert message → intent=asks_for_dessert", () => {
+    const sit = analyzeSalesSituation(makeInput("ON_USER_MESSAGE", { message: "quero uma sobremesa" }));
+    expect(sit.intent).toBe("asks_for_dessert");
+    expect(sit.opportunity).toBe("suggest_dessert");
+  });
+
+  it("light message → intent=wants_light_option", () => {
+    const sit = analyzeSalesSituation(makeInput("ON_USER_MESSAGE", { message: "quero algo leve" }));
+    expect(sit.intent).toBe("wants_light_option");
+    expect(sit.opportunity).toBe("suggest_light_options");
+  });
+
+  it("group message → intent=wants_group_order", () => {
+    const sit = analyzeSalesSituation(makeInput("ON_USER_MESSAGE", { message: "somos 4 pessoas" }));
+    expect(sit.intent).toBe("wants_group_order");
+    expect(sit.opportunity).toBe("suggest_group_combo");
+  });
+
+  it("budget message → intent=wants_budget_option", () => {
+    const sit = analyzeSalesSituation(makeInput("ON_USER_MESSAGE", { message: "algo barato" }));
+    expect(sit.intent).toBe("wants_budget_option");
+    expect(sit.opportunity).toBe("suggest_budget_option");
+  });
+
+  it("premium message → intent=wants_premium_option", () => {
+    const sit = analyzeSalesSituation(makeInput("ON_USER_MESSAGE", { message: "quero o melhor da casa" }));
+    expect(sit.intent).toBe("wants_premium_option");
+    expect(sit.opportunity).toBe("suggest_premium_upgrade");
+  });
+
+  it("pairing message with empty cart → opportunity=clarify_preference", () => {
+    const sit = analyzeSalesSituation(makeInput("ON_USER_MESSAGE", { message: "o que combina?" }));
+    expect(sit.intent).toBe("asks_for_pairing");
+    expect(sit.opportunity).toBe("clarify_preference"); // no cart → can't pair yet
+  });
+
+  it("pairing message with cart items → opportunity=suggest_pairing", () => {
+    const sit = analyzeSalesSituation(
+      makeInput("ON_USER_MESSAGE", { message: "o que combina?", cartItemIds: ["s1"] }),
+    );
+    expect(sit.intent).toBe("asks_for_pairing");
+    expect(sit.opportunity).toBe("suggest_pairing");
+  });
+
+  it("need is a non-empty string", () => {
+    const sit = analyzeSalesSituation(makeInput("ON_USER_MESSAGE", { message: "algo leve" }));
+    expect(typeof sit.need).toBe("string");
+    expect(sit.need.length).toBeGreaterThan(0);
+  });
+});
+
+// ── 17. Acceptance tests (Sprint 4A spec) ────────────────────────────────────
+
+describe("Acceptance tests — Sales Specialist Agent", () => {
+  it("A) 'me sugere algo' → button question, no cards, no open typing", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "me sugere algo" }));
+    expect(out.cards).toHaveLength(0);
+    expect(out.options.length).toBeGreaterThan(0);
+    out.options.forEach((o) => {
+      expect(typeof o.label).toBe("string");
+      expect(typeof o.value).toBe("string");
+    });
+  });
+
+  it("B) 'quero algo leve' → light food cards, mode SUGGESTION", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero algo leve" }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("SUGGESTION");
+    // Must not include drinks or desserts
+    expect(out.cards).not.toContain("s4");
+    expect(out.cards).not.toContain("s5");
+  });
+
+  it("C) 'quero sobremesa' → dessert cards, mode SUGGESTION", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero sobremesa" }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.cards).toContain("s5");
+    expect(out.mode).toBe("SUGGESTION");
+  });
+
+  it("D) 'é pra 4 pessoas' → group/shareable cards", () => {
+    const catalog = makeBurgerCatalog();
+    const out     = decide(makeInput("ON_USER_MESSAGE", { message: "é pra 4 pessoas", catalog }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("SUGGESTION");
+    // Should include the combo item
+    expect(out.cards).toContain("b3");
+  });
+
+  it("E) item click → cards=[], options=[], mode=BROWSE", () => {
+    const out = decide(makeInput("ON_ITEM_ADDED", { lastAddedId: "s1" }));
+    expect(out.cards).toHaveLength(0);
+    expect(out.options).toHaveLength(0);
+    expect(out.mode).toBe("BROWSE");
+  });
+
+  it("F) 'o que combina com isso?' with cart → pairing cards, no cart items in result", () => {
+    const catalog = makeSushiCatalog();
+    const out     = decide(makeInput(
+      "ON_USER_MESSAGE",
+      { message: "o que combina com isso?", cartItemIds: ["s1"], catalog },
+    ));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("SUGGESTION");
+    expect(out.cards).not.toContain("s1"); // must not suggest an already-carted item
+  });
+
+  it("G) during checkout → cards=[], mode=CHECKOUT_SUPPORT", () => {
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", { cartItemIds: ["s1", "s2"] }));
+    expect(out.cards).toHaveLength(0);
+    expect(out.mode).toBe("CHECKOUT_SUPPORT");
+  });
+
+  it("asks_specific_product → returns that product's card directly", () => {
+    const catalog = makeSushiCatalog();
+    const out     = decide(makeInput(
+      "ON_USER_MESSAGE",
+      { message: "quero o Temaki Salmão", catalog },
+    ));
+    expect(out.cards).toContain("s1");
+    expect(out.mode).toBe("SUGGESTION");
+  });
+
+  it("premium request → premium/highest-price cards", () => {
+    const catalog = makeBurgerCatalog();
+    const out     = decide(makeInput(
+      "ON_USER_MESSAGE",
+      { message: "quero o melhor da casa", catalog },
+    ));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("INTERVENTION");
+  });
+
+  it("budget request → cheaper items returned", () => {
+    const catalog = makeBurgerCatalog();
+    const out     = decide(makeInput(
+      "ON_USER_MESSAGE",
+      { message: "algo barato", catalog },
+    ));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("SUGGESTION");
   });
 });
