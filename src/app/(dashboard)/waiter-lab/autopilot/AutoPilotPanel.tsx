@@ -90,19 +90,21 @@ function resolveSilentCartItems(
 // ── API helper ────────────────────────────────────────────────────────────────
 
 async function callWaiterApi(
-  slug:         string,
-  event:        string,
-  message:      string,
-  history:      { role: string; content: string }[],
-  cart:         CartItem[],
-  lastAddedId?: string,
+  slug:                 string,
+  event:                string,
+  message:              string,
+  history:              { role: string; content: string }[],
+  cart:                 CartItem[],
+  lastAddedId?:         string,
+  suggestedProductIds?: string[],
 ) {
   const body: Record<string, unknown> = {
     event, message, history,
     cart:  cart.map((i) => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
     stage: "BROWSE",
   };
-  if (lastAddedId) body.lastAddedId = lastAddedId;
+  if (lastAddedId)                              body.lastAddedId         = lastAddedId;
+  if (suggestedProductIds?.length)              body.suggestedProductIds = suggestedProductIds;
 
   const res = await fetch(`/api/pedido/${encodeURIComponent(slug)}`, {
     method:  "POST",
@@ -151,8 +153,9 @@ async function runScenario(
   let detectedMode       = "BROWSE";
   let lastReply          = "";
   let lastOptions:       { label: string; value: string }[] = [];
-  let permissionDeclined = false;
-  let promptsGiven       = 0;
+  let permissionDeclined   = false;
+  let promptsGiven         = 0;
+  const suggestedIdsAccum: string[] = [];
 
   const seenCardIds = new Set<string>();
 
@@ -239,7 +242,7 @@ async function runScenario(
     let stepAssertions: { label: string; pass: boolean; detail?: string }[] = [];
 
     try {
-      response = await callWaiterApi(slug, event, message, history, cart, lastAddedId);
+      response = await callWaiterApi(slug, event, message, history, cart, lastAddedId, suggestedIdsAccum.length > 0 ? [...suggestedIdsAccum] : undefined);
 
       if (message)        history.push({ role: "user",      content: message        });
       if (response.reply) history.push({ role: "assistant", content: response.reply });
@@ -275,8 +278,11 @@ async function runScenario(
       stepAssertions = v.assertions;
       stepFailures   = v.failureTypes;
 
-      // Update seen cards for duplicate tracking
-      for (const id of response.cards) seenCardIds.add(id);
+      // Update seen cards for duplicate tracking and accumulate for next API call
+      for (const id of response.cards) {
+        seenCardIds.add(id);
+        if (!suggestedIdsAccum.includes(id)) suggestedIdsAccum.push(id);
+      }
 
       // Budget check for cart additions
       if (event === "ON_ITEM_ADDED" && lastAddedId && profile.budget !== undefined) {

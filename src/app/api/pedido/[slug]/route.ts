@@ -37,8 +37,10 @@ interface PedidoChatRequest {
   customerPhone?:  string | null;
   categoryIntro?:  { name: string; description: string } | null;
   // ── V2 fields ─────────────────────────────────────────────────
-  event?:          V2Event;
-  lastAddedId?:    string;
+  event?:               V2Event;
+  lastAddedId?:         string;
+  /** Product IDs already shown as cards this session (for de-duplication). */
+  suggestedProductIds?: string[];
 }
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -123,8 +125,9 @@ export async function POST(
       customerName   = null,
       customerPhone  = null,
       categoryIntro  = null,
-      event          = "ON_USER_MESSAGE",
+      event               = "ON_USER_MESSAGE",
       lastAddedId,
+      suggestedProductIds,
     } = body;
 
     // ON_IDLE and non-AI events may arrive with an empty message
@@ -164,6 +167,7 @@ export async function POST(
       event,
       catalogItems,
       lastAddedId,
+      suggestedProductIds: Array.isArray(suggestedProductIds) ? suggestedProductIds : [],
     });
 
     console.info("[waiter]", JSON.stringify({

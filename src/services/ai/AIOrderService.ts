@@ -61,6 +61,8 @@ export interface AIWebTurnInput {
   catalogItems?:   V2CatalogItem[];
   /** ID of the last item added (used for ON_ITEM_ADDED complement selection). */
   lastAddedId?:    string;
+  /** Product IDs already shown as cards this session (for de-duplication). */
+  suggestedProductIds?: string[];
 }
 
 export interface AIWebTurnOutput {
@@ -159,13 +161,15 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   const cartItemIds = cart.map((c) => c.id).filter((id): id is string => !!id);
   const cartValue   = cart.reduce((s, c) => s + c.price * c.qty, 0);
 
-  // ON_CHECKOUT_STARTED is fired by the client only after the client-side upsell
-  // prompts have already been shown (drink/dessert permission gate in PedidoClient).
-  // Pass a synthetic memory so WaiterBrainV2 skips the final upsell path and
-  // returns the checkout bridge message instead of re-showing the same prompt.
-  const waiterMemory = event === "ON_CHECKOUT_STARTED"
-    ? { ...WaiterBrainV2.createWaiterMemory(), finalUpsellPromptShown: true }
-    : undefined;
+  // Build session memory from request context.
+  // finalUpsellPromptShown is only true when the client already offered a upsell
+  // (indicated by the upsellOffered field). When not set (e.g. AutoPilot calls),
+  // WaiterBrainV2 will show the permission gate if the cart qualifies.
+  const waiterMemory: WaiterBrainV2.WaiterMemory = {
+    ...WaiterBrainV2.createWaiterMemory(),
+    suggestedProductIds:    input.suggestedProductIds ?? [],
+    finalUpsellPromptShown: event === "ON_CHECKOUT_STARTED" && (input.upsellOffered != null),
+  };
 
   const v2 = WaiterBrainV2.decide({
     event,
@@ -320,6 +324,18 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
         normalizeText(finalResponse).includes(normalizeText(s.name))
     );
     if (hit) suggestedItemName = hit.name;
+  }
+
+  // Hard guard: CHECKOUT_SUPPORT mode must never return cards or selling content.
+  const inCheckout = v2.mode === "CHECKOUT_SUPPORT" || event === "AFTER_CHECKOUT";
+  if (inCheckout) {
+    return {
+      reply:   finalResponse || "Pedido recebido 😊 Agora é só acompanhar a confirmação.",
+      cards:   [],
+      mode:    "CHECKOUT_SUPPORT",
+      options: [],
+      suggestedItemName: undefined,
+    };
   }
 
   return {

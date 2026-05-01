@@ -38,7 +38,8 @@ export type V2Event =
   | "ON_IDLE"
   | "ON_CHECKOUT_STARTED"
   | "AFTER_CHECKOUT"
-  | "ON_PERMISSION_ACCEPT"
+  | "ON_PERMISSION_ACCEPT"    // kept for backward compat
+  | "ON_PERMISSION_ACCEPTED"  // canonical form used by AutoPilot and new clients
   | "ON_PERMISSION_DECLINED";
 
 /** Flat product descriptor used for card selection (no full MenuItem needed). */
@@ -732,6 +733,7 @@ export function scoreProductForIntent(item: TaggedItem, intent: CustomerIntent, 
       score += item.tags.includes("starter") ? 20 : 0;
       score += item.tags.includes("main")    ?  5 : 0;
       score -= item.tags.includes("combo")   ? 15 : 0;
+      score -= item.tags.includes("premium") ? 25 : 0;  // premium items are not light options
       score -= item.tags.includes("drink")   ? 20 : 0;
       score -= item.tags.includes("dessert") ? 20 : 0;
       break;
@@ -806,13 +808,14 @@ export function scoreProductForIntent(item: TaggedItem, intent: CustomerIntent, 
       break;
   }
 
-  // B) Commercial value
-  if (intent !== "wants_budget_option") {
-    if (item.price >= ctx.benchmarks.median) score += 8;
-    if (item.price >= ctx.benchmarks.p75)    score += 4;
-  } else {
+  // B) Commercial value — budget/light intents prefer cheaper items; others prefer higher value.
+  if (intent === "wants_budget_option" || intent === "wants_light_option") {
     if (item.price <= ctx.benchmarks.p25)    score += 12;
     if (item.price <= ctx.benchmarks.median) score +=  5;
+    if (item.price >= ctx.benchmarks.p75)    score -=  8;  // penalize expensive items
+  } else {
+    if (item.price >= ctx.benchmarks.median) score += 8;
+    if (item.price >= ctx.benchmarks.p75)    score += 4;
   }
 
   // C) Cart fit
@@ -1472,13 +1475,14 @@ function handlePermissionDeclined(): V2Output {
 }
 
 function handleAfterCheckout(): V2Output {
+  // Static response — never use AI for post-checkout events to prevent upsell leakage.
   return {
-    message:     "",
+    message:     "Pedido recebido 😊 Agora é só acompanhar a confirmação.",
     cards:       [],
     mode:        "CHECKOUT_SUPPORT",
     options:     [],
-    requiresAI:  true,
-    aiDirective: buildAfterCheckoutDirective(),
+    requiresAI:  false,
+    aiDirective: "",
   };
 }
 
@@ -1894,7 +1898,7 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
   }
 
   // User accepted passive help
-  if (input.event === "ON_PERMISSION_ACCEPT" || msg === "want_suggestion") {
+  if (input.event === "ON_PERMISSION_ACCEPT" || input.event === "ON_PERMISSION_ACCEPTED" || msg === "want_suggestion") {
     patch.acceptedSuggestionTypes = [...new Set([...mem.acceptedSuggestionTypes, "passive_help"])];
   }
 
@@ -1923,17 +1927,34 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
 
 export function decide(input: V2Input): V2Output {
   const raw = ((): V2Output => {
-    switch (input.event) {
-      case "ON_ENTRY":               return handleEntry();
-      case "ON_MENU_MODE":           return handleMenuMode();
-      case "ON_ITEM_ADDED":          return handleItemAdded();
-      case "ON_CART_UPDATED":        return handleCartUpdated(input);
-      case "ON_IDLE":                return handleIdle(input);
-      case "ON_CHECKOUT_STARTED":    return handleCheckoutStarted(input);
-      case "AFTER_CHECKOUT":         return handleAfterCheckout();
-      case "ON_USER_MESSAGE":        return handleUserMessage(input);
-      case "ON_PERMISSION_ACCEPT":   return handlePermissionAccepted(input);
-      case "ON_PERMISSION_DECLINED": return handlePermissionDeclined();
+    try {
+      switch (input.event) {
+        case "ON_ENTRY":               return handleEntry();
+        case "ON_MENU_MODE":           return handleMenuMode();
+        case "ON_ITEM_ADDED":          return handleItemAdded();
+        case "ON_CART_UPDATED":        return handleCartUpdated(input);
+        case "ON_IDLE":                return handleIdle(input);
+        case "ON_CHECKOUT_STARTED":    return handleCheckoutStarted(input);
+        case "AFTER_CHECKOUT":         return handleAfterCheckout();
+        case "ON_USER_MESSAGE":        return handleUserMessage(input);
+        case "ON_PERMISSION_ACCEPT":
+        case "ON_PERMISSION_ACCEPTED": {
+          console.info("[WaiterBrainV2] ON_PERMISSION_ACCEPTED", JSON.stringify({
+            cartItems:  input.cartItemIds.length,
+            cartValue:  input.cartValue,
+            hasMemory:  !!input.memory,
+          }));
+          return handlePermissionAccepted(input);
+        }
+        case "ON_PERMISSION_DECLINED": return handlePermissionDeclined();
+        default: {
+          console.warn("[WaiterBrainV2] Unknown event", input.event);
+          return { ...SAFE_FALLBACK };
+        }
+      }
+    } catch (err) {
+      console.error("[WaiterBrainV2] decide() error", { event: input.event, err });
+      return { ...SAFE_FALLBACK };
     }
   })();
   const validated   = validateWaiterResponse(raw, input.catalog, input.event);
