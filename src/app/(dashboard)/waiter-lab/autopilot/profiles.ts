@@ -1,6 +1,11 @@
 import type { CustomerProfile } from "./types";
 
 export const CUSTOMER_PROFILES: CustomerProfile[] = [
+
+  // ════════════════════════════════════════════════════════════
+  //  TYPED CUSTOMER PROFILES  (A – H)
+  // ════════════════════════════════════════════════════════════
+
   // ── A: Cliente Leve Individual ───────────────────────────────────────────────
   {
     id:      "leve-individual",
@@ -135,5 +140,146 @@ export const CUSTOMER_PROFILES: CustomerProfile[] = [
     requiresCheckout: false,
     expectedOutcome:
       "Waiter deve sugerir itens premium ou mais completos via cards",
+  },
+
+  // ════════════════════════════════════════════════════════════
+  //  SILENT CUSTOMER PROFILES  (I – P)
+  // ════════════════════════════════════════════════════════════
+
+  // ── I: Cliente Calado — Temaki ────────────────────────────────────────────────
+  {
+    id:       "silent-temaki-only",
+    name:     "Cliente Calado — Temaki",
+    goal:     "Entra, adiciona temaki sem digitar, tenta checkout",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems:       [["temaki", "uramaki", "hot roll", "hossomaki"]],
+    requiresCart:          true,
+    requiresCheckout:      true,
+    requiresIdle:          false,
+    expectsCheckoutUpsell: true,
+    expectedOutcome:
+      "ON_ITEM_ADDED → cards=[], options=[]. ON_CHECKOUT_STARTED → options gate sem cards. AFTER_CHECKOUT → sem pitch de vendas.",
+  },
+
+  // ── J: Cliente Calado — Prato sem bebida ─────────────────────────────────────
+  {
+    id:       "silent-main-no-drink",
+    name:     "Cliente Calado — Prato sem bebida",
+    goal:     "Adiciona prato principal, checkout sem bebida",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems:       [[]],  // catalog[0]
+    requiresCart:          true,
+    requiresCheckout:      true,
+    requiresIdle:          false,
+    expectsCheckoutUpsell: true,
+    expectedOutcome:
+      "ON_ITEM_ADDED limpo. ON_CHECKOUT_STARTED oferece permission gate; sem invasão.",
+  },
+
+  // ── K: Cliente Calado — Prato + Bebida, sem sobremesa ────────────────────────
+  {
+    id:       "silent-main-drink-no-dessert",
+    name:     "Cliente Calado — Sem sobremesa",
+    goal:     "Adiciona prato e bebida, checkout sem sobremesa",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems: [
+      [],                                                        // food: catalog[0]
+      ["bebida", "suco", "refrigerante", "agua", "cerveja", "limonada"],
+    ],
+    requiresCart:          true,
+    requiresCheckout:      true,
+    requiresIdle:          false,
+    expectsCheckoutUpsell: true,
+    expectedOutcome:
+      "Dois ON_ITEM_ADDED limpos. Checkout deve sugerir sobremesa via options gate.",
+  },
+
+  // ── L: Cliente Calado — Montando pedido sozinho ───────────────────────────────
+  {
+    id:       "silent-multi-item-browser",
+    name:     "Cliente Calado — Montando pedido sozinho",
+    goal:     "Adiciona 3 itens clicando sem digitar, sem checkout",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems: [[], [], []],  // catalog[0], catalog[1], catalog[2]
+    requiresCart:     false,
+    requiresCheckout: false,
+    requiresIdle:     false,
+    expectedOutcome:
+      "Três ON_ITEM_ADDED retornam cards=[], options=[]. Waiter não interrompe navegação.",
+  },
+
+  // ── M: Cliente Calado — Recusa ajuda ─────────────────────────────────────────
+  {
+    id:       "silent-declines-help",
+    name:     "Cliente Calado — Recusa ajuda",
+    goal:     "Recebe idle prompt e clica Prefiro continuar",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems:     [],
+    requiresCart:        false,
+    requiresCheckout:    false,
+    requiresIdle:        true,
+    permissionResponse:  "decline",
+    expectedOutcome:
+      "ON_IDLE → options com aceite/recusa. ON_PERMISSION_DECLINED → reply neutro, cards=[], options=[]. Sem prompt repetido.",
+  },
+
+  // ── N: Cliente Calado — Aceita ajuda ─────────────────────────────────────────
+  {
+    id:       "silent-accepts-help",
+    name:     "Cliente Calado — Aceita ajuda",
+    goal:     "Recebe idle prompt e clica Quero sugestão",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems:     [],
+    requiresCart:        false,
+    requiresCheckout:    false,
+    requiresIdle:        true,
+    permissionResponse:  "accept",
+    expectedOutcome:
+      "ON_IDLE → options. ON_PERMISSION_ACCEPTED → cards[] com produtos válidos. Sem options simultâneos (Rule 9).",
+  },
+
+  // ── O: Cliente Calado — Checkout rápido ──────────────────────────────────────
+  {
+    id:       "silent-fast-checkout",
+    name:     "Cliente Calado — Checkout rápido",
+    goal:     "Adiciona item e clica finalizar imediatamente",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems:       [[]],
+    requiresCart:          true,
+    requiresCheckout:      true,
+    requiresIdle:          false,
+    expectsCheckoutUpsell: true,
+    expectedOutcome:
+      "ON_ITEM_ADDED limpo. ON_CHECKOUT_STARTED → uma tentativa de upsell via options, não repetida. AFTER_CHECKOUT sem vendas.",
+  },
+
+  // ── P: Cliente Calado — Sensível à invasão ───────────────────────────────────
+  {
+    id:       "silent-invasion-sensitive",
+    name:     "Cliente Calado — Sensível à invasão",
+    goal:     "Adiciona produto e continua navegando — testa Rule 7 rigorosamente",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems:  [[]],
+    requiresCart:     false,
+    requiresCheckout: false,
+    requiresIdle:     false,
+    expectedOutcome:
+      "ON_ITEM_ADDED → cards=[], options=[], mode=BROWSE. Qualquer card ou option retornado é invasive_after_item_add.",
   },
 ];

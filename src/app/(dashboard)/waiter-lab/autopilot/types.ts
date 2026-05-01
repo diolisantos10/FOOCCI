@@ -19,6 +19,12 @@ export interface CustomerProfile {
   requiresCart:     boolean;
   requiresCheckout: boolean;
   expectedOutcome:  string;
+  // ── Silent browsing extensions ─────────────────────────────────────────────
+  isSilent?:             boolean;
+  silentCartItems?:      string[][];  // per-item hint arrays; resolved against catalog by name
+  permissionResponse?:   "accept" | "decline";
+  requiresIdle?:         boolean;
+  expectsCheckoutUpsell?: boolean;    // ON_CHECKOUT_STARTED must return options gate
 }
 
 // ── Shared item shape ─────────────────────────────────────────────────────────
@@ -53,7 +59,18 @@ export type FailureType =
   | "unknown_error"
   | "bad_product_fit"
   | "repeated_suggestion"
-  | "invalid_card_id";
+  | "invalid_card_id"
+  // ── Silent customer failures ───────────────────────────────────────────────
+  | "missed_final_upsell"
+  | "premature_intervention"
+  | "repeated_prompt"
+  | "ignored_decline"
+  | "wrong_cart_context"
+  | "missed_drink_opportunity"
+  | "missed_dessert_opportunity"
+  | "invasive_after_item_add"
+  | "checkout_prompt_repeated"
+  | "silent_customer_not_supported";
 
 export type Severity = "low" | "medium" | "high" | "critical";
 
@@ -98,6 +115,7 @@ export interface ScenarioResult {
   orderConfirmed:         boolean;
   improvementSuggestions: string[];
   durationMs:             number;
+  isSilent:               boolean;
   // ── Diagnostic fields ─────────────────────────────────────────────────────
   customerGoal:      string;
   expectedIntent:    string;
@@ -123,6 +141,19 @@ export interface AreaScores {
   userControlScore:    number;
   checkoutSafetyScore: number;
   overallScore:        number;
+}
+
+// ── Silent customer metrics ───────────────────────────────────────────────────
+
+export interface SilentMetrics {
+  silentScenarioCount:       number;
+  silentPassed:              number;
+  silentFailed:              number;
+  silentConversionRate:      number;
+  finalUpsellOfferedRate:    number;
+  finalUpsellAcceptedRate:   number;
+  invasionFailures:          number;
+  missedUpsellOpportunities: number;
 }
 
 // ── Fix recommendation ────────────────────────────────────────────────────────
@@ -155,6 +186,7 @@ export interface AutoPilotReport {
   scenarioResults:  ScenarioResult[];
   areaScores:       AreaScores;
   topFixes:         FixRecommendation[];
+  silentMetrics:    SilentMetrics;
 }
 
 // ── Runner state ──────────────────────────────────────────────────────────────

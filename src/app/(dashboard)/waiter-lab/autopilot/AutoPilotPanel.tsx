@@ -35,11 +35,11 @@ const SPEED_OPTIONS: { label: string; ms: number }[] = [
   { label: "Devagar", ms: 1800 },
 ];
 
-// ── Intent label helper ───────────────────────────────────────────────────────
+// ── Intent label helpers ──────────────────────────────────────────────────────
 
 function expectedIntentFromBehavior(behavior: CustomerProfile["behavior"]): string {
   const map: Record<CustomerProfile["behavior"], string> = {
-    passive:    "Aguardar iniciativa do Waiter",
+    passive:    "Comportamento behavioral (silent browsing)",
     guided:     "Receber sugestões guiadas com cards",
     direct:     "Receber recomendação direta com cards",
     indecisive: "Receber qualificação via options[] e depois cards",
@@ -55,6 +55,37 @@ const MODE_LABEL: Record<string, string> = {
   INTERVENTION:     "Intervenção de vendas (INTERVENTION)",
   CHECKOUT_SUPPORT: "Suporte a checkout (CHECKOUT_SUPPORT)",
 };
+
+// ── Catalog resolution for silent profiles ────────────────────────────────────
+
+function findCatalogItemByHints(
+  catalog:       CatalogItem[],
+  hints:         string[],
+  fallbackIndex: number = 0,
+): CatalogItem | null {
+  for (const hint of hints) {
+    const lh    = hint.toLowerCase();
+    const found = catalog.find((item) => item.name.toLowerCase().includes(lh));
+    if (found) return found;
+  }
+  return catalog[fallbackIndex] ?? catalog[0] ?? null;
+}
+
+function resolveSilentCartItems(
+  catalog:    CatalogItem[],
+  hintGroups: string[][],
+): CatalogItem[] {
+  if (!hintGroups || hintGroups.length === 0) {
+    return catalog[0] ? [catalog[0]] : [];
+  }
+  const items: CatalogItem[] = [];
+  for (let i = 0; i < hintGroups.length; i++) {
+    const hints = hintGroups[i] ?? [];
+    const item  = findCatalogItemByHints(catalog, hints, i);
+    if (item) items.push(item);
+  }
+  return items.length > 0 ? items : (catalog[0] ? [catalog[0]] : []);
+}
 
 // ── API helper ────────────────────────────────────────────────────────────────
 
@@ -97,15 +128,17 @@ async function callWaiterApi(
 // ── Scenario runner ───────────────────────────────────────────────────────────
 
 async function runScenario(
-  profile:     CustomerProfile,
-  slug:        string,
-  catalogIds:  Set<string>,
-  firstItem:   CatalogItem | null,
-  stepDelay:   number,
-  stopRef:     React.MutableRefObject<boolean>,
-  onStep:      (step: ScenarioStep) => void,
+  profile:   CustomerProfile,
+  slug:      string,
+  catalog:   CatalogItem[],
+  stepDelay: number,
+  stopRef:   React.MutableRefObject<boolean>,
+  onStep:    (step: ScenarioStep) => void,
 ): Promise<ScenarioResult> {
-  const t0 = Date.now();
+  const t0         = Date.now();
+  const catalogIds = new Set(catalog.map((c) => c.id));
+  const firstItem  = catalog[0] ?? null;
+
   const steps:    ScenarioStep[]                       = [];
   const history:  { role: string; content: string }[] = [];
   const cart:     CartItem[]                           = [];
@@ -113,40 +146,86 @@ async function runScenario(
   const allMessages: string[]      = [];
   const allFailures: FailureType[] = [];
 
-  let checkoutReached = false;
-  let orderConfirmed  = false;
-  let detectedMode    = "BROWSE";
-  let lastReply       = "";
-  let lastOptions:    { label: string; value: string }[] = [];
-  const seenCardIds   = new Set<string>();
+  let checkoutReached    = false;
+  let orderConfirmed     = false;
+  let detectedMode       = "BROWSE";
+  let lastReply          = "";
+  let lastOptions:       { label: string; value: string }[] = [];
+  let permissionDeclined = false;
+  let promptsGiven       = 0;
 
-  // Build step sequence
-  type StepDef = { event: string; message: string; requireCards: boolean; lastAddedId?: string };
+  const seenCardIds = new Set<string>();
+
+  // ── Build step sequence ────────────────────────────────────────────────────
+
+  type StepDef = {
+    event:        string;
+    message:      string;
+    requireCards: boolean;
+    lastAddedId?: string;
+  };
+
   const seq: StepDef[] = [{ event: "ON_ENTRY", message: "", requireCards: false }];
 
-  if (profile.behavior === "indecisive" || profile.behavior === "passive") {
-    seq.push({ event: "ON_IDLE", message: "", requireCards: false });
-  }
+  if (profile.isSilent) {
+    // Cart additions via silent item resolution
+    const silentItems = resolveSilentCartItems(catalog, profile.silentCartItems ?? []);
+    for (const item of silentItems) {
+      seq.push({ event: "ON_ITEM_ADDED", message: "", requireCards: false, lastAddedId: item.id });
+    }
 
-  profile.intentMessages.forEach((msg, i) => {
-    const isLast = i === profile.intentMessages.length - 1;
-    seq.push({
-      event:        "ON_USER_MESSAGE",
-      message:      msg,
-      requireCards: isLast && profile.requiresCart && catalogIds.size > 0,
+    // Optional idle prompt
+    if (profile.requiresIdle) {
+      seq.push({ event: "ON_IDLE", message: "", requireCards: false });
+    }
+
+    // Permission response
+    if (profile.permissionResponse === "accept") {
+      seq.push({
+        event:        "ON_PERMISSION_ACCEPTED",
+        message:      "Quero sugestão",
+        requireCards: catalogIds.size > 0,
+      });
+    } else if (profile.permissionResponse === "decline") {
+      seq.push({
+        event:        "ON_PERMISSION_DECLINED",
+        message:      "Prefiro continuar",
+        requireCards: false,
+      });
+    }
+
+    if (profile.requiresCheckout) {
+      seq.push({ event: "ON_CHECKOUT_STARTED", message: "", requireCards: false });
+      seq.push({ event: "AFTER_CHECKOUT",       message: "", requireCards: false });
+    }
+
+  } else {
+    // Typed profile sequence
+    if (profile.behavior === "indecisive" || profile.behavior === "passive") {
+      seq.push({ event: "ON_IDLE", message: "", requireCards: false });
+    }
+
+    profile.intentMessages.forEach((msg, i) => {
+      const isLast = i === profile.intentMessages.length - 1;
+      seq.push({
+        event:        "ON_USER_MESSAGE",
+        message:      msg,
+        requireCards: isLast && profile.requiresCart && catalogIds.size > 0,
+      });
     });
-  });
 
-  if (profile.requiresCart && firstItem) {
-    seq.push({ event: "ON_ITEM_ADDED", message: "", requireCards: false, lastAddedId: firstItem.id });
+    if (profile.requiresCart && firstItem) {
+      seq.push({ event: "ON_ITEM_ADDED", message: "", requireCards: false, lastAddedId: firstItem.id });
+    }
+
+    if (profile.requiresCheckout) {
+      seq.push({ event: "ON_CHECKOUT_STARTED", message: "", requireCards: false });
+      seq.push({ event: "AFTER_CHECKOUT",       message: "", requireCards: false });
+    }
   }
 
-  if (profile.requiresCheckout) {
-    seq.push({ event: "ON_CHECKOUT_STARTED", message: "", requireCards: false });
-    seq.push({ event: "AFTER_CHECKOUT",       message: "", requireCards: false });
-  }
+  // ── Execute steps ──────────────────────────────────────────────────────────
 
-  // Execute
   for (let i = 0; i < seq.length; i++) {
     if (stopRef.current) break;
 
@@ -165,37 +244,153 @@ async function runScenario(
       if (message)        history.push({ role: "user",      content: message        });
       if (response.reply) history.push({ role: "assistant", content: response.reply });
 
-      if (event === "ON_ITEM_ADDED" && firstItem) {
-        const existing = cart.find((c) => c.id === firstItem.id);
-        if (existing) existing.qty += 1;
-        else          cart.push({ ...firstItem, qty: 1 });
+      // Cart update — use lastAddedId to find the actual catalog item
+      if (event === "ON_ITEM_ADDED" && lastAddedId) {
+        const item = catalog.find((c) => c.id === lastAddedId) ?? firstItem;
+        if (item) {
+          const existing = cart.find((c) => c.id === item.id);
+          if (existing) existing.qty += 1;
+          else          cart.push({ ...item, qty: 1 });
+        }
       }
 
-      if (response.reply)             lastReply = response.reply;
+      if (response.reply)              lastReply   = response.reply;
       if (response.options.length > 0) lastOptions = response.options;
-      if (event === "ON_USER_MESSAGE") detectedMode = response.mode;
+      if (event === "ON_USER_MESSAGE" || event === "ON_PERMISSION_ACCEPTED") {
+        detectedMode = response.mode;
+      }
 
       allMessages.push(response.reply);
       allCards.push(...response.cards);
       if (event === "ON_CHECKOUT_STARTED") checkoutReached = true;
       if (event === "AFTER_CHECKOUT")       orderConfirmed  = true;
 
-      const v    = validateStep(event, message, response, catalogIds, requireCards, seenCardIds);
+      // Track prompts offered (options on non-item events)
+      if (response.options.length > 0 &&
+          event !== "ON_ITEM_ADDED" && event !== "ON_ENTRY" && event !== "ON_PERMISSION_DECLINED") {
+        promptsGiven++;
+      }
+
+      const v = validateStep(event, message, response, catalogIds, requireCards, seenCardIds);
       stepAssertions = v.assertions;
       stepFailures   = v.failureTypes;
 
-      // Track seen cards for duplicate detection in subsequent steps
+      // Update seen cards for duplicate tracking
       for (const id of response.cards) seenCardIds.add(id);
 
-      // Budget validation: flag if cart item price exceeds profile budget
-      if (event === "ON_ITEM_ADDED" && firstItem && profile.budget !== undefined) {
-        if (firstItem.price > profile.budget) {
-          stepFailures = [...stepFailures, "bad_product_fit"];
+      // Budget check for cart additions
+      if (event === "ON_ITEM_ADDED" && lastAddedId && profile.budget !== undefined) {
+        const item = catalog.find((c) => c.id === lastAddedId) ?? firstItem;
+        if (item && item.price > profile.budget) {
+          stepFailures    = [...stepFailures, "bad_product_fit"];
+          stepAssertions  = [
+            ...stepAssertions,
+            {
+              label: `Budget: ${item.name} (R$${item.price.toFixed(2)}) excede orçamento R$${profile.budget}`,
+              pass:  false,
+            },
+          ];
+        }
+      }
+
+      // ── Silent profile post-assertions ─────────────────────────────────────
+
+      if (profile.isSilent) {
+
+        // ON_ITEM_ADDED: Rule 7 already covered; additionally tag as invasive if it failed
+        if (event === "ON_ITEM_ADDED") {
+          const invaded = response.cards.length > 0 || response.options.length > 0;
+          if (invaded && !stepFailures.includes("ui_invasion_after_click")) {
+            stepFailures   = [...stepFailures, "invasive_after_item_add"];
+            stepAssertions = [
+              ...stepAssertions,
+              {
+                label:  "Rule 7 (silent): ON_ITEM_ADDED → cards=[], options=[]",
+                pass:   false,
+                detail: `cards=${response.cards.length}, options=${response.options.length}`,
+              },
+            ];
+          }
+        }
+
+        // After permission declined: next steps must not offer cards or options
+        if (permissionDeclined && event !== "ON_PERMISSION_DECLINED") {
+          const violated = response.cards.length > 0 || response.options.length > 0;
+          if (violated) {
+            stepFailures   = [...stepFailures, "ignored_decline"];
+            stepAssertions = [
+              ...stepAssertions,
+              {
+                label:  "Após recusa: UI silenciosa — sem cards ou options",
+                pass:   false,
+                detail: `cards=${response.cards.length}, options=${response.options.length}`,
+              },
+            ];
+          } else {
+            stepAssertions = [
+              ...stepAssertions,
+              { label: "Após recusa: UI silenciosa respeitada", pass: true },
+            ];
+          }
+        }
+
+        // ON_PERMISSION_DECLINED → mark state
+        if (event === "ON_PERMISSION_DECLINED") {
+          permissionDeclined = true;
+        }
+
+        // ON_PERMISSION_ACCEPTED → expect cards
+        if (event === "ON_PERMISSION_ACCEPTED") {
+          const hasCards = response.cards.length > 0;
+          if (!hasCards) {
+            stepFailures   = [...stepFailures, "missed_final_upsell"];
+            stepAssertions = [
+              ...stepAssertions,
+              {
+                label:  "Após aceite: cards esperados",
+                pass:   false,
+                detail: `cards=0, mode=${response.mode}`,
+              },
+            ];
+          } else {
+            stepAssertions = [
+              ...stepAssertions,
+              { label: "Após aceite: cards retornados", pass: true },
+            ];
+          }
+        }
+
+        // ON_CHECKOUT_STARTED: expect permission gate (options) for upsell-enabled profiles
+        if (event === "ON_CHECKOUT_STARTED" && profile.expectsCheckoutUpsell) {
+          const hasGate = response.options.length > 0;
+          if (!hasGate) {
+            stepFailures   = [...stepFailures, "missed_final_upsell"];
+            stepAssertions = [
+              ...stepAssertions,
+              {
+                label:  "Checkout upsell gate esperado via options",
+                pass:   false,
+                detail: `options=0, mode=${response.mode}`,
+              },
+            ];
+          } else {
+            stepAssertions = [
+              ...stepAssertions,
+              { label: "Checkout upsell gate presente", pass: true },
+            ];
+          }
+        }
+
+        // Repeated prompt detection
+        if (promptsGiven > 1 && response.options.length > 0 &&
+            event !== "ON_ITEM_ADDED" && event !== "ON_ENTRY") {
+          stepFailures   = [...stepFailures, "repeated_prompt"];
           stepAssertions = [
             ...stepAssertions,
             {
-              label: `Budget: ${firstItem.name} (R$${firstItem.price.toFixed(2)}) excede orçamento R$${profile.budget}`,
-              pass:  false,
+              label:  "Sem prompt repetido no mesmo cenário",
+              pass:   false,
+              detail: `Prompt #${promptsGiven} no evento ${event}`,
             },
           ];
         }
@@ -229,7 +424,8 @@ async function runScenario(
     }
   }
 
-  if (profile.requiresCheckout && !checkoutReached)               allFailures.push("checkout_not_reached");
+  // Checkout completeness checks
+  if (profile.requiresCheckout && !checkoutReached)                   allFailures.push("checkout_not_reached");
   if (profile.requiresCheckout && checkoutReached && !orderConfirmed) allFailures.push("order_not_confirmed");
 
   const unique = [...new Set(allFailures)];
@@ -256,6 +452,7 @@ async function runScenario(
     orderConfirmed,
     improvementSuggestions: unique.map((f) => IMPROVEMENT_SUGGESTIONS[f]).filter(Boolean),
     durationMs:             Date.now() - t0,
+    isSilent:               profile.isSilent ?? false,
     // ── Diagnostic fields ───────────────────────────────────────────────────
     customerGoal:      profile.goal,
     expectedIntent:    expectedIntentFromBehavior(profile.behavior),
@@ -323,13 +520,19 @@ function SeverityBadge({ severity }: { severity: Severity }) {
   );
 }
 
+function TypeBadge({ isSilent }: { isSilent: boolean }) {
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+      isSilent ? "bg-blue-900 text-blue-300" : "bg-gray-800 text-gray-500"
+    }`}>
+      {isSilent ? "silent" : "typed"}
+    </span>
+  );
+}
+
 function AreaScoreBar({ label, score }: { label: string; score: number }) {
-  const color =
-    score >= 80 ? "text-green-400" :
-    score >= 50 ? "text-amber-400" : "text-red-400";
-  const barColor =
-    score >= 80 ? "bg-green-700" :
-    score >= 50 ? "bg-amber-700" : "bg-red-700";
+  const color    = score >= 80 ? "text-green-400" : score >= 50 ? "text-amber-400" : "text-red-400";
+  const barColor = score >= 80 ? "bg-green-700"   : score >= 50 ? "bg-amber-700"   : "bg-red-700";
   return (
     <div className="flex items-center gap-1.5">
       <span className="w-20 shrink-0 text-[9px] text-gray-600 leading-none">{label}</span>
@@ -359,8 +562,6 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
   const [expandedResult,   setExpandedResult]  = useState<string | null>(null);
   const stopRef = useRef(false);
 
-  const catalogIds = new Set(catalog.map((c) => c.id));
-  const firstItem  = catalog[0] ?? null;
   const stepDelay  = SPEED_OPTIONS[speedIdx]?.ms ?? 900;
 
   // ── Runner ──────────────────────────────────────────────────────────────────
@@ -389,7 +590,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
 
       try {
         const result = await runScenario(
-          profile, slug, catalogIds, firstItem, stepDelay, stopRef,
+          profile, slug, catalog, stepDelay, stopRef,
           (step) => {
             setCurrentStepLabel(
               `${step.event}${step.message ? `: "${step.message.slice(0, 40)}"` : ""}`,
@@ -399,7 +600,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
         );
         accumulated.push(result);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg    = err instanceof Error ? err.message : String(err);
         const unique: FailureType[] = ["unknown_error"];
         accumulated.push({
           profileId:              profile.id,
@@ -416,6 +617,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
           orderConfirmed:         false,
           improvementSuggestions: [IMPROVEMENT_SUGGESTIONS.unknown_error],
           durationMs:             0,
+          isSilent:               profile.isSilent ?? false,
           customerGoal:           profile.goal,
           expectedIntent:         expectedIntentFromBehavior(profile.behavior),
           detectedIntent:         "—",
@@ -460,8 +662,10 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
     });
   };
 
-  const selectAll  = () => setSelectedIds(new Set(CUSTOMER_PROFILES.map((p) => p.id)));
-  const selectNone = () => setSelectedIds(new Set());
+  const selectAll   = () => setSelectedIds(new Set(CUSTOMER_PROFILES.map((p) => p.id)));
+  const selectNone  = () => setSelectedIds(new Set());
+  const selectTyped = () => setSelectedIds(new Set(CUSTOMER_PROFILES.filter((p) => !p.isSilent).map((p) => p.id)));
+  const selectSilent = () => setSelectedIds(new Set(CUSTOMER_PROFILES.filter((p) => p.isSilent).map((p) => p.id)));
 
   const currentProfile = CUSTOMER_PROFILES.filter((p) => selectedIds.has(p.id))[profileIdx];
 
@@ -477,19 +681,40 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
         <div className="border-b border-gray-800 px-3 py-2">
           <div className="mb-1.5 flex items-center justify-between">
             <span className="text-[10px] uppercase tracking-widest text-gray-600">Perfis</span>
-            <span className="flex gap-2">
-              <button onClick={selectAll}  className="text-[9px] text-gray-600 hover:text-amber-400">todos</button>
-              <button onClick={selectNone} className="text-[9px] text-gray-600 hover:text-red-400">nenhum</button>
+            <span className="flex gap-1.5">
+              <button onClick={selectAll}    className="text-[9px] text-gray-600 hover:text-amber-400">todos</button>
+              <button onClick={selectNone}   className="text-[9px] text-gray-600 hover:text-red-400">nenhum</button>
+              <button onClick={selectTyped}  className="text-[9px] text-gray-600 hover:text-gray-300">T</button>
+              <button onClick={selectSilent} className="text-[9px] text-blue-700 hover:text-blue-400">S</button>
             </span>
           </div>
-          <div className="space-y-1">
-            {CUSTOMER_PROFILES.map((p) => (
+
+          {/* Typed profiles */}
+          <div className="mb-1 text-[9px] text-gray-700 uppercase tracking-wide">Digitados</div>
+          <div className="space-y-1 mb-2">
+            {CUSTOMER_PROFILES.filter((p) => !p.isSilent).map((p) => (
               <label key={p.id} className="flex cursor-pointer items-start gap-1.5">
                 <input
                   type="checkbox"
                   checked={selectedIds.has(p.id)}
                   onChange={() => toggleProfile(p.id)}
                   className="mt-px shrink-0 accent-amber-500"
+                />
+                <span className="text-[10px] leading-snug text-gray-400">{p.name}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* Silent profiles */}
+          <div className="mb-1 text-[9px] text-blue-700 uppercase tracking-wide">Silent</div>
+          <div className="space-y-1">
+            {CUSTOMER_PROFILES.filter((p) => p.isSilent).map((p) => (
+              <label key={p.id} className="flex cursor-pointer items-start gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(p.id)}
+                  onChange={() => toggleProfile(p.id)}
+                  className="mt-px shrink-0 accent-blue-500"
                 />
                 <span className="text-[10px] leading-snug text-gray-400">{p.name}</span>
               </label>
@@ -575,7 +800,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
         )}
       </div>
 
-      {/* ── Right: Live progress + Report ───────────────────────────────────── */}
+      {/* ── Right: Live + Report ─────────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col overflow-hidden">
 
         {/* ── Idle ──────────────────────────────────────────────────────────── */}
@@ -584,7 +809,11 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
             <span className="text-3xl">🤖</span>
             <p className="text-sm font-semibold text-gray-400">AutoPilot pronto</p>
             <p className="max-w-xs text-[11px] text-gray-600">
-              {selectedIds.size} perfis selecionados · catálogo: {catalog.length} itens
+              {selectedIds.size} perfis ({
+                CUSTOMER_PROFILES.filter((p) => selectedIds.has(p.id) && !p.isSilent).length
+              }T + {
+                CUSTOMER_PROFILES.filter((p) => selectedIds.has(p.id) && p.isSilent).length
+              }S) · catálogo: {catalog.length} itens
             </p>
             <p className="text-[10px] text-gray-700">
               Clique <span className="text-amber-500">▶ Run AutoPilot</span> para iniciar
@@ -598,6 +827,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
             <div className="shrink-0 border-b border-gray-800 px-3 py-2">
               <div className="flex items-center gap-2">
                 <StatusBadge status="running" />
+                {currentProfile && <TypeBadge isSilent={currentProfile.isSilent ?? false} />}
                 <span className="text-[11px] font-semibold text-gray-300">
                   {currentProfile?.name ?? "…"}
                 </span>
@@ -670,249 +900,281 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
         )}
 
         {/* ── Done / Stopped: Report ─────────────────────────────────────────── */}
-        {(status === "done" || status === "stopped") && report && (
-          <div className="flex flex-1 flex-col overflow-hidden">
+        {(status === "done" || status === "stopped") && report && (() => {
+          const typed  = report.scenarioResults.filter((r) => !r.isSilent);
+          const silent = report.scenarioResults.filter((r) =>  r.isSilent);
+          const typedPassed  = typed.filter((r)  => r.status === "PASS").length;
+          const silentPassed = silent.filter((r) => r.status === "PASS").length;
+          const sm = report.silentMetrics;
 
-            {/* Score header */}
-            <div className="shrink-0 border-b border-gray-800 px-4 py-3">
-              <div className="flex items-start gap-6">
-                <div className="flex flex-col items-center">
-                  <ScoreRing score={report.score} />
-                  <span className="mt-0.5 text-[9px] uppercase tracking-wide text-gray-600">Score</span>
+          return (
+            <div className="flex flex-1 flex-col overflow-hidden">
+
+              {/* Score header */}
+              <div className="shrink-0 border-b border-gray-800 px-4 py-3">
+                <div className="flex items-start gap-6">
+                  <div className="flex flex-col items-center">
+                    <ScoreRing score={report.score} />
+                    <span className="mt-0.5 text-[9px] uppercase tracking-wide text-gray-600">Score</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                    <div>
+                      <span className={typedPassed === typed.length ? "text-green-400" : "text-amber-400"} style={{ fontWeight: "bold" }}>
+                        {typedPassed}/{typed.length}
+                      </span>
+                      <span className="ml-1 text-gray-600">typed</span>
+                    </div>
+                    <div>
+                      <span className={silentPassed === silent.length ? "text-green-400" : "text-red-400"} style={{ fontWeight: "bold" }}>
+                        {silentPassed}/{silent.length}
+                      </span>
+                      <span className="ml-1 text-blue-700">silent</span>
+                    </div>
+                    <div>
+                      <span className="text-amber-300 font-bold">{report.conversionRate}%</span>
+                      <span className="ml-1 text-gray-600">checkout</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-300 font-bold">{report.avgTurns}</span>
+                      <span className="ml-1 text-gray-600">turnos avg</span>
+                    </div>
+                  </div>
+                  {status === "stopped" && (
+                    <span className="ml-auto text-[10px] text-amber-500">Interrompido</span>
+                  )}
                 </div>
-                <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-[11px]">
-                  <div>
-                    <span className="text-green-400 font-bold">{report.passed}</span>
-                    <span className="ml-1 text-gray-600">passou</span>
-                  </div>
-                  <div>
-                    <span className="text-red-400 font-bold">{report.failed}</span>
-                    <span className="ml-1 text-gray-600">falhou</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-300 font-bold">{report.totalScenarios}</span>
-                    <span className="ml-1 text-gray-600">total</span>
-                  </div>
-                  <div>
-                    <span className="text-amber-300 font-bold">{report.conversionRate}%</span>
-                    <span className="ml-1 text-gray-600">checkout</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-300 font-bold">{report.avgTurns}</span>
-                    <span className="ml-1 text-gray-600">turnos avg</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-300 font-bold">{report.avgCardsReturned}</span>
-                    <span className="ml-1 text-gray-600">cards avg</span>
-                  </div>
-                </div>
-                {status === "stopped" && (
-                  <span className="ml-auto text-[10px] text-amber-500">Interrompido</span>
-                )}
               </div>
-            </div>
 
-            {/* Area scores */}
-            <div className="shrink-0 border-b border-gray-800 px-3 py-2">
-              <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Scores por área</div>
-              <div className="space-y-1">
-                <AreaScoreBar label="Intenção"    score={report.areaScores.intentScore} />
-                <AreaScoreBar label="Produto"     score={report.areaScores.productFitScore} />
-                <AreaScoreBar label="Sinc. Visual" score={report.areaScores.visualSyncScore} />
-                <AreaScoreBar label="Copy"        score={report.areaScores.salesCopyScore} />
-                <AreaScoreBar label="Controle UI" score={report.areaScores.userControlScore} />
-                <AreaScoreBar label="Checkout"    score={report.areaScores.checkoutSafetyScore} />
-              </div>
-            </div>
-
-            {/* Top fixes */}
-            {report.topFixes.length > 0 && (
+              {/* Area scores */}
               <div className="shrink-0 border-b border-gray-800 px-3 py-2">
-                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">
-                  Top {report.topFixes.length} correções prioritárias
+                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Scores por área</div>
+                <div className="space-y-1">
+                  <AreaScoreBar label="Intenção"     score={report.areaScores.intentScore} />
+                  <AreaScoreBar label="Produto"      score={report.areaScores.productFitScore} />
+                  <AreaScoreBar label="Sinc. Visual" score={report.areaScores.visualSyncScore} />
+                  <AreaScoreBar label="Copy"         score={report.areaScores.salesCopyScore} />
+                  <AreaScoreBar label="Controle UI"  score={report.areaScores.userControlScore} />
+                  <AreaScoreBar label="Checkout"     score={report.areaScores.checkoutSafetyScore} />
                 </div>
+              </div>
+
+              {/* Silent metrics */}
+              {sm.silentScenarioCount > 0 && (
+                <div className="shrink-0 border-b border-gray-800 px-3 py-2">
+                  <div className="mb-1.5 text-[10px] uppercase tracking-widest text-blue-700">
+                    Métricas silent ({sm.silentPassed}/{sm.silentScenarioCount} passou)
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px]">
+                    <div>
+                      <span className="text-gray-600">Conversão: </span>
+                      <span className={sm.silentConversionRate >= 80 ? "text-green-400" : "text-amber-400"}>
+                        {sm.silentConversionRate}%
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Upsell oferecido: </span>
+                      <span className={sm.finalUpsellOfferedRate >= 80 ? "text-green-400" : "text-amber-400"}>
+                        {sm.finalUpsellOfferedRate}%
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Upsell aceito: </span>
+                      <span className="text-gray-300">{sm.finalUpsellAcceptedRate}%</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Invasões: </span>
+                      <span className={sm.invasionFailures === 0 ? "text-green-400" : "text-red-400"}>
+                        {sm.invasionFailures}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-gray-600">Upsells perdidos: </span>
+                      <span className={sm.missedUpsellOpportunities === 0 ? "text-green-400" : "text-amber-400"}>
+                        {sm.missedUpsellOpportunities}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Top fixes */}
+              {report.topFixes.length > 0 && (
+                <div className="shrink-0 border-b border-gray-800 px-3 py-2">
+                  <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">
+                    Top {report.topFixes.length} correções
+                  </div>
+                  <div className="space-y-1.5">
+                    {report.topFixes.map((fix) => (
+                      <div key={fix.failureType} className="rounded border border-gray-800 bg-gray-900/50 px-2 py-1.5">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="shrink-0 text-[9px] font-bold text-amber-500">#{fix.priority}</span>
+                          <span className="rounded bg-red-950/60 px-1 py-px text-[9px] font-mono text-red-400">
+                            {fix.failureType}
+                          </span>
+                          <span className="text-[9px] text-gray-600">{fix.affectedScenarios.length} cenário(s)</span>
+                        </div>
+                        <p className="text-[9px] text-gray-500">
+                          <span className="text-gray-600">Área:</span>{" "}
+                          <span className="text-amber-400/80">{fix.implementationArea}</span>
+                        </p>
+                        <p className="text-[9px] text-gray-500">{fix.expectedImpact}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Failure type tags */}
+              {Object.keys(report.failureTypes).length > 0 && (
+                <div className="shrink-0 border-b border-gray-800 px-3 py-2">
+                  <div className="mb-1 text-[10px] uppercase tracking-widest text-gray-600">Falhas detectadas</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(report.failureTypes)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([ft, count]) => (
+                        <span
+                          key={ft}
+                          title={`${FAILURE_TO_FIX_AREA[ft as FailureType]} — ${IMPROVEMENT_SUGGESTIONS[ft as FailureType]}`}
+                          className="rounded bg-red-950/40 px-1.5 py-0.5 text-[9px] text-red-400"
+                        >
+                          {ft} ×{count}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Scenario results */}
+              <div className="flex-1 overflow-y-auto px-3 py-2">
+                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Cenários</div>
                 <div className="space-y-2">
-                  {report.topFixes.map((fix) => (
-                    <div key={fix.failureType} className="rounded border border-gray-800 bg-gray-900/50 px-2 py-1.5">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="shrink-0 text-[9px] font-bold text-amber-500">#{fix.priority}</span>
-                        <span className="rounded bg-red-950/60 px-1 py-px text-[9px] font-mono text-red-400">
-                          {fix.failureType}
+                  {report.scenarioResults.map((r) => (
+                    <div
+                      key={r.profileId}
+                      className={`rounded border ${
+                        r.status === "PASS"
+                          ? "border-green-900 bg-green-950/10"
+                          : "border-red-900 bg-red-950/10"
+                      }`}
+                    >
+                      {/* Header */}
+                      <button
+                        onClick={() =>
+                          setExpandedResult(expandedResult === r.profileId ? null : r.profileId)
+                        }
+                        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left"
+                      >
+                        <StatusBadge status={r.status} />
+                        <SeverityBadge severity={r.severity} />
+                        <TypeBadge isSilent={r.isSilent} />
+                        <span className="flex-1 text-[10px] font-semibold text-gray-300">
+                          {r.profileName}
                         </span>
                         <span className="text-[9px] text-gray-600">
-                          {fix.affectedScenarios.length} cenário(s)
+                          {r.stepsRun}t · {r.cardsShown.length}c
+                          {r.checkoutReached ? " · ✓chk" : ""}
                         </span>
-                      </div>
-                      <p className="text-[9px] text-gray-500 leading-relaxed">
-                        <span className="text-gray-600">Área:</span>{" "}
-                        <span className="text-amber-400/80">{fix.implementationArea}</span>
-                      </p>
-                      <p className="text-[9px] text-gray-500 leading-relaxed">
-                        <span className="text-gray-600">Correção:</span>{" "}
-                        {fix.expectedImpact}
-                      </p>
+                        <span className="text-[10px] text-gray-700">
+                          {expandedResult === r.profileId ? "▲" : "▼"}
+                        </span>
+                      </button>
+
+                      {/* Expanded diagnostic */}
+                      {expandedResult === r.profileId && (
+                        <div className="border-t border-gray-800 px-2 py-2 space-y-2">
+
+                          {/* Intent comparison */}
+                          <div className="rounded bg-gray-900/60 px-2 py-1.5 space-y-0.5">
+                            <p className="text-[9px] text-gray-600 font-semibold uppercase tracking-wide mb-1">Intenção</p>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[9px]">
+                              <span className="text-gray-600">Esperada:</span>
+                              <span className="text-gray-400">{r.expectedIntent}</span>
+                              <span className="text-gray-600">Detectada:</span>
+                              <span className="text-amber-400">{r.detectedIntent}</span>
+                            </div>
+                          </div>
+
+                          {/* Action comparison */}
+                          <div className="rounded bg-gray-900/60 px-2 py-1.5 space-y-0.5">
+                            <p className="text-[9px] text-gray-600 font-semibold uppercase tracking-wide mb-1">Ação</p>
+                            <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[9px]">
+                              <span className="text-gray-600">Esperada:</span>
+                              <span className="text-gray-400">{r.expectedAction}</span>
+                              <span className="text-gray-600">Real:</span>
+                              <span className={r.status === "PASS" ? "text-green-400" : "text-amber-400"}>
+                                {r.actualAction}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Failures + diagnosis */}
+                          {r.failures.length > 0 && (
+                            <div className="rounded bg-red-950/20 px-2 py-1.5 space-y-1">
+                              <p className="text-[9px] text-red-400 font-semibold">
+                                Falhas: {r.failures.join(", ")}
+                              </p>
+                              {r.failures.map((f) => (
+                                <p key={f} className="text-[9px] text-gray-600">
+                                  <span className="text-gray-500 font-mono">{f}</span>
+                                  {" → "}
+                                  <span className="text-amber-400/70">{FAILURE_TO_FIX_AREA[f]}</span>
+                                </p>
+                              ))}
+                              <div className="mt-1 border-t border-red-900/40 pt-1 space-y-0.5">
+                                <p className="text-[9px] text-gray-500">
+                                  <span className="text-gray-600">Causa:</span> {r.probableRootCause}
+                                </p>
+                                <p className="text-[9px] text-gray-500">
+                                  <span className="text-gray-600">Correção:</span>{" "}
+                                  <span className="text-green-400/80">{r.recommendedFix}</span>
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Steps */}
+                          <div>
+                            <p className="text-[9px] text-gray-600 mb-0.5">Passos:</p>
+                            <div className="space-y-0.5">
+                              {r.steps.map((step, i) => (
+                                <div key={i} className="flex items-start gap-1.5 text-[9px]">
+                                  <span className={step.passed ? "text-green-400" : "text-red-400"}>
+                                    {step.passed ? "✓" : "✗"}
+                                  </span>
+                                  <span className="font-mono text-gray-500">{step.event}</span>
+                                  {step.message && (
+                                    <span className="truncate text-gray-600">
+                                      {'"'}{step.message.slice(0, 40)}{'"'}
+                                    </span>
+                                  )}
+                                  {step.response && (
+                                    <span className="ml-auto shrink-0 text-gray-700">
+                                      {step.response.mode} · {step.response.cards.length}c
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Last waiter message */}
+                          {r.waiterMessage && (
+                            <div>
+                              <p className="text-[9px] text-gray-600 mb-0.5">Última mensagem:</p>
+                              <p className="text-[9px] text-gray-400 italic">
+                                {'"'}{r.waiterMessage.slice(0, 120)}{r.waiterMessage.length > 120 ? "…" : ""}{'"'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
-            )}
-
-            {/* Failure type tags */}
-            {Object.keys(report.failureTypes).length > 0 && (
-              <div className="shrink-0 border-b border-gray-800 px-3 py-2">
-                <div className="mb-1 text-[10px] uppercase tracking-widest text-gray-600">Falhas detectadas</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(report.failureTypes)
-                    .sort(([, a], [, b]) => b - a)
-                    .map(([ft, count]) => (
-                      <span
-                        key={ft}
-                        title={`${FAILURE_TO_FIX_AREA[ft as FailureType]} — ${IMPROVEMENT_SUGGESTIONS[ft as FailureType]}`}
-                        className="rounded bg-red-950/40 px-1.5 py-0.5 text-[9px] text-red-400"
-                      >
-                        {ft} ×{count}
-                      </span>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* Scenario results */}
-            <div className="flex-1 overflow-y-auto px-3 py-2">
-              <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Cenários</div>
-              <div className="space-y-2">
-                {report.scenarioResults.map((r) => (
-                  <div
-                    key={r.profileId}
-                    className={`rounded border ${
-                      r.status === "PASS"
-                        ? "border-green-900 bg-green-950/10"
-                        : "border-red-900 bg-red-950/10"
-                    }`}
-                  >
-                    {/* Scenario header */}
-                    <button
-                      onClick={() =>
-                        setExpandedResult(expandedResult === r.profileId ? null : r.profileId)
-                      }
-                      className="flex w-full items-center gap-2 px-2 py-1.5 text-left"
-                    >
-                      <StatusBadge status={r.status} />
-                      <SeverityBadge severity={r.severity} />
-                      <span className="flex-1 text-[11px] font-semibold text-gray-300">
-                        {r.profileName}
-                      </span>
-                      <span className="text-[9px] text-gray-600">
-                        {r.stepsRun}t · {r.cardsShown.length}c
-                        {r.checkoutReached ? " · ✓chk" : ""}
-                      </span>
-                      <span className="text-[10px] text-gray-700">
-                        {expandedResult === r.profileId ? "▲" : "▼"}
-                      </span>
-                    </button>
-
-                    {/* Expanded diagnostic */}
-                    {expandedResult === r.profileId && (
-                      <div className="border-t border-gray-800 px-2 py-2 space-y-2">
-
-                        {/* Intent comparison */}
-                        <div className="rounded bg-gray-900/60 px-2 py-1.5 space-y-0.5">
-                          <p className="text-[9px] text-gray-600 font-semibold uppercase tracking-wide mb-1">
-                            Intenção
-                          </p>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[9px]">
-                            <span className="text-gray-600">Esperada:</span>
-                            <span className="text-gray-400">{r.expectedIntent}</span>
-                            <span className="text-gray-600">Detectada:</span>
-                            <span className={r.detectedIntent === r.expectedIntent ? "text-green-400" : "text-amber-400"}>
-                              {r.detectedIntent}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Action comparison */}
-                        <div className="rounded bg-gray-900/60 px-2 py-1.5 space-y-0.5">
-                          <p className="text-[9px] text-gray-600 font-semibold uppercase tracking-wide mb-1">
-                            Ação
-                          </p>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[9px]">
-                            <span className="text-gray-600">Esperada:</span>
-                            <span className="text-gray-400">{r.expectedAction}</span>
-                            <span className="text-gray-600">Real:</span>
-                            <span className={r.status === "PASS" ? "text-green-400" : "text-amber-400"}>
-                              {r.actualAction}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Failures + diagnosis */}
-                        {r.failures.length > 0 && (
-                          <div className="rounded bg-red-950/20 px-2 py-1.5 space-y-1">
-                            <p className="text-[9px] text-red-400 font-semibold">
-                              Falhas: {r.failures.join(", ")}
-                            </p>
-                            {r.failures.map((f) => (
-                              <p key={f} className="text-[9px] text-gray-600">
-                                <span className="text-gray-500 font-mono">{f}</span>
-                                {" → "}
-                                <span className="text-amber-400/70">{FAILURE_TO_FIX_AREA[f]}</span>
-                              </p>
-                            ))}
-                            <div className="mt-1 border-t border-red-900/40 pt-1 space-y-0.5">
-                              <p className="text-[9px] text-gray-500">
-                                <span className="text-gray-600">Causa:</span>{" "}
-                                {r.probableRootCause}
-                              </p>
-                              <p className="text-[9px] text-gray-500">
-                                <span className="text-gray-600">Correção:</span>{" "}
-                                <span className="text-green-400/80">{r.recommendedFix}</span>
-                              </p>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Step breakdown */}
-                        <div>
-                          <p className="text-[9px] text-gray-600 mb-0.5">Passos:</p>
-                          <div className="space-y-0.5">
-                            {r.steps.map((step, i) => (
-                              <div key={i} className="flex items-start gap-1.5 text-[9px]">
-                                <span className={step.passed ? "text-green-400" : "text-red-400"}>
-                                  {step.passed ? "✓" : "✗"}
-                                </span>
-                                <span className="font-mono text-gray-500">{step.event}</span>
-                                {step.message && (
-                                  <span className="truncate text-gray-600">
-                                    {'"'}{step.message.slice(0, 40)}{'"'}
-                                  </span>
-                                )}
-                                {step.response && (
-                                  <span className="ml-auto shrink-0 text-gray-700">
-                                    {step.response.mode} · {step.response.cards.length}c
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Last waiter message */}
-                        {r.waiterMessage && (
-                          <div>
-                            <p className="text-[9px] text-gray-600 mb-0.5">Última mensagem:</p>
-                            <p className="text-[9px] text-gray-400 italic">
-                              {'"'}{r.waiterMessage.slice(0, 120)}{r.waiterMessage.length > 120 ? "…" : ""}{'"'}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

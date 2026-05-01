@@ -7,6 +7,7 @@ import type {
   AreaScores,
   FixRecommendation,
   Severity,
+  SilentMetrics,
 } from "./types";
 
 // ── Improvement suggestion map ────────────────────────────────────────────────
@@ -48,6 +49,27 @@ export const IMPROVEMENT_SUGGESTIONS: Record<FailureType, string> = {
     "O mesmo produto foi sugerido múltiplas vezes. Implemente memória de sessão para evitar repetições.",
   invalid_card_id:
     "IDs em cards[] não existem no catálogo ativo. Valide IDs antes de incluir na resposta.",
+  // ── Silent customer failures ─────────────────────────────────────────────────
+  missed_final_upsell:
+    "Upsell final não foi oferecido. No ON_CHECKOUT_STARTED (silent), retornar options com 'Ver opções' e 'Não, finalizar'.",
+  premature_intervention:
+    "Waiter interrompeu navegação silenciosa sem sinal claro de intenção. Aguardar checkout intent para agir.",
+  repeated_prompt:
+    "Prompt de permissão foi repetido no mesmo cenário. Implementar cooldown de sessão após aceite ou recusa.",
+  ignored_decline:
+    "Após recusa de ajuda, Waiter voltou a oferecer opções. Implementar estado de silêncio após ON_PERMISSION_DECLINED.",
+  wrong_cart_context:
+    "Sugestão ignorou contexto do carrinho. Usar cart[] para determinar o que falta (bebida, sobremesa).",
+  missed_drink_opportunity:
+    "Carrinho sem bebida mas Waiter não ofereceu. No checkout intent, verificar ausência de bebida antes de sugerir.",
+  missed_dessert_opportunity:
+    "Carrinho sem sobremesa mas Waiter não ofereceu. No checkout intent, verificar ausência de sobremesa.",
+  invasive_after_item_add:
+    "ON_ITEM_ADDED retornou cards ou options. Rule 7 deve garantir cards=[], options=[] após click.",
+  checkout_prompt_repeated:
+    "Prompt de checkout foi repetido. Verificar deduplicação no fluxo de ON_CHECKOUT_STARTED.",
+  silent_customer_not_supported:
+    "Comportamento silencioso não é suportado. Implementar detecção de intenção behavioral além de mensagens de texto.",
 };
 
 // ── Failure → fix-area map ────────────────────────────────────────────────────
@@ -70,7 +92,17 @@ export const FAILURE_TO_FIX_AREA: Record<FailureType, string> = {
   unknown_error:             "general error handling / server logs",
   bad_product_fit:           "product ranking / menu analysis",
   repeated_suggestion:       "session memory / deduplication",
-  invalid_card_id:           "catalog validation / ID sync",
+  invalid_card_id:              "catalog validation / ID sync",
+  missed_final_upsell:          "checkout upsell flow / ON_CHECKOUT_STARTED handler",
+  premature_intervention:       "silent detection / ON_IDLE timing",
+  repeated_prompt:              "session state / cooldown management",
+  ignored_decline:              "session state / ON_PERMISSION_DECLINED handler",
+  wrong_cart_context:           "cart context awareness / product ranking",
+  missed_drink_opportunity:     "cart gap detection / checkout upsell",
+  missed_dessert_opportunity:   "cart gap detection / checkout upsell",
+  invasive_after_item_add:      "event routing / ON_ITEM_ADDED handler (Rule 7)",
+  checkout_prompt_repeated:     "session state / checkout flow deduplication",
+  silent_customer_not_supported: "behavioral intent detection / silent customer handling",
 };
 
 // ── Probable root cause map ───────────────────────────────────────────────────
@@ -112,6 +144,26 @@ const ROOT_CAUSE_MAP: Record<FailureType, string> = {
     "Waiter sem memória de curto prazo sugeriu o mesmo produto repetidamente.",
   invalid_card_id:
     "ID enviado em cards[] não existe no catálogo — sincronização de IDs com problema.",
+  missed_final_upsell:
+    "ON_CHECKOUT_STARTED não ofereceu permission gate via options[] para upsell final.",
+  premature_intervention:
+    "Waiter interrompeu antes do sinal de checkout, perturbando a navegação silenciosa.",
+  repeated_prompt:
+    "Estado de sessão não registrou o aceite/recusa anterior, causando repetição de prompt.",
+  ignored_decline:
+    "Handler ON_PERMISSION_DECLINED não alterou o modo de sessão para silêncio.",
+  wrong_cart_context:
+    "Waiter sugeriu produto sem considerar o conteúdo atual do carrinho.",
+  missed_drink_opportunity:
+    "Waiter não detectou ausência de bebida no carrinho durante intent de checkout.",
+  missed_dessert_opportunity:
+    "Waiter não detectou ausência de sobremesa no carrinho durante intent de checkout.",
+  invasive_after_item_add:
+    "Handler ON_ITEM_ADDED retornou cards[] ou options[], violando Rule 7.",
+  checkout_prompt_repeated:
+    "Lógica de checkout não verifica se prompt já foi exibido na sessão.",
+  silent_customer_not_supported:
+    "WaiterBrain não possui lógica específica para clientes silenciosos/behavioral.",
 };
 
 // ── Recommended fix map ───────────────────────────────────────────────────────
@@ -153,6 +205,26 @@ const RECOMMENDED_FIX_MAP: Record<FailureType, string> = {
     "Adicionar set de IDs já sugeridos na sessão e excluí-los de futuras recomendações.",
   invalid_card_id:
     "Validar todos os IDs em cards[] contra o catálogo ativo antes de retornar resposta.",
+  missed_final_upsell:
+    "No ON_CHECKOUT_STARTED, retornar options=['Ver opções', 'Não, finalizar'] para permission gate de upsell.",
+  premature_intervention:
+    "Restringir intervenção ativa ao evento ON_CHECKOUT_STARTED para clientes sem mensagem de texto.",
+  repeated_prompt:
+    "Salvar estado 'permission_resolved' na sessão após aceite ou recusa e não repetir prompt.",
+  ignored_decline:
+    "Ao receber ON_PERMISSION_DECLINED, salvar 'silent_mode=true' e retornar reply neutro sem options ou cards.",
+  wrong_cart_context:
+    "Passar cart[] para o ranqueador de produtos e excluir categorias já presentes no pedido.",
+  missed_drink_opportunity:
+    "Verificar se cart[] contém bebida antes de finalizar; se não, incluir na sugestão de upsell.",
+  missed_dessert_opportunity:
+    "Verificar se cart[] contém sobremesa antes de finalizar; se não, incluir na sugestão de upsell.",
+  invasive_after_item_add:
+    "No handler ON_ITEM_ADDED, sempre retornar cards=[], options=[] (Rule 7 já define isso).",
+  checkout_prompt_repeated:
+    "Adicionar flag 'checkout_upsell_shown' na sessão e verificar antes de exibir novamente.",
+  silent_customer_not_supported:
+    "Implementar módulo de detecção comportamental baseado em eventos (ON_ITEM_ADDED, ON_IDLE, ON_CHECKOUT_STARTED) sem necessidade de mensagem de texto.",
 };
 
 // ── Severity ──────────────────────────────────────────────────────────────────
@@ -186,11 +258,11 @@ export function computeRecommendedFix(failures: FailureType[]): string {
 // ── Area scores ───────────────────────────────────────────────────────────────
 
 const AREA_FAILURES: Record<keyof Omit<AreaScores, "overallScore">, FailureType[]> = {
-  intentScore:         ["wrong_intent_detection"],
-  productFitScore:     ["missing_cards", "bad_product_fit", "product_mismatch", "invisible_product_mention"],
-  visualSyncScore:     ["extra_buttons_after_cards", "ui_invasion_after_click", "invalid_card_id"],
-  salesCopyScore:      ["weak_sales_response"],
-  userControlScore:    ["missing_options", "repeated_suggestion"],
+  intentScore:         ["wrong_intent_detection", "premature_intervention", "silent_customer_not_supported"],
+  productFitScore:     ["missing_cards", "bad_product_fit", "product_mismatch", "invisible_product_mention", "wrong_cart_context"],
+  visualSyncScore:     ["extra_buttons_after_cards", "ui_invasion_after_click", "invalid_card_id", "invasive_after_item_add"],
+  salesCopyScore:      ["weak_sales_response", "missed_final_upsell", "missed_drink_opportunity", "missed_dessert_opportunity"],
+  userControlScore:    ["missing_options", "repeated_suggestion", "repeated_prompt", "ignored_decline", "checkout_prompt_repeated"],
   checkoutSafetyScore: ["checkout_interference", "cart_not_updated", "checkout_not_reached", "order_not_confirmed"],
 };
 
@@ -242,6 +314,61 @@ export function generateTopFixes(results: ScenarioResult[]): FixRecommendation[]
       implementationArea: FAILURE_TO_FIX_AREA[ft]    ?? "indefinido",
       expectedImpact:     RECOMMENDED_FIX_MAP[ft]    ?? "Investigar logs.",
     }));
+}
+
+// ── Silent metrics ────────────────────────────────────────────────────────────
+
+export function computeSilentMetrics(results: ScenarioResult[]): SilentMetrics {
+  const silent = results.filter((r) => r.isSilent);
+  const total  = silent.length;
+
+  if (total === 0) {
+    return {
+      silentScenarioCount: 0, silentPassed: 0, silentFailed: 0,
+      silentConversionRate: 0, finalUpsellOfferedRate: 0, finalUpsellAcceptedRate: 0,
+      invasionFailures: 0, missedUpsellOpportunities: 0,
+    };
+  }
+
+  const passed   = silent.filter((r) => r.status === "PASS").length;
+  const reached  = silent.filter((r) => r.checkoutReached).length;
+
+  const upsellOffered = silent.filter((r) =>
+    r.steps.some(
+      (s) => s.event === "ON_CHECKOUT_STARTED" && s.response && s.response.options.length > 0,
+    )
+  ).length;
+
+  const upsellAccepted = silent.filter((r) =>
+    r.steps.some(
+      (s) => s.event === "ON_PERMISSION_ACCEPTED" && s.response && s.response.cards.length > 0,
+    )
+  ).length;
+
+  const INVASION_TYPES: FailureType[] = ["invasive_after_item_add", "ui_invasion_after_click"];
+  const invasionCount = silent.reduce(
+    (sum, r) => sum + r.failures.filter((f) => INVASION_TYPES.includes(f)).length, 0,
+  );
+
+  const MISSED_UPSELL: FailureType[] = [
+    "missed_final_upsell", "missed_drink_opportunity", "missed_dessert_opportunity",
+  ];
+  const missedCount = silent.reduce(
+    (sum, r) => sum + r.failures.filter((f) => MISSED_UPSELL.includes(f)).length, 0,
+  );
+
+  return {
+    silentScenarioCount:       total,
+    silentPassed:              passed,
+    silentFailed:              total - passed,
+    silentConversionRate:      Math.round((reached       / total)         * 100),
+    finalUpsellOfferedRate:    Math.round((upsellOffered / total)         * 100),
+    finalUpsellAcceptedRate:   upsellOffered > 0
+                                 ? Math.round((upsellAccepted / upsellOffered) * 100)
+                                 : 0,
+    invasionFailures:          invasionCount,
+    missedUpsellOpportunities: missedCount,
+  };
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -456,6 +583,7 @@ export function buildReport(
     scenarioResults:  results,
     areaScores:       computeAreaScores(results),
     topFixes:         generateTopFixes(results),
+    silentMetrics:    computeSilentMetrics(results),
   };
 }
 
@@ -463,6 +591,7 @@ export function buildReport(
 
 export function toCsv(report: AutoPilotReport): string {
   const header = [
+    "Tipo",
     "Cenário",
     "Objetivo",
     "Status",
@@ -483,6 +612,7 @@ export function toCsv(report: AutoPilotReport): string {
   const rows = report.scenarioResults.map((r) => {
     const fixAreas = r.failures.map((f) => FAILURE_TO_FIX_AREA[f] ?? "").filter(Boolean).join("; ");
     return [
+      r.isSilent ? "Silent" : "Typed",
       `"${r.profileName}"`,
       `"${r.goal}"`,
       r.status,
@@ -508,10 +638,22 @@ export function toSummaryText(report: AutoPilotReport): string {
   const date = new Date(report.runAt).toLocaleString("pt-BR");
   const { areaScores: a } = report;
 
+  const sm     = report.silentMetrics;
+  const typed  = report.scenarioResults.filter((r) => !r.isSilent);
+  const silent = report.scenarioResults.filter((r) =>  r.isSilent);
+  const typedPassed  = typed.filter((r)  => r.status === "PASS").length;
+  const silentPassed = silent.filter((r) => r.status === "PASS").length;
+
   const lines: string[] = [
     "=== WAITER LAB AUTOPILOT REPORT ===",
     `Data:         ${date}`,
     `Restaurante:  ${report.restaurantName} (${report.slug})`,
+    "",
+    "=== SCORES GERAIS ===",
+    `  Score total:    ${report.score}/100  (${report.passed}/${report.totalScenarios} passou)`,
+    `  Typed:          ${typedPassed}/${typed.length} passou`,
+    `  Silent:         ${silentPassed}/${silent.length} passou`,
+    `  Conversão:      ${report.conversionRate}% checkout | avg ${report.avgTurns} turnos | avg ${report.avgCardsReturned} cards`,
     "",
     "=== SCORES POR ÁREA ===",
     `  Intenção:       ${a.intentScore}/100`,
@@ -522,14 +664,16 @@ export function toSummaryText(report: AutoPilotReport): string {
     `  Checkout:       ${a.checkoutSafetyScore}/100`,
     `  GERAL:          ${a.overallScore}/100`,
     "",
-    `Score (PASS/total): ${report.score}/100`,
-    `Passou:       ${report.passed}/${report.totalScenarios}`,
-    `Falhou:       ${report.failed}/${report.totalScenarios}`,
-    `Erro:         ${report.errored}/${report.totalScenarios}`,
-    `Conversão:    ${report.conversionRate}% (chegou ao checkout)`,
-    `Média turnos: ${report.avgTurns}`,
-    `Média cards:  ${report.avgCardsReturned}`,
-    "",
+    ...(sm.silentScenarioCount > 0 ? [
+      "=== MÉTRICAS SILENT ===",
+      `  Cenários silent:        ${sm.silentScenarioCount} (${sm.silentPassed} passou, ${sm.silentFailed} falhou)`,
+      `  Conversão silent:       ${sm.silentConversionRate}%`,
+      `  Upsell oferecido:       ${sm.finalUpsellOfferedRate}%`,
+      `  Upsell aceito:          ${sm.finalUpsellAcceptedRate}%`,
+      `  Invasões detectadas:    ${sm.invasionFailures}`,
+      `  Upsells perdidos:       ${sm.missedUpsellOpportunities}`,
+      "",
+    ] : []),
     "=== TOP 5 CORREÇÕES PRIORITÁRIAS ===",
     ...report.topFixes.map((fix) => [
       `  #${fix.priority} [${fix.failureType}]`,
@@ -549,7 +693,7 @@ export function toSummaryText(report: AutoPilotReport): string {
     "=== CENÁRIOS ===",
     ...report.scenarioResults.map((r) =>
       [
-        `  [${r.status}] ${r.profileName} — Severidade: ${r.severity.toUpperCase()}`,
+        `  [${r.status}] [${r.isSilent ? "SILENT" : "TYPED "}] ${r.profileName} — Severidade: ${r.severity.toUpperCase()}`,
         `          Objetivo:           ${r.goal}`,
         `          Intenção esperada:  ${r.expectedIntent}`,
         `          Intenção detectada: ${r.detectedIntent}`,
