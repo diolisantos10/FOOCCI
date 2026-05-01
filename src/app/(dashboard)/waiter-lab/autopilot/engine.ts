@@ -371,13 +371,41 @@ export function computeSilentMetrics(results: ScenarioResult[]): SilentMetrics {
   };
 }
 
+// ── Evaluator version ─────────────────────────────────────────────────────────
+// Bump this string any time the evaluation rules change so stale Railway builds
+// are immediately visible in the UI.
+export const EVALUATOR_VERSION = "2026-05-01-fix-checkout-gate-v2";
+
 // ── Validation ────────────────────────────────────────────────────────────────
 
 const VALID_MODES  = ["BROWSE", "SUGGESTION", "INTERVENTION", "CHECKOUT_SUPPORT"];
 const WEAK_PHRASES = /^(ok|beleza|ótimo|certo|perfeito|entendi|claro)[.!]?$/i;
 
-// Sales language that must NOT appear during checkout events
+// Sales language that must NOT appear during checkout events (AFTER_CHECKOUT or
+// CHECKOUT_SUPPORT mode). Does NOT apply to the final-upsell permission gate —
+// see isFinalUpsellGate() below.
 const CHECKOUT_SALES_PHRASES = /\b(vou sugerir|que tal|combina|tente|experimente|aproveite|bebida|drink|sobremesa|acompanhe?|complementa?|adicional|quer experimentar|posso sugerir|sugiro)\b/i;
+
+/**
+ * Returns true when the response is the expected final-upsell permission gate
+ * emitted by handleCheckoutStarted() in WaiterBrainV2.
+ *
+ * A valid gate MUST have:
+ *   - mode: "INTERVENTION"  (not CHECKOUT_SUPPORT — checkout hasn't started yet)
+ *   - cards: []             (no products before permission)
+ *   - options: includes "see_final_suggestions" AND "continue_checkout"
+ *
+ * This gate intentionally mentions "bebida"/"sobremesa" in its reply and must
+ * NEVER be flagged as checkout_interference.
+ */
+export function isFinalUpsellGate(response: WaiterResponse): boolean {
+  return (
+    response.mode === "INTERVENTION" &&
+    response.cards.length === 0 &&
+    response.options.some((o) => o.value === "see_final_suggestions") &&
+    response.options.some((o) => o.value === "continue_checkout")
+  );
+}
 
 // Clear premium-intent patterns where qualification without cards signals wrong detection
 const PREMIUM_PHRASES = /\b(melhor|especial|mais completo|premium|exclusiv[ao]|o que voc[êe]s t[êe]m)\b/i;
@@ -497,9 +525,16 @@ export function validateStep(
     }
   }
 
-  // Checkout sales guard — no selling language during checkout flow
+  // Checkout sales guard — no selling language during checkout flow.
+  // Exception: ON_CHECKOUT_STARTED may return a final-upsell permission gate
+  // (mode=INTERVENTION, options=[see_final_suggestions, continue_checkout]).
+  // That gate intentionally mentions "bebida"/"sobremesa" and is NOT interference.
   if (event === "ON_CHECKOUT_STARTED" || event === "AFTER_CHECKOUT") {
-    if (response.reply && CHECKOUT_SALES_PHRASES.test(response.reply)) {
+    const gateExempt = event === "ON_CHECKOUT_STARTED" && isFinalUpsellGate(response);
+    if (!gateExempt) {
+      assertions.push({ label: "Checkout: resposta é gate de upsell legítimo ou CHECKOUT_SUPPORT", pass: true });
+    }
+    if (!gateExempt && response.reply && CHECKOUT_SALES_PHRASES.test(response.reply)) {
       assertions.push({
         label:  "Sem pitch de vendas durante checkout",
         pass:   false,
@@ -711,4 +746,52 @@ export function toSummaryText(report: AutoPilotReport): string {
     ),
   ];
   return lines.join("\n");
+}
+
+// ── Internal self-tests ───────────────────────────────────────────────────────
+// Run at module load in development to catch evaluator regressions early.
+
+/** Asserts that the final-upsell permission gate is never flagged as checkout_interference. */
+export function runEvaluatorSelfTests(): { pass: boolean; failures: string[] } {
+  const errors: string[] = [];
+
+  // Test: final upsell gate from handleCheckoutStarted must NOT be checkout_interference
+  const gateResponse: WaiterResponse = {
+    reply:   "Antes de finalizar, quer ver uma bebida ou sobremesa pra acompanhar?",
+    cards:   [],
+    options: [
+      { label: "Ver opções",      value: "see_final_suggestions" },
+      { label: "Não, finalizar",  value: "continue_checkout"     },
+    ],
+    mode: "INTERVENTION",
+  };
+  const gateResult = validateStep(
+    "ON_CHECKOUT_STARTED", "", gateResponse,
+    new Set(["_test_id"]), false, new Set(),
+  );
+  if (gateResult.failureTypes.includes("checkout_interference")) {
+    errors.push(
+      `isFinalUpsellGate incorrectly flagged as checkout_interference ` +
+      `(failureTypes=${gateResult.failureTypes.join(",")})`,
+    );
+  }
+
+  // Test: actual CHECKOUT_SUPPORT sales content IS flagged
+  const salesResponse: WaiterResponse = {
+    reply:   "Que tal adicionar uma bebida para acompanhar?",
+    cards:   [],
+    options: [],
+    mode:    "CHECKOUT_SUPPORT",
+  };
+  const salesResult = validateStep(
+    "AFTER_CHECKOUT", "", salesResponse,
+    new Set(["_test_id"]), false, new Set(),
+  );
+  if (!salesResult.failureTypes.includes("checkout_interference")) {
+    errors.push(
+      "AFTER_CHECKOUT with sales language was NOT flagged as checkout_interference",
+    );
+  }
+
+  return { pass: errors.length === 0, failures: errors };
 }

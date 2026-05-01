@@ -6,7 +6,18 @@ import {
   validateStep, buildReport, toCsv, toSummaryText,
   IMPROVEMENT_SUGGESTIONS, FAILURE_TO_FIX_AREA,
   computeProbableRootCause, computeRecommendedFix, computeSeverity,
+  EVALUATOR_VERSION, runEvaluatorSelfTests,
 } from "./engine";
+
+// Run self-tests once at module load to surface evaluator regressions in dev.
+if (typeof window !== "undefined") {
+  const st = runEvaluatorSelfTests();
+  if (!st.pass) {
+    console.error("[AutoPilot self-test FAIL]", st.failures);
+  } else {
+    console.info(`[AutoPilot self-test PASS] evaluator=${EVALUATOR_VERSION}`);
+  }
+}
 import type {
   CustomerProfile,
   CatalogItem,
@@ -581,6 +592,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
     setResults([]);
     setReport(null);
     setCurrentSteps([]);
+    setExpandedResult(null);
 
     const accumulated: ScenarioResult[] = [];
 
@@ -658,6 +670,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
     setReport(null);
     setCurrentSteps([]);
     setCurrentStepLabel("");
+    setExpandedResult(null);
   };
 
   const toggleProfile = (id: string) => {
@@ -824,6 +837,9 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
             <p className="text-[10px] text-gray-700">
               Clique <span className="text-amber-500">▶ Run AutoPilot</span> para iniciar
             </p>
+            <p className="text-[9px] text-gray-800 font-mono">
+              evaluator: {EVALUATOR_VERSION}
+            </p>
           </div>
         )}
 
@@ -945,9 +961,12 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                       <span className="ml-1 text-gray-600">turnos avg</span>
                     </div>
                   </div>
-                  {status === "stopped" && (
-                    <span className="ml-auto text-[10px] text-amber-500">Interrompido</span>
-                  )}
+                  <div className="ml-auto flex flex-col items-end gap-1">
+                    {status === "stopped" && (
+                      <span className="text-[10px] text-amber-500">Interrompido</span>
+                    )}
+                    <span className="text-[8px] font-mono text-gray-800">{EVALUATOR_VERSION}</span>
+                  </div>
                 </div>
               </div>
 
