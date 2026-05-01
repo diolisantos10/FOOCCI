@@ -166,6 +166,13 @@ export async function POST(
       lastAddedId,
     });
 
+    console.info("[waiter]", JSON.stringify({
+      event,
+      mode:    mode    ?? "BROWSE",
+      cards:   (cards  ?? []).length,
+      options: (options ?? []).length,
+    }));
+
     return ok({ reply, cards, mode: mode ?? "BROWSE", options: options ?? [], suggestedItemName: suggestedItemName ?? null });
   } catch (err) {
     console.error("[POST /api/pedido/[slug]]", err);
