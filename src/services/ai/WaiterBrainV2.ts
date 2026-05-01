@@ -484,6 +484,66 @@ function selectRecommendedItems(catalog: V2CatalogItem[], cartItemIds: string[],
   return (pairings.length > 0 ? pairings : notCart.sort(tagSort)).slice(0, limit).map((i) => i.id);
 }
 
+// ─── cart analysis + pairing helpers (Sales Intelligence) ───
+
+export interface CartAnalysis {
+  hasFood:          boolean;
+  hasDrink:         boolean;
+  hasDessert:       boolean;
+  hasCombo:         boolean;
+  itemCount:        number;
+  totalValue:       number;
+  categoriesInCart: string[];
+  mainFlavors:      string[];
+  opportunity:      "drink" | "dessert" | "pairing" | "upgrade" | "none";
+}
+
+export function analyzeCart(cartItemIds: string[], catalog: V2CatalogItem[]): CartAnalysis {
+  const tagged  = tagCatalog(catalog);
+  const inCart  = tagged.filter((i) => cartItemIds.includes(i.id));
+
+  const hasFood    = inCart.some((i) => !i.tags.includes("drink") && !i.tags.includes("dessert"));
+  const hasDrink   = inCart.some((i) => i.tags.includes("drink"));
+  const hasDessert = inCart.some((i) => i.tags.includes("dessert"));
+  const hasCombo   = inCart.some((i) => i.tags.includes("combo"));
+
+  const categoriesInCart = [...new Set(inCart.map((i) => i.category))];
+
+  let opportunity: CartAnalysis["opportunity"] = "none";
+  if      (hasFood && !hasDrink)                  opportunity = "drink";
+  else if (hasFood && hasDrink && !hasDessert)     opportunity = "dessert";
+  else if (hasFood && inCart.length >= 2)          opportunity = "pairing";
+  else if (hasFood)                                opportunity = "upgrade";
+
+  return {
+    hasFood, hasDrink, hasDessert, hasCombo,
+    itemCount:        cartItemIds.length,
+    totalValue:       inCart.reduce((sum, i) => sum + i.price, 0),
+    categoriesInCart,
+    mainFlavors:      [],
+    opportunity,
+  };
+}
+
+function selectPairingItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
+  const ca      = analyzeCart(cartItemIds, catalog);
+  const tagged  = tagCatalog(catalog);
+  const notCart = tagged.filter((i) => !cartItemIds.includes(i.id));
+
+  if (ca.opportunity === "drink") {
+    const drinks = notCart.filter((i) => i.tags.includes("drink")).sort(tagSort);
+    if (drinks.length > 0) return drinks.slice(0, limit).map((i) => i.id);
+  }
+  if (ca.opportunity === "dessert") {
+    const desserts = notCart.filter((i) => i.tags.includes("dessert")).sort(tagSort);
+    if (desserts.length > 0) return desserts.slice(0, limit).map((i) => i.id);
+  }
+  const pairings = notCart
+    .filter((i) => i.tags.includes("pairing_candidate") || i.tags.includes("premium"))
+    .sort(tagSort);
+  return (pairings.length > 0 ? pairings : notCart.sort(tagSort)).slice(0, limit).map((i) => i.id);
+}
+
 // ─── directive builder for AI events ────────────────────────
 
 const BASE_DIRECTIVE = `
@@ -744,6 +804,26 @@ function handleUserMessage(input: V2Input): V2Output {
       const cards = selectRecommendedItems(catalog, cartItemIds, 3);
       if (cards.length > 0) return { message: "Aqui vai o que faz mais sentido pra você agora 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       break;
+    }
+    case "asks_pairing": {
+      const cards = selectPairingItems(catalog, cartItemIds, 3);
+      if (cards.length > 0) return { message: "Essas opções combinam bem com o que você escolheu 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      return noCardsFound();
+    }
+    case "checkout_intent": {
+      if (!hasItems) break;
+      const pairingCards = selectPairingItems(catalog, cartItemIds, 2);
+      if (pairingCards.length > 0) {
+        return {
+          message:     "Antes de finalizar, que tal acrescentar algo?",
+          cards:       [],
+          mode:        "INTERVENTION",
+          options:     [{ label: "Ver opções", value: "see_final_suggestions" }, { label: "Não, finalizar", value: "continue_checkout" }],
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
+      return { message: "Perfeito! Pode finalizar quando quiser 😊", cards: [], mode: "CHECKOUT_SUPPORT", options: [], requiresAI: false, aiDirective: "" };
     }
   }
 

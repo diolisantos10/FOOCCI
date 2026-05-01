@@ -1496,23 +1496,34 @@ export function PedidoClient({
       // "browse_menu" → dismiss any active suggestion, return to passive browsing.
       if (value === "browse_menu") { setSuggestedProducts([]); return; }
 
+      // "see_final_suggestions" → show pairing suggestions before checkout.
+      if (value === "see_final_suggestions") {
+        setSuggestedProducts([]);
+        sendText("quero ver opções para acompanhar", cart, stage, activeUpsell);
+        return;
+      }
+
+      // "continue_checkout" → local acknowledgment, no API call.
+      if (value === "continue_checkout") {
+        setSuggestedProducts([]);
+        pushAssistantMessage("Ótimo! Pode finalizar quando quiser 😊");
+        return;
+      }
+
       // All other values (qualification, custom choices) → send to API.
       setSuggestedProducts([]);
       sendText(value, cart, stage, activeUpsell);
     },
-    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd],
+    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, pushAssistantMessage],
   );
 
   // ── Checkout permission handlers ──────────────────────────────────
 
   const handleCheckoutPermAccept = useCallback(() => {
-    const type = checkoutPromptType;
     setAiPermState("consultive");
     setCheckoutPromptType(null);
-    if (type) {
-      sendText("Quero finalizar o pedido", cart, "BROWSE", type);
-    }
-  }, [checkoutPromptType, cart, sendText]);
+    void sendText("quero ver opções para acompanhar", cart, stage, null, { event: "ON_USER_MESSAGE", silent: true });
+  }, [cart, stage, sendText]);
 
   const handleCheckoutPermDecline = useCallback(() => {
     setAiPermState("idle");
