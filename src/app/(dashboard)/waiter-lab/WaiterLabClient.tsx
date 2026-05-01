@@ -131,28 +131,44 @@ function buildAssertions(
   return out;
 }
 
+// ── Response normalizer ───────────────────────────────────────────────────────
+
+function normalizeResponse(raw: unknown): LabResponse {
+  if (!raw || typeof raw !== "object") {
+    return { reply: "", cards: [], options: [], mode: "BROWSE" };
+  }
+  const r = raw as Record<string, unknown>;
+  return {
+    reply:   typeof r.reply   === "string" ? r.reply                      : "",
+    cards:   Array.isArray(r.cards)        ? (r.cards   as string[])      : [],
+    options: Array.isArray(r.options)      ? (r.options as LabOption[])   : [],
+    mode:    typeof r.mode    === "string" ? r.mode                       : "BROWSE",
+  };
+}
+
 // ── Quick-test buttons ────────────────────────────────────────────────────────
 
 type QuickTest = {
-  label:      string;
-  event:      V2Event;
-  message:    string;
-  useFirstId?: boolean;
+  label:         string;
+  event:         V2Event;
+  message:       string;
+  useFirstId?:   boolean;
+  needsCatalog?: boolean;
 };
 
 const QUICK_TESTS: QuickTest[] = [
-  { label: "Entry",               event: "ON_ENTRY",              message: ""                     },
-  { label: "Idle / Permission",   event: "ON_IDLE",               message: ""                     },
-  { label: "Permission Accepted", event: "ON_PERMISSION_ACCEPT",  message: ""                     },
-  { label: "Permission Declined", event: "ON_PERMISSION_DECLINED", message: ""                    },
-  { label: "Quero sugestão",      event: "ON_USER_MESSAGE",       message: "quero uma sugestão"   },
-  { label: "Leve",                event: "ON_USER_MESSAGE",       message: "quero algo leve"      },
-  { label: "Completo",            event: "ON_USER_MESSAGE",       message: "quero algo completo"  },
-  { label: "Quero sobremesa",     event: "ON_USER_MESSAGE",       message: "quero uma sobremesa"  },
-  { label: "Quero bebida",        event: "ON_USER_MESSAGE",       message: "quero uma bebida"     },
-  { label: "Add first product",   event: "ON_ITEM_ADDED",         message: "", useFirstId: true    },
-  { label: "Checkout start",      event: "ON_CHECKOUT_STARTED",   message: ""                     },
-  { label: "After checkout",      event: "AFTER_CHECKOUT",        message: ""                     },
+  { label: "Entry",               event: "ON_ENTRY",               message: ""                                    },
+  { label: "Idle / Permission",   event: "ON_IDLE",                message: ""                                    },
+  { label: "Permission Accepted", event: "ON_PERMISSION_ACCEPT",   message: ""                                    },
+  { label: "Permission Declined", event: "ON_PERMISSION_DECLINED", message: ""                                    },
+  { label: "Quero sugestão",      event: "ON_USER_MESSAGE",        message: "quero uma sugestão",  needsCatalog: true },
+  { label: "Leve",                event: "ON_USER_MESSAGE",        message: "quero algo leve",     needsCatalog: true },
+  { label: "Completo",            event: "ON_USER_MESSAGE",        message: "quero algo completo", needsCatalog: true },
+  { label: "Quero sobremesa",     event: "ON_USER_MESSAGE",        message: "quero uma sobremesa", needsCatalog: true },
+  { label: "Quero bebida",        event: "ON_USER_MESSAGE",        message: "quero uma bebida",    needsCatalog: true },
+  { label: "Add first product",   event: "ON_ITEM_ADDED",          message: "", useFirstId: true,  needsCatalog: true },
+  { label: "Checkout start",      event: "ON_CHECKOUT_STARTED",    message: "",                    needsCatalog: true },
+  { label: "After checkout",      event: "AFTER_CHECKOUT",         message: ""                                    },
 ];
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -181,6 +197,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
   const [showRaw,        setShowRaw]       = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [iframeStatus,   setIframeStatus]   = useState<"loading" | "loaded" | "error">("loading");
+  const [lastError,      setLastError]      = useState<{ message: string; stack?: string; event?: string } | null>(null);
 
   // ── Catalog loading ───────────────────────────────────────────────────────
 
@@ -215,6 +232,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
     async (event: V2Event, message = "", lastAddedId?: string) => {
       setIsLoading(true);
       setLastEvent(event);
+      setLastError(null);
       try {
         const cartPayload = labCart.map((i) => ({
           id: i.id, name: i.name, price: i.price, qty: i.qty,
@@ -231,19 +249,25 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
         });
 
         if (!res.ok) {
-          const text = await res.text();
+          const text = await res.text().catch(() => "(sem corpo)");
           setLastResponse(null);
+          setLastError({ message: `HTTP ${res.status}`, event, stack: text.slice(0, 400) });
           setAssertions([{ label: `HTTP ${res.status} — ${text.slice(0, 120)}`, pass: false }]);
           return;
         }
 
-        const data = (await res.json()) as LabResponse;
-        if (message) setHistory((h) => [...h, { role: "user",      content: message   }]);
+        // ok() wraps as { success: true, data: { reply, cards, mode, options } }
+        const json = await res.json();
+        const data = normalizeResponse(json.data ?? json);
+        if (message) setHistory((h) => [...h, { role: "user",      content: message      }]);
         if (data.reply) setHistory((h) => [...h, { role: "assistant", content: data.reply }]);
         setLastResponse(data);
         setAssertions(buildAssertions(event, data, catalog));
       } catch (err) {
-        setAssertions([{ label: `Erro de rede: ${String(err)}`, pass: false }]);
+        const msg   = err instanceof Error ? err.message : String(err);
+        const stack = err instanceof Error ? (err.stack ?? "") : "";
+        setLastError({ message: msg, stack, event });
+        setAssertions([{ label: `Evento falhou: ${event} — ${msg}`, pass: false }]);
       } finally {
         setIsLoading(false);
       }
@@ -308,6 +332,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
     setLastEvent(null);
     setLastResponse(null);
     setAssertions([]);
+    setLastError(null);
     setIframeStatus("loading");
     setIframeKey((k) => k + 1);
   };
@@ -466,19 +491,34 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
           <div className="shrink-0 border-b border-gray-800 px-3 py-2">
             <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Teste Rápido</div>
             <div className="flex flex-wrap gap-1.5">
-              {QUICK_TESTS.map(({ label, event, message, useFirstId }) => (
-                <button
-                  key={label}
-                  disabled={isLoading}
-                  onClick={() => {
-                    const lastAddedId = useFirstId ? catalog[0]?.id : undefined;
-                    void fireEvent(event, message, lastAddedId);
-                  }}
-                  className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-400 hover:border-amber-600 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {label}
-                </button>
-              ))}
+              {QUICK_TESTS.map(({ label, event, message, useFirstId, needsCatalog }) => {
+                const noCatalog = needsCatalog && catalog.length === 0;
+                const isDisabled = isLoading || noCatalog;
+                return (
+                  <button
+                    key={label}
+                    disabled={isDisabled}
+                    title={noCatalog ? "Aguardando catálogo…" : label}
+                    onClick={() => {
+                      try {
+                        setLastError(null);
+                        const lastAddedId = useFirstId ? (catalog[0]?.id ?? undefined) : undefined;
+                        void fireEvent(event, message, lastAddedId);
+                      } catch (err) {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        setLastError({ message: msg, event });
+                      }
+                    }}
+                    className={`rounded border px-2 py-0.5 text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                      noCatalog
+                        ? "border-gray-800 text-gray-700"
+                        : "border-gray-700 text-gray-400 hover:border-amber-600 hover:text-amber-300"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
             <div className="mt-2 flex gap-1.5">
               <input
@@ -605,6 +645,29 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
             {/* Right column — Assertions + State */}
             <div className="flex w-72 shrink-0 flex-col overflow-y-auto p-3">
 
+              {/* Error panel — shown when last event threw */}
+              {lastError && (
+                <div className="mb-4 rounded border border-red-900 bg-red-950/40 p-2">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">
+                      Evento falhou{lastError.event ? `: ${lastError.event}` : ""}
+                    </span>
+                    <button
+                      onClick={() => setLastError(null)}
+                      className="text-[10px] text-red-700 hover:text-red-500"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <p className="mb-1 break-all text-[10px] text-red-300">{lastError.message}</p>
+                  {lastError.stack && (
+                    <pre className="overflow-auto text-[9px] text-red-700 leading-relaxed">
+                      {lastError.stack.slice(0, 300)}
+                    </pre>
+                  )}
+                </div>
+              )}
+
               {/* Assertions */}
               <div className="mb-4">
                 <div className="mb-1.5 flex items-center gap-2">
@@ -639,6 +702,12 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
                 <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Lab Controls</div>
                 <div className="flex flex-wrap gap-1.5">
                   <button
+                    onClick={resetSession}
+                    className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-400 hover:border-amber-600 hover:text-amber-300"
+                  >
+                    Reset Lab
+                  </button>
+                  <button
                     onClick={() => setLabCart([])}
                     className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-500 hover:border-red-700 hover:text-red-400"
                   >
@@ -651,7 +720,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
                     Clear Memory
                   </button>
                   <button
-                    onClick={() => setIframeKey((k) => k + 1)}
+                    onClick={() => { setIframeStatus("loading"); setIframeKey((k) => k + 1); }}
                     className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-500 hover:border-gray-500 hover:text-gray-300"
                   >
                     Reload UI

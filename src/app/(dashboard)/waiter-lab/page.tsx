@@ -11,6 +11,7 @@
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import WaiterLabClient from "./WaiterLabClient";
+import { WaiterLabErrorBoundary } from "./WaiterLabErrorBoundary";
 
 export const dynamic = "force-dynamic";
 
@@ -49,10 +50,12 @@ export default async function WaiterLabPage() {
   }
 
   return (
-    <WaiterLabClient
-      defaultSlug={defaultSlug}
-      restaurantName={restaurantName}
-      hasMenu={hasMenu}
-    />
+    <WaiterLabErrorBoundary>
+      <WaiterLabClient
+        defaultSlug={defaultSlug}
+        restaurantName={restaurantName}
+        hasMenu={hasMenu}
+      />
+    </WaiterLabErrorBoundary>
   );
 }
