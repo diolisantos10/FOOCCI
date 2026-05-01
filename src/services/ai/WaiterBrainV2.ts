@@ -141,6 +141,19 @@ const AGGRESSIVE_COPY: Partial<Record<CustomerIntent, string>> = {
   asks_for_pairing:     "Combinação perfeita para o seu pedido 👇",
 };
 
+// ─── internal observability ───────────────────────────────────
+// Enable with: WAITER_DEBUG=true
+// Never exposed to the customer UI — server console only.
+
+const DEBUG_ENABLED =
+  typeof process !== "undefined" && process.env.WAITER_DEBUG === "true";
+
+function waiterLog(payload: Record<string, unknown>): void {
+  if (!DEBUG_ENABLED) return;
+  // eslint-disable-next-line no-console
+  console.log("[WaiterBrainV2]", JSON.stringify(payload));
+}
+
 export interface V2Input {
   event:        V2Event;
   cartItemIds:  string[];    // IDs of items currently in cart
@@ -834,13 +847,23 @@ export function rankProducts(
   const cartTagged = tagged.filter((i) => cartItemIds.includes(i.id));
   const ctx: ScoreContext = { cartItemIds, cartTagged, benchmarks };
 
-  const scored: Array<{ id: string; score: number }> = [];
+  const scored:   Array<{ id: string; score: number }> = [];
+  const rejected: Array<{ id: string; reason: string; score?: number }> = [];
+
   for (const item of tagged) {
-    if (cartItemIds.includes(item.id)) continue;
+    if (cartItemIds.includes(item.id)) {
+      rejected.push({ id: item.id, reason: "already_in_cart" });
+      continue;
+    }
     let score = scoreProductForIntent(item, intent, ctx);
+    const wasSuggested = alreadySuggestedIds.includes(item.id);
     // Penalise already-shown products to encourage variety (soft exclusion)
-    if (alreadySuggestedIds.includes(item.id)) score -= 15;
-    if (score >= MIN_SCORE_THRESHOLD) scored.push({ id: item.id, score });
+    if (wasSuggested) score -= 15;
+    if (score >= MIN_SCORE_THRESHOLD) {
+      scored.push({ id: item.id, score });
+    } else {
+      rejected.push({ id: item.id, reason: wasSuggested ? "already_suggested" : "low_score", score });
+    }
   }
   scored.sort((a, b) => b.score - a.score);
 
@@ -849,6 +872,14 @@ export function rankProducts(
   for (const { id } of scored) {
     if (!seen.has(id) && results.length < limit) { seen.add(id); results.push(id); }
   }
+
+  waiterLog({
+    type:               "waiter_product_selection",
+    intent,
+    selectedProductIds: results,
+    rejectedProductIds: rejected,
+  });
+
   return results;
 }
 
@@ -1733,6 +1764,11 @@ export function validateWaiterResponse(
 ): V2Output {
   let { message, cards, mode, options, requiresAI, aiDirective } = output;
 
+  // Snapshot for debug diff — only allocated when debug is on
+  const snap = DEBUG_ENABLED
+    ? { message: output.message, cards: output.cards.slice(), options: output.options.slice(), mode: output.mode }
+    : null;
+
   try {
     // 1. Mode must be a known WaiterMode
     if (!VALID_MODES.has(mode)) return { ...SAFE_FALLBACK };
@@ -1789,6 +1825,23 @@ export function validateWaiterResponse(
 
     // 9. No confirmation buttons alongside product cards
     if (cards.length > 0) options = [];
+
+    if (snap) {
+      const fixes: string[] = [];
+      if (snap.message !== message)                  fixes.push("message modified (truncation or product name stripped)");
+      if (snap.cards.join(",") !== cards.join(","))  fixes.push("cards modified (dedup or ghost ID removed)");
+      if (snap.options.length !== options.length)    fixes.push("options modified (buttons added or stripped)");
+      if (snap.mode !== mode)                        fixes.push("mode changed");
+      if (fixes.length > 0) {
+        waiterLog({
+          type:     "waiter_validation_fix",
+          event,
+          fixes,
+          original: { message: snap.message, cards: snap.cards, options: snap.options.map((o) => o.value), mode: snap.mode },
+          fixed:    { message, cards, options: options.map((o) => o.value), mode },
+        });
+      }
+    }
 
     return { message, cards, mode, options, requiresAI, aiDirective };
   } catch {
@@ -1883,7 +1936,50 @@ export function decide(input: V2Input): V2Output {
       case "ON_PERMISSION_DECLINED": return handlePermissionDeclined();
     }
   })();
-  const validated    = validateWaiterResponse(raw, input.catalog, input.event);
-  const memoryPatch  = computeMemoryPatch(input, validated);
-  return { ...validated, memoryPatch };
+  const validated   = validateWaiterResponse(raw, input.catalog, input.event);
+  const memoryPatch = computeMemoryPatch(input, validated);
+  const result      = { ...validated, memoryPatch };
+
+  if (DEBUG_ENABLED) {
+    const cfg = input.config ?? DEFAULT_WAITER_CONFIG;
+    const ca  = analyzeCart(input.cartItemIds, input.catalog);
+    const intent =
+      input.event === "ON_USER_MESSAGE" ? analyzeSalesContext(input).customerIntent : null;
+
+    // No-op: silent response with no message, no cards, no options
+    if (validated.message === "" && validated.cards.length === 0 && validated.options.length === 0) {
+      let noopReason = "unknown";
+      const mem = input.memory;
+      if (input.event === "ON_IDLE") {
+        if (!cfg.allowIdlePrompt)                                                 noopReason = "idle_prompt_disabled";
+        else if (mem && mem.promptCount >= cfg.maxPermissionPromptsPerSession)    noopReason = "prompt_count_exceeded";
+        else if (mem && isPermissionCooldownActive(mem, cfg))                     noopReason = "cooldown_active";
+      } else if (input.event === "ON_ITEM_ADDED")  noopReason = "item_added_no_intervention";
+      else if (input.event === "AFTER_CHECKOUT")   noopReason = "checkout_active";
+      waiterLog({ type: "waiter_noop", event: input.event, reason: noopReason });
+    }
+
+    waiterLog({
+      type:        "waiter_decision",
+      event:       input.event,
+      mode:        validated.mode,
+      intent,
+      cards:       validated.cards,
+      options:     validated.options.map((o) => o.value),
+      requiresAI:  validated.requiresAI,
+      cartSummary: {
+        itemCount:  input.cartItemIds.length,
+        hasFood:    ca.hasFood,
+        hasDrink:   ca.hasDrink,
+        hasDessert: ca.hasDessert,
+      },
+      configUsed: {
+        interactionLevel: cfg.interactionLevel,
+        upsellStyle:      cfg.upsellStyle,
+        tone:             cfg.tone,
+      },
+    });
+  }
+
+  return result;
 }
