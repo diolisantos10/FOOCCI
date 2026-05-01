@@ -54,8 +54,9 @@ const nextConfig = {
       {
         source: "/(.*)",
         headers: [
-          // Prevent framing (clickjacking)
-          { key: "X-Frame-Options", value: "DENY" },
+          // Prevent cross-origin framing (clickjacking). SAMEORIGIN instead of
+          // DENY allows the Waiter Lab iframe to embed /pedido/* on the same host.
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
           // Prevent MIME-type sniffing
           { key: "X-Content-Type-Options", value: "nosniff" },
           // Restrict referrer information leakage

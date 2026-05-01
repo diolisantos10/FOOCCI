@@ -178,26 +178,31 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
   const [typedMessage,  setTypedMessage] = useState("");
   const [isLoading,     setIsLoading]    = useState(false);
   const [assertions,    setAssertions]   = useState<Assertion[]>([]);
-  const [showRaw,       setShowRaw]      = useState(false);
+  const [showRaw,        setShowRaw]       = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [iframeStatus,   setIframeStatus]   = useState<"loading" | "loaded" | "error">("loading");
 
   // ── Catalog loading ───────────────────────────────────────────────────────
 
   const loadCatalog = useCallback(async (targetSlug: string) => {
     setCatalogError(null);
     setCatalog([]);
+    setCatalogLoading(true);
     try {
       const res = await fetch(`/api/pedido/${encodeURIComponent(targetSlug)}`);
       if (!res.ok) {
         setCatalogError(`Restaurante "${targetSlug}" não encontrado (${res.status}).`);
         return;
       }
-      const data = await res.json();
-      const items: CatalogItem[] = (data.categories ?? []).flatMap(
-        (c: { items: CatalogItem[] }) => c.items,
-      );
+      // ok() wraps as { success: true, data: { restaurantName, categories } }
+      const json = await res.json();
+      const payload: { categories?: { items: CatalogItem[] }[] } = json.data ?? json;
+      const items: CatalogItem[] = (payload.categories ?? []).flatMap((c) => c.items);
       setCatalog(items);
     } catch {
       setCatalogError("Erro de rede ao carregar catálogo.");
+    } finally {
+      setCatalogLoading(false);
     }
   }, []);
 
@@ -287,6 +292,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
     if (!trimmed) return;
     setSlug(trimmed);
     setActiveSlug(trimmed);
+    setIframeStatus("loading");
     await loadCatalog(trimmed);
     setHistory([]);
     setLabCart([]);
@@ -302,6 +308,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
     setLastEvent(null);
     setLastResponse(null);
     setAssertions([]);
+    setIframeStatus("loading");
     setIframeKey((k) => k + 1);
   };
 
@@ -381,17 +388,66 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
           <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3 py-1.5">
             <span className="text-[10px] uppercase tracking-widest text-gray-600">UI Real</span>
             <button
-              onClick={() => setIframeKey((k) => k + 1)}
+              onClick={() => { setIframeStatus("loading"); setIframeKey((k) => k + 1); }}
               className="text-[10px] text-gray-600 hover:text-gray-400"
             >
               ↺ reload
             </button>
           </div>
+
+          {/* iframe debug info */}
+          <div className="shrink-0 space-y-0.5 border-b border-gray-800 px-3 py-1.5">
+            <div className="flex gap-1.5">
+              <span className="w-16 shrink-0 text-[10px] text-gray-600">restaurante</span>
+              <span className="truncate text-[10px] text-amber-400">{restaurantName ?? activeSlug}</span>
+            </div>
+            <div className="flex gap-1.5">
+              <span className="w-16 shrink-0 text-[10px] text-gray-600">slug</span>
+              <span className="text-[10px] text-gray-300">{activeSlug}</span>
+            </div>
+            <div className="flex gap-1.5">
+              <span className="w-16 shrink-0 text-[10px] text-gray-600">url</span>
+              <span className="text-[10px] text-gray-500">/pedido/{activeSlug}</span>
+            </div>
+            <div className="flex gap-1.5">
+              <span className="w-16 shrink-0 text-[10px] text-gray-600">catálogo</span>
+              <span className={`text-[10px] ${
+                catalogLoading          ? "animate-pulse text-gray-500" :
+                catalog.length > 0      ? "text-green-400"              : "text-red-400"
+              }`}>
+                {catalogLoading ? "carregando…" : `${catalog.length} itens`}
+              </span>
+            </div>
+            <div className="flex gap-1.5">
+              <span className="w-16 shrink-0 text-[10px] text-gray-600">iframe</span>
+              <span className={`text-[10px] ${
+                iframeStatus === "loaded"  ? "text-green-400"              :
+                iframeStatus === "error"   ? "text-red-400"               : "animate-pulse text-gray-500"
+              }`}>
+                {iframeStatus === "loaded" ? "carregado" : iframeStatus === "error" ? "erro" : "carregando…"}
+              </span>
+            </div>
+          </div>
+
           <div className="relative flex-1 overflow-hidden bg-white">
+            {iframeStatus === "error" && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-gray-100 p-4 text-center">
+                <span className="text-2xl">⚠️</span>
+                <p className="text-xs font-semibold text-gray-700">Não foi possível carregar</p>
+                <code className="rounded bg-gray-200 px-2 py-0.5 text-[10px] text-gray-600">
+                  /pedido/{activeSlug}
+                </code>
+                <p className="text-[10px] text-gray-500">
+                  Verifique se o restaurante possui cardápio publicado.
+                </p>
+              </div>
+            )}
             <iframe
               key={iframeKey}
               src={`/pedido/${activeSlug}`}
               title="Ordering UI"
+              onLoad={() => setIframeStatus("loaded")}
+              onError={() => setIframeStatus("error")}
               className="absolute inset-0 h-full w-full border-0"
               style={{
                 transform:       "scale(0.77)",
