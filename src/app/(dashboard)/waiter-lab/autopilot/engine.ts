@@ -374,7 +374,7 @@ export function computeSilentMetrics(results: ScenarioResult[]): SilentMetrics {
 // ── Evaluator version ─────────────────────────────────────────────────────────
 // Bump this string any time the evaluation rules change so stale Railway builds
 // are immediately visible in the UI.
-export const EVALUATOR_VERSION = "2026-05-01-fix-checkout-gate-v2";
+export const EVALUATOR_VERSION = "2026-05-01-waiter-final-refinement-v1";
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
