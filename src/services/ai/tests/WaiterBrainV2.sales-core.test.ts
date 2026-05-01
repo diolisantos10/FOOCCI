@@ -1562,3 +1562,209 @@ describe("Sprint 4E: full session simulation", () => {
     expect(turn3.options.some((o) => o.value === "want_suggestion")).toBe(false);
   });
 });
+
+// ─── Section 22: Sprint 4F — Final Upsell Permission at Checkout ─────────────
+
+describe("Sprint 4F: handleCheckoutStarted — final upsell permission", () => {
+  it("A) food but no drink/dessert → asks permission once (INTERVENTION, cards=[])", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", {
+      cartItemIds: ["s1"],   // temaki salmão — food only
+      cartValue:   22,
+      catalog,
+    }));
+    expect(out.mode).toBe("INTERVENTION");
+    expect(out.cards).toHaveLength(0);
+    expect(out.options.some((o) => o.value === "see_final_suggestions")).toBe(true);
+    expect(out.options.some((o) => o.value === "continue_checkout")).toBe(true);
+  });
+
+  it("B) if finalUpsellDeclined=true → skip to CHECKOUT_SUPPORT immediately", () => {
+    const catalog = makeSushiCatalog();
+    const memory: WaiterMemory = { ...createWaiterMemory(), finalUpsellDeclined: true };
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", {
+      cartItemIds: ["s1"],
+      cartValue:   22,
+      catalog,
+      memory,
+    }));
+    expect(out.mode).toBe("CHECKOUT_SUPPORT");
+    expect(out.options).toHaveLength(0);
+  });
+
+  it("B) if finalUpsellPromptShown=true → skip to CHECKOUT_SUPPORT (no repeated prompt)", () => {
+    const catalog = makeSushiCatalog();
+    const memory: WaiterMemory = { ...createWaiterMemory(), finalUpsellPromptShown: true };
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", {
+      cartItemIds: ["s1"],
+      cartValue:   22,
+      catalog,
+      memory,
+    }));
+    expect(out.mode).toBe("CHECKOUT_SUPPORT");
+    expect(out.options.some((o) => o.value === "see_final_suggestions")).toBe(false);
+  });
+
+  it("cart with food+drink+dessert → no upsell, CHECKOUT_SUPPORT directly", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", {
+      cartItemIds: ["s1", "s4", "s5"],  // food + drink + dessert
+      cartValue:   42,
+      catalog,
+    }));
+    expect(out.mode).toBe("CHECKOUT_SUPPORT");
+  });
+
+  it("empty cart → no upsell, CHECKOUT_SUPPORT directly", () => {
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", { cartItemIds: [], catalog: makeSushiCatalog() }));
+    expect(out.mode).toBe("CHECKOUT_SUPPORT");
+  });
+
+  it("no available drinks/desserts in catalog → no upsell", () => {
+    const catalog: V2CatalogItem[] = [
+      { id: "m1", name: "Prato",  categoryName: "Pratos", price: 30, sortOrder: 1 },
+      { id: "m2", name: "Lanche", categoryName: "Pratos", price: 20, sortOrder: 2 },
+    ];
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", {
+      cartItemIds: ["m1"],
+      cartValue:   30,
+      catalog,
+    }));
+    expect(out.mode).toBe("CHECKOUT_SUPPORT");
+  });
+
+  it("prompt message matches spec", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", {
+      cartItemIds: ["s1"],
+      cartValue:   22,
+      catalog,
+    }));
+    if (out.mode === "INTERVENTION") {
+      expect(out.message).toBe("Antes de finalizar, quer ver uma bebida ou sobremesa pra acompanhar?");
+    }
+  });
+});
+
+describe("Sprint 4F: see_final_suggestions — cart-aware product cards", () => {
+  it("C) no drink in cart → returns drinks", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_USER_MESSAGE", {
+      message:     "see_final_suggestions",
+      cartItemIds: ["s1"],   // food only, no drink
+      catalog,
+    }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("INTERVENTION");
+    out.cards.forEach((id) => expect(["s4"]).toContain(id));
+  });
+
+  it("no dessert in cart (has drink) → returns desserts", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_USER_MESSAGE", {
+      message:     "see_final_suggestions",
+      cartItemIds: ["s1", "s4"],  // food + drink, no dessert
+      catalog,
+    }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    out.cards.forEach((id) => expect(["s5"]).toContain(id));
+  });
+
+  it("cart has both drink and dessert → returns pairing/complement", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_USER_MESSAGE", {
+      message:     "see_final_suggestions",
+      cartItemIds: ["s1", "s4", "s5"],  // food+drink+dessert
+      catalog,
+    }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.cards).not.toContain("s1");
+    expect(out.cards).not.toContain("s4");
+    expect(out.cards).not.toContain("s5");
+  });
+
+  it("response message matches spec", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_USER_MESSAGE", {
+      message:     "see_final_suggestions",
+      cartItemIds: ["s1"],
+      catalog,
+    }));
+    if (out.cards.length > 0) {
+      expect(out.message).toBe("Pra fechar bem, essas opções combinam com seu pedido 👇");
+    }
+  });
+
+  it("D) cart items never appear in suggestion cards", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_USER_MESSAGE", {
+      message:     "see_final_suggestions",
+      cartItemIds: ["s1", "s4"],
+      catalog,
+    }));
+    expect(out.cards).not.toContain("s1");
+    expect(out.cards).not.toContain("s4");
+  });
+
+  it("no confirmation buttons alongside product cards", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_USER_MESSAGE", {
+      message:     "see_final_suggestions",
+      cartItemIds: ["s1"],
+      catalog,
+    }));
+    if (out.cards.length > 0) expect(out.options).toHaveLength(0);
+  });
+});
+
+describe("Sprint 4F: memory patch for checkout upsell", () => {
+  it("ON_CHECKOUT_STARTED prompt → memoryPatch.finalUpsellPromptShown = true", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", {
+      cartItemIds: ["s1"],
+      cartValue:   22,
+      catalog,
+    }));
+    if (out.mode === "INTERVENTION") {
+      expect(out.memoryPatch?.finalUpsellPromptShown).toBe(true);
+    }
+  });
+
+  it("continue_checkout → memoryPatch.finalUpsellDeclined = true", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", {
+      message: "continue_checkout",
+      catalog: makeSushiCatalog(),
+    }));
+    expect(out.memoryPatch?.finalUpsellDeclined).toBe(true);
+    expect(out.memoryPatch?.finalUpsellPromptShown).toBe(true);
+  });
+
+  it("see_final_suggestions → memoryPatch.finalUpsellPromptShown = true", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_USER_MESSAGE", {
+      message:     "see_final_suggestions",
+      cartItemIds: ["s1"],
+      catalog,
+    }));
+    expect(out.memoryPatch?.finalUpsellPromptShown).toBe(true);
+  });
+
+  it("E) full flow: prompt shown → declined → second checkout suppressed", () => {
+    const catalog = makeSushiCatalog();
+    let memory = createWaiterMemory();
+
+    // First ON_CHECKOUT_STARTED — should show prompt
+    const turn1 = decide(makeInput("ON_CHECKOUT_STARTED", { cartItemIds: ["s1"], cartValue: 22, catalog, memory }));
+    memory = { ...memory, ...turn1.memoryPatch };
+    expect(turn1.mode).toBe("INTERVENTION");
+
+    // User clicks "Não, finalizar"
+    const turn2 = decide(makeInput("ON_USER_MESSAGE", { message: "continue_checkout", catalog, memory }));
+    memory = { ...memory, ...turn2.memoryPatch };
+
+    // Second ON_CHECKOUT_STARTED — must NOT show prompt again (F)
+    const turn3 = decide(makeInput("ON_CHECKOUT_STARTED", { cartItemIds: ["s1"], cartValue: 22, catalog, memory }));
+    expect(turn3.mode).toBe("CHECKOUT_SUPPORT");
+    expect(turn3.options.some((o) => o.value === "see_final_suggestions")).toBe(false);
+  });
+});

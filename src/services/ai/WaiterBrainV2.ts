@@ -65,6 +65,8 @@ export interface WaiterMemory {
   lastMode:                string | null;
   permissionDeclinedAt:    number | null; // Unix ms — null means never declined
   promptCount:             number;        // how many idle permission prompts shown
+  finalUpsellPromptShown:  boolean;       // pre-checkout upsell prompt was shown once
+  finalUpsellDeclined:     boolean;       // user clicked "Não, finalizar"
 }
 
 /** Returns a blank WaiterMemory for a new ordering session. */
@@ -77,6 +79,8 @@ export function createWaiterMemory(): WaiterMemory {
     lastMode:                null,
     permissionDeclinedAt:    null,
     promptCount:             0,
+    finalUpsellPromptShown:  false,
+    finalUpsellDeclined:     false,
   };
 }
 
@@ -1256,22 +1260,31 @@ function handleIdle(input: V2Input): V2Output {
 }
 
 function handleCheckoutStarted(input: V2Input): V2Output {
-  // If cart has food but is missing a drink or dessert, offer one last upsell.
-  const ca = analyzeCart(input.cartItemIds, input.catalog);
-  if (ca.hasFood && (!ca.hasDrink || !ca.hasDessert)) {
+  const mem = input.memory;
+  const ca  = analyzeCart(input.cartItemIds, input.catalog);
+
+  // Skip final upsell if already shown or declined this session
+  const alreadyHandled = mem && (mem.finalUpsellPromptShown || mem.finalUpsellDeclined);
+
+  // Check there is at least one non-cart drink or dessert available to suggest
+  const hasComplementAvailable = input.catalog.some(
+    (i) => !input.cartItemIds.includes(i.id) && (isDrinkCategory(i.categoryName) || isDessertCategory(i.categoryName)),
+  );
+
+  if (!alreadyHandled && ca.hasFood && (!ca.hasDrink || !ca.hasDessert) && hasComplementAvailable) {
     return {
-      message:     "Antes de finalizar, quer ver uma bebida ou sobremesa? 👇",
+      message:     "Antes de finalizar, quer ver uma bebida ou sobremesa pra acompanhar?",
       cards:       [],
       mode:        "INTERVENTION",
       options:     [
-        { label: "Ver opções", value: "see_final_suggestions" },
-        { label: "Não, finalizar", value: "continue_checkout" },
+        { label: "Ver opções",    value: "see_final_suggestions" },
+        { label: "Não, finalizar", value: "continue_checkout"    },
       ],
       requiresAI:  false,
       aiDirective: "",
     };
   }
-  // No opportunity — proceed to checkout immediately.
+  // No upsell opportunity — proceed to checkout immediately.
   return {
     message:     "Perfeito 😊\nSe já estiver tudo certo, pode finalizar 👇",
     cards:       [],
@@ -1440,6 +1453,28 @@ function handleUserMessage(input: V2Input): V2Output {
   const hasItems     = input.cartItemIds.length > 0;
   const { catalog, cartItemIds } = input;
   const suggestedIds = input.memory?.suggestedProductIds ?? [];
+
+  // ── Special path: pre-checkout "Ver opções" button ─────────────────────────
+  // Priority: missing drink → drinks; missing dessert → desserts; else pairing.
+  if ((input.message ?? "").toLowerCase().trim() === "see_final_suggestions") {
+    const ca = analyzeCart(cartItemIds, catalog);
+    const intent: CustomerIntent =
+      !ca.hasDrink   ? "asks_for_drink"   :
+      !ca.hasDessert ? "asks_for_dessert" :
+                       "asks_for_pairing";
+    const cards = rankProducts(catalog, intent, cartItemIds, 3, suggestedIds);
+    if (cards.length > 0) {
+      return {
+        message:     "Pra fechar bem, essas opções combinam com seu pedido 👇",
+        cards,
+        mode:        "INTERVENTION",
+        options:     [],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
+    return noCardsFound();
+  }
 
   // ── Deterministic paths (Sales Intelligence — no AI call) ────
   switch (analysis.customerIntent) {
@@ -1730,11 +1765,19 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
   // Pre-checkout upsell declined
   if (msg === "continue_checkout") {
     patch.declinedSuggestionTypes = [...new Set([...mem.declinedSuggestionTypes, "final_upsell"])];
+    patch.finalUpsellDeclined     = true;
+    patch.finalUpsellPromptShown  = true;
   }
 
-  // Pre-checkout upsell accepted
+  // Pre-checkout upsell accepted (user chose "Ver opções")
   if (msg === "see_final_suggestions") {
     patch.acceptedSuggestionTypes = [...new Set([...mem.acceptedSuggestionTypes, "final_upsell"])];
+    patch.finalUpsellPromptShown  = true;
+  }
+
+  // Final upsell prompt shown at checkout start
+  if (input.event === "ON_CHECKOUT_STARTED" && output.options.some((o) => o.value === "see_final_suggestions")) {
+    patch.finalUpsellPromptShown = true;
   }
 
   return patch;
