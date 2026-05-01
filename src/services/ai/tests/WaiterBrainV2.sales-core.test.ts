@@ -24,10 +24,14 @@ import {
   analyzeSalesSituation,
   chooseSalesStrategy,
   buildWaiterResponse,
+  scoreProductForIntent,
+  rankProducts,
   type V2CatalogItem,
   type V2Input,
   type V2Output,
   type WaiterMode,
+  type ScoreContext,
+  type PriceBenchmarks,
 } from "../WaiterBrainV2";
 
 // ── Shared catalog fixtures ───────────────────────────────────────────────────
@@ -953,5 +957,208 @@ describe("Sprint 4B — event wiring", () => {
     }));
     expect(out.cards.length).toBeGreaterThan(0);
     expect(out.cards).not.toContain("s1"); // cart items not re-suggested
+  });
+});
+
+// ─── Section 19: Sprint 4C — Smart Product Selection Engine ──────────────────
+
+describe("Sprint 4C: scoreProductForIntent", () => {
+  const benchmarks: PriceBenchmarks = { p25: 10, median: 20, p75: 30 };
+  const emptyCtx: ScoreContext = { cartItemIds: [], cartTagged: [], benchmarks };
+
+  function makeTagged(id: string, tags: string[], price = 20, sortOrder = 100): Parameters<typeof scoreProductForIntent>[0] {
+    return { id, name: id, category: "cat", description: null, price, sortOrder, tags: tags as never };
+  }
+
+  it("light item scores highest for wants_light_option", () => {
+    const light  = makeTagged("light1", ["light", "starter"]);
+    const combo  = makeTagged("combo1", ["combo"]);
+    const drink  = makeTagged("drink1", ["drink"]);
+    const lScore = scoreProductForIntent(light, "wants_light_option", emptyCtx);
+    const cScore = scoreProductForIntent(combo, "wants_light_option", emptyCtx);
+    const dScore = scoreProductForIntent(drink, "wants_light_option", emptyCtx);
+    expect(lScore).toBeGreaterThan(cScore);
+    expect(lScore).toBeGreaterThan(dScore);
+  });
+
+  it("combo item scores highest for wants_complete_meal", () => {
+    const combo  = makeTagged("combo1", ["combo"]);
+    const light  = makeTagged("light1", ["light", "starter"]);
+    const drink  = makeTagged("drink1", ["drink"]);
+    const cScore = scoreProductForIntent(combo, "wants_complete_meal", emptyCtx);
+    const lScore = scoreProductForIntent(light, "wants_complete_meal", emptyCtx);
+    const dScore = scoreProductForIntent(drink, "wants_complete_meal", emptyCtx);
+    expect(cScore).toBeGreaterThan(lScore);
+    expect(cScore).toBeGreaterThan(dScore);
+  });
+
+  it("group item scores highest for wants_group_order", () => {
+    const group  = makeTagged("group1", ["group", "combo"]);
+    const main   = makeTagged("main1", ["main"]);
+    const drink  = makeTagged("drink1", ["drink"]);
+    const gScore = scoreProductForIntent(group, "wants_group_order", emptyCtx);
+    const mScore = scoreProductForIntent(main,  "wants_group_order", emptyCtx);
+    const dScore = scoreProductForIntent(drink, "wants_group_order", emptyCtx);
+    expect(gScore).toBeGreaterThan(mScore);
+    expect(gScore).toBeGreaterThan(dScore);
+  });
+
+  it("premium item scores highest for wants_premium_option", () => {
+    const premium = makeTagged("p1", ["premium"], 35);
+    const cheap   = makeTagged("c1", ["cheap"], 8);
+    const pScore  = scoreProductForIntent(premium, "wants_premium_option", emptyCtx);
+    const cScore  = scoreProductForIntent(cheap,   "wants_premium_option", emptyCtx);
+    expect(pScore).toBeGreaterThan(cScore);
+  });
+
+  it("cheap item scores highest for wants_budget_option", () => {
+    const cheap   = makeTagged("c1", ["cheap", "main"], 8);
+    const premium = makeTagged("p1", ["premium"], 35);
+    const cScore  = scoreProductForIntent(cheap,   "wants_budget_option", emptyCtx);
+    const pScore  = scoreProductForIntent(premium, "wants_budget_option", emptyCtx);
+    expect(cScore).toBeGreaterThan(pScore);
+  });
+
+  it("drink scores highest for asks_for_drink; non-drink goes negative", () => {
+    const drink  = makeTagged("d1", ["drink"]);
+    const main   = makeTagged("m1", ["main"]);
+    const dScore = scoreProductForIntent(drink, "asks_for_drink", emptyCtx);
+    const mScore = scoreProductForIntent(main,  "asks_for_drink", emptyCtx);
+    expect(dScore).toBeGreaterThan(0);
+    expect(mScore).toBeLessThan(0);
+  });
+
+  it("dessert scores highest for asks_for_dessert; non-dessert goes negative", () => {
+    const dessert = makeTagged("des1", ["dessert"]);
+    const main    = makeTagged("m1",   ["main"]);
+    const deScore = scoreProductForIntent(dessert, "asks_for_dessert", emptyCtx);
+    const mScore  = scoreProductForIntent(main,    "asks_for_dessert", emptyCtx);
+    expect(deScore).toBeGreaterThan(0);
+    expect(mScore).toBeLessThan(0);
+  });
+
+  it("pairing_candidate + drink score high for asks_for_pairing", () => {
+    const pairing = makeTagged("pair1", ["pairing_candidate"]);
+    const drink   = makeTagged("d1",    ["drink"]);
+    const main    = makeTagged("m1",    ["main"]);
+    const pScore  = scoreProductForIntent(pairing, "asks_for_pairing", emptyCtx);
+    const dScore  = scoreProductForIntent(drink,   "asks_for_pairing", emptyCtx);
+    const mScore  = scoreProductForIntent(main,    "asks_for_pairing", emptyCtx);
+    expect(pScore).toBeGreaterThan(mScore);
+    expect(dScore).toBeGreaterThan(mScore);
+  });
+
+  it("commercial value: above-median item gets bonus for non-budget intents", () => {
+    const expensive = makeTagged("e1", ["main"], 25); // >= median(20) and < p75(30)
+    const cheap     = makeTagged("c1", ["main"], 10); // below median
+    const eScore    = scoreProductForIntent(expensive, "wants_complete_meal", emptyCtx);
+    const cScore    = scoreProductForIntent(cheap,     "wants_complete_meal", emptyCtx);
+    expect(eScore).toBeGreaterThan(cScore);
+  });
+
+  it("cart fit: same-category item gets -8 penalty for non-drink/dessert intents", () => {
+    const cartItem  = makeTagged("c1", ["main"]);
+    const samecat   = makeTagged("s1", ["main"]);
+    const diffcat   = { ...makeTagged("d1", ["complete"]), category: "other" };
+    const cartTagged = [cartItem];
+    const ctx: ScoreContext = { cartItemIds: ["c1"], cartTagged, benchmarks };
+    const sameScore = scoreProductForIntent(samecat, "wants_complete_meal", ctx);
+    const diffScore = scoreProductForIntent(diffcat, "wants_complete_meal", ctx);
+    expect(diffScore).toBeGreaterThan(sameScore);
+  });
+
+  it("sortOrder popularity tie-breaker: lower sortOrder → higher score", () => {
+    const popular  = makeTagged("p1", ["main"], 20, 50);
+    const obscure  = makeTagged("o1", ["main"], 20, 450);
+    const popScore = scoreProductForIntent(popular,  "wants_recommendation", emptyCtx);
+    const obsScore = scoreProductForIntent(obscure,  "wants_recommendation", emptyCtx);
+    expect(popScore).toBeGreaterThan(obsScore);
+  });
+});
+
+describe("Sprint 4C: rankProducts", () => {
+  function makeFullCatalog(): V2CatalogItem[] {
+    return [
+      { id: "m1", name: "Burger Clássico",  categoryName: "Burgers",     price: 28, sortOrder: 1 },
+      { id: "m2", name: "Combo Família",    categoryName: "Combos",      price: 65, sortOrder: 2 },
+      { id: "m3", name: "Salada Verde",     categoryName: "Saladas",     price: 18, sortOrder: 3 },
+      { id: "d1", name: "Refrigerante",     categoryName: "Bebidas",     price: 7,  sortOrder: 4 },
+      { id: "d2", name: "Suco Natural",     categoryName: "Bebidas",     price: 10, sortOrder: 5 },
+      { id: "s1", name: "Brownie",          categoryName: "Sobremesas",  price: 14, sortOrder: 6 },
+      { id: "p1", name: "Burger Gourmet",   categoryName: "Burgers",     price: 45, sortOrder: 7 },
+      { id: "g1", name: "Combo Para 4",     categoryName: "Combos",      price: 90, sortOrder: 8 },
+    ];
+  }
+
+  it("returns up to limit items", () => {
+    const results = rankProducts(makeFullCatalog(), "wants_recommendation", [], 3);
+    expect(results.length).toBeLessThanOrEqual(3);
+  });
+
+  it("never includes cart items in results", () => {
+    const results = rankProducts(makeFullCatalog(), "wants_recommendation", ["m1"], 3);
+    expect(results).not.toContain("m1");
+  });
+
+  it("asks_for_drink returns only drinks", () => {
+    const results = rankProducts(makeFullCatalog(), "asks_for_drink", [], 3);
+    expect(results.length).toBeGreaterThan(0);
+    results.forEach((id) => expect(["d1", "d2"]).toContain(id));
+  });
+
+  it("asks_for_dessert returns only desserts", () => {
+    const results = rankProducts(makeFullCatalog(), "asks_for_dessert", [], 3);
+    expect(results.length).toBeGreaterThan(0);
+    results.forEach((id) => expect(["s1"]).toContain(id));
+  });
+
+  it("wants_group_order returns combos first", () => {
+    const results = rankProducts(makeFullCatalog(), "wants_group_order", [], 2);
+    expect(results.length).toBeGreaterThan(0);
+    expect(["m2", "g1"]).toContain(results[0]);
+  });
+
+  it("wants_budget_option ranks cheap items before expensive ones", () => {
+    const catalog: V2CatalogItem[] = [
+      { id: "cheap1", name: "Prato do Dia",      categoryName: "Pratos",    price: 8,  sortOrder: 1 },
+      { id: "cheap2", name: "Lanche Simples",    categoryName: "Lanches",   price: 10, sortOrder: 2 },
+      { id: "prem1",  name: "Wagyu Premium",     categoryName: "Especiais", price: 95, sortOrder: 3 },
+    ];
+    const results = rankProducts(catalog, "wants_budget_option", [], 3);
+    expect(results.length).toBeGreaterThan(0);
+    // cheap items must rank above the premium one
+    const premIdx  = results.indexOf("prem1");
+    const cheapIdx = results.findIndex((id) => id === "cheap1" || id === "cheap2");
+    if (premIdx !== -1 && cheapIdx !== -1) expect(cheapIdx).toBeLessThan(premIdx);
+  });
+
+  it("wants_premium_option puts high-priced items first", () => {
+    const results = rankProducts(makeFullCatalog(), "wants_premium_option", [], 2);
+    const catalog = makeFullCatalog();
+    const topItem = catalog.find((i) => i.id === results[0]);
+    expect(topItem?.price).toBeGreaterThanOrEqual(28); // should be a premium item
+  });
+
+  it("items below MIN_SCORE_THRESHOLD are excluded (drink intent excludes non-drinks)", () => {
+    const catalog = makeFullCatalog();
+    const drinkIds = ["d1", "d2"];
+    const results  = rankProducts(catalog, "asks_for_drink", [], 10);
+    results.forEach((id) => expect(drinkIds).toContain(id));
+  });
+
+  it("wants_recommendation with food in cart surfaces a drink", () => {
+    const results = rankProducts(makeFullCatalog(), "wants_recommendation", ["m1"], 3);
+    expect(results.length).toBeGreaterThan(0);
+    // When food is in cart and no drink → drink should rank first
+    expect(["d1", "d2"]).toContain(results[0]);
+  });
+
+  it("returns empty array when no items pass threshold", () => {
+    const drinkOnly: V2CatalogItem[] = [
+      { id: "d1", name: "Água",  categoryName: "Bebidas", price: 5, sortOrder: 1 },
+      { id: "d2", name: "Suco",  categoryName: "Bebidas", price: 8, sortOrder: 2 },
+    ];
+    const results = rankProducts(drinkOnly, "wants_complete_meal", [], 3);
+    expect(results).toHaveLength(0);
   });
 });

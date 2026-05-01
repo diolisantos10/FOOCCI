@@ -298,7 +298,7 @@ export interface TaggedItem {
   tags:        ItemTag[];
 }
 
-interface PriceBenchmarks { p25: number; median: number; p75: number; }
+export interface PriceBenchmarks { p25: number; median: number; p75: number; }
 
 function computePriceBenchmarks(catalog: V2CatalogItem[]): PriceBenchmarks {
   const prices = catalog
@@ -606,6 +606,149 @@ function selectPairingItems(catalog: V2CatalogItem[], cartItemIds: string[], lim
     .filter((i) => i.tags.includes("pairing_candidate") || i.tags.includes("premium"))
     .sort(tagSort);
   return (pairings.length > 0 ? pairings : notCart.sort(tagSort)).slice(0, limit).map((i) => i.id);
+}
+
+// ─── Smart Product Selection Engine (Sprint 4C) ──────────────
+
+export interface ScoreContext {
+  cartItemIds: string[];
+  cartTagged:  TaggedItem[];
+  benchmarks:  PriceBenchmarks;
+}
+
+export function scoreProductForIntent(item: TaggedItem, intent: CustomerIntent, ctx: ScoreContext): number {
+  let score = 0;
+
+  // A) Intent fit
+  switch (intent) {
+    case "wants_light_option":
+      score += item.tags.includes("light")   ? 30 : 0;
+      score += item.tags.includes("starter") ? 20 : 0;
+      score += item.tags.includes("main")    ?  5 : 0;
+      score -= item.tags.includes("combo")   ? 15 : 0;
+      score -= item.tags.includes("drink")   ? 20 : 0;
+      score -= item.tags.includes("dessert") ? 20 : 0;
+      break;
+    case "wants_complete_meal":
+      score += item.tags.includes("combo")    ? 35 : 0;
+      score += item.tags.includes("complete") ? 25 : 0;
+      score += item.tags.includes("main")     ? 15 : 0;
+      score -= item.tags.includes("starter")  ? 15 : 0;
+      score -= item.tags.includes("drink")    ? 20 : 0;
+      score -= item.tags.includes("dessert")  ? 20 : 0;
+      break;
+    case "wants_group_order":
+      score += item.tags.includes("group")    ? 40 : 0;
+      score += item.tags.includes("combo")    ? 35 : 0;
+      score += item.tags.includes("complete") ? 10 : 0;
+      score += item.tags.includes("premium")  ?  5 : 0;
+      score -= item.tags.includes("drink")    ? 15 : 0;
+      score -= item.tags.includes("dessert")  ? 15 : 0;
+      break;
+    case "wants_premium_option":
+      score += item.tags.includes("premium")  ? 40 : 0;
+      score += item.tags.includes("combo")    ? 20 : 0;
+      score += item.tags.includes("complete") ? 15 : 0;
+      score -= item.tags.includes("cheap")    ? 30 : 0;
+      score -= item.tags.includes("drink")    ? 10 : 0;
+      score -= item.tags.includes("dessert")  ? 10 : 0;
+      break;
+    case "wants_budget_option":
+      score += item.tags.includes("cheap")    ? 35 : 0;
+      score += item.tags.includes("complete") ? 10 : 0;
+      score += item.tags.includes("main")     ?  8 : 0;
+      score -= item.tags.includes("premium")  ? 25 : 0;
+      score -= item.tags.includes("drink")    ? 10 : 0;
+      score -= item.tags.includes("dessert")  ? 10 : 0;
+      break;
+    case "asks_for_drink":
+      score += item.tags.includes("drink") ? 60 : 0;
+      if (!item.tags.includes("drink")) score -= 100;
+      break;
+    case "asks_for_dessert":
+      score += item.tags.includes("dessert") ? 60 : 0;
+      if (!item.tags.includes("dessert")) score -= 100;
+      break;
+    case "asks_for_pairing":
+      score += item.tags.includes("pairing_candidate") ? 30 : 0;
+      score += item.tags.includes("drink")             ? 20 : 0;
+      score += item.tags.includes("dessert")           ? 15 : 0;
+      if (!item.tags.includes("pairing_candidate") && !item.tags.includes("drink") && !item.tags.includes("dessert")) score -= 15;
+      break;
+    case "wants_recommendation": {
+      const cartHasFood    = ctx.cartTagged.some((i) => !i.tags.includes("drink") && !i.tags.includes("dessert"));
+      const cartHasDrink   = ctx.cartTagged.some((i) => i.tags.includes("drink"));
+      const cartHasDessert = ctx.cartTagged.some((i) => i.tags.includes("dessert"));
+      if (ctx.cartTagged.length === 0) {
+        score += item.tags.includes("main")     ? 25 : 0;
+        score += item.tags.includes("complete") ? 15 : 0;
+        score -= item.tags.includes("drink")    ? 10 : 0;
+        score -= item.tags.includes("dessert")  ? 10 : 0;
+      } else if (cartHasFood && !cartHasDrink) {
+        score += item.tags.includes("drink") ? 40 : -10;
+      } else if (cartHasFood && cartHasDrink && !cartHasDessert) {
+        score += item.tags.includes("dessert") ? 35 : -10;
+      } else {
+        score += item.tags.includes("pairing_candidate") ? 20 : 0;
+        score += item.tags.includes("premium")           ? 15 : 0;
+      }
+      break;
+    }
+    default:
+      score += item.tags.includes("main")     ? 20 : 0;
+      score += item.tags.includes("complete") ? 15 : 0;
+      break;
+  }
+
+  // B) Commercial value
+  if (intent !== "wants_budget_option") {
+    if (item.price >= ctx.benchmarks.median) score += 8;
+    if (item.price >= ctx.benchmarks.p75)    score += 4;
+  } else {
+    if (item.price <= ctx.benchmarks.p25)    score += 12;
+    if (item.price <= ctx.benchmarks.median) score +=  5;
+  }
+
+  // C) Cart fit
+  if (ctx.cartTagged.length > 0) {
+    const cartCategories = new Set(ctx.cartTagged.map((i) => i.category));
+    if (intent === "asks_for_pairing") {
+      if (!cartCategories.has(item.category)) score += 10;
+    } else if (intent !== "asks_for_drink" && intent !== "asks_for_dessert") {
+      if (cartCategories.has(item.category)) score -= 8;
+    }
+  }
+
+  // D) Popularity tie-breaker
+  if (item.sortOrder !== undefined) {
+    score += Math.max(0, Math.floor((500 - item.sortOrder) / 50));
+  }
+
+  return score;
+}
+
+const MIN_SCORE_THRESHOLD = 10;
+
+export function rankProducts(catalog: V2CatalogItem[], intent: CustomerIntent, cartItemIds: string[], limit: number): string[] {
+  const benchmarks = computePriceBenchmarks(catalog);
+  const tagged     = catalog.map((item) => analyzeMenuItem(item, benchmarks));
+  const cartTagged = tagged.filter((i) => cartItemIds.includes(i.id));
+  const ctx: ScoreContext = { cartItemIds, cartTagged, benchmarks };
+
+  const scored: Array<{ id: string; score: number }> = [];
+  for (const item of tagged) {
+    if (cartItemIds.includes(item.id)) continue;
+    const score = scoreProductForIntent(item, intent, ctx);
+    if (score >= MIN_SCORE_THRESHOLD) scored.push({ id: item.id, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+
+  const seen    = new Set<string>();
+  const results: string[] = [];
+  for (const { id } of scored) {
+    if (!seen.has(id) && results.length < limit) { seen.add(id); results.push(id); }
+  }
+  return results;
 }
 
 // ─── restaurant-agnostic sales strategy (Sales Intelligence) ─
@@ -1138,7 +1281,7 @@ function handlePermissionAccepted(input: V2Input): V2Output {
   }
 
   // Cart has items → context-aware deterministic recommendation
-  const cards = selectRecommendedItems(catalog, cartItemIds, 3);
+  const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3);
   if (cards.length > 0) {
     return {
       message:     "Separei algumas opções que combinam com o seu pedido 👇",
@@ -1217,48 +1360,42 @@ function handleUserMessage(input: V2Input): V2Output {
   // ── Deterministic paths (Sales Intelligence — no AI call) ────
   switch (analysis.customerIntent) {
     case "wants_light_option": {
-      const cards = selectLightItems(catalog, cartItemIds, 3);
+      const cards = rankProducts(catalog, "wants_light_option", cartItemIds, 3);
       if (cards.length > 0) return { message: "Separei algumas opções mais leves pra você 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_complete_meal": {
-      const cards = selectCompleteMealItems(catalog, cartItemIds, 3);
+      const cards = rankProducts(catalog, "wants_complete_meal", cartItemIds, 3);
       if (cards.length > 0) return { message: "Separei opções mais completas pra você 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_group_order": {
-      const cards = selectGroupItems(catalog, cartItemIds, 3);
+      const cards = rankProducts(catalog, "wants_group_order", cartItemIds, 3);
       if (cards.length > 0) return { message: "Pra compartilhar, essas opções fazem mais sentido 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_budget_option": {
-      const tagged  = tagCatalog(catalog);
-      const notCart = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert") && !cartItemIds.includes(i.id));
-      const cheap   = notCart.filter((i) => i.tags.includes("cheap")).sort(tagSort);
-      const cards   = (cheap.length > 0 ? cheap : notCart.sort(tagSort)).slice(0, 3).map((i) => i.id);
+      const cards = rankProducts(catalog, "wants_budget_option", cartItemIds, 3);
       if (cards.length > 0) return { message: "Ótimas opções com bom custo-benefício 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_premium_option": {
-      const tagged    = tagCatalog(catalog);
-      const notCart   = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert") && !cartItemIds.includes(i.id));
-      const premium   = notCart.filter((i) => i.tags.includes("premium")).sort(tagSort);
-      const cards     = (premium.length > 0 ? premium : [...notCart].sort((a, b) => b.price - a.price)).slice(0, 3).map((i) => i.id);
+      const cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 3);
       if (cards.length > 0) return { message: "Uma experiência um pouco acima do padrão 👇", cards, mode: "INTERVENTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "asks_for_dessert": {
-      const cards = selectDessertItems(catalog, cartItemIds, 3);
+      const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 3);
       if (cards.length > 0) return { message: "Para adoçar o final 🍰", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "asks_for_drink": {
-      const cards = selectDrinkItems(catalog, cartItemIds, 3);
+      const cards = rankProducts(catalog, "asks_for_drink", cartItemIds, 3);
       if (cards.length > 0) return { message: "Aqui estão as bebidas disponíveis 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "asks_for_pairing": {
-      const cards = selectPairingItems(catalog, cartItemIds, 3);
+      const cards = rankProducts(catalog, "asks_for_pairing", cartItemIds, 3);
       if (cards.length > 0) return { message: "Essas opções combinam bem com o que você escolheu 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
@@ -1291,8 +1428,7 @@ function handleUserMessage(input: V2Input): V2Output {
     }
     case "wants_recommendation": {
       if (!hasItems) return { ...QUAL_QUESTION };
-      // Cart has items → context-aware recommendation
-      const cards = selectRecommendedItems(catalog, cartItemIds, 3);
+      const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3);
       if (cards.length > 0) return { message: "Aqui vai o que faz mais sentido pra você agora 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       break;
     }
