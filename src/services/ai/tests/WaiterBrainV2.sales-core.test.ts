@@ -27,6 +27,7 @@ import {
   scoreProductForIntent,
   rankProducts,
   buildCommercialResponse,
+  createWaiterMemory,
   type V2CatalogItem,
   type V2Input,
   type V2Output,
@@ -34,6 +35,7 @@ import {
   type ScoreContext,
   type PriceBenchmarks,
   type CommercialResponseInput,
+  type WaiterMemory,
 } from "../WaiterBrainV2";
 
 // ── Shared catalog fixtures ───────────────────────────────────────────────────
@@ -1321,5 +1323,242 @@ describe("Sprint 4D: QUESTION_BUTTON_PATTERNS — budget pattern", () => {
     const values = validated.options.map((o) => o.value);
     expect(values).toContain("budget");
     expect(values).toContain("complete");
+  });
+});
+
+// ─── Section 21: Sprint 4E — Session Memory ──────────────────────────────────
+
+describe("Sprint 4E: createWaiterMemory", () => {
+  it("returns a blank memory with correct shape", () => {
+    const mem = createWaiterMemory();
+    expect(mem.suggestedProductIds).toEqual([]);
+    expect(mem.declinedSuggestionTypes).toEqual([]);
+    expect(mem.acceptedSuggestionTypes).toEqual([]);
+    expect(mem.lastIntent).toBeNull();
+    expect(mem.lastMode).toBeNull();
+    expect(mem.permissionDeclinedAt).toBeNull();
+    expect(mem.promptCount).toBe(0);
+  });
+});
+
+describe("Sprint 4E: decide() returns memoryPatch", () => {
+  it("every decide() call includes memoryPatch in the output", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero bebida", catalog: makeSushiCatalog() }));
+    expect(out).toHaveProperty("memoryPatch");
+    expect(typeof out.memoryPatch).toBe("object");
+  });
+
+  it("memoryPatch.lastMode matches output.mode", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero bebida", catalog: makeSushiCatalog() }));
+    expect(out.memoryPatch?.lastMode).toBe(out.mode);
+  });
+
+  it("memoryPatch.suggestedProductIds includes cards returned in this turn", () => {
+    const catalog = makeSushiCatalog();
+    const out     = decide(makeInput("ON_USER_MESSAGE", { message: "quero bebida", catalog }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    for (const id of out.cards) {
+      expect(out.memoryPatch?.suggestedProductIds).toContain(id);
+    }
+  });
+
+  it("memoryPatch.suggestedProductIds accumulates across turns", () => {
+    const catalog  = makeSushiCatalog();
+    const turn1    = decide(makeInput("ON_USER_MESSAGE", { message: "quero bebida", catalog }));
+    const memory1: WaiterMemory = { ...createWaiterMemory(), ...turn1.memoryPatch };
+    const turn2    = decide(makeInput("ON_USER_MESSAGE", { message: "quero sobremesa", catalog, memory: memory1 }));
+    const allIds   = turn2.memoryPatch?.suggestedProductIds ?? [];
+    // Turn 2 patch should include turn 1 cards plus turn 2 cards
+    for (const id of (turn1.memoryPatch?.suggestedProductIds ?? [])) {
+      expect(allIds).toContain(id);
+    }
+  });
+
+  it("ON_PERMISSION_DECLINED sets permissionDeclinedAt and passive_help in declinedTypes", () => {
+    const out = decide(makeInput("ON_PERMISSION_DECLINED", { catalog: makeSushiCatalog() }));
+    expect(out.memoryPatch?.permissionDeclinedAt).toBeTypeOf("number");
+    expect(out.memoryPatch?.declinedSuggestionTypes).toContain("passive_help");
+  });
+
+  it("ON_PERMISSION_ACCEPT adds passive_help to acceptedTypes", () => {
+    const out = decide(makeInput("ON_PERMISSION_ACCEPT", { catalog: makeSushiCatalog() }));
+    expect(out.memoryPatch?.acceptedSuggestionTypes).toContain("passive_help");
+  });
+
+  it("continue_browsing message sets permissionDeclinedAt in patch", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "continue_browsing", catalog: makeSushiCatalog() }));
+    expect(out.memoryPatch?.permissionDeclinedAt).toBeTypeOf("number");
+    expect(out.memoryPatch?.declinedSuggestionTypes).toContain("passive_help");
+  });
+
+  it("continue_checkout message adds final_upsell to declinedTypes", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "continue_checkout", catalog: makeSushiCatalog() }));
+    expect(out.memoryPatch?.declinedSuggestionTypes).toContain("final_upsell");
+  });
+
+  it("see_final_suggestions message adds final_upsell to acceptedTypes", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "see_final_suggestions", catalog: makeSushiCatalog(), cartItemIds: ["s1"] }));
+    expect(out.memoryPatch?.acceptedSuggestionTypes).toContain("final_upsell");
+  });
+
+  it("ON_IDLE prompt shown → promptCount increments in patch", () => {
+    const catalog = makeSushiCatalog();
+    const out     = decide(makeInput("ON_IDLE", { catalog }));
+    // Prompt shown when options contain want_suggestion
+    if (out.options.some((o) => o.value === "want_suggestion")) {
+      expect(out.memoryPatch?.promptCount).toBe(1);
+    }
+  });
+
+  it("ON_USER_MESSAGE sets lastIntent in patch", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero bebida", catalog: makeSushiCatalog() }));
+    expect(typeof out.memoryPatch?.lastIntent).toBe("string");
+  });
+});
+
+describe("Sprint 4E: ON_IDLE prompt count and cooldown", () => {
+  it("shows permission prompt when memory is blank", () => {
+    const out = decide(makeInput("ON_IDLE", { memory: createWaiterMemory(), catalog: makeSushiCatalog() }));
+    expect(out.options.some((o) => o.value === "want_suggestion")).toBe(true);
+  });
+
+  it("suppresses prompt when promptCount >= 2", () => {
+    const mem: WaiterMemory = { ...createWaiterMemory(), promptCount: 2 };
+    const out = decide(makeInput("ON_IDLE", { memory: mem, catalog: makeSushiCatalog() }));
+    expect(out.options.some((o) => o.value === "want_suggestion")).toBe(false);
+    expect(out.cards).toHaveLength(0);
+  });
+
+  it("suppresses prompt during cooldown after decline", () => {
+    const mem: WaiterMemory = {
+      ...createWaiterMemory(),
+      permissionDeclinedAt: Date.now() - 60_000, // declined 1 minute ago (within 5-min cooldown)
+    };
+    const out = decide(makeInput("ON_IDLE", { memory: mem, catalog: makeSushiCatalog() }));
+    expect(out.options.some((o) => o.value === "want_suggestion")).toBe(false);
+  });
+
+  it("shows prompt again after cooldown expires", () => {
+    const mem: WaiterMemory = {
+      ...createWaiterMemory(),
+      promptCount:          1,
+      permissionDeclinedAt: Date.now() - 10 * 60_000, // declined 10 min ago (past 5-min cooldown)
+    };
+    const out = decide(makeInput("ON_IDLE", { memory: mem, catalog: makeSushiCatalog() }));
+    expect(out.options.some((o) => o.value === "want_suggestion")).toBe(true);
+  });
+
+  it("ON_IDLE does not increment promptCount when prompt is suppressed", () => {
+    const mem: WaiterMemory = { ...createWaiterMemory(), promptCount: 2 };
+    const out = decide(makeInput("ON_IDLE", { memory: mem, catalog: makeSushiCatalog() }));
+    expect(out.memoryPatch?.promptCount).toBeUndefined();
+  });
+});
+
+describe("Sprint 4E: rankProducts already-suggested penalty", () => {
+  it("already-suggested products rank lower than fresh ones", () => {
+    const catalog: V2CatalogItem[] = [
+      { id: "d1", name: "Suco",       categoryName: "Bebidas", price: 8,  sortOrder: 1 },
+      { id: "d2", name: "Refrigerante", categoryName: "Bebidas", price: 7, sortOrder: 2 },
+    ];
+    const fresh    = rankProducts(catalog, "asks_for_drink", [], 2, []);
+    const biased   = rankProducts(catalog, "asks_for_drink", [], 2, ["d1"]);
+    // When d1 is penalized, d2 should come first
+    if (biased.length > 0) expect(biased[0]).toBe("d2");
+    // fresh has no penalty — d1 ranks first by sortOrder
+    if (fresh.length > 0) expect(fresh[0]).toBe("d1");
+  });
+
+  it("already-suggested product can still appear if it's the only option above threshold", () => {
+    const catalog: V2CatalogItem[] = [
+      { id: "d1", name: "Suco", categoryName: "Bebidas", price: 8, sortOrder: 1 },
+    ];
+    const results = rankProducts(catalog, "asks_for_drink", [], 2, ["d1"]);
+    // d1 gets -15 penalty but drink base score is +60, so net ≥ 10 → still included
+    expect(results).toContain("d1");
+  });
+
+  it("already-suggested products not shown when fresh options exist", () => {
+    const catalog: V2CatalogItem[] = [
+      { id: "d1", name: "Suco",        categoryName: "Bebidas", price: 8,  sortOrder: 1 },
+      { id: "d2", name: "Limonada",    categoryName: "Bebidas", price: 9,  sortOrder: 2 },
+      { id: "d3", name: "Refrigerante", categoryName: "Bebidas", price: 7, sortOrder: 3 },
+    ];
+    const results = rankProducts(catalog, "asks_for_drink", [], 1, ["d1"]);
+    // With limit=1 and d1 penalized, the top result should be d2 or d3
+    expect(results).toHaveLength(1);
+    expect(results[0]).not.toBe("d1");
+  });
+});
+
+describe("Sprint 4E: full session simulation", () => {
+  it("acceptance criteria A — same product not suggested twice in a session", () => {
+    const catalog  = makeSushiCatalog();
+    let memory     = createWaiterMemory();
+
+    const turn1    = decide(makeInput("ON_USER_MESSAGE", { message: "quero bebida", catalog, memory }));
+    memory         = { ...memory, ...turn1.memoryPatch };
+    const turn2    = decide(makeInput("ON_USER_MESSAGE", { message: "quero bebida", catalog, memory }));
+
+    // Cards from turn 2 should not overlap with turn 1 (or there are no more fresh ones)
+    const t1Cards  = turn1.cards;
+    const t2Cards  = turn2.cards;
+    const overlap  = t2Cards.filter((id) => t1Cards.includes(id));
+    // Overlap is only acceptable if there are no other drink options
+    const drinkIds = catalog.filter((i) => i.categoryName === "Bebidas").map((i) => i.id);
+    const freshOptions = drinkIds.filter((id) => !t1Cards.includes(id));
+    if (freshOptions.length > 0) {
+      expect(overlap).toHaveLength(0);
+    }
+  });
+
+  it("acceptance criteria B — waiter stays quiet during cooldown after decline", () => {
+    const catalog  = makeSushiCatalog();
+    const memory: WaiterMemory = {
+      ...createWaiterMemory(),
+      permissionDeclinedAt: Date.now() - 60_000, // 1 min ago, within cooldown
+    };
+    const out = decide(makeInput("ON_IDLE", { catalog, memory }));
+    expect(out.options.some((o) => o.value === "want_suggestion")).toBe(false);
+    expect(out.message).toBe("");
+  });
+
+  it("acceptance criteria C — explicit ask still works during cooldown", () => {
+    const catalog  = makeSushiCatalog();
+    const memory: WaiterMemory = {
+      ...createWaiterMemory(),
+      declinedSuggestionTypes: ["passive_help"],
+      permissionDeclinedAt:    Date.now() - 60_000,
+    };
+    // User explicitly asks — ON_USER_MESSAGE bypasses idle cooldown
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero bebida", catalog, memory }));
+    expect(out.cards.length).toBeGreaterThan(0);
+  });
+
+  it("acceptance criteria D — cart item not suggested again", () => {
+    const catalog = makeSushiCatalog();
+    const out     = decide(makeInput("ON_USER_MESSAGE", {
+      message:     "me sugere algo",
+      cartItemIds: ["s4"],  // suco already in cart
+      catalog,
+    }));
+    expect(out.cards).not.toContain("s4");
+  });
+
+  it("acceptance criteria E — permission prompt max 2 times", () => {
+    const catalog = makeSushiCatalog();
+    let memory    = createWaiterMemory();
+
+    // First idle — should show prompt
+    const turn1 = decide(makeInput("ON_IDLE", { catalog, memory }));
+    memory = { ...memory, ...turn1.memoryPatch };
+
+    // Second idle — should show prompt (count = 1 after turn1)
+    const turn2 = decide(makeInput("ON_IDLE", { catalog, memory }));
+    memory = { ...memory, ...turn2.memoryPatch };
+
+    // Third idle — must be suppressed (count = 2)
+    const turn3 = decide(makeInput("ON_IDLE", { catalog, memory }));
+    expect(turn3.options.some((o) => o.value === "want_suggestion")).toBe(false);
   });
 });

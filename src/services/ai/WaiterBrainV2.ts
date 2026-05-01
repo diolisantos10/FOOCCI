@@ -51,6 +51,35 @@ export interface V2CatalogItem {
   description?: string | null;
 }
 
+// ─── session memory ───────────────────────────────────────────
+
+/**
+ * Lightweight session memory held by the client (never persisted).
+ * Passed in via V2Input.memory; updates returned via V2Output.memoryPatch.
+ */
+export interface WaiterMemory {
+  suggestedProductIds:     string[];   // products shown as cards this session
+  declinedSuggestionTypes: string[];   // e.g. "passive_help", "final_upsell"
+  acceptedSuggestionTypes: string[];
+  lastIntent:              string | null;
+  lastMode:                string | null;
+  permissionDeclinedAt:    number | null; // Unix ms — null means never declined
+  promptCount:             number;        // how many idle permission prompts shown
+}
+
+/** Returns a blank WaiterMemory for a new ordering session. */
+export function createWaiterMemory(): WaiterMemory {
+  return {
+    suggestedProductIds:     [],
+    declinedSuggestionTypes: [],
+    acceptedSuggestionTypes: [],
+    lastIntent:              null,
+    lastMode:                null,
+    permissionDeclinedAt:    null,
+    promptCount:             0,
+  };
+}
+
 export interface V2Input {
   event:        V2Event;
   cartItemIds:  string[];    // IDs of items currently in cart
@@ -58,6 +87,7 @@ export interface V2Input {
   lastAddedId?: string;      // for ON_ITEM_ADDED: the item just added
   catalog:      V2CatalogItem[];
   message?:     string;      // raw user message (for intent detection)
+  memory?:      WaiterMemory; // current session memory — client passes this in
 }
 
 /** Rendering mode returned to the client so the UI knows how to behave. */
@@ -70,12 +100,13 @@ export interface WaiterOption {
 }
 
 export interface V2Output {
-  message:     string;          // short text (≤ 2 lines)
-  cards:       string[];        // product IDs to render as UI cards
-  mode:        WaiterMode;      // UI rendering state
-  options:     WaiterOption[];  // quick-reply buttons — empty array when none
-  requiresAI:  boolean;         // when true → caller must run OpenAI pipeline
-  aiDirective: string;          // injected into system prompt for AI events
+  message:      string;          // short text (≤ 2 lines)
+  cards:        string[];        // product IDs to render as UI cards
+  mode:         WaiterMode;      // UI rendering state
+  options:      WaiterOption[];  // quick-reply buttons — empty array when none
+  requiresAI:   boolean;         // when true → caller must run OpenAI pipeline
+  aiDirective:  string;          // injected into system prompt for AI events
+  memoryPatch?: Partial<WaiterMemory>; // client merges this into its WaiterMemory
 }
 
 // ─── sales intelligence types ────────────────────────────────
@@ -729,7 +760,13 @@ export function scoreProductForIntent(item: TaggedItem, intent: CustomerIntent, 
 
 const MIN_SCORE_THRESHOLD = 10;
 
-export function rankProducts(catalog: V2CatalogItem[], intent: CustomerIntent, cartItemIds: string[], limit: number): string[] {
+export function rankProducts(
+  catalog:              V2CatalogItem[],
+  intent:               CustomerIntent,
+  cartItemIds:          string[],
+  limit:                number,
+  alreadySuggestedIds:  string[] = [],
+): string[] {
   const benchmarks = computePriceBenchmarks(catalog);
   const tagged     = catalog.map((item) => analyzeMenuItem(item, benchmarks));
   const cartTagged = tagged.filter((i) => cartItemIds.includes(i.id));
@@ -738,7 +775,9 @@ export function rankProducts(catalog: V2CatalogItem[], intent: CustomerIntent, c
   const scored: Array<{ id: string; score: number }> = [];
   for (const item of tagged) {
     if (cartItemIds.includes(item.id)) continue;
-    const score = scoreProductForIntent(item, intent, ctx);
+    let score = scoreProductForIntent(item, intent, ctx);
+    // Penalise already-shown products to encourage variety (soft exclusion)
+    if (alreadySuggestedIds.includes(item.id)) score -= 15;
     if (score >= MIN_SCORE_THRESHOLD) scored.push({ id: item.id, score });
   }
   scored.sort((a, b) => b.score - a.score);
@@ -1196,7 +1235,12 @@ function handleCartUpdated(input: V2Input): V2Output {
   };
 }
 
-function handleIdle(): V2Output {
+function handleIdle(input: V2Input): V2Output {
+  const mem = input.memory;
+  // Respect max 2 prompts per session and cooldown after decline
+  if (mem && (mem.promptCount >= 2 || isPermissionCooldownActive(mem))) {
+    return { message: "", cards: [], mode: "BROWSE", options: [], requiresAI: false, aiDirective: "" };
+  }
   // Ask permission before suggesting — never auto-push products on idle.
   return {
     message:     "Posso te sugerir algo que combine com o que você está vendo? 👇",
@@ -1281,7 +1325,8 @@ function handlePermissionAccepted(input: V2Input): V2Output {
   }
 
   // Cart has items → context-aware deterministic recommendation
-  const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3);
+  const suggestedIds = input.memory?.suggestedProductIds ?? [];
+  const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3, suggestedIds);
   if (cards.length > 0) {
     return {
       message:     "Separei algumas opções que combinam com o seu pedido 👇",
@@ -1391,49 +1436,50 @@ export function buildCommercialResponse(
 }
 
 function handleUserMessage(input: V2Input): V2Output {
-  const analysis  = analyzeSalesContext(input);
-  const hasItems  = input.cartItemIds.length > 0;
+  const analysis     = analyzeSalesContext(input);
+  const hasItems     = input.cartItemIds.length > 0;
   const { catalog, cartItemIds } = input;
+  const suggestedIds = input.memory?.suggestedProductIds ?? [];
 
   // ── Deterministic paths (Sales Intelligence — no AI call) ────
   switch (analysis.customerIntent) {
     case "wants_light_option": {
-      const cards = rankProducts(catalog, "wants_light_option", cartItemIds, 3);
+      const cards = rankProducts(catalog, "wants_light_option", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_light_option", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_complete_meal": {
-      const cards = rankProducts(catalog, "wants_complete_meal", cartItemIds, 3);
+      const cards = rankProducts(catalog, "wants_complete_meal", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_complete_meal", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_group_order": {
-      const cards = rankProducts(catalog, "wants_group_order", cartItemIds, 3);
+      const cards = rankProducts(catalog, "wants_group_order", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_group_order", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_budget_option": {
-      const cards = rankProducts(catalog, "wants_budget_option", cartItemIds, 3);
+      const cards = rankProducts(catalog, "wants_budget_option", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_budget_option", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_premium_option": {
-      const cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 3);
+      const cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_premium_option", selectedProducts: cards, mode: "INTERVENTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "asks_for_dessert": {
-      const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 3);
+      const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_for_dessert", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "asks_for_drink": {
-      const cards = rankProducts(catalog, "asks_for_drink", cartItemIds, 3);
+      const cards = rankProducts(catalog, "asks_for_drink", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_for_drink", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "asks_for_pairing": {
-      const cards = rankProducts(catalog, "asks_for_pairing", cartItemIds, 3);
+      const cards = rankProducts(catalog, "asks_for_pairing", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_for_pairing", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
@@ -1464,7 +1510,7 @@ function handleUserMessage(input: V2Input): V2Output {
     }
     case "wants_recommendation": {
       if (!hasItems) return { ...QUAL_QUESTION };
-      const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3);
+      const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_recommendation", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       break;
     }
@@ -1632,6 +1678,68 @@ export function validateWaiterResponse(
   }
 }
 
+// ─── session memory helpers ───────────────────────────────────
+
+/** 5-minute cooldown after a permission decline. */
+const PERMISSION_COOLDOWN_MS = 5 * 60 * 1000;
+
+function isPermissionCooldownActive(mem: WaiterMemory): boolean {
+  if (mem.permissionDeclinedAt === null) return false;
+  return Date.now() - mem.permissionDeclinedAt < PERMISSION_COOLDOWN_MS;
+}
+
+/**
+ * Derives the memory update for this turn.
+ * Client applies it as: `memory = { ...memory, ...memoryPatch }`.
+ * All array values are complete replacements (not deltas).
+ */
+function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMemory> {
+  const mem  = input.memory ?? createWaiterMemory();
+  const msg  = (input.message ?? "").toLowerCase().trim();
+  const patch: Partial<WaiterMemory> = {};
+
+  // Always track last mode
+  patch.lastMode = output.mode;
+
+  // Track last detected intent for ON_USER_MESSAGE turns
+  if (input.event === "ON_USER_MESSAGE") {
+    patch.lastIntent = analyzeSalesContext(input).customerIntent;
+  }
+
+  // Accumulate shown product IDs
+  if (output.cards.length > 0) {
+    patch.suggestedProductIds = [...new Set([...mem.suggestedProductIds, ...output.cards])];
+  }
+
+  // Permission prompt was shown → increment counter
+  if (input.event === "ON_IDLE" && output.options.some((o) => o.value === "want_suggestion")) {
+    patch.promptCount = mem.promptCount + 1;
+  }
+
+  // User explicitly declined passive help
+  if (input.event === "ON_PERMISSION_DECLINED" || msg === "continue_browsing") {
+    patch.permissionDeclinedAt    = Date.now();
+    patch.declinedSuggestionTypes = [...new Set([...mem.declinedSuggestionTypes, "passive_help"])];
+  }
+
+  // User accepted passive help
+  if (input.event === "ON_PERMISSION_ACCEPT" || msg === "want_suggestion") {
+    patch.acceptedSuggestionTypes = [...new Set([...mem.acceptedSuggestionTypes, "passive_help"])];
+  }
+
+  // Pre-checkout upsell declined
+  if (msg === "continue_checkout") {
+    patch.declinedSuggestionTypes = [...new Set([...mem.declinedSuggestionTypes, "final_upsell"])];
+  }
+
+  // Pre-checkout upsell accepted
+  if (msg === "see_final_suggestions") {
+    patch.acceptedSuggestionTypes = [...new Set([...mem.acceptedSuggestionTypes, "final_upsell"])];
+  }
+
+  return patch;
+}
+
 // ─── public API ───────────────────────────────────────────────
 
 export function decide(input: V2Input): V2Output {
@@ -1641,7 +1749,7 @@ export function decide(input: V2Input): V2Output {
       case "ON_MENU_MODE":           return handleMenuMode();
       case "ON_ITEM_ADDED":          return handleItemAdded();
       case "ON_CART_UPDATED":        return handleCartUpdated(input);
-      case "ON_IDLE":                return handleIdle();
+      case "ON_IDLE":                return handleIdle(input);
       case "ON_CHECKOUT_STARTED":    return handleCheckoutStarted(input);
       case "AFTER_CHECKOUT":         return handleAfterCheckout();
       case "ON_USER_MESSAGE":        return handleUserMessage(input);
@@ -1649,5 +1757,7 @@ export function decide(input: V2Input): V2Output {
       case "ON_PERMISSION_DECLINED": return handlePermissionDeclined();
     }
   })();
-  return validateWaiterResponse(raw, input.catalog, input.event);
+  const validated    = validateWaiterResponse(raw, input.catalog, input.event);
+  const memoryPatch  = computeMemoryPatch(input, validated);
+  return { ...validated, memoryPatch };
 }
