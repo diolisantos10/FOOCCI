@@ -9,16 +9,16 @@ export type CustomerBehavior =
   | "premium";
 
 export interface CustomerProfile {
-  id:              string;
-  name:            string;
-  goal:            string;
-  budget?:         number;
-  groupSize?:      number;
-  behavior:        CustomerBehavior;
-  intentMessages:  string[];
-  requiresCart:    boolean;
+  id:               string;
+  name:             string;
+  goal:             string;
+  budget?:          number;
+  groupSize?:       number;
+  behavior:         CustomerBehavior;
+  intentMessages:   string[];
+  requiresCart:     boolean;
   requiresCheckout: boolean;
-  expectedOutcome: string;
+  expectedOutcome:  string;
 }
 
 // ── Shared item shape ─────────────────────────────────────────────────────────
@@ -50,7 +50,12 @@ export type FailureType =
   | "order_not_confirmed"
   | "response_contract_error"
   | "timeout"
-  | "unknown_error";
+  | "unknown_error"
+  | "bad_product_fit"
+  | "repeated_suggestion"
+  | "invalid_card_id";
+
+export type Severity = "low" | "medium" | "high" | "critical";
 
 // ── Step & scenario shapes ────────────────────────────────────────────────────
 
@@ -93,6 +98,42 @@ export interface ScenarioResult {
   orderConfirmed:         boolean;
   improvementSuggestions: string[];
   durationMs:             number;
+  // ── Diagnostic fields ─────────────────────────────────────────────────────
+  customerGoal:      string;
+  expectedIntent:    string;
+  detectedIntent:    string;
+  expectedAction:    string;
+  actualAction:      string;
+  waiterMessage:     string;
+  optionsReturned:   { label: string; value: string }[];
+  cardsReturned:     string[];
+  renderedProducts:  string[];
+  probableRootCause: string;
+  recommendedFix:    string;
+  severity:          Severity;
+}
+
+// ── Area scores ───────────────────────────────────────────────────────────────
+
+export interface AreaScores {
+  intentScore:         number;
+  productFitScore:     number;
+  visualSyncScore:     number;
+  salesCopyScore:      number;
+  userControlScore:    number;
+  checkoutSafetyScore: number;
+  overallScore:        number;
+}
+
+// ── Fix recommendation ────────────────────────────────────────────────────────
+
+export interface FixRecommendation {
+  priority:           number;
+  failureType:        FailureType;
+  affectedScenarios:  string[];
+  reason:             string;
+  implementationArea: string;
+  expectedImpact:     string;
 }
 
 // ── Report ────────────────────────────────────────────────────────────────────
@@ -105,13 +146,15 @@ export interface AutoPilotReport {
   passed:           number;
   failed:           number;
   errored:          number;
-  score:            number;       // 0–100
+  score:            number;
   avgTurns:         number;
   avgCardsReturned: number;
-  conversionRate:   number;       // % of scenarios that reached checkout
+  conversionRate:   number;
   failureTypes:     Partial<Record<FailureType, number>>;
   recommendations:  string[];
   scenarioResults:  ScenarioResult[];
+  areaScores:       AreaScores;
+  topFixes:         FixRecommendation[];
 }
 
 // ── Runner state ──────────────────────────────────────────────────────────────

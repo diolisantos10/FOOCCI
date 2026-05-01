@@ -2,7 +2,11 @@
 
 import { useState, useRef, useCallback } from "react";
 import { CUSTOMER_PROFILES } from "./profiles";
-import { validateStep, buildReport, toCsv, toSummaryText, IMPROVEMENT_SUGGESTIONS } from "./engine";
+import {
+  validateStep, buildReport, toCsv, toSummaryText,
+  IMPROVEMENT_SUGGESTIONS, FAILURE_TO_FIX_AREA,
+  computeProbableRootCause, computeRecommendedFix, computeSeverity,
+} from "./engine";
 import type {
   CustomerProfile,
   CatalogItem,
@@ -12,6 +16,7 @@ import type {
   AutoPilotReport,
   AutoPilotStatus,
   FailureType,
+  Severity,
 } from "./types";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -30,14 +35,35 @@ const SPEED_OPTIONS: { label: string; ms: number }[] = [
   { label: "Devagar", ms: 1800 },
 ];
 
+// ── Intent label helper ───────────────────────────────────────────────────────
+
+function expectedIntentFromBehavior(behavior: CustomerProfile["behavior"]): string {
+  const map: Record<CustomerProfile["behavior"], string> = {
+    passive:    "Aguardar iniciativa do Waiter",
+    guided:     "Receber sugestões guiadas com cards",
+    direct:     "Receber recomendação direta com cards",
+    indecisive: "Receber qualificação via options[] e depois cards",
+    budget:     "Receber opção econômica via cards",
+    premium:    "Receber opção premium via cards",
+  };
+  return map[behavior];
+}
+
+const MODE_LABEL: Record<string, string> = {
+  BROWSE:           "Navegação geral (BROWSE)",
+  SUGGESTION:       "Sugestão de produto (SUGGESTION)",
+  INTERVENTION:     "Intervenção de vendas (INTERVENTION)",
+  CHECKOUT_SUPPORT: "Suporte a checkout (CHECKOUT_SUPPORT)",
+};
+
 // ── API helper ────────────────────────────────────────────────────────────────
 
 async function callWaiterApi(
-  slug:        string,
-  event:       string,
-  message:     string,
-  history:     { role: string; content: string }[],
-  cart:        CartItem[],
+  slug:         string,
+  event:        string,
+  message:      string,
+  history:      { role: string; content: string }[],
+  cart:         CartItem[],
   lastAddedId?: string,
 ) {
   const body: Record<string, unknown> = {
@@ -79,28 +105,28 @@ async function runScenario(
   stopRef:     React.MutableRefObject<boolean>,
   onStep:      (step: ScenarioStep) => void,
 ): Promise<ScenarioResult> {
-  const t0       = Date.now();
-  const steps:   ScenarioStep[]             = [];
-  const history: { role: string; content: string }[] = [];
-  const cart:    CartItem[]                 = [];
-  const allCards:    string[] = [];
-  const allMessages: string[] = [];
+  const t0 = Date.now();
+  const steps:    ScenarioStep[]                       = [];
+  const history:  { role: string; content: string }[] = [];
+  const cart:     CartItem[]                           = [];
+  const allCards:    string[]      = [];
+  const allMessages: string[]      = [];
   const allFailures: FailureType[] = [];
+
   let checkoutReached = false;
   let orderConfirmed  = false;
+  let detectedMode    = "BROWSE";
+  let lastReply       = "";
+  let lastOptions:    { label: string; value: string }[] = [];
 
   // Build step sequence
   type StepDef = { event: string; message: string; requireCards: boolean; lastAddedId?: string };
-  const seq: StepDef[] = [
-    { event: "ON_ENTRY", message: "", requireCards: false },
-  ];
+  const seq: StepDef[] = [{ event: "ON_ENTRY", message: "", requireCards: false }];
 
-  // Indecisive / passive profiles get an idle prompt before messages
   if (profile.behavior === "indecisive" || profile.behavior === "passive") {
     seq.push({ event: "ON_IDLE", message: "", requireCards: false });
   }
 
-  // Intent messages
   profile.intentMessages.forEach((msg, i) => {
     const isLast = i === profile.intentMessages.length - 1;
     seq.push({
@@ -110,17 +136,10 @@ async function runScenario(
     });
   });
 
-  // Cart addition
   if (profile.requiresCart && firstItem) {
-    seq.push({
-      event:        "ON_ITEM_ADDED",
-      message:      "",
-      requireCards: false,
-      lastAddedId:  firstItem.id,
-    });
+    seq.push({ event: "ON_ITEM_ADDED", message: "", requireCards: false, lastAddedId: firstItem.id });
   }
 
-  // Checkout flow
   if (profile.requiresCheckout) {
     seq.push({ event: "ON_CHECKOUT_STARTED", message: "", requireCards: false });
     seq.push({ event: "AFTER_CHECKOUT",       message: "", requireCards: false });
@@ -136,14 +155,14 @@ async function runScenario(
     const t1 = Date.now();
 
     let response: { reply: string; cards: string[]; options: { label: string; value: string }[]; mode: string } | null = null;
-    let stepFailures: FailureType[] = [];
+    let stepFailures:   FailureType[]                           = [];
     let stepAssertions: { label: string; pass: boolean; detail?: string }[] = [];
 
     try {
       response = await callWaiterApi(slug, event, message, history, cart, lastAddedId);
 
-      if (message)         history.push({ role: "user",      content: message        });
-      if (response.reply)  history.push({ role: "assistant", content: response.reply });
+      if (message)        history.push({ role: "user",      content: message        });
+      if (response.reply) history.push({ role: "assistant", content: response.reply });
 
       if (event === "ON_ITEM_ADDED" && firstItem) {
         const existing = cart.find((c) => c.id === firstItem.id);
@@ -151,12 +170,16 @@ async function runScenario(
         else          cart.push({ ...firstItem, qty: 1 });
       }
 
+      if (response.reply)             lastReply = response.reply;
+      if (response.options.length > 0) lastOptions = response.options;
+      if (event === "ON_USER_MESSAGE") detectedMode = response.mode;
+
       allMessages.push(response.reply);
       allCards.push(...response.cards);
       if (event === "ON_CHECKOUT_STARTED") checkoutReached = true;
       if (event === "AFTER_CHECKOUT")       orderConfirmed  = true;
 
-      const v = validateStep(event, response, catalogIds, requireCards);
+      const v    = validateStep(event, response, catalogIds, requireCards);
       stepAssertions = v.assertions;
       stepFailures   = v.failureTypes;
 
@@ -188,22 +211,25 @@ async function runScenario(
     }
   }
 
-  // Checkout not reached but required
-  if (profile.requiresCheckout && !checkoutReached) {
-    allFailures.push("checkout_not_reached");
-  }
-  if (profile.requiresCheckout && checkoutReached && !orderConfirmed) {
-    allFailures.push("order_not_confirmed");
-  }
+  if (profile.requiresCheckout && !checkoutReached)               allFailures.push("checkout_not_reached");
+  if (profile.requiresCheckout && checkoutReached && !orderConfirmed) allFailures.push("order_not_confirmed");
 
   const unique = [...new Set(allFailures)];
+  const status: "PASS" | "FAIL" | "ERROR" = unique.length === 0 ? "PASS" : "FAIL";
+
+  const actualAction =
+    checkoutReached         ? "Chegou ao checkout com sucesso" :
+    allCards.length > 0     ? `Mostrou ${allCards.length} produto(s) via cards` :
+    lastOptions.length > 0  ? `Apresentou ${lastOptions.length} opção(ões) de qualificação` :
+                              "Respondeu sem cards ou options";
+
   return {
-    profileId:   profile.id,
-    profileName: profile.name,
-    goal:        profile.goal,
-    status:      unique.length === 0 ? "PASS" : "FAIL",
-    stepsRun:    steps.length,
-    failures:    unique,
+    profileId:              profile.id,
+    profileName:            profile.name,
+    goal:                   profile.goal,
+    status,
+    stepsRun:               steps.length,
+    failures:               unique,
     steps,
     waiterMessages:         allMessages.filter(Boolean),
     cardsShown:             allCards,
@@ -212,6 +238,19 @@ async function runScenario(
     orderConfirmed,
     improvementSuggestions: unique.map((f) => IMPROVEMENT_SUGGESTIONS[f]).filter(Boolean),
     durationMs:             Date.now() - t0,
+    // ── Diagnostic fields ───────────────────────────────────────────────────
+    customerGoal:      profile.goal,
+    expectedIntent:    expectedIntentFromBehavior(profile.behavior),
+    detectedIntent:    MODE_LABEL[detectedMode] ?? detectedMode,
+    expectedAction:    profile.expectedOutcome,
+    actualAction,
+    waiterMessage:     lastReply,
+    optionsReturned:   lastOptions,
+    cardsReturned:     allCards,
+    renderedProducts:  allCards,
+    probableRootCause: computeProbableRootCause(unique),
+    recommendedFix:    computeRecommendedFix(unique),
+    severity:          computeSeverity(unique, status),
   };
 }
 
@@ -253,20 +292,53 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function SeverityBadge({ severity }: { severity: Severity }) {
+  const cls =
+    severity === "critical" ? "bg-red-900    text-red-200"    :
+    severity === "high"     ? "bg-orange-900 text-orange-300" :
+    severity === "medium"   ? "bg-amber-900  text-amber-300"  :
+                              "bg-gray-800   text-gray-500";
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${cls}`}>
+      {severity}
+    </span>
+  );
+}
+
+function AreaScoreBar({ label, score }: { label: string; score: number }) {
+  const color =
+    score >= 80 ? "text-green-400" :
+    score >= 50 ? "text-amber-400" : "text-red-400";
+  const barColor =
+    score >= 80 ? "bg-green-700" :
+    score >= 50 ? "bg-amber-700" : "bg-red-700";
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-20 shrink-0 text-[9px] text-gray-600 leading-none">{label}</span>
+      <div className="flex-1 h-1 rounded-full bg-gray-800">
+        <div className={`h-1 rounded-full ${barColor}`} style={{ width: `${score}%` }} />
+      </div>
+      <span className={`w-6 shrink-0 text-right text-[9px] tabular-nums font-bold ${color}`}>
+        {score}
+      </span>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props) {
-  const [status,          setStatus]          = useState<AutoPilotStatus>("idle");
-  const [selectedIds,     setSelectedIds]      = useState<Set<string>>(
+  const [status,           setStatus]          = useState<AutoPilotStatus>("idle");
+  const [selectedIds,      setSelectedIds]     = useState<Set<string>>(
     new Set(CUSTOMER_PROFILES.map((p) => p.id)),
   );
-  const [speedIdx,        setSpeedIdx]         = useState(1);  // Normal
-  const [profileIdx,      setProfileIdx]       = useState(0);
+  const [speedIdx,         setSpeedIdx]        = useState(1);
+  const [profileIdx,       setProfileIdx]      = useState(0);
   const [currentStepLabel, setCurrentStepLabel] = useState("");
-  const [currentSteps,    setCurrentSteps]     = useState<ScenarioStep[]>([]);
-  const [results,         setResults]          = useState<ScenarioResult[]>([]);
-  const [report,          setReport]           = useState<AutoPilotReport | null>(null);
-  const [expandedResult,  setExpandedResult]   = useState<string | null>(null);
+  const [currentSteps,     setCurrentSteps]    = useState<ScenarioStep[]>([]);
+  const [results,          setResults]         = useState<ScenarioResult[]>([]);
+  const [report,           setReport]          = useState<AutoPilotReport | null>(null);
+  const [expandedResult,   setExpandedResult]  = useState<string | null>(null);
   const stopRef = useRef(false);
 
   const catalogIds = new Set(catalog.map((c) => c.id));
@@ -310,14 +382,15 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
         accumulated.push(result);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        const unique: FailureType[] = ["unknown_error"];
         accumulated.push({
-          profileId:   profile.id,
-          profileName: profile.name,
-          goal:        profile.goal,
-          status:      "ERROR",
-          stepsRun:    0,
-          failures:    ["unknown_error"],
-          steps:       [],
+          profileId:              profile.id,
+          profileName:            profile.name,
+          goal:                   profile.goal,
+          status:                 "ERROR",
+          stepsRun:               0,
+          failures:               unique,
+          steps:                  [],
           waiterMessages:         [],
           cardsShown:             [],
           cartFinal:              [],
@@ -325,6 +398,18 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
           orderConfirmed:         false,
           improvementSuggestions: [IMPROVEMENT_SUGGESTIONS.unknown_error],
           durationMs:             0,
+          customerGoal:           profile.goal,
+          expectedIntent:         expectedIntentFromBehavior(profile.behavior),
+          detectedIntent:         "—",
+          expectedAction:         profile.expectedOutcome,
+          actualAction:           `Erro: ${msg.slice(0, 120)}`,
+          waiterMessage:          "",
+          optionsReturned:        [],
+          cardsReturned:          [],
+          renderedProducts:       [],
+          probableRootCause:      computeProbableRootCause(unique),
+          recommendedFix:         computeRecommendedFix(unique),
+          severity:               "critical",
         });
         console.error("[AutoPilot] scenario error:", msg);
       }
@@ -451,40 +536,22 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
           <div className="px-3 py-2 space-y-1">
             <div className="mb-1 text-[10px] uppercase tracking-widest text-gray-600">Exportar</div>
             <button
-              onClick={() =>
-                download(
-                  JSON.stringify(report, null, 2),
-                  `waiter-lab-${slug}-${Date.now()}.json`,
-                  "application/json",
-                )
-              }
+              onClick={() => download(JSON.stringify(report, null, 2), `waiter-autopilot-${slug}-${Date.now()}.json`, "application/json")}
               className="w-full rounded border border-gray-700 px-2 py-1 text-left text-[10px] text-gray-500 hover:border-amber-700 hover:text-amber-400"
             >
-              ⬇ JSON
+              ⬇ JSON (completo)
             </button>
             <button
-              onClick={() =>
-                download(
-                  toCsv(report),
-                  `waiter-lab-${slug}-${Date.now()}.csv`,
-                  "text/csv",
-                )
-              }
+              onClick={() => download(toCsv(report), `waiter-autopilot-${slug}-${Date.now()}.csv`, "text/csv")}
               className="w-full rounded border border-gray-700 px-2 py-1 text-left text-[10px] text-gray-500 hover:border-amber-700 hover:text-amber-400"
             >
-              ⬇ CSV
+              ⬇ CSV (cenários)
             </button>
             <button
-              onClick={() =>
-                download(
-                  toSummaryText(report),
-                  `waiter-lab-${slug}-${Date.now()}.txt`,
-                  "text/plain",
-                )
-              }
+              onClick={() => download(toSummaryText(report), `waiter-autopilot-${slug}-${Date.now()}.txt`, "text/plain")}
               className="w-full rounded border border-gray-700 px-2 py-1 text-left text-[10px] text-gray-500 hover:border-amber-700 hover:text-amber-400"
             >
-              ⬇ Sumário TXT
+              ⬇ Relatório TXT
             </button>
           </div>
         )}
@@ -493,7 +560,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
       {/* ── Right: Live progress + Report ───────────────────────────────────── */}
       <div className="flex flex-1 flex-col overflow-hidden">
 
-        {/* ── Idle state ──────────────────────────────────────────────────── */}
+        {/* ── Idle ──────────────────────────────────────────────────────────── */}
         {status === "idle" && (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center p-6">
             <span className="text-3xl">🤖</span>
@@ -507,10 +574,9 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
           </div>
         )}
 
-        {/* ── Running: Live progress ───────────────────────────────────────── */}
+        {/* ── Running ───────────────────────────────────────────────────────── */}
         {status === "running" && (
           <div className="flex flex-1 flex-col overflow-hidden">
-            {/* Header bar */}
             <div className="shrink-0 border-b border-gray-800 px-3 py-2">
               <div className="flex items-center gap-2">
                 <StatusBadge status="running" />
@@ -524,7 +590,6 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
               <p className="mt-0.5 truncate text-[10px] text-gray-600">{currentStepLabel}</p>
             </div>
 
-            {/* Completed scenarios */}
             <div className="shrink-0 border-b border-gray-800 px-3 py-1.5">
               <div className="flex flex-wrap gap-1">
                 {results.map((r) => (
@@ -543,7 +608,6 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
               </div>
             </div>
 
-            {/* Live step list */}
             <div className="flex-1 overflow-y-auto px-3 py-2">
               <div className="mb-1 text-[10px] uppercase tracking-widest text-gray-600">
                 Passos — {currentProfile?.name ?? ""}
@@ -557,9 +621,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                       <span className={step.passed ? "text-green-400" : "text-red-400"}>
                         {step.passed ? "✓" : "✗"}
                       </span>
-                      <span className="text-[10px] font-mono text-gray-400">
-                        {step.event}
-                      </span>
+                      <span className="text-[10px] font-mono text-gray-400">{step.event}</span>
                       {step.message && (
                         <span className="truncate text-[9px] text-gray-600">
                           {'"'}{step.message.slice(0, 50)}{'"'}
@@ -589,13 +651,13 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
           </div>
         )}
 
-        {/* ── Done / Stopped: Report ───────────────────────────────────────── */}
+        {/* ── Done / Stopped: Report ─────────────────────────────────────────── */}
         {(status === "done" || status === "stopped") && report && (
           <div className="flex flex-1 flex-col overflow-hidden">
 
             {/* Score header */}
             <div className="shrink-0 border-b border-gray-800 px-4 py-3">
-              <div className="flex items-center gap-6">
+              <div className="flex items-start gap-6">
                 <div className="flex flex-col items-center">
                   <ScoreRing score={report.score} />
                   <span className="mt-0.5 text-[9px] uppercase tracking-wide text-gray-600">Score</span>
@@ -630,20 +692,54 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                   <span className="ml-auto text-[10px] text-amber-500">Interrompido</span>
                 )}
               </div>
-
-              {/* Recommendations */}
-              {report.recommendations.length > 0 && (
-                <div className="mt-2 space-y-0.5">
-                  {report.recommendations.map((r, i) => (
-                    <p key={i} className="text-[10px] text-amber-300">
-                      {i + 1}. {r}
-                    </p>
-                  ))}
-                </div>
-              )}
             </div>
 
-            {/* Failure type summary */}
+            {/* Area scores */}
+            <div className="shrink-0 border-b border-gray-800 px-3 py-2">
+              <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">Scores por área</div>
+              <div className="space-y-1">
+                <AreaScoreBar label="Intenção"    score={report.areaScores.intentScore} />
+                <AreaScoreBar label="Produto"     score={report.areaScores.productFitScore} />
+                <AreaScoreBar label="Sinc. Visual" score={report.areaScores.visualSyncScore} />
+                <AreaScoreBar label="Copy"        score={report.areaScores.salesCopyScore} />
+                <AreaScoreBar label="Controle UI" score={report.areaScores.userControlScore} />
+                <AreaScoreBar label="Checkout"    score={report.areaScores.checkoutSafetyScore} />
+              </div>
+            </div>
+
+            {/* Top fixes */}
+            {report.topFixes.length > 0 && (
+              <div className="shrink-0 border-b border-gray-800 px-3 py-2">
+                <div className="mb-1.5 text-[10px] uppercase tracking-widest text-gray-600">
+                  Top {report.topFixes.length} correções prioritárias
+                </div>
+                <div className="space-y-2">
+                  {report.topFixes.map((fix) => (
+                    <div key={fix.failureType} className="rounded border border-gray-800 bg-gray-900/50 px-2 py-1.5">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="shrink-0 text-[9px] font-bold text-amber-500">#{fix.priority}</span>
+                        <span className="rounded bg-red-950/60 px-1 py-px text-[9px] font-mono text-red-400">
+                          {fix.failureType}
+                        </span>
+                        <span className="text-[9px] text-gray-600">
+                          {fix.affectedScenarios.length} cenário(s)
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-gray-500 leading-relaxed">
+                        <span className="text-gray-600">Área:</span>{" "}
+                        <span className="text-amber-400/80">{fix.implementationArea}</span>
+                      </p>
+                      <p className="text-[9px] text-gray-500 leading-relaxed">
+                        <span className="text-gray-600">Correção:</span>{" "}
+                        {fix.expectedImpact}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Failure type tags */}
             {Object.keys(report.failureTypes).length > 0 && (
               <div className="shrink-0 border-b border-gray-800 px-3 py-2">
                 <div className="mb-1 text-[10px] uppercase tracking-widest text-gray-600">Falhas detectadas</div>
@@ -653,7 +749,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                     .map(([ft, count]) => (
                       <span
                         key={ft}
-                        title={IMPROVEMENT_SUGGESTIONS[ft as FailureType]}
+                        title={`${FAILURE_TO_FIX_AREA[ft as FailureType]} — ${IMPROVEMENT_SUGGESTIONS[ft as FailureType]}`}
                         className="rounded bg-red-950/40 px-1.5 py-0.5 text-[9px] text-red-400"
                       >
                         {ft} ×{count}
@@ -684,65 +780,111 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                       className="flex w-full items-center gap-2 px-2 py-1.5 text-left"
                     >
                       <StatusBadge status={r.status} />
+                      <SeverityBadge severity={r.severity} />
                       <span className="flex-1 text-[11px] font-semibold text-gray-300">
                         {r.profileName}
                       </span>
                       <span className="text-[9px] text-gray-600">
-                        {r.stepsRun} turnos · {r.cardsShown.length} cards
-                        {r.checkoutReached ? " · checkout ✓" : ""}
+                        {r.stepsRun}t · {r.cardsShown.length}c
+                        {r.checkoutReached ? " · ✓chk" : ""}
                       </span>
                       <span className="text-[10px] text-gray-700">
                         {expandedResult === r.profileId ? "▲" : "▼"}
                       </span>
                     </button>
 
-                    {/* Expanded detail */}
+                    {/* Expanded diagnostic */}
                     {expandedResult === r.profileId && (
-                      <div className="border-t border-gray-800 px-2 py-2 space-y-1.5">
-                        <p className="text-[10px] text-gray-500">Objetivo: {r.goal}</p>
+                      <div className="border-t border-gray-800 px-2 py-2 space-y-2">
 
+                        {/* Intent comparison */}
+                        <div className="rounded bg-gray-900/60 px-2 py-1.5 space-y-0.5">
+                          <p className="text-[9px] text-gray-600 font-semibold uppercase tracking-wide mb-1">
+                            Intenção
+                          </p>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[9px]">
+                            <span className="text-gray-600">Esperada:</span>
+                            <span className="text-gray-400">{r.expectedIntent}</span>
+                            <span className="text-gray-600">Detectada:</span>
+                            <span className={r.detectedIntent === r.expectedIntent ? "text-green-400" : "text-amber-400"}>
+                              {r.detectedIntent}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Action comparison */}
+                        <div className="rounded bg-gray-900/60 px-2 py-1.5 space-y-0.5">
+                          <p className="text-[9px] text-gray-600 font-semibold uppercase tracking-wide mb-1">
+                            Ação
+                          </p>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[9px]">
+                            <span className="text-gray-600">Esperada:</span>
+                            <span className="text-gray-400">{r.expectedAction}</span>
+                            <span className="text-gray-600">Real:</span>
+                            <span className={r.status === "PASS" ? "text-green-400" : "text-amber-400"}>
+                              {r.actualAction}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Failures + diagnosis */}
                         {r.failures.length > 0 && (
-                          <div>
-                            <p className="text-[9px] text-red-500 font-semibold mb-0.5">
+                          <div className="rounded bg-red-950/20 px-2 py-1.5 space-y-1">
+                            <p className="text-[9px] text-red-400 font-semibold">
                               Falhas: {r.failures.join(", ")}
                             </p>
-                            {r.improvementSuggestions.map((s, i) => (
-                              <p key={i} className="text-[9px] text-amber-400">↳ {s}</p>
+                            {r.failures.map((f) => (
+                              <p key={f} className="text-[9px] text-gray-600">
+                                <span className="text-gray-500 font-mono">{f}</span>
+                                {" → "}
+                                <span className="text-amber-400/70">{FAILURE_TO_FIX_AREA[f]}</span>
+                              </p>
                             ))}
+                            <div className="mt-1 border-t border-red-900/40 pt-1 space-y-0.5">
+                              <p className="text-[9px] text-gray-500">
+                                <span className="text-gray-600">Causa:</span>{" "}
+                                {r.probableRootCause}
+                              </p>
+                              <p className="text-[9px] text-gray-500">
+                                <span className="text-gray-600">Correção:</span>{" "}
+                                <span className="text-green-400/80">{r.recommendedFix}</span>
+                              </p>
+                            </div>
                           </div>
                         )}
 
                         {/* Step breakdown */}
-                        <div className="space-y-1">
-                          {r.steps.map((step, i) => (
-                            <div key={i} className="flex items-start gap-1.5 text-[9px]">
-                              <span className={step.passed ? "text-green-400" : "text-red-400"}>
-                                {step.passed ? "✓" : "✗"}
-                              </span>
-                              <span className="font-mono text-gray-500">{step.event}</span>
-                              {step.message && (
-                                <span className="truncate text-gray-600">
-                                  {'"'}{step.message.slice(0, 40)}{'"'}
+                        <div>
+                          <p className="text-[9px] text-gray-600 mb-0.5">Passos:</p>
+                          <div className="space-y-0.5">
+                            {r.steps.map((step, i) => (
+                              <div key={i} className="flex items-start gap-1.5 text-[9px]">
+                                <span className={step.passed ? "text-green-400" : "text-red-400"}>
+                                  {step.passed ? "✓" : "✗"}
                                 </span>
-                              )}
-                              {step.response && (
-                                <span className="ml-auto shrink-0 text-gray-700">
-                                  {step.response.mode} · {step.response.cards.length}c
-                                </span>
-                              )}
-                            </div>
-                          ))}
+                                <span className="font-mono text-gray-500">{step.event}</span>
+                                {step.message && (
+                                  <span className="truncate text-gray-600">
+                                    {'"'}{step.message.slice(0, 40)}{'"'}
+                                  </span>
+                                )}
+                                {step.response && (
+                                  <span className="ml-auto shrink-0 text-gray-700">
+                                    {step.response.mode} · {step.response.cards.length}c
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
 
-                        {/* Waiter messages */}
-                        {r.waiterMessages.length > 0 && (
+                        {/* Last waiter message */}
+                        {r.waiterMessage && (
                           <div>
-                            <p className="text-[9px] text-gray-600 mb-0.5">Mensagens do Waiter:</p>
-                            {r.waiterMessages.map((m, i) => (
-                              <p key={i} className="text-[9px] text-gray-400 italic">
-                                {'"'}{m.slice(0, 100)}{m.length > 100 ? "…" : ""}{'"'}
-                              </p>
-                            ))}
+                            <p className="text-[9px] text-gray-600 mb-0.5">Última mensagem:</p>
+                            <p className="text-[9px] text-gray-400 italic">
+                              {'"'}{r.waiterMessage.slice(0, 120)}{r.waiterMessage.length > 120 ? "…" : ""}{'"'}
+                            </p>
                           </div>
                         )}
                       </div>
