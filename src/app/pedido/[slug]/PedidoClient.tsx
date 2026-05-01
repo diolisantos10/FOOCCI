@@ -289,7 +289,10 @@ function Bubble({
   const isUser = msg.role === "user";
   if (msg.content.trim() === "") return null;
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div
+      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+      data-testid={isUser ? "bubble-user" : "bubble-waiter"}
+    >
       <div
         className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
           isUser
@@ -302,10 +305,11 @@ function Bubble({
           {formatTime(msg.ts)}
         </p>
         {!isUser && msg.options && msg.options.length > 0 && onOptionSelect && (
-          <div className="mt-2.5 flex flex-wrap gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-2" data-testid="waiter-options">
             {msg.options.map((opt) => (
               <button
                 key={opt.value}
+                data-testid={`waiter-option-${opt.value}`}
                 onClick={() => onOptionSelect(opt.value, opt.label)}
                 className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-green-50 hover:border-green-300 hover:text-green-800 active:scale-95 transition-all"
               >
@@ -2189,13 +2193,14 @@ export function PedidoClient({
 
           {/* Passive permission prompt — soft ask before AI engages */}
           {aiPermState === "pending" && stage === "BROWSE" && entryPhase === "browsing" && (
-            <div className="flex justify-start">
+            <div className="flex justify-start" data-testid="waiter-permission-prompt">
               <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3">
                 <p className="text-sm text-gray-900 mb-3 leading-relaxed">
                   Posso te sugerir algo que combine com o que você está vendo? 👇
                 </p>
                 <div className="flex gap-2">
                   <button
+                    data-testid="waiter-permission-accept"
                     onClick={handlePermissionAccept}
                     className="flex-1 rounded-xl py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
                     style={{ backgroundColor: 'var(--brand-primary)' }}
@@ -2203,6 +2208,7 @@ export function PedidoClient({
                     Quero sugestão ✨
                   </button>
                   <button
+                    data-testid="waiter-permission-decline"
                     onClick={handlePermissionDecline}
                     className="flex-1 rounded-xl py-2 text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
                   >
@@ -2215,13 +2221,14 @@ export function PedidoClient({
 
           {/* Checkout permission prompt — ask before upsell at Finalizar */}
           {aiPermState === "checkout-prompt" && stage === "BROWSE" && (
-            <div className="flex justify-start">
+            <div className="flex justify-start" data-testid="waiter-checkout-prompt">
               <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3">
                 <p className="text-sm text-gray-900 mb-3 leading-relaxed">
                   Antes de finalizar, quer ver uma bebida ou sobremesa? 👇
                 </p>
                 <div className="flex gap-2">
                   <button
+                    data-testid="waiter-checkout-accept"
                     onClick={handleCheckoutPermAccept}
                     className="flex-1 rounded-xl py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
                     style={{ backgroundColor: 'var(--brand-primary)' }}
@@ -2229,6 +2236,7 @@ export function PedidoClient({
                     Ver opções ✨
                   </button>
                   <button
+                    data-testid="waiter-checkout-decline"
                     onClick={handleCheckoutPermDecline}
                     className="flex-1 rounded-xl py-2 text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
                   >
@@ -2304,7 +2312,7 @@ export function PedidoClient({
         {stage === "BROWSE" && entryPhase === "browsing" && (
           <div className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
             {suggestedProducts.length > 0 ? (
-              <div className="px-3 pt-2 pb-1">
+              <div className="px-3 pt-2 pb-1" data-testid="waiter-suggestion-grid">
                 <div
                   className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
                   style={{ scrollbarWidth: "none" }}

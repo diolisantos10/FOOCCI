@@ -159,6 +159,14 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   const cartItemIds = cart.map((c) => c.id).filter((id): id is string => !!id);
   const cartValue   = cart.reduce((s, c) => s + c.price * c.qty, 0);
 
+  // ON_CHECKOUT_STARTED is fired by the client only after the client-side upsell
+  // prompts have already been shown (drink/dessert permission gate in PedidoClient).
+  // Pass a synthetic memory so WaiterBrainV2 skips the final upsell path and
+  // returns the checkout bridge message instead of re-showing the same prompt.
+  const waiterMemory = event === "ON_CHECKOUT_STARTED"
+    ? { ...WaiterBrainV2.createWaiterMemory(), finalUpsellPromptShown: true }
+    : undefined;
+
   const v2 = WaiterBrainV2.decide({
     event,
     cartItemIds,
@@ -166,6 +174,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     lastAddedId,
     catalog: catalogItems,
     message,
+    memory: waiterMemory,
   });
 
   if (!v2.requiresAI) {
