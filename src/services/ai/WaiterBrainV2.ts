@@ -161,7 +161,7 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
     };
   }
 
-  if (/\bcompleto\b|refeição completa/i.test(msg)) {
+  if (/\bcompleto\b|\bcomplete\b|refeição completa/i.test(msg)) {
     return {
       customerIntent:   "wants_complete_meal",
       salesOpportunity: "suggest_combo",
@@ -290,6 +290,67 @@ function cartUpdateCards(
     .filter((i) => isComplementCategory(i.categoryName) && !cartItemIds.includes(i.id))
     .sort((a, b) => b.price - a.price)[0];
   return { cards: upgrade ? [upgrade.id] : [], offersDrink: false };
+}
+
+// ─── product selection helpers (Sales Intelligence) ──────────
+// All helpers: filter by category/price, exclude cart items, return IDs only.
+
+function selectDrinkItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
+  return catalog
+    .filter((i) => isDrinkCategory(i.categoryName) && !cartItemIds.includes(i.id))
+    .sort(bySort)
+    .slice(0, limit)
+    .map((i) => i.id);
+}
+
+function selectDessertItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
+  return catalog
+    .filter((i) => isDessertCategory(i.categoryName) && !cartItemIds.includes(i.id))
+    .sort(bySort)
+    .slice(0, limit)
+    .map((i) => i.id);
+}
+
+function selectLightItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
+  const mains = catalog.filter((i) => isComplementCategory(i.categoryName) && !cartItemIds.includes(i.id));
+  if (mains.length === 0) return [];
+  const prices  = mains.map((i) => i.price).sort((a, b) => a - b);
+  const median  = prices[Math.floor(prices.length / 2)] ?? 0;
+  // Light = category sounds like starters/salads OR price ≤ median (smaller portion proxy)
+  const light = mains.filter(
+    (i) =>
+      /entrada|salada|aperitiv|petisco|porcao|porção|tira.gosto|snack/i.test(i.categoryName) ||
+      i.price <= median,
+  );
+  return (light.length > 0 ? light : mains).sort(bySort).slice(0, limit).map((i) => i.id);
+}
+
+function selectCompleteMealItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
+  const mains = catalog.filter((i) => isComplementCategory(i.categoryName) && !cartItemIds.includes(i.id));
+  if (mains.length === 0) return [];
+  const prices  = mains.map((i) => i.price).sort((a, b) => a - b);
+  const median  = prices[Math.floor(prices.length / 2)] ?? 0;
+  // Complete = name/category suggests main/combo OR price ≥ median (larger portion proxy)
+  const complete = mains.filter(
+    (i) =>
+      /combo|completo|principal|refeição|família/i.test(i.name) ||
+      /combo|principal|main/i.test(i.categoryName) ||
+      i.price >= median,
+  );
+  return (complete.length > 0 ? complete : mains).sort(bySort).slice(0, limit).map((i) => i.id);
+}
+
+function selectGroupItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
+  const mains = catalog.filter((i) => isComplementCategory(i.categoryName) && !cartItemIds.includes(i.id));
+  if (mains.length === 0) return [];
+  // Group = name signals combo/family, or fallback to highest-priced (largest portions)
+  const group = mains.filter(
+    (i) =>
+      /combo|famil|balde|bandeja|para\s*[2-9]|[2-9]\s*pessoa/i.test(i.name) ||
+      /famil|compartilh/i.test(i.categoryName),
+  );
+  if (group.length > 0) return group.sort(bySort).slice(0, limit).map((i) => i.id);
+  return [...mains].sort((a, b) => b.price - a.price).slice(0, limit).map((i) => i.id);
 }
 
 // ─── directive builder for AI events ────────────────────────
@@ -498,33 +559,66 @@ function handleAfterCheckout(): V2Output {
   };
 }
 
-function handleUserMessage(input: V2Input): V2Output {
-  const hasItems = input.cartItemIds.length > 0;
-  const msg = (input.message ?? "").toLowerCase();
+function noCardsFound(): V2Output {
+  return {
+    message:     "Não encontrei uma opção perfeita agora. Quer explorar o cardápio?",
+    cards:       [],
+    mode:        "BROWSE",
+    options:     [{ label: "Ver cardápio", value: "browse_menu" }],
+    requiresAI:  false,
+    aiDirective: "",
+  };
+}
 
-  // Detect category intent from qualifier buttons (values "light" / "complete").
-  let aiDirective: string;
-  if (!hasItems && /leve|light/i.test(msg)) {
-    aiDirective = buildCategoryIntentDirective("light");
-  } else if (!hasItems && /completo|complete|refeição/i.test(msg)) {
-    aiDirective = buildCategoryIntentDirective("complete");
-  } else {
-    aiDirective = buildUserMessageDirective(input.cartItemIds, input.cartValue);
+function handleUserMessage(input: V2Input): V2Output {
+  const analysis  = analyzeSalesContext(input);
+  const hasItems  = input.cartItemIds.length > 0;
+  const { catalog, cartItemIds } = input;
+
+  // ── Deterministic paths (Sales Intelligence — no AI call) ────
+  switch (analysis.customerIntent) {
+    case "wants_light_food": {
+      const cards = selectLightItems(catalog, cartItemIds, 3);
+      if (cards.length > 0) return { message: "Separei algumas opções mais leves pra você 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      return noCardsFound();
+    }
+    case "wants_complete_meal": {
+      const cards = selectCompleteMealItems(catalog, cartItemIds, 3);
+      if (cards.length > 0) return { message: "Separei opções mais completas pra você 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      return noCardsFound();
+    }
+    case "wants_for_group": {
+      const cards = selectGroupItems(catalog, cartItemIds, 3);
+      if (cards.length > 0) return { message: "Pra compartilhar, essas opções fazem mais sentido 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      return noCardsFound();
+    }
+    case "asks_dessert": {
+      const cards = selectDessertItems(catalog, cartItemIds, 3);
+      if (cards.length > 0) return { message: "Para adoçar o final 🍰", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      return noCardsFound();
+    }
+    case "asks_drink": {
+      const cards = selectDrinkItems(catalog, cartItemIds, 3);
+      if (cards.length > 0) return { message: "Aqui estão as bebidas disponíveis 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      return noCardsFound();
+    }
+    case "unclear": {
+      // Cart is empty → qualification buttons; cart has items → fall through to AI
+      if (!hasItems) return { message: "Prefere algo mais leve ou completo?", options: [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }], cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "" };
+      break;
+    }
   }
 
-  // Qualification buttons shown only when cart is empty (first free-text message).
-  const options: WaiterOption[] = hasItems ? [] : [
-    { label: "Leve",     value: "light"    },
-    { label: "Completo", value: "complete" },
-  ];
-
+  // ── AI path for remaining intents ─────────────────────────────
+  // (wants_recommendation, price_sensitive, premium_experience,
+  //  asks_pairing, checkout_intent, restriction_based, unclear+cart)
   return {
     message:     "",
     cards:       [],
     mode:        "BROWSE",
-    options,
+    options:     hasItems ? [] : [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }],
     requiresAI:  true,
-    aiDirective,
+    aiDirective: buildUserMessageDirective(input.cartItemIds, input.cartValue),
   };
 }
 

@@ -1491,6 +1491,9 @@ export function PedidoClient({
         return;
       }
 
+      // "browse_menu" → dismiss any active suggestion, return to passive browsing.
+      if (value === "browse_menu") { setSuggestedProducts([]); return; }
+
       // All other values (qualification, custom choices) → send to API.
       setSuggestedProducts([]);
       sendText(value, cart, stage, activeUpsell);
