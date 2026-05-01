@@ -32,7 +32,7 @@ import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
 import { getDrinkAttemptCount, getAlreadySuggestedItems, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
 import * as WaiterBrain from "./WaiterBrain";
 import * as WaiterBrainV2 from "./WaiterBrainV2";
-import type { V2Event, V2CatalogItem } from "./WaiterBrainV2";
+import type { V2Event, V2CatalogItem, WaiterMode, WaiterOption } from "./WaiterBrainV2";
 import type { UpsellSuggestion } from "./UpsellEngine";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
@@ -65,10 +65,10 @@ export interface AIWebTurnInput {
 
 export interface AIWebTurnOutput {
   reply:              string;
-  cards:              string[];  // product IDs to show as UI cards (V2)
-  suggestedItemName?: string;    // kept for backward-compat (name-match fallback)
-  /** Quick-reply button labels to display below the AI message. */
-  options?:           string[];
+  cards:              string[];        // product IDs to show as UI cards (V2)
+  mode:               WaiterMode;     // UI rendering state
+  options:            WaiterOption[]; // quick-reply buttons
+  suggestedItemName?: string;
 }
 
 const MAX_TOOL_ITERATIONS = 6;
@@ -169,7 +169,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   });
 
   if (!v2.requiresAI) {
-    return { reply: v2.message, cards: v2.cards, options: v2.options };
+    return { reply: v2.message, cards: v2.cards, mode: v2.mode, options: v2.options };
   }
 
   // ── AI pipeline (ON_USER_MESSAGE / AFTER_CHECKOUT) ──────────
@@ -316,8 +316,9 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   return {
     reply:             finalResponse || "Desculpe, não consegui processar sua mensagem. 😅",
     cards:             aiCards,
-    suggestedItemName,
+    mode:              aiCards.length > 0 ? "SUGGESTION" : v2.mode,
     options:           v2.options,
+    suggestedItemName,
   };
 }
 

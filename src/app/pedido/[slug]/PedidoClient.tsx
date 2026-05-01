@@ -16,6 +16,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEven
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface WaiterOption { label: string; value: string; }
+
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -24,8 +26,8 @@ interface ChatMessage {
   suggestedItemName?: string;
   /** V2: product IDs to render as suggestion cards below this message. */
   cards?: string[];
-  /** Quick-reply buttons rendered below the message — tapping sends the text as user input. */
-  options?: string[];
+  /** Quick-reply buttons — label is display text, value is what gets sent. */
+  options?: WaiterOption[];
 }
 
 interface MenuItemVariant {
@@ -282,7 +284,7 @@ function Bubble({
   onOptionSelect,
 }: {
   msg: ChatMessage;
-  onOptionSelect?: (text: string) => void;
+  onOptionSelect?: (value: string) => void;
 }) {
   const isUser = msg.role === "user";
   if (msg.content.trim() === "") return null;
@@ -303,11 +305,11 @@ function Bubble({
           <div className="mt-2.5 flex flex-wrap gap-2">
             {msg.options.map((opt) => (
               <button
-                key={opt}
-                onClick={() => onOptionSelect(opt)}
+                key={opt.value}
+                onClick={() => onOptionSelect(opt.value)}
                 className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-green-50 hover:border-green-300 hover:text-green-800 active:scale-95 transition-all"
               >
-                {opt}
+                {opt.label}
               </button>
             ))}
           </div>
@@ -893,10 +895,8 @@ const SALES_BEHAVIOR: SalesBehavior = {
   passivePermissionPrompt:  true,
 };
 
-// Events whose card results may be promoted to the product grid.
-// ON_USER_MESSAGE: user explicitly asked for something.
-// Checkout-intent upsell uses upsellOfferedSnap, handled separately.
-const CARD_ALLOWED_EVENTS = new Set<string>(["ON_USER_MESSAGE"]);
+// Product cards are shown only when the API returns mode "SUGGESTION" or "INTERVENTION"
+// and the current stage is BROWSE. No client-side card inference from any other source.
 
 // Passive trigger: seconds of inactivity before permission prompt fires.
 const PASSIVE_TRIGGER_MS   = 5_000;  // 5 s
@@ -1003,7 +1003,7 @@ export function PedidoClient({
   const [aiPermState, setAiPermState] = useState<AIPermState>("idle");
   const silentUntilRef    = useRef<number>(0);     // epoch ms when silence expires
   const permPromptCountRef = useRef<number>(0);    // passive prompts shown this session (max 2)
-  const contextChosenRef  = useRef<boolean>(false); // true once user picks light/complete — no re-ask
+  // (contextChosenRef removed — qualification suppression handled by options contract)
   const guidedStepRef     = useRef<"size" | "starters" | "main" | "drinks" | "dessert" | "done">("size");
   // Type of upsell pending at checkout ("drink" | "dessert")
   const [checkoutPromptType, setCheckoutPromptType] = useState<"drink" | "dessert" | null>(null);
@@ -1109,18 +1109,16 @@ export function PedidoClient({
       stageSnap: Stage,
       upsellOfferedSnap: "drink" | "dessert" | null,
       options?: {
-        event?:            "ON_ENTRY" | "ON_MENU_MODE" | "ON_USER_MESSAGE" | "ON_ITEM_ADDED" | "ON_CART_UPDATED" | "ON_IDLE" | "ON_CHECKOUT_STARTED" | "AFTER_CHECKOUT";
-        lastAddedId?:      string;
-        silent?:           boolean;
-        categoryIntro?:    { name: string; description: string };
-        expandToCategory?: boolean;
+        event?:         "ON_ENTRY" | "ON_MENU_MODE" | "ON_USER_MESSAGE" | "ON_ITEM_ADDED" | "ON_CART_UPDATED" | "ON_IDLE" | "ON_CHECKOUT_STARTED" | "AFTER_CHECKOUT";
+        lastAddedId?:   string;
+        silent?:        boolean;
+        categoryIntro?: { name: string; description: string };
       },
     ) => {
-      const event            = options?.event ?? "ON_USER_MESSAGE";
-      const lastAddedId      = options?.lastAddedId;
-      const silent           = options?.silent ?? false;
-      const categoryIntro    = options?.categoryIntro;
-      const expandToCategory = options?.expandToCategory ?? false;
+      const event         = options?.event ?? "ON_USER_MESSAGE";
+      const lastAddedId   = options?.lastAddedId;
+      const silent        = options?.silent ?? false;
+      const categoryIntro = options?.categoryIntro;
 
       setUi("thinking");
       const trimmed = text.trim();
@@ -1161,66 +1159,35 @@ export function PedidoClient({
           }),
         });
 
-        const data    = await res.json();
-        const reply: string    = data?.data?.reply   ?? "";
-        const rawCards: string[]  = Array.isArray(data?.data?.cards)   ? data.data.cards   : [];
-        const apiOptions: string[] = Array.isArray(data?.data?.options) ? data.data.options : [];
+        const data        = await res.json();
+        const reply       = (data?.data?.reply   ?? "") as string;
+        const rawCards    = (Array.isArray(data?.data?.cards)   ? data.data.cards   : []) as string[];
+        const apiOptions  = (Array.isArray(data?.data?.options) ? data.data.options : []) as WaiterOption[];
+        const responseMode = (data?.data?.mode ?? "BROWSE") as string;
 
-        // Promote cards to the product grid.
-        // Text-match fallback: when AI mentions a product name in text but does not call
-        // suggest_upsell (speech-tool mismatch), find that product in the catalog by name
-        // and treat it as an implicit card — so the grid ALWAYS stays in sync with the chat.
-        const isCheckoutIntent = upsellOfferedSnap !== null;
-        const allowCards =
-          CARD_ALLOWED_EVENTS.has(event) ||
-          (SALES_BEHAVIOR.suggestOnCheckoutIntent && isCheckoutIntent);
-
-        const flat = categories.flatMap((c) => c.items);
-        let effectiveCards = rawCards;
-
-        if (allowCards && rawCards.length === 0 && reply && stageSnap === "BROWSE") {
-          const nr = reply.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-          const hit = flat.find((item) => {
-            if (item.name.length < 4) return false;
-            const nn = item.name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-            return nr.includes(nn);
-          });
-          if (hit) effectiveCards = [hit.id];
-        }
-
+        // Cards come ONLY from response.cards — no text inference, no category expansion.
+        // Show cards only when mode is SUGGESTION/INTERVENTION and stage is BROWSE.
         let hasShownCards = false;
+        const allowCards = responseMode !== "CHECKOUT_SUPPORT" && stageSnap === "BROWSE";
 
-        if (allowCards && effectiveCards.length > 0 && stageSnap === "BROWSE") {
+        if (allowCards && rawCards.length > 0) {
+          const flat = categories.flatMap((c) => c.items);
           const seen = new Set<string>();
-          const resolved = effectiveCards
+          const resolved = rawCards
             .filter((id) => { const first = !seen.has(id); seen.add(id); return first; })
             .map((id) => flat.find((i) => i.id === id))
             .filter((i): i is MenuItem => !!i);
 
           if (resolved.length > 0) {
             hasShownCards = true;
-            if (expandToCategory) {
-              const firstItem = resolved[0]!;
-              const itemCat = categories.find((c) => c.items.some((i) => i.id === firstItem.id));
-              const expanded = itemCat
-                ? [
-                    ...resolved,
-                    ...itemCat.items.filter((i) => !resolved.some((r) => r.id === i.id)),
-                  ].slice(0, 4)
-                : resolved;
-              setSuggestedProducts(expanded);
-            } else {
-              setSuggestedProducts(resolved);
-            }
+            setSuggestedProducts(resolved);
           }
         }
 
-        // When products are shown → action buttons.
-        // When context already chosen this session → suppress qualification options (no re-ask).
-        // Otherwise → show API-provided qualification choices (first time only).
-        const finalOptions: string[] | undefined = hasShownCards
-          ? ["Quero", "Ver outra opção"]
-          : apiOptions.length > 0 && !contextChosenRef.current
+        // When products are shown → action buttons. Otherwise → API-provided options.
+        const finalOptions: WaiterOption[] | undefined = hasShownCards
+          ? [{ label: "Quero", value: "add_to_cart" }, { label: "Ver outra opção", value: "see_other" }]
+          : apiOptions.length > 0
           ? apiOptions
           : undefined;
 
@@ -1413,70 +1380,67 @@ export function PedidoClient({
   // ── Guided flow step handler ──────────────────────────────────────
   // Client-side state machine — no AI calls. Each step pushes a message with
   // buttons and optionally fills the product grid from the local catalog.
+  // Each guided step that needs to show products calls sendText (silent) so products
+  // come exclusively from WaiterBrainV2 — no client-side catalog filtering.
   const handleGuidedStep = useCallback(
-    (choice: string) => {
+    async (value: string) => {
       const step = guidedStepRef.current;
-      const n = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-      const addMsg = (content: string, opts?: string[]) => {
+      const addMsg = (content: string, opts?: WaiterOption[]) => {
         setMessages((prev) => [
           ...prev,
           { id: uid(), role: "assistant" as const, content, ts: new Date(), options: opts },
         ]);
       };
 
-      const catItems = (predicate: (name: string) => boolean): MenuItem[] =>
-        categories.filter((c) => predicate(c.name)).flatMap((c) => c.items).slice(0, 4);
-
       switch (step) {
         case "size":
           guidedStepRef.current = "starters";
-          addMsg("Vai querer entrada? 🥗", ["Sim, quero entrada", "Direto ao prato"]);
+          addMsg("Vai querer entrada? 🥗", [
+            { label: "Sim, quero entrada", value: "wants_starter" },
+            { label: "Direto ao prato",    value: "skip_starter"  },
+          ]);
           break;
 
         case "starters":
-          if (/entrada/i.test(choice)) {
-            const items = catItems((nm) => /entrada|aperitivo|petisco|salada|sashimi|tapas/i.test(n(nm)));
-            if (items.length > 0) setSuggestedProducts(items);
-          }
           guidedStepRef.current = "main";
-          addMsg("Prefere algo leve ou uma refeição completa? 🍽️", ["Leve", "Completo"]);
+          if (value === "wants_starter") {
+            await sendText("quero entrada", cart, stage, activeUpsell, { event: "ON_USER_MESSAGE", silent: true });
+          }
+          addMsg("Prefere algo leve ou uma refeição completa? 🍽️", [
+            { label: "Leve",     value: "light"    },
+            { label: "Completo", value: "complete" },
+          ]);
           break;
 
-        case "main": {
-          const isLight = /leve|🥗/u.test(choice);
-          const items = isLight
-            ? catItems((nm) =>
-                !/combo|completo/i.test(n(nm)) &&
-                !/bebida|drink|suco|refri|cerveja|vinho|água/i.test(n(nm)) &&
-                !/sobremesa|doce|gelado|sorvete/i.test(n(nm))
-              )
-            : catItems((nm) =>
-                /combo|completo|grilh|teppan|yakisoba|massa|pizza|hambur|prato principal/i.test(n(nm))
-              );
-          if (items.length > 0) setSuggestedProducts(items);
+        case "main":
           guidedStepRef.current = "drinks";
-          addMsg("Vai querer bebida? 🥤", ["Sim, quero bebida", "Não, obrigado"]);
+          // Route through API so WaiterBrainV2 returns official product cards.
+          await sendText(value, cart, stage, activeUpsell, { event: "ON_USER_MESSAGE", silent: true });
+          addMsg("Vai querer bebida? 🥤", [
+            { label: "Sim, quero bebida", value: "wants_drink" },
+            { label: "Não, obrigado",     value: "skip_drink"  },
+          ]);
           break;
-        }
 
         case "drinks":
-          if (/sim|bebida/i.test(choice)) {
-            const items = catItems((nm) => /bebida|drink|suco|refri|cerveja|vinho|água/i.test(n(nm)));
-            if (items.length > 0) setSuggestedProducts(items);
-          }
           guidedStepRef.current = "dessert";
-          addMsg("Vai querer sobremesa? 🍰", ["Sim, quero sobremesa", "Não, obrigado"]);
+          if (value === "wants_drink") {
+            await sendText("quero bebida", cart, stage, activeUpsell, { event: "ON_USER_MESSAGE", silent: true });
+          }
+          addMsg("Vai querer sobremesa? 🍰", [
+            { label: "Sim, quero sobremesa", value: "wants_dessert" },
+            { label: "Não, obrigado",        value: "skip_dessert"  },
+          ]);
           break;
 
         case "dessert":
-          if (/sim|sobremesa/i.test(choice)) {
-            const items = catItems((nm) => /sobremesa|doce|gelado|sorvete|torta/i.test(n(nm)));
-            if (items.length > 0) setSuggestedProducts(items);
-          }
           guidedStepRef.current = "done";
           setGuidedMode(false);
           setAiPermState("idle");
+          if (value === "wants_dessert") {
+            await sendText("quero sobremesa", cart, stage, activeUpsell, { event: "ON_USER_MESSAGE", silent: true });
+          }
           addMsg("Tudo pronto! 🎉 Quando quiser finalizar, clique em Finalizar pedido 😊");
           break;
 
@@ -1484,7 +1448,7 @@ export function PedidoClient({
           break;
       }
     },
-    [categories],
+    [cart, stage, activeUpsell, sendText],
   );
 
   // ── Permission prompt handlers ────────────────────────────────────
@@ -1500,7 +1464,11 @@ export function PedidoClient({
         role: "assistant" as const,
         content: "Para quantas pessoas é o pedido? 😊",
         ts: new Date(),
-        options: ["Só eu", "2 a 3 pessoas", "4 ou mais"],
+        options: [
+          { label: "Só eu",          value: "solo"        },
+          { label: "2 a 3 pessoas",  value: "small_group" },
+          { label: "4 ou mais",      value: "large_group" },
+        ] satisfies WaiterOption[],
       },
     ]);
   }, []);
@@ -1512,26 +1480,19 @@ export function PedidoClient({
   }, [pushAssistantMessage]);
 
   // ── Option button handler ─────────────────────────────────────────
-  // MODE 1 (GUIDED): routes to handleGuidedStep — no AI, pure state machine.
-  // MODE 2 (FREE CHAT): existing sendText path.
+  // Receives the button VALUE (not label). Routes to guided step or API.
   const handleOptionSelect = useCallback(
-    (text: string) => {
+    (value: string) => {
       if (ui === "thinking") return;
 
-      // Guided flow mode: all button taps advance the step sequence
-      if (guidedMode) {
-        handleGuidedStep(text);
-        return;
-      }
+      // Guided mode intercepts all taps to advance the step sequence.
+      if (guidedMode) { void handleGuidedStep(value); return; }
 
-      // "Ver outra opção" → local: clear grid, return to catalog
-      if (text === "Ver outra opção") {
-        setSuggestedProducts([]);
-        return;
-      }
+      // "see_other" → clear product grid, return to browsing.
+      if (value === "see_other") { setSuggestedProducts([]); return; }
 
-      // "Quero" → local: add first shown product to cart
-      if (text === "Quero") {
+      // "add_to_cart" → add first shown product to cart.
+      if (value === "add_to_cart") {
         const firstItem = suggestedProducts[0];
         if (firstItem) {
           if (firstItem.hasVariants) setSelectedProduct(firstItem);
@@ -1540,10 +1501,9 @@ export function PedidoClient({
         return;
       }
 
-      // Free-chat qualifier buttons (🥗 / 🍽️) — AI call with category expansion
-      contextChosenRef.current = true;
+      // All other values (qualification, custom choices) → send to API.
       setSuggestedProducts([]);
-      sendText(text, cart, stage, activeUpsell, { expandToCategory: true });
+      sendText(value, cart, stage, activeUpsell);
     },
     [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, guidedMode, handleGuidedStep],
   );

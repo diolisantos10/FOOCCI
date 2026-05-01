@@ -56,13 +56,22 @@ export interface V2Input {
   message?:     string;      // raw user message (for intent detection)
 }
 
+/** Rendering mode returned to the client so the UI knows how to behave. */
+export type WaiterMode = "BROWSE" | "SUGGESTION" | "INTERVENTION" | "CHECKOUT_SUPPORT";
+
+/** A tappable quick-reply button. `label` is display text; `value` is what gets sent. */
+export interface WaiterOption {
+  label: string;
+  value: string;
+}
+
 export interface V2Output {
-  message:      string;   // short text (≤ 2 lines)
-  cards:        string[]; // product IDs to render as UI cards
-  requiresAI:   boolean;  // when true → caller must run OpenAI pipeline
-  aiDirective:  string;   // injected into system prompt for AI events
-  /** Quick-reply buttons rendered below the response — each string is a tap-to-send label. */
-  options?:     string[];
+  message:     string;          // short text (≤ 2 lines)
+  cards:       string[];        // product IDs to render as UI cards
+  mode:        WaiterMode;      // UI rendering state
+  options:     WaiterOption[];  // quick-reply buttons — empty array when none
+  requiresAI:  boolean;         // when true → caller must run OpenAI pipeline
+  aiDirective: string;          // injected into system prompt for AI events
 }
 
 // ─── category classifiers ─────────────────────────────────────
@@ -248,18 +257,22 @@ function buildAfterCheckoutDirective(): string {
 
 function handleEntry(): V2Output {
   return {
-    message:    "Bem-vindo! 😊\nQuer uma sugestão ou prefere explorar o cardápio?",
-    cards:      [],
-    requiresAI: false,
+    message:     "Bem-vindo! 😊\nQuer uma sugestão ou prefere explorar o cardápio?",
+    cards:       [],
+    mode:        "BROWSE",
+    options:     [],
+    requiresAI:  false,
     aiDirective: "",
   };
 }
 
 function handleMenuMode(): V2Output {
   return {
-    message:    "Perfeito 👌\nFica à vontade — se quiser uma sugestão, me chama 😉",
-    cards:      [],
-    requiresAI: false,
+    message:     "Perfeito 👌\nFica à vontade — se quiser uma sugestão, me chama 😉",
+    cards:       [],
+    mode:        "BROWSE",
+    options:     [],
+    requiresAI:  false,
     aiDirective: "",
   };
 }
@@ -267,11 +280,11 @@ function handleMenuMode(): V2Output {
 function handleItemAdded(input: V2Input): V2Output {
   const cards = complementaryFood(input.catalog, input.lastAddedId, input.cartItemIds);
   return {
-    message:    cards.length > 0
-      ? "Boa escolha 🔥\nEsse aqui combina muito bem 👇"
-      : "Boa escolha! 🔥",
+    message:     cards.length > 0 ? "Boa escolha 🔥\nEsse aqui combina muito bem 👇" : "Boa escolha! 🔥",
     cards,
-    requiresAI: false,
+    mode:        cards.length > 0 ? "SUGGESTION" : "BROWSE",
+    options:     [],
+    requiresAI:  false,
     aiDirective: "",
   };
 }
@@ -286,7 +299,9 @@ function handleCartUpdated(input: V2Input): V2Output {
   return {
     message,
     cards,
-    requiresAI: false,
+    mode:        cards.length > 0 ? "SUGGESTION" : "BROWSE",
+    options:     [],
+    requiresAI:  false,
     aiDirective: "",
   };
 }
@@ -294,27 +309,33 @@ function handleCartUpdated(input: V2Input): V2Output {
 function handleIdle(input: V2Input): V2Output {
   const cards = topSellers(input.catalog, input.cartItemIds, 3);
   return {
-    message:    "Se quiser algo certeiro, esses são os mais pedidos 👇",
+    message:     "Se quiser algo certeiro, esses são os mais pedidos 👇",
     cards,
-    requiresAI: false,
+    mode:        cards.length > 0 ? "SUGGESTION" : "BROWSE",
+    options:     [],
+    requiresAI:  false,
     aiDirective: "",
   };
 }
 
 function handleCheckoutStarted(): V2Output {
   return {
-    message:    "Perfeito 😊\nSe já estiver tudo certo, pode finalizar 👇",
-    cards:      [],
-    requiresAI: false,
+    message:     "Perfeito 😊\nSe já estiver tudo certo, pode finalizar 👇",
+    cards:       [],
+    mode:        "CHECKOUT_SUPPORT",
+    options:     [],
+    requiresAI:  false,
     aiDirective: "",
   };
 }
 
 function handleAfterCheckout(): V2Output {
   return {
-    message:    "",
-    cards:      [],
-    requiresAI: true,
+    message:     "",
+    cards:       [],
+    mode:        "CHECKOUT_SUPPORT",
+    options:     [],
+    requiresAI:  true,
     aiDirective: buildAfterCheckoutDirective(),
   };
 }
@@ -323,25 +344,29 @@ function handleUserMessage(input: V2Input): V2Output {
   const hasItems = input.cartItemIds.length > 0;
   const msg = (input.message ?? "").toLowerCase();
 
-  // Detect category intent from qualifier buttons.
-  // When detected, use the multi-suggest category directive instead of the generic one.
+  // Detect category intent from qualifier buttons (values "light" / "complete").
   let aiDirective: string;
-  if (!hasItems && /leve|light|🥗/u.test(msg)) {
+  if (!hasItems && /leve|light/i.test(msg)) {
     aiDirective = buildCategoryIntentDirective("light");
-  } else if (!hasItems && /completa|completo|refeição|complete|🍽/u.test(msg)) {
+  } else if (!hasItems && /completo|complete|refeição/i.test(msg)) {
     aiDirective = buildCategoryIntentDirective("complete");
   } else {
     aiDirective = buildUserMessageDirective(input.cartItemIds, input.cartValue);
   }
 
+  // Qualification buttons shown only when cart is empty (first free-text message).
+  const options: WaiterOption[] = hasItems ? [] : [
+    { label: "Leve",     value: "light"    },
+    { label: "Completo", value: "complete" },
+  ];
+
   return {
-    message:    "",
-    cards:      [],
-    requiresAI: true,
+    message:     "",
+    cards:       [],
+    mode:        "BROWSE",
+    options,
+    requiresAI:  true,
     aiDirective,
-    // Qualification buttons only shown on first free-text message with empty cart.
-    // Exactly 2 options per UX spec — no "surprise me".
-    options: hasItems ? undefined : ["Leve", "Completo"],
   };
 }
 
