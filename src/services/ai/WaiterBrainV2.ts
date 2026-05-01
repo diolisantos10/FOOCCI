@@ -607,6 +607,11 @@ function handleUserMessage(input: V2Input): V2Output {
       if (!hasItems) return { message: "Prefere algo mais leve ou completo?", options: [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }], cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "" };
       break;
     }
+    case "wants_recommendation": {
+      // Empty cart → ask preference first; cart has items → fall through to AI (pairing)
+      if (!hasItems) return { message: "Prefere algo mais leve ou completo?", options: [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }], cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "" };
+      break;
+    }
   }
 
   // ── AI path for remaining intents ─────────────────────────────

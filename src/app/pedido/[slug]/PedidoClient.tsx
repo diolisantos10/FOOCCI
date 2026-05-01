@@ -1455,7 +1455,9 @@ export function PedidoClient({
 
   const handlePermissionAccept = useCallback(() => {
     setAiPermState("consultive");
-    void sendText("", cart, stage, null, { event: "ON_PERMISSION_ACCEPT", silent: true });
+    // Route through ON_USER_MESSAGE so Sales Intelligence Core handles it:
+    // "quero uma sugestão" → wants_recommendation → Leve/Completo buttons
+    void sendText("quero uma sugestão", cart, stage, null, { event: "ON_USER_MESSAGE", silent: true });
   }, [cart, stage, sendText]);
 
   const handlePermissionDecline = useCallback(() => {
