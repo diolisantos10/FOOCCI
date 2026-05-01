@@ -76,6 +76,136 @@ export interface V2Output {
   aiDirective: string;          // injected into system prompt for AI events
 }
 
+// ─── sales intelligence types ────────────────────────────────
+
+export type CustomerIntent =
+  | "browsing_alone"
+  | "wants_recommendation"
+  | "wants_light_food"
+  | "wants_complete_meal"
+  | "wants_for_group"
+  | "price_sensitive"
+  | "premium_experience"
+  | "asks_drink"
+  | "asks_dessert"
+  | "asks_pairing"
+  | "checkout_intent"
+  | "restriction_based"
+  | "unclear";
+
+export type SalesOpportunity =
+  | "suggest_main_item"
+  | "suggest_combo"
+  | "suggest_group_option"
+  | "suggest_pairing"
+  | "suggest_drink"
+  | "suggest_dessert"
+  | "suggest_premium_upgrade"
+  | "ask_clarifying_question"
+  | "stay_quiet"
+  | "support_checkout";
+
+export interface SalesAnalysis {
+  customerIntent:   CustomerIntent;
+  salesOpportunity: SalesOpportunity;
+  confidence:       number;   // 0–1
+  reason:           string;   // human-readable explanation for debug/logging
+}
+
+// ─── sales intelligence core ─────────────────────────────────
+
+/**
+ * Deterministic intent + opportunity classifier.
+ * Reads the raw customer message and returns a SalesAnalysis.
+ * Does NOT change any existing WaiterBrainV2 behavior — called by
+ * handlers in future sprints. Currently side-effect-free.
+ */
+export function analyzeSalesContext(input: V2Input): SalesAnalysis {
+  const msg     = (input.message ?? "").toLowerCase().trim();
+  const hasCart = input.cartItemIds.length > 0;
+
+  // ── intent detection (deterministic keyword rules) ────────
+  if (/\b(família|familia|grupo|[2-9]\s*pessoas?)\b/i.test(msg)) {
+    return {
+      customerIntent:   "wants_for_group",
+      salesOpportunity: "suggest_group_option",
+      confidence:       0.9,
+      reason:           "group/family keyword detected",
+    };
+  }
+
+  if (/bebida|refri(gerante)?|água|suco|drink/i.test(msg)) {
+    return {
+      customerIntent:   "asks_drink",
+      salesOpportunity: "suggest_drink",
+      confidence:       0.9,
+      reason:           "drink keyword detected",
+    };
+  }
+
+  if (/sobremesa|doce/i.test(msg)) {
+    return {
+      customerIntent:   "asks_dessert",
+      salesOpportunity: "suggest_dessert",
+      confidence:       0.9,
+      reason:           "dessert keyword detected",
+    };
+  }
+
+  if (/\bleve\b|light/i.test(msg)) {
+    return {
+      customerIntent:   "wants_light_food",
+      salesOpportunity: "suggest_main_item",
+      confidence:       0.85,
+      reason:           "light-food keyword detected",
+    };
+  }
+
+  if (/\bcompleto\b|refeição completa/i.test(msg)) {
+    return {
+      customerIntent:   "wants_complete_meal",
+      salesOpportunity: "suggest_combo",
+      confidence:       0.85,
+      reason:           "complete-meal keyword detected",
+    };
+  }
+
+  if (/barato|econôm|econom|até\s*R?\$|em conta/i.test(msg)) {
+    return {
+      customerIntent:   "price_sensitive",
+      salesOpportunity: "suggest_main_item",
+      confidence:       0.85,
+      reason:           "price-sensitivity keyword detected",
+    };
+  }
+
+  if (/combina|acompanha|vai bem|harmoniz/i.test(msg)) {
+    return {
+      customerIntent:   "asks_pairing",
+      salesOpportunity: hasCart ? "suggest_pairing" : "ask_clarifying_question",
+      confidence:       0.85,
+      reason:           "pairing keyword detected",
+    };
+  }
+
+  if (/sugere|indica|recomenda|me ajud|o que (tem|você|vc)/i.test(msg)) {
+    return {
+      customerIntent:   "wants_recommendation",
+      salesOpportunity: hasCart ? "suggest_pairing" : "suggest_main_item",
+      confidence:       0.8,
+      reason:           "recommendation-request keyword detected",
+    };
+  }
+
+  // Default: unclear → ask a clarifying question
+  return {
+    customerIntent:   "unclear",
+    salesOpportunity: "ask_clarifying_question",
+    confidence:       0.5,
+    reason:           "no clear intent signal in message",
+  };
+}
+
 // ─── category classifiers ─────────────────────────────────────
 
 function isDrinkCategory(name: string): boolean {
