@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import AutoPilotPanel from "./autopilot/AutoPilotPanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [iframeStatus,   setIframeStatus]   = useState<"loading" | "loaded" | "error">("loading");
   const [lastError,      setLastError]      = useState<{ message: string; stack?: string; event?: string } | null>(null);
+  const [labMode,        setLabMode]        = useState<"manual" | "autopilot">("manual");
 
   // ── Catalog loading ───────────────────────────────────────────────────────
 
@@ -395,7 +397,31 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
           </span>
         )}
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {/* Mode toggle */}
+          <div className="flex overflow-hidden rounded border border-gray-700">
+            <button
+              onClick={() => setLabMode("manual")}
+              className={`px-2 py-1 text-[10px] transition-colors ${
+                labMode === "manual"
+                  ? "bg-gray-700 text-gray-100"
+                  : "text-gray-600 hover:text-gray-400"
+              }`}
+            >
+              Manual
+            </button>
+            <button
+              onClick={() => setLabMode("autopilot")}
+              className={`px-2 py-1 text-[10px] transition-colors ${
+                labMode === "autopilot"
+                  ? "bg-amber-600 text-white"
+                  : "text-gray-600 hover:text-amber-400"
+              }`}
+            >
+              AutoPilot
+            </button>
+          </div>
+
           <button
             onClick={resetSession}
             className="rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-500 hover:border-red-700 hover:text-red-400"
@@ -484,8 +510,17 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
           </div>
         </div>
 
-        {/* Right — Debug panel */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Right — AutoPilot mode */}
+        {labMode === "autopilot" && (
+          <AutoPilotPanel
+            slug={activeSlug}
+            catalog={catalog}
+            restaurantName={restaurantName ?? activeSlug}
+          />
+        )}
+
+        {/* Right — Manual debug panel */}
+        {labMode === "manual" && <div className="flex flex-1 flex-col overflow-hidden">
 
           {/* Quick test buttons */}
           <div className="shrink-0 border-b border-gray-800 px-3 py-2">
@@ -810,7 +845,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
               )}
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );
