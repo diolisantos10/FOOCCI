@@ -180,40 +180,6 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
   const [assertions,    setAssertions]   = useState<Assertion[]>([]);
   const [showRaw,       setShowRaw]      = useState(false);
 
-  // ── No restaurant / no menu guard ─────────────────────────────────────────
-
-  if (!defaultSlug) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-        <span className="text-4xl">🍽️</span>
-        <p className="text-lg font-semibold text-gray-700">
-          Nenhum restaurante encontrado
-        </p>
-        <p className="max-w-xs text-sm text-gray-400">
-          Faça login com uma conta que tenha um restaurante cadastrado para usar o Waiter Lab.
-        </p>
-      </div>
-    );
-  }
-
-  if (!hasMenu) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-        <span className="text-4xl">🍽️</span>
-        <p className="text-lg font-semibold text-gray-700">
-          Nenhum restaurante com cardápio encontrado para testar.
-        </p>
-        <p className="max-w-xs text-sm text-gray-400">
-          Adicione itens ao cardápio em{" "}
-          <a href="/menu" className="text-amber-600 underline hover:text-amber-500">
-            Cardápio
-          </a>{" "}
-          e volte aqui para testar o Waiter.
-        </p>
-      </div>
-    );
-  }
-
   // ── Catalog loading ───────────────────────────────────────────────────────
 
   const loadCatalog = useCallback(async (targetSlug: string) => {
@@ -236,7 +202,7 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
   }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void loadCatalog(defaultSlug); }, []);
+  useEffect(() => { if (defaultSlug) void loadCatalog(defaultSlug); }, []);
 
   // ── Fire event ────────────────────────────────────────────────────────────
 
@@ -279,6 +245,40 @@ export default function WaiterLabClient({ defaultSlug, restaurantName, hasMenu }
     },
     [activeSlug, history, labCart, catalog],
   );
+
+  // ── No restaurant / no menu guard (after all hooks) ───────────────────────
+
+  if (!defaultSlug) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+        <span className="text-4xl">🍽️</span>
+        <p className="text-lg font-semibold text-gray-700">
+          Nenhum restaurante encontrado
+        </p>
+        <p className="max-w-xs text-sm text-gray-400">
+          Faça login com uma conta que tenha um restaurante cadastrado para usar o Waiter Lab.
+        </p>
+      </div>
+    );
+  }
+
+  if (!hasMenu) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+        <span className="text-4xl">🍽️</span>
+        <p className="text-lg font-semibold text-gray-700">
+          Nenhum restaurante com cardápio encontrado para testar.
+        </p>
+        <p className="max-w-xs text-sm text-gray-400">
+          Adicione itens ao cardápio em{" "}
+          <a href="/menu" className="text-amber-600 underline hover:text-amber-500">
+            Cardápio
+          </a>{" "}
+          e volte aqui para testar o Waiter.
+        </p>
+      </div>
+    );
+  }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
