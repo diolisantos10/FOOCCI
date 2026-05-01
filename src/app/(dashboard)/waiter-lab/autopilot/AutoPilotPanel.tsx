@@ -167,6 +167,7 @@ async function runScenario(
   let permissionDeclined   = false;
   let promptsGiven         = 0;
   const suggestedIdsAccum: string[] = [];
+  let lastResponseCards: string[]   = [];
 
   const seenCardIds = new Set<string>();
 
@@ -228,8 +229,15 @@ async function runScenario(
       });
     });
 
-    if (profile.requiresCart && firstItem) {
-      seq.push({ event: "ON_ITEM_ADDED", message: "", requireCards: false, lastAddedId: firstItem.id });
+    if (profile.requiresCart) {
+      // Budget profiles resolve lastAddedId at runtime from Waiter's suggestion cards
+      const resolveFromCards = profile.budget !== undefined;
+      seq.push({
+        event:        "ON_ITEM_ADDED",
+        message:      "",
+        requireCards: false,
+        lastAddedId:  resolveFromCards ? undefined : (firstItem?.id ?? undefined),
+      });
     }
 
     if (profile.requiresCheckout) {
@@ -245,7 +253,23 @@ async function runScenario(
 
     const def = seq[i];
     if (!def) break;
-    const { event, message, requireCards, lastAddedId } = def;
+    const { event, message, requireCards } = def;
+    let lastAddedId = def.lastAddedId;
+
+    // For budget profiles: resolve lastAddedId from the Waiter's previous suggestion cards
+    if (event === "ON_ITEM_ADDED" && !lastAddedId) {
+      if (lastResponseCards.length > 0) {
+        if (profile.budget !== undefined) {
+          lastAddedId = lastResponseCards.find((id) => {
+            const item = catalog.find((c) => c.id === id);
+            return item !== undefined && item.price <= profile.budget!;
+          }) ?? lastResponseCards[0];
+        } else {
+          lastAddedId = lastResponseCards[0];
+        }
+      }
+      if (!lastAddedId && firstItem) lastAddedId = firstItem.id;
+    }
     const t1 = Date.now();
 
     let response: { reply: string; cards: string[]; options: { label: string; value: string }[]; mode: string } | null = null;
@@ -294,6 +318,7 @@ async function runScenario(
         seenCardIds.add(id);
         if (!suggestedIdsAccum.includes(id)) suggestedIdsAccum.push(id);
       }
+      if (response.cards.length > 0) lastResponseCards = [...response.cards];
 
       // Budget check for cart additions
       if (event === "ON_ITEM_ADDED" && lastAddedId && profile.budget !== undefined) {

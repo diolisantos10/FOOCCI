@@ -304,7 +304,7 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
     };
   }
 
-  if (/melhor da casa|especial|premium|\btop\b|destaque|mais\s*caro|high.?end/i.test(msg)) {
+  if (/\bmelhor\b|melhor da casa|algo especial|especial|premium|\btop\b|destaque|mais\s*caro|high.?end|caprichado|favorito da casa/i.test(msg)) {
     return {
       customerIntent:   "wants_premium_option",
       salesOpportunity: "suggest_premium_upgrade",
@@ -860,8 +860,8 @@ export function rankProducts(
     }
     let score = scoreProductForIntent(item, intent, ctx);
     const wasSuggested = alreadySuggestedIds.includes(item.id);
-    // Penalise already-shown products to encourage variety (soft exclusion)
-    if (wasSuggested) score -= 15;
+    // Hard-exclude already-shown products: 60-200=-140 < MIN_SCORE_THRESHOLD(10)
+    if (wasSuggested) score -= 200;
     if (score >= MIN_SCORE_THRESHOLD) {
       scored.push({ id: item.id, score });
     } else {
@@ -1518,7 +1518,7 @@ const INTENT_COPY: Partial<Record<CustomerIntent, string>> = {
   wants_complete_meal:   "Pra uma refeição mais completa, essas fazem mais sentido 👇",
   wants_group_order:     "Pra dividir bem, essas opções funcionam melhor 👇",
   wants_budget_option:   "Separei opções boas sem pesar tanto no pedido 👇",
-  wants_premium_option:  "Se a ideia é algo especial, eu começaria por essas 👇",
+  wants_premium_option:  "Se a ideia é ir no melhor da casa, eu começaria por essas opções 👇",
   asks_for_drink:        "Pra acompanhar, essas bebidas funcionam bem 👇",
   asks_for_dessert:      "Pra fechar com doce, essas são boas escolhas 👇",
   asks_for_pairing:      "Pra combinar com seu pedido, essas fazem sentido 👇",
