@@ -544,6 +544,208 @@ function selectPairingItems(catalog: V2CatalogItem[], cartItemIds: string[], lim
   return (pairings.length > 0 ? pairings : notCart.sort(tagSort)).slice(0, limit).map((i) => i.id);
 }
 
+// ─── restaurant-agnostic sales strategy (Sales Intelligence) ─
+
+export interface MenuProfile {
+  cuisineSignals:             string[];
+  hasCombos:                  boolean;
+  hasDrinks:                  boolean;
+  hasDesserts:                boolean;
+  hasStarters:                boolean;
+  hasPremiumItems:            boolean;
+  avgPrice:                   number;
+  topCategories:              string[];
+  likelyMainCategories:       string[];
+  likelyComplementCategories: string[];
+}
+
+/**
+ * Profiles the menu catalog without hardcoding any cuisine.
+ * Uses tag classification + category frequency to describe what the
+ * restaurant sells, enabling strategy selection for any food type.
+ */
+export function analyzeMenuProfile(menuItems: V2CatalogItem[]): MenuProfile {
+  const tagged = tagCatalog(menuItems);
+
+  const hasDrinks      = tagged.some((i) => i.tags.includes("drink"));
+  const hasDesserts    = tagged.some((i) => i.tags.includes("dessert"));
+  const hasStarters    = tagged.some((i) => i.tags.includes("starter"));
+  const hasCombos      = tagged.some((i) => i.tags.includes("combo"));
+  const hasPremiumItems = tagged.some((i) => i.tags.includes("premium"));
+
+  const foodItems = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert"));
+  const avgPrice  = foodItems.length > 0
+    ? foodItems.reduce((s, i) => s + i.price, 0) / foodItems.length
+    : 0;
+
+  // Rank categories by item count
+  const catFreq = new Map<string, number>();
+  for (const item of menuItems) {
+    catFreq.set(item.categoryName, (catFreq.get(item.categoryName) ?? 0) + 1);
+  }
+  const topCategories = [...catFreq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name]) => name);
+
+  const mainCatNames = new Set(
+    tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert")).map((i) => i.category),
+  );
+  const complementCatNames = new Set(
+    tagged.filter((i) => i.tags.includes("drink") || i.tags.includes("dessert")).map((i) => i.category),
+  );
+
+  // Generic cuisine signal detection from all item text — no cuisine hard-wired
+  const allText = menuItems
+    .map((i) => `${i.categoryName} ${i.name} ${i.description ?? ""}`)
+    .join(" ")
+    .toLowerCase();
+  const CUISINE_PATTERNS: [RegExp, string][] = [
+    [/pizza|pizz[ao]/,                "pizza"   ],
+    [/burger|hamburguer|smash/,       "burger"  ],
+    [/sushi|temaki|uramaki|maki/,     "sushi"   ],
+    [/pasta|macarrão|lasanha|risoto/, "italian" ],
+    [/tacos?|burrito|mexican/,        "mexican" ],
+    [/churrasco|bbq|grelhad/,         "grill"   ],
+    [/wonton|dim.?sum/,               "chinese" ],
+    [/crepe|crêpe/,                   "crepe"   ],
+    [/açaí|acai/,                     "acai"    ],
+    [/poke|bowl/,                     "poke"    ],
+  ];
+  const cuisineSignals = CUISINE_PATTERNS
+    .filter(([re]) => re.test(allText))
+    .map(([, signal]) => signal);
+
+  return {
+    cuisineSignals,
+    hasCombos,
+    hasDrinks,
+    hasDesserts,
+    hasStarters,
+    hasPremiumItems,
+    avgPrice,
+    topCategories,
+    likelyMainCategories:       [...mainCatNames],
+    likelyComplementCategories: [...complementCatNames],
+  };
+}
+
+export type SalesStrategy =
+  | "recommend_signature_item"
+  | "recommend_budget_item"
+  | "recommend_group_bundle"
+  | "recommend_premium_upgrade"
+  | "recommend_pairing"
+  | "recommend_drink"
+  | "recommend_dessert"
+  | "ask_clarifying_question"
+  | "stay_quiet";
+
+/**
+ * Selects the right sales strategy from intent + menu profile + cart state.
+ * Pure logic — no DB calls, no side effects.
+ */
+export function chooseSalesStrategy(
+  analysis:     SalesAnalysis,
+  menuProfile:  MenuProfile,
+  cartAnalysis: CartAnalysis,
+): SalesStrategy {
+  const { customerIntent } = analysis;
+  const { opportunity }    = cartAnalysis;
+
+  // A) Price-sensitive — affordable items first, no premium push
+  if (customerIntent === "price_sensitive") return "recommend_budget_item";
+
+  // B) Group / family — combos when available
+  if (customerIntent === "wants_for_group")
+    return menuProfile.hasCombos ? "recommend_group_bundle" : "recommend_signature_item";
+
+  // C) Premium intent
+  if (customerIntent === "premium_experience")
+    return menuProfile.hasPremiumItems ? "recommend_premium_upgrade" : "recommend_signature_item";
+
+  // D) Explicit pairing request — always cart-aware
+  if (customerIntent === "asks_pairing") return "recommend_pairing";
+
+  // E) Explicit category requests
+  if (customerIntent === "asks_drink")
+    return menuProfile.hasDrinks   ? "recommend_drink"   : "ask_clarifying_question";
+  if (customerIntent === "asks_dessert")
+    return menuProfile.hasDesserts ? "recommend_dessert" : "ask_clarifying_question";
+
+  // Light / complete — map to available product shapes
+  if (customerIntent === "wants_light_food")    return "recommend_signature_item";
+  if (customerIntent === "wants_complete_meal")
+    return menuProfile.hasCombos ? "recommend_group_bundle" : "recommend_signature_item";
+
+  // Recommendation — let cart opportunity guide the pick
+  if (customerIntent === "wants_recommendation") {
+    if (opportunity === "drink")   return menuProfile.hasDrinks   ? "recommend_drink"   : "recommend_signature_item";
+    if (opportunity === "dessert") return menuProfile.hasDesserts ? "recommend_dessert" : "recommend_signature_item";
+    if (opportunity === "pairing" || opportunity === "upgrade") return "recommend_pairing";
+    return "recommend_signature_item";
+  }
+
+  // Checkout + restriction intents — stay quiet; other handlers own these
+  if (customerIntent === "checkout_intent")   return "stay_quiet";
+  if (customerIntent === "restriction_based") return "ask_clarifying_question";
+
+  // F/G) Unclear / silent browsing — ask with buttons
+  return "ask_clarifying_question";
+}
+
+export interface WaiterResponseShape {
+  message: string;
+  options: WaiterOption[];
+  cards:   string[];
+  mode:    WaiterMode;
+}
+
+const STRATEGY_MESSAGES: Record<SalesStrategy, string> = {
+  recommend_signature_item:  "Separei as melhores opções pra você 👇",
+  recommend_budget_item:     "Ótimas opções com bom custo-benefício 👇",
+  recommend_group_bundle:    "Pra compartilhar, essas opções fazem mais sentido 👇",
+  recommend_premium_upgrade: "Uma experiência um pouco acima do padrão 👇",
+  recommend_pairing:         "Essas opções combinam bem com o que você escolheu 👇",
+  recommend_drink:           "Aqui estão as bebidas disponíveis 👇",
+  recommend_dessert:         "Para adoçar o final 🍰",
+  ask_clarifying_question:   "Prefere algo mais leve ou completo?",
+  stay_quiet:                "",
+};
+
+/**
+ * Builds the normalized waiter response from a strategy + resolved product IDs.
+ * Rule: if no products found, never mention item names — offer button question instead.
+ */
+export function buildWaiterResponse(
+  strategy:         SalesStrategy,
+  selectedProducts: string[],
+): WaiterResponseShape {
+  if (strategy === "stay_quiet") {
+    return { message: "", options: [], cards: [], mode: "BROWSE" };
+  }
+
+  // No products → fall back to button question (rule 5)
+  if (selectedProducts.length === 0) {
+    return {
+      message: "Prefere algo mais leve ou completo?",
+      options: [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }],
+      cards:   [],
+      mode:    "BROWSE",
+    };
+  }
+
+  const isIntervention =
+    strategy === "recommend_premium_upgrade" ||
+    strategy === "recommend_group_bundle";
+
+  return {
+    message: STRATEGY_MESSAGES[strategy],
+    options: [],
+    cards:   selectedProducts,
+    mode:    isIntervention ? "INTERVENTION" : "SUGGESTION",
+  };
+}
+
 // ─── directive builder for AI events ────────────────────────
 
 const BASE_DIRECTIVE = `
