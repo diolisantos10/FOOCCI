@@ -249,11 +249,19 @@ export function generateTopFixes(results: ScenarioResult[]): FixRecommendation[]
 const VALID_MODES  = ["BROWSE", "SUGGESTION", "INTERVENTION", "CHECKOUT_SUPPORT"];
 const WEAK_PHRASES = /^(ok|beleza|ótimo|certo|perfeito|entendi|claro)[.!]?$/i;
 
+// Sales language that must NOT appear during checkout events
+const CHECKOUT_SALES_PHRASES = /\b(vou sugerir|que tal|combina|tente|experimente|aproveite|bebida|drink|sobremesa|acompanhe?|complementa?|adicional|quer experimentar|posso sugerir|sugiro)\b/i;
+
+// Clear premium-intent patterns where qualification without cards signals wrong detection
+const PREMIUM_PHRASES = /\b(melhor|especial|mais completo|premium|exclusiv[ao]|o que voc[êe]s t[êe]m)\b/i;
+
 export function validateStep(
   event:        string,
+  message:      string,
   response:     WaiterResponse | null,
   catalogIds:   Set<string>,
   requireCards: boolean,
+  seenCardIds:  Set<string>,
 ): { assertions: StepAssertion[]; failureTypes: FailureType[]; passed: boolean } {
   const assertions:   StepAssertion[] = [];
   const failureTypes: FailureType[]   = [];
@@ -289,6 +297,7 @@ export function validateStep(
     pass:   lineOk,
     detail: lineOk ? undefined : `${nonEmpty} linhas`,
   });
+  if (!lineOk) failureTypes.push("response_contract_error");
 
   // Rule 7: ON_ITEM_ADDED → cards=[], options=[]
   if (event === "ON_ITEM_ADDED") {
@@ -324,17 +333,52 @@ export function validateStep(
     if (ghosts.length > 0) failureTypes.push("product_mismatch");
   }
 
+  // Duplicate card detection across turns
+  if (response.cards.length > 0 && seenCardIds.size > 0) {
+    const dups = response.cards.filter((id) => seenCardIds.has(id));
+    if (dups.length > 0) {
+      assertions.push({
+        label:  "Sem cards repetidos entre turnos",
+        pass:   false,
+        detail: `IDs repetidos: ${dups.join(", ")}`,
+      });
+      failureTypes.push("repeated_suggestion");
+    }
+  }
+
   // Cards expected for last intent message
   if (requireCards && event === "ON_USER_MESSAGE" && response.cards.length === 0 && catalogIds.size > 0) {
-    assertions.push({
-      label:  "Cards esperados para intenção de produto",
-      pass:   false,
-      detail: `mode=${response.mode}, options=${response.options.length}`,
-    });
     if (response.options.length === 0) {
+      // No cards AND no options — clear missing_cards failure
+      assertions.push({
+        label:  "Cards esperados para intenção de produto",
+        pass:   false,
+        detail: `mode=${response.mode}, options=0`,
+      });
       failureTypes.push("missing_cards");
+    } else if (message && PREMIUM_PHRASES.test(message)) {
+      // Clear premium intent but Waiter returned qualification buttons — wrong detection
+      assertions.push({
+        label:  "Intenção premium clara: Waiter deve retornar cards, não qualificação",
+        pass:   false,
+        detail: `options=${response.options.length}, cards=0`,
+      });
+      failureTypes.push("wrong_intent_detection");
     } else {
+      // Options present on ambiguous message — acceptable qualifying question
       assertions.push({ label: "Options presentes (qualificando intenção)", pass: true });
+    }
+  }
+
+  // Checkout sales guard — no selling language during checkout flow
+  if (event === "ON_CHECKOUT_STARTED" || event === "AFTER_CHECKOUT") {
+    if (response.reply && CHECKOUT_SALES_PHRASES.test(response.reply)) {
+      assertions.push({
+        label:  "Sem pitch de vendas durante checkout",
+        pass:   false,
+        detail: "Linguagem de vendas detectada na mensagem de checkout",
+      });
+      failureTypes.push("checkout_interference");
     }
   }
 
@@ -387,7 +431,11 @@ export function buildReport(
     .map(([ft]) => IMPROVEMENT_SUGGESTIONS[ft as FailureType])
     .filter(Boolean);
 
-  if (passed === total && total > 0) {
+  // Belt-and-suspenders: "pronto para piloto" only when no assertions failed anywhere
+  const anyAssertionFailed = results.some((r) =>
+    r.steps.some((s) => s.assertions.some((a) => !a.pass)),
+  );
+  if (passed === total && total > 0 && !anyAssertionFailed) {
     recommendations.push("Todos os cenários passaram. Sistema pronto para piloto QA.");
   }
 

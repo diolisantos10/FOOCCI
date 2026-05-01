@@ -118,6 +118,7 @@ async function runScenario(
   let detectedMode    = "BROWSE";
   let lastReply       = "";
   let lastOptions:    { label: string; value: string }[] = [];
+  const seenCardIds   = new Set<string>();
 
   // Build step sequence
   type StepDef = { event: string; message: string; requireCards: boolean; lastAddedId?: string };
@@ -179,9 +180,26 @@ async function runScenario(
       if (event === "ON_CHECKOUT_STARTED") checkoutReached = true;
       if (event === "AFTER_CHECKOUT")       orderConfirmed  = true;
 
-      const v    = validateStep(event, response, catalogIds, requireCards);
+      const v    = validateStep(event, message, response, catalogIds, requireCards, seenCardIds);
       stepAssertions = v.assertions;
       stepFailures   = v.failureTypes;
+
+      // Track seen cards for duplicate detection in subsequent steps
+      for (const id of response.cards) seenCardIds.add(id);
+
+      // Budget validation: flag if cart item price exceeds profile budget
+      if (event === "ON_ITEM_ADDED" && firstItem && profile.budget !== undefined) {
+        if (firstItem.price > profile.budget) {
+          stepFailures = [...stepFailures, "bad_product_fit"];
+          stepAssertions = [
+            ...stepAssertions,
+            {
+              label: `Budget: ${firstItem.name} (R$${firstItem.price.toFixed(2)}) excede orçamento R$${profile.budget}`,
+              pass:  false,
+            },
+          ];
+        }
+      }
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
