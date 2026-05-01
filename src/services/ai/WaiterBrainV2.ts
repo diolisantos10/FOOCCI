@@ -1352,6 +1352,44 @@ const QUAL_QUESTION: Pick<V2Output, "message" | "options" | "cards" | "mode" | "
   aiDirective: "",
 };
 
+// ─── Commercial Response Builder (Sprint 4D) ─────────────────
+
+const INTENT_COPY: Partial<Record<CustomerIntent, string>> = {
+  wants_light_option:    "Pra algo mais leve, eu iria nessas opções 👇",
+  wants_complete_meal:   "Pra uma refeição mais completa, essas fazem mais sentido 👇",
+  wants_group_order:     "Pra dividir bem, essas opções funcionam melhor 👇",
+  wants_budget_option:   "Separei opções boas sem pesar tanto no pedido 👇",
+  wants_premium_option:  "Se a ideia é algo especial, eu começaria por essas 👇",
+  asks_for_drink:        "Pra acompanhar, essas bebidas funcionam bem 👇",
+  asks_for_dessert:      "Pra fechar com doce, essas são boas escolhas 👇",
+  asks_for_pairing:      "Pra combinar com seu pedido, essas fazem sentido 👇",
+  wants_recommendation:  "Separei boas opções pra você 👇",
+  asks_specific_product: "Separei essa opção pra você 👇",
+  asks_category:         "Separei as opções dessa categoria 👇",
+};
+
+export interface CommercialResponseInput {
+  intent:           CustomerIntent;
+  opportunity?:     SalesOpportunity;
+  selectedProducts: string[];
+  mode:             WaiterMode;
+  cartAnalysis?:    { hasFood: boolean; hasDrink: boolean; hasDessert: boolean };
+  confidence?:      number;
+}
+
+/**
+ * Builds a concise, seller-tone message for a product suggestion.
+ * Contract: cards present → options is always [] (no confirmation buttons).
+ */
+export function buildCommercialResponse(
+  params: CommercialResponseInput,
+): Pick<V2Output, "message" | "options" | "cards" | "mode"> {
+  const { intent, selectedProducts, mode } = params;
+  const cards   = selectedProducts;
+  const message = INTENT_COPY[intent] ?? "Separei boas opções pra você 👇";
+  return { message, options: [], cards, mode };
+}
+
 function handleUserMessage(input: V2Input): V2Output {
   const analysis  = analyzeSalesContext(input);
   const hasItems  = input.cartItemIds.length > 0;
@@ -1361,53 +1399,51 @@ function handleUserMessage(input: V2Input): V2Output {
   switch (analysis.customerIntent) {
     case "wants_light_option": {
       const cards = rankProducts(catalog, "wants_light_option", cartItemIds, 3);
-      if (cards.length > 0) return { message: "Separei algumas opções mais leves pra você 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_light_option", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_complete_meal": {
       const cards = rankProducts(catalog, "wants_complete_meal", cartItemIds, 3);
-      if (cards.length > 0) return { message: "Separei opções mais completas pra você 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_complete_meal", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_group_order": {
       const cards = rankProducts(catalog, "wants_group_order", cartItemIds, 3);
-      if (cards.length > 0) return { message: "Pra compartilhar, essas opções fazem mais sentido 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_group_order", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_budget_option": {
       const cards = rankProducts(catalog, "wants_budget_option", cartItemIds, 3);
-      if (cards.length > 0) return { message: "Ótimas opções com bom custo-benefício 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_budget_option", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "wants_premium_option": {
       const cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 3);
-      if (cards.length > 0) return { message: "Uma experiência um pouco acima do padrão 👇", cards, mode: "INTERVENTION", options: [], requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_premium_option", selectedProducts: cards, mode: "INTERVENTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "asks_for_dessert": {
       const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 3);
-      if (cards.length > 0) return { message: "Para adoçar o final 🍰", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_for_dessert", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "asks_for_drink": {
       const cards = rankProducts(catalog, "asks_for_drink", cartItemIds, 3);
-      if (cards.length > 0) return { message: "Aqui estão as bebidas disponíveis 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_for_drink", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "asks_for_pairing": {
       const cards = rankProducts(catalog, "asks_for_pairing", cartItemIds, 3);
-      if (cards.length > 0) return { message: "Essas opções combinam bem com o que você escolheu 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_for_pairing", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       return noCardsFound();
     }
     case "asks_specific_product": {
-      // Find the exact product mentioned and show it directly
       const msg = (input.message ?? "").toLowerCase();
       const hit = catalog.find((i) => i.name.length >= 4 && msg.includes(i.name.toLowerCase()) && !cartItemIds.includes(i.id));
-      if (hit) return { message: "Separei essa opção pra você 👇", cards: [hit.id], mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
-      break; // fall through to AI if match not found in cards
+      if (hit) return { ...buildCommercialResponse({ intent: "asks_specific_product", selectedProducts: [hit.id], mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+      break;
     }
     case "asks_category": {
-      // Show top items from the mentioned category
       const msg      = (input.message ?? "").toLowerCase();
       const catNames = [...new Set(catalog.map((i) => i.categoryName))];
       const hitCat   = catNames.find((c) => c.length >= 4 && msg.includes(c.toLowerCase()));
@@ -1417,7 +1453,7 @@ function handleUserMessage(input: V2Input): V2Output {
           .sort(bySort)
           .slice(0, 3)
           .map((i) => i.id);
-        if (cards.length > 0) return { message: "Separei as opções dessa categoria 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+        if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_category", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       }
       break;
     }
@@ -1429,7 +1465,7 @@ function handleUserMessage(input: V2Input): V2Output {
     case "wants_recommendation": {
       if (!hasItems) return { ...QUAL_QUESTION };
       const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3);
-      if (cards.length > 0) return { message: "Aqui vai o que faz mais sentido pra você agora 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_recommendation", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
       break;
     }
     case "checkout_intent": {
@@ -1491,9 +1527,16 @@ const QUESTION_BUTTON_PATTERNS: { re: RegExp; options: WaiterOption[] }[] = [
   {
     re: /quantas?\s*(pessoas?|são)/i,
     options: [
-      { label: "Só eu",   value: "solo"        },
-      { label: "2 a 3",  value: "small_group"  },
-      { label: "4 ou +", value: "large_group"  },
+      { label: "Só eu",        value: "solo"        },
+      { label: "2 a 3 pessoas", value: "small_group"  },
+      { label: "4 ou mais",    value: "large_group"  },
+    ],
+  },
+  {
+    re: /mais econômico.*mais complet[ao]|mais complet[ao].*mais econômico/i,
+    options: [
+      { label: "Mais econômico", value: "budget"   },
+      { label: "Mais completo",  value: "complete" },
     ],
   },
 ];
@@ -1513,10 +1556,11 @@ const CHECKOUT_SAFE_OPTIONS = new Set(["continue_checkout", "browse_menu"]);
  *   2. Deduplicate + ghost card IDs removed
  *   3. Message truncated to 2 lines
  *   4. Product mention in text without matching card → strip name from text
- *   5. Unanswered choice question → attach buttons
+ *   5. Unanswered choice question → attach buttons (only when no cards shown)
  *   6. Bare weak phrase → seller replacement
  *   7. ON_ITEM_ADDED → force cards = [], options = []
  *   8. CHECKOUT_SUPPORT → force cards = [], strip selling options
+ *   9. Cards present → options forced to [] (no confirmation buttons after cards)
  */
 export function validateWaiterResponse(
   output:  V2Output,
@@ -1555,8 +1599,8 @@ export function validateWaiterResponse(
       }
     }
 
-    // 5. Open question guard — unanswered choice question must carry buttons
-    if (options.length === 0 && !requiresAI && message.includes("?")) {
+    // 5. Open question guard — unanswered choice question must carry buttons (only when no cards)
+    if (cards.length === 0 && options.length === 0 && !requiresAI && message.includes("?")) {
       for (const { re, options: btns } of QUESTION_BUTTON_PATTERNS) {
         if (re.test(message)) { options = btns; break; }
       }
@@ -1578,6 +1622,9 @@ export function validateWaiterResponse(
       cards   = [];
       options = options.filter((o) => CHECKOUT_SAFE_OPTIONS.has(o.value));
     }
+
+    // 9. No confirmation buttons alongside product cards
+    if (cards.length > 0) options = [];
 
     return { message, cards, mode, options, requiresAI, aiDirective };
   } catch {

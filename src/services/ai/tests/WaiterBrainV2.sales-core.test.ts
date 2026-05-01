@@ -26,12 +26,14 @@ import {
   buildWaiterResponse,
   scoreProductForIntent,
   rankProducts,
+  buildCommercialResponse,
   type V2CatalogItem,
   type V2Input,
   type V2Output,
   type WaiterMode,
   type ScoreContext,
   type PriceBenchmarks,
+  type CommercialResponseInput,
 } from "../WaiterBrainV2";
 
 // ── Shared catalog fixtures ───────────────────────────────────────────────────
@@ -1160,5 +1162,164 @@ describe("Sprint 4C: rankProducts", () => {
     ];
     const results = rankProducts(drinkOnly, "wants_complete_meal", [], 3);
     expect(results).toHaveLength(0);
+  });
+});
+
+// ─── Section 20: Sprint 4D — Commercial Response Builder ─────────────────────
+
+describe("Sprint 4D: buildCommercialResponse", () => {
+  it("returns the correct intent copy for each mapped intent", () => {
+    const intents: Array<CommercialResponseInput["intent"]> = [
+      "wants_light_option", "wants_complete_meal", "wants_group_order",
+      "wants_budget_option", "wants_premium_option", "asks_for_drink",
+      "asks_for_dessert", "asks_for_pairing", "wants_recommendation",
+      "asks_specific_product", "asks_category",
+    ];
+    for (const intent of intents) {
+      const r = buildCommercialResponse({ intent, selectedProducts: ["id1"], mode: "SUGGESTION" });
+      expect(typeof r.message).toBe("string");
+      expect(r.message.length).toBeGreaterThan(0);
+      expect(r.message).not.toMatch(/^(Legal|Beleza|Ok|Claro)[!.]?$/i);
+    }
+  });
+
+  it("unmapped intent falls back to generic seller message", () => {
+    const r = buildCommercialResponse({ intent: "unclear", selectedProducts: ["id1"], mode: "SUGGESTION" });
+    expect(r.message).toBe("Separei boas opções pra você 👇");
+  });
+
+  it("always returns options = [] (no confirmation buttons)", () => {
+    const r = buildCommercialResponse({ intent: "wants_light_option", selectedProducts: ["id1"], mode: "SUGGESTION" });
+    expect(r.options).toHaveLength(0);
+  });
+
+  it("passes mode through unchanged", () => {
+    const rSuggestion  = buildCommercialResponse({ intent: "wants_light_option",   selectedProducts: ["id1"], mode: "SUGGESTION"   });
+    const rIntervention = buildCommercialResponse({ intent: "wants_premium_option", selectedProducts: ["id1"], mode: "INTERVENTION" });
+    expect(rSuggestion.mode).toBe("SUGGESTION");
+    expect(rIntervention.mode).toBe("INTERVENTION");
+  });
+
+  it("passes selectedProducts through as cards", () => {
+    const products = ["p1", "p2", "p3"];
+    const r = buildCommercialResponse({ intent: "asks_for_drink", selectedProducts: products, mode: "SUGGESTION" });
+    expect(r.cards).toEqual(products);
+  });
+
+  it("copy for wants_light_option contains 'leve' keyword", () => {
+    const r = buildCommercialResponse({ intent: "wants_light_option", selectedProducts: ["id1"], mode: "SUGGESTION" });
+    expect(r.message.toLowerCase()).toContain("leve");
+  });
+
+  it("copy for wants_group_order contains sharing/group concept", () => {
+    const r = buildCommercialResponse({ intent: "wants_group_order", selectedProducts: ["id1"], mode: "SUGGESTION" });
+    expect(r.message.toLowerCase()).toMatch(/divid|compartilh|grupo/);
+  });
+
+  it("copy for asks_for_pairing references the user's order", () => {
+    const r = buildCommercialResponse({ intent: "asks_for_pairing", selectedProducts: ["id1"], mode: "SUGGESTION" });
+    expect(r.message.toLowerCase()).toContain("pedido");
+  });
+});
+
+describe("Sprint 4D: validateWaiterResponse — Rule 9 (no options when cards exist)", () => {
+  const catalog = makeSushiCatalog();
+
+  it("strips options when cards are present", () => {
+    const raw: V2Output = {
+      message:     "Separei pra você 👇",
+      cards:       ["s1", "s2"],
+      mode:        "SUGGESTION",
+      options:     [{ label: "Quero", value: "want_it" }],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+    const validated = validateWaiterResponse(raw, catalog, "ON_USER_MESSAGE");
+    expect(validated.options).toHaveLength(0);
+  });
+
+  it("preserves options when cards are empty", () => {
+    const raw: V2Output = {
+      message:     "Prefere algo mais leve ou mais completo?",
+      cards:       [],
+      mode:        "BROWSE",
+      options:     [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+    const validated = validateWaiterResponse(raw, catalog, "ON_USER_MESSAGE");
+    expect(validated.options.length).toBeGreaterThan(0);
+  });
+
+  it("Rule 5 does not attach buttons when cards are present", () => {
+    const raw: V2Output = {
+      message:     "Prefere algo leve ou completo?",
+      cards:       ["s1"],
+      mode:        "SUGGESTION",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+    const validated = validateWaiterResponse(raw, catalog, "ON_USER_MESSAGE");
+    expect(validated.options).toHaveLength(0);
+  });
+});
+
+describe("Sprint 4D: handleUserMessage — seller tone via buildCommercialResponse", () => {
+  it("wants_light_option → copy references 'leve'", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero algo leve", catalog: makeBurgerCatalog() }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.options).toHaveLength(0);
+    expect(out.message.toLowerCase()).toContain("leve");
+  });
+
+  it("asks_for_drink → copy references 'bebidas'", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero uma bebida", catalog: makeSushiCatalog() }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.options).toHaveLength(0);
+    expect(out.message.toLowerCase()).toContain("bebida");
+  });
+
+  it("asks_for_dessert → copy references 'doce'", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "quero sobremesa", catalog: makeSushiCatalog() }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.options).toHaveLength(0);
+    expect(out.message.toLowerCase()).toContain("doce");
+  });
+
+  it("wants_group_order → copy references dividing/sharing", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "somos 4 pessoas", catalog: makeBurgerCatalog() }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.options).toHaveLength(0);
+    expect(out.message.toLowerCase()).toMatch(/divid|compartilh|grupo/);
+  });
+
+  it("no confirmation buttons appear after any suggestion response with cards", () => {
+    const messages = ["quero algo leve", "quero sobremesa", "quero uma bebida", "quero algo completo"];
+    for (const message of messages) {
+      const out = decide(makeInput("ON_USER_MESSAGE", { message, catalog: makeSushiCatalog() }));
+      if (out.cards.length > 0) {
+        expect(out.options).toHaveLength(0);
+      }
+    }
+  });
+});
+
+describe("Sprint 4D: QUESTION_BUTTON_PATTERNS — budget pattern", () => {
+  const catalog = makeSushiCatalog();
+
+  it("budget-vs-complete question auto-attaches correct buttons", () => {
+    const raw: V2Output = {
+      message:     "Quer algo mais econômico ou uma opção mais completa?",
+      cards:       [],
+      mode:        "BROWSE",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+    const validated = validateWaiterResponse(raw, catalog, "ON_USER_MESSAGE");
+    const values = validated.options.map((o) => o.value);
+    expect(values).toContain("budget");
+    expect(values).toContain("complete");
   });
 });
