@@ -1109,7 +1109,7 @@ export function PedidoClient({
       stageSnap: Stage,
       upsellOfferedSnap: "drink" | "dessert" | null,
       options?: {
-        event?:         "ON_ENTRY" | "ON_MENU_MODE" | "ON_USER_MESSAGE" | "ON_ITEM_ADDED" | "ON_CART_UPDATED" | "ON_IDLE" | "ON_CHECKOUT_STARTED" | "AFTER_CHECKOUT";
+        event?:         "ON_ENTRY" | "ON_MENU_MODE" | "ON_USER_MESSAGE" | "ON_ITEM_ADDED" | "ON_CART_UPDATED" | "ON_IDLE" | "ON_CHECKOUT_STARTED" | "AFTER_CHECKOUT" | "ON_PERMISSION_ACCEPT";
         lastAddedId?:   string;
         silent?:        boolean;
         categoryIntro?: { name: string; description: string };
@@ -1245,8 +1245,8 @@ export function PedidoClient({
     greetedRef.current = true;
     const name = identifiedName;
     const greeting = name
-      ? `Olá, ${name}! Como vai? 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo.`
-      : `Olá! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo.`;
+      ? `Bem-vindo, ${name}! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`
+      : `Bem-vindo! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`;
     setMessages((prev) => [
       ...prev,
       {
@@ -1455,23 +1455,8 @@ export function PedidoClient({
 
   const handlePermissionAccept = useCallback(() => {
     setAiPermState("consultive");
-    setGuidedMode(true);
-    guidedStepRef.current = "size";
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: uid(),
-        role: "assistant" as const,
-        content: "Para quantas pessoas é o pedido? 😊",
-        ts: new Date(),
-        options: [
-          { label: "Só eu",          value: "solo"        },
-          { label: "2 a 3 pessoas",  value: "small_group" },
-          { label: "4 ou mais",      value: "large_group" },
-        ] satisfies WaiterOption[],
-      },
-    ]);
-  }, []);
+    void sendText("", cart, stage, null, { event: "ON_PERMISSION_ACCEPT", silent: true });
+  }, [cart, stage, sendText]);
 
   const handlePermissionDecline = useCallback(() => {
     setAiPermState("silent");
@@ -1480,13 +1465,10 @@ export function PedidoClient({
   }, [pushAssistantMessage]);
 
   // ── Option button handler ─────────────────────────────────────────
-  // Receives the button VALUE (not label). Routes to guided step or API.
+  // Receives the button VALUE (not label). Routes to specific handler or API.
   const handleOptionSelect = useCallback(
     (value: string) => {
       if (ui === "thinking") return;
-
-      // Guided mode intercepts all taps to advance the step sequence.
-      if (guidedMode) { void handleGuidedStep(value); return; }
 
       // "see_other" → clear product grid, return to browsing.
       if (value === "see_other") { setSuggestedProducts([]); return; }
@@ -1501,11 +1483,19 @@ export function PedidoClient({
         return;
       }
 
+      // "continue_browsing" → dismiss suggestion, apply cooldown.
+      if (value === "continue_browsing") {
+        setSuggestedProducts([]);
+        setAiPermState("silent");
+        silentUntilRef.current = Date.now() + SILENT_COOLDOWN_MS;
+        return;
+      }
+
       // All other values (qualification, custom choices) → send to API.
       setSuggestedProducts([]);
       sendText(value, cart, stage, activeUpsell);
     },
-    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, guidedMode, handleGuidedStep],
+    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd],
   );
 
   // ── Checkout permission handlers ──────────────────────────────────
@@ -2172,7 +2162,7 @@ export function PedidoClient({
             <div className="flex justify-start">
               <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3">
                 <p className="text-sm text-gray-900 mb-3 leading-relaxed">
-                  Posso te sugerir algo que combina com o que você está vendo? 👇
+                  Posso te sugerir algo que combine com o que você está vendo? 👇
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -2198,9 +2188,7 @@ export function PedidoClient({
             <div className="flex justify-start">
               <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3">
                 <p className="text-sm text-gray-900 mb-3 leading-relaxed">
-                  {checkoutPromptType === "drink"
-                    ? "Antes de finalizar, posso sugerir uma bebida para acompanhar? 👇"
-                    : "Que tal uma sobremesa para fechar com chave de ouro? 👇"}
+                  Antes de finalizar, quer ver uma bebida ou sobremesa? 👇
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -2208,13 +2196,13 @@ export function PedidoClient({
                     className="flex-1 rounded-xl py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
                     style={{ backgroundColor: 'var(--brand-primary)' }}
                   >
-                    Ver sugestão ✨
+                    Ver opções ✨
                   </button>
                   <button
                     onClick={handleCheckoutPermDecline}
                     className="flex-1 rounded-xl py-2 text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
                   >
-                    Finalizar agora
+                    Não, finalizar
                   </button>
                 </div>
               </div>

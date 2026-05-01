@@ -316,7 +316,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   return {
     reply:             finalResponse || "Desculpe, não consegui processar sua mensagem. 😅",
     cards:             aiCards,
-    mode:              aiCards.length > 0 ? "SUGGESTION" : v2.mode,
+    mode:              aiCards.length > 0 && v2.mode === "BROWSE" ? "SUGGESTION" : v2.mode,
     options:           v2.options,
     suggestedItemName,
   };

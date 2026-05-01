@@ -19,14 +19,15 @@ import { isDessertCategory } from "./ConversationGuardrails";
 /**
  * Events emitted by the UI to drive WaiterBrainV2 decisions.
  *
- * ON_ENTRY           — customer opened the ordering page
- * ON_MENU_MODE       — customer chose "Ver cardápio" (passive browsing)
- * ON_USER_MESSAGE    — customer sent a free-text message (requires AI)
- * ON_ITEM_ADDED      — customer added an item to the cart
- * ON_CART_UPDATED    — cart now has 2+ items (upgrade/drink window opens)
- * ON_IDLE            — customer has been inactive; show best sellers
- * ON_CHECKOUT_STARTED — customer tapped "Finalizar pedido"
- * AFTER_CHECKOUT     — order confirmed; only answer status/logistics questions
+ * ON_ENTRY             — customer opened the ordering page
+ * ON_MENU_MODE         — customer chose "Ver cardápio" (passive browsing)
+ * ON_USER_MESSAGE      — customer sent a free-text message (requires AI)
+ * ON_ITEM_ADDED        — customer added an item to the cart
+ * ON_CART_UPDATED      — cart now has 2+ items (upgrade/drink window opens)
+ * ON_IDLE              — customer has been inactive; show best sellers
+ * ON_CHECKOUT_STARTED  — customer tapped "Finalizar pedido"
+ * AFTER_CHECKOUT       — order confirmed; only answer status/logistics questions
+ * ON_PERMISSION_ACCEPT — customer accepted the suggestion prompt (INTERVENTION mode)
  */
 export type V2Event =
   | "ON_ENTRY"
@@ -36,7 +37,8 @@ export type V2Event =
   | "ON_CART_UPDATED"
   | "ON_IDLE"
   | "ON_CHECKOUT_STARTED"
-  | "AFTER_CHECKOUT";
+  | "AFTER_CHECKOUT"
+  | "ON_PERMISSION_ACCEPT";
 
 /** Flat product descriptor used for card selection (no full MenuItem needed). */
 export interface V2CatalogItem {
@@ -277,12 +279,11 @@ function handleMenuMode(): V2Output {
   };
 }
 
-function handleItemAdded(input: V2Input): V2Output {
-  const cards = complementaryFood(input.catalog, input.lastAddedId, input.cartItemIds);
+function handleItemAdded(): V2Output {
   return {
-    message:     cards.length > 0 ? "Boa escolha 🔥\nEsse aqui combina muito bem 👇" : "Boa escolha! 🔥",
-    cards,
-    mode:        cards.length > 0 ? "SUGGESTION" : "BROWSE",
+    message:     "Escolha certeira 👌",
+    cards:       [],
+    mode:        "BROWSE",
     options:     [],
     requiresAI:  false,
     aiDirective: "",
@@ -326,6 +327,33 @@ function handleCheckoutStarted(): V2Output {
     options:     [],
     requiresAI:  false,
     aiDirective: "",
+  };
+}
+
+function buildInterventionDirective(): string {
+  return [
+    BASE_DIRECTIVE,
+    "",
+    "CONTEXTO: cliente aceitou receber sugestões ativas (INTERVENTION mode).",
+    "COMPORTAMENTO: SUGERIR (grade de sugestões — 2 a 3 itens variados)",
+    "",
+    "OBRIGATÓRIO NESTE TURNO:",
+    '  → 1 frase de abertura curta: ex. "Separei algumas opções pra você 👇"',
+    "  → Chame suggest_upsell 2 a 3 vezes — cada call com um produto diferente.",
+    "  → NUNCA apenas 1 suggest_upsell — SEMPRE 2 a 3 calls neste turno.",
+    "  → Varie as categorias quando possível.",
+    "  → PROIBIDO fazer perguntas.",
+  ].join("\n");
+}
+
+function handleInterventionRequest(): V2Output {
+  return {
+    message:     "",
+    cards:       [],
+    mode:        "INTERVENTION",
+    options:     [],
+    requiresAI:  true,
+    aiDirective: buildInterventionDirective(),
   };
 }
 
@@ -374,13 +402,14 @@ function handleUserMessage(input: V2Input): V2Output {
 
 export function decide(input: V2Input): V2Output {
   switch (input.event) {
-    case "ON_ENTRY":           return handleEntry();
-    case "ON_MENU_MODE":       return handleMenuMode();
-    case "ON_ITEM_ADDED":      return handleItemAdded(input);
-    case "ON_CART_UPDATED":    return handleCartUpdated(input);
-    case "ON_IDLE":            return handleIdle(input);
+    case "ON_ENTRY":            return handleEntry();
+    case "ON_MENU_MODE":        return handleMenuMode();
+    case "ON_ITEM_ADDED":       return handleItemAdded();
+    case "ON_CART_UPDATED":     return handleCartUpdated(input);
+    case "ON_IDLE":             return handleIdle(input);
     case "ON_CHECKOUT_STARTED": return handleCheckoutStarted();
-    case "AFTER_CHECKOUT":     return handleAfterCheckout();
-    case "ON_USER_MESSAGE":    return handleUserMessage(input);
+    case "AFTER_CHECKOUT":      return handleAfterCheckout();
+    case "ON_USER_MESSAGE":     return handleUserMessage(input);
+    case "ON_PERMISSION_ACCEPT": return handleInterventionRequest();
   }
 }
