@@ -54,7 +54,7 @@
     "eslint-config-next": "14.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.3",
-    "vitest": "^4.1.5"
+    "vitest": "^2.1.9"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
