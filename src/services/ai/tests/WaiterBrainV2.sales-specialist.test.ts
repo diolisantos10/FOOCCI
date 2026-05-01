@@ -650,7 +650,7 @@ describe("S12 — Restaurant-agnostic behaviour", () => {
   });
 
   it.each(catalogs)("%s — ON_ITEM_ADDED always returns cards=[], options=[]", (_name, catalog) => {
-    const firstItem = catalog[0];
+    const firstItem = catalog[0]!;
     const out = decide(makeInput("ON_ITEM_ADDED", { catalog, lastAddedId: firstItem.id }));
     expect(out.cards).toHaveLength(0);
     expect(out.options).toHaveLength(0);
