@@ -36,6 +36,8 @@ import {
   type PriceBenchmarks,
   type CommercialResponseInput,
   type WaiterMemory,
+  type WaiterSalesConfig,
+  DEFAULT_WAITER_CONFIG,
 } from "../WaiterBrainV2";
 
 // ── Shared catalog fixtures ───────────────────────────────────────────────────
@@ -1766,5 +1768,207 @@ describe("Sprint 4F: memory patch for checkout upsell", () => {
     const turn3 = decide(makeInput("ON_CHECKOUT_STARTED", { cartItemIds: ["s1"], cartValue: 22, catalog, memory }));
     expect(turn3.mode).toBe("CHECKOUT_SUPPORT");
     expect(turn3.options.some((o) => o.value === "see_final_suggestions")).toBe(false);
+  });
+});
+
+// ─── Section 23: WaiterSalesConfig (Sprint 4G) ───────────────────────────────
+
+describe("23 — WaiterSalesConfig", () => {
+
+  // ── A) DEFAULT_WAITER_CONFIG shape ──────────────────────────────────────────
+
+  it("A1) DEFAULT_WAITER_CONFIG has all required fields with correct types", () => {
+    expect(DEFAULT_WAITER_CONFIG).toMatchObject({
+      interactionLevel:                    expect.stringMatching(/^(low|medium|high)$/),
+      upsellStyle:                         expect.stringMatching(/^(subtle|balanced|aggressive)$/),
+      permissionRequiredBeforeSuggestions: expect.any(Boolean),
+      allowIdlePrompt:                     expect.any(Boolean),
+      allowFinalUpsellPrompt:              expect.any(Boolean),
+      maxPermissionPromptsPerSession:      expect.any(Number),
+      tone:                                expect.stringMatching(/^(traditional|premium|young|fast)$/),
+    });
+  });
+
+  it("A2) DEFAULT_WAITER_CONFIG defaults to medium/balanced/traditional", () => {
+    expect(DEFAULT_WAITER_CONFIG.interactionLevel).toBe("medium");
+    expect(DEFAULT_WAITER_CONFIG.upsellStyle).toBe("balanced");
+    expect(DEFAULT_WAITER_CONFIG.tone).toBe("traditional");
+    expect(DEFAULT_WAITER_CONFIG.permissionRequiredBeforeSuggestions).toBe(true);
+    expect(DEFAULT_WAITER_CONFIG.allowIdlePrompt).toBe(true);
+    expect(DEFAULT_WAITER_CONFIG.allowFinalUpsellPrompt).toBe(true);
+    expect(DEFAULT_WAITER_CONFIG.maxPermissionPromptsPerSession).toBe(2);
+  });
+
+  // ── B) allowIdlePrompt = false ───────────────────────────────────────────────
+
+  it("B1) allowIdlePrompt = false → ON_IDLE returns silent (no message, no options)", () => {
+    const catalog = makeSushiCatalog();
+    const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, allowIdlePrompt: false };
+    const out = decide(makeInput("ON_IDLE", { catalog, config }));
+    expect(out.message).toBe("");
+    expect(out.options).toHaveLength(0);
+    expect(out.cards).toHaveLength(0);
+  });
+
+  it("B2) allowIdlePrompt = true (default) → ON_IDLE shows permission prompt", () => {
+    const catalog = makeSushiCatalog();
+    const out = decide(makeInput("ON_IDLE", { catalog }));
+    expect(out.options.some((o) => o.value === "want_suggestion")).toBe(true);
+  });
+
+  // ── C) maxPermissionPromptsPerSession ────────────────────────────────────────
+
+  it("C1) maxPermissionPromptsPerSession = 1 → silenced after one prompt", () => {
+    const catalog = makeSushiCatalog();
+    const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, maxPermissionPromptsPerSession: 1 };
+    let memory = createWaiterMemory();
+
+    // First idle → prompt shown; increment promptCount
+    const out1 = decide(makeInput("ON_IDLE", { catalog, config, memory }));
+    memory = { ...memory, ...out1.memoryPatch };
+    expect(out1.options.some((o) => o.value === "want_suggestion")).toBe(true);
+
+    // Second idle → must be silent (promptCount = 1 >= limit 1)
+    const out2 = decide(makeInput("ON_IDLE", { catalog, config, memory }));
+    expect(out2.message).toBe("");
+    expect(out2.options).toHaveLength(0);
+  });
+
+  it("C2) maxPermissionPromptsPerSession = 3 → allows three prompts", () => {
+    const catalog = makeSushiCatalog();
+    const config: WaiterSalesConfig = {
+      ...DEFAULT_WAITER_CONFIG,
+      maxPermissionPromptsPerSession: 3,
+      interactionLevel: "high", // short cooldown so we can test without mocking Date.now
+    };
+    let memory = createWaiterMemory();
+
+    for (let i = 0; i < 3; i++) {
+      const out = decide(makeInput("ON_IDLE", { catalog, config, memory }));
+      expect(out.options.some((o) => o.value === "want_suggestion")).toBe(true);
+      memory = { ...memory, ...out.memoryPatch };
+    }
+
+    // 4th → silent
+    const out4 = decide(makeInput("ON_IDLE", { catalog, config, memory }));
+    expect(out4.message).toBe("");
+  });
+
+  // ── D) permissionRequiredBeforeSuggestions = false ──────────────────────────
+
+  it("D1) permissionRequiredBeforeSuggestions = false → ON_IDLE returns qualification question directly", () => {
+    const catalog = makeSushiCatalog();
+    const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, permissionRequiredBeforeSuggestions: false };
+    const out = decide(makeInput("ON_IDLE", { catalog, config }));
+    // Must be the qualification question (no "want_suggestion" permission button)
+    expect(out.options.some((o) => o.value === "want_suggestion")).toBe(false);
+    expect(out.options.some((o) => o.value === "light" || o.value === "complete")).toBe(true);
+  });
+
+  // ── E) allowFinalUpsellPrompt = false ────────────────────────────────────────
+
+  it("E1) allowFinalUpsellPrompt = false → ON_CHECKOUT_STARTED skips upsell and goes straight to checkout message", () => {
+    const catalog = makeSushiCatalog();
+    const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, allowFinalUpsellPrompt: false };
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", { cartItemIds: ["s1"], cartValue: 22, catalog, config }));
+    expect(out.mode).toBe("CHECKOUT_SUPPORT");
+    expect(out.options.some((o) => o.value === "see_final_suggestions")).toBe(false);
+  });
+
+  it("E2) allowFinalUpsellPrompt = true (default) → ON_CHECKOUT_STARTED shows upsell when applicable", () => {
+    const catalog = makeSushiCatalog();
+    // s1 is food-only cart, so drink/dessert upsell should trigger
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", { cartItemIds: ["s1"], cartValue: 22, catalog }));
+    expect(out.mode).toBe("INTERVENTION");
+    expect(out.options.some((o) => o.value === "see_final_suggestions")).toBe(true);
+  });
+
+  // ── F) upsellStyle copy variants ─────────────────────────────────────────────
+
+  it("F1) upsellStyle = 'balanced' → buildCommercialResponse uses INTENT_COPY (default map)", () => {
+    const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, upsellStyle: "balanced" };
+    const result = buildCommercialResponse(
+      { intent: "asks_for_drink", selectedProducts: ["s4"], mode: "SUGGESTION" },
+      config,
+    );
+    expect(result.message).toBe("Pra acompanhar, essas bebidas funcionam bem 👇");
+  });
+
+  it("F2) upsellStyle = 'subtle' → buildCommercialResponse uses SUBTLE_COPY override", () => {
+    const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, upsellStyle: "subtle" };
+    const result = buildCommercialResponse(
+      { intent: "asks_for_drink", selectedProducts: ["s4"], mode: "SUGGESTION" },
+      config,
+    );
+    expect(result.message).toBe("Para acompanhar, essas são as opções disponíveis 👇");
+  });
+
+  it("F3) upsellStyle = 'aggressive' → buildCommercialResponse uses AGGRESSIVE_COPY override", () => {
+    const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, upsellStyle: "aggressive" };
+    const result = buildCommercialResponse(
+      { intent: "asks_for_drink", selectedProducts: ["s4"], mode: "SUGGESTION" },
+      config,
+    );
+    expect(result.message).toBe("Essas bebidas vão completar seu pedido 👇");
+  });
+
+  it("F4) subtle intent without override falls back to INTENT_COPY default", () => {
+    const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, upsellStyle: "subtle" };
+    // "wants_recommendation" is not in SUBTLE_COPY so should use INTENT_COPY fallback
+    const result = buildCommercialResponse(
+      { intent: "wants_recommendation", selectedProducts: ["s1"], mode: "SUGGESTION" },
+      config,
+    );
+    expect(result.message).toBe("Separei boas opções pra você 👇");
+  });
+
+  // ── G) config threads through decide() → handleUserMessage ──────────────────
+
+  it("G1) config.upsellStyle = 'subtle' threads into decide ON_USER_MESSAGE response", () => {
+    const catalog = makeSushiCatalog();
+    const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, upsellStyle: "subtle" };
+    const out = decide(makeInput("ON_USER_MESSAGE", {
+      message:    "quero uma bebida",
+      catalog,
+      cartItemIds: [],
+      config,
+    }));
+    // Should use subtle copy for asks_for_drink
+    if (out.cards.length > 0) {
+      expect(out.message).toBe("Para acompanhar, essas são as opções disponíveis 👇");
+    }
+  });
+
+  it("G2) config.upsellStyle = 'aggressive' threads into decide ON_USER_MESSAGE response", () => {
+    const catalog = makeSushiCatalog();
+    const config: WaiterSalesConfig = { ...DEFAULT_WAITER_CONFIG, upsellStyle: "aggressive" };
+    const out = decide(makeInput("ON_USER_MESSAGE", {
+      message:    "quero uma bebida",
+      catalog,
+      cartItemIds: [],
+      config,
+    }));
+    if (out.cards.length > 0) {
+      expect(out.message).toBe("Essas bebidas vão completar seu pedido 👇");
+    }
+  });
+
+  // ── H) config is optional — omitting it uses DEFAULT_WAITER_CONFIG ───────────
+
+  it("H1) no config in V2Input → decide behaves identically to passing DEFAULT_WAITER_CONFIG", () => {
+    const catalog = makeSushiCatalog();
+    const withoutConfig = decide(makeInput("ON_IDLE", { catalog }));
+    const withConfig    = decide(makeInput("ON_IDLE", { catalog, config: DEFAULT_WAITER_CONFIG }));
+    expect(withoutConfig.message).toBe(withConfig.message);
+    expect(withoutConfig.mode).toBe(withConfig.mode);
+    expect(withoutConfig.options).toEqual(withConfig.options);
+  });
+
+  it("H2) no config → buildCommercialResponse called without config uses DEFAULT_WAITER_CONFIG (balanced copy)", () => {
+    const result = buildCommercialResponse(
+      { intent: "asks_for_dessert", selectedProducts: ["s5"], mode: "SUGGESTION" },
+    );
+    // balanced → INTENT_COPY
+    expect(result.message).toBe("Pra fechar com doce, essas são boas escolhas 👇");
   });
 });

@@ -84,6 +84,63 @@ export function createWaiterMemory(): WaiterMemory {
   };
 }
 
+// ─── waiter sales config ──────────────────────────────────────
+
+/** Configures Sales Specialist Agent behavior per restaurant. */
+export type WaiterSalesConfig = {
+  interactionLevel:                    "low" | "medium" | "high";
+  upsellStyle:                         "subtle" | "balanced" | "aggressive";
+  permissionRequiredBeforeSuggestions: boolean;
+  allowIdlePrompt:                     boolean;
+  allowFinalUpsellPrompt:              boolean;
+  maxPermissionPromptsPerSession:      number;
+  tone:                                "traditional" | "premium" | "young" | "fast";
+};
+
+/**
+ * Default hardcoded config — medium/balanced behavior.
+ * Future Agents panel will replace this with a per-restaurant value from DB.
+ */
+export const DEFAULT_WAITER_CONFIG: WaiterSalesConfig = {
+  interactionLevel:                    "medium",
+  upsellStyle:                         "balanced",
+  permissionRequiredBeforeSuggestions: true,
+  allowIdlePrompt:                     true,
+  allowFinalUpsellPrompt:              true,
+  maxPermissionPromptsPerSession:      2,
+  tone:                                "traditional",
+};
+
+// Cooldown duration per interaction level
+const COOLDOWN_BY_LEVEL: Record<WaiterSalesConfig["interactionLevel"], number> = {
+  low:    15 * 60 * 1000,  // 15 min — less intrusive
+  medium:  5 * 60 * 1000,  // 5 min  — balanced (current default)
+  high:    2 * 60 * 1000,  // 2 min  — more responsive
+};
+
+// Upsell-style copy overrides (balanced uses INTENT_COPY defaults)
+const SUBTLE_COPY: Partial<Record<CustomerIntent, string>> = {
+  wants_light_option:   "Se preferir algo mais leve, essas podem funcionar 👇",
+  wants_complete_meal:  "Para uma refeição mais completa, essas são opções 👇",
+  wants_group_order:    "Para dividir, essas opções podem funcionar 👇",
+  wants_budget_option:  "Temos opções com bom custo-benefício 👇",
+  wants_premium_option: "Temos algumas opções diferenciadas, se quiser ver 👇",
+  asks_for_drink:       "Para acompanhar, essas são as opções disponíveis 👇",
+  asks_for_dessert:     "Para finalizar, temos essas opções de sobremesa 👇",
+  asks_for_pairing:     "Para complementar, essas podem combinar 👇",
+};
+
+const AGGRESSIVE_COPY: Partial<Record<CustomerIntent, string>> = {
+  wants_light_option:   "Pra algo mais leve — essas são as melhores escolhas 👇",
+  wants_complete_meal:  "Pra uma refeição completa — essas são perfeitas 👇",
+  wants_group_order:    "Pra compartilhar — não tem como errar nessas 👇",
+  wants_budget_option:  "Melhor custo-benefício da casa — garantido 👇",
+  wants_premium_option: "Experiência premium — você vai adorar 👇",
+  asks_for_drink:       "Essas bebidas vão completar seu pedido 👇",
+  asks_for_dessert:     "Sobremesas que valem muito a pena 👇",
+  asks_for_pairing:     "Combinação perfeita para o seu pedido 👇",
+};
+
 export interface V2Input {
   event:        V2Event;
   cartItemIds:  string[];    // IDs of items currently in cart
@@ -91,7 +148,8 @@ export interface V2Input {
   lastAddedId?: string;      // for ON_ITEM_ADDED: the item just added
   catalog:      V2CatalogItem[];
   message?:     string;      // raw user message (for intent detection)
-  memory?:      WaiterMemory; // current session memory — client passes this in
+  memory?:      WaiterMemory;    // current session memory — client passes this in
+  config?:      WaiterSalesConfig; // optional per-restaurant config override
 }
 
 /** Rendering mode returned to the client so the UI knows how to behave. */
@@ -1240,11 +1298,18 @@ function handleCartUpdated(input: V2Input): V2Output {
 }
 
 function handleIdle(input: V2Input): V2Output {
+  const cfg = input.config ?? DEFAULT_WAITER_CONFIG;
   const mem = input.memory;
-  // Respect max 2 prompts per session and cooldown after decline
-  if (mem && (mem.promptCount >= 2 || isPermissionCooldownActive(mem))) {
-    return { message: "", cards: [], mode: "BROWSE", options: [], requiresAI: false, aiDirective: "" };
+  const silent: V2Output = { message: "", cards: [], mode: "BROWSE", options: [], requiresAI: false, aiDirective: "" };
+
+  if (!cfg.allowIdlePrompt) return silent;
+  if (mem && (mem.promptCount >= cfg.maxPermissionPromptsPerSession || isPermissionCooldownActive(mem, cfg))) return silent;
+
+  // When permission is not required, skip the ask and return the qualification question directly.
+  if (!cfg.permissionRequiredBeforeSuggestions) {
+    return { ...QUAL_QUESTION };
   }
+
   // Ask permission before suggesting — never auto-push products on idle.
   return {
     message:     "Posso te sugerir algo que combine com o que você está vendo? 👇",
@@ -1260,11 +1325,12 @@ function handleIdle(input: V2Input): V2Output {
 }
 
 function handleCheckoutStarted(input: V2Input): V2Output {
+  const cfg = input.config ?? DEFAULT_WAITER_CONFIG;
   const mem = input.memory;
   const ca  = analyzeCart(input.cartItemIds, input.catalog);
 
-  // Skip final upsell if already shown or declined this session
-  const alreadyHandled = mem && (mem.finalUpsellPromptShown || mem.finalUpsellDeclined);
+  // Skip final upsell if config disables it, or if already shown/declined this session
+  const alreadyHandled = !cfg.allowFinalUpsellPrompt || (mem && (mem.finalUpsellPromptShown || mem.finalUpsellDeclined));
 
   // Check there is at least one non-cart drink or dessert available to suggest
   const hasComplementAvailable = input.catalog.some(
@@ -1435,24 +1501,41 @@ export interface CommercialResponseInput {
   confidence?:      number;
 }
 
+function getCopy(intent: CustomerIntent, config: WaiterSalesConfig): string {
+  const map =
+    config.upsellStyle === "subtle"     ? { ...INTENT_COPY, ...SUBTLE_COPY }     :
+    config.upsellStyle === "aggressive" ? { ...INTENT_COPY, ...AGGRESSIVE_COPY } :
+    INTENT_COPY;
+  return map[intent] ?? "Separei boas opções pra você 👇";
+}
+
 /**
  * Builds a concise, seller-tone message for a product suggestion.
  * Contract: cards present → options is always [] (no confirmation buttons).
+ * Pass config to apply tone/upsell-style overrides; defaults to DEFAULT_WAITER_CONFIG.
  */
 export function buildCommercialResponse(
   params: CommercialResponseInput,
+  config: WaiterSalesConfig = DEFAULT_WAITER_CONFIG,
 ): Pick<V2Output, "message" | "options" | "cards" | "mode"> {
   const { intent, selectedProducts, mode } = params;
-  const cards   = selectedProducts;
-  const message = INTENT_COPY[intent] ?? "Separei boas opções pra você 👇";
-  return { message, options: [], cards, mode };
+  const message = getCopy(intent, config);
+  return { message, options: [], cards: selectedProducts, mode };
 }
 
 function handleUserMessage(input: V2Input): V2Output {
+  const cfg          = input.config ?? DEFAULT_WAITER_CONFIG;
   const analysis     = analyzeSalesContext(input);
   const hasItems     = input.cartItemIds.length > 0;
   const { catalog, cartItemIds } = input;
   const suggestedIds = input.memory?.suggestedProductIds ?? [];
+
+  // Convenience wrapper — threads config to buildCommercialResponse for every deterministic path.
+  const suggest = (intent: CustomerIntent, cards: string[], mode: WaiterMode): V2Output => ({
+    ...buildCommercialResponse({ intent, selectedProducts: cards, mode }, cfg),
+    requiresAI:  false,
+    aiDirective: "",
+  });
 
   // ── Special path: pre-checkout "Ver opções" button ─────────────────────────
   // Priority: missing drink → drinks; missing dessert → desserts; else pairing.
@@ -1480,48 +1563,48 @@ function handleUserMessage(input: V2Input): V2Output {
   switch (analysis.customerIntent) {
     case "wants_light_option": {
       const cards = rankProducts(catalog, "wants_light_option", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_light_option", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return suggest("wants_light_option", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "wants_complete_meal": {
       const cards = rankProducts(catalog, "wants_complete_meal", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_complete_meal", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return suggest("wants_complete_meal", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "wants_group_order": {
       const cards = rankProducts(catalog, "wants_group_order", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_group_order", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return suggest("wants_group_order", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "wants_budget_option": {
       const cards = rankProducts(catalog, "wants_budget_option", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_budget_option", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return suggest("wants_budget_option", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "wants_premium_option": {
       const cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_premium_option", selectedProducts: cards, mode: "INTERVENTION" }), requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return suggest("wants_premium_option", cards, "INTERVENTION");
       return noCardsFound();
     }
     case "asks_for_dessert": {
       const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_for_dessert", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return suggest("asks_for_dessert", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "asks_for_drink": {
       const cards = rankProducts(catalog, "asks_for_drink", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_for_drink", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return suggest("asks_for_drink", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "asks_for_pairing": {
       const cards = rankProducts(catalog, "asks_for_pairing", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_for_pairing", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return suggest("asks_for_pairing", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "asks_specific_product": {
       const msg = (input.message ?? "").toLowerCase();
       const hit = catalog.find((i) => i.name.length >= 4 && msg.includes(i.name.toLowerCase()) && !cartItemIds.includes(i.id));
-      if (hit) return { ...buildCommercialResponse({ intent: "asks_specific_product", selectedProducts: [hit.id], mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+      if (hit) return suggest("asks_specific_product", [hit.id], "SUGGESTION");
       break;
     }
     case "asks_category": {
@@ -1534,7 +1617,7 @@ function handleUserMessage(input: V2Input): V2Output {
           .sort(bySort)
           .slice(0, 3)
           .map((i) => i.id);
-        if (cards.length > 0) return { ...buildCommercialResponse({ intent: "asks_category", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+        if (cards.length > 0) return suggest("asks_category", cards, "SUGGESTION");
       }
       break;
     }
@@ -1546,7 +1629,7 @@ function handleUserMessage(input: V2Input): V2Output {
     case "wants_recommendation": {
       if (!hasItems) return { ...QUAL_QUESTION };
       const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) return { ...buildCommercialResponse({ intent: "wants_recommendation", selectedProducts: cards, mode: "SUGGESTION" }), requiresAI: false, aiDirective: "" };
+      if (cards.length > 0) return suggest("wants_recommendation", cards, "SUGGESTION");
       break;
     }
     case "checkout_intent": {
@@ -1715,12 +1798,12 @@ export function validateWaiterResponse(
 
 // ─── session memory helpers ───────────────────────────────────
 
-/** 5-minute cooldown after a permission decline. */
-const PERMISSION_COOLDOWN_MS = 5 * 60 * 1000;
-
-function isPermissionCooldownActive(mem: WaiterMemory): boolean {
+function isPermissionCooldownActive(
+  mem:    WaiterMemory,
+  config: WaiterSalesConfig = DEFAULT_WAITER_CONFIG,
+): boolean {
   if (mem.permissionDeclinedAt === null) return false;
-  return Date.now() - mem.permissionDeclinedAt < PERMISSION_COOLDOWN_MS;
+  return Date.now() - mem.permissionDeclinedAt < COOLDOWN_BY_LEVEL[config.interactionLevel];
 }
 
 /**
