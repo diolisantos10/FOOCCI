@@ -220,16 +220,18 @@ describe("CHECKOUT_SUPPORT guard", () => {
     expect(out.mode).toBe("CHECKOUT_SUPPORT");
   });
 
-  it("ON_CHECKOUT_STARTED always returns no cards regardless of cart state", () => {
+  it("ON_CHECKOUT_STARTED with food+no drink → pre-checkout upsell offer (INTERVENTION, cards=[])", () => {
     const catalog = makeSushiCatalog();
     const out = decide(makeInput("ON_CHECKOUT_STARTED", {
-      cartItemIds: ["s1", "s2"],
+      cartItemIds: ["s1", "s2"], // two food items, no drink
       cartValue:   50,
       catalog,
     }));
-    // Checkout events must never push product cards at the customer
+    // cards are always [] — never push cards at checkout start
     expect(out.cards).toHaveLength(0);
-    expect(out.mode).toBe("CHECKOUT_SUPPORT");
+    // Spec: if opportunity exists, offer it as INTERVENTION permission prompt
+    expect(out.mode).toBe("INTERVENTION");
+    expect(out.options.length).toBeGreaterThan(0);
   });
 });
 
@@ -787,8 +789,9 @@ describe("Acceptance tests — Sales Specialist Agent", () => {
     expect(out.cards).not.toContain("s1"); // must not suggest an already-carted item
   });
 
-  it("G) during checkout → cards=[], mode=CHECKOUT_SUPPORT", () => {
-    const out = decide(makeInput("ON_CHECKOUT_STARTED", { cartItemIds: ["s1", "s2"] }));
+  it("G) during checkout with empty cart → cards=[], mode=CHECKOUT_SUPPORT", () => {
+    // Empty cart: no upsell opportunity → straight to checkout
+    const out = decide(makeInput("ON_CHECKOUT_STARTED"));
     expect(out.cards).toHaveLength(0);
     expect(out.mode).toBe("CHECKOUT_SUPPORT");
   });
@@ -821,5 +824,134 @@ describe("Acceptance tests — Sales Specialist Agent", () => {
     ));
     expect(out.cards.length).toBeGreaterThan(0);
     expect(out.mode).toBe("SUGGESTION");
+  });
+});
+
+// ── 18. Sprint 4B — event wiring ──────────────────────────────────────────────
+
+describe("Sprint 4B — event wiring", () => {
+  // ── ON_IDLE ───────────────────────────────────────────────────
+
+  it("ON_IDLE → permission prompt with two buttons (no product cards)", () => {
+    const out = decide(makeInput("ON_IDLE"));
+    expect(out.cards).toHaveLength(0);
+    expect(out.mode).toBe("BROWSE");
+    const values = out.options.map((o) => o.value);
+    expect(values).toContain("want_suggestion");
+    expect(values).toContain("continue_browsing");
+  });
+
+  it("ON_IDLE → never auto-shows product cards", () => {
+    // Even with a full catalog the Waiter should ask before pushing products
+    const out = decide(makeInput("ON_IDLE", {}, makeBurgerCatalog()));
+    expect(out.cards).toHaveLength(0);
+  });
+
+  // ── ON_PERMISSION_DECLINED ────────────────────────────────────
+
+  it("ON_PERMISSION_DECLINED → BROWSE mode, no cards, no options", () => {
+    const out = decide(makeInput("ON_PERMISSION_DECLINED"));
+    expect(out.mode).toBe("BROWSE");
+    expect(out.cards).toHaveLength(0);
+    expect(out.options).toHaveLength(0);
+  });
+
+  it("ON_PERMISSION_DECLINED → acknowledgment message present", () => {
+    const out = decide(makeInput("ON_PERMISSION_DECLINED"));
+    expect(out.message.length).toBeGreaterThan(0);
+  });
+
+  // ── ON_PERMISSION_ACCEPT (deterministic path) ─────────────────
+
+  it("ON_PERMISSION_ACCEPT with empty cart → qualification buttons (3 options)", () => {
+    const out = decide(makeInput("ON_PERMISSION_ACCEPT"));
+    expect(out.cards).toHaveLength(0);
+    const values = out.options.map((o) => o.value);
+    expect(values).toContain("light");
+    expect(values).toContain("complete");
+    expect(values).toContain("group");
+  });
+
+  it("ON_PERMISSION_ACCEPT with food+no drink → deterministic drink cards (no AI)", () => {
+    const catalog = makeSushiCatalog();
+    const out     = decide(makeInput("ON_PERMISSION_ACCEPT", {
+      cartItemIds: ["s1"],
+      catalog,
+    }));
+    // Cart has food, no drink → context-aware recommendation returns drinks or other items
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("INTERVENTION");
+    expect(out.requiresAI).toBe(false); // deterministic path
+  });
+
+  it("ON_PERMISSION_ACCEPT — returned card IDs exist in catalog", () => {
+    const catalog = makeBurgerCatalog();
+    const out     = decide(makeInput("ON_PERMISSION_ACCEPT", {
+      cartItemIds: ["b1"],
+      catalog,
+    }));
+    const validIds = new Set(catalog.map((i) => i.id));
+    out.cards.forEach((id) => expect(validIds.has(id)).toBe(true));
+  });
+
+  // ── ON_CHECKOUT_STARTED ───────────────────────────────────────
+
+  it("ON_CHECKOUT_STARTED with empty cart → CHECKOUT_SUPPORT immediately", () => {
+    const out = decide(makeInput("ON_CHECKOUT_STARTED"));
+    expect(out.cards).toHaveLength(0);
+    expect(out.mode).toBe("CHECKOUT_SUPPORT");
+    expect(out.options).toHaveLength(0);
+  });
+
+  it("ON_CHECKOUT_STARTED with complete cart (food+drink+dessert) → CHECKOUT_SUPPORT", () => {
+    const catalog = makeSushiCatalog();
+    // s1=food, s4=drink, s5=dessert → cart is complete, no opportunity
+    const out = decide(makeInput("ON_CHECKOUT_STARTED", {
+      cartItemIds: ["s1", "s4", "s5"],
+      catalog,
+    }));
+    expect(out.cards).toHaveLength(0);
+    expect(out.mode).toBe("CHECKOUT_SUPPORT");
+  });
+
+  it("ON_CHECKOUT_STARTED with food+drink but no dessert → pre-checkout offer", () => {
+    const catalog = makeSushiCatalog();
+    const out     = decide(makeInput("ON_CHECKOUT_STARTED", {
+      cartItemIds: ["s1", "s4"], // food + drink, no dessert
+      catalog,
+    }));
+    expect(out.cards).toHaveLength(0);
+    expect(out.mode).toBe("INTERVENTION");
+    const values = out.options.map((o) => o.value);
+    expect(values).toContain("see_final_suggestions");
+    expect(values).toContain("continue_checkout");
+  });
+
+  // ── ON_USER_MESSAGE — "Para compartilhar" button ──────────────
+
+  it("'me sugere algo' with empty cart → 3 qualification buttons (Leve/Completo/Para compartilhar)", () => {
+    const out = decide(makeInput("ON_USER_MESSAGE", { message: "me sugere algo" }));
+    const values = out.options.map((o) => o.value);
+    expect(values).toContain("light");
+    expect(values).toContain("complete");
+    expect(values).toContain("group");
+  });
+
+  it("button value 'group' → triggers group/shareable cards", () => {
+    const catalog = makeBurgerCatalog();
+    const out     = decide(makeInput("ON_USER_MESSAGE", { message: "group", catalog }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.mode).toBe("SUGGESTION");
+  });
+
+  it("see_final_suggestions message → cart-aware pairing cards returned", () => {
+    const catalog = makeSushiCatalog();
+    const out     = decide(makeInput("ON_USER_MESSAGE", {
+      message:     "see_final_suggestions",
+      cartItemIds: ["s1"],
+      catalog,
+    }));
+    expect(out.cards.length).toBeGreaterThan(0);
+    expect(out.cards).not.toContain("s1"); // cart items not re-suggested
   });
 });

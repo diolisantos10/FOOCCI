@@ -38,7 +38,8 @@ export type V2Event =
   | "ON_IDLE"
   | "ON_CHECKOUT_STARTED"
   | "AFTER_CHECKOUT"
-  | "ON_PERMISSION_ACCEPT";
+  | "ON_PERMISSION_ACCEPT"
+  | "ON_PERMISSION_DECLINED";
 
 /** Flat product descriptor used for card selection (no full MenuItem needed). */
 export interface V2CatalogItem {
@@ -131,7 +132,18 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
 
   // ── intent detection (deterministic keyword rules) ────────
 
-  if (/\b(família|familia|grupo|[2-9]\s*pessoas?)\b/i.test(msg)) {
+  // "group" — button value sent from qualification question
+  // "see_final_suggestions" — sent when user accepts pre-checkout upsell offer
+  if (msg === "see_final_suggestions") {
+    return {
+      customerIntent:   "asks_for_pairing",
+      salesOpportunity: "suggest_pairing",
+      confidence:       0.95,
+      reason:           "pre-checkout final-suggestions button value",
+    };
+  }
+
+  if (/\b(família|familia|grupo|[2-9]\s*pessoas?)\b|\bgroup\b|para\s*compartilhar/i.test(msg)) {
     return {
       customerIntent:   "wants_group_order",
       salesOpportunity: "suggest_group_combo",
@@ -1041,19 +1053,38 @@ function handleCartUpdated(input: V2Input): V2Output {
   };
 }
 
-function handleIdle(input: V2Input): V2Output {
-  const cards = topSellers(input.catalog, input.cartItemIds, 3);
+function handleIdle(): V2Output {
+  // Ask permission before suggesting — never auto-push products on idle.
   return {
-    message:     "Se quiser algo certeiro, esses são os mais pedidos 👇",
-    cards,
-    mode:        cards.length > 0 ? "SUGGESTION" : "BROWSE",
-    options:     [],
+    message:     "Posso te sugerir algo que combine com o que você está vendo? 👇",
+    cards:       [],
+    mode:        "BROWSE",
+    options:     [
+      { label: "Quero sugestão ✨", value: "want_suggestion" },
+      { label: "Prefiro continuar", value: "continue_browsing" },
+    ],
     requiresAI:  false,
     aiDirective: "",
   };
 }
 
-function handleCheckoutStarted(): V2Output {
+function handleCheckoutStarted(input: V2Input): V2Output {
+  // If cart has food but is missing a drink or dessert, offer one last upsell.
+  const ca = analyzeCart(input.cartItemIds, input.catalog);
+  if (ca.hasFood && (!ca.hasDrink || !ca.hasDessert)) {
+    return {
+      message:     "Antes de finalizar, quer ver uma bebida ou sobremesa? 👇",
+      cards:       [],
+      mode:        "INTERVENTION",
+      options:     [
+        { label: "Ver opções", value: "see_final_suggestions" },
+        { label: "Não, finalizar", value: "continue_checkout" },
+      ],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+  // No opportunity — proceed to checkout immediately.
   return {
     message:     "Perfeito 😊\nSe já estiver tudo certo, pode finalizar 👇",
     cards:       [],
@@ -1080,7 +1111,46 @@ function buildInterventionDirective(): string {
   ].join("\n");
 }
 
-function handleInterventionRequest(): V2Output {
+/**
+ * User accepted the passive permission prompt ("Quero sugestão ✨").
+ * Run the Sales Specialist Core as if user said "me sugere algo":
+ *   - Empty cart     → qualification buttons (Leve / Completo / Para compartilhar)
+ *   - Cart has items → context-aware suggestion cards (deterministic)
+ *   - Fallback       → AI pipeline for complex cases
+ */
+function handlePermissionAccepted(input: V2Input): V2Output {
+  const { catalog, cartItemIds } = input;
+  const hasItems = cartItemIds.length > 0;
+
+  if (!hasItems) {
+    return {
+      message:     "Prefere algo mais leve, completo ou para compartilhar?",
+      cards:       [],
+      mode:        "BROWSE",
+      options:     [
+        { label: "Leve", value: "light" },
+        { label: "Completo", value: "complete" },
+        { label: "Para compartilhar", value: "group" },
+      ],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
+  // Cart has items → context-aware deterministic recommendation
+  const cards = selectRecommendedItems(catalog, cartItemIds, 3);
+  if (cards.length > 0) {
+    return {
+      message:     "Separei algumas opções que combinam com o seu pedido 👇",
+      cards,
+      mode:        "INTERVENTION",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
+  // Fallback: AI pipeline
   return {
     message:     "",
     cards:       [],
@@ -1088,6 +1158,18 @@ function handleInterventionRequest(): V2Output {
     options:     [],
     requiresAI:  true,
     aiDirective: buildInterventionDirective(),
+  };
+}
+
+/** User declined ("Prefiro continuar") — silent acknowledgment, no products. */
+function handlePermissionDeclined(): V2Output {
+  return {
+    message:     "Perfeito 😊 fico por aqui se precisar.",
+    cards:       [],
+    mode:        "BROWSE",
+    options:     [],
+    requiresAI:  false,
+    aiDirective: "",
   };
 }
 
@@ -1112,6 +1194,20 @@ function noCardsFound(): V2Output {
     aiDirective: "",
   };
 }
+
+// Qualification question used when the Waiter needs to narrow down the customer's preference.
+const QUAL_QUESTION: Pick<V2Output, "message" | "options" | "cards" | "mode" | "requiresAI" | "aiDirective"> = {
+  message:     "Prefere algo mais leve, completo ou para compartilhar?",
+  options:     [
+    { label: "Leve", value: "light" },
+    { label: "Completo", value: "complete" },
+    { label: "Para compartilhar", value: "group" },
+  ],
+  cards:       [],
+  mode:        "BROWSE",
+  requiresAI:  false,
+  aiDirective: "",
+};
 
 function handleUserMessage(input: V2Input): V2Output {
   const analysis  = analyzeSalesContext(input);
@@ -1190,11 +1286,11 @@ function handleUserMessage(input: V2Input): V2Output {
     }
     case "unclear": {
       // Cart is empty → qualification buttons; cart has items → fall through to AI
-      if (!hasItems) return { message: "Prefere algo mais leve ou completo?", options: [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }], cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "" };
+      if (!hasItems) return { ...QUAL_QUESTION };
       break;
     }
     case "wants_recommendation": {
-      if (!hasItems) return { message: "Prefere algo mais leve ou completo?", options: [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }], cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "" };
+      if (!hasItems) return { ...QUAL_QUESTION };
       // Cart has items → context-aware recommendation
       const cards = selectRecommendedItems(catalog, cartItemIds, 3);
       if (cards.length > 0) return { message: "Aqui vai o que faz mais sentido pra você agora 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
@@ -1218,13 +1314,11 @@ function handleUserMessage(input: V2Input): V2Output {
   }
 
   // ── AI path for remaining intents ─────────────────────────────
-  // (wants_recommendation, price_sensitive, premium_experience,
-  //  asks_pairing, checkout_intent, restriction_based, unclear+cart)
   return {
     message:     "",
     cards:       [],
     mode:        "BROWSE",
-    options:     hasItems ? [] : [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }],
+    options:     hasItems ? [] : QUAL_QUESTION.options,
     requiresAI:  true,
     aiDirective: buildUserMessageDirective(input.cartItemIds, input.cartValue),
   };
@@ -1245,6 +1339,15 @@ const VALID_MODES = new Set<WaiterMode>(["BROWSE", "SUGGESTION", "INTERVENTION",
 
 // Unanswered choice questions → attach appropriate buttons automatically
 const QUESTION_BUTTON_PATTERNS: { re: RegExp; options: WaiterOption[] }[] = [
+  // 3-option pattern must come before the 2-option pattern (more specific first)
+  {
+    re: /leve.*completo.*compartilh|leve.*completo.*grupo/i,
+    options: [
+      { label: "Leve", value: "light" },
+      { label: "Completo", value: "complete" },
+      { label: "Para compartilhar", value: "group" },
+    ],
+  },
   {
     re: /leve.*ou.*completo|completo.*ou.*leve/i,
     options: [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }],
@@ -1351,15 +1454,16 @@ export function validateWaiterResponse(
 export function decide(input: V2Input): V2Output {
   const raw = ((): V2Output => {
     switch (input.event) {
-      case "ON_ENTRY":             return handleEntry();
-      case "ON_MENU_MODE":         return handleMenuMode();
-      case "ON_ITEM_ADDED":        return handleItemAdded();
-      case "ON_CART_UPDATED":      return handleCartUpdated(input);
-      case "ON_IDLE":              return handleIdle(input);
-      case "ON_CHECKOUT_STARTED":  return handleCheckoutStarted();
-      case "AFTER_CHECKOUT":       return handleAfterCheckout();
-      case "ON_USER_MESSAGE":      return handleUserMessage(input);
-      case "ON_PERMISSION_ACCEPT": return handleInterventionRequest();
+      case "ON_ENTRY":               return handleEntry();
+      case "ON_MENU_MODE":           return handleMenuMode();
+      case "ON_ITEM_ADDED":          return handleItemAdded();
+      case "ON_CART_UPDATED":        return handleCartUpdated(input);
+      case "ON_IDLE":                return handleIdle();
+      case "ON_CHECKOUT_STARTED":    return handleCheckoutStarted(input);
+      case "AFTER_CHECKOUT":         return handleAfterCheckout();
+      case "ON_USER_MESSAGE":        return handleUserMessage(input);
+      case "ON_PERMISSION_ACCEPT":   return handlePermissionAccepted(input);
+      case "ON_PERMISSION_DECLINED": return handlePermissionDeclined();
     }
   })();
   return validateWaiterResponse(raw, input.catalog, input.event);
