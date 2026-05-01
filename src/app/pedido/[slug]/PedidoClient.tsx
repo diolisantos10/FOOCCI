@@ -284,7 +284,7 @@ function Bubble({
   onOptionSelect,
 }: {
   msg: ChatMessage;
-  onOptionSelect?: (value: string) => void;
+  onOptionSelect?: (value: string, label: string) => void;
 }) {
   const isUser = msg.role === "user";
   if (msg.content.trim() === "") return null;
@@ -306,7 +306,7 @@ function Bubble({
             {msg.options.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => onOptionSelect(opt.value)}
+                onClick={() => onOptionSelect(opt.value, opt.label)}
                 className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-green-50 hover:border-green-300 hover:text-green-800 active:scale-95 transition-all"
               >
                 {opt.label}
@@ -1113,12 +1113,14 @@ export function PedidoClient({
         lastAddedId?:   string;
         silent?:        boolean;
         categoryIntro?: { name: string; description: string };
+        displayText?:   string;  // shown in the user bubble; text is still sent to the backend
       },
     ) => {
       const event         = options?.event ?? "ON_USER_MESSAGE";
       const lastAddedId   = options?.lastAddedId;
       const silent        = options?.silent ?? false;
       const categoryIntro = options?.categoryIntro;
+      const displayText   = options?.displayText;
 
       setUi("thinking");
       const trimmed = text.trim();
@@ -1126,7 +1128,7 @@ export function PedidoClient({
       if (!silent && trimmed) {
         setMessages((prev) => [
           ...prev,
-          { id: uid(), role: "user" as const, content: trimmed, ts: new Date() },
+          { id: uid(), role: "user" as const, content: displayText ?? trimmed, ts: new Date() },
         ]);
       }
 
@@ -1190,9 +1192,10 @@ export function PedidoClient({
           setSuggestedProducts([]);
         }
 
-        // When products are shown → action buttons. Otherwise → API-provided options.
+        // When products are shown → no buttons; the "+" on each card is the action.
+        // When no products → use API-provided options (qualification buttons, etc.).
         const finalOptions: WaiterOption[] | undefined = hasShownCards
-          ? [{ label: "Quero", value: "add_to_cart" }, { label: "Ver outra opção", value: "see_other" }]
+          ? undefined
           : apiOptions.length > 0
           ? apiOptions
           : undefined;
@@ -1473,9 +1476,10 @@ export function PedidoClient({
   }, [pushAssistantMessage]);
 
   // ── Option button handler ─────────────────────────────────────────
-  // Receives the button VALUE (not label). Routes to specific handler or API.
+  // Receives the button value + label. Label is shown in the user bubble;
+  // value is what is sent to the backend and used for routing.
   const handleOptionSelect = useCallback(
-    (value: string) => {
+    (value: string, label?: string) => {
       if (ui === "thinking") return;
 
       // "see_other" → clear product grid, return to browsing.
@@ -1517,8 +1521,9 @@ export function PedidoClient({
       }
 
       // All other values (qualification, custom choices) → send to API.
+      // displayText shows the human label in the bubble; value goes to the backend.
       setSuggestedProducts([]);
-      sendText(value, cart, stage, activeUpsell);
+      sendText(value, cart, stage, activeUpsell, { displayText: label });
     },
     [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, pushAssistantMessage],
   );
