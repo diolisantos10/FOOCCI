@@ -562,7 +562,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                       </span>
                       {step.message && (
                         <span className="truncate text-[9px] text-gray-600">
-                          "{step.message.slice(0, 50)}"
+                          {'"'}{step.message.slice(0, 50)}{'"'}
                         </span>
                       )}
                       <span className="ml-auto text-[9px] text-gray-700">{step.durationMs}ms</span>
@@ -722,7 +722,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                               <span className="font-mono text-gray-500">{step.event}</span>
                               {step.message && (
                                 <span className="truncate text-gray-600">
-                                  "{step.message.slice(0, 40)}"
+                                  {'"'}{step.message.slice(0, 40)}{'"'}
                                 </span>
                               )}
                               {step.response && (
@@ -740,7 +740,7 @@ export default function AutoPilotPanel({ slug, catalog, restaurantName }: Props)
                             <p className="text-[9px] text-gray-600 mb-0.5">Mensagens do Waiter:</p>
                             {r.waiterMessages.map((m, i) => (
                               <p key={i} className="text-[9px] text-gray-400 italic">
-                                "{m.slice(0, 100)}{m.length > 100 ? "…" : ""}"
+                                {'"'}{m.slice(0, 100)}{m.length > 100 ? "…" : ""}{'"'}
                               </p>
                             ))}
                           </div>
