@@ -1184,6 +1184,12 @@ export function PedidoClient({
           }
         }
 
+        // Clear stale grid when this response carries no valid cards.
+        // Keeps the product area in sync with the latest waiter response.
+        if (allowCards && !hasShownCards) {
+          setSuggestedProducts([]);
+        }
+
         // When products are shown → action buttons. Otherwise → API-provided options.
         const finalOptions: WaiterOption[] | undefined = hasShownCards
           ? [{ label: "Quero", value: "add_to_cart" }, { label: "Ver outra opção", value: "see_other" }]
