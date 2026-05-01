@@ -47,6 +47,7 @@ export interface V2CatalogItem {
   categoryName: string;
   price:        number;
   sortOrder?:   number;
+  description?: string | null;
 }
 
 export interface V2Input {
@@ -216,6 +217,99 @@ function isComplementCategory(name: string): boolean {
   return !isDrinkCategory(name) && !isDessertCategory(name);
 }
 
+// ─── menu item tagging ────────────────────────────────────────
+
+export type ItemTag =
+  | "light" | "complete" | "group"   | "premium" | "cheap"
+  | "drink" | "dessert"  | "starter" | "main"    | "combo"
+  | "pairing_candidate";
+
+export interface TaggedItem {
+  id:          string;
+  name:        string;
+  category:    string;
+  description: string | null;
+  price:       number;
+  sortOrder?:  number;
+  tags:        ItemTag[];
+}
+
+interface PriceBenchmarks { p25: number; median: number; p75: number; }
+
+function computePriceBenchmarks(catalog: V2CatalogItem[]): PriceBenchmarks {
+  const prices = catalog
+    .filter((i) => isComplementCategory(i.categoryName))
+    .map((i) => i.price)
+    .sort((a, b) => a - b);
+  if (prices.length === 0) return { p25: 0, median: 0, p75: 0 };
+  return {
+    p25:    prices[Math.floor(prices.length * 0.25)] ?? 0,
+    median: prices[Math.floor(prices.length * 0.50)] ?? 0,
+    p75:    prices[Math.floor(prices.length * 0.75)] ?? 0,
+  };
+}
+
+/**
+ * Tags a single menu item with semantic labels.
+ * Pass priceBenchmarks from computePriceBenchmarks() for price-tier accuracy.
+ * Works with any restaurant menu — no cuisine-specific logic.
+ */
+export function analyzeMenuItem(item: V2CatalogItem, benchmarks: PriceBenchmarks): TaggedItem {
+  const text = [item.name, item.categoryName, item.description ?? ""].join(" ").toLowerCase();
+  const tags: ItemTag[] = [];
+
+  if (isDrinkCategory(item.categoryName)) {
+    tags.push("drink", "pairing_candidate");
+  } else if (isDessertCategory(item.categoryName)) {
+    tags.push("dessert", "pairing_candidate");
+  } else {
+    // Combo / group (overrides light — combos are always complete)
+    if (/combo|famil|balde|bandeja|para\s*[2-9]|[2-9]\s*pessoas?|compartilh/i.test(text)) {
+      tags.push("combo", "group", "complete");
+    }
+    // Starter / small plates
+    if (/entrada|salada|aperitiv|petisco|porç(ao|ão)|tira.gosto|snack/i.test(text)) {
+      tags.push("starter", "light", "pairing_candidate");
+    }
+    // Explicit light signals in name or description
+    if (!tags.includes("combo") && /\bleve\b|\blight\b|diet|vegano|vegetarian/i.test(text)) {
+      if (!tags.includes("light")) tags.push("light");
+    }
+    // Main dish (default for non-categorised food items)
+    if (!tags.includes("combo") && !tags.includes("starter")) {
+      tags.push("main");
+    }
+    // Complete meal signal
+    if (!tags.includes("complete") &&
+        (item.price >= benchmarks.median || /prato\s*principal|refeição|completo/i.test(text))) {
+      tags.push("complete");
+    }
+    // Price-based light (cheapest items are generally smaller portions)
+    if (!tags.includes("light") && !tags.includes("combo") &&
+        item.price > 0 && item.price <= benchmarks.p25) {
+      tags.push("light");
+    }
+    // Premium / cheap tiers
+    if (item.price > 0 && item.price >= benchmarks.p75) tags.push("premium");
+    if (item.price > 0 && item.price <= benchmarks.p25) tags.push("cheap");
+  }
+
+  return {
+    id:          item.id,
+    name:        item.name,
+    category:    item.categoryName,
+    description: item.description ?? null,
+    price:       item.price,
+    sortOrder:   item.sortOrder,
+    tags,
+  };
+}
+
+function tagCatalog(catalog: V2CatalogItem[]): TaggedItem[] {
+  const b = computePriceBenchmarks(catalog);
+  return catalog.map((item) => analyzeMenuItem(item, b));
+}
+
 // ─── card selection helpers ───────────────────────────────────
 
 function bySort(a: V2CatalogItem, b: V2CatalogItem): number {
@@ -293,64 +387,101 @@ function cartUpdateCards(
 }
 
 // ─── product selection helpers (Sales Intelligence) ──────────
-// All helpers: filter by category/price, exclude cart items, return IDs only.
+// All helpers use tagCatalog() for semantic selection.
+// Excludes cart items, returns exact IDs, no duplicates.
+
+function tagSort(a: TaggedItem, b: TaggedItem): number {
+  return (a.sortOrder ?? 999) - (b.sortOrder ?? 999);
+}
 
 function selectDrinkItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
-  return catalog
-    .filter((i) => isDrinkCategory(i.categoryName) && !cartItemIds.includes(i.id))
-    .sort(bySort)
+  return tagCatalog(catalog)
+    .filter((i) => i.tags.includes("drink") && !cartItemIds.includes(i.id))
+    .sort(tagSort)
     .slice(0, limit)
     .map((i) => i.id);
 }
 
 function selectDessertItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
-  return catalog
-    .filter((i) => isDessertCategory(i.categoryName) && !cartItemIds.includes(i.id))
-    .sort(bySort)
+  return tagCatalog(catalog)
+    .filter((i) => i.tags.includes("dessert") && !cartItemIds.includes(i.id))
+    .sort(tagSort)
     .slice(0, limit)
     .map((i) => i.id);
 }
 
 function selectLightItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
-  const mains = catalog.filter((i) => isComplementCategory(i.categoryName) && !cartItemIds.includes(i.id));
-  if (mains.length === 0) return [];
-  const prices  = mains.map((i) => i.price).sort((a, b) => a - b);
-  const median  = prices[Math.floor(prices.length / 2)] ?? 0;
-  // Light = category sounds like starters/salads OR price ≤ median (smaller portion proxy)
-  const light = mains.filter(
-    (i) =>
-      /entrada|salada|aperitiv|petisco|porcao|porção|tira.gosto|snack/i.test(i.categoryName) ||
-      i.price <= median,
-  );
-  return (light.length > 0 ? light : mains).sort(bySort).slice(0, limit).map((i) => i.id);
+  const tagged = tagCatalog(catalog);
+  const notInCart = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert") && !cartItemIds.includes(i.id));
+  const light = notInCart.filter((i) => i.tags.includes("light") || i.tags.includes("starter"));
+  // Starters first, then light-tagged, then sortOrder
+  const sorted = (light.length > 0 ? light : notInCart).sort((a, b) => {
+    const aScore = (a.tags.includes("starter") ? 2 : 0) + (a.tags.includes("light") ? 1 : 0);
+    const bScore = (b.tags.includes("starter") ? 2 : 0) + (b.tags.includes("light") ? 1 : 0);
+    if (bScore !== aScore) return bScore - aScore;
+    return tagSort(a, b);
+  });
+  return sorted.slice(0, limit).map((i) => i.id);
 }
 
 function selectCompleteMealItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
-  const mains = catalog.filter((i) => isComplementCategory(i.categoryName) && !cartItemIds.includes(i.id));
-  if (mains.length === 0) return [];
-  const prices  = mains.map((i) => i.price).sort((a, b) => a - b);
-  const median  = prices[Math.floor(prices.length / 2)] ?? 0;
-  // Complete = name/category suggests main/combo OR price ≥ median (larger portion proxy)
-  const complete = mains.filter(
-    (i) =>
-      /combo|completo|principal|refeição|família/i.test(i.name) ||
-      /combo|principal|main/i.test(i.categoryName) ||
-      i.price >= median,
-  );
-  return (complete.length > 0 ? complete : mains).sort(bySort).slice(0, limit).map((i) => i.id);
+  const tagged = tagCatalog(catalog);
+  const notInCart = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert") && !cartItemIds.includes(i.id));
+  const complete = notInCart.filter((i) => i.tags.includes("complete") || i.tags.includes("main"));
+  // combo > complete > main, then sortOrder
+  const tagScore = (t: TaggedItem) =>
+    (t.tags.includes("combo")    ? 3 : 0) +
+    (t.tags.includes("complete") ? 2 : 0) +
+    (t.tags.includes("main")     ? 1 : 0);
+  const sorted = (complete.length > 0 ? complete : notInCart)
+    .sort((a, b) => tagScore(b) - tagScore(a) || tagSort(a, b));
+  return sorted.slice(0, limit).map((i) => i.id);
 }
 
 function selectGroupItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
-  const mains = catalog.filter((i) => isComplementCategory(i.categoryName) && !cartItemIds.includes(i.id));
-  if (mains.length === 0) return [];
-  // Group = name signals combo/family, or fallback to highest-priced (largest portions)
-  const group = mains.filter(
-    (i) =>
-      /combo|famil|balde|bandeja|para\s*[2-9]|[2-9]\s*pessoa/i.test(i.name) ||
-      /famil|compartilh/i.test(i.categoryName),
-  );
-  if (group.length > 0) return group.sort(bySort).slice(0, limit).map((i) => i.id);
-  return [...mains].sort((a, b) => b.price - a.price).slice(0, limit).map((i) => i.id);
+  const tagged = tagCatalog(catalog);
+  const notInCart = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert") && !cartItemIds.includes(i.id));
+  const group = notInCart.filter((i) => i.tags.includes("group") || i.tags.includes("combo"));
+  if (group.length > 0) return group.sort(tagSort).slice(0, limit).map((i) => i.id);
+  // Fallback: highest-priced items (largest portions proxy for groups)
+  return [...notInCart].sort((a, b) => b.price - a.price).slice(0, limit).map((i) => i.id);
+}
+
+/**
+ * Context-aware recommendation.
+ * Prioritises what the cart is missing: food → drink → dessert → pairing/premium.
+ * Not a funnel — driven by current cart state only.
+ */
+function selectRecommendedItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
+  const tagged  = tagCatalog(catalog);
+  const inCart  = tagged.filter((i) => cartItemIds.includes(i.id));
+  const notCart = tagged.filter((i) => !cartItemIds.includes(i.id));
+
+  const cartHasFood    = inCart.some((i) => !i.tags.includes("drink") && !i.tags.includes("dessert"));
+  const cartHasDrink   = inCart.some((i) => i.tags.includes("drink"));
+  const cartHasDessert = inCart.some((i) => i.tags.includes("dessert"));
+
+  // Empty cart → bestsellers (food only, by sortOrder)
+  if (cartItemIds.length === 0) {
+    return notCart
+      .filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert"))
+      .sort(tagSort)
+      .slice(0, limit)
+      .map((i) => i.id);
+  }
+  // Has food but no drink → suggest drink
+  if (cartHasFood && !cartHasDrink) {
+    const drinks = notCart.filter((i) => i.tags.includes("drink")).sort(tagSort);
+    if (drinks.length > 0) return drinks.slice(0, limit).map((i) => i.id);
+  }
+  // Has food + drink but no dessert → suggest dessert
+  if (cartHasFood && cartHasDrink && !cartHasDessert) {
+    const desserts = notCart.filter((i) => i.tags.includes("dessert")).sort(tagSort);
+    if (desserts.length > 0) return desserts.slice(0, limit).map((i) => i.id);
+  }
+  // Fallback → pairing candidates or premium items, else top of catalog
+  const pairings = notCart.filter((i) => i.tags.includes("pairing_candidate") || i.tags.includes("premium")).sort(tagSort);
+  return (pairings.length > 0 ? pairings : notCart.sort(tagSort)).slice(0, limit).map((i) => i.id);
 }
 
 // ─── directive builder for AI events ────────────────────────
@@ -608,8 +739,10 @@ function handleUserMessage(input: V2Input): V2Output {
       break;
     }
     case "wants_recommendation": {
-      // Empty cart → ask preference first; cart has items → fall through to AI (pairing)
       if (!hasItems) return { message: "Prefere algo mais leve ou completo?", options: [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }], cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "" };
+      // Cart has items → context-aware recommendation
+      const cards = selectRecommendedItems(catalog, cartItemIds, 3);
+      if (cards.length > 0) return { message: "Aqui vai o que faz mais sentido pra você agora 👇", cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
       break;
     }
   }
