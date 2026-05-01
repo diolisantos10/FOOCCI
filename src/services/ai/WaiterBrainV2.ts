@@ -1042,18 +1042,137 @@ function handleUserMessage(input: V2Input): V2Output {
   };
 }
 
+// ─── response quality + safety guards ────────────────────────
+
+const SAFE_FALLBACK: V2Output = {
+  message:     "Perfeito 😊 fico por aqui se precisar de ajuda.",
+  options:     [],
+  cards:       [],
+  mode:        "BROWSE",
+  requiresAI:  false,
+  aiDirective: "",
+};
+
+const VALID_MODES = new Set<WaiterMode>(["BROWSE", "SUGGESTION", "INTERVENTION", "CHECKOUT_SUPPORT"]);
+
+// Unanswered choice questions → attach appropriate buttons automatically
+const QUESTION_BUTTON_PATTERNS: { re: RegExp; options: WaiterOption[] }[] = [
+  {
+    re: /leve.*ou.*completo|completo.*ou.*leve/i,
+    options: [{ label: "Leve", value: "light" }, { label: "Completo", value: "complete" }],
+  },
+  {
+    re: /quantas?\s*(pessoas?|são)/i,
+    options: [
+      { label: "Só eu",   value: "solo"        },
+      { label: "2 a 3",  value: "small_group"  },
+      { label: "4 ou +", value: "large_group"  },
+    ],
+  },
+];
+
+// Bare weak phrases → replace with seller-tone equivalent
+const WEAK_PHRASE_RE = /^(legal|beleza|ótimo|ok|claro)[!.]?$/i;
+
+// Option values allowed when mode is CHECKOUT_SUPPORT
+const CHECKOUT_SAFE_OPTIONS = new Set(["continue_checkout", "browse_menu"]);
+
+/**
+ * Validates and repairs a V2Output before it reaches the client.
+ * Runs for every event so no handler can bypass the rules.
+ *
+ * Repair priority:
+ *   1. Invalid mode          → SAFE_FALLBACK
+ *   2. Deduplicate + ghost card IDs removed
+ *   3. Message truncated to 2 lines
+ *   4. Product mention in text without matching card → strip name from text
+ *   5. Unanswered choice question → attach buttons
+ *   6. Bare weak phrase → seller replacement
+ *   7. ON_ITEM_ADDED → force cards = [], options = []
+ *   8. CHECKOUT_SUPPORT → force cards = [], strip selling options
+ */
+export function validateWaiterResponse(
+  output:  V2Output,
+  catalog: V2CatalogItem[],
+  event:   V2Event,
+): V2Output {
+  let { message, cards, mode, options, requiresAI, aiDirective } = output;
+
+  try {
+    // 1. Mode must be a known WaiterMode
+    if (!VALID_MODES.has(mode)) return { ...SAFE_FALLBACK };
+
+    // 2. Deduplicate cards and drop any ID not present in the catalog
+    const catalogIds = new Set(catalog.map((i) => i.id));
+    cards = [...new Set(cards)].filter((id) => catalogIds.has(id));
+
+    // 3. Truncate message to max 2 non-empty lines
+    {
+      const lines = message.split("\n").filter((l) => l.trim().length > 0);
+      if (lines.length > 2) message = lines.slice(0, 2).join("\n");
+    }
+
+    // 4. Product mention guard (deterministic responses only — AI messages are empty at this point)
+    if (!requiresAI && message.length > 0) {
+      for (const item of catalog) {
+        if (item.name.length < 4) continue; // very short names risk false positives
+        const escaped = item.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const nameRe  = new RegExp(escaped, "gi");
+        if (nameRe.test(message) && !cards.includes(item.id)) {
+          // Fix B: strip the name from the message text
+          message = message.replace(nameRe, "").replace(/\s{2,}/g, " ").trim();
+          if (message.replace(/[^a-zà-ú]/gi, "").length < 5) {
+            message = "Separei boas opções pra você 👇";
+          }
+        }
+      }
+    }
+
+    // 5. Open question guard — unanswered choice question must carry buttons
+    if (options.length === 0 && !requiresAI && message.includes("?")) {
+      for (const { re, options: btns } of QUESTION_BUTTON_PATTERNS) {
+        if (re.test(message)) { options = btns; break; }
+      }
+    }
+
+    // 6. Seller tone guard — bare weak phrases are not acceptable as a full response
+    if (WEAK_PHRASE_RE.test(message.trim())) {
+      message = "Escolha certeira 👌";
+    }
+
+    // 7. No UI invasion — item-added events must not carry cards or option prompts
+    if (event === "ON_ITEM_ADDED") {
+      cards   = [];
+      options = [];
+    }
+
+    // 8. Checkout guard — CHECKOUT_SUPPORT must have no cards and no selling options
+    if (mode === "CHECKOUT_SUPPORT") {
+      cards   = [];
+      options = options.filter((o) => CHECKOUT_SAFE_OPTIONS.has(o.value));
+    }
+
+    return { message, cards, mode, options, requiresAI, aiDirective };
+  } catch {
+    return { ...SAFE_FALLBACK };
+  }
+}
+
 // ─── public API ───────────────────────────────────────────────
 
 export function decide(input: V2Input): V2Output {
-  switch (input.event) {
-    case "ON_ENTRY":            return handleEntry();
-    case "ON_MENU_MODE":        return handleMenuMode();
-    case "ON_ITEM_ADDED":       return handleItemAdded();
-    case "ON_CART_UPDATED":     return handleCartUpdated(input);
-    case "ON_IDLE":             return handleIdle(input);
-    case "ON_CHECKOUT_STARTED": return handleCheckoutStarted();
-    case "AFTER_CHECKOUT":      return handleAfterCheckout();
-    case "ON_USER_MESSAGE":     return handleUserMessage(input);
-    case "ON_PERMISSION_ACCEPT": return handleInterventionRequest();
-  }
+  const raw = ((): V2Output => {
+    switch (input.event) {
+      case "ON_ENTRY":             return handleEntry();
+      case "ON_MENU_MODE":         return handleMenuMode();
+      case "ON_ITEM_ADDED":        return handleItemAdded();
+      case "ON_CART_UPDATED":      return handleCartUpdated(input);
+      case "ON_IDLE":              return handleIdle(input);
+      case "ON_CHECKOUT_STARTED":  return handleCheckoutStarted();
+      case "AFTER_CHECKOUT":       return handleAfterCheckout();
+      case "ON_USER_MESSAGE":      return handleUserMessage(input);
+      case "ON_PERMISSION_ACCEPT": return handleInterventionRequest();
+    }
+  })();
+  return validateWaiterResponse(raw, input.catalog, input.event);
 }
