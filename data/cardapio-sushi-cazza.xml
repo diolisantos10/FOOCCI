@@ -1,0 +1,2428 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="header">
+   <Font ss:Bold="1"/>
+   <Interior ss:Color="#1F3864" ss:Pattern="Solid"/>
+   <Font ss:Color="#FFFFFF" ss:Bold="1"/>
+  </Style>
+  <Style ss:ID="even">
+   <Interior ss:Color="#F2F2F2" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="price">
+   <NumberFormat ss:Format="&quot;R$&quot; #,##0.00"/>
+  </Style>
+  <Style ss:ID="priceven">
+   <NumberFormat ss:Format="&quot;R$&quot; #,##0.00"/>
+   <Interior ss:Color="#F2F2F2" ss:Pattern="Solid"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Cardápio">
+  <Table ss:ExpandedColumnCount="19" ss:DefaultRowHeight="15">
+   <Column ss:Width="140"/>
+   <Column ss:Width="200"/>
+   <Column ss:Width="300"/>
+   <Column ss:Width="150"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="250"/>
+   <Column ss:Width="80"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="80"/>
+   <Column ss:Width="90"/>
+   <Column ss:Width="80"/>
+   <Column ss:Width="80"/>
+   <Column ss:Width="80"/>
+   <Column ss:Width="90"/>
+   <Column ss:Width="280"/>
+   <Column ss:Width="80"/>
+   <Column ss:Width="100"/>
+   <Column ss:Width="100"/>
+   <Row ss:Height="18">
+      <Cell ss:StyleID="header"><Data ss:Type="String">categoria</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">nome</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">descricao</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">ingredients</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">preco</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">imagem</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">code</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">sortOrder</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">isActive</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">isAvailable</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">showInDelivery</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">showInDineIn</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">hasVariants</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">servingSize</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">portionInfo</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">modificadores</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">tags</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">upsellHints</Data></Cell>
+      <Cell ss:StyleID="header"><Data ss:Type="String">channelNote</Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">RODIZIO PRESENCIAL</Data></Cell>
+      <Cell><Data ss:Type="String">RODIZIO PRESENCIAL</Data></Cell>
+      <Cell><Data ss:Type="String">RODIZIO : 99,00 POR PESSOA CRIANÇAS: ATÉ 5 ANOS NÃO PAGAM 6 Á 10 ANOS 49,90 *ENTRADAS* CEVICHE SUNOMONO SHIMEJI CANAPÉ DE SALMÃO HARUMAKI (ROLINHO PRIMAVERA QUEIJO) GUIOZA PASTELZINHO SHIMEJI PASTELZINHO QUEIJO *CARPACCIOS* CARPACCIO SALMÃO CARPACCIO TILÁPIA CARPACCIO SALMÃO COM MOLHO DE ERVAS *HOT HOLL* HOT HOLL HOT CRISPY *TEMAKIS* SALMÃO SALMÃO GRELHADO TEMAKI HOT HOLL SALMÃO SHIMEJI SHIMEJI SKIN CALIFÓRNIA *PRATOS QUENTES* CAMARÃO EMPANADO LULA DORÊ YAKISSOBA YAKIMESHI TEPPAN SALMÃO LULA A DORÊ MISSÔSHIRO FILÉZINHO GRATINADO *COMBO SUSHI* COMBINADO DE SUSHIS VARIADOS *SASHIMI* SALMÃO ATUM TILÁPIA SALMÃO FLAMBADO *JHOW* SALMÃO SALMÃO FLAMBADO PEPINO MARACUJÁ GELEIA OVAS *NIGUIRI* SALMÃO ATUM SALMÃO FLAMBADO KANI SKIN TILÁPIA *URAMAKI* SALMÃO SALMÃO GRELHADO ESPECIAL SKIN CALIFÓRNIA *HOSSOMAKI* SALMÃO PEPINO KANI *SOBREMESAS* HOT DOCE DE LEITE HOT CHOCOLATE BOLA DE SORVETE BANANA EMPANADA c/leite condensado e canela</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">99</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710303/photo1756325207.jpeg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">1</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">presencial_only</Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">FESTIVAL CAZZA (DELIVERY)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">FESTIVAL CAZZA (DELIVERY)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Entradas: Sunomono Ceviche Pratos quentes: Yakisoba 01 Teppan de salmão 04 harumaki queijo 02 Guioza tiras de frango empanado Pratos frios: 02 temaki (cru ou grelhado) 10 sashimi salmão 05 uramaki salmão 05 hossomaki salmão 02 niguiri salmão 02 niguiri cazza 02 niguiri skin 12 hot roll Sobremesa: Banana empanada com leite condensado polvilhada com canela</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">199</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970292/photo1724225413.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">[Opcional] Escolha sua opção: Salmão Cru / Salmão Grelhado</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">ENTRADAS</Data></Cell>
+      <Cell><Data ss:Type="String">Ceviche</Data></Cell>
+      <Cell><Data ss:Type="String">Peixe branco cortado em cubos marinado no suco de limão, cebola roxa, pimenta e cebolinha.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">62.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970279/325125_original.jpg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">1</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">ENTRADAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Carpaccio de Salmão (20 Lâminas)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">20 lâminas de salmão finas regadas ao molho a base de shoyu, limão e cebolinha.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">72</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970280/c9996acd834cbeaf810bc257183b72a7.jpg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">20 lâminas</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">ENTRADAS</Data></Cell>
+      <Cell><Data ss:Type="String">Sunomono</Data></Cell>
+      <Cell><Data ss:Type="String">Típica salada de pepino oriental agridoce.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">24</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970283/sunomono.jpg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">3</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">ENTRADAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Shimeji</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Cogumelos salteados na manteiga, shoyu e cobinha.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">30</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970281/SHIMEJI.jpg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">4</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">ENTRADAS</Data></Cell>
+      <Cell><Data ss:Type="String">Guioza (06 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">28</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970286/68bf0ef705a832e831c27dc5083235f5.jpg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">5</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">06 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">ENTRADAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Harumaki de Queijo (05 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Famoso rolinho primavera da cozinha oriental.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">29.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970285/HARUMAKI.jpg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">6</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">05 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">COMBOS</Data></Cell>
+      <Cell><Data ss:Type="String">COMBO AYANE</Data></Cell>
+      <Cell><Data ss:Type="String">02 Temaki (Cru Ou Grelhado) 06 Sashimi Salmão 05 Uramaki Salmão 06 Hot Holl 02 Niguiri 02 Jhow</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">132.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2551663/photo1732344546.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">1</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">2</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">[Opcional] Escolha sua opção: Salmão Cru / Salmão Grelhado</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">COMBOS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Combo 1 (32 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">12 hot roll 05 niguiri salmão flambado 05 uramaki salmão grelhado 05 hossomaki kani 05 batera de salmão grelhado</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">82.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970751/photo1724224627.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">32 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">COMBOS</Data></Cell>
+      <Cell><Data ss:Type="String">Combo 2 (18 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">06 hot roll 05 hossomaki salmão 05 hossomaki kani 02 niguiri salmão</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">47.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970752/ifood_38.jpg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">3</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">18 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">COMBOS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Combo Temaki + Hot + Refri</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">01Temaki salmão (cru ou grelhado) 06 hot roll Refri 350ml</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">58.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970442/photo1724224710.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">4</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">[Opcional] Escolha sua opção: Salmão Cru / Salmão Grelhado</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">COMBOS</Data></Cell>
+      <Cell><Data ss:Type="String">Combo Flambado (21 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">06 niguiri salmão flambado 04 jhow salmão flambado 06 hot roll 05 uramaki salmão grelhado</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">72.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970441/photo1724224834.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">5</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">2</Data></Cell>
+      <Cell><Data ss:Type="String">21 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">COMBOS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">COMBO AKEMI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">02 TEMAKIS (CRU OU GRELHADO) 05 URAMAKIS SALMÃO</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">72.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2504179/photo1726637627.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">6</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">COMBOS</Data></Cell>
+      <Cell><Data ss:Type="String">COMBO MINAMI</Data></Cell>
+      <Cell><Data ss:Type="String">05 SASHIMI SALMÃO 02 NIGUIRI SALMÃO 02 JHOW SALMÃO 5 URAMAKI SALMÃO</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">58.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2504178/photo1726637522.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">7</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">COMBOS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Combo Só Salmão (30 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">06 sashimi salmão 04 niguiri salmão 04 johw salmão 05 batera de salmão 05 uramaki salmão 06 hot roll</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">122.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970748/photo1724224670.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">8</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">30 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">COMBOS</Data></Cell>
+      <Cell><Data ss:Type="String">Combo Hot (51 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">30 hot roll 06 hot roll especial 05 uramaki salmão grelhado 04 niguiri salmão flambado 06 jhow flambado</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">155</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970756/photo1724224527.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">9</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">4</Data></Cell>
+      <Cell><Data ss:Type="String">51 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">COMBOS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Combo Cazza (53 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">12 hot roll 10 sashimi salmão 05 hossomaki salmão 05 uramaki salmão 05 uramaki salmão especial 04 niguiri cazza 04 niguiri salmão 04 batera salmão 02 jhow salmão 02 jhow geleia</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">192</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970754/photo1724224582.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">10</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">4</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">53 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell><Data ss:Type="String">Gohan</Data></Cell>
+      <Cell><Data ss:Type="String">Arroz japonês.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">26</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970303/photo1726638153.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">1</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Yakisoba Carne e Frango</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">54</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970384/photo1724224922.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell><Data ss:Type="String">Teppan de Salmão</Data></Cell>
+      <Cell><Data ss:Type="String">Posta de salmão grelhado acompanhado de legumes na manteiga e Gohan (arroz japonês) ou arroz brasileiro.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">76</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970382/photo1724224960.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">3</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">[Obrigatório] Escolha o arroz: Arroz Brasileiro / Gohan (Arroz Japonês)</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Salmão á Camarão</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Posta de salmão grelhado com camarões regados ao molho de cebola, alcaparras e tomate cereja, acompanhado de purê de batata e Gohan (arroz japonês) ou arroz brasileiro.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">125</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970380/photo1724225023.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">4</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">[Obrigatório] Escolha o arroz: Arroz Brasileiro / Gohan (Arroz Japonês)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell><Data ss:Type="String">Salmão ao Molho de Requeijão</Data></Cell>
+      <Cell><Data ss:Type="String">Posta de salmão grelhado regado ao molho de requeijão acompanhado de purê de batata e Gohan (arroz) ou arroz brasileiro.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">85</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970377/photo1724225082.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">5</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">[Obrigatório] Escolha o arroz: Arroz Brasileiro / Gohan (Arroz Japonês)</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">YAKISOBA DE CAMARÃO</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">YAKISOBA DE CAMARÃO</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">82</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2637650/photo1756207676.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">6</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell><Data ss:Type="String">Yakissoba Especial</Data></Cell>
+      <Cell><Data ss:Type="String">Yakisoba Carne, Frango e Camarão</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">74</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2351451/photo1724224389.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">7</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Yakissoba Frutos do Mar</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Yakisoba fetio com camarão, lula e molho de ostras</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">82</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483441/photo1724222384.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">8</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell><Data ss:Type="String">Yakimeshi</Data></Cell>
+      <Cell><Data ss:Type="String">Yakimeshi</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">32.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2433692/photo1720111023.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">9</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">FETUCCINE SALMÃO</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">FETUCCINE BASÍLICO COM POSTA DE SALMÃO GRELHADO</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">82</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2551668/photo1732349913.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">10</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell><Data ss:Type="String">FETUCCINE BASÍLICO</Data></Cell>
+      <Cell><Data ss:Type="String">Fetuccine De Massa Fresca Refogado Com Alho, Tomate Cereja E Manjericão. Finalizado Mcom Azeite E Parmesão</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">42</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2551667/photo1732349754.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">11</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEPPAN PICANHA</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">02 STEAK DE PICANHA SERVIDO COM LEGUMES SALTEADOS NA MANTEIGA E ARROZ</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">69.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2504173/photo1732342042.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">12</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell><Data ss:Type="String">SAINT PETER CAMARONÊ</Data></Cell>
+      <Cell><Data ss:Type="String">FILÉ DE SAINT PETER EMPANADO ENVOLTO COM MOLHO DE CAMARÃO , COM PURE DE BATATAS E ARROZ</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">76</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2504172/photo1726757055.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">13</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">MIGNON FETUCCINE</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">02 MEDALHÕES DE MIGNON GRELHADOS COM FETUCCINE DE MASSA FRESCA AO MOLHO ALFREDO. FINALIZADO COM PARMESÃO E AZEITE</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">85</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2504171/photo1726757108.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">14</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">PRATOS QUENTES</Data></Cell>
+      <Cell><Data ss:Type="String">FETUCCINE Á CAMARÃO LIMONE</Data></Cell>
+      <Cell><Data ss:Type="String">CAMARÕES TEMPERADOS COM ERVAS SALTEADO NO AZEITE COM FETUCCINE DE MASSA FRESCA AO MOLHO DE LIMÃO SICILIANO</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">72</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2504170/photo1726757137.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">15</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">LÁMEN</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">LÁMEN KARE</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Pasta de soja, macarrão, karê, carne de porco, ovo, nori e cebolinha.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">44.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2695512/photo1756187706.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">LÁMEN</Data></Cell>
+      <Cell><Data ss:Type="String">LÁMEN MISSÔ</Data></Cell>
+      <Cell><Data ss:Type="String">Pasta de soja, macarrão, nori, carne de porco, ovo, milho, moyashi e cebolinha.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">44.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2695511/photo1756207404.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">2</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">LÁMEN</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">LÁMEN SHOYU</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Macarrão, molho de soja, carne de porco, wakamê, nori, ovo, moyashi e cebolinha</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">42.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2695497/photo1756207720.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">3</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">PORÇÕES</Data></Cell>
+      <Cell><Data ss:Type="String">Isca de Tilápia</Data></Cell>
+      <Cell><Data ss:Type="String">Iscas de tilápia empanado da farinha panko, acompanhado do molho da casa.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">62.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970296/WhatsApp_Image_2021-05-19_at_14.28.21__2_.jpeg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">1</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">2</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">PORÇÕES</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Camarão Empanado</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Camarões empanados na farinha panko, acompanhado do molho da casa.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">90</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483468/WhatsApp_Image_2021-05-19_at_14.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">PORÇÕES</Data></Cell>
+      <Cell><Data ss:Type="String">LULA Á DORÊ</Data></Cell>
+      <Cell><Data ss:Type="String">Anéis de lula empanado da farinha panko, acompanhado do molho da casa.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">72.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2438265/photo1724222424.jpeg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">3</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">2</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">PORÇÕES</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Frango Empanado</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Tiras de frango empanado da farinha panko, acompanhado do molho da casa.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">50</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483458/WhatsApp_Image_2021-05-19_at_14.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">4</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">CAZZA HOT</Data></Cell>
+      <Cell><Data ss:Type="String">CAZZA HOT SALMÂO CRU</Data></Cell>
+      <Cell><Data ss:Type="String">Hot empanado na farinha panko e recheio de cream cheese, cortado ao meio e coberto por salmão cru misturado no cream cheese e finalizado com molho taré, celolinha e gergilim</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">54.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483486/photo1709854584.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">1</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">CAZZA HOT</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">CAZZA HOT SALMÃO GRELHADO</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Hot empanado na farinha panko e recheio de cream cheese, cortado ao meio e coberto por salmão grelhado misturado no cream cheese e finalizado com molho taré, celolinha e gergilim</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">54.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2303064/photo1709854709.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">CAZZA HOT</Data></Cell>
+      <Cell><Data ss:Type="String">CAZZA BURGUER SALMÃO</Data></Cell>
+      <Cell><Data ss:Type="String">Nosso delicioso arroz misturado com cream cheese empanado na farinha Panko, recheado com salmão cru, cream cheese e finalizado com molho de pimenta doce (sweet chilli) e cebolinha</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">54.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2364982/photo1713996122.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">3</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">HOT ROLL</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Hot Roll (06 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Sushi de salmão grelhado empanado finalizado com cream cheese, cebolinha e tarê.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">29.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483445/ifood_50.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">06 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">HOT ROLL</Data></Cell>
+      <Cell><Data ss:Type="String">Hot Roll (12 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">Sushi de salmão grelhado empanado finalizado com cream cheese, cebolinha e tarê.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">39.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970428/ifood_50.jpg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">2</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">2</Data></Cell>
+      <Cell><Data ss:Type="String">12 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">HOT ROLL</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">HOT ROLL ESPECIAL (06 UNIDADES)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Sushi de salmão grelado empanado com cobertura de salmão grelhado finalizado com cream cheese, cebolinha e tarê</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">39.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2551669/photo1732350463.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">3</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">06 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">HOT ROLL</Data></Cell>
+      <Cell><Data ss:Type="String">Hot Roll Especial (12 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">Sushi de salmão grelhado empanado com cobertura de salmão grelhado finalizado com cream cheese, cebolinha e tarê.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">54.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970427/download__7_.jpg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">4</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">2</Data></Cell>
+      <Cell><Data ss:Type="String">12 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">HOT ROLL</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">HOT CRISPY (06 UNIDADES)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Sushi de salmão grelado empanado finalizado com cream cheese, crispy de couve, cebolinha e tarê</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">32.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483474/photo1704404283.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">5</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">06 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">HOT ROLL</Data></Cell>
+      <Cell><Data ss:Type="String">HOT CRISPY (12 UNIDADES)</Data></Cell>
+      <Cell><Data ss:Type="String">Sushi de salmão grelado empanado finalizado com cream cheese, crispy de couve, cebolinha e tarê</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">42</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483473/photo1704404228.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">6</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">2</Data></Cell>
+      <Cell><Data ss:Type="String">12 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">HOT ROLL</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">HOT ROLL DOCE DE LEITE (08 UNIDADES)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">08 unidades de hot roll de banana com cobertura de doce de leite polvilhado com canela</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">28.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2551673/photo1732350879.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">7</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">08 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">HOT ROLL</Data></Cell>
+      <Cell><Data ss:Type="String">HOT ROLL NUTELLA (08 UNIDADES)</Data></Cell>
+      <Cell><Data ss:Type="String">08 unidades de hot roll de banana com cobertura de Nutella</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">28.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2551674/photo1732351002.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">8</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">08 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">POKE</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">POKE FRY</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">BASE DE ARROZ COBERTA COM SALMÃO EM CUBOS EMPANADOS E FRITOS COM CREAM CHEESE E CEBOLINHA, MANGA, SUNOMONO E TOMATE CEREJA</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">48.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2770750/photo1772587458.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">POKE</Data></Cell>
+      <Cell><Data ss:Type="String">POKE SHIMEJI</Data></Cell>
+      <Cell><Data ss:Type="String">Base de arroz coberto com shimeji, Sunomono, cream cheese, manga, tomate cereja e crispy de couve</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">42.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710906/photo1756356069.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">2</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">POKE</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Poke Salmão Grelhado</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Base de arroz coberta com salmão grelhado com cream cheese e cebolinha , manga, sunomono e tomate cereja</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">48.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483483/photo1678900166.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">3</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">POKE</Data></Cell>
+      <Cell><Data ss:Type="String">Poke Salmão cream</Data></Cell>
+      <Cell><Data ss:Type="String">Base de arroz coberta com salmão cru com cream cheese e cebolinha, manga, sunomono e tomate cereja</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">48.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483477/photo1756350773.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">4</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKI SKIN</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Skin (pele de salmão frita), cream cheese e cebolinha</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">32.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2711095/photo1756430337.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell><Data ss:Type="String">Temaki Salmão Cru</Data></Cell>
+      <Cell><Data ss:Type="String">Salmão cru cortado em cubos, cream cheese e cebolinha.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">42.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970350/ifood_95.jpg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">2</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKI SALMÃO SHIMEJI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Salmão cru cortado em cubos, com shimeji, cream cheese e cebolinha</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">44.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2551665/photo1732347711.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">3</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell><Data ss:Type="String">Temaki Salmão Grelhado</Data></Cell>
+      <Cell><Data ss:Type="String">Salmão grelhado, cream cheese e cebolinha.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">42.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970349/download__5_.jpg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">4</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Temaki Hot Roll</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Temaki de salmão grelhado empando, cream cheese, cebolinha e tarê.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">46.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970341/photo1724225345.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">5</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell><Data ss:Type="String">Temaki Salmão Cazza</Data></Cell>
+      <Cell><Data ss:Type="String">Cubos de salmão empanado, cream cheese, cebolinha e tarê.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">46.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970343/photo1724225304.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">6</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKI HAKONE</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKI DE SALMÃO EMPANADO COM CAMARÃO COM CREAM CHEESE , CEBOLINHA, GERGELIM</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">54.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2504177/photo1726637332.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">7</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell><Data ss:Type="String">Temaki Nacho</Data></Cell>
+      <Cell><Data ss:Type="String">Salmão cru com cream cheese, nachos (Doritos), e cebolinha</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">44.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2351452/photo1712960053.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">8</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Temaki Califórnia</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Manga peino e kani.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">28.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970348/5efe07ad-6dc8-4cad-b60c-2a9aac1e01b4.jpg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell><Data ss:Type="String">TEMAKI SHIMEJI</Data></Cell>
+      <Cell><Data ss:Type="String">Shimeji, cream cheese e cebolinha</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">36.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2551664/photo1732347601.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">10</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKI EBI FRY</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">CAMARÃO EMPANADO COM CREAM CHEESE E CEBOLINHA</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">54.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2551666/photo1732348661.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">11</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell><Data ss:Type="String">TEMAKI EBI</Data></Cell>
+      <Cell><Data ss:Type="String">CAMARÃO COZIDO COM CREAM CHEESE, CEBOLINHA E GERGELIM</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">48.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2504181/photo1731547418.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">12</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKIS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TEMAKI SALMÃO EBI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">SALMÃO CRU EM CUBOS COM CAMARÕES COZIDOS COM CREAM CHEESE, CEBOLINHA E GERGELIM</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">54.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2504176/photo1726637063.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">13</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">JHOW</Data></Cell>
+      <Cell><Data ss:Type="String">Jhow Salmão (06 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">Arroz envolto por fatia fina de salmão, com cobertura de salmão, cream cheese e cebolinha.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">30.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483449/ifood_1__1_.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">1</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">06 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">JHOW</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Jhow Geleia (06 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Arroz envolto por fatia fina de salmão, com cobertura de geléia de morango e cream cheese.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">30.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483448/download__3_.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">06 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">JHOW</Data></Cell>
+      <Cell><Data ss:Type="String">Jhow Salmão Flambado (06 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">Arroz envolto por fatia fina de salmão maçaricado com cobertura de salmão grelhado, cream cheese e cebolinha.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">30.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970324/264a7a68-2ed7-4b07-81fd-50958a8836fe-1611320198005.png</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">3</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">06 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">SASHIMIS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Sashimi Salmão (10 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">10 lâminas de salmão cru.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">68.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970353/photo1724225202.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">SASHIMIS</Data></Cell>
+      <Cell><Data ss:Type="String">Sashimi Salmão Flambado (10 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">10 lâminas de salmão flambado na pedra de sal</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">68.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970352/photo1724225257.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">2</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">2</Data></Cell>
+      <Cell><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">NIGUIRI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Niguiri Salmão (06 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Bolinho de arroz coberto com lâmina de salmão.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">30.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483451/ifood_12.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">06 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">NIGUIRI</Data></Cell>
+      <Cell><Data ss:Type="String">Niguiri Salmão Flambado (06 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">Bolinho de arroz coberto com lâmina de salmão flambado.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">30.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483450/WhatsApp_Image_2021-05-19_at_14.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">2</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">06 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">NIGUIRI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Niguiri Cazza (06 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Bolinho de arroz coberto com lâmina de salmão empando com cream cheese, geleia de pimenta e cebolinha.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">32.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483452/photo1712803347.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">3</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">06 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">URAMAKI</Data></Cell>
+      <Cell><Data ss:Type="String">Uramaki de Salmão (10 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de salmão cru e cream cheese.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">36.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483466/ifood_18.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">1</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">URAMAKI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Uramaki de Salmão Grelhado (10 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de salmão grelhado e cream cheese.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">36.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483463/images.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">URAMAKI</Data></Cell>
+      <Cell><Data ss:Type="String">Uramaki de Salmão Especial (10 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de salmão cru e cream cheese, envolto de lâmina de salmão cru.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">40.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483462/WhatsApp_Image_2021-05-19_at_14.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">3</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">URAMAKI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Uramaki Cazza (10 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de salmão empanado, cream cheese e geleia de pimenta.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">38.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483467/Uramaki.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">4</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">URAMAKI</Data></Cell>
+      <Cell><Data ss:Type="String">MORANGUME</Data></Cell>
+      <Cell><Data ss:Type="String">Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de salmão cru com morango e cream cheese</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">40.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2551662/photo1732342823.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">5</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">URAMAKI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Uramaki Califórnia (10 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Sushi enrolado com arroz na parte externa e gergelim torrado, recheado de maga, pepino e kani.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">30.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483461/sushi-hokkai.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">6</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">HOSSOMAKI</Data></Cell>
+      <Cell><Data ss:Type="String">Hossomaki de pepino (10 unidades )</Data></Cell>
+      <Cell><Data ss:Type="String">Sushi enrolado com arroz na parte interna recheado de pepino</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">20</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2436773/photo1720111994.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">1</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">HOSSOMAKI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Hossomaki de Salmão (10 Unidades)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Sushi enrolado com arroz na parte interna recheado de salmão cru.</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">24</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970316/download__1_.jpg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">HOSSOMAKI</Data></Cell>
+      <Cell><Data ss:Type="String">Hossomaki de Kani (10 Unidades)</Data></Cell>
+      <Cell><Data ss:Type="String">Sushi enrolado com arroz na parte interna recheado de kani.</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">24</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970315/WhatsApp_Image_2021-05-19_at_14.28.21__4_.jpeg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">3</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">1</Data></Cell>
+      <Cell><Data ss:Type="String">10 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">SOBREMESAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">BANANA EMPANADA</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">BANANA EMPANADA</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">26.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2486770/photo1724816650.jpeg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">presencial_only</Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">SOBREMESAS</Data></Cell>
+      <Cell><Data ss:Type="String">TAÇA MERENGUE</Data></Cell>
+      <Cell><Data ss:Type="String">TAÇA MERENGUE</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">34.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2486768/photo1756208261.jpeg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">2</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">presencial_only</Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">SOBREMESAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TAÇA NUTELLA</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TAÇA NUTELLA</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">38.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2486767/photo1724816049.jpeg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">3</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">presencial_only</Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">SOBREMESAS</Data></Cell>
+      <Cell><Data ss:Type="String">TAÇA BANOFFEE</Data></Cell>
+      <Cell><Data ss:Type="String">TAÇA BANOFFEE</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">30.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2486766/photo1756208324.jpeg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">4</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">presencial_only</Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">COCA ZERO 2 LITROS (APENAS DELIVERY)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">APENAS PARA DELIVERY !</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">20</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2770743/photo1772583500.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">1</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">2 litros</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell><Data ss:Type="String">Água</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">7</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970902/Agua.jpg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">2</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Água c/ Gás</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">8</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/970900/Agua-c-g_s.jpg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">3</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell><Data ss:Type="String">REFRIGERANTE 350 ml</Data></Cell>
+      <Cell><Data ss:Type="String">REFRIGERANTES 350 ml</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">10.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2436286/photo1720103827.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">4</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">350 ml</Data></Cell>
+      <Cell><Data ss:Type="String">[Obrigatório] REFRIGERANTE: ÁGUA TÔNICA R$10,90 / COCA COLA R$10,90 / GUARANA R$10,90 / SCHWEPPES R$10,90 / COCA COLA ZERO R$10,90 / GUARANA ZERO R$10,90 / FANTA UVA R$10,90 / FANTA LARANJA R$10,90 / H2OH R$13,90</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">SUCOS NATURAIS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">14.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2436761/photo1720109634.jpeg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">5</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">[Obrigatório] SUCO NATURAL: LARANJA R$14,90 / LARANJA COM MORANGO R$16,90 / LARANJA COM ACEROLA R$16,90 / LIMÃO R$14,90 / MORANGO R$14,90 / MARACUJÁ R$14,90 / ABACAXI R$14,90</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell><Data ss:Type="String">ICE TEA RED FRUITS</Data></Cell>
+      <Cell><Data ss:Type="String">CHÁ GELADO COM FRUTAS VERMELHAS</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">22</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2486771/photo1724817008.jpeg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">6</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">presencial_only</Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">CAIPIRNHAS SAQUÊ / VODKA</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">23</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2436769/photo1720110895.jpeg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">7</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">[Obrigatório] CAIPIRINHA: LIMÃO R$23,00 / FRUTAS VERMELHAS R$28,00 / MORANGO R$23,00 / MARACUJÁ R$23,00 / ABACAXI R$23,00</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell><Data ss:Type="String">SODA ITALIANA</Data></Cell>
+      <Cell><Data ss:Type="String">CONSULTAR SABORES COM O GARÇOM</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">18</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710302/photo1756212500.jpeg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">8</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">presencial_only</Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">VINHOS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">CONSULTAR COM O GARÇOM:</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">0</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710301/photo1756212290.jpeg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell><Data ss:Type="String">CERVEJAS LONG NECK 330ML</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">12</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2438198/photo1720205449.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">10</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">330 ml</Data></Cell>
+      <Cell><Data ss:Type="String">[Obrigatório] CERVEJAS: HEINEKEN R$14,00 / CORONA R$14,00 / BUDWEISER R$12,00 / STELLA R$12,00 / HEINEKEN ZERO R$12,00</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">GIN TROPICAL</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">GIN, FRUTAS CÍTRICAS E ENERGÉTICO TROPICAL</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">34.9</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710298/photo1756211718.jpeg</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">11</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">presencial_only</Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell><Data ss:Type="String">GIN RED FRUIT</Data></Cell>
+      <Cell><Data ss:Type="String">GIN, XAROPE DE MORANGO, FRUTAS VERMELHAS E ESPUMA DE LIMÃO SICILIANO</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">36.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710296/photo1756210515.jpeg</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">12</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">presencial_only</Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">BEBIDAS</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Coca Cola 2L (APENAS DELIVERY)</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Coca Cola 2l</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">18</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/1886202/200.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">13</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">2 litros</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">MOLHO, EXTRA E HASHI</Data></Cell>
+      <Cell><Data ss:Type="String">GENGIBRE</Data></Cell>
+      <Cell><Data ss:Type="String">GENGIBRE EM CONSERVA 30 ML</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">2</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710903/photo1756347464.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">1</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">30 ml</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">MOLHO, EXTRA E HASHI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">WASABI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">WASABI 30 ML</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">4</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710902/photo1756346428.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">2</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">30 ml</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">MOLHO, EXTRA E HASHI</Data></Cell>
+      <Cell><Data ss:Type="String">HASHI</Data></Cell>
+      <Cell><Data ss:Type="String">01 UNIDADE HASHI</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">0.9</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710901/photo1756346231.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">3</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">1 unidade</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">MOLHO, EXTRA E HASHI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">ADAPTADOR HASHI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">01 UNIDADE ADAPTADOR</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">0.5</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710900/photo1756346131.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">4</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">1 unidade</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">MOLHO, EXTRA E HASHI</Data></Cell>
+      <Cell><Data ss:Type="String">AGRIDOCE SACHÊ</Data></Cell>
+      <Cell><Data ss:Type="String">03 UNIDADES AGRIDOCE SACHÊ</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">3.5</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710899/photo1756345778.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">5</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">3 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">MOLHO, EXTRA E HASHI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TARÊ SACHÊ</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">03 UNIDADES TARÊ SACHÊ</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">3.5</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710898/photo1756345690.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">6</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">3 unidades</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">MOLHO, EXTRA E HASHI</Data></Cell>
+      <Cell><Data ss:Type="String">SHOYU SACHÊ</Data></Cell>
+      <Cell><Data ss:Type="String">03 UNIDADES SHOYU SACHÊ</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">2.5</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2710897/photo1756345584.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">7</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">3 unidades</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">MOLHO, EXTRA E HASHI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">TARÊ ARTESANAL</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">Molho Tarê 30ML</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">8</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2483470/photo1713999263.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">8</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">30 ml</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell><Data ss:Type="String">MOLHO, EXTRA E HASHI</Data></Cell>
+      <Cell><Data ss:Type="String">SWEET CHILLI</Data></Cell>
+      <Cell><Data ss:Type="String">(SWEET CHILLI) 30ml</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="price"><Data ss:Type="Number">7.5</Data></Cell>
+      <Cell><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2365057/photo1713999572.jpeg.webp</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="Number">9</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">true</Data></Cell>
+      <Cell><Data ss:Type="String">false</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String">30 ml</Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+      <Cell><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+      <Cell ss:StyleID="even"><Data ss:Type="String">MOLHO, EXTRA E HASHI</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">CREAM CHEESE 30 ML</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">CREAM CHEESE</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="priceven"><Data ss:Type="Number">8</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">https://cdn.neemo.com.br/uploads/item/photo/2365056/photo1713999404.jpeg.webp</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="Number">10</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">true</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">false</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String">30 ml</Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+      <Cell ss:StyleID="even"><Data ss:Type="String"></Data></Cell>
+   </Row>
+  </Table>
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
+   <FreezePanes/>
+   <FrozenNoSplit/>
+   <SplitHorizontal>1</SplitHorizontal>
+   <TopRowBottomPane>1</TopRowBottomPane>
+   <ActivePane>2</ActivePane>
+  </WorksheetOptions>
+ </Worksheet>
+</Workbook>
