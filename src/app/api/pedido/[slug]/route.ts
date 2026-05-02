@@ -41,6 +41,7 @@ interface PedidoChatRequest {
   lastAddedId?:         string;
   /** Product IDs already shown as cards this session (for de-duplication). */
   suggestedProductIds?: string[];
+  waiterMemory?:        Record<string, unknown>;
 }
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -128,6 +129,7 @@ export async function POST(
       event               = "ON_USER_MESSAGE",
       lastAddedId,
       suggestedProductIds,
+      waiterMemory,
     } = body;
 
     // ON_IDLE and non-AI events may arrive with an empty message
@@ -151,7 +153,7 @@ export async function POST(
       description:  (i as { description?: string | null }).description ?? null,
     }));
 
-    const { reply, cards, mode, options, suggestedItemName } = await AIOrderService.runWebTurn({
+    const { reply, cards, mode, options, suggestedItemName, memoryPatch } = await AIOrderService.runWebTurn({
       restaurantId:  restaurant.id,
       message:       message?.trim() ?? "",
       history,
@@ -168,6 +170,7 @@ export async function POST(
       catalogItems,
       lastAddedId,
       suggestedProductIds: Array.isArray(suggestedProductIds) ? suggestedProductIds : [],
+      waiterMemory:        waiterMemory ?? undefined,
     });
 
     console.info("[waiter]", JSON.stringify({
@@ -177,7 +180,7 @@ export async function POST(
       options: (options ?? []).length,
     }));
 
-    return ok({ reply, cards, mode: mode ?? "BROWSE", options: options ?? [], suggestedItemName: suggestedItemName ?? null });
+    return ok({ reply, cards, mode: mode ?? "BROWSE", options: options ?? [], suggestedItemName: suggestedItemName ?? null, memoryPatch: memoryPatch ?? null });
   } catch (err) {
     console.error("[POST /api/pedido/[slug]]", err);
     return serverError("Erro interno ao processar mensagem.");

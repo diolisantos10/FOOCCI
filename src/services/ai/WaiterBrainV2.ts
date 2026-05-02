@@ -567,20 +567,18 @@ function tagSort(a: TaggedItem, b: TaggedItem): number {
   return (a.sortOrder ?? 999) - (b.sortOrder ?? 999);
 }
 
-function selectDrinkItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
-  return tagCatalog(catalog)
+function selectDrinkItems(catalog: V2CatalogItem[], cartItemIds: string[], limit?: number): string[] {
+  const all = tagCatalog(catalog)
     .filter((i) => i.tags.includes("drink") && !cartItemIds.includes(i.id))
-    .sort(tagSort)
-    .slice(0, limit)
-    .map((i) => i.id);
+    .sort(tagSort);
+  return (limit !== undefined ? all.slice(0, limit) : all).map((i) => i.id);
 }
 
-function selectDessertItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
-  return tagCatalog(catalog)
+function selectDessertItems(catalog: V2CatalogItem[], cartItemIds: string[], limit?: number): string[] {
+  const all = tagCatalog(catalog)
     .filter((i) => i.tags.includes("dessert") && !cartItemIds.includes(i.id))
-    .sort(tagSort)
-    .slice(0, limit)
-    .map((i) => i.id);
+    .sort(tagSort);
+  return (limit !== undefined ? all.slice(0, limit) : all).map((i) => i.id);
 }
 
 function selectLightItems(catalog: V2CatalogItem[], cartItemIds: string[], limit: number): string[] {
@@ -1456,13 +1454,14 @@ function buildAfterCheckoutDirective(): string {
 
 // ─── event handlers ───────────────────────────────────────────
 
-function handleEntry(catalog: V2CatalogItem[]): V2Output {
-  // Consultant first turn: scan the menu taxonomy and present a qualifying question.
-  // PROHIBITED from showing product cards on entry (State 0 rule — no cards before probing).
-  const probe = buildDynamicProbeQuestion(catalog);
+function handleEntry(_catalog: V2CatalogItem[]): V2Output {
   return {
-    ...probe,
-    message: "Bem-vindo! Vamos encontrar o ideal pra você 😊",
+    message:     "Olá! Estou aqui se precisar de ajuda 😊",
+    cards:       [],
+    mode:        "BROWSE",
+    options:     [],
+    requiresAI:  false,
+    aiDirective: "",
   };
 }
 
@@ -1541,9 +1540,19 @@ function handleIdle(input: V2Input): V2Output {
   if (!cfg.allowIdlePrompt) return silent;
   if (mem && (mem.promptCount >= cfg.maxPermissionPromptsPerSession || isPermissionCooldownActive(mem, cfg))) return silent;
 
-  // When permission is not required, skip the ask and return the qualification question directly.
+  // When permission is not required, surface the permission ask as a soft suggestion.
   if (!cfg.permissionRequiredBeforeSuggestions) {
-    return { ...QUAL_QUESTION };
+    return {
+      message:     "Posso te sugerir algo? ✨",
+      cards:       [],
+      mode:        "BROWSE",
+      options:     [
+        { label: "Quero sugestão ✨", value: "want_suggestion" },
+        { label: "Prefiro continuar", value: "continue_browsing" },
+      ],
+      requiresAI:  false,
+      aiDirective: "",
+    };
   }
 
   // Ask permission before suggesting — never auto-push products on idle.
@@ -1571,7 +1580,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
   if (!alreadyHandled && ca.hasFood) {
     // Case A: cart has food but no drink → show drink cards actively
     if (!ca.hasDrink) {
-      const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds, 3);
+      const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds);
       if (drinkCards.length > 0) {
         return {
           message:     "Esse pedido fica perfeito com uma dessas bebidas — a combinação ideal 👇",
@@ -1589,7 +1598,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
 
     // Case B/C: has drink (or no drinks available) but no dessert → show dessert cards
     if (!ca.hasDessert) {
-      const dessertCards = selectDessertItems(input.catalog, input.cartItemIds, 3);
+      const dessertCards = selectDessertItems(input.catalog, input.cartItemIds);
       if (dessertCards.length > 0) {
         return {
           message:     "O favorito dos clientes pra fechar com chave de ouro 🍰",
@@ -1639,13 +1648,6 @@ function buildInterventionDirective(): string {
  */
 function handlePermissionAccepted(input: V2Input): V2Output {
   const { catalog, cartItemIds } = input;
-  const hasItems = cartItemIds.length > 0;
-
-  if (!hasItems) {
-    return { ...buildDynamicProbeQuestion(catalog) };
-  }
-
-  // Cart has items → context-aware deterministic recommendation
   const suggestedIds = input.memory?.suggestedProductIds ?? [];
   const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 5, suggestedIds);
   if (cards.length > 0) {
@@ -1700,63 +1702,6 @@ function noCardsFound(): V2Output {
     cards:       [],
     mode:        "BROWSE",
     options:     [{ label: "Ver cardápio", value: "browse_menu" }],
-    requiresAI:  false,
-    aiDirective: "",
-  };
-}
-
-// Qualification question used when the Waiter needs to narrow down the customer's preference.
-const QUAL_QUESTION: Pick<V2Output, "message" | "options" | "cards" | "mode" | "requiresAI" | "aiDirective"> = {
-  message:     "Prefere algo mais leve, completo ou para compartilhar?",
-  options:     [
-    { label: "Leve", value: "light" },
-    { label: "Completo", value: "complete" },
-    { label: "Para compartilhar", value: "group" },
-  ],
-  cards:       [],
-  mode:        "BROWSE",
-  requiresAI:  false,
-  aiDirective: "",
-};
-
-/**
- * Builds a catalog-driven qualifying question for undecided customers.
- * Derives the menu taxonomy from actual category frequency — no hardcoded cuisine labels.
- * Works for any menu: Japanese today, Italian tomorrow, logic unchanged.
- * Button values use "discovery:TERM" prefix for dynamic resolution in handleUserMessage.
- */
-function buildDynamicProbeQuestion(
-  catalog: V2CatalogItem[],
-): Pick<V2Output, "message" | "options" | "cards" | "mode" | "requiresAI" | "aiDirective"> {
-  const tagged    = tagCatalog(catalog);
-  const mainItems = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert"));
-
-  // Rank categories by item count and take the top 3 most represented food categories
-  const catFreq = new Map<string, number>();
-  for (const item of mainItems) {
-    catFreq.set(item.category, (catFreq.get(item.category) ?? 0) + 1);
-  }
-  const topCats = [...catFreq.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([name]) => name);
-
-  if (topCats.length < 2) return { ...QUAL_QUESTION };
-
-  // Truncate very long category names so they fit cleanly as button labels
-  const truncate = (s: string, max = 22): string =>
-    s.length > max ? `${s.slice(0, max - 1)}…` : s;
-
-  const options: WaiterOption[] = topCats.map((catName) => ({
-    label: truncate(catName),
-    value: `discovery:${catName.toLowerCase()}`,
-  }));
-
-  return {
-    message:     "Que tipo de experiência você procura hoje?",
-    options,
-    cards:       [],
-    mode:        "BROWSE",
     requiresAI:  false,
     aiDirective: "",
   };
@@ -1934,31 +1879,10 @@ function applyConstraints(
   });
 }
 
-/**
- * Deterministic State-1 response: brain pre-selects cards, returns them directly.
- * No AI call required — cards are guaranteed to reach the frontend every time.
- * Uses the expert-recommendation copy mandated by the Maître D' spec.
- */
-function buildCuratedResponse(
-  _catalog:        V2CatalogItem[],
-  _preferenceLabel: string,
-  cardIds:         string[],
-): V2Output {
-  return {
-    message:     "Baseado na sua preferência, estas são as experiências ideais 👇",
-    cards:       cardIds,
-    mode:        "SUGGESTION",
-    options:     [],
-    requiresAI:  false,
-    aiDirective: "",
-  };
-}
-
 function handleUserMessage(input: V2Input): V2Output {
   const cfg          = input.config ?? DEFAULT_WAITER_CONFIG;
   const { catalog, cartItemIds } = input;
   const suggestedIds = input.memory?.suggestedProductIds ?? [];
-  const qualCount    = input.memory?.qualificationCount ?? 0;
 
   const msgRaw  = input.message ?? "";
   const msgLow  = msgRaw.toLowerCase().trim();
@@ -1976,19 +1900,6 @@ function handleUserMessage(input: V2Input): V2Output {
     const base    = buildCommercialResponse({ intent, selectedProducts: cards, mode }, cfg);
     const message = buildObjectionCopy(msgRaw, intent) ?? base.message;
     return { ...base, message, requiresAI: false, aiDirective: "" };
-  };
-
-  // State machine: State 0 (qualCount=0) → probe question; State 1 (qualCount≥1) → 3 curated cards.
-  // Never skips State 0: the first vague/recommendation turn always asks ONE qualifying question.
-  const probeOrSuggest = (): V2Output => {
-    if (qualCount >= 1) {
-      // State 1: probe was already shown → curate 3 cards with AI-generated Maître D' copy
-      const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) return buildCuratedResponse(catalog, msgRaw, cards);
-      return noCardsFound();
-    }
-    // State 0: must ask ONE qualifying question first
-    return { ...buildDynamicProbeQuestion(catalog) };
   };
 
   // ── Special path: pre-checkout "Ver opções" button (backward compat) ─────────
@@ -2015,9 +1926,9 @@ function handleUserMessage(input: V2Input): V2Output {
     return noCardsFound();
   }
 
-  // ── Special path: user skipped drink upsell → offer desserts ─────────────────
+  // ── Special path: user skipped drink upsell → offer all desserts ────────────
   if (msgLow === "skip_drink_upsell") {
-    const dessertCards = selectDessertItems(catalog, cartItemIds, 5);
+    const dessertCards = selectDessertItems(catalog, cartItemIds);
     if (dessertCards.length > 0) {
       return {
         message:     "Feche com chave de ouro — o favorito dos clientes 🍰",
@@ -2036,46 +1947,6 @@ function handleUserMessage(input: V2Input): V2Output {
       requiresAI:  false,
       aiDirective: "",
     };
-  }
-
-  // ── Dynamic discovery: "discovery:CATEGORY" prefix from buildDynamicProbeQuestion ──────────
-  // State 1: user tapped a probe button → run catalog search + return 3 curated cards with AI copy.
-  if (msgLow.startsWith("discovery:")) {
-    const query        = msgLow.slice("discovery:".length).trim();
-    const displayLabel = msgRaw.slice("discovery:".length).trim();
-    if (query.length >= 2) {
-      const result = searchMenuByQuery(query, catalog, cartItemIds, suggestedIds, 3, maxBudget, excludedIngredients);
-      let cardIds  = result.ids.slice(0, 3);
-      if (cardIds.length === 0) {
-        // Fallback: direct category name match
-        cardIds = catalog
-          .filter((i) => i.categoryName.toLowerCase().includes(query) && !cartItemIds.includes(i.id))
-          .sort(bySort)
-          .slice(0, 3)
-          .map((i) => i.id);
-      }
-      if (cardIds.length > 0) return buildCuratedResponse(catalog, displayLabel, cardIds);
-    }
-    return noCardsFound();
-  }
-
-  // ── Cuisine-aware discovery answers (legacy button values — kept for backward compat) ──────
-  const DISCOVERY_SEARCH: Record<string, string> = {
-    discovery_cru_sushi:      "sashimi niguiri uramaki sushi",
-    discovery_quente:         "hot roll yakisoba quente",
-    discovery_temaki:         "temaki",
-    discovery_pizza_salgada:  "pizza",
-    discovery_pizza_doce:     "doce pizza",
-    discovery_burger_classic: "hamburguer burger",
-    discovery_burger_smash:   "smash burger",
-    discovery_vegetariano:    "vegetariano vegano",
-  };
-  if (msgLow in DISCOVERY_SEARCH) {
-    const query    = DISCOVERY_SEARCH[msgLow]!;
-    const result   = searchMenuByQuery(query, catalog, cartItemIds, suggestedIds, 3, maxBudget, excludedIngredients);
-    const cardIds  = result.ids.slice(0, 3);
-    if (cardIds.length > 0) return buildCuratedResponse(catalog, msgLow.replace(/_/g, " "), cardIds);
-    return noCardsFound();
   }
 
   // ── Menu search: explicit product / category queries ─────────────────────────
@@ -2179,23 +2050,17 @@ function handleUserMessage(input: V2Input): V2Output {
       }
       break;
     }
-    case "unclear": {
-      // Cart is empty → dynamic probe or curated cards after 2 questions (anti-loop)
-      if (!hasItems) return probeOrSuggest();
-      break;
-    }
+    case "unclear":
     case "wants_recommendation": {
-      if (!hasItems) return probeOrSuggest();
       const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("wants_recommendation", cards, "SUGGESTION");
       break;
     }
     case "checkout_intent": {
       if (!hasItems) break;
-      // Inline active upsell: check cart gaps and show cards directly
       const ca = analyzeCart(cartItemIds, catalog);
       if (!ca.hasDrink) {
-        const drinkCards = selectDrinkItems(catalog, cartItemIds, 3);
+        const drinkCards = selectDrinkItems(catalog, cartItemIds);
         if (drinkCards.length > 0) {
           return {
             message:     "Antes de finalizar — uma bebida vai bem com seu pedido 👇",
@@ -2211,7 +2076,7 @@ function handleUserMessage(input: V2Input): V2Output {
         }
       }
       if (!ca.hasDessert) {
-        const dessertCards = selectDessertItems(catalog, cartItemIds, 3);
+        const dessertCards = selectDessertItems(catalog, cartItemIds);
         if (dessertCards.length > 0) {
           return {
             message:     "Antes de finalizar — separei algumas sobremesas pra você 👇",
@@ -2228,12 +2093,11 @@ function handleUserMessage(input: V2Input): V2Output {
   }
 
   // ── AI path for remaining intents ─────────────────────────────
-  const discoveryOpts = hasItems ? [] : buildDynamicProbeQuestion(catalog).options;
   return {
     message:     "",
     cards:       [],
     mode:        "BROWSE",
-    options:     discoveryOpts,
+    options:     [],
     requiresAI:  true,
     aiDirective: buildUserMessageDirective(input.cartItemIds, input.cartValue),
   };
@@ -2488,22 +2352,6 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
   // User skipped drink upsell — mark as handled so dessert runs next
   if (input.event === "ON_USER_MESSAGE" && (input.message ?? "").toLowerCase().trim() === "skip_drink_upsell") {
     patch.finalUpsellPromptShown = true;
-  }
-
-  // Track qualifying question count to enforce the 2-state mandate.
-  // ON_ENTRY: entry probe counts as State 0 shown → set to 1 so user's next message
-  //   (whether typed or button-tapped) enters State 1 and receives cards.
-  if (input.event === "ON_ENTRY" && output.options.length > 0 && output.cards.length === 0) {
-    patch.qualificationCount = 1;
-  }
-  // ON_USER_MESSAGE: increment when a qualification question is shown (options, no cards);
-  //   reset to 0 when cards are delivered so a fresh probe cycle can start later.
-  if (input.event === "ON_USER_MESSAGE") {
-    if (output.options.length > 0 && output.cards.length === 0) {
-      patch.qualificationCount = (mem.qualificationCount ?? 0) + 1;
-    } else if (output.cards.length > 0) {
-      patch.qualificationCount = 0;
-    }
   }
 
   return patch;

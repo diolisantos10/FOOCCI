@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
+import type { WaiterMemory } from "@/services/ai/WaiterBrainV2";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,8 +27,6 @@ interface ChatMessage {
   suggestedItemName?: string;
   /** V2: product IDs to render as suggestion cards below this message. */
   cards?: string[];
-  /** Pre-resolved items for the inline carousel — checkout upsell (INTERVENTION mode). */
-  inlineItems?: MenuItem[];
   /** Quick-reply buttons — label is display text, value is what gets sent. */
   options?: WaiterOption[];
 }
@@ -308,17 +307,6 @@ function Bubble({
         <p className={`mt-1 text-right text-[10px] ${isUser ? "text-green-700" : "text-gray-400"}`}>
           {formatTime(msg.ts)}
         </p>
-        {/* Inline product carousel — checkout upsell cards embedded in the bubble */}
-        {!isUser && msg.inlineItems && msg.inlineItems.length > 0 && onItemAdd && (
-          <div
-            className="mt-3 -mx-2 flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
-            style={{ scrollbarWidth: "none" }}
-          >
-            {msg.inlineItems.map((item) => (
-              <InlineProductCard key={item.id} item={item} onAdd={() => onItemAdd(item)} />
-            ))}
-          </div>
-        )}
         {!isUser && msg.options && msg.options.length > 0 && onOptionSelect && (
           <div className="mt-2.5 flex flex-wrap gap-2" data-testid="waiter-options">
             {msg.options.map((opt) => (
@@ -356,41 +344,6 @@ function TypingIndicator() {
   );
 }
 
-// ── Inline product card — compact version for use inside chat bubbles ─────────
-// Used for checkout upsell (INTERVENTION mode) so cards appear below the waiter
-// text and above the skip/continue buttons, not in the separate product grid.
-
-function InlineProductCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
-  return (
-    <div className="flex flex-col shrink-0 w-[92px] overflow-hidden rounded-xl border border-gray-100 bg-gray-50 shadow-sm">
-      <div className="h-[48px] w-full overflow-hidden shrink-0">
-        {item.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gray-100 text-xl">
-            {categoryEmoji(item.name)}
-          </div>
-        )}
-      </div>
-      <div className="flex flex-1 flex-col px-2 pb-2 pt-1">
-        <p className="text-[10px] font-semibold leading-tight text-gray-900 line-clamp-2">{item.name}</p>
-        <div className="mt-1 flex items-center justify-between gap-1">
-          <span className="text-[10px] font-bold text-gray-700 shrink-0">
-            R${item.price.toFixed(2).replace(".", ",")}
-          </span>
-          <button
-            onClick={onAdd}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white text-xs font-bold"
-            style={{ backgroundColor: "var(--brand-primary)" }}
-          >
-            +
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Product card ──────────────────────────────────────────────────────────────
 // Thumbnail — uniform h-44 w-36. Image + name + price + add. No description.
@@ -994,6 +947,8 @@ export function PedidoClient({
   const [cartOpen, setCartOpen] = useState(false);
   // Products suggested by the AI — rendered in the product grid, not in chat.
   const [suggestedProducts, setSuggestedProducts] = useState<MenuItem[]>([]);
+  // Server-side session memory — sent each turn, updated from memoryPatch responses.
+  const [waiterMemory, setWaiterMemory] = useState<Partial<WaiterMemory>>({});
 
   // ── Guided flow mode ──────────────────────────────────────────────
   // Activated when user accepts the "Can I suggest something?" prompt.
@@ -1212,6 +1167,7 @@ export function PedidoClient({
             event,
             lastAddedId,
             categoryIntro: categoryIntro ?? null,
+            waiterMemory:  Object.keys(waiterMemory).length > 0 ? waiterMemory : undefined,
           }),
         });
 
@@ -1221,18 +1177,13 @@ export function PedidoClient({
         const apiOptions  = (Array.isArray(data?.data?.options) ? data.data.options : []) as WaiterOption[];
         const responseMode = (data?.data?.mode ?? "BROWSE") as string;
 
-        // Cards come ONLY from response.cards — no text inference, no category expansion.
-        // Show cards only when mode is SUGGESTION/INTERVENTION and stage is BROWSE.
-        //
-        // For INTERVENTION checkout upsell (has skip/continue options) the cards are
-        // rendered INLINE inside the chat bubble (inlineItems) so they appear directly
-        // below the waiter text and above the action buttons — the external product
-        // grid is cleared to avoid duplication.
-        const isInterventionWithSkip = responseMode === "INTERVENTION" &&
-          apiOptions.some((o) => o.value === "skip_drink_upsell" || o.value === "continue_checkout");
+        if (data?.data?.memoryPatch && typeof data.data.memoryPatch === "object") {
+          setWaiterMemory((prev) => ({ ...prev, ...data.data.memoryPatch }));
+        }
 
+        // Cards always go to the external carousel — never rendered inline in chat.
+        // Buttons are shown alongside cards for INTERVENTION (checkout upsell) mode.
         let hasShownCards = false;
-        let inlineItems: MenuItem[] | undefined;
         const allowCards = responseMode !== "CHECKOUT_SUPPORT" && stageSnap === "BROWSE";
 
         if (allowCards && rawCards.length > 0) {
@@ -1245,13 +1196,7 @@ export function PedidoClient({
 
           if (resolved.length > 0) {
             hasShownCards = true;
-            if (isInterventionWithSkip) {
-              // Checkout upsell: embed cards inline in the bubble, clear external grid
-              inlineItems = resolved;
-              setSuggestedProducts([]);
-            } else {
-              setSuggestedProducts(resolved);
-            }
+            setSuggestedProducts(resolved);
           }
         }
 
@@ -1260,15 +1205,8 @@ export function PedidoClient({
           setSuggestedProducts([]);
         }
 
-        // INTERVENTION with skip/continue: show both inline cards and buttons.
-        // Otherwise: cards suppress options; options only show when no cards.
-        const finalOptions: WaiterOption[] | undefined = isInterventionWithSkip
-          ? apiOptions
-          : hasShownCards
-          ? undefined
-          : apiOptions.length > 0
-          ? apiOptions
-          : undefined;
+        // Cards and buttons are always shown together when both are present.
+        const finalOptions: WaiterOption[] | undefined = apiOptions.length > 0 ? apiOptions : undefined;
 
         if (reply) {
           setMessages((prev) => [
@@ -1279,7 +1217,6 @@ export function PedidoClient({
               content: reply,
               ts: new Date(),
               options: finalOptions,
-              inlineItems,
             },
           ]);
         }

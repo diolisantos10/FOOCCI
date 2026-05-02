@@ -63,6 +63,8 @@ export interface AIWebTurnInput {
   lastAddedId?:    string;
   /** Product IDs already shown as cards this session (for de-duplication). */
   suggestedProductIds?: string[];
+  /** Client-held WaiterMemory from previous turn — merged server-side for stateful continuity. */
+  waiterMemory?: Partial<WaiterBrainV2.WaiterMemory>;
 }
 
 export interface AIWebTurnOutput {
@@ -71,6 +73,8 @@ export interface AIWebTurnOutput {
   mode:               WaiterMode;     // UI rendering state
   options:            WaiterOption[]; // quick-reply buttons
   suggestedItemName?: string;
+  /** Memory patch to be stored client-side and sent back on the next request. */
+  memoryPatch?: Partial<WaiterBrainV2.WaiterMemory>;
 }
 
 const MAX_TOOL_ITERATIONS = 6;
@@ -167,8 +171,10 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   // WaiterBrainV2 will show the permission gate if the cart qualifies.
   const waiterMemory: WaiterBrainV2.WaiterMemory = {
     ...WaiterBrainV2.createWaiterMemory(),
-    suggestedProductIds:    input.suggestedProductIds ?? [],
-    finalUpsellPromptShown: event === "ON_CHECKOUT_STARTED" && (input.upsellOffered != null),
+    ...(input.waiterMemory ?? {}),
+    suggestedProductIds:    input.waiterMemory?.suggestedProductIds ?? input.suggestedProductIds ?? [],
+    finalUpsellPromptShown: (input.waiterMemory?.finalUpsellPromptShown ?? false) ||
+                             (event === "ON_CHECKOUT_STARTED" && input.upsellOffered != null),
   };
 
   const v2 = WaiterBrainV2.decide({
@@ -182,7 +188,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   });
 
   if (!v2.requiresAI) {
-    return { reply: v2.message, cards: v2.cards, mode: v2.mode, options: v2.options };
+    return { reply: v2.message, cards: v2.cards, mode: v2.mode, options: v2.options, memoryPatch: v2.memoryPatch };
   }
 
   // ── AI pipeline (ON_USER_MESSAGE / AFTER_CHECKOUT) ──────────
@@ -355,6 +361,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     mode:              aiCards.length > 0 && v2.mode === "BROWSE" ? "SUGGESTION" : v2.mode,
     options:           v2.options,
     suggestedItemName,
+    memoryPatch:       v2.memoryPatch,
   };
 }
 
