@@ -58,6 +58,9 @@ export default async function QRMenuPage({
           price: true,
           imageUrl: true,
           isAvailable: true,
+          ingredients: true,
+          servingSize: true,
+          portionInfo: true,
           variants: {
             where: { isAvailable: true },
             orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -84,6 +87,9 @@ export default async function QRMenuPage({
         price: Number(i.price),
         imageUrl: i.imageUrl ?? null,
         isAvailable: i.isAvailable,
+        ingredients: i.ingredients ?? null,
+        servingSize: i.servingSize ?? null,
+        portionInfo: i.portionInfo ?? null,
         variants: i.variants.map((v) => ({
           id: v.id,
           name: v.name,

@@ -25,6 +25,9 @@ type Item = {
   price: number;
   imageUrl: string | null;
   isAvailable: boolean;
+  ingredients: string | null;
+  servingSize: number | null;
+  portionInfo: string | null;
   variants: Variant[];
   extras: Extra[];
 };
@@ -253,6 +256,28 @@ function ProductModal({
               <p className="text-sm text-gray-600 leading-relaxed">
                 {item.description}
               </p>
+            )}
+
+            {(item.servingSize || item.portionInfo) && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {item.servingSize && (
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                    👥 Serve {item.servingSize === 4 ? "4+" : item.servingSize} {item.servingSize === 1 ? "pessoa" : "pessoas"}
+                  </span>
+                )}
+                {item.portionInfo && (
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                    ⚖️ {item.portionInfo}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {item.ingredients && (
+              <div className="mt-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Ingredientes</p>
+                <p className="mt-1 text-xs leading-relaxed text-gray-500">{item.ingredients}</p>
+              </div>
             )}
 
             {item.variants.length > 0 && (
