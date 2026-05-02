@@ -904,6 +904,11 @@ type NewItemForm = {
   imageUrl: string | null;
   servingSize: number | null;
   portionInfo: string;
+  tagFunil:             string;
+  perfilPaladar:        string;
+  harmonizacaoSugerida: string;
+  alergenosDetalhados:  string;
+  storytellingIA:       string;
 };
 
 function NewItemModal({
@@ -926,6 +931,11 @@ function NewItemModal({
     imageUrl: null,
     servingSize: null,
     portionInfo: "",
+    tagFunil:             "",
+    perfilPaladar:        "",
+    harmonizacaoSugerida: "",
+    alergenosDetalhados:  "",
+    storytellingIA:       "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -940,6 +950,11 @@ function NewItemModal({
       imageUrl: null,
       servingSize: null,
       portionInfo: "",
+      tagFunil:             "",
+      perfilPaladar:        "",
+      harmonizacaoSugerida: "",
+      alergenosDetalhados:  "",
+      storytellingIA:       "",
     });
     setError("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -977,6 +992,11 @@ function NewItemModal({
           imageUrl: form.imageUrl || undefined,
           servingSize: form.servingSize ?? undefined,
           portionInfo: form.portionInfo.trim() || undefined,
+          tagFunil:             form.tagFunil.trim()             || undefined,
+          perfilPaladar:        form.perfilPaladar.trim()        || undefined,
+          harmonizacaoSugerida: form.harmonizacaoSugerida.trim() || undefined,
+          alergenosDetalhados:  form.alergenosDetalhados.trim()  || undefined,
+          storytellingIA:       form.storytellingIA.trim()       || undefined,
         }
       );
       const item: Item = {
@@ -985,6 +1005,11 @@ function NewItemModal({
         hasVariants: data.data.hasVariants ?? false,
         servingSize: data.data.servingSize ?? null,
         portionInfo: data.data.portionInfo ?? null,
+        tagFunil:             data.data.tagFunil             ?? null,
+        perfilPaladar:        data.data.perfilPaladar        ?? null,
+        harmonizacaoSugerida: data.data.harmonizacaoSugerida ?? null,
+        alergenosDetalhados:  data.data.alergenosDetalhados  ?? null,
+        storytellingIA:       data.data.storytellingIA       ?? null,
         variants: [],
         extras: [],
       };
@@ -1104,6 +1129,67 @@ function NewItemModal({
             <div className="space-y-1">
               <label className="block text-xs font-medium text-gray-700">Imagem</label>
               <ImageUpload value={form.imageUrl} onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))} />
+            </div>
+
+            {/* IA / Enriquecimento */}
+            <div className="space-y-3 border-t border-gray-100 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Inteligência / IA</p>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Etapa do funil</label>
+                <select
+                  value={form.tagFunil}
+                  onChange={(e) => setForm((f) => ({ ...f, tagFunil: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                >
+                  <option value="">— Não definido —</option>
+                  <option value="Entrada">Entrada</option>
+                  <option value="Prato Principal">Prato Principal</option>
+                  <option value="Bebida">Bebida</option>
+                  <option value="Sobremesa">Sobremesa</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Perfil de paladar</label>
+                <input
+                  value={form.perfilPaladar}
+                  onChange={(e) => setForm((f) => ({ ...f, perfilPaladar: e.target.value }))}
+                  placeholder="ex: umami, cremoso, cítrico"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Harmonização sugerida</label>
+                <input
+                  value={form.harmonizacaoSugerida}
+                  onChange={(e) => setForm((f) => ({ ...f, harmonizacaoSugerida: e.target.value }))}
+                  placeholder="ex: Água Tônica, Cerveja Heineken"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Alérgenos detalhados</label>
+                <input
+                  value={form.alergenosDetalhados}
+                  onChange={(e) => setForm((f) => ({ ...f, alergenosDetalhados: e.target.value }))}
+                  placeholder="ex: glúten, lactose, frutos do mar"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-700">Storytelling IA</label>
+                <textarea
+                  rows={3}
+                  value={form.storytellingIA}
+                  onChange={(e) => setForm((f) => ({ ...f, storytellingIA: e.target.value }))}
+                  placeholder="Narrativa usada pela IA quando o cliente pede uma recomendação especial"
+                  className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                />
+              </div>
             </div>
 
             {error && <InlineError message={error} />}
