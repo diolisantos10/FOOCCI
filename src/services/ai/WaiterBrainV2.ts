@@ -758,6 +758,31 @@ const MENU_SYNONYM_GROUPS: Array<[RegExp, RegExp]> = [
     /\b(combo|combinado|festival|bandeja)\b/i,
     /combo|combinado|festival|bandeja/i,
   ],
+  // Frango / chicken family
+  [
+    /\b(frango|chicken|galinha)\b/i,
+    /frango|chicken|galinha|peito|empanado/i,
+  ],
+  // Salmão / salmon family
+  [
+    /\b(salm[aã]o|salmon)\b/i,
+    /salm[aã]o|salmon/i,
+  ],
+  // Camarão / shrimp family
+  [
+    /\b(camar[aã]o|shrimp)\b/i,
+    /camar[aã]o|shrimp/i,
+  ],
+  // Peixe / fish family
+  [
+    /\b(peixe|fish|bacalhau|til[aá]pia|corvina)\b/i,
+    /peixe|fish|bacalhau|tilapia|corvina/i,
+  ],
+  // Carne / beef family
+  [
+    /\b(carne|bife|picanha|fil[eé]|filet|contra.?fil[eé])\b/i,
+    /carne|bife|picanha|fil[eé]|contra.?fil[eé]/i,
+  ],
 ];
 
 /**
@@ -770,7 +795,7 @@ function searchMenuByQuery(
   catalog:      V2CatalogItem[],
   cartItemIds:  string[],
   suggestedIds: string[],
-  limit = 3,
+  limit = 5,
 ): { ids: string[]; confidence: "high" | "medium" | "low" } {
   const normQuery = normalizeSearch(rawQuery);
   const words     = normQuery.split(/\s+/).filter((w) => w.length >= 3);
@@ -917,7 +942,7 @@ export function scoreProductForIntent(item: TaggedItem, intent: CustomerIntent, 
   if (intent === "wants_budget_option" || intent === "wants_light_option") {
     if (item.price <= ctx.benchmarks.p25)    score += 12;
     if (item.price <= ctx.benchmarks.median) score +=  5;
-    if (item.price >= ctx.benchmarks.p75)    score -=  8;  // penalize expensive items
+    if (item.price >= ctx.benchmarks.p75)    score -= 40;  // heavy penalty: above-budget items must not appear
   } else {
     if (item.price >= ctx.benchmarks.median) score += 8;
     if (item.price >= ctx.benchmarks.p75)    score += 4;
@@ -1408,9 +1433,40 @@ function handleMenuMode(): V2Output {
   };
 }
 
-function handleItemAdded(): V2Output {
+function handleItemAdded(input: V2Input): V2Output {
+  const { catalog, cartItemIds, lastAddedId, cartValue } = input;
+  const addedItem = lastAddedId ? catalog.find((i) => i.id === lastAddedId) : undefined;
+
+  let message: string;
+
+  if (cartItemIds.length >= 3 || cartValue >= 150) {
+    message = "Seu pedido já está ficando bem completo 👌";
+  } else if (cartItemIds.length >= 2) {
+    message = "Boa combinação! Seu pedido está tomando forma 👌";
+  } else if (addedItem) {
+    const cat  = addedItem.categoryName.toLowerCase();
+    const name = addedItem.name.toLowerCase();
+    if (/sobremesa|doce|gelad|sorvete|brownie|pudim|mousse/.test(cat) ||
+        /brownie|sorvete|pudim|mousse/.test(name)) {
+      message = "Ótima escolha pra fechar bem 😋";
+    } else if (/bebida|suco|refri|drink|cerveja|limonada/.test(cat)) {
+      message = "Perfeito pra acompanhar 🥤";
+    } else if (/sushi|temaki|maki|uramaki|hossomaki|combinado/.test(cat) ||
+               /temaki|uramaki|hossomaki|hot.?roll|niguiri/.test(name)) {
+      message = "Boa pedida 🍱";
+    } else if (/combo|festival|bandeja/.test(cat) || /combo|festival/.test(name)) {
+      message = "Combo certeiro 👌";
+    } else if (addedItem.price >= 80) {
+      message = "Excelente escolha 👌";
+    } else {
+      message = "Adicionado ao pedido ✅";
+    }
+  } else {
+    message = "Adicionado ao pedido ✅";
+  }
+
   return {
-    message:     "Escolha certeira 👌",
+    message,
     cards:       [],
     mode:        "BROWSE",
     options:     [],
@@ -1550,7 +1606,7 @@ function handlePermissionAccepted(input: V2Input): V2Output {
 
   // Cart has items → context-aware deterministic recommendation
   const suggestedIds = input.memory?.suggestedProductIds ?? [];
-  const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3, suggestedIds);
+  const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 5, suggestedIds);
   if (cards.length > 0) {
     return {
       message:     "Separei algumas opções que combinam com o seu pedido 👇",
@@ -1737,7 +1793,7 @@ function handleUserMessage(input: V2Input): V2Output {
       !ca.hasDrink   ? "asks_for_drink"   :
       !ca.hasDessert ? "asks_for_dessert" :
                        "asks_for_pairing";
-    const cards = rankProducts(catalog, intent, cartItemIds, 3, suggestedIds);
+    const cards = rankProducts(catalog, intent, cartItemIds, 5, suggestedIds);
     if (cards.length > 0) {
       return {
         message:     "Pra fechar bem, essas opções combinam com seu pedido 👇",
@@ -1749,14 +1805,14 @@ function handleUserMessage(input: V2Input): V2Output {
 
   // ── Special path: "Ver sobremesas novamente" button ───────────────────────────
   if (msgLow === "see_desserts_again") {
-    const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 3, []);
+    const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 5, []);
     if (cards.length > 0) return suggest("asks_for_dessert", cards, "SUGGESTION");
     return noCardsFound();
   }
 
   // ── Special path: user skipped drink upsell → offer desserts ─────────────────
   if (msgLow === "skip_drink_upsell") {
-    const dessertCards = selectDessertItems(catalog, cartItemIds, 3);
+    const dessertCards = selectDessertItems(catalog, cartItemIds, 5);
     if (dessertCards.length > 0) {
       return {
         message:     "Sem problema. Também vou te mostrar nossas sobremesas pra fechar bem 👇",
@@ -1816,35 +1872,35 @@ function handleUserMessage(input: V2Input): V2Output {
   // ── Deterministic paths (Sales Intelligence — no AI call) ────
   switch (analysis.customerIntent) {
     case "wants_light_option": {
-      const cards = rankProducts(catalog, "wants_light_option", cartItemIds, 3, suggestedIds);
+      const cards = rankProducts(catalog, "wants_light_option", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("wants_light_option", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "wants_complete_meal": {
-      const cards = rankProducts(catalog, "wants_complete_meal", cartItemIds, 3, suggestedIds);
+      const cards = rankProducts(catalog, "wants_complete_meal", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("wants_complete_meal", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "wants_group_order": {
-      const cards = rankProducts(catalog, "wants_group_order", cartItemIds, 3, suggestedIds);
+      const cards = rankProducts(catalog, "wants_group_order", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("wants_group_order", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "wants_budget_option": {
-      const cards = rankProducts(catalog, "wants_budget_option", cartItemIds, 3, suggestedIds);
+      const cards = rankProducts(catalog, "wants_budget_option", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("wants_budget_option", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "wants_premium_option": {
-      let cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 3, suggestedIds);
+      let cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 5, suggestedIds);
       if (cards.length === 0 && suggestedIds.length > 0) {
-        cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 3, []);
+        cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 5, []);
       }
       if (cards.length > 0) return suggest("wants_premium_option", cards, "INTERVENTION");
       return noCardsFound();
     }
     case "asks_for_dessert": {
-      const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 3, suggestedIds);
+      const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("asks_for_dessert", cards, "SUGGESTION");
       if (suggestedIds.some((id) => {
         const item = catalog.find((i) => i.id === id);
@@ -1865,12 +1921,12 @@ function handleUserMessage(input: V2Input): V2Output {
       return noCardsFound();
     }
     case "asks_for_drink": {
-      const cards = rankProducts(catalog, "asks_for_drink", cartItemIds, 3, suggestedIds);
+      const cards = rankProducts(catalog, "asks_for_drink", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("asks_for_drink", cards, "SUGGESTION");
       return noCardsFound();
     }
     case "asks_for_pairing": {
-      const cards = rankProducts(catalog, "asks_for_pairing", cartItemIds, 3, suggestedIds);
+      const cards = rankProducts(catalog, "asks_for_pairing", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("asks_for_pairing", cards, "SUGGESTION");
       return noCardsFound();
     }
@@ -1888,7 +1944,7 @@ function handleUserMessage(input: V2Input): V2Output {
         const cards = catalog
           .filter((i) => i.categoryName === hitCat && !cartItemIds.includes(i.id))
           .sort(bySort)
-          .slice(0, 3)
+          .slice(0, 5)
           .map((i) => i.id);
         if (cards.length > 0) return suggest("asks_category", cards, "SUGGESTION");
       }
@@ -1901,7 +1957,7 @@ function handleUserMessage(input: V2Input): V2Output {
     }
     case "wants_recommendation": {
       if (!hasItems) return { ...buildDiscoveryQuestion(catalog) };
-      const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3, suggestedIds);
+      const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("wants_recommendation", cards, "SUGGESTION");
       break;
     }
@@ -1910,7 +1966,7 @@ function handleUserMessage(input: V2Input): V2Output {
       // Inline active upsell: check cart gaps and show cards directly
       const ca = analyzeCart(cartItemIds, catalog);
       if (!ca.hasDrink) {
-        const drinkCards = selectDrinkItems(catalog, cartItemIds, 2);
+        const drinkCards = selectDrinkItems(catalog, cartItemIds, 3);
         if (drinkCards.length > 0) {
           return {
             message:     "Antes de finalizar — uma bebida vai bem com seu pedido 👇",
@@ -1926,7 +1982,7 @@ function handleUserMessage(input: V2Input): V2Output {
         }
       }
       if (!ca.hasDessert) {
-        const dessertCards = selectDessertItems(catalog, cartItemIds, 2);
+        const dessertCards = selectDessertItems(catalog, cartItemIds, 3);
         if (dessertCards.length > 0) {
           return {
             message:     "Antes de finalizar — separei algumas sobremesas pra você 👇",
@@ -2216,7 +2272,7 @@ export function decide(input: V2Input): V2Output {
       switch (input.event) {
         case "ON_ENTRY":               return handleEntry();
         case "ON_MENU_MODE":           return handleMenuMode();
-        case "ON_ITEM_ADDED":          return handleItemAdded();
+        case "ON_ITEM_ADDED":          return handleItemAdded(input);
         case "ON_CART_UPDATED":        return handleCartUpdated(input);
         case "ON_IDLE":                return handleIdle(input);
         case "ON_CHECKOUT_STARTED":    return handleCheckoutStarted(input);

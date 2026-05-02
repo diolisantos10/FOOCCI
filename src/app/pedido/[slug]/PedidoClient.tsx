@@ -1002,15 +1002,14 @@ export function PedidoClient({
   // pending         → passive permission prompt visible (during browsing)
   // consultive      → user accepted — AI may suggest
   // silent          → user declined — AI stays quiet until cooldown
-  // checkout-prompt → checkout upsell permission prompt visible
-  type AIPermState = "idle" | "pending" | "consultive" | "silent" | "checkout-prompt";
+  type AIPermState = "idle" | "pending" | "consultive" | "silent";
   const [aiPermState, setAiPermState] = useState<AIPermState>("idle");
   const silentUntilRef    = useRef<number>(0);     // epoch ms when silence expires
   const permPromptCountRef = useRef<number>(0);    // passive prompts shown this session (max 2)
   // (contextChosenRef removed — qualification suppression handled by options contract)
   const guidedStepRef     = useRef<"size" | "starters" | "main" | "drinks" | "dessert" | "done">("size");
   // Type of upsell pending at checkout ("drink" | "dessert")
-  const [checkoutPromptType, setCheckoutPromptType] = useState<"drink" | "dessert" | null>(null);
+  const checkoutPendingRef = useRef(false);
 
   // ── Upsell engine ─────────────────────────────────────────────────
   // offeredDrink / offeredDessert: set to true once that phase has been
@@ -1196,9 +1195,13 @@ export function PedidoClient({
           setSuggestedProducts([]);
         }
 
-        // When products are shown → no buttons; the "+" on each card is the action.
-        // When no products → use API-provided options (qualification buttons, etc.).
-        const finalOptions: WaiterOption[] | undefined = hasShownCards
+        // INTERVENTION with skip/continue options → show both cards and buttons (checkout upsell).
+        // Otherwise: cards suppress options; options only show when no cards.
+        const isInterventionWithSkip = responseMode === "INTERVENTION" &&
+          apiOptions.some((o) => o.value === "skip_drink_upsell" || o.value === "continue_checkout");
+        const finalOptions: WaiterOption[] | undefined = isInterventionWithSkip
+          ? apiOptions
+          : hasShownCards
           ? undefined
           : apiOptions.length > 0
           ? apiOptions
@@ -1368,9 +1371,12 @@ export function PedidoClient({
       setCart(newCart);
       lastActivityRef.current = Date.now();
       idleFiredRef.current    = false;
-      // suggestOnAdd: false — AI is not called on item add; cart updates silently.
+      // Call WaiterBrain with ON_ITEM_ADDED for contextual praise (deterministic, no AI cost).
+      if (stage === "BROWSE") {
+        sendText("", newCart, stage, activeUpsell, { event: "ON_ITEM_ADDED", lastAddedId: item.id, silent: true });
+      }
     },
-    [cart],
+    [cart, stage, activeUpsell, sendText],
   );
 
   const handleVariantAdd = useCallback(
@@ -1479,6 +1485,22 @@ export function PedidoClient({
     pushAssistantMessage("Perfeito 😊 fica à vontade — qualquer coisa é só me chamar.");
   }, [pushAssistantMessage]);
 
+  // ── Checkout proceed helper ───────────────────────────────────────
+  // Called by continue_checkout option or after all upsells resolve.
+
+  const proceedToCheckout = useCallback(() => {
+    checkoutPendingRef.current = false;
+    setSuggestedProducts([]);
+    setUpsellState((prev) => ({ ...prev, lastUpsellCategory: null }));
+    const resumeStage = computeResumeStage(deliveryMethod, address, customerName, paymentMode, paymentMethodSub);
+    setStage(resumeStage);
+    if (resumeStage === "DELIVERY_TYPE") {
+      sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
+    } else {
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Se já estiver tudo certo, pode finalizar 👇");
+    }
+  }, [deliveryMethod, address, customerName, paymentMode, paymentMethodSub, cart, sendText, pushAssistantMessage]);
+
   // ── Option button handler ─────────────────────────────────────────
   // Receives the button value + label. Label is shown in the user bubble;
   // value is what is sent to the backend and used for routing.
@@ -1517,10 +1539,14 @@ export function PedidoClient({
         return;
       }
 
-      // "continue_checkout" → local acknowledgment, no API call.
+      // "continue_checkout" → skip upsell and advance to checkout if pending, else acknowledge.
       if (value === "continue_checkout") {
         setSuggestedProducts([]);
-        pushAssistantMessage("Ótimo! Pode finalizar quando quiser 😊");
+        if (checkoutPendingRef.current) {
+          proceedToCheckout();
+        } else {
+          pushAssistantMessage("Ótimo! Pode finalizar quando quiser 😊");
+        }
         return;
       }
 
@@ -1529,31 +1555,8 @@ export function PedidoClient({
       setSuggestedProducts([]);
       sendText(value, cart, stage, activeUpsell, { displayText: label });
     },
-    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, pushAssistantMessage],
+    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, pushAssistantMessage, proceedToCheckout],
   );
-
-  // ── Checkout permission handlers ──────────────────────────────────
-
-  const handleCheckoutPermAccept = useCallback(() => {
-    setAiPermState("consultive");
-    setCheckoutPromptType(null);
-    void sendText("quero ver opções para acompanhar", cart, stage, null, { event: "ON_USER_MESSAGE", silent: true });
-  }, [cart, stage, sendText]);
-
-  const handleCheckoutPermDecline = useCallback(() => {
-    setAiPermState("idle");
-    setCheckoutPromptType(null);
-    // Mark both upsell phases as done so the next Finalizar goes straight to checkout.
-    setUpsellState((prev) => ({ ...prev, offeredDrink: true, offeredDessert: true, lastUpsellCategory: null }));
-    // Proceed to checkout immediately — no need for another Finalizar tap.
-    const resumeStage = computeResumeStage(deliveryMethod, address, customerName, paymentMode, paymentMethodSub);
-    setStage(resumeStage);
-    if (resumeStage === "DELIVERY_TYPE") {
-      sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
-    } else {
-      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Se já estiver tudo certo, pode finalizar 👇");
-    }
-  }, [deliveryMethod, address, customerName, paymentMode, paymentMethodSub, cart, sendText, pushAssistantMessage]);
 
   // Sends a category intro via the standard sendText path so cards are preserved
   // and history is updated consistently. No user bubble is shown (silent: true).
@@ -1591,8 +1594,6 @@ export function PedidoClient({
       silentUntilRef.current = 0;
       setAiPermState("idle");
     }
-    // If checkout permission prompt already showing, ignore repeated taps.
-    if (aiPermState === "checkout-prompt") return;
 
     if (cart.length === 0) {
       setMessages((prev) => [
@@ -1614,40 +1615,26 @@ export function PedidoClient({
     const hasDrink   = drinkCat   ? drinkCat.items.some((i)   => cartIds.has(i.id)) : false;
     const hasDessert = dessertCat ? dessertCat.items.some((i) => cartIds.has(i.id)) : false;
 
-    // ── DRINK phase — permission-gated (MEDIUM behavior) ─────────────────────
+    // ── DRINK phase — active upsell cards via Waiter ──────────────────────────
     if (!hasDrink && !upsellState.offeredDrink && drinkCat) {
       setUpsellState((prev) => ({ ...prev, offeredDrink: true, lastUpsellCategory: "drink" }));
-      setCheckoutPromptType("drink");
-      setAiPermState("checkout-prompt");
+      checkoutPendingRef.current = true;
+      sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
       return;
     }
 
-    // ── DESSERT phase — permission-gated (MEDIUM behavior) ───────────────────
+    // ── DESSERT phase — active upsell cards via Waiter ────────────────────────
     const drinkResolved = hasDrink || upsellState.offeredDrink;
     if (drinkResolved && !hasDessert && !upsellState.offeredDessert && dessertCat) {
       setUpsellState((prev) => ({ ...prev, offeredDessert: true, lastUpsellCategory: "dessert" }));
-      setCheckoutPromptType("dessert");
-      setAiPermState("checkout-prompt");
+      checkoutPendingRef.current = true;
+      sendText("skip_drink_upsell", cart, "BROWSE", null, { silent: true });
       return;
     }
 
     // ── All upsells resolved → resume from the correct checkout stage ─────────
-    // If the customer previously collected some checkout data and came back to
-    // browse, computeResumeStage detects the furthest completed step and jumps
-    // straight there — no need to re-enter address/name/payment already given.
-    setUpsellState((prev) => ({ ...prev, lastUpsellCategory: null }));
-    const resumeStage = computeResumeStage(deliveryMethod, address, customerName, paymentMode, paymentMethodSub);
-    setStage(resumeStage);
-    if (resumeStage === "DELIVERY_TYPE") {
-      // First checkout entry — emit ON_CHECKOUT_STARTED (silent, no user bubble).
-      // WaiterBrainV2 returns a short deterministic bridge message; the DELIVERY_TYPE
-      // panel renders the delivery/pickup buttons independently of this.
-      sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
-    } else {
-      // Resuming a prior checkout — jump straight with the step-specific prompt.
-      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT[resumeStage] ?? "Se já estiver tudo certo, pode finalizar 👇");
-    }
-  }, [cart, categories, stage, upsellState, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, sendText, pushAssistantMessage]);
+    proceedToCheckout();
+  }, [cart, categories, stage, upsellState, proceedToCheckout, sendText, pushAssistantMessage, aiPermState]);
 
   const handleDeliveryMethod = useCallback(
     (type: "delivery" | "pickup") => {
@@ -1828,9 +1815,8 @@ export function PedidoClient({
     lastActivityRef.current = Date.now();
     idleFiredRef.current    = false;
     // Exit passive states the moment the user initiates conversation
-    if (aiPermState === "silent" || aiPermState === "pending" || aiPermState === "checkout-prompt") {
+    if (aiPermState === "silent" || aiPermState === "pending") {
       silentUntilRef.current = 0;
-      setCheckoutPromptType(null);
       setAiPermState("consultive");
     }
 
@@ -2219,33 +2205,6 @@ export function PedidoClient({
             </div>
           )}
 
-          {/* Checkout permission prompt — ask before upsell at Finalizar */}
-          {aiPermState === "checkout-prompt" && stage === "BROWSE" && (
-            <div className="flex justify-start" data-testid="waiter-checkout-prompt">
-              <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3">
-                <p className="text-sm text-gray-900 mb-3 leading-relaxed">
-                  Antes de finalizar, quer ver uma bebida ou sobremesa? 👇
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    data-testid="waiter-checkout-accept"
-                    onClick={handleCheckoutPermAccept}
-                    className="flex-1 rounded-xl py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
-                    style={{ backgroundColor: 'var(--brand-primary)' }}
-                  >
-                    Ver opções ✨
-                  </button>
-                  <button
-                    data-testid="waiter-checkout-decline"
-                    onClick={handleCheckoutPermDecline}
-                    className="flex-1 rounded-xl py-2 text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
-                  >
-                    Não, finalizar
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {ui === "thinking" && <TypingIndicator />}
           <div ref={bottomRef} />

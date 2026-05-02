@@ -282,4 +282,117 @@ export const CUSTOMER_PROFILES: CustomerProfile[] = [
     expectedOutcome:
       "ON_ITEM_ADDED → cards=[], options=[], mode=BROWSE. Qualquer card ou option retornado é invasive_after_item_add.",
   },
+
+  // ════════════════════════════════════════════════════════════
+  //  MENU SEARCH & INGREDIENT PROFILES  (Q – R)
+  // ════════════════════════════════════════════════════════════
+
+  // ── Q: Busca por Sushi ───────────────────────────────────────────────────────
+  {
+    id:       "sushi-search",
+    name:     "Busca por Sushi",
+    goal:     "Perguntar opções de sushi e receber cards diretos",
+    behavior: "direct",
+    intentMessages: [
+      "quais opções de sushi vocês têm?",
+      "me mostra os sushis",
+    ],
+    requiresCart:     false,
+    requiresCheckout: false,
+    expectedOutcome:
+      "searchMenuByQuery('sushi') confidence=high → cards[] com uramaki/temaki/hot roll. Sunomono/shimeji não aparecem.",
+  },
+
+  // ── R: Busca por Frango ───────────────────────────────────────────────────────
+  {
+    id:       "frango-search",
+    name:     "Busca por Frango",
+    goal:     "Pedir opções com frango e receber cards por ingrediente",
+    behavior: "direct",
+    intentMessages: [
+      "quero opções com frango",
+      "tem alguma coisa com frango aqui?",
+    ],
+    requiresCart:     false,
+    requiresCheckout: false,
+    expectedOutcome:
+      "Synonym group frango → cards[] com itens que contêm frango no nome/descrição. Confidence medium→high.",
+  },
+
+  // ════════════════════════════════════════════════════════════
+  //  CONTEXTUAL ON_ITEM_ADDED PROFILES  (S – T)
+  // ════════════════════════════════════════════════════════════
+
+  // ── S: ON_ITEM_ADDED — Item único (elogio contextual) ────────────────────────
+  {
+    id:       "contextual-item-add-single",
+    name:     "Contextual ON_ITEM_ADDED — Item único",
+    goal:     "Adiciona 1 item e espera elogio contextual (não 'Escolha certeira' genérico)",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems:  [[]],
+    requiresCart:     false,
+    requiresCheckout: false,
+    requiresIdle:     false,
+    expectedOutcome:
+      "ON_ITEM_ADDED → cards=[], options=[] (Rule 7). reply é contextual ao produto adicionado.",
+  },
+
+  // ── T: ON_ITEM_ADDED — Multi-item (confirmação de pedido completo) ────────────
+  {
+    id:       "contextual-item-add-multi",
+    name:     "Contextual ON_ITEM_ADDED — Multi-item",
+    goal:     "Adiciona 3 itens e espera acknowledgment de pedido completo na 3ª adição",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems:  [[], [], []],
+    requiresCart:     false,
+    requiresCheckout: false,
+    requiresIdle:     false,
+    expectedOutcome:
+      "Três ON_ITEM_ADDED → todos cards=[], options=[] (Rule 7). 3ª resposta deve mencionar pedido completo.",
+  },
+
+  // ════════════════════════════════════════════════════════════
+  //  ACTIVE CHECKOUT UPSELL PROFILES  (U – V)
+  // ════════════════════════════════════════════════════════════
+
+  // ── U: Upsell de Bebida Ativo — Prato sem bebida ──────────────────────────────
+  {
+    id:       "active-drink-upsell",
+    name:     "Upsell Ativo — Bebida na finalização",
+    goal:     "Adiciona prato, tenta checkout, espera bebida cards ativos (sem modal)",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems:       [[]],
+    requiresCart:          true,
+    requiresCheckout:      true,
+    requiresIdle:          false,
+    expectsCheckoutUpsell: true,
+    expectedOutcome:
+      "ON_CHECKOUT_STARTED → cards[] de bebida + skip/continue options (INTERVENTION). Sem modal de permissão. Sem tela de checkout operacional.",
+  },
+
+  // ── V: Skip bebida → Upsell de Sobremesa ────────────────────────────────────
+  {
+    id:       "active-dessert-after-skip",
+    name:     "Upsell Ativo — Sobremesa após skip de bebida",
+    goal:     "Prato + bebida, skip drink upsell, espera cards de sobremesa",
+    behavior: "passive",
+    isSilent: true,
+    intentMessages: [],
+    silentCartItems: [
+      [],
+      ["bebida", "suco", "refrigerante", "agua", "cerveja", "limonada"],
+    ],
+    requiresCart:          true,
+    requiresCheckout:      true,
+    requiresIdle:          false,
+    expectsCheckoutUpsell: true,
+    expectedOutcome:
+      "ON_CHECKOUT_STARTED com prato+bebida → sobremesa cards (INTERVENTION) + continue_checkout option. Sem modal.",
+  },
 ];
