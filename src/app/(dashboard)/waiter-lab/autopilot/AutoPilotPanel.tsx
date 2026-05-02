@@ -402,23 +402,28 @@ async function runScenario(
           }
         }
 
-        // ON_CHECKOUT_STARTED: expect permission gate (options) for upsell-enabled profiles
+        // ON_CHECKOUT_STARTED: expect active upsell (cards) or permission gate (options)
         if (event === "ON_CHECKOUT_STARTED" && profile.expectsCheckoutUpsell) {
-          const hasGate = response.options.length > 0;
-          if (!hasGate) {
+          const hasUpsell = response.cards.length > 0 || response.options.length > 0;
+          if (!hasUpsell) {
             stepFailures   = [...stepFailures, "missed_final_upsell"];
             stepAssertions = [
               ...stepAssertions,
               {
-                label:  "Checkout upsell gate esperado via options",
+                label:  "Checkout upsell esperado (cards ativos ou options gate)",
                 pass:   false,
-                detail: `options=0, mode=${response.mode}`,
+                detail: `cards=0, options=0, mode=${response.mode}`,
               },
             ];
           } else {
             stepAssertions = [
               ...stepAssertions,
-              { label: "Checkout upsell gate presente", pass: true },
+              {
+                label: response.cards.length > 0
+                  ? "Checkout upsell ativo: cards retornados"
+                  : "Checkout upsell gate presente via options",
+                pass: true,
+              },
             ];
           }
         }

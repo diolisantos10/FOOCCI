@@ -51,7 +51,7 @@ export const IMPROVEMENT_SUGGESTIONS: Record<FailureType, string> = {
     "IDs em cards[] não existem no catálogo ativo. Valide IDs antes de incluir na resposta.",
   // ── Silent customer failures ─────────────────────────────────────────────────
   missed_final_upsell:
-    "Upsell final não foi oferecido. No ON_CHECKOUT_STARTED (silent), retornar options com 'Ver opções' e 'Não, finalizar'.",
+    "Upsell final não oferecido. No ON_CHECKOUT_STARTED, retornar cards de bebida/sobremesa diretamente (INTERVENTION) ou permission gate via options.",
   premature_intervention:
     "Waiter interrompeu navegação silenciosa sem sinal claro de intenção. Aguardar checkout intent para agir.",
   repeated_prompt:
@@ -335,7 +335,8 @@ export function computeSilentMetrics(results: ScenarioResult[]): SilentMetrics {
 
   const upsellOffered = silent.filter((r) =>
     r.steps.some(
-      (s) => s.event === "ON_CHECKOUT_STARTED" && s.response && s.response.options.length > 0,
+      (s) => s.event === "ON_CHECKOUT_STARTED" && s.response &&
+             (s.response.options.length > 0 || s.response.cards.length > 0),
     )
   ).length;
 
@@ -374,7 +375,7 @@ export function computeSilentMetrics(results: ScenarioResult[]): SilentMetrics {
 // ── Evaluator version ─────────────────────────────────────────────────────────
 // Bump this string any time the evaluation rules change so stale Railway builds
 // are immediately visible in the UI.
-export const EVALUATOR_VERSION = "2026-05-02-waiter-final-v2";
+export const EVALUATOR_VERSION = "2026-05-02-store-model-v3";
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
@@ -387,24 +388,30 @@ const WEAK_PHRASES = /^(ok|beleza|ótimo|certo|perfeito|entendi|claro)[.!]?$/i;
 const CHECKOUT_SALES_PHRASES = /\b(vou sugerir|que tal|combina|tente|experimente|aproveite|bebida|drink|sobremesa|acompanhe?|complementa?|adicional|quer experimentar|posso sugerir|sugiro)\b/i;
 
 /**
- * Returns true when the response is the expected final-upsell permission gate
- * emitted by handleCheckoutStarted() in WaiterBrainV2.
+ * Returns true when the response is a valid checkout upsell response from
+ * handleCheckoutStarted() or checkout_intent in WaiterBrainV2.
  *
- * A valid gate MUST have:
- *   - mode: "INTERVENTION"  (not CHECKOUT_SUPPORT — checkout hasn't started yet)
- *   - cards: []             (no products before permission)
- *   - options: includes "see_final_suggestions" AND "continue_checkout"
+ * Accepts two shapes:
+ *   Old permission gate: mode=INTERVENTION, cards=[], options=[see_final_suggestions, continue_checkout]
+ *   New active upsell:   mode=INTERVENTION, cards=[drink/dessert IDs], options=[skip_drink_upsell | continue_checkout]
  *
- * This gate intentionally mentions "bebida"/"sobremesa" in its reply and must
- * NEVER be flagged as checkout_interference.
+ * Both intentionally mention "bebida"/"sobremesa" and must NEVER be flagged as checkout_interference.
  */
 export function isFinalUpsellGate(response: WaiterResponse): boolean {
-  return (
-    response.mode === "INTERVENTION" &&
+  if (response.mode !== "INTERVENTION") return false;
+  // Old permission gate (backward compat)
+  if (
     response.cards.length === 0 &&
     response.options.some((o) => o.value === "see_final_suggestions") &&
     response.options.some((o) => o.value === "continue_checkout")
-  );
+  ) return true;
+  // New active upsell: cards shown directly with skip/continue options
+  if (
+    response.cards.length > 0 &&
+    (response.options.some((o) => o.value === "skip_drink_upsell") ||
+     response.options.some((o) => o.value === "continue_checkout"))
+  ) return true;
+  return false;
 }
 
 // Clear premium-intent patterns where qualification without cards signals wrong detection
@@ -473,8 +480,11 @@ export function validateStep(
   }
 
   // Rule 9: cards + options mix
-  const noMix = !(response.cards.length > 0 && response.options.length > 0);
-  assertions.push({ label: "Rule 9: sem options[] quando cards[] existe", pass: noMix });
+  // Exception: active checkout upsell (INTERVENTION) may carry skip/continue options alongside cards
+  const isCheckoutUpsell = response.cards.length > 0 &&
+    response.options.some((o) => o.value === "skip_drink_upsell" || o.value === "continue_checkout");
+  const noMix = !(response.cards.length > 0 && response.options.length > 0 && !isCheckoutUpsell);
+  assertions.push({ label: "Rule 9: sem options[] quando cards[] existe (exceto upsell de checkout)", pass: noMix });
   if (!noMix) failureTypes.push("extra_buttons_after_cards");
 
   // Rule 2: cards contain valid catalog IDs

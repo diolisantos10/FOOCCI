@@ -160,7 +160,7 @@ export const CUSTOMER_PROFILES: CustomerProfile[] = [
     requiresIdle:          false,
     expectsCheckoutUpsell: true,
     expectedOutcome:
-      "ON_ITEM_ADDED → cards=[], options=[]. ON_CHECKOUT_STARTED → options gate sem cards. AFTER_CHECKOUT → sem pitch de vendas.",
+      "ON_ITEM_ADDED → cards=[], options=[]. ON_CHECKOUT_STARTED → bebida cards ativos (INTERVENTION) + opções de skip. AFTER_CHECKOUT → sem pitch de vendas.",
   },
 
   // ── J: Cliente Calado — Prato sem bebida ─────────────────────────────────────
@@ -177,7 +177,7 @@ export const CUSTOMER_PROFILES: CustomerProfile[] = [
     requiresIdle:          false,
     expectsCheckoutUpsell: true,
     expectedOutcome:
-      "ON_ITEM_ADDED limpo. ON_CHECKOUT_STARTED oferece permission gate; sem invasão.",
+      "ON_ITEM_ADDED limpo. ON_CHECKOUT_STARTED → bebida cards ativos (INTERVENTION). Sem invasão em navegação.",
   },
 
   // ── K: Cliente Calado — Prato + Bebida, sem sobremesa ────────────────────────
@@ -197,7 +197,7 @@ export const CUSTOMER_PROFILES: CustomerProfile[] = [
     requiresIdle:          false,
     expectsCheckoutUpsell: true,
     expectedOutcome:
-      "Dois ON_ITEM_ADDED limpos. Checkout deve sugerir sobremesa via options gate.",
+      "Dois ON_ITEM_ADDED limpos. ON_CHECKOUT_STARTED → sobremesa cards ativos (INTERVENTION). Sem invasão.",
   },
 
   // ── L: Cliente Calado — Montando pedido sozinho ───────────────────────────────
@@ -264,7 +264,7 @@ export const CUSTOMER_PROFILES: CustomerProfile[] = [
     requiresIdle:          false,
     expectsCheckoutUpsell: true,
     expectedOutcome:
-      "ON_ITEM_ADDED limpo. ON_CHECKOUT_STARTED → uma tentativa de upsell via options, não repetida. AFTER_CHECKOUT sem vendas.",
+      "ON_ITEM_ADDED limpo. ON_CHECKOUT_STARTED → upsell ativo com cards de bebida (INTERVENTION). AFTER_CHECKOUT sem vendas.",
   },
 
   // ── P: Cliente Calado — Sensível à invasão ───────────────────────────────────

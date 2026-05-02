@@ -715,6 +715,107 @@ function selectPairingItems(catalog: V2CatalogItem[], cartItemIds: string[], lim
   return (pairings.length > 0 ? pairings : notCart.sort(tagSort)).slice(0, limit).map((i) => i.id);
 }
 
+// ─── Menu search ─────────────────────────────────────────────
+
+function normalizeSearch(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Synonym groups: [queryPattern, itemPattern].
+ * When the customer message matches queryPattern, catalog items matching itemPattern
+ * receive a bonus score — enabling "sushi" to surface uramaki, hot roll, etc.
+ */
+const MENU_SYNONYM_GROUPS: Array<[RegExp, RegExp]> = [
+  // Sushi family — "sushi" query surfaces all sushi-style items
+  [
+    /\b(sushi|sashimi|niguiri|nigiri|uramaki|hossomaki|hosso.?maki|hot.?roll|temaki|maki|combinado)\b/i,
+    /sushi|sashimi|niguiri|nigiri|uramaki|hossomaki|hot.?roll|temaki|maki|combinado|combo/i,
+  ],
+  // Ramen / noodle family
+  [
+    /\b(l[aá]men|ramen|yakisoba|macarr|yakis)\b/i,
+    /lamen|ramen|yakisoba|macarr|noodle/i,
+  ],
+  // Drinks family
+  [
+    /\b(bebida|refri(gerante)?|refrigerante|suco|coca|agua|água|drink|cerveja|limonada|guaran[aá])\b/i,
+    /bebida|refri|refrigerante|suco|coca|agua|drink|cerveja|limonada|guarana/i,
+  ],
+  // Desserts family
+  [
+    /\b(sobremesa|doce|gelad[ao]|sorvete|brownie|pudim|mousse|tembleque)\b/i,
+    /sobremesa|doce|gelad|sorvete|brownie|pudim|mousse/i,
+  ],
+  // Combo / festival
+  [
+    /\b(combo|combinado|festival|bandeja)\b/i,
+    /combo|combinado|festival|bandeja/i,
+  ],
+];
+
+/**
+ * Searches the catalog for items explicitly matching the customer's query.
+ * Priority: name match > category match > description match > synonym group.
+ * Returns IDs sorted by relevance and a confidence level.
+ */
+function searchMenuByQuery(
+  rawQuery:     string,
+  catalog:      V2CatalogItem[],
+  cartItemIds:  string[],
+  suggestedIds: string[],
+  limit = 3,
+): { ids: string[]; confidence: "high" | "medium" | "low" } {
+  const normQuery = normalizeSearch(rawQuery);
+  const words     = normQuery.split(/\s+/).filter((w) => w.length >= 3);
+
+  if (words.length === 0) return { ids: [], confidence: "low" };
+
+  const scored: Array<{ id: string; score: number }> = [];
+
+  for (const item of catalog) {
+    if (cartItemIds.includes(item.id)) continue;
+
+    const nameNorm = normalizeSearch(item.name);
+    const catNorm  = normalizeSearch(item.categoryName);
+    const descNorm = normalizeSearch(item.description ?? "");
+    let score      = 0;
+
+    for (const word of words) {
+      if (nameNorm.includes(word))  score += 50;
+      if (catNorm.includes(word))   score += 40;
+      if (descNorm.includes(word))  score += 15;
+    }
+
+    const itemText = `${item.name} ${item.categoryName} ${item.description ?? ""}`;
+    for (const [queryPat, itemPat] of MENU_SYNONYM_GROUPS) {
+      if (queryPat.test(rawQuery) && itemPat.test(itemText)) {
+        score += 35;
+        break;
+      }
+    }
+
+    if (score > 0) {
+      if (suggestedIds.includes(item.id)) score = Math.max(1, score - 25);
+      scored.push({ id: item.id, score });
+    }
+  }
+
+  if (scored.length === 0) return { ids: [], confidence: "low" };
+
+  scored.sort((a, b) => b.score - a.score);
+  const topScore    = scored[0]?.score ?? 0;
+  const confidence  = topScore >= 40 ? "high" : topScore >= 20 ? "medium" : "low";
+
+  return { ids: scored.slice(0, limit).map((s) => s.id), confidence };
+}
+
 // ─── Smart Product Selection Engine (Sprint 4C) ──────────────
 
 export interface ScoreContext {
@@ -1367,28 +1468,45 @@ function handleCheckoutStarted(input: V2Input): V2Output {
   const mem = input.memory;
   const ca  = analyzeCart(input.cartItemIds, input.catalog);
 
-  // Skip final upsell if config disables it, or if already shown/declined this session
+  // Skip if config disables, or already handled this session
   const alreadyHandled = !cfg.allowFinalUpsellPrompt || (mem && (mem.finalUpsellPromptShown || mem.finalUpsellDeclined));
 
-  // Check there is at least one non-cart drink or dessert available to suggest
-  const hasComplementAvailable = input.catalog.some(
-    (i) => !input.cartItemIds.includes(i.id) && (isDrinkCategory(i.categoryName) || isDessertCategory(i.categoryName)),
-  );
+  if (!alreadyHandled && ca.hasFood) {
+    // Case A: cart has food but no drink → show drink cards actively
+    if (!ca.hasDrink) {
+      const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds, 3);
+      if (drinkCards.length > 0) {
+        return {
+          message:     "Excelente escolha. Separei algumas bebidas que combinam com seu pedido 👇",
+          cards:       drinkCards,
+          mode:        "INTERVENTION",
+          options:     [
+            { label: "Adicionar depois",    value: "skip_drink_upsell" },
+            { label: "Finalizar sem bebida", value: "continue_checkout"  },
+          ],
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
+    }
 
-  if (!alreadyHandled && ca.hasFood && (!ca.hasDrink || !ca.hasDessert) && hasComplementAvailable) {
-    return {
-      message:     "Antes de finalizar, quer ver uma bebida ou sobremesa pra acompanhar?",
-      cards:       [],
-      mode:        "INTERVENTION",
-      options:     [
-        { label: "Ver opções",    value: "see_final_suggestions" },
-        { label: "Não, finalizar", value: "continue_checkout"    },
-      ],
-      requiresAI:  false,
-      aiDirective: "",
-    };
+    // Case B/C: has drink (or no drinks available) but no dessert → show dessert cards
+    if (!ca.hasDessert) {
+      const dessertCards = selectDessertItems(input.catalog, input.cartItemIds, 3);
+      if (dessertCards.length > 0) {
+        return {
+          message:     "Para fechar bem, separei algumas sobremesas pra você 👇",
+          cards:       dessertCards,
+          mode:        "INTERVENTION",
+          options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
+    }
   }
-  // No upsell opportunity — proceed to checkout immediately.
+
+  // Case D: cart complete, or no opportunity — proceed to checkout.
   return {
     message:     "Perfeito 😊\nSe já estiver tudo certo, pode finalizar 👇",
     cards:       [],
@@ -1427,18 +1545,7 @@ function handlePermissionAccepted(input: V2Input): V2Output {
   const hasItems = cartItemIds.length > 0;
 
   if (!hasItems) {
-    return {
-      message:     "Prefere algo mais leve, completo ou para compartilhar?",
-      cards:       [],
-      mode:        "BROWSE",
-      options:     [
-        { label: "Leve", value: "light" },
-        { label: "Completo", value: "complete" },
-        { label: "Para compartilhar", value: "group" },
-      ],
-      requiresAI:  false,
-      aiDirective: "",
-    };
+    return { ...buildDiscoveryQuestion(catalog) };
   }
 
   // Cart has items → context-aware deterministic recommendation
@@ -1515,6 +1622,52 @@ const QUAL_QUESTION: Pick<V2Output, "message" | "options" | "cards" | "mode" | "
   aiDirective: "",
 };
 
+/**
+ * Builds a cuisine-aware discovery question for undecided customers.
+ * Falls back to generic options when no cuisine signal is detected.
+ */
+function buildDiscoveryQuestion(
+  catalog: V2CatalogItem[],
+): Pick<V2Output, "message" | "options" | "cards" | "mode" | "requiresAI" | "aiDirective"> {
+  const profile = analyzeMenuProfile(catalog);
+  const signals = profile.cuisineSignals;
+
+  if (signals.includes("sushi")) {
+    return {
+      message:     "Você prefere algo cru, quente ou tipo temaki?",
+      options:     [
+        { label: "Cru / Sushi",  value: "discovery_cru_sushi"  },
+        { label: "Quente",       value: "discovery_quente"      },
+        { label: "Temaki",       value: "discovery_temaki"      },
+      ],
+      cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "",
+    };
+  }
+  if (signals.includes("pizza")) {
+    return {
+      message:     "Prefere pizza salgada ou doce?",
+      options:     [
+        { label: "Salgada", value: "discovery_pizza_salgada" },
+        { label: "Doce",    value: "discovery_pizza_doce"    },
+      ],
+      cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "",
+    };
+  }
+  if (signals.includes("burger")) {
+    return {
+      message:     "Prefere hambúrguer clássico, smash ou vegetariano?",
+      options:     [
+        { label: "Clássico",    value: "discovery_burger_classic" },
+        { label: "Smash",       value: "discovery_burger_smash"   },
+        { label: "Vegetariano", value: "discovery_vegetariano"    },
+      ],
+      cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "",
+    };
+  }
+  // Generic fallback
+  return { ...QUAL_QUESTION };
+}
+
 // ─── Commercial Response Builder (Sprint 4D) ─────────────────
 
 const INTENT_COPY: Partial<Record<CustomerIntent, string>> = {
@@ -1564,8 +1717,6 @@ export function buildCommercialResponse(
 
 function handleUserMessage(input: V2Input): V2Output {
   const cfg          = input.config ?? DEFAULT_WAITER_CONFIG;
-  const analysis     = analyzeSalesContext(input);
-  const hasItems     = input.cartItemIds.length > 0;
   const { catalog, cartItemIds } = input;
   const suggestedIds = input.memory?.suggestedProductIds ?? [];
 
@@ -1576,9 +1727,11 @@ function handleUserMessage(input: V2Input): V2Output {
     aiDirective: "",
   });
 
-  // ── Special path: pre-checkout "Ver opções" button ─────────────────────────
-  // Priority: missing drink → drinks; missing dessert → desserts; else pairing.
-  if ((input.message ?? "").toLowerCase().trim() === "see_final_suggestions") {
+  const msgRaw  = input.message ?? "";
+  const msgLow  = msgRaw.toLowerCase().trim();
+
+  // ── Special path: pre-checkout "Ver opções" button (backward compat) ─────────
+  if (msgLow === "see_final_suggestions") {
     const ca = analyzeCart(cartItemIds, catalog);
     const intent: CustomerIntent =
       !ca.hasDrink   ? "asks_for_drink"   :
@@ -1588,22 +1741,77 @@ function handleUserMessage(input: V2Input): V2Output {
     if (cards.length > 0) {
       return {
         message:     "Pra fechar bem, essas opções combinam com seu pedido 👇",
-        cards,
-        mode:        "INTERVENTION",
-        options:     [],
-        requiresAI:  false,
-        aiDirective: "",
+        cards, mode: "INTERVENTION", options: [], requiresAI: false, aiDirective: "",
       };
     }
     return noCardsFound();
   }
 
-  // ── Special path: "Ver sobremesas novamente" button ──────────────────────────
-  if ((input.message ?? "").toLowerCase().trim() === "see_desserts_again") {
+  // ── Special path: "Ver sobremesas novamente" button ───────────────────────────
+  if (msgLow === "see_desserts_again") {
     const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 3, []);
     if (cards.length > 0) return suggest("asks_for_dessert", cards, "SUGGESTION");
     return noCardsFound();
   }
+
+  // ── Special path: user skipped drink upsell → offer desserts ─────────────────
+  if (msgLow === "skip_drink_upsell") {
+    const dessertCards = selectDessertItems(catalog, cartItemIds, 3);
+    if (dessertCards.length > 0) {
+      return {
+        message:     "Sem problema. Também vou te mostrar nossas sobremesas pra fechar bem 👇",
+        cards:       dessertCards,
+        mode:        "INTERVENTION",
+        options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
+    return {
+      message:     "Perfeito 😊 pode finalizar por aqui.",
+      cards:       [],
+      mode:        "CHECKOUT_SUPPORT",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
+  // ── Cuisine-aware discovery answers ───────────────────────────────────────────
+  const DISCOVERY_SEARCH: Record<string, string> = {
+    discovery_cru_sushi:      "sashimi niguiri uramaki sushi",
+    discovery_quente:         "hot roll yakisoba quente",
+    discovery_temaki:         "temaki",
+    discovery_pizza_salgada:  "pizza",
+    discovery_pizza_doce:     "doce pizza",
+    discovery_burger_classic: "hamburguer burger",
+    discovery_burger_smash:   "smash burger",
+    discovery_vegetariano:    "vegetariano vegano",
+  };
+  if (msgLow in DISCOVERY_SEARCH) {
+    const query  = DISCOVERY_SEARCH[msgLow]!;
+    const result = searchMenuByQuery(query, catalog, cartItemIds, suggestedIds);
+    if (result.ids.length > 0) return suggest("asks_category", result.ids, "SUGGESTION");
+    return noCardsFound();
+  }
+
+  // ── Menu search: explicit product / category queries ─────────────────────────
+  // If the customer is asking about a specific food (sushi, temaki, coca, etc.),
+  // surface matching catalog items immediately — no generic qualification.
+  const searchResult = searchMenuByQuery(msgRaw, catalog, cartItemIds, suggestedIds);
+  if (searchResult.confidence === "high") {
+    return {
+      message:     "Encontrei essas opções pra você 👇",
+      cards:       searchResult.ids,
+      mode:        "SUGGESTION",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
+  const analysis = analyzeSalesContext(input);
+  const hasItems = cartItemIds.length > 0;
 
   // ── Deterministic paths (Sales Intelligence — no AI call) ────
   switch (analysis.customerIntent) {
@@ -1667,15 +1875,15 @@ function handleUserMessage(input: V2Input): V2Output {
       return noCardsFound();
     }
     case "asks_specific_product": {
-      const msg = (input.message ?? "").toLowerCase();
-      const hit = catalog.find((i) => i.name.length >= 4 && msg.includes(i.name.toLowerCase()) && !cartItemIds.includes(i.id));
+      const msgL = msgRaw.toLowerCase();
+      const hit  = catalog.find((i) => i.name.length >= 4 && msgL.includes(i.name.toLowerCase()) && !cartItemIds.includes(i.id));
       if (hit) return suggest("asks_specific_product", [hit.id], "SUGGESTION");
       break;
     }
     case "asks_category": {
-      const msg      = (input.message ?? "").toLowerCase();
+      const msgL    = msgRaw.toLowerCase();
       const catNames = [...new Set(catalog.map((i) => i.categoryName))];
-      const hitCat   = catNames.find((c) => c.length >= 4 && msg.includes(c.toLowerCase()));
+      const hitCat  = catNames.find((c) => c.length >= 4 && msgL.includes(c.toLowerCase()));
       if (hitCat) {
         const cards = catalog
           .filter((i) => i.categoryName === hitCat && !cartItemIds.includes(i.id))
@@ -1687,39 +1895,60 @@ function handleUserMessage(input: V2Input): V2Output {
       break;
     }
     case "unclear": {
-      // Cart is empty → qualification buttons; cart has items → fall through to AI
-      if (!hasItems) return { ...QUAL_QUESTION };
+      // Cart is empty → cuisine-aware discovery; cart has items → fall through to AI
+      if (!hasItems) return { ...buildDiscoveryQuestion(catalog) };
       break;
     }
     case "wants_recommendation": {
-      if (!hasItems) return { ...QUAL_QUESTION };
+      if (!hasItems) return { ...buildDiscoveryQuestion(catalog) };
       const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return suggest("wants_recommendation", cards, "SUGGESTION");
       break;
     }
     case "checkout_intent": {
       if (!hasItems) break;
-      const pairingCards = selectPairingItems(catalog, cartItemIds, 2);
-      if (pairingCards.length > 0) {
-        return {
-          message:     "Antes de finalizar, que tal acrescentar algo?",
-          cards:       [],
-          mode:        "INTERVENTION",
-          options:     [{ label: "Ver opções", value: "see_final_suggestions" }, { label: "Não, finalizar", value: "continue_checkout" }],
-          requiresAI:  false,
-          aiDirective: "",
-        };
+      // Inline active upsell: check cart gaps and show cards directly
+      const ca = analyzeCart(cartItemIds, catalog);
+      if (!ca.hasDrink) {
+        const drinkCards = selectDrinkItems(catalog, cartItemIds, 2);
+        if (drinkCards.length > 0) {
+          return {
+            message:     "Antes de finalizar — uma bebida vai bem com seu pedido 👇",
+            cards:       drinkCards,
+            mode:        "INTERVENTION",
+            options:     [
+              { label: "Adicionar depois",    value: "skip_drink_upsell" },
+              { label: "Finalizar sem bebida", value: "continue_checkout" },
+            ],
+            requiresAI:  false,
+            aiDirective: "",
+          };
+        }
+      }
+      if (!ca.hasDessert) {
+        const dessertCards = selectDessertItems(catalog, cartItemIds, 2);
+        if (dessertCards.length > 0) {
+          return {
+            message:     "Antes de finalizar — separei algumas sobremesas pra você 👇",
+            cards:       dessertCards,
+            mode:        "INTERVENTION",
+            options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
+            requiresAI:  false,
+            aiDirective: "",
+          };
+        }
       }
       return { message: "Perfeito! Pode finalizar quando quiser 😊", cards: [], mode: "CHECKOUT_SUPPORT", options: [], requiresAI: false, aiDirective: "" };
     }
   }
 
   // ── AI path for remaining intents ─────────────────────────────
+  const discoveryOpts = hasItems ? [] : buildDiscoveryQuestion(catalog).options;
   return {
     message:     "",
     cards:       [],
     mode:        "BROWSE",
-    options:     hasItems ? [] : QUAL_QUESTION.options,
+    options:     discoveryOpts,
     requiresAI:  true,
     aiDirective: buildUserMessageDirective(input.cartItemIds, input.cartValue),
   };
@@ -1768,13 +1997,30 @@ const QUESTION_BUTTON_PATTERNS: { re: RegExp; options: WaiterOption[] }[] = [
       { label: "Mais completo",  value: "complete" },
     ],
   },
+  // Cuisine-aware: sushi discovery
+  {
+    re: /cru.*quente.*temaki|prefere algo cru/i,
+    options: [
+      { label: "Cru / Sushi", value: "discovery_cru_sushi" },
+      { label: "Quente",      value: "discovery_quente"    },
+      { label: "Temaki",      value: "discovery_temaki"    },
+    ],
+  },
+  // Cuisine-aware: pizza discovery
+  {
+    re: /pizza salgada.*doce|salgada.*ou.*doce.*pizza/i,
+    options: [
+      { label: "Salgada", value: "discovery_pizza_salgada" },
+      { label: "Doce",    value: "discovery_pizza_doce"    },
+    ],
+  },
 ];
 
 // Bare weak phrases → replace with seller-tone equivalent
 const WEAK_PHRASE_RE = /^(legal|beleza|ótimo|ok|claro)[!.]?$/i;
 
 // Option values allowed when mode is CHECKOUT_SUPPORT
-const CHECKOUT_SAFE_OPTIONS = new Set(["continue_checkout", "browse_menu"]);
+const CHECKOUT_SAFE_OPTIONS = new Set(["continue_checkout", "browse_menu", "skip_drink_upsell"]);
 
 /**
  * Validates and repairs a V2Output before it reaches the client.
@@ -1858,7 +2104,10 @@ export function validateWaiterResponse(
     }
 
     // 9. No confirmation buttons alongside product cards
-    if (cards.length > 0) options = [];
+    // Exception: active checkout upsell (INTERVENTION) may carry skip/continue options
+    const isCheckoutUpsell = mode === "INTERVENTION" &&
+      options.some((o) => o.value === "skip_drink_upsell" || o.value === "continue_checkout");
+    if (cards.length > 0 && !isCheckoutUpsell) options = [];
 
     if (snap) {
       const fixes: string[] = [];
@@ -1945,8 +2194,14 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
     patch.finalUpsellPromptShown  = true;
   }
 
-  // Final upsell prompt shown at checkout start
-  if (input.event === "ON_CHECKOUT_STARTED" && output.options.some((o) => o.value === "see_final_suggestions")) {
+  // Final upsell prompt shown at checkout start (old gate or new active upsell with cards)
+  if (input.event === "ON_CHECKOUT_STARTED" &&
+      (output.options.some((o) => o.value === "see_final_suggestions") || output.cards.length > 0)) {
+    patch.finalUpsellPromptShown = true;
+  }
+
+  // User skipped drink upsell — mark as handled so dessert runs next
+  if (input.event === "ON_USER_MESSAGE" && (input.message ?? "").toLowerCase().trim() === "skip_drink_upsell") {
     patch.finalUpsellPromptShown = true;
   }
 
