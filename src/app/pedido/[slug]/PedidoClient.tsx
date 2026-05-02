@@ -446,8 +446,8 @@ function ProductModal({
       {/* Card — full-screen on mobile, centered on desktop */}
       <div className="w-full h-full flex flex-col sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white">
 
-        {/* ── Image — square, flush to top of screen ── */}
-        <div className="relative w-full aspect-square shrink-0">
+        {/* ── Image — fixed height so content is always visible below ── */}
+        <div className="relative w-full h-52 sm:h-64 shrink-0">
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
