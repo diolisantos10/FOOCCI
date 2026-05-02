@@ -1398,7 +1398,12 @@ function buildUserMessageDirective(cartItemIds: string[], cartValue: number): st
     "  → ANCORAGEM: chame suggest_upsell com o item mais COMPLETO/PREMIUM primeiro.",
     "  → Depois, sugira 1 opção de custo-benefício como segundo call (quando aplicável).",
     "  → GATILHOS: use 'o mais pedido da casa', 'combinação perfeita', 'o mais fresco do dia'.",
-    "  → VENDA CASADA: ao sugerir prato principal, adicione 1 frase de harmonização sutil.",
+    "  → ENRIQUECIMENTO: se o item tiver 'perfilPaladar', use-o para descrição sensorial curta.",
+    "    Ex: perfil 'umami e cremoso' → 'textura cremosa com sabor intenso de salmão'.",
+    "  → STORYTELLING: se o cliente perguntar 'o que tem de especial?' ou 'me recomenda?',",
+    "    use o campo 'storytellingIA' do item (se preenchido) como base da resposta.",
+    "  → VENDA CASADA: ao sugerir prato principal, use 'harmonizacaoSugerida' do item",
+    "    como 'Sugestão do Maitre'. Ex: 'Fica perfeito com [harmonizacaoSugerida] 🍹'.",
     '  → Ex: "O mais pedido da casa — fica perfeito com uma bebida gelada. Quer experimentar? 👇"',
     "  → OBJEÇÃO DE PREÇO detectada ('caro', 'em conta', 'barato'):",
     '    Pivote com empatia: "Entendido! Se a ideia é algo mais em conta, esse combo entrega muito pelo valor 👇"',
@@ -1422,6 +1427,12 @@ function buildUserMessageDirective(cartItemIds: string[], cartValue: number): st
     "",
     "REGRA VISUAL (CRÍTICA): se você mencionar um produto → chame suggest_upsell.",
     "Se diz → mostra. Sem exceção.",
+    "",
+    "SEGURANÇA — ALÉRGENOS (OBRIGATÓRIO):",
+    "  → Se o cliente mencionar alergia ou restrição alimentar,",
+    "    verifique o campo 'alergenosDetalhados' de cada item antes de sugerir.",
+    "  → NUNCA sugira um item cujo 'alergenosDetalhados' contenha o alérgeno mencionado.",
+    "  → Se não tiver certeza, avise: 'Consulte nosso atendimento para confirmar os ingredientes.'",
     "━━━",
   ].join("\n");
 }
@@ -1575,6 +1586,17 @@ function handleIdle(input: V2Input): V2Output {
   };
 }
 
+/** Returns the harmonizacaoSugerida value from the highest-value food item in cart, if any. */
+function getCartPairing(catalog: V2CatalogItem[], cartItemIds: string[]): string | null {
+  const cartItems = cartItemIds
+    .map((id) => catalog.find((i) => i.id === id))
+    .filter((i): i is V2CatalogItem => !!i && !!i.harmonizacaoSugerida);
+  if (cartItems.length === 0) return null;
+  // Prefer the most expensive item's pairing suggestion
+  cartItems.sort((a, b) => b.price - a.price);
+  return cartItems[0]!.harmonizacaoSugerida!;
+}
+
 function handleCheckoutStarted(input: V2Input): V2Output {
   const cfg = input.config ?? DEFAULT_WAITER_CONFIG;
   const mem = input.memory;
@@ -1584,17 +1606,21 @@ function handleCheckoutStarted(input: V2Input): V2Output {
   const alreadyHandled = !cfg.allowFinalUpsellPrompt || (mem && (mem.finalUpsellPromptShown || mem.finalUpsellDeclined));
 
   if (!alreadyHandled && ca.hasFood) {
-    // Case A: cart has food but no drink → show drink cards actively
+    // Case A: cart has food but no drink → show full drink carousel
     if (!ca.hasDrink) {
       const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds);
       if (drinkCards.length > 0) {
+        const pairing = getCartPairing(input.catalog, input.cartItemIds);
+        const message = pairing
+          ? `Sugestão do Maitre: ${pairing} ✨ Veja todas as bebidas 👇`
+          : "Que tal uma bebida para completar o pedido? 👇";
         return {
-          message:     "Esse pedido fica perfeito com uma dessas bebidas — a combinação ideal 👇",
+          message,
           cards:       drinkCards,
           mode:        "INTERVENTION",
           options:     [
-            { label: "Adicionar depois",    value: "skip_drink_upsell" },
-            { label: "Finalizar sem bebida", value: "continue_checkout"  },
+            { label: "Adicionar depois",     value: "skip_drink_upsell" },
+            { label: "Finalizar sem bebida", value: "continue_checkout" },
           ],
           requiresAI:  false,
           aiDirective: "",
@@ -1602,12 +1628,16 @@ function handleCheckoutStarted(input: V2Input): V2Output {
       }
     }
 
-    // Case B/C: has drink (or no drinks available) but no dessert → show dessert cards
+    // Case B/C: has drink but no dessert → show full dessert carousel
     if (!ca.hasDessert) {
       const dessertCards = selectDessertItems(input.catalog, input.cartItemIds);
       if (dessertCards.length > 0) {
+        const pairing = getCartPairing(input.catalog, input.cartItemIds);
+        const message = pairing
+          ? `Sugestão do Maitre: ${pairing} 🍰 Veja todas as sobremesas 👇`
+          : "Uma sobremesa para fechar com chave de ouro? 👇";
         return {
-          message:     "O favorito dos clientes pra fechar com chave de ouro 🍰",
+          message,
           cards:       dessertCards,
           mode:        "INTERVENTION",
           options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
