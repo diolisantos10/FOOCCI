@@ -1456,14 +1456,13 @@ function buildAfterCheckoutDirective(): string {
 
 // ─── event handlers ───────────────────────────────────────────
 
-function handleEntry(): V2Output {
+function handleEntry(catalog: V2CatalogItem[]): V2Output {
+  // Act as consultant from the first turn: scan the menu and ask ONE qualifying question.
+  // STRICTLY FORBIDDEN to return cards on entry — State 0 always shows the probe question.
+  const probe = buildDynamicProbeQuestion(catalog);
   return {
-    message:     "Bem-vindo! 😊\nQuer uma sugestão ou prefere explorar o cardápio?",
-    cards:       [],
-    mode:        "BROWSE",
-    options:     [],
-    requiresAI:  false,
-    aiDirective: "",
+    ...probe,
+    message: "Bem-vindo! O que te apetece hoje? 😊",
   };
 }
 
@@ -1877,7 +1876,7 @@ function buildSearchCopy(message: string): string {
   if (CONSTRAINT_RE_MSG.test(message)) {
     return "Entendido! Levei em conta sua restrição — veja essas opções 👇";
   }
-  return "Encontrei essas opções pra você 👇";
+  return "Aqui estão as melhores opções pra você 👇";
 }
 
 /**
@@ -1930,6 +1929,64 @@ function applyConstraints(
   });
 }
 
+/**
+ * Returns a "requiresAI" output for State-1 curated picks.
+ * The brain pre-selects the cards; the AI generates the contextual Maître D' copy
+ * and calls suggest_upsell for each predetermined ID in order.
+ */
+function buildCuratedResponse(
+  catalog:         V2CatalogItem[],
+  preferenceLabel: string,
+  cardIds:         string[],
+): V2Output {
+  const profile     = analyzeMenuProfile(catalog);
+  const cuisineCtx  = profile.cuisineSignals.length > 0
+    ? profile.cuisineSignals.join("/")
+    : "gastronomia";
+
+  const itemLines = cardIds
+    .map((id) => {
+      const item = catalog.find((c) => c.id === id);
+      return item
+        ? `  • "${item.name}" — R$ ${item.price.toFixed(2)} [ID: ${item.id}]`
+        : null;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const aiDirective = [
+    BASE_DIRECTIVE,
+    "",
+    "━━━ ESTADO 1 — CURATED PICK (PÓS-SONDAGEM) ━━━",
+    `Cliente expressou: "${preferenceLabel}"`,
+    `Contexto: cardápio de ${cuisineCtx}`,
+    "",
+    `SELEÇÃO CURADA — apresente EXATAMENTE estes ${cardIds.length} itens:`,
+    itemLines,
+    "",
+    "TAREFA:",
+    "  → 1 frase (máx. 15 palavras) estilo Maître D' premium.",
+    '  → Modelo: "Entendido. Para quem busca [PREFERÊNCIA], estas são as joias do nosso cardápio 👇"',
+    "  → Vocabulário do domínio: sushi → 'joias do itamae'; pizza → 'seleção do forno'; burgers → 'hits da churrasqueira'; genérico → 'curadoria especial'.",
+    "  → Após a frase: chame suggest_upsell para CADA ID listado acima (em ordem).",
+    "PROIBIDO ABSOLUTAMENTE:",
+    "  → Sugerir qualquer ID diferente dos listados.",
+    "  → Fazer perguntas ao cliente.",
+    "  → Texto adicional após os cards.",
+    "  → Chamar suggest_upsell mais de 3 vezes.",
+    "━━━",
+  ].join("\n");
+
+  return {
+    message:     "",
+    cards:       [],   // AI generates cards via suggest_upsell with the predefined IDs
+    mode:        "SUGGESTION",
+    options:     [],
+    requiresAI:  true,
+    aiDirective,
+  };
+}
+
 function handleUserMessage(input: V2Input): V2Output {
   const cfg          = input.config ?? DEFAULT_WAITER_CONFIG;
   const { catalog, cartItemIds } = input;
@@ -1954,22 +2011,16 @@ function handleUserMessage(input: V2Input): V2Output {
     return { ...base, message, requiresAI: false, aiDirective: "" };
   };
 
-  // Anti-loop: after 2 qualifying questions, force 3 curated cards instead of asking again.
+  // State machine: State 0 (qualCount=0) → probe question; State 1 (qualCount≥1) → 3 curated cards.
+  // Never skips State 0: the first vague/recommendation turn always asks ONE qualifying question.
   const probeOrSuggest = (): V2Output => {
-    if (qualCount >= 2) {
+    if (qualCount >= 1) {
+      // State 1: probe was already shown → curate 3 cards with AI-generated Maître D' copy
       const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3, suggestedIds);
-      if (cards.length > 0) {
-        return {
-          message:     "Separei as melhores opções pra você 👇",
-          cards,
-          mode:        "SUGGESTION",
-          options:     [],
-          requiresAI:  false,
-          aiDirective: "",
-        };
-      }
+      if (cards.length > 0) return buildCuratedResponse(catalog, msgRaw, cards);
       return noCardsFound();
     }
+    // State 0: must ask ONE qualifying question first
     return { ...buildDynamicProbeQuestion(catalog) };
   };
 
@@ -2021,23 +2072,27 @@ function handleUserMessage(input: V2Input): V2Output {
   }
 
   // ── Dynamic discovery: "discovery:CATEGORY" prefix from buildDynamicProbeQuestion ──────────
+  // State 1: user tapped a probe button → run catalog search + return 3 curated cards with AI copy.
   if (msgLow.startsWith("discovery:")) {
-    const query = msgLow.slice("discovery:".length).trim();
+    const query        = msgLow.slice("discovery:".length).trim();
+    const displayLabel = msgRaw.slice("discovery:".length).trim();
     if (query.length >= 2) {
-      const result = searchMenuByQuery(query, catalog, cartItemIds, suggestedIds, 5, maxBudget, excludedIngredients);
-      if (result.ids.length > 0) return suggest("asks_category", result.ids, "SUGGESTION");
-      // Fallback: direct category name match when search returns nothing
-      const catMatch = catalog
-        .filter((i) => i.categoryName.toLowerCase().includes(query) && !cartItemIds.includes(i.id))
-        .sort(bySort)
-        .slice(0, 5)
-        .map((i) => i.id);
-      if (catMatch.length > 0) return suggest("asks_category", catMatch, "SUGGESTION");
+      const result = searchMenuByQuery(query, catalog, cartItemIds, suggestedIds, 3, maxBudget, excludedIngredients);
+      let cardIds  = result.ids.slice(0, 3);
+      if (cardIds.length === 0) {
+        // Fallback: direct category name match
+        cardIds = catalog
+          .filter((i) => i.categoryName.toLowerCase().includes(query) && !cartItemIds.includes(i.id))
+          .sort(bySort)
+          .slice(0, 3)
+          .map((i) => i.id);
+      }
+      if (cardIds.length > 0) return buildCuratedResponse(catalog, displayLabel, cardIds);
     }
     return noCardsFound();
   }
 
-  // ── Cuisine-aware discovery answers (legacy button values) ────────────────────────────────
+  // ── Cuisine-aware discovery answers (legacy button values — kept for backward compat) ──────
   const DISCOVERY_SEARCH: Record<string, string> = {
     discovery_cru_sushi:      "sashimi niguiri uramaki sushi",
     discovery_quente:         "hot roll yakisoba quente",
@@ -2049,9 +2104,10 @@ function handleUserMessage(input: V2Input): V2Output {
     discovery_vegetariano:    "vegetariano vegano",
   };
   if (msgLow in DISCOVERY_SEARCH) {
-    const query  = DISCOVERY_SEARCH[msgLow]!;
-    const result = searchMenuByQuery(query, catalog, cartItemIds, suggestedIds, 5, maxBudget, excludedIngredients);
-    if (result.ids.length > 0) return suggest("asks_category", result.ids, "SUGGESTION");
+    const query    = DISCOVERY_SEARCH[msgLow]!;
+    const result   = searchMenuByQuery(query, catalog, cartItemIds, suggestedIds, 3, maxBudget, excludedIngredients);
+    const cardIds  = result.ids.slice(0, 3);
+    if (cardIds.length > 0) return buildCuratedResponse(catalog, msgLow.replace(/_/g, " "), cardIds);
     return noCardsFound();
   }
 
@@ -2485,7 +2541,7 @@ export function decide(input: V2Input): V2Output {
   const raw = ((): V2Output => {
     try {
       switch (input.event) {
-        case "ON_ENTRY":               return handleEntry();
+        case "ON_ENTRY":               return handleEntry(input.catalog);
         case "ON_MENU_MODE":           return handleMenuMode();
         case "ON_ITEM_ADDED":          return handleItemAdded(input);
         case "ON_CART_UPDATED":        return handleCartUpdated(input);
