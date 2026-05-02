@@ -142,15 +142,25 @@ export async function POST(
     const catalogRows = await prisma.menuItem.findMany({
       where:   { isActive: true, isAvailable: true, showInDelivery: true, category: { restaurantId: restaurant.id } },
       orderBy: { sortOrder: "asc" },
-      select:  { id: true, name: true, price: true, description: true, sortOrder: true, category: { select: { name: true } } },
+      select:  {
+        id: true, name: true, price: true, description: true, sortOrder: true,
+        tagFunil: true, perfilPaladar: true, harmonizacaoSugerida: true,
+        alergenosDetalhados: true, storytellingIA: true,
+        category: { select: { name: true } },
+      },
     });
     const catalogItems = catalogRows.map((i: typeof catalogRows[number]) => ({
-      id:           i.id,
-      name:         i.name,
-      categoryName: (i.category as { name: string } | null)?.name ?? "",
-      price:        Number(i.price),
-      sortOrder:    i.sortOrder ?? undefined,
-      description:  (i as { description?: string | null }).description ?? null,
+      id:                   i.id,
+      name:                 i.name,
+      categoryName:         (i.category as { name: string } | null)?.name ?? "",
+      price:                Number(i.price),
+      sortOrder:            i.sortOrder ?? undefined,
+      description:          i.description ?? null,
+      tagFunil:             i.tagFunil ?? null,
+      perfilPaladar:        i.perfilPaladar ?? null,
+      harmonizacaoSugerida: i.harmonizacaoSugerida ?? null,
+      alergenosDetalhados:  i.alergenosDetalhados ?? null,
+      storytellingIA:       i.storytellingIA ?? null,
     }));
 
     const { reply, cards, mode, options, suggestedItemName, memoryPatch } = await AIOrderService.runWebTurn({

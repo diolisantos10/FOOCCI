@@ -211,6 +211,12 @@ model MenuItem {
   code        String?
   servingSize Int?     // number of people (1, 2, 3, 4+)
   portionInfo String?  // free-text weight/volume e.g. "300g", "500ml"
+  // ── AI enrichment fields ──────────────────────────────────────────
+  tagFunil             String?  // funnel stage: Entrada | Prato Principal | Bebida | Sobremesa
+  perfilPaladar        String?  // sensory profile for AI descriptions (umami, cítrico, cremoso…)
+  harmonizacaoSugerida String?  // item ID or name to suggest at checkout if category missing from cart
+  alergenosDetalhados  String?  // comma-separated allergen list (glúten, lactose, frutos do mar…)
+  storytellingIA       String?  // curated narrative to use when customer asks "what makes it special"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

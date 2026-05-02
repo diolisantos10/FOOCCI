@@ -50,6 +50,12 @@ export interface V2CatalogItem {
   price:        number;
   sortOrder?:   number;
   description?: string | null;
+  // AI enrichment fields (optional — populated after migration)
+  tagFunil?:             string | null;
+  perfilPaladar?:        string | null;
+  harmonizacaoSugerida?: string | null;
+  alergenosDetalhados?:  string | null;
+  storytellingIA?:       string | null;
 }
 
 // ─── session memory ───────────────────────────────────────────
