@@ -56,6 +56,12 @@ export interface V2CatalogItem {
   harmonizacaoSugerida?: string | null;
   alergenosDetalhados?:  string | null;
   storytellingIA?:       string | null;
+  // Sales performance fields (optional — provided by future restaurant analytics integration)
+  salesCount?:        number | null;
+  conversionRate?:    number | null;   // 0–1
+  popularityScore?:   number | null;   // 0–1 normalized
+  isBestSeller?:      boolean | null;
+  restaurantPriority?: number | null;  // 0–100, set manually per item
 }
 
 // ─── session memory ───────────────────────────────────────────
@@ -817,6 +823,20 @@ const MENU_SYNONYM_GROUPS: Array<[RegExp, RegExp]> = [
 ];
 
 /**
+ * Matches accessory/condiment products that should not rank for broad food queries.
+ * Accessories only surface when the user explicitly asks for them ("tem shoyu?").
+ */
+const ACCESSORY_ITEM_RE = /\b(wasabi|shoyu|sache|sach[eê]|tare|tar[eê]|agridoce|hashi|gengibre|adicional|acompanhamento|condimento)\b/i;
+
+function isAccessoryItem(item: V2CatalogItem): boolean {
+  return ACCESSORY_ITEM_RE.test(`${item.name} ${item.categoryName} ${item.description ?? ""}`);
+}
+
+function isAccessoryQuery(rawQuery: string): boolean {
+  return ACCESSORY_ITEM_RE.test(rawQuery);
+}
+
+/**
  * Searches the catalog for items explicitly matching the customer's query.
  * Priority: name match > category match > description match > synonym group.
  * Returns IDs sorted by relevance and a confidence level.
@@ -829,22 +849,18 @@ function searchMenuByQuery(
   limit = 5,
   maxBudget?:       number,
   excludeKeywords?: string[],
-): { ids: string[]; confidence: "high" | "medium" | "low" } {
-  const normQuery = normalizeSearch(rawQuery);
-  // Filter stopwords so "quero opções com frango" reduces to ["frango"]
-  const words = normQuery.split(/\s+/).filter((w) => w.length >= 3 && !QUERY_STOPWORDS.has(w));
+): { ids: string[]; allCount: number; confidence: "high" | "medium" | "low" } {
+  const normQuery  = normalizeSearch(rawQuery);
+  const words      = normQuery.split(/\s+/).filter((w) => w.length >= 3 && !QUERY_STOPWORDS.has(w));
 
-  if (words.length === 0) return { ids: [], confidence: "low" };
+  if (words.length === 0) return { ids: [], allCount: 0, confidence: "low" };
 
-  const scored: Array<{ id: string; score: number }> = [];
+  const isAccessoryReq = isAccessoryQuery(rawQuery);
+  const allScored: Array<{ id: string; score: number }> = [];
 
   for (const item of catalog) {
     if (cartItemIds.includes(item.id)) continue;
-
-    // Hard-filter: budget constraint declared in the customer message.
     if (maxBudget !== undefined && item.price > maxBudget) continue;
-
-    // Hard-filter: allergen/ingredient exclusion declared in the customer message.
     if (excludeKeywords?.length) {
       const nameLow = item.name.toLowerCase();
       const descLow = (item.description ?? "").toLowerCase();
@@ -870,21 +886,30 @@ function searchMenuByQuery(
       }
     }
 
-    // Hard-exclude already-suggested items — prevents repeated_suggestion across turns.
-    // Do not use a soft penalty: any positive score on a high-signal query (e.g. "frango")
-    // will survive a -25 adjustment and the same IDs would re-surface next turn.
-    if (score > 0 && !suggestedIds.includes(item.id)) {
-      scored.push({ id: item.id, score });
-    }
+    // Accessory penalty: suppress condiments/add-ons for broad food queries.
+    // Only applies when the user did NOT explicitly ask for an accessory.
+    if (!isAccessoryReq && isAccessoryItem(item)) score -= 100;
+
+    // Future sales data hook — bonuses when restaurant provides real metrics
+    if (item.isBestSeller)                                         score += 12;
+    if (item.restaurantPriority != null && item.restaurantPriority > 0) score += Math.min(15, item.restaurantPriority / 5);
+    if (item.popularityScore    != null && item.popularityScore    > 0) score += Math.min(10, Math.floor(item.popularityScore * 10));
+
+    if (score > 0) allScored.push({ id: item.id, score });
   }
 
-  if (scored.length === 0) return { ids: [], confidence: "low" };
+  if (allScored.length === 0) return { ids: [], allCount: 0, confidence: "low" };
 
-  scored.sort((a, b) => b.score - a.score);
-  const topScore    = scored[0]?.score ?? 0;
-  const confidence  = topScore >= 40 ? "high" : topScore >= 20 ? "medium" : "low";
+  allScored.sort((a, b) => b.score - a.score);
+  const topScore   = allScored[0]!.score;
+  const confidence = topScore >= 40 ? "high" : topScore >= 20 ? "medium" : "low";
 
-  return { ids: scored.slice(0, limit).map((s) => s.id), confidence };
+  // Filter out already-suggested IDs — the remaining list is what can be shown next.
+  const available = allScored.filter((s) => !suggestedIds.includes(s.id));
+  const allCount  = available.length;
+  const ids       = available.slice(0, limit).map((s) => s.id);
+
+  return { ids, allCount, confidence };
 }
 
 // ─── Smart Product Selection Engine (Sprint 4C) ──────────────
@@ -1008,6 +1033,9 @@ export function scoreProductForIntent(item: TaggedItem, intent: CustomerIntent, 
   if (item.sortOrder !== undefined) {
     score += Math.max(0, Math.floor((500 - item.sortOrder) / 50));
   }
+
+  // E) Future sales data hook — wire salesCount/popularityScore/restaurantPriority
+  // from V2CatalogItem through analyzeMenuItem → TaggedItem when analytics are available.
 
   return score;
 }
@@ -2120,14 +2148,42 @@ function handleUserMessage(input: V2Input): V2Output {
     };
   }
 
+  // ── show_more: pagination for a previous search result ───────────────────────
+  if (msgLow.startsWith("show_more:")) {
+    const originalQuery = input.message?.slice("show_more:".length).trim() ?? "";
+    if (originalQuery) {
+      const more = searchMenuByQuery(originalQuery, catalog, cartItemIds, suggestedIds, 5, maxBudget, excludedIngredients);
+      if (more.ids.length > 0) {
+        const stillMore = more.allCount > more.ids.length;
+        return {
+          message:     "Claro — aqui vão mais opções pra você 👇",
+          cards:       more.ids,
+          mode:        "SUGGESTION",
+          options:     stillMore ? [{ label: "Ver mais opções", value: `show_more:${originalQuery}` }] : [],
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
+    }
+    return {
+      message:     "Por enquanto é isso que temos. Posso ajudar com mais alguma coisa?",
+      cards:       [],
+      mode:        "BROWSE",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
   // ── Menu search: explicit product / category queries ─────────────────────────
   const searchResult = searchMenuByQuery(msgRaw, catalog, cartItemIds, suggestedIds, 5, maxBudget, excludedIngredients);
   if (searchResult.confidence === "high") {
+    const hasMore = searchResult.allCount > searchResult.ids.length;
     return {
       message:     buildSearchCopy(msgRaw),
       cards:       searchResult.ids,
       mode:        "SUGGESTION",
-      options:     [],
+      options:     hasMore ? [{ label: "Ver mais opções", value: `show_more:${msgRaw}` }] : [],
       requiresAI:  false,
       aiDirective: "",
     };
@@ -2451,10 +2507,13 @@ export function validateWaiterResponse(
     }
 
     // 9. No confirmation buttons alongside product cards
-    // Exception: active checkout upsell (INTERVENTION) may carry skip/continue options
+    // Exceptions:
+    //   - active checkout upsell (INTERVENTION) may carry skip/continue options
+    //   - show_more: pagination option is always allowed alongside cards
     const isCheckoutUpsell = mode === "INTERVENTION" &&
       options.some((o) => o.value === "skip_drink_upsell" || o.value === "continue_checkout");
-    if (cards.length > 0 && !isCheckoutUpsell) options = [];
+    const paginationOnly = options.every((o) => o.value.startsWith("show_more:"));
+    if (cards.length > 0 && !isCheckoutUpsell && !paginationOnly) options = [];
 
     if (snap) {
       const fixes: string[] = [];
