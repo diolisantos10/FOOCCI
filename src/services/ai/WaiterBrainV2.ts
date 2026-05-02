@@ -1333,6 +1333,10 @@ const BASE_DIRECTIVE = `
 ▶ ANCORAGEM: quando cliente está indeciso ou sem filtro de preço, chame suggest_upsell com o item mais completo/premium primeiro — depois ofereça uma opção de custo-benefício.
 ▶ GATILHOS DE DESEJO: use "o mais pedido da casa", "combinação perfeita", "o mais fresco do dia", "favorito dos clientes" para gerar percepção de valor.
 ▶ VENDA CASADA: ao sugerir prato principal, plante sutilmente uma harmonização. Ex: "Fica perfeito com nossas bebidas geladas." — mas NUNCA liste o produto da harmonização no texto sem chamar suggest_upsell.
+━━━ TRATAMENTO DE OBJEÇÕES ━━━
+▶ OBJEÇÃO DE PREÇO ("caro", "mais em conta", "barato"): reconheça com empatia e pivote com valor. Ex: "Entendido! Se a ideia é algo mais em conta, esse combo aqui entrega muito sabor por um valor excelente 👇". NUNCA apenas liste itens baratos sem ancoragem — o valor percebido é obrigatório.
+▶ OBJEÇÃO DE GOSTO ("não gosto de cru", "frito", "empanado"): valide a preferência e redirecione. Ex: "Sem problemas! Nossos pratos quentes e empanados fazem muito sucesso — separei os melhores pra você 👇". Sempre termine com suggest_upsell, nunca com texto puro.
+▶ REGRA GERAL DE OBJEÇÃO: toda objeção exige resposta com cards (suggest_upsell) ou botões de qualificação. Resposta somente em texto após objeção = falha crítica de vendas.
 ━━━`;
 
 function buildUserMessageDirective(cartItemIds: string[], cartValue: number): string {
@@ -1364,6 +1368,12 @@ function buildUserMessageDirective(cartItemIds: string[], cartValue: number): st
     "  → GATILHOS: use 'o mais pedido da casa', 'combinação perfeita', 'o mais fresco do dia'.",
     "  → VENDA CASADA: ao sugerir prato principal, adicione 1 frase de harmonização sutil.",
     '  → Ex: "O mais pedido da casa — fica perfeito com uma bebida gelada. Quer experimentar? 👇"',
+    "  → OBJEÇÃO DE PREÇO detectada ('caro', 'em conta', 'barato'):",
+    '    Pivote com empatia: "Entendido! Se a ideia é algo mais em conta, esse combo entrega muito pelo valor 👇"',
+    "    Depois chame suggest_upsell com item de melhor custo-benefício.",
+    "  → OBJEÇÃO DE GOSTO detectada ('não gosto de', 'frito', 'empanado', 'sem cru'):",
+    '    Valide e redirecione: "Sem problemas! Nossos pratos quentes fazem muito sucesso — separei os melhores 👇"',
+    "    Depois chame suggest_upsell com item do perfil solicitado.",
     "  → Mapeamento de intenção:",
     '    "algo leve"   → pratos leves, saladas, entradas',
     '    "com fome"    → pratos principais, combos',
@@ -1778,17 +1788,76 @@ export function buildCommercialResponse(
   return { message, options: [], cards: selectedProducts, mode };
 }
 
+// ─── Objection-aware copy builder ─────────────────────────────────────────────
+// Fires when a customer message contains price or taste/ingredient objection signals.
+// Returns a copy string that pivots the objection with empathy; returns null when
+// no objection is detected so normal INTENT_COPY continues to apply.
+
+const PRICE_OBJECTION_RE_MSG =
+  /\b(caro|cara|mais em conta|mais barato|barato|econôm|econom|em conta|custo.?benef[íi]cio)\b/i;
+
+const TASTE_OBJECTION_RE_MSG =
+  /n[ãa]o gosto\b|\b(frito|empanado|assado|cozido|sem cru|sem peixe|sem frango|sem carne|sem glúten)\b/i;
+
+// Per-intent copy for price objections — acknowledges before pivoting.
+const PRICE_OBJECTION_COPY: Partial<Record<CustomerIntent, string>> = {
+  wants_budget_option:  "Entendido! Se a ideia é algo mais em conta, essas opções entregam muito pelo valor 👇",
+  wants_group_order:    "Com certeza! Pra dividir bem e gastar menos, essas são ótimas escolhas 👇",
+  wants_recommendation: "Sem problema! Separei as melhores opções de custo-benefício pra você 👇",
+  asks_for_pairing:     "Claro! Essas opções harmonizam com o pedido e têm ótimo valor 👇",
+  unclear:              "Entendido! Essas opções têm excelente custo-benefício 👇",
+};
+
+// Per-intent copy for taste/ingredient objections — validates and redirects.
+const TASTE_OBJECTION_COPY: Partial<Record<CustomerIntent, string>> = {
+  asks_category:        "Sem problemas! Nossos pratos quentes e empanados fazem muito sucesso — separei os melhores 👇",
+  wants_recommendation: "Boa escolha! Separei as opções que combinam com o seu gosto 👇",
+  unclear:              "Sem problemas! Veja essas opções que combinam com você 👇",
+};
+
+/**
+ * Returns objection-pivoting copy when a price or taste objection is detected.
+ * Returns null when no objection signal is present — caller falls back to default copy.
+ */
+function buildObjectionCopy(message: string, intent: CustomerIntent): string | null {
+  if (PRICE_OBJECTION_RE_MSG.test(message)) {
+    return PRICE_OBJECTION_COPY[intent] ??
+           "Entendido! Essas opções têm excelente custo-benefício 👇";
+  }
+  if (TASTE_OBJECTION_RE_MSG.test(message)) {
+    return TASTE_OBJECTION_COPY[intent] ??
+           "Sem problemas! Separei opções que combinam com você 👇";
+  }
+  return null;
+}
+
+/**
+ * Returns context-aware copy for the high-confidence search fast-path.
+ * Objection messages get empathy-first pivoting copy instead of a generic "Encontrei".
+ */
+function buildSearchCopy(message: string): string {
+  if (PRICE_OBJECTION_RE_MSG.test(message)) {
+    return "Entendido! Se a ideia é algo mais em conta, essas opções entregam muito pelo valor 👇";
+  }
+  if (TASTE_OBJECTION_RE_MSG.test(message)) {
+    return "Sem problemas! Nossos pratos quentes e empanados fazem muito sucesso — separei os melhores 👇";
+  }
+  return "Encontrei essas opções pra você 👇";
+}
+
 function handleUserMessage(input: V2Input): V2Output {
   const cfg          = input.config ?? DEFAULT_WAITER_CONFIG;
   const { catalog, cartItemIds } = input;
   const suggestedIds = input.memory?.suggestedProductIds ?? [];
 
   // Convenience wrapper — threads config to buildCommercialResponse for every deterministic path.
-  const suggest = (intent: CustomerIntent, cards: string[], mode: WaiterMode): V2Output => ({
-    ...buildCommercialResponse({ intent, selectedProducts: cards, mode }, cfg),
-    requiresAI:  false,
-    aiDirective: "",
-  });
+  // If the customer message contains a price or taste objection, the copy is pivoted via
+  // buildObjectionCopy() so the reply acknowledges the objection before presenting cards.
+  const suggest = (intent: CustomerIntent, cards: string[], mode: WaiterMode): V2Output => {
+    const base    = buildCommercialResponse({ intent, selectedProducts: cards, mode }, cfg);
+    const message = buildObjectionCopy(msgRaw, intent) ?? base.message;
+    return { ...base, message, requiresAI: false, aiDirective: "" };
+  };
 
   const msgRaw  = input.message ?? "";
   const msgLow  = msgRaw.toLowerCase().trim();
@@ -1864,7 +1933,7 @@ function handleUserMessage(input: V2Input): V2Output {
   const searchResult = searchMenuByQuery(msgRaw, catalog, cartItemIds, suggestedIds);
   if (searchResult.confidence === "high") {
     return {
-      message:     "Encontrei essas opções pra você 👇",
+      message:     buildSearchCopy(msgRaw),
       cards:       searchResult.ids,
       mode:        "SUGGESTION",
       options:     [],
