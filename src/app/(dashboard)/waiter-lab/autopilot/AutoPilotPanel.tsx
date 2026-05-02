@@ -442,6 +442,67 @@ async function runScenario(
         }
       }
 
+      // Constraint check — verify returned cards against declared profile constraints
+      if (profile.constraints && event === "ON_USER_MESSAGE" && response.cards.length > 0) {
+        const { maxBudget, excludeKeywords } = profile.constraints;
+        const constraintViolations: string[] = [];
+
+        for (const cardId of response.cards) {
+          const item = catalog.find((c) => c.id === cardId);
+          if (!item) continue;
+          if (maxBudget !== undefined && item.price > maxBudget) {
+            constraintViolations.push(
+              `${item.name} (R$${item.price.toFixed(2)}) excede orçamento R$${maxBudget}`,
+            );
+          }
+          if (excludeKeywords?.some((kw) => item.name.toLowerCase().includes(kw.toLowerCase()))) {
+            const kw = excludeKeywords.find((k) => item.name.toLowerCase().includes(k.toLowerCase()));
+            constraintViolations.push(`${item.name} contém ingrediente restrito "${kw}"`);
+          }
+        }
+
+        if (constraintViolations.length > 0) {
+          stepFailures   = [...stepFailures, "constraint_ignored"];
+          stepAssertions = [
+            ...stepAssertions,
+            {
+              label:  "Constraint: cards respeitam restrições declaradas (orçamento/ingrediente)",
+              pass:   false,
+              detail: constraintViolations.slice(0, 3).join("; "),
+            },
+          ];
+        } else {
+          stepAssertions = [
+            ...stepAssertions,
+            { label: "Constraint: todos os cards respeitam restrições declaradas", pass: true },
+          ];
+        }
+      }
+
+      // requiresIdleUpsell: ON_IDLE must return options for re-engagement
+      if (profile.requiresIdleUpsell && event === "ON_IDLE") {
+        const hasOptions = response.options.length > 0;
+        if (!hasOptions) {
+          stepFailures   = [...stepFailures, "missed_final_upsell"];
+          stepAssertions = [
+            ...stepAssertions,
+            {
+              label:  "Idle upsell: ON_IDLE deve retornar options de reconexão",
+              pass:   false,
+              detail: `options=0, cards=${response.cards.length}, mode=${response.mode}`,
+            },
+          ];
+        } else {
+          stepAssertions = [
+            ...stepAssertions,
+            {
+              label: `Idle upsell: ${response.options.length} option(s) de reconexão retornado(s)`,
+              pass:  true,
+            },
+          ];
+        }
+      }
+
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const ft: FailureType = msg.startsWith("HTTP 429") ? "timeout" : "unknown_error";

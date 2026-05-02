@@ -435,4 +435,43 @@ export const CUSTOMER_PROFILES: CustomerProfile[] = [
     expectedOutcome:
       "Turn 1: Waiter qualifica ou sugere via cards/options. Turn 2: objeção de ingrediente ('frito', 'empanado') → searchMenuByQuery retorna cards específicos. Waiter não pode retornar apenas texto — objeção de gosto exige cards ou qualificação.",
   },
+
+  // ════════════════════════════════════════════════════════════
+  //  HARDCORE SALES & COPY PROFILES  (Y – Z)
+  // ════════════════════════════════════════════════════════════
+
+  // ── Y: Restrição Complexa (Alergia + Budget) ──────────────────────────────────
+  {
+    id:       "complex-constraint",
+    name:     "Restrição Complexa (Alergia + Budget)",
+    goal:     "Alérgico a camarão, orçamento R$ 60 — Waiter deve filtrar e respeitar restrições",
+    budget:   60,
+    behavior: "guided",
+    intentMessages: [
+      "Sou alérgico a camarão e meu orçamento máximo é R$ 60. O que você me sugere?",
+    ],
+    constraints:         { maxBudget: 60, excludeKeywords: ["camarão", "shrimp"] },
+    requiresCart:        false,
+    requiresCheckout:    false,
+    requiresSearchCards: true,
+    expectedOutcome:
+      "Turn 1: Waiter retorna cards sem itens de camarão e dentro do orçamento R$ 60. Copy deve abrir com empatia ('Sem problemas!', 'Entendido!'). Falha se card contém camarão, excede R$ 60, ou copy é genérico (robotic_copy_detected / constraint_ignored).",
+  },
+
+  // ── Z: Carrinho Abandonado (Silent) ──────────────────────────────────────────
+  {
+    id:               "cart-abandonment",
+    name:             "Carrinho Abandonado (Silent)",
+    goal:             "Cliente silencioso adiciona item e para — Waiter deve agir no ON_IDLE",
+    behavior:         "passive",
+    isSilent:         true,
+    silentCartItems:  [[]],   // resolves to catalog[0]
+    requiresCart:     true,
+    requiresCheckout: false,
+    requiresIdle:     true,
+    requiresIdleUpsell: true,
+    intentMessages:   [],
+    expectedOutcome:
+      "ON_ITEM_ADDED: UI silenciosa (cards=[], options=[]). ON_IDLE: Waiter deve retornar options de reconexão ('Quer finalizar?', 'Posso ajudar?') — sem options = missed_final_upsell.",
+  },
 ];

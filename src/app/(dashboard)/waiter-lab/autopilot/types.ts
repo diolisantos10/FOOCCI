@@ -26,6 +26,9 @@ export interface CustomerProfile {
   requiresIdle?:         boolean;
   expectsCheckoutUpsell?: boolean;    // ON_CHECKOUT_STARTED must return cards (active upsell)
   requiresSearchCards?:   boolean;    // last ON_USER_MESSAGE must return cards[] (search/ingredient profiles)
+  // ── Constraint & idle extensions ───────────────────────────────────────────
+  constraints?:          { maxBudget?: number; excludeKeywords?: string[] };
+  requiresIdleUpsell?:   boolean;     // ON_IDLE must return options (re-engagement prompt)
 }
 
 // ── Shared item shape ─────────────────────────────────────────────────────────
@@ -73,7 +76,9 @@ export type FailureType =
   | "checkout_prompt_repeated"
   | "silent_customer_not_supported"
   // ── Consultative sales failures ────────────────────────────────────────────
-  | "objection_not_handled";
+  | "objection_not_handled"
+  | "robotic_copy_detected"
+  | "constraint_ignored";
 
 export type Severity = "low" | "medium" | "high" | "critical";
 

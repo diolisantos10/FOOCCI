@@ -72,6 +72,10 @@ export const IMPROVEMENT_SUGGESTIONS: Record<FailureType, string> = {
     "Comportamento silencioso não é suportado. Implementar detecção de intenção behavioral além de mensagens de texto.",
   objection_not_handled:
     "Objeção de preço ou gosto detectada sem resposta com cards ou opções. Waiter deve oferecer alternativa econômica ou filtrar por ingrediente — nunca ignorar uma objeção.",
+  robotic_copy_detected:
+    "Objeção ou restrição detectada mas a resposta usou copy genérico sem empatia. Use 'Entendido!', 'Sem problemas!' ou 'Com certeza!' como abertura antes dos cards.",
+  constraint_ignored:
+    "Cards retornados incluem produtos fora do orçamento ou ingredientes restritos declarados pelo cliente. Aplique filtros de restrição antes de chamar suggest_upsell.",
 };
 
 // ── Failure → fix-area map ────────────────────────────────────────────────────
@@ -106,6 +110,8 @@ export const FAILURE_TO_FIX_AREA: Record<FailureType, string> = {
   checkout_prompt_repeated:     "session state / checkout flow deduplication",
   silent_customer_not_supported: "behavioral intent detection / silent customer handling",
   objection_not_handled:         "consultative sales / objection handling — analyzeSalesContext() + rankProducts()",
+  robotic_copy_detected:         "commercial copy / buildObjectionCopy() / buildSearchCopy()",
+  constraint_ignored:            "product ranking / constraint filter — searchMenuByQuery()",
 };
 
 // ── Probable root cause map ───────────────────────────────────────────────────
@@ -169,6 +175,10 @@ const ROOT_CAUSE_MAP: Record<FailureType, string> = {
     "WaiterBrain não possui lógica específica para clientes silenciosos/behavioral.",
   objection_not_handled:
     "Waiter recebeu objeção de preço ou gosto/ingrediente e retornou resposta sem cards e sem options — objeção ignorada.",
+  robotic_copy_detected:
+    "Caminho determinístico usou copy padrão (INTENT_COPY) em vez de buildObjectionCopy() ao detectar objeção — abertura empática ausente.",
+  constraint_ignored:
+    "searchMenuByQuery() retornou produtos sem filtrar orçamento máximo ou ingredientes excluídos declarados na mensagem.",
 };
 
 // ── Recommended fix map ───────────────────────────────────────────────────────
@@ -232,6 +242,10 @@ const RECOMMENDED_FIX_MAP: Record<FailureType, string> = {
     "Implementar módulo de detecção comportamental baseado em eventos (ON_ITEM_ADDED, ON_IDLE, ON_CHECKOUT_STARTED) sem necessidade de mensagem de texto.",
   objection_not_handled:
     "Em analyzeSalesContext(), mapear keywords de objeção de preço ('caro', 'em conta') para wants_budget_option e de gosto ('frito', 'empanado', 'não gosto de cru') para asks_category + searchMenuByQuery. Sempre retornar cards ou options de qualificação.",
+  robotic_copy_detected:
+    "Garantir que buildObjectionCopy() seja chamado antes de INTENT_COPY para toda mensagem com padrão de objeção ou restrição. A abertura empática ('Entendido!', 'Sem problemas!') é obrigatória quando cards são retornados.",
+  constraint_ignored:
+    "Passar maxBudget e excludeKeywords ao searchMenuByQuery(); filtrar items por price <= maxBudget e excluir items cujo nome contenha excludeKeywords antes de retornar cards.",
 };
 
 // ── Severity ──────────────────────────────────────────────────────────────────
@@ -266,9 +280,9 @@ export function computeRecommendedFix(failures: FailureType[]): string {
 
 const AREA_FAILURES: Record<keyof Omit<AreaScores, "overallScore">, FailureType[]> = {
   intentScore:         ["wrong_intent_detection", "premature_intervention", "silent_customer_not_supported"],
-  productFitScore:     ["missing_cards", "bad_product_fit", "product_mismatch", "invisible_product_mention", "wrong_cart_context"],
+  productFitScore:     ["missing_cards", "bad_product_fit", "product_mismatch", "invisible_product_mention", "wrong_cart_context", "constraint_ignored"],
   visualSyncScore:     ["extra_buttons_after_cards", "ui_invasion_after_click", "invalid_card_id", "invasive_after_item_add"],
-  salesCopyScore:      ["weak_sales_response", "missed_final_upsell", "missed_drink_opportunity", "missed_dessert_opportunity", "objection_not_handled"],
+  salesCopyScore:      ["weak_sales_response", "missed_final_upsell", "missed_drink_opportunity", "missed_dessert_opportunity", "objection_not_handled", "robotic_copy_detected"],
   userControlScore:    ["missing_options", "repeated_suggestion", "repeated_prompt", "ignored_decline", "checkout_prompt_repeated"],
   checkoutSafetyScore: ["checkout_interference", "cart_not_updated", "checkout_not_reached", "order_not_confirmed"],
 };
@@ -382,7 +396,7 @@ export function computeSilentMetrics(results: ScenarioResult[]): SilentMetrics {
 // ── Evaluator version ─────────────────────────────────────────────────────────
 // Bump this string any time the evaluation rules change so stale Railway builds
 // are immediately visible in the UI.
-export const EVALUATOR_VERSION = "2026-05-02-store-model-v6";
+export const EVALUATOR_VERSION = "2026-05-02-store-model-v7";
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
@@ -583,6 +597,28 @@ export function validateStep(
       detail: handled ? undefined : `cards=0, options=0, mode=${response.mode} — objeção ignorada`,
     });
     if (!handled) failureTypes.push("objection_not_handled");
+  }
+
+  // Copy Audit — when an objection or constraint is detected and cards ARE returned,
+  // the reply must open with an empathy phrase (buildObjectionCopy contract).
+  // A reply that starts with generic copy signals the fast-path bypassed buildObjectionCopy.
+  const OBJECTION_OR_CONSTRAINT_RE =
+    /\b(caro|cara|mais em conta|mais barato|barato|econôm|econom|em conta|custo.?benef[íi]cio|al[eé]rgico|alergi[ao]?|orçamento)\b|n[ãa]o gosto\b|nao gosto|\b(frito|empanado|assado|cozido|vegetarian[ao]?|vegano|sem cru|sem peixe|sem frango|sem carne|sem glúten)\b/i;
+  const EMPATHY_OPENER_RE =
+    /^(Entendido|Sem problemas?|Com certeza|Claro|Compreendo|Perfeito|Boa escolha|Ótima escolha)/i;
+  if (
+    event === "ON_USER_MESSAGE" &&
+    OBJECTION_OR_CONSTRAINT_RE.test(message) &&
+    response.cards.length > 0 &&
+    response.reply &&
+    !EMPATHY_OPENER_RE.test(response.reply.trim())
+  ) {
+    assertions.push({
+      label:  "Copy Audit: objeção/restrição detectada → reply deve abrir com empatia",
+      pass:   false,
+      detail: `reply="${response.reply.slice(0, 80)}" — faltou abertura empática (Entendido/Sem problemas/etc.)`,
+    });
+    failureTypes.push("robotic_copy_detected");
   }
 
   const passed = failureTypes.length === 0;
