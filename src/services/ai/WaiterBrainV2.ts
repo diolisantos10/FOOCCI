@@ -770,10 +770,11 @@ const QUERY_STOPWORDS = new Set([
  * receive a bonus score — enabling "sushi" to surface uramaki, hot roll, etc.
  */
 const MENU_SYNONYM_GROUPS: Array<[RegExp, RegExp]> = [
-  // Sushi family — "sushi" query surfaces all sushi-style items
+  // Sushi family — "sushi"/"sushis" query surfaces all sushi-style items (plural forms included)
+  // Item pattern deliberately excludes bare "combo" to avoid matching frango/other combos.
   [
-    /\b(sushi|sashimi|niguiri|nigiri|uramaki|hossomaki|hosso.?maki|hot.?roll|temaki|maki|combinado)\b/i,
-    /sushi|sashimi|niguiri|nigiri|uramaki|hossomaki|hot.?roll|temaki|maki|combinado|combo/i,
+    /\b(sushis?|sashimis?|niguiris?|nigiris?|uramakis?|hossomakis?|hosso.?makis?|hot.?rolls?|temakis?|makis?|combinados?)\b/i,
+    /sushi|sashimi|niguiri|nigiri|uramaki|hossomaki|hot.?roll|temaki|maki|combinado/i,
   ],
   // Ramen / noodle family
   [
@@ -838,25 +839,33 @@ function isAccessoryQuery(rawQuery: string): boolean {
 
 /**
  * Searches the catalog for items explicitly matching the customer's query.
- * Priority: name match > category match > description match > synonym group.
- * Returns IDs sorted by relevance and a confidence level.
+ *
+ * Scoring determines IF an item matches; ordering follows menu/catalog order
+ * (sortOrder field = restaurant's commercial priority). Returns ALL matches
+ * with no artificial cap — the restaurant's menu order is the ranking.
+ *
+ * Direct-search callers pass suggestedIds=[] to return every match regardless
+ * of session history. Upsell callers pass the session suggestedProductIds to
+ * suppress already-shown items.
  */
 function searchMenuByQuery(
   rawQuery:         string,
   catalog:          V2CatalogItem[],
   cartItemIds:      string[],
   suggestedIds:     string[],
-  limit = 5,
   maxBudget?:       number,
   excludeKeywords?: string[],
-): { ids: string[]; allCount: number; confidence: "high" | "medium" | "low" } {
+): { ids: string[]; confidence: "high" | "medium" | "low" } {
   const normQuery  = normalizeSearch(rawQuery);
   const words      = normQuery.split(/\s+/).filter((w) => w.length >= 3 && !QUERY_STOPWORDS.has(w));
 
-  if (words.length === 0) return { ids: [], allCount: 0, confidence: "low" };
+  if (words.length === 0) return { ids: [], confidence: "low" };
 
   const isAccessoryReq = isAccessoryQuery(rawQuery);
-  const allScored: Array<{ id: string; score: number }> = [];
+  // Pre-compute menu order: sortOrder when available, catalog array index as fallback.
+  const menuOrder  = new Map(catalog.map((item, idx) => [item.id, item.sortOrder ?? (10000 + idx)]));
+  let topScore     = 0;
+  const matched:   Array<{ id: string; score: number }> = [];
 
   for (const item of catalog) {
     if (cartItemIds.includes(item.id)) continue;
@@ -891,25 +900,29 @@ function searchMenuByQuery(
     if (!isAccessoryReq && isAccessoryItem(item)) score -= 100;
 
     // Future sales data hook — bonuses when restaurant provides real metrics
-    if (item.isBestSeller)                                         score += 12;
+    if (item.isBestSeller)                                              score += 12;
     if (item.restaurantPriority != null && item.restaurantPriority > 0) score += Math.min(15, item.restaurantPriority / 5);
     if (item.popularityScore    != null && item.popularityScore    > 0) score += Math.min(10, Math.floor(item.popularityScore * 10));
 
-    if (score > 0) allScored.push({ id: item.id, score });
+    if (score > 0) {
+      if (score > topScore) topScore = score;
+      matched.push({ id: item.id, score });
+    }
   }
 
-  if (allScored.length === 0) return { ids: [], allCount: 0, confidence: "low" };
+  if (matched.length === 0) return { ids: [], confidence: "low" };
 
-  allScored.sort((a, b) => b.score - a.score);
-  const topScore   = allScored[0]!.score;
   const confidence = topScore >= 40 ? "high" : topScore >= 20 ? "medium" : "low";
 
-  // Filter out already-suggested IDs — the remaining list is what can be shown next.
-  const available = allScored.filter((s) => !suggestedIds.includes(s.id));
-  const allCount  = available.length;
-  const ids       = available.slice(0, limit).map((s) => s.id);
+  // Order by menu/catalog position — restaurant's commercial priority.
+  matched.sort((a, b) => (menuOrder.get(a.id) ?? 99999) - (menuOrder.get(b.id) ?? 99999));
 
-  return { ids, allCount, confidence };
+  // Apply session filter only when the caller opts in (direct search passes []).
+  const ids = matched
+    .filter((s) => !suggestedIds.includes(s.id))
+    .map((s) => s.id);
+
+  return { ids, confidence };
 }
 
 // ─── Smart Product Selection Engine (Sprint 4C) ──────────────
@@ -2040,27 +2053,27 @@ function handleUserMessage(input: V2Input): V2Output {
   // ── Discovery answer paths — map button values to catalog search ─────────────
   // These are fired when the user taps a discovery option (e.g. "Cru / Sushi").
   if (msgLow === "discovery_cru_sushi" || msgLow === "cru / sushi" || msgLow === "cru/sushi" || msgLow === "sashimi/niguiri") {
-    const ids = searchMenuByQuery("sashimi niguiri uramaki hossomaki sushi combinado misto", catalog, cartItemIds, suggestedIds, 5);
+    const ids = searchMenuByQuery("sashimi niguiri uramaki hossomaki sushi combinado misto", catalog, cartItemIds, []);
     if (ids.ids.length > 0) return { message: "Separei as melhores opções crus e frescos pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
     return noCardsFound();
   }
   if (msgLow === "discovery_quente" || msgLow === "quente") {
-    const ids = searchMenuByQuery("yakisoba lamen ramen hot roll quente grelhado cozido teppan", catalog, cartItemIds, suggestedIds, 5);
+    const ids = searchMenuByQuery("yakisoba lamen ramen hot roll quente grelhado cozido teppan", catalog, cartItemIds, []);
     if (ids.ids.length > 0) return { message: "Ótima pedida! Separei as melhores opções quentes 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
     return noCardsFound();
   }
   if (msgLow === "discovery_temaki" || msgLow === "temaki") {
-    const ids = searchMenuByQuery("temaki", catalog, cartItemIds, suggestedIds, 5);
+    const ids = searchMenuByQuery("temaki", catalog, cartItemIds, []);
     if (ids.ids.length > 0) return { message: "Separei nossos temakis pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
     return noCardsFound();
   }
   if (msgLow === "discovery_salmao" || msgLow === "salmão" || msgLow === "salmao") {
-    const ids = searchMenuByQuery("salmao salmon salmão", catalog, cartItemIds, suggestedIds, 5);
+    const ids = searchMenuByQuery("salmao salmon salmão", catalog, cartItemIds, []);
     if (ids.ids.length > 0) return { message: "Separei as opções com salmão pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
     return noCardsFound();
   }
   if (msgLow === "discovery_hot_roll" || msgLow === "hot roll" || msgLow === "hot_roll") {
-    const ids = searchMenuByQuery("hot roll", catalog, cartItemIds, suggestedIds, 5);
+    const ids = searchMenuByQuery("hot roll", catalog, cartItemIds, []);
     if (ids.ids.length > 0) return { message: "Separei nossos hot rolls pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
     return noCardsFound();
   }
@@ -2148,42 +2161,17 @@ function handleUserMessage(input: V2Input): V2Output {
     };
   }
 
-  // ── show_more: pagination for a previous search result ───────────────────────
-  if (msgLow.startsWith("show_more:")) {
-    const originalQuery = input.message?.slice("show_more:".length).trim() ?? "";
-    if (originalQuery) {
-      const more = searchMenuByQuery(originalQuery, catalog, cartItemIds, suggestedIds, 5, maxBudget, excludedIngredients);
-      if (more.ids.length > 0) {
-        const stillMore = more.allCount > more.ids.length;
-        return {
-          message:     "Claro — aqui vão mais opções pra você 👇",
-          cards:       more.ids,
-          mode:        "SUGGESTION",
-          options:     stillMore ? [{ label: "Ver mais opções", value: `show_more:${originalQuery}` }] : [],
-          requiresAI:  false,
-          aiDirective: "",
-        };
-      }
-    }
-    return {
-      message:     "Por enquanto é isso que temos. Posso ajudar com mais alguma coisa?",
-      cards:       [],
-      mode:        "BROWSE",
-      options:     [],
-      requiresAI:  false,
-      aiDirective: "",
-    };
-  }
-
   // ── Menu search: explicit product / category queries ─────────────────────────
-  const searchResult = searchMenuByQuery(msgRaw, catalog, cartItemIds, suggestedIds, 5, maxBudget, excludedIngredients);
-  if (searchResult.confidence === "high") {
-    const hasMore = searchResult.allCount > searchResult.ids.length;
+  // Returns ALL matching products in menu order (catalog/sortOrder = commercial priority).
+  // suggestedIds=[] ensures session history does not suppress relevant results.
+  // confidence "medium" or "high" = enough signal to return cards without asking discovery.
+  const searchResult = searchMenuByQuery(msgRaw, catalog, cartItemIds, [], maxBudget, excludedIngredients);
+  if (searchResult.confidence !== "low" && searchResult.ids.length > 0) {
     return {
       message:     buildSearchCopy(msgRaw),
       cards:       searchResult.ids,
       mode:        "SUGGESTION",
-      options:     hasMore ? [{ label: "Ver mais opções", value: `show_more:${msgRaw}` }] : [],
+      options:     [],
       requiresAI:  false,
       aiDirective: "",
     };
@@ -2507,13 +2495,10 @@ export function validateWaiterResponse(
     }
 
     // 9. No confirmation buttons alongside product cards
-    // Exceptions:
-    //   - active checkout upsell (INTERVENTION) may carry skip/continue options
-    //   - show_more: pagination option is always allowed alongside cards
+    // Exception: active checkout upsell (INTERVENTION) may carry skip/continue options
     const isCheckoutUpsell = mode === "INTERVENTION" &&
       options.some((o) => o.value === "skip_drink_upsell" || o.value === "continue_checkout");
-    const paginationOnly = options.every((o) => o.value.startsWith("show_more:"));
-    if (cards.length > 0 && !isCheckoutUpsell && !paginationOnly) options = [];
+    if (cards.length > 0 && !isCheckoutUpsell) options = [];
 
     if (snap) {
       const fixes: string[] = [];
