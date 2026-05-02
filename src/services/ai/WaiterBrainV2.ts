@@ -826,8 +826,10 @@ function searchMenuByQuery(
       }
     }
 
-    if (score > 0) {
-      if (suggestedIds.includes(item.id)) score = Math.max(1, score - 25);
+    // Hard-exclude already-suggested items — prevents repeated_suggestion across turns.
+    // Do not use a soft penalty: any positive score on a high-signal query (e.g. "frango")
+    // will survive a -25 adjustment and the same IDs would re-surface next turn.
+    if (score > 0 && !suggestedIds.includes(item.id)) {
       scored.push({ id: item.id, score });
     }
   }
@@ -1271,13 +1273,13 @@ export interface WaiterResponseShape {
 }
 
 const STRATEGY_MESSAGES: Record<SalesStrategy, string> = {
-  recommend_signature_item:  "Separei as melhores opções pra você 👇",
-  recommend_budget_item:     "Ótimas opções com bom custo-benefício 👇",
-  recommend_group_bundle:    "Pra compartilhar, essas opções fazem mais sentido 👇",
-  recommend_premium_upgrade: "Uma experiência um pouco acima do padrão 👇",
-  recommend_pairing:         "Essas opções combinam bem com o que você escolheu 👇",
-  recommend_drink:           "Aqui estão as bebidas disponíveis 👇",
-  recommend_dessert:         "Para adoçar o final 🍰",
+  recommend_signature_item:  "O mais pedido da casa pra você 👇",
+  recommend_budget_item:     "Melhor custo-benefício — o favorito dos clientes 👇",
+  recommend_group_bundle:    "A favorita do grupo — combinação certeira 👇",
+  recommend_premium_upgrade: "Nossa opção mais especial — vale cada detalhe 👇",
+  recommend_pairing:         "Combinação perfeita com o que você escolheu 👇",
+  recommend_drink:           "A bebida ideal pra harmonizar com seu pedido 👇",
+  recommend_dessert:         "O favorito dos clientes pra fechar com doce 🍰",
   ask_clarifying_question:   "Prefere algo mais leve ou completo?",
   stay_quiet:                "",
 };
@@ -1327,6 +1329,10 @@ const BASE_DIRECTIVE = `
 ▶ PROIBIDO confirm_order — o checkout é controlado pelo CLIENTE via botão.
 ▶ PROIBIDO pedir dados pessoais — o UI coleta isso.
 ▶ PROIBIDO dizer "adicionei" ou qualquer variante — você SUGERE; quem adiciona é o CLIENTE.
+━━━ TÉCNICAS DE VENDAS ELITE ━━━
+▶ ANCORAGEM: quando cliente está indeciso ou sem filtro de preço, chame suggest_upsell com o item mais completo/premium primeiro — depois ofereça uma opção de custo-benefício.
+▶ GATILHOS DE DESEJO: use "o mais pedido da casa", "combinação perfeita", "o mais fresco do dia", "favorito dos clientes" para gerar percepção de valor.
+▶ VENDA CASADA: ao sugerir prato principal, plante sutilmente uma harmonização. Ex: "Fica perfeito com nossas bebidas geladas." — mas NUNCA liste o produto da harmonização no texto sem chamar suggest_upsell.
 ━━━`;
 
 function buildUserMessageDirective(cartItemIds: string[], cartValue: number): string {
@@ -1353,10 +1359,11 @@ function buildUserMessageDirective(cartItemIds: string[], cartValue: number): st
     "  → NÃO sugira produto nenhum neste turno.",
     "",
     "SUGERIR — cliente pediu ajuda, pediu sugestão, ou expressou preferência de categoria",
-    "  → Leia o cardápio (nome, descrição, ingredientes) e encontre o melhor item.",
-    "  → Execute suggest_upsell com UM produto.",
-    "  → 1 benefício curto + convite a confirmar.",
-    '  → Ex: "Esse aqui é leve e bem fresquinho. Quer experimentar? 👇"',
+    "  → ANCORAGEM: chame suggest_upsell com o item mais COMPLETO/PREMIUM primeiro.",
+    "  → Depois, sugira 1 opção de custo-benefício como segundo call (quando aplicável).",
+    "  → GATILHOS: use 'o mais pedido da casa', 'combinação perfeita', 'o mais fresco do dia'.",
+    "  → VENDA CASADA: ao sugerir prato principal, adicione 1 frase de harmonização sutil.",
+    '  → Ex: "O mais pedido da casa — fica perfeito com uma bebida gelada. Quer experimentar? 👇"',
     "  → Mapeamento de intenção:",
     '    "algo leve"   → pratos leves, saladas, entradas',
     '    "com fome"    → pratos principais, combos',
@@ -1533,7 +1540,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
       const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds, 3);
       if (drinkCards.length > 0) {
         return {
-          message:     "Separei as bebidas ideais para o seu pedido 👇",
+          message:     "Esse pedido fica perfeito com uma dessas bebidas — a combinação ideal 👇",
           cards:       drinkCards,
           mode:        "INTERVENTION",
           options:     [
@@ -1551,7 +1558,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
       const dessertCards = selectDessertItems(input.catalog, input.cartItemIds, 3);
       if (dessertCards.length > 0) {
         return {
-          message:     "Dê uma olhada nessas sobremesas antes de fechar 👇",
+          message:     "O favorito dos clientes pra fechar com chave de ouro 🍰",
           cards:       dessertCards,
           mode:        "INTERVENTION",
           options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
@@ -1727,17 +1734,17 @@ function buildDiscoveryQuestion(
 // ─── Commercial Response Builder (Sprint 4D) ─────────────────
 
 const INTENT_COPY: Partial<Record<CustomerIntent, string>> = {
-  wants_light_option:    "Pra algo mais leve, eu iria nessas opções 👇",
-  wants_complete_meal:   "Pra uma refeição mais completa, essas fazem mais sentido 👇",
-  wants_group_order:     "Pra dividir bem, essas opções funcionam melhor 👇",
-  wants_budget_option:   "Separei opções boas sem pesar tanto no pedido 👇",
-  wants_premium_option:  "Se a ideia é ir no melhor da casa, eu começaria por essas opções 👇",
-  asks_for_drink:        "Pra acompanhar, essas bebidas funcionam bem 👇",
-  asks_for_dessert:      "Pra fechar com doce, essas são boas escolhas 👇",
-  asks_for_pairing:      "Pra combinar com seu pedido, essas fazem sentido 👇",
-  wants_recommendation:  "Separei boas opções pra você 👇",
-  asks_specific_product: "Separei essa opção pra você 👇",
-  asks_category:         "Separei as opções dessa categoria 👇",
+  wants_light_option:    "Pra algo mais leve — essas são as favoritas da casa 👇",
+  wants_complete_meal:   "Pra uma refeição completa — essa combinação é perfeita 👇",
+  wants_group_order:     "As favoritas do grupo — combinação certeira 👇",
+  wants_budget_option:   "Melhor custo-benefício da casa — o mais pedido nessa faixa 👇",
+  wants_premium_option:  "O melhor da casa — vale cada detalhe 👇",
+  asks_for_drink:        "A combinação perfeita pra acompanhar o pedido 👇",
+  asks_for_dessert:      "O favorito dos clientes pra fechar com chave de ouro 🍰",
+  asks_for_pairing:      "Combinação perfeita com o que você escolheu 👇",
+  wants_recommendation:  "O mais pedido da casa — você vai adorar 👇",
+  asks_specific_product: "Separei essa opção especial pra você 👇",
+  asks_category:         "As melhores opções dessa categoria 👇",
 };
 
 export interface CommercialResponseInput {
@@ -1815,7 +1822,7 @@ function handleUserMessage(input: V2Input): V2Output {
     const dessertCards = selectDessertItems(catalog, cartItemIds, 5);
     if (dessertCards.length > 0) {
       return {
-        message:     "Dê uma olhada nessas sobremesas antes de fechar 👇",
+        message:     "Feche com chave de ouro — o favorito dos clientes 🍰",
         cards:       dessertCards,
         mode:        "INTERVENTION",
         options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
