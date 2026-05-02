@@ -268,7 +268,7 @@ async function runScenario(
           lastAddedId = lastResponseCards[0];
         }
       }
-      if (!lastAddedId && firstItem) lastAddedId = firstItem.id;
+      if (!lastAddedId && firstItem && profile.budget === undefined) lastAddedId = firstItem.id;
     }
     const t1 = Date.now();
 

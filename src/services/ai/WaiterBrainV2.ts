@@ -277,7 +277,7 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
     };
   }
 
-  if (/\bleve\b|light/i.test(msg)) {
+  if (/\bleve\b|\bsuave\b|light/i.test(msg)) {
     return {
       customerIntent:   "wants_light_option",
       salesOpportunity: "suggest_light_options",
@@ -736,6 +736,8 @@ export function scoreProductForIntent(item: TaggedItem, intent: CustomerIntent, 
       score -= item.tags.includes("premium") ? 25 : 0;  // premium items are not light options
       score -= item.tags.includes("drink")   ? 20 : 0;
       score -= item.tags.includes("dessert") ? 20 : 0;
+      // Baseline: guarantee non-premium food items always pass MIN_SCORE_THRESHOLD
+      if (!item.tags.includes("premium") && !item.tags.includes("drink") && !item.tags.includes("dessert")) score += 5;
       break;
     case "wants_complete_meal":
       score += item.tags.includes("combo")    ? 35 : 0;
@@ -768,6 +770,8 @@ export function scoreProductForIntent(item: TaggedItem, intent: CustomerIntent, 
       score -= item.tags.includes("premium")  ? 25 : 0;
       score -= item.tags.includes("drink")    ? 10 : 0;
       score -= item.tags.includes("dessert")  ? 10 : 0;
+      // Baseline: guarantee non-premium food items always pass MIN_SCORE_THRESHOLD
+      if (!item.tags.includes("premium") && !item.tags.includes("drink") && !item.tags.includes("dessert")) score += 5;
       break;
     case "asks_for_drink":
       score += item.tags.includes("drink") ? 60 : 0;
@@ -1594,6 +1598,13 @@ function handleUserMessage(input: V2Input): V2Output {
     return noCardsFound();
   }
 
+  // ── Special path: "Ver sobremesas novamente" button ──────────────────────────
+  if ((input.message ?? "").toLowerCase().trim() === "see_desserts_again") {
+    const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 3, []);
+    if (cards.length > 0) return suggest("asks_for_dessert", cards, "SUGGESTION");
+    return noCardsFound();
+  }
+
   // ── Deterministic paths (Sales Intelligence — no AI call) ────
   switch (analysis.customerIntent) {
     case "wants_light_option": {
@@ -1617,13 +1628,32 @@ function handleUserMessage(input: V2Input): V2Output {
       return noCardsFound();
     }
     case "wants_premium_option": {
-      const cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 3, suggestedIds);
+      let cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 3, suggestedIds);
+      if (cards.length === 0 && suggestedIds.length > 0) {
+        cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 3, []);
+      }
       if (cards.length > 0) return suggest("wants_premium_option", cards, "INTERVENTION");
       return noCardsFound();
     }
     case "asks_for_dessert": {
       const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 3, suggestedIds);
       if (cards.length > 0) return suggest("asks_for_dessert", cards, "SUGGESTION");
+      if (suggestedIds.some((id) => {
+        const item = catalog.find((i) => i.id === id);
+        return item && isDessertCategory(item.categoryName);
+      })) {
+        return {
+          message:     "Mostro as mesmas opções de sobremesa ou prefere ver outra categoria?",
+          cards:       [],
+          mode:        "BROWSE",
+          options:     [
+            { label: "Ver sobremesas novamente", value: "see_desserts_again" },
+            { label: "Ver outra categoria",      value: "browse_menu"        },
+          ],
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
       return noCardsFound();
     }
     case "asks_for_drink": {
