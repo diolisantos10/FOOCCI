@@ -210,8 +210,8 @@ function ProductModal({
         className="w-full h-full flex flex-col sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Image — fixed height so content is always visible below */}
-        <div className="relative w-full h-52 sm:h-64 shrink-0">
+        {/* Image — hero height for appetite appeal */}
+        <div className="relative w-full h-64 sm:h-72 shrink-0">
           {item.imageUrl ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -404,7 +404,7 @@ function FeaturedCard({
       onClick={onClick}
       className="snap-start shrink-0 w-40 rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden text-left hover:shadow-md hover:border-orange-100 transition-all"
     >
-      <div className="h-36 bg-gray-100 overflow-hidden">
+      <div className="h-40 bg-gray-100 overflow-hidden">
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

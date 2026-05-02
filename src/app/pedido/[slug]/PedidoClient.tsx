@@ -356,7 +356,7 @@ function TypingIndicator() {
 // ── Product card ──────────────────────────────────────────────────────────────
 // Thumbnail — uniform h-44 w-36. Image + name + price + add. No description.
 
-const CARD_IMG_H = "h-[72px]"; // fixed image zone — same with or without photo
+const CARD_IMG_H = "h-36"; // square image zone for w-36 card (144×144px)
 
 function ProductCard({
   item,
@@ -371,7 +371,7 @@ function ProductCard({
 }) {
   return (
     /* Fixed outer size keeps the grid perfectly uniform regardless of name length */
-    <div className="flex h-44 w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <div className="flex h-60 w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
 
       {/* Image zone — fixed height, tappable */}
       <button onClick={onOpen} className={`block w-full shrink-0 overflow-hidden ${CARD_IMG_H}`}>
@@ -454,8 +454,8 @@ function ProductModal({
       {/* Card — full-screen on mobile, centered on desktop */}
       <div className="w-full h-full flex flex-col sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white">
 
-        {/* ── Image — fixed height so content is always visible below ── */}
-        <div className="relative w-full h-52 sm:h-64 shrink-0">
+        {/* ── Image — hero height for appetite appeal ── */}
+        <div className="relative w-full h-64 sm:h-72 shrink-0">
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
