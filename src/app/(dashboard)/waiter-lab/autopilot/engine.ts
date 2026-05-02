@@ -70,6 +70,8 @@ export const IMPROVEMENT_SUGGESTIONS: Record<FailureType, string> = {
     "Prompt de checkout foi repetido. Verificar deduplicação no fluxo de ON_CHECKOUT_STARTED.",
   silent_customer_not_supported:
     "Comportamento silencioso não é suportado. Implementar detecção de intenção behavioral além de mensagens de texto.",
+  objection_not_handled:
+    "Objeção de preço ou gosto detectada sem resposta com cards ou opções. Waiter deve oferecer alternativa econômica ou filtrar por ingrediente — nunca ignorar uma objeção.",
 };
 
 // ── Failure → fix-area map ────────────────────────────────────────────────────
@@ -103,6 +105,7 @@ export const FAILURE_TO_FIX_AREA: Record<FailureType, string> = {
   invasive_after_item_add:      "event routing / ON_ITEM_ADDED handler (Rule 7)",
   checkout_prompt_repeated:     "session state / checkout flow deduplication",
   silent_customer_not_supported: "behavioral intent detection / silent customer handling",
+  objection_not_handled:         "consultative sales / objection handling — analyzeSalesContext() + rankProducts()",
 };
 
 // ── Probable root cause map ───────────────────────────────────────────────────
@@ -164,6 +167,8 @@ const ROOT_CAUSE_MAP: Record<FailureType, string> = {
     "Lógica de checkout não verifica se prompt já foi exibido na sessão.",
   silent_customer_not_supported:
     "WaiterBrain não possui lógica específica para clientes silenciosos/behavioral.",
+  objection_not_handled:
+    "Waiter recebeu objeção de preço ou gosto/ingrediente e retornou resposta sem cards e sem options — objeção ignorada.",
 };
 
 // ── Recommended fix map ───────────────────────────────────────────────────────
@@ -225,6 +230,8 @@ const RECOMMENDED_FIX_MAP: Record<FailureType, string> = {
     "Adicionar flag 'checkout_upsell_shown' na sessão e verificar antes de exibir novamente.",
   silent_customer_not_supported:
     "Implementar módulo de detecção comportamental baseado em eventos (ON_ITEM_ADDED, ON_IDLE, ON_CHECKOUT_STARTED) sem necessidade de mensagem de texto.",
+  objection_not_handled:
+    "Em analyzeSalesContext(), mapear keywords de objeção de preço ('caro', 'em conta') para wants_budget_option e de gosto ('frito', 'empanado', 'não gosto de cru') para asks_category + searchMenuByQuery. Sempre retornar cards ou options de qualificação.",
 };
 
 // ── Severity ──────────────────────────────────────────────────────────────────
@@ -261,7 +268,7 @@ const AREA_FAILURES: Record<keyof Omit<AreaScores, "overallScore">, FailureType[
   intentScore:         ["wrong_intent_detection", "premature_intervention", "silent_customer_not_supported"],
   productFitScore:     ["missing_cards", "bad_product_fit", "product_mismatch", "invisible_product_mention", "wrong_cart_context"],
   visualSyncScore:     ["extra_buttons_after_cards", "ui_invasion_after_click", "invalid_card_id", "invasive_after_item_add"],
-  salesCopyScore:      ["weak_sales_response", "missed_final_upsell", "missed_drink_opportunity", "missed_dessert_opportunity"],
+  salesCopyScore:      ["weak_sales_response", "missed_final_upsell", "missed_drink_opportunity", "missed_dessert_opportunity", "objection_not_handled"],
   userControlScore:    ["missing_options", "repeated_suggestion", "repeated_prompt", "ignored_decline", "checkout_prompt_repeated"],
   checkoutSafetyScore: ["checkout_interference", "cart_not_updated", "checkout_not_reached", "order_not_confirmed"],
 };
@@ -558,6 +565,24 @@ export function validateStep(
   if (response.reply && WEAK_PHRASES.test(response.reply.trim())) {
     assertions.push({ label: "Sem resposta fraca (ok/beleza/ótimo)", pass: false });
     failureTypes.push("weak_sales_response");
+  }
+
+  // Objection handling — price or taste/ingredient objection MUST yield cards or qualifying options.
+  // A Waiter that responds with only text (or silence) to a customer objection is failing consultative sales.
+  const PRICE_OBJECTION_RE =
+    /\b(caro|cara|mais em conta|mais barato|barato|econôm|econom|em conta|custo.?benef[íi]cio)\b/i;
+  const TASTE_OBJECTION_RE =
+    /n[ãa]o gosto\b|nao gosto|\b(frito|empanado|assado|cozido|vegetarian[ao]?|vegano|sem cru|sem peixe|sem frango|sem carne|sem glúten)\b/i;
+  if (event === "ON_USER_MESSAGE" &&
+      (PRICE_OBJECTION_RE.test(message) || TASTE_OBJECTION_RE.test(message))) {
+    const objectionType = PRICE_OBJECTION_RE.test(message) ? "preço" : "gosto/ingrediente";
+    const handled = response.cards.length > 0 || response.options.length > 0;
+    assertions.push({
+      label:  `Objeção de ${objectionType}: Waiter deve retornar cards ou options de qualificação`,
+      pass:   handled,
+      detail: handled ? undefined : `cards=0, options=0, mode=${response.mode} — objeção ignorada`,
+    });
+    if (!handled) failureTypes.push("objection_not_handled");
   }
 
   const passed = failureTypes.length === 0;

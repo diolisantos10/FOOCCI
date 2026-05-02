@@ -397,4 +397,42 @@ export const CUSTOMER_PROFILES: CustomerProfile[] = [
     expectedOutcome:
       "ON_CHECKOUT_STARTED com prato+bebida → sobremesa cards (INTERVENTION) + continue_checkout option. Sem modal.",
   },
+
+  // ════════════════════════════════════════════════════════════
+  //  CONSULTATIVE SALES / OBJECTION PROFILES  (W – X)
+  // ════════════════════════════════════════════════════════════
+
+  // ── W: Objeção de Preço ───────────────────────────────────────────────────────
+  {
+    id:       "objection-price",
+    name:     "Objeção de Preço",
+    goal:     "Sugestão para casal → cliente acha caro e pede opção mais em conta",
+    behavior: "guided",
+    intentMessages: [
+      "Quero sugestão para casal",
+      "Achei meio caro, tem algo mais em conta para dois?",
+    ],
+    requiresCart:        false,
+    requiresCheckout:    false,
+    requiresSearchCards: true,   // última mensagem deve retornar cards de opção econômica
+    expectedOutcome:
+      "Turn 1: Waiter sugere itens para casal via cards (group/pairing intent). Turn 2: objeção de preço → Waiter retorna cards de custo-benefício (wants_budget_option). Não pode ignorar a objeção nem responder só com texto.",
+  },
+
+  // ── X: Objeção de Gosto/Ingrediente ──────────────────────────────────────────
+  {
+    id:       "objection-taste",
+    name:     "Objeção de Ingrediente",
+    goal:     "Pedido genérico → cliente recusa cru e pede frito ou empanado",
+    behavior: "guided",
+    intentMessages: [
+      "O que tem de bom?",
+      "Não gosto de cru, tem algo frito ou empanado?",
+    ],
+    requiresCart:        false,
+    requiresCheckout:    false,
+    requiresSearchCards: true,   // última mensagem deve retornar cards filtrados por ingrediente
+    expectedOutcome:
+      "Turn 1: Waiter qualifica ou sugere via cards/options. Turn 2: objeção de ingrediente ('frito', 'empanado') → searchMenuByQuery retorna cards específicos. Waiter não pode retornar apenas texto — objeção de gosto exige cards ou qualificação.",
+  },
 ];

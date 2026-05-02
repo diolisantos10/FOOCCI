@@ -71,7 +71,9 @@ export type FailureType =
   | "missed_dessert_opportunity"
   | "invasive_after_item_add"
   | "checkout_prompt_repeated"
-  | "silent_customer_not_supported";
+  | "silent_customer_not_supported"
+  // ── Consultative sales failures ────────────────────────────────────────────
+  | "objection_not_handled";
 
 export type Severity = "low" | "medium" | "high" | "critical";
 
