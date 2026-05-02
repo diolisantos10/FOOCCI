@@ -72,11 +72,13 @@ export interface WaiterMemory {
   lastMode:                string | null;
   permissionDeclinedAt:    number | null; // Unix ms — null means never declined
   promptCount:             number;        // how many idle permission prompts shown
-  finalUpsellPromptShown:  boolean;       // pre-checkout upsell prompt was shown once
+  finalUpsellPromptShown:  boolean;       // kept for backward compat (not used as gate)
   finalUpsellDeclined:     boolean;       // user clicked "Não, finalizar"
   qualificationCount:      number;        // qualifying questions asked this session (anti-loop)
   acknowledgedItemIds:     string[];      // item IDs already praised after add (no repeat)
   lastAckMessages:         string[];      // recent ack phrases (avoid literal repetition)
+  drinkUpsellShown:        boolean;       // drink cards were shown at checkout upsell
+  dessertUpsellShown:      boolean;       // dessert cards were shown at checkout upsell
 }
 
 /** Returns a blank WaiterMemory for a new ordering session. */
@@ -94,6 +96,8 @@ export function createWaiterMemory(): WaiterMemory {
     qualificationCount:      0,
     acknowledgedItemIds:     [],
     lastAckMessages:         [],
+    drinkUpsellShown:        false,
+    dessertUpsellShown:      false,
   };
 }
 
@@ -1658,60 +1662,58 @@ function findPinnedId(catalog: V2CatalogItem[], pairing: string, cards: string[]
 
 function handleCheckoutStarted(input: V2Input): V2Output {
   const cfg = input.config ?? DEFAULT_WAITER_CONFIG;
-  const mem = input.memory;
+  const mem = input.memory ?? createWaiterMemory();
   const ca  = analyzeCart(input.cartItemIds, input.catalog);
 
-  const alreadyHandled = !cfg.allowFinalUpsellPrompt || (mem && (mem.finalUpsellPromptShown || mem.finalUpsellDeclined));
+  if (!cfg.allowFinalUpsellPrompt || !ca.hasFood) {
+    return { message: "Excelente pedido. Vamos concluir agora.", cards: [], mode: "CHECKOUT_SUPPORT", options: [], requiresAI: false, aiDirective: "" };
+  }
 
-  if (!alreadyHandled && ca.hasFood) {
-    // Case A: no drink → interrupt with drinks
-    if (!ca.hasDrink) {
-      const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds);
-      if (drinkCards.length > 0) {
-        const pairing     = getCartPairing(input.catalog, input.cartItemIds);
-        const pinnedCardId = pairing ? findPinnedId(input.catalog, pairing, drinkCards) : undefined;
-        // Move pinned item to front so carousel shows it first with ⭐
-        const sortedCards = pinnedCardId
-          ? [pinnedCardId, ...drinkCards.filter((id) => id !== pinnedCardId)]
-          : drinkCards;
-        return {
-          message:     "Antes de fechar, deixe-me apresentar nossas bebidas.",
-          cards:       sortedCards,
-          mode:        "INTERVENTION",
-          options:     [
-            { label: "Adicionar depois",     value: "skip_drink_upsell" },
-            { label: "Finalizar sem bebida", value: "continue_checkout" },
-          ],
-          requiresAI:  false,
-          aiDirective: "",
-          pinnedCardId,
-        };
-      }
-    }
-
-    // Case B/C: has drink but no dessert → interrupt with desserts
-    if (!ca.hasDessert) {
-      const dessertCards = selectDessertItems(input.catalog, input.cartItemIds);
-      if (dessertCards.length > 0) {
-        const pairing      = getCartPairing(input.catalog, input.cartItemIds);
-        const pinnedCardId = pairing ? findPinnedId(input.catalog, pairing, dessertCards) : undefined;
-        const sortedCards  = pinnedCardId
-          ? [pinnedCardId, ...dessertCards.filter((id) => id !== pinnedCardId)]
-          : dessertCards;
-        return {
-          message:     "Temos também deliciosas sobremesas para completar seu pedido.",
-          cards:       sortedCards,
-          mode:        "INTERVENTION",
-          options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
-          requiresAI:  false,
-          aiDirective: "",
-          pinnedCardId,
-        };
-      }
+  // Stage A: drink not yet offered and cart has no drink
+  if (!ca.hasDrink && !mem.drinkUpsellShown) {
+    const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds);
+    if (drinkCards.length > 0) {
+      const pairing      = getCartPairing(input.catalog, input.cartItemIds);
+      const pinnedCardId = pairing ? findPinnedId(input.catalog, pairing, drinkCards) : undefined;
+      const sortedCards  = pinnedCardId
+        ? [pinnedCardId, ...drinkCards.filter((id) => id !== pinnedCardId)]
+        : drinkCards;
+      return {
+        message:      "Antes de fechar, deixe-me apresentar nossas bebidas.",
+        cards:        sortedCards,
+        mode:         "INTERVENTION",
+        options:      [],
+        requiresAI:   false,
+        aiDirective:  "",
+        pinnedCardId,
+        memoryPatch:  { drinkUpsellShown: true },
+      };
     }
   }
 
-  // Case D: cart complete — proceed to checkout.
+  // Stage B: drink shown (or cart already has drink); dessert not yet offered and cart has no dessert
+  if (!ca.hasDessert && !mem.dessertUpsellShown) {
+    const dessertCards = selectDessertItems(input.catalog, input.cartItemIds);
+    if (dessertCards.length > 0) {
+      const pairing      = getCartPairing(input.catalog, input.cartItemIds);
+      const pinnedCardId = pairing ? findPinnedId(input.catalog, pairing, dessertCards) : undefined;
+      const sortedCards  = pinnedCardId
+        ? [pinnedCardId, ...dessertCards.filter((id) => id !== pinnedCardId)]
+        : dessertCards;
+      return {
+        message:      "Temos também deliciosas sobremesas para completar seu pedido.",
+        cards:        sortedCards,
+        mode:         "INTERVENTION",
+        options:      [],
+        requiresAI:   false,
+        aiDirective:  "",
+        pinnedCardId,
+        memoryPatch:  { dessertUpsellShown: true },
+      };
+    }
+  }
+
+  // Stage C: both upsells handled (or not applicable) — proceed to checkout.
   return {
     message:     "Excelente pedido. Vamos concluir agora.",
     cards:       [],
@@ -2491,13 +2493,18 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
   const msg  = (input.message ?? "").toLowerCase().trim();
   const patch: Partial<WaiterMemory> = {};
 
-  // Merge acknowledged item IDs from ON_ITEM_ADDED deterministic handler.
-  // The handler already sets memoryPatch — merge rather than overwrite.
+  // Merge handler memoryPatch fields (ON_ITEM_ADDED, ON_CHECKOUT_STARTED, etc.)
   if (output.memoryPatch?.acknowledgedItemIds) {
     patch.acknowledgedItemIds = output.memoryPatch.acknowledgedItemIds;
   }
   if (output.memoryPatch?.lastAckMessages) {
     patch.lastAckMessages = output.memoryPatch.lastAckMessages;
+  }
+  if (output.memoryPatch?.drinkUpsellShown !== undefined) {
+    patch.drinkUpsellShown = output.memoryPatch.drinkUpsellShown;
+  }
+  if (output.memoryPatch?.dessertUpsellShown !== undefined) {
+    patch.dessertUpsellShown = output.memoryPatch.dessertUpsellShown;
   }
 
   // Always track last mode
@@ -2540,17 +2547,6 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
   if (msg === "see_final_suggestions") {
     patch.acceptedSuggestionTypes = [...new Set([...mem.acceptedSuggestionTypes, "final_upsell"])];
     patch.finalUpsellPromptShown  = true;
-  }
-
-  // Final upsell prompt shown at checkout start (old gate or new active upsell with cards)
-  if (input.event === "ON_CHECKOUT_STARTED" &&
-      (output.options.some((o) => o.value === "see_final_suggestions") || output.cards.length > 0)) {
-    patch.finalUpsellPromptShown = true;
-  }
-
-  // User skipped drink upsell — mark as handled so dessert runs next
-  if (input.event === "ON_USER_MESSAGE" && (input.message ?? "").toLowerCase().trim() === "skip_drink_upsell") {
-    patch.finalUpsellPromptShown = true;
   }
 
   return patch;
