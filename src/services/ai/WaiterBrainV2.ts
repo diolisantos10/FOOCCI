@@ -68,6 +68,7 @@ export interface WaiterMemory {
   promptCount:             number;        // how many idle permission prompts shown
   finalUpsellPromptShown:  boolean;       // pre-checkout upsell prompt was shown once
   finalUpsellDeclined:     boolean;       // user clicked "Não, finalizar"
+  qualificationCount:      number;        // qualifying questions asked this session (anti-loop)
 }
 
 /** Returns a blank WaiterMemory for a new ordering session. */
@@ -82,6 +83,7 @@ export function createWaiterMemory(): WaiterMemory {
     promptCount:             0,
     finalUpsellPromptShown:  false,
     finalUpsellDeclined:     false,
+    qualificationCount:      0,
   };
 }
 
@@ -1641,7 +1643,7 @@ function handlePermissionAccepted(input: V2Input): V2Output {
   const hasItems = cartItemIds.length > 0;
 
   if (!hasItems) {
-    return { ...buildDiscoveryQuestion(catalog) };
+    return { ...buildDynamicProbeQuestion(catalog) };
   }
 
   // Cart has items → context-aware deterministic recommendation
@@ -1719,49 +1721,41 @@ const QUAL_QUESTION: Pick<V2Output, "message" | "options" | "cards" | "mode" | "
 };
 
 /**
- * Builds a cuisine-aware discovery question for undecided customers.
- * Falls back to generic options when no cuisine signal is detected.
+ * Builds a catalog-driven discovery question for undecided customers.
+ * Reads actual menu categories — works with any cuisine, no hardcoded labels.
+ * Button values use the "discovery:TERM" prefix so handleUserMessage resolves them dynamically.
  */
-function buildDiscoveryQuestion(
+function buildDynamicProbeQuestion(
   catalog: V2CatalogItem[],
 ): Pick<V2Output, "message" | "options" | "cards" | "mode" | "requiresAI" | "aiDirective"> {
-  const profile = analyzeMenuProfile(catalog);
-  const signals = profile.cuisineSignals;
+  const tagged    = tagCatalog(catalog);
+  const mainItems = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert"));
 
-  if (signals.includes("sushi")) {
-    return {
-      message:     "Você prefere algo cru, quente ou tipo temaki?",
-      options:     [
-        { label: "Cru / Sushi",  value: "discovery_cru_sushi"  },
-        { label: "Quente",       value: "discovery_quente"      },
-        { label: "Temaki",       value: "discovery_temaki"      },
-      ],
-      cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "",
-    };
+  // Count items per category and pick the top 3 most represented
+  const catFreq = new Map<string, number>();
+  for (const item of mainItems) {
+    catFreq.set(item.category, (catFreq.get(item.category) ?? 0) + 1);
   }
-  if (signals.includes("pizza")) {
-    return {
-      message:     "Prefere pizza salgada ou doce?",
-      options:     [
-        { label: "Salgada", value: "discovery_pizza_salgada" },
-        { label: "Doce",    value: "discovery_pizza_doce"    },
-      ],
-      cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "",
-    };
-  }
-  if (signals.includes("burger")) {
-    return {
-      message:     "Prefere hambúrguer clássico, smash ou vegetariano?",
-      options:     [
-        { label: "Clássico",    value: "discovery_burger_classic" },
-        { label: "Smash",       value: "discovery_burger_smash"   },
-        { label: "Vegetariano", value: "discovery_vegetariano"    },
-      ],
-      cards: [], mode: "BROWSE", requiresAI: false, aiDirective: "",
-    };
-  }
-  // Generic fallback
-  return { ...QUAL_QUESTION };
+  const topCats = [...catFreq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name]) => name);
+
+  if (topCats.length < 2) return { ...QUAL_QUESTION };
+
+  const options: WaiterOption[] = topCats.map((catName) => ({
+    label: catName,
+    value: `discovery:${catName.toLowerCase()}`,
+  }));
+
+  return {
+    message:     "O que te apetece hoje?",
+    options,
+    cards:       [],
+    mode:        "BROWSE",
+    requiresAI:  false,
+    aiDirective: "",
+  };
 }
 
 // ─── Commercial Response Builder (Sprint 4D) ─────────────────
@@ -1940,6 +1934,7 @@ function handleUserMessage(input: V2Input): V2Output {
   const cfg          = input.config ?? DEFAULT_WAITER_CONFIG;
   const { catalog, cartItemIds } = input;
   const suggestedIds = input.memory?.suggestedProductIds ?? [];
+  const qualCount    = input.memory?.qualificationCount ?? 0;
 
   const msgRaw  = input.message ?? "";
   const msgLow  = msgRaw.toLowerCase().trim();
@@ -1957,6 +1952,25 @@ function handleUserMessage(input: V2Input): V2Output {
     const base    = buildCommercialResponse({ intent, selectedProducts: cards, mode }, cfg);
     const message = buildObjectionCopy(msgRaw, intent) ?? base.message;
     return { ...base, message, requiresAI: false, aiDirective: "" };
+  };
+
+  // Anti-loop: after 2 qualifying questions, force 3 curated cards instead of asking again.
+  const probeOrSuggest = (): V2Output => {
+    if (qualCount >= 2) {
+      const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 3, suggestedIds);
+      if (cards.length > 0) {
+        return {
+          message:     "Separei as melhores opções pra você 👇",
+          cards,
+          mode:        "SUGGESTION",
+          options:     [],
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
+      return noCardsFound();
+    }
+    return { ...buildDynamicProbeQuestion(catalog) };
   };
 
   // ── Special path: pre-checkout "Ver opções" button (backward compat) ─────────
@@ -2006,7 +2020,24 @@ function handleUserMessage(input: V2Input): V2Output {
     };
   }
 
-  // ── Cuisine-aware discovery answers ───────────────────────────────────────────
+  // ── Dynamic discovery: "discovery:CATEGORY" prefix from buildDynamicProbeQuestion ──────────
+  if (msgLow.startsWith("discovery:")) {
+    const query = msgLow.slice("discovery:".length).trim();
+    if (query.length >= 2) {
+      const result = searchMenuByQuery(query, catalog, cartItemIds, suggestedIds, 5, maxBudget, excludedIngredients);
+      if (result.ids.length > 0) return suggest("asks_category", result.ids, "SUGGESTION");
+      // Fallback: direct category name match when search returns nothing
+      const catMatch = catalog
+        .filter((i) => i.categoryName.toLowerCase().includes(query) && !cartItemIds.includes(i.id))
+        .sort(bySort)
+        .slice(0, 5)
+        .map((i) => i.id);
+      if (catMatch.length > 0) return suggest("asks_category", catMatch, "SUGGESTION");
+    }
+    return noCardsFound();
+  }
+
+  // ── Cuisine-aware discovery answers (legacy button values) ────────────────────────────────
   const DISCOVERY_SEARCH: Record<string, string> = {
     discovery_cru_sushi:      "sashimi niguiri uramaki sushi",
     discovery_quente:         "hot roll yakisoba quente",
@@ -2126,12 +2157,12 @@ function handleUserMessage(input: V2Input): V2Output {
       break;
     }
     case "unclear": {
-      // Cart is empty → cuisine-aware discovery; cart has items → fall through to AI
-      if (!hasItems) return { ...buildDiscoveryQuestion(catalog) };
+      // Cart is empty → dynamic probe or curated cards after 2 questions (anti-loop)
+      if (!hasItems) return probeOrSuggest();
       break;
     }
     case "wants_recommendation": {
-      if (!hasItems) return { ...buildDiscoveryQuestion(catalog) };
+      if (!hasItems) return probeOrSuggest();
       const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("wants_recommendation", cards, "SUGGESTION");
       break;
@@ -2174,7 +2205,7 @@ function handleUserMessage(input: V2Input): V2Output {
   }
 
   // ── AI path for remaining intents ─────────────────────────────
-  const discoveryOpts = hasItems ? [] : buildDiscoveryQuestion(catalog).options;
+  const discoveryOpts = hasItems ? [] : buildDynamicProbeQuestion(catalog).options;
   return {
     message:     "",
     cards:       [],
@@ -2434,6 +2465,15 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
   // User skipped drink upsell — mark as handled so dessert runs next
   if (input.event === "ON_USER_MESSAGE" && (input.message ?? "").toLowerCase().trim() === "skip_drink_upsell") {
     patch.finalUpsellPromptShown = true;
+  }
+
+  // Track qualifying question count for anti-loop rule (max 2 before forcing cards).
+  if (input.event === "ON_USER_MESSAGE") {
+    if (output.options.length > 0 && output.cards.length === 0) {
+      patch.qualificationCount = (mem.qualificationCount ?? 0) + 1;
+    } else if (output.cards.length > 0) {
+      patch.qualificationCount = 0;
+    }
   }
 
   return patch;
