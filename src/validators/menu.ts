@@ -44,6 +44,11 @@ export const createMenuItemSchema = z.object({
   code: z.string().max(100).optional(),
   servingSize: z.number().int().min(1).max(20).optional(),
   portionInfo: z.string().max(50).optional(),
+  tagFunil:             z.string().max(50).optional(),
+  perfilPaladar:        z.string().max(200).optional(),
+  harmonizacaoSugerida: z.string().max(200).optional(),
+  alergenosDetalhados:  z.string().max(500).optional(),
+  storytellingIA:       z.string().max(1000).optional(),
 });
 
 export const updateMenuItemSchema = createMenuItemSchema.partial().extend({

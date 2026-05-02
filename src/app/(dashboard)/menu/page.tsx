@@ -68,6 +68,11 @@ export default async function MenuPage() {
       code: item.code ?? null,
       servingSize: item.servingSize ?? null,
       portionInfo: item.portionInfo ?? null,
+      tagFunil:             item.tagFunil             ?? null,
+      perfilPaladar:        item.perfilPaladar        ?? null,
+      harmonizacaoSugerida: item.harmonizacaoSugerida ?? null,
+      alergenosDetalhados:  item.alergenosDetalhados  ?? null,
+      storytellingIA:       item.storytellingIA       ?? null,
       variants: item.variants.map((v) => ({
         id: v.id,
         name: v.name,

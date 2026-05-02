@@ -55,6 +55,11 @@ type Item = {
   code: string | null;
   servingSize: number | null;
   portionInfo: string | null;
+  tagFunil:             string | null;
+  perfilPaladar:        string | null;
+  harmonizacaoSugerida: string | null;
+  alergenosDetalhados:  string | null;
+  storytellingIA:       string | null;
   variants: Variant[];
   extras: Extra[];
 };
@@ -1378,6 +1383,11 @@ type EditModalForm = {
   servingSize: number | null;
   portionInfo: string;
   categoryId: string;
+  tagFunil:             string;
+  perfilPaladar:        string;
+  harmonizacaoSugerida: string;
+  alergenosDetalhados:  string;
+  storytellingIA:       string;
 };
 
 function EditItemModal({
@@ -1409,6 +1419,11 @@ function EditItemModal({
     servingSize: null,
     portionInfo: "",
     categoryId: currentCategoryId,
+    tagFunil:             "",
+    perfilPaladar:        "",
+    harmonizacaoSugerida: "",
+    alergenosDetalhados:  "",
+    storytellingIA:       "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1447,6 +1462,11 @@ function EditItemModal({
       servingSize: item.servingSize ?? null,
       portionInfo: item.portionInfo ?? "",
       categoryId: currentCategoryId,
+      tagFunil:             item.tagFunil             ?? "",
+      perfilPaladar:        item.perfilPaladar        ?? "",
+      harmonizacaoSugerida: item.harmonizacaoSugerida ?? "",
+      alergenosDetalhados:  item.alergenosDetalhados  ?? "",
+      storytellingIA:       item.storytellingIA       ?? "",
     });
     setVariants(item.variants ?? []);
     setExtras(item.extras ?? []);
@@ -2005,6 +2025,67 @@ function EditItemModal({
             </div>
           </div>
 
+          {/* ── IA / Enriquecimento ─────────────────────────────── */}
+          <div className="space-y-4 border-t border-gray-100 px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Inteligência / IA</p>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Etapa do funil</label>
+              <select
+                value={form.tagFunil}
+                onChange={(e) => setForm((f) => ({ ...f, tagFunil: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+              >
+                <option value="">— Não definido —</option>
+                <option value="Entrada">Entrada</option>
+                <option value="Prato Principal">Prato Principal</option>
+                <option value="Bebida">Bebida</option>
+                <option value="Sobremesa">Sobremesa</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Perfil de paladar</label>
+              <input
+                value={form.perfilPaladar}
+                onChange={(e) => setForm((f) => ({ ...f, perfilPaladar: e.target.value }))}
+                placeholder="ex: umami, cremoso, cítrico, levemente picante"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Harmonização sugerida</label>
+              <input
+                value={form.harmonizacaoSugerida}
+                onChange={(e) => setForm((f) => ({ ...f, harmonizacaoSugerida: e.target.value }))}
+                placeholder="ex: Água Tônica, Cerveja Heineken"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Alérgenos detalhados</label>
+              <input
+                value={form.alergenosDetalhados}
+                onChange={(e) => setForm((f) => ({ ...f, alergenosDetalhados: e.target.value }))}
+                placeholder="ex: glúten, lactose, frutos do mar, amendoim"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Storytelling IA</label>
+              <textarea
+                rows={3}
+                value={form.storytellingIA}
+                onChange={(e) => setForm((f) => ({ ...f, storytellingIA: e.target.value }))}
+                placeholder="Narrativa usada pela IA quando o cliente pede uma recomendação especial"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400 resize-none"
+              />
+            </div>
+          </div>
+
           {error && (
             <div className="px-5 pb-4">
               <InlineError message={error} />
@@ -2416,6 +2497,11 @@ export function MenuManager({
       code: patch.code.trim() || undefined,
       servingSize: patch.servingSize ?? undefined,
       portionInfo: patch.portionInfo.trim() || undefined,
+      tagFunil:             patch.tagFunil.trim()             || undefined,
+      perfilPaladar:        patch.perfilPaladar.trim()        || undefined,
+      harmonizacaoSugerida: patch.harmonizacaoSugerida.trim() || undefined,
+      alergenosDetalhados:  patch.alergenosDetalhados.trim()  || undefined,
+      storytellingIA:       patch.storytellingIA.trim()       || undefined,
       ...(newCategoryId !== oldCategoryId && { categoryId: newCategoryId }),
     };
     const data = await apiFetch(`/api/menu/items/${item.id}`, "PATCH", body);

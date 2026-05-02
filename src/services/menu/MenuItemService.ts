@@ -126,6 +126,11 @@ export class MenuItemService {
         ...(input.code !== undefined && { code: input.code || null }),
         ...(input.servingSize !== undefined && { servingSize: input.servingSize ?? null }),
         ...(input.portionInfo !== undefined && { portionInfo: input.portionInfo ?? null }),
+        ...(input.tagFunil             !== undefined && { tagFunil:             input.tagFunil             || null }),
+        ...(input.perfilPaladar        !== undefined && { perfilPaladar:        input.perfilPaladar        || null }),
+        ...(input.harmonizacaoSugerida !== undefined && { harmonizacaoSugerida: input.harmonizacaoSugerida || null }),
+        ...(input.alergenosDetalhados  !== undefined && { alergenosDetalhados:  input.alergenosDetalhados  || null }),
+        ...(input.storytellingIA       !== undefined && { storytellingIA:       input.storytellingIA       || null }),
       },
     });
 
