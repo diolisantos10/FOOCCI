@@ -194,7 +194,12 @@ function norm(s: string) {
 function findBeverageCat(cats: MenuCategory[]) {
   return cats.find((c) => {
     const n = norm(c.name);
-    return n.includes("bebida") || n.includes("drink") || n.includes("suco") || n.includes("refri");
+    return (
+      n.includes("bebida") || n.includes("drink")  || n.includes("suco")  ||
+      n.includes("refri")  || n.includes("cerveja") || n.includes("vinho") ||
+      n.includes("sake")   || n.includes("agua")    || n.includes("shake") ||
+      n.includes("alco")   || n.includes("chopp")   || n.includes("limonada")
+    );
   }) ?? null;
 }
 
@@ -1063,7 +1068,9 @@ export function PedidoClient({
   // (contextChosenRef removed — qualification suppression handled by options contract)
   const guidedStepRef     = useRef<"size" | "starters" | "main" | "drinks" | "dessert" | "done">("size");
   // Type of upsell pending at checkout ("drink" | "dessert")
-  const checkoutPendingRef = useRef(false);
+  const checkoutPendingRef     = useRef(false);
+  // Stable ref so sendText can call proceedToCheckout without being in its deps
+  const proceedToCheckoutRef   = useRef<() => void>(() => {});
 
   // ── Upsell engine ─────────────────────────────────────────────────
   // offeredDrink / offeredDessert: set to true once that phase has been
@@ -1259,6 +1266,15 @@ export function PedidoClient({
 
         // Cards and buttons are always shown together when both are present.
         const finalOptions: WaiterOption[] | undefined = apiOptions.length > 0 ? apiOptions : undefined;
+
+        // Checkout auto-advance: if checkout was pending and Waiter returned CHECKOUT_SUPPORT
+        // (no more upsells to show), advance to the operational checkout flow now.
+        // When INTERVENTION+cards is returned instead, stay in BROWSE so the user reviews cards.
+        if (checkoutPendingRef.current && responseMode === "CHECKOUT_SUPPORT") {
+          checkoutPendingRef.current = false;
+          proceedToCheckoutRef.current();
+          return; // skip message push — proceedToCheckout shows its own prompt
+        }
 
         if (reply) {
           setMessages((prev) => [
@@ -1554,6 +1570,9 @@ export function PedidoClient({
     }
   }, [deliveryMethod, address, customerName, paymentMode, paymentMethodSub, cart, sendText, pushAssistantMessage]);
 
+  // Keep ref in sync so sendText can call proceedToCheckout without circular deps
+  useEffect(() => { proceedToCheckoutRef.current = proceedToCheckout; }, [proceedToCheckout]);
+
   // ── Option button handler ─────────────────────────────────────────
   // Receives the button value + label. Label is shown in the user bubble;
   // value is what is sent to the backend and used for routing.
@@ -1649,45 +1668,19 @@ export function PedidoClient({
     }
 
     if (cart.length === 0) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id:      uid(),
-          role:    "assistant" as const,
-          content: "Adicione pelo menos um item antes de finalizar 👆",
-          ts:      new Date(),
-        },
-      ]);
+      pushAssistantMessage("Adicione pelo menos um item antes de finalizar 👆");
       return;
     }
     if (stage !== "BROWSE") return;
 
-    const cartIds    = new Set(cart.map((c) => c.id));
-    const drinkCat   = findBeverageCat(categories);
-    const dessertCat = findDessertCat(categories);
-    const hasDrink   = drinkCat   ? drinkCat.items.some((i)   => cartIds.has(i.id)) : false;
-    const hasDessert = dessertCat ? dessertCat.items.some((i) => cartIds.has(i.id)) : false;
-
-    // ── DRINK phase — active upsell cards via Waiter ──────────────────────────
-    if (!hasDrink && !upsellState.offeredDrink && drinkCat) {
-      setUpsellState((prev) => ({ ...prev, offeredDrink: true, lastUpsellCategory: "drink" }));
-      checkoutPendingRef.current = true;
-      sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
-      return;
-    }
-
-    // ── DESSERT phase — active upsell cards via Waiter ────────────────────────
-    const drinkResolved = hasDrink || upsellState.offeredDrink;
-    if (drinkResolved && !hasDessert && !upsellState.offeredDessert && dessertCat) {
-      setUpsellState((prev) => ({ ...prev, offeredDessert: true, lastUpsellCategory: "dessert" }));
-      checkoutPendingRef.current = true;
-      sendText("skip_drink_upsell", cart, "BROWSE", null, { silent: true });
-      return;
-    }
-
-    // ── All upsells resolved → resume from the correct checkout stage ─────────
-    proceedToCheckout();
-  }, [cart, categories, stage, upsellState, proceedToCheckout, sendText, pushAssistantMessage, aiPermState]);
+    // Delegate upsell intelligence entirely to WaiterBrain.
+    // ON_CHECKOUT_STARTED returns:
+    //   INTERVENTION + cards → stay in BROWSE, show drink/dessert cards
+    //   CHECKOUT_SUPPORT     → sendText auto-advances via proceedToCheckoutRef
+    // waiterMemory.finalUpsellPromptShown ensures each upsell fires at most once.
+    checkoutPendingRef.current = true;
+    sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
+  }, [cart, stage, sendText, pushAssistantMessage, aiPermState]);
 
   const handleDeliveryMethod = useCallback(
     (type: "delivery" | "pickup") => {

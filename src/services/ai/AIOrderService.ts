@@ -356,6 +356,16 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     };
   }
 
+  // Contract guard: if the reply contains product-presentation language but cards are empty,
+  // strip the presentation opening so the client never sees "Separei..." without visible cards.
+  const PRESENTATION_RE = /separei|encontrei|vou te mostrar|essas opções|essas bebidas|essas sobremesas/i;
+  if (PRESENTATION_RE.test(finalResponse) && aiCards.length === 0) {
+    finalResponse = finalResponse.replace(
+      /^[^.!?\n]*(?:separei|encontrei|vou te mostrar|essas opções|essas bebidas|essas sobremesas)[^.!?\n]*/i,
+      "Posso te ajudar com o cardápio 😊"
+    ).trim();
+  }
+
   return {
     reply:             finalResponse || "Desculpe, não consegui processar sua mensagem. 😅",
     cards:             aiCards,

@@ -75,6 +75,8 @@ export interface WaiterMemory {
   finalUpsellPromptShown:  boolean;       // pre-checkout upsell prompt was shown once
   finalUpsellDeclined:     boolean;       // user clicked "Não, finalizar"
   qualificationCount:      number;        // qualifying questions asked this session (anti-loop)
+  acknowledgedItemIds:     string[];      // item IDs already praised after add (no repeat)
+  lastAckMessages:         string[];      // recent ack phrases (avoid literal repetition)
 }
 
 /** Returns a blank WaiterMemory for a new ordering session. */
@@ -90,6 +92,8 @@ export function createWaiterMemory(): WaiterMemory {
     finalUpsellPromptShown:  false,
     finalUpsellDeclined:     false,
     qualificationCount:      0,
+    acknowledgedItemIds:     [],
+    lastAckMessages:         [],
   };
 }
 
@@ -734,6 +738,21 @@ function normalizeSearch(s: string): string {
     .trim();
 }
 
+// Common Portuguese words that carry no menu-search meaning.
+// Filtering these out prevents "com" matching "combo", "quero" scoring via descriptions, etc.
+const QUERY_STOPWORDS = new Set([
+  "quero","queria","quero","posso","pode","tem","temos","tenho","voce","vc",
+  "me","meu","minha","nos","um","uma","uns","umas","os","as","de","do","da",
+  "com","por","para","em","na","no","ao","aos","nas","nao","nao","e","e",
+  "vai","vou","ver","que","so","mais","opcoes","opcao","comer","pedir",
+  "hoje","aqui","ate","mas","sim","nao","gosto","tipo","coisa","algo",
+  "tudo","nada","quando","como","qual","quais","favor","por","pois","isto",
+  "isso","aqui","voce","vc","me","mim","seu","sua","seus","suas","muito",
+  "pouco","bem","mal","ter","quais","quem","esta","esse","essa","esses",
+  "essas","este","estes","estas","esse","aquele","aquela","aqueles","aquelas",
+]);
+
+
 /**
  * Synonym groups: [queryPattern, itemPattern].
  * When the customer message matches queryPattern, catalog items matching itemPattern
@@ -765,10 +784,10 @@ const MENU_SYNONYM_GROUPS: Array<[RegExp, RegExp]> = [
     /\b(combo|combinado|festival|bandeja)\b/i,
     /combo|combinado|festival|bandeja/i,
   ],
-  // Frango / chicken family
+  // Frango / chicken family — "empanado" alone is too broad; require "frango" in item text
   [
     /\b(frango|chicken|galinha)\b/i,
-    /frango|chicken|galinha|peito|empanado/i,
+    /frango|chicken|galinha/i,
   ],
   // Salmão / salmon family
   [
@@ -807,7 +826,8 @@ function searchMenuByQuery(
   excludeKeywords?: string[],
 ): { ids: string[]; confidence: "high" | "medium" | "low" } {
   const normQuery = normalizeSearch(rawQuery);
-  const words     = normQuery.split(/\s+/).filter((w) => w.length >= 3);
+  // Filter stopwords so "quero opções com frango" reduces to ["frango"]
+  const words = normQuery.split(/\s+/).filter((w) => w.length >= 3 && !QUERY_STOPWORDS.has(w));
 
   if (words.length === 0) return { ids: [], confidence: "low" };
 
@@ -1494,43 +1514,73 @@ function handleMenuMode(): V2Output {
   };
 }
 
+// Deterministic acknowledgement pools by cart/item context.
+// Never calls OpenAI — instant, zero-cost, varied.
+const ACK_POOL: Record<"drink" | "dessert" | "first" | "second" | "third_plus", string[]> = {
+  drink: [
+    "Boa pedida pra acompanhar 🥤",
+    "Ótima escolha de bebida 🥤",
+    "Toque final no pedido 🥤",
+    "",
+  ],
+  dessert: [
+    "Pra fechar com doce — escolha certeira 🍰",
+    "Sobremesa no pedido — ótima decisão ✨",
+    "",
+  ],
+  first: [
+    "Boa escolha 👌",
+    "Escolha certeira pra começar ✨",
+    "Ótima pedida 🍱",
+    "Boa pedida 👌",
+  ],
+  second: [
+    "Pedido já está bem composto 👌",
+    "Boa combinação 👌",
+    "Ficou equilibrado o pedido ✨",
+    "",
+  ],
+  third_plus: [
+    "Pedido ficando muito bom 🔥",
+    "Boa composição de pedido 🍱",
+    "",
+    "",
+  ],
+};
+
 function handleItemAdded(input: V2Input): V2Output {
-  const { catalog, cartItemIds, lastAddedId, cartValue } = input;
-  const addedItem = lastAddedId ? catalog.find((i) => i.id === lastAddedId) : undefined;
+  const { catalog, cartItemIds, lastAddedId } = input;
+  const mem       = input.memory ?? createWaiterMemory();
+  const silent: V2Output = { message: "", cards: [], mode: "BROWSE", options: [], requiresAI: false, aiDirective: "" };
 
-  const itemLine = addedItem
-    ? `Item adicionado: "${addedItem.name}" (categoria: ${addedItem.categoryName}) — R$ ${addedItem.price.toFixed(2)}`
-    : "Item adicionado ao carrinho.";
+  // Already acknowledged this exact item this session — stay quiet
+  if (lastAddedId && mem.acknowledgedItemIds.includes(lastAddedId)) return silent;
 
-  const cartLine = cartItemIds.length > 1
-    ? `Pedido atual: ${cartItemIds.length} itens — total R$ ${cartValue.toFixed(2)}.`
-    : "Primeiro item do pedido.";
+  const addedItem  = lastAddedId ? catalog.find((i) => i.id === lastAddedId) : undefined;
+  const cartSize   = cartItemIds.length;
 
-  const aiDirective = [
-    BASE_DIRECTIVE,
-    "",
-    "━━━ EVENTO: ON_ITEM_ADDED ━━━",
-    itemLine,
-    cartLine,
-    "",
-    "TAREFA: Gere 1 frase de confirmação única e sofisticada (máx. 15 palavras).",
-    "  → Analise o item e contexto do carrinho — nunca use frases genéricas.",
-    "  → Variedade obrigatória: entusiasmado, elegante, com dica sutil — alterne estilos.",
-    "  → Se é bebida: elogie a escolha de acompanhamento. Se é sobremesa: antecipe a experiência.",
-    "  → Se é 2º+ item: comente sutilmente a boa composição do pedido.",
-    "  → Use 1 emoji elegante adequado à categoria (🍱 sushi/japonês, 🥤 bebida, 🍰 sobremesa, ✨ premium, 👌 padrão).",
-    "PROIBIDO absolutamente: chamar suggest_upsell, add_item ou qualquer outra ferramenta.",
-    "Responda SOMENTE com a frase de confirmação. Sem aspas. Sem explicação.",
-  ].join("\n");
+  // Classify item to pick pool
+  let poolKey: keyof typeof ACK_POOL = cartSize <= 1 ? "first" : cartSize === 2 ? "second" : "third_plus";
+  if (addedItem) {
+    const b = computePriceBenchmarks(catalog);
+    const t = analyzeMenuItem(addedItem, b);
+    if (t.tags.includes("drink"))   poolKey = "drink";
+    if (t.tags.includes("dessert")) poolKey = "dessert";
+  }
 
-  return {
-    message:     "",
-    cards:       [],
-    mode:        "BROWSE",
-    options:     [],
-    requiresAI:  true,
-    aiDirective,
+  const pool      = ACK_POOL[poolKey];
+  const recentMsg = mem.lastAckMessages ?? [];
+  // Prefer messages not recently used; fall back to full pool if all exhausted
+  const available = pool.filter((m) => !recentMsg.includes(m));
+  const candidates = available.length > 0 ? available : pool;
+  const message   = candidates[Math.floor(Math.random() * candidates.length)] ?? "";
+
+  const memPatch: Partial<WaiterMemory> = {
+    acknowledgedItemIds: [...mem.acknowledgedItemIds, ...(lastAddedId ? [lastAddedId] : [])],
+    lastAckMessages:     message ? [...recentMsg.slice(-4), message] : recentMsg,
   };
+
+  return { message, cards: [], mode: "BROWSE", options: [], requiresAI: false, aiDirective: "", memoryPatch: memPatch };
 }
 
 function handleCartUpdated(input: V2Input): V2Output {
@@ -1951,6 +2001,34 @@ function handleUserMessage(input: V2Input): V2Output {
     return { ...base, message, requiresAI: false, aiDirective: "" };
   };
 
+  // ── Discovery answer paths — map button values to catalog search ─────────────
+  // These are fired when the user taps a discovery option (e.g. "Cru / Sushi").
+  if (msgLow === "discovery_cru_sushi" || msgLow === "cru / sushi" || msgLow === "cru/sushi" || msgLow === "sashimi/niguiri") {
+    const ids = searchMenuByQuery("sashimi niguiri uramaki hossomaki sushi combinado misto", catalog, cartItemIds, suggestedIds, 5);
+    if (ids.ids.length > 0) return { message: "Separei as melhores opções crus e frescos pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+    return noCardsFound();
+  }
+  if (msgLow === "discovery_quente" || msgLow === "quente") {
+    const ids = searchMenuByQuery("yakisoba lamen ramen hot roll quente grelhado cozido teppan", catalog, cartItemIds, suggestedIds, 5);
+    if (ids.ids.length > 0) return { message: "Ótima pedida! Separei as melhores opções quentes 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+    return noCardsFound();
+  }
+  if (msgLow === "discovery_temaki" || msgLow === "temaki") {
+    const ids = searchMenuByQuery("temaki", catalog, cartItemIds, suggestedIds, 5);
+    if (ids.ids.length > 0) return { message: "Separei nossos temakis pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+    return noCardsFound();
+  }
+  if (msgLow === "discovery_salmao" || msgLow === "salmão" || msgLow === "salmao") {
+    const ids = searchMenuByQuery("salmao salmon salmão", catalog, cartItemIds, suggestedIds, 5);
+    if (ids.ids.length > 0) return { message: "Separei as opções com salmão pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+    return noCardsFound();
+  }
+  if (msgLow === "discovery_hot_roll" || msgLow === "hot roll" || msgLow === "hot_roll") {
+    const ids = searchMenuByQuery("hot roll", catalog, cartItemIds, suggestedIds, 5);
+    if (ids.ids.length > 0) return { message: "Separei nossos hot rolls pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+    return noCardsFound();
+  }
+
   // ── Special path: pre-checkout "Ver opções" button (backward compat) ─────────
   if (msgLow === "see_final_suggestions") {
     const ca = analyzeCart(cartItemIds, catalog);
@@ -1998,11 +2076,43 @@ function handleUserMessage(input: V2Input): V2Output {
     };
   }
 
+  // ── Ambiguous-help detection — fires BEFORE menu search ─────────────────────
+  // Matches messages with no product/category signal at all.
+  // Returns a catalog-aware discovery question instead of random cards.
+  const AMBIGUOUS_HELP_RE = /^(n[ãa]o\s+sei|me\s+ajuda|me\s+ajude|estou\s+em\s+d[úu]vida|estou\s+indecis|sem\s+ideia|n[ãa]o\s+sei\s+o\s+que|n[ãa]o\s+sei\s+escolher)\b/i;
+  if (AMBIGUOUS_HELP_RE.test(msgLow)) {
+    const profile = analyzeMenuProfile(catalog);
+    const isSushi = profile.cuisineSignals.includes("sushi");
+    if (isSushi) {
+      return {
+        message:     "Boa. Você prefere algo cru, quente ou tipo temaki?",
+        cards:       [],
+        mode:        "BROWSE",
+        options:     [
+          { label: "Cru / Sushi",  value: "discovery_cru_sushi" },
+          { label: "Quente",       value: "discovery_quente"    },
+          { label: "Temaki",       value: "discovery_temaki"    },
+        ],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
+    // Generic discovery for non-sushi menus
+    return {
+      message: "Prefere algo mais leve ou uma refeição mais completa?",
+      cards:   [],
+      mode:    "BROWSE",
+      options: [
+        { label: "Leve",              value: "light"  },
+        { label: "Completo",          value: "complete" },
+        { label: "Para compartilhar", value: "group"  },
+      ],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
   // ── Menu search: explicit product / category queries ─────────────────────────
-  // If the customer is asking about a specific food (sushi, temaki, coca, etc.),
-  // surface matching catalog items immediately — no generic qualification.
-  // Constraints (maxBudget, excludedIngredients) are applied inside searchMenuByQuery
-  // so allergen items or over-budget items are excluded before scoring.
   const searchResult = searchMenuByQuery(msgRaw, catalog, cartItemIds, suggestedIds, 5, maxBudget, excludedIngredients);
   if (searchResult.confidence === "high") {
     return {
@@ -2099,7 +2209,38 @@ function handleUserMessage(input: V2Input): V2Output {
       }
       break;
     }
-    case "unclear":
+    case "unclear": {
+      // No clear intent and AMBIGUOUS_HELP_RE didn't match → ask a discovery question.
+      // Never return random cards for unclear intent.
+      const profile = analyzeMenuProfile(catalog);
+      const isSushi = profile.cuisineSignals.includes("sushi");
+      if (isSushi) {
+        return {
+          message:     "Posso te ajudar! Você prefere algo cru, quente ou tipo temaki?",
+          cards:       [],
+          mode:        "BROWSE",
+          options:     [
+            { label: "Cru / Sushi", value: "discovery_cru_sushi" },
+            { label: "Quente",      value: "discovery_quente"    },
+            { label: "Temaki",      value: "discovery_temaki"    },
+          ],
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
+      return {
+        message:     "Posso ajudar! Prefere algo mais leve ou completo?",
+        cards:       [],
+        mode:        "BROWSE",
+        options:     [
+          { label: "Leve",              value: "light"    },
+          { label: "Completo",          value: "complete" },
+          { label: "Para compartilhar", value: "group"    },
+        ],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
     case "wants_recommendation": {
       const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 5, suggestedIds);
       if (cards.length > 0) return suggest("wants_recommendation", cards, "SUGGESTION");
@@ -2349,6 +2490,15 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
   const mem  = input.memory ?? createWaiterMemory();
   const msg  = (input.message ?? "").toLowerCase().trim();
   const patch: Partial<WaiterMemory> = {};
+
+  // Merge acknowledged item IDs from ON_ITEM_ADDED deterministic handler.
+  // The handler already sets memoryPatch — merge rather than overwrite.
+  if (output.memoryPatch?.acknowledgedItemIds) {
+    patch.acknowledgedItemIds = output.memoryPatch.acknowledgedItemIds;
+  }
+  if (output.memoryPatch?.lastAckMessages) {
+    patch.lastAckMessages = output.memoryPatch.lastAckMessages;
+  }
 
   // Always track last mode
   patch.lastMode = output.mode;
