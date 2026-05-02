@@ -1001,7 +1001,10 @@ export function PedidoClient({
   // ID of the harmonically suggested item — shown with ⭐ in the carousel.
   const [pinnedCardId, setPinnedCardId] = useState<string | null>(null);
   // Server-side session memory — sent each turn, updated from memoryPatch responses.
+  // waiterMemoryRef keeps the value always current so sendText (which has a stale
+  // closure over the state) reads the latest value even before React re-renders.
   const [waiterMemory, setWaiterMemory] = useState<Partial<WaiterMemory>>({});
+  const waiterMemoryRef = useRef<Partial<WaiterMemory>>({});
 
   // ── Guided flow mode ──────────────────────────────────────────────
   // Activated when user accepts the "Can I suggest something?" prompt.
@@ -1222,7 +1225,7 @@ export function PedidoClient({
             event,
             lastAddedId,
             categoryIntro: categoryIntro ?? null,
-            waiterMemory:  Object.keys(waiterMemory).length > 0 ? waiterMemory : undefined,
+            waiterMemory:  Object.keys(waiterMemoryRef.current).length > 0 ? waiterMemoryRef.current : undefined,
           }),
         });
 
@@ -1234,7 +1237,10 @@ export function PedidoClient({
         const newPinned   = (data?.data?.pinnedCardId ?? null) as string | null;
 
         if (data?.data?.memoryPatch && typeof data.data.memoryPatch === "object") {
-          setWaiterMemory((prev) => ({ ...prev, ...data.data.memoryPatch }));
+          // Update ref synchronously so the next sendText call (even before re-render)
+          // ships the latest memory to the server — prevents stage repeat on rapid clicks.
+          waiterMemoryRef.current = { ...waiterMemoryRef.current, ...data.data.memoryPatch };
+          setWaiterMemory(waiterMemoryRef.current);
         }
 
         // Cards always go to the external carousel — never rendered inline in chat.
@@ -1275,6 +1281,9 @@ export function PedidoClient({
           proceedToCheckoutRef.current();
           return; // skip message push — proceedToCheckout shows its own prompt
         }
+        // Non-CHECKOUT_SUPPORT response (e.g. INTERVENTION upsell): reset flag so the
+        // next "Finalizar pedido" click fires normally and advances to the next stage.
+        checkoutPendingRef.current = false;
 
         if (reply) {
           setMessages((prev) => [
@@ -1673,11 +1682,12 @@ export function PedidoClient({
     }
     if (stage !== "BROWSE") return;
 
-    // Delegate upsell intelligence entirely to WaiterBrain.
-    // ON_CHECKOUT_STARTED returns:
-    //   INTERVENTION + cards → stay in BROWSE, show drink/dessert cards
-    //   CHECKOUT_SUPPORT     → sendText auto-advances via proceedToCheckoutRef
-    // waiterMemory.finalUpsellPromptShown ensures each upsell fires at most once.
+    // Rapid-click guard: if a request is already in flight, ignore.
+    if (checkoutPendingRef.current) return;
+
+    // Delegate upsell sequencing to WaiterBrain via ON_CHECKOUT_STARTED.
+    // INTERVENTION+cards → stay in BROWSE, advance upsell stage in memory.
+    // CHECKOUT_SUPPORT   → sendText auto-advances via proceedToCheckoutRef.
     checkoutPendingRef.current = true;
     sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
   }, [cart, stage, sendText, pushAssistantMessage, aiPermState]);

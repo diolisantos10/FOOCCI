@@ -1594,9 +1594,9 @@ describe("Sprint 4F: handleCheckoutStarted — final upsell permission", () => {
     expect(out.options).toHaveLength(0);
   });
 
-  it("B) if finalUpsellPromptShown=true → skip to CHECKOUT_SUPPORT (no repeated prompt)", () => {
+  it("B) if checkoutUpsellStage=completed → skip to CHECKOUT_SUPPORT (no repeated upsell)", () => {
     const catalog = makeSushiCatalog();
-    const memory: WaiterMemory = { ...createWaiterMemory(), finalUpsellPromptShown: true };
+    const memory: WaiterMemory = { ...createWaiterMemory(), checkoutUpsellStage: "completed" };
     const out = decide(makeInput("ON_CHECKOUT_STARTED", {
       cartItemIds: ["s1"],
       cartValue:   22,
@@ -1635,7 +1635,7 @@ describe("Sprint 4F: handleCheckoutStarted — final upsell permission", () => {
     expect(out.mode).toBe("CHECKOUT_SUPPORT");
   });
 
-  it("prompt message matches spec", () => {
+  it("drink upsell message matches spec", () => {
     const catalog = makeSushiCatalog();
     const out = decide(makeInput("ON_CHECKOUT_STARTED", {
       cartItemIds: ["s1"],
@@ -1643,7 +1643,7 @@ describe("Sprint 4F: handleCheckoutStarted — final upsell permission", () => {
       catalog,
     }));
     if (out.mode === "INTERVENTION") {
-      expect(out.message).toBe("Antes de finalizar, quer ver uma bebida ou sobremesa pra acompanhar?");
+      expect(out.message).toBe("Antes de fechar, deixe-me apresentar nossas bebidas.");
     }
   });
 });
@@ -1720,7 +1720,7 @@ describe("Sprint 4F: see_final_suggestions — cart-aware product cards", () => 
 });
 
 describe("Sprint 4F: memory patch for checkout upsell", () => {
-  it("ON_CHECKOUT_STARTED prompt → memoryPatch.finalUpsellPromptShown = true", () => {
+  it("ON_CHECKOUT_STARTED drink stage → memoryPatch.checkoutUpsellStage = drink_shown", () => {
     const catalog = makeSushiCatalog();
     const out = decide(makeInput("ON_CHECKOUT_STARTED", {
       cartItemIds: ["s1"],
@@ -1728,17 +1728,17 @@ describe("Sprint 4F: memory patch for checkout upsell", () => {
       catalog,
     }));
     if (out.mode === "INTERVENTION") {
-      expect(out.memoryPatch?.finalUpsellPromptShown).toBe(true);
+      expect(out.memoryPatch?.checkoutUpsellStage).toBe("drink_shown");
     }
   });
 
-  it("continue_checkout → memoryPatch.finalUpsellDeclined = true", () => {
+  it("continue_checkout → memoryPatch.finalUpsellDeclined = true and stage = completed", () => {
     const out = decide(makeInput("ON_USER_MESSAGE", {
       message: "continue_checkout",
       catalog: makeSushiCatalog(),
     }));
     expect(out.memoryPatch?.finalUpsellDeclined).toBe(true);
-    expect(out.memoryPatch?.finalUpsellPromptShown).toBe(true);
+    expect(out.memoryPatch?.checkoutUpsellStage).toBe("completed");
   });
 
   it("see_final_suggestions → memoryPatch.finalUpsellPromptShown = true", () => {
