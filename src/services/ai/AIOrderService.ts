@@ -326,6 +326,17 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     if (hit) suggestedItemName = hit.name;
   }
 
+  // Hard guard: ON_ITEM_ADDED must never return cards or options regardless of AI output.
+  // Rule 7 already strips them from the deterministic path; this guard covers the AI path.
+  if (event === "ON_ITEM_ADDED") {
+    return {
+      reply:   finalResponse || "",
+      cards:   [],
+      mode:    "BROWSE",
+      options: [],
+    };
+  }
+
   // Hard guard: CHECKOUT_SUPPORT mode must never return cards or selling content.
   const inCheckout = v2.mode === "CHECKOUT_SUPPORT" || event === "AFTER_CHECKOUT";
   if (inCheckout) {

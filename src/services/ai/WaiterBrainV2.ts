@@ -1333,22 +1333,36 @@ export function buildWaiterResponse(
 // ─── directive builder for AI events ────────────────────────
 
 const BASE_DIRECTIVE = `
-━━━ GARÇOM VIRTUAL — REGRAS INVIOLÁVEIS ━━━
-▶ Você é um garçom virtual num menu digital — NÃO um chatbot.
-▶ MENSAGEM: máximo 2 linhas. Direta. Natural.
-▶ REGRA VISUAL: se mencionou um produto → chame suggest_upsell. Se diz → mostra.
-▶ NUNCA liste produtos no texto. NUNCA sugira sem chamar suggest_upsell.
-▶ PROIBIDO confirm_order — o checkout é controlado pelo CLIENTE via botão.
-▶ PROIBIDO pedir dados pessoais — o UI coleta isso.
-▶ PROIBIDO dizer "adicionei" ou qualquer variante — você SUGERE; quem adiciona é o CLIENTE.
+━━━ GUIDED AUTONOMY — GARÇOM VIRTUAL DE ALTO PADRÃO ━━━
+▶ Identidade: especialista em experiência gastronômica num menu digital minimalista.
+▶ NÃO sou um chatbot genérico — sou uma voz de marca sofisticada e contextual.
+
+━━━ THE CAGE — RESTRIÇÕES DE UI ABSOLUTAS (NUNCA VIOLAR) ━━━
+▶ LIMITE DE TEXTO: máximo 1-2 frases curtas. Teto de 15 palavras por resposta.
+▶ NUNCA repita a mesma frase exata numa sessão — criatividade real, não templates fixos.
+▶ NUNCA liste produtos no texto — use suggest_upsell. Se diz → mostra. Sem exceção.
+▶ NUNCA sugira sem chamar suggest_upsell. Cards são obrigatórios com toda recomendação.
+▶ VISUAL: use "👇" sempre que apresentar cards. Emojis elegantes (✨ 👌 🍱 🍰 🥤) nas confirmações — com moderação, nunca dois seguidos.
+▶ PROIBIDO: confirm_order, pedir dados pessoais, dizer "adicionei" em qualquer variante.
+
+━━━ LIBERDADE CRIATIVA TOTAL ━━━
+▶ Analise o contexto completo: evento disparado, item específico, composição do carrinho.
+▶ Gere respostas únicas e sofisticadas — varie tom, estrutura e escolha de palavras.
+▶ Estilos permitidos: entusiasmado, elegante, informal sofisticado, curioso — nunca robótico.
+
 ━━━ TÉCNICAS DE VENDAS ELITE ━━━
-▶ ANCORAGEM: quando cliente está indeciso ou sem filtro de preço, chame suggest_upsell com o item mais completo/premium primeiro — depois ofereça uma opção de custo-benefício.
-▶ GATILHOS DE DESEJO: use "o mais pedido da casa", "combinação perfeita", "o mais fresco do dia", "favorito dos clientes" para gerar percepção de valor.
-▶ VENDA CASADA: ao sugerir prato principal, plante sutilmente uma harmonização. Ex: "Fica perfeito com nossas bebidas geladas." — mas NUNCA liste o produto da harmonização no texto sem chamar suggest_upsell.
-━━━ TRATAMENTO DE OBJEÇÕES ━━━
-▶ OBJEÇÃO DE PREÇO ("caro", "mais em conta", "barato"): reconheça com empatia e pivote com valor. Ex: "Entendido! Se a ideia é algo mais em conta, esse combo aqui entrega muito sabor por um valor excelente 👇". NUNCA apenas liste itens baratos sem ancoragem — o valor percebido é obrigatório.
-▶ OBJEÇÃO DE GOSTO ("não gosto de cru", "frito", "empanado"): valide a preferência e redirecione. Ex: "Sem problemas! Nossos pratos quentes e empanados fazem muito sucesso — separei os melhores pra você 👇". Sempre termine com suggest_upsell, nunca com texto puro.
-▶ REGRA GERAL DE OBJEÇÃO: toda objeção exige resposta com cards (suggest_upsell) ou botões de qualificação. Resposta somente em texto após objeção = falha crítica de vendas.
+▶ ANCORAGEM: indeciso? Mostre o premium primeiro via suggest_upsell, depois o custo-benefício.
+▶ GATILHO DE DESEJO: "o mais pedido da casa", "combinação perfeita", "favorito dos clientes".
+▶ VENDA CASADA: ao sugerir prato → plante 1 frase de harmonização sutil (sem nomear o produto).
+
+━━━ TRATAMENTO DE OBJEÇÕES — ACKNOWLEDGE + PIVOT ━━━
+▶ PREÇO ("caro", "mais em conta"): reconheça + pivote com valor percebido.
+   Ex: "Entendido! Este combo entrega muito pelo valor — confira 👇"
+▶ GOSTO/INGREDIENTE ("não gosto de cru", "frito", "empanado"): valide + redirecione.
+   Ex: "Sem problemas! Nossos pratos quentes fazem muito sucesso — separei os melhores 👇"
+▶ ALERGIA/RESTRIÇÃO ("alérgico a X", "orçamento R$ Y"): reconheça + filtre.
+   Ex: "Entendido! Levei em conta sua restrição — estas são as melhores opções 👇"
+▶ REGRA: toda objeção EXIGE cards (suggest_upsell) ou botões de qualificação. Texto puro após objeção = falha crítica.
 ━━━`;
 
 function buildUserMessageDirective(cartItemIds: string[], cartValue: number): string {
@@ -1466,41 +1480,38 @@ function handleItemAdded(input: V2Input): V2Output {
   const { catalog, cartItemIds, lastAddedId, cartValue } = input;
   const addedItem = lastAddedId ? catalog.find((i) => i.id === lastAddedId) : undefined;
 
-  let message: string;
+  const itemLine = addedItem
+    ? `Item adicionado: "${addedItem.name}" (categoria: ${addedItem.categoryName}) — R$ ${addedItem.price.toFixed(2)}`
+    : "Item adicionado ao carrinho.";
 
-  if (cartItemIds.length >= 3 || cartValue >= 150) {
-    message = "Seu pedido já está ficando bem completo 👌";
-  } else if (cartItemIds.length >= 2) {
-    message = "Boa combinação! Seu pedido está tomando forma 👌";
-  } else if (addedItem) {
-    const cat  = addedItem.categoryName.toLowerCase();
-    const name = addedItem.name.toLowerCase();
-    if (/sobremesa|doce|gelad|sorvete|brownie|pudim|mousse/.test(cat) ||
-        /brownie|sorvete|pudim|mousse/.test(name)) {
-      message = "Ótima escolha pra fechar bem 😋";
-    } else if (/bebida|suco|refri|drink|cerveja|limonada/.test(cat)) {
-      message = "Perfeito pra acompanhar 🥤";
-    } else if (/sushi|temaki|maki|uramaki|hossomaki|combinado/.test(cat) ||
-               /temaki|uramaki|hossomaki|hot.?roll|niguiri/.test(name)) {
-      message = "Boa pedida 🍱";
-    } else if (/combo|festival|bandeja/.test(cat) || /combo|festival/.test(name)) {
-      message = "Combo certeiro 👌";
-    } else if (addedItem.price >= 80) {
-      message = "Excelente escolha 👌";
-    } else {
-      message = "Adicionado ao pedido ✅";
-    }
-  } else {
-    message = "Adicionado ao pedido ✅";
-  }
+  const cartLine = cartItemIds.length > 1
+    ? `Pedido atual: ${cartItemIds.length} itens — total R$ ${cartValue.toFixed(2)}.`
+    : "Primeiro item do pedido.";
+
+  const aiDirective = [
+    BASE_DIRECTIVE,
+    "",
+    "━━━ EVENTO: ON_ITEM_ADDED ━━━",
+    itemLine,
+    cartLine,
+    "",
+    "TAREFA: Gere 1 frase de confirmação única e sofisticada (máx. 15 palavras).",
+    "  → Analise o item e contexto do carrinho — nunca use frases genéricas.",
+    "  → Variedade obrigatória: entusiasmado, elegante, com dica sutil — alterne estilos.",
+    "  → Se é bebida: elogie a escolha de acompanhamento. Se é sobremesa: antecipe a experiência.",
+    "  → Se é 2º+ item: comente sutilmente a boa composição do pedido.",
+    "  → Use 1 emoji elegante adequado à categoria (🍱 sushi/japonês, 🥤 bebida, 🍰 sobremesa, ✨ premium, 👌 padrão).",
+    "PROIBIDO absolutamente: chamar suggest_upsell, add_item ou qualquer outra ferramenta.",
+    "Responda SOMENTE com a frase de confirmação. Sem aspas. Sem explicação.",
+  ].join("\n");
 
   return {
-    message,
+    message:     "",
     cards:       [],
     mode:        "BROWSE",
     options:     [],
-    requiresAI:  false,
-    aiDirective: "",
+    requiresAI:  true,
+    aiDirective,
   };
 }
 

@@ -26,6 +26,8 @@ interface ChatMessage {
   suggestedItemName?: string;
   /** V2: product IDs to render as suggestion cards below this message. */
   cards?: string[];
+  /** Pre-resolved items for the inline carousel — checkout upsell (INTERVENTION mode). */
+  inlineItems?: MenuItem[];
   /** Quick-reply buttons — label is display text, value is what gets sent. */
   options?: WaiterOption[];
 }
@@ -282,9 +284,11 @@ function computeResumeStage(
 function Bubble({
   msg,
   onOptionSelect,
+  onItemAdd,
 }: {
   msg: ChatMessage;
   onOptionSelect?: (value: string, label: string) => void;
+  onItemAdd?: (item: MenuItem) => void;
 }) {
   const isUser = msg.role === "user";
   if (msg.content.trim() === "") return null;
@@ -304,6 +308,17 @@ function Bubble({
         <p className={`mt-1 text-right text-[10px] ${isUser ? "text-green-700" : "text-gray-400"}`}>
           {formatTime(msg.ts)}
         </p>
+        {/* Inline product carousel — checkout upsell cards embedded in the bubble */}
+        {!isUser && msg.inlineItems && msg.inlineItems.length > 0 && onItemAdd && (
+          <div
+            className="mt-3 -mx-2 flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {msg.inlineItems.map((item) => (
+              <InlineProductCard key={item.id} item={item} onAdd={() => onItemAdd(item)} />
+            ))}
+          </div>
+        )}
         {!isUser && msg.options && msg.options.length > 0 && onOptionSelect && (
           <div className="mt-2.5 flex flex-wrap gap-2" data-testid="waiter-options">
             {msg.options.map((opt) => (
@@ -335,6 +350,42 @@ function TypingIndicator() {
               style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
             />
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Inline product card — compact version for use inside chat bubbles ─────────
+// Used for checkout upsell (INTERVENTION mode) so cards appear below the waiter
+// text and above the skip/continue buttons, not in the separate product grid.
+
+function InlineProductCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
+  return (
+    <div className="flex flex-col shrink-0 w-[92px] overflow-hidden rounded-xl border border-gray-100 bg-gray-50 shadow-sm">
+      <div className="h-[48px] w-full overflow-hidden shrink-0">
+        {item.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gray-100 text-xl">
+            {categoryEmoji(item.name)}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-1 flex-col px-2 pb-2 pt-1">
+        <p className="text-[10px] font-semibold leading-tight text-gray-900 line-clamp-2">{item.name}</p>
+        <div className="mt-1 flex items-center justify-between gap-1">
+          <span className="text-[10px] font-bold text-gray-700 shrink-0">
+            R${item.price.toFixed(2).replace(".", ",")}
+          </span>
+          <button
+            onClick={onAdd}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white text-xs font-bold"
+            style={{ backgroundColor: "var(--brand-primary)" }}
+          >
+            +
+          </button>
         </div>
       </div>
     </div>
@@ -1172,7 +1223,16 @@ export function PedidoClient({
 
         // Cards come ONLY from response.cards — no text inference, no category expansion.
         // Show cards only when mode is SUGGESTION/INTERVENTION and stage is BROWSE.
+        //
+        // For INTERVENTION checkout upsell (has skip/continue options) the cards are
+        // rendered INLINE inside the chat bubble (inlineItems) so they appear directly
+        // below the waiter text and above the action buttons — the external product
+        // grid is cleared to avoid duplication.
+        const isInterventionWithSkip = responseMode === "INTERVENTION" &&
+          apiOptions.some((o) => o.value === "skip_drink_upsell" || o.value === "continue_checkout");
+
         let hasShownCards = false;
+        let inlineItems: MenuItem[] | undefined;
         const allowCards = responseMode !== "CHECKOUT_SUPPORT" && stageSnap === "BROWSE";
 
         if (allowCards && rawCards.length > 0) {
@@ -1185,20 +1245,23 @@ export function PedidoClient({
 
           if (resolved.length > 0) {
             hasShownCards = true;
-            setSuggestedProducts(resolved);
+            if (isInterventionWithSkip) {
+              // Checkout upsell: embed cards inline in the bubble, clear external grid
+              inlineItems = resolved;
+              setSuggestedProducts([]);
+            } else {
+              setSuggestedProducts(resolved);
+            }
           }
         }
 
         // Clear stale grid when this response carries no valid cards.
-        // Keeps the product area in sync with the latest waiter response.
         if (allowCards && !hasShownCards) {
           setSuggestedProducts([]);
         }
 
-        // INTERVENTION with skip/continue options → show both cards and buttons (checkout upsell).
+        // INTERVENTION with skip/continue: show both inline cards and buttons.
         // Otherwise: cards suppress options; options only show when no cards.
-        const isInterventionWithSkip = responseMode === "INTERVENTION" &&
-          apiOptions.some((o) => o.value === "skip_drink_upsell" || o.value === "continue_checkout");
         const finalOptions: WaiterOption[] | undefined = isInterventionWithSkip
           ? apiOptions
           : hasShownCards
@@ -1216,6 +1279,7 @@ export function PedidoClient({
               content: reply,
               ts: new Date(),
               options: finalOptions,
+              inlineItems,
             },
           ]);
         }
@@ -2174,7 +2238,15 @@ export function PedidoClient({
           )}
 
           {messages.map((msg) => (
-            <Bubble key={msg.id} msg={msg} onOptionSelect={handleOptionSelect} />
+            <Bubble
+              key={msg.id}
+              msg={msg}
+              onOptionSelect={handleOptionSelect}
+              onItemAdd={(item) => {
+                if (item.hasVariants) setSelectedProduct(item);
+                else handleItemAdd(item);
+              }}
+            />
           ))}
 
           {/* Passive permission prompt — soft ask before AI engages */}
