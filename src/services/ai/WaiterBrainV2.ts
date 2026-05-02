@@ -185,12 +185,13 @@ export interface WaiterOption {
 
 export interface V2Output {
   message:      string;          // short text (≤ 2 lines)
-  cards:        string[];        // product IDs to render as UI cards
+  cards:        string[];        // product IDs to render as UI cards (first item = pinned when pinnedCardId set)
   mode:         WaiterMode;      // UI rendering state
   options:      WaiterOption[];  // quick-reply buttons — empty array when none
   requiresAI:   boolean;         // when true → caller must run OpenAI pipeline
   aiDirective:  string;          // injected into system prompt for AI events
   memoryPatch?: Partial<WaiterMemory>; // client merges this into its WaiterMemory
+  pinnedCardId?: string;         // ID of the harmonically suggested item (shown with ⭐)
 }
 
 // ─── sales intelligence types ────────────────────────────────
@@ -1592,9 +1593,17 @@ function getCartPairing(catalog: V2CatalogItem[], cartItemIds: string[]): string
     .map((id) => catalog.find((i) => i.id === id))
     .filter((i): i is V2CatalogItem => !!i && !!i.harmonizacaoSugerida);
   if (cartItems.length === 0) return null;
-  // Prefer the most expensive item's pairing suggestion
   cartItems.sort((a, b) => b.price - a.price);
   return cartItems[0]!.harmonizacaoSugerida!;
+}
+
+/** Find the catalog item whose name best matches the pairing string, return its ID. */
+function findPinnedId(catalog: V2CatalogItem[], pairing: string, cards: string[]): string | undefined {
+  const lower = pairing.toLowerCase();
+  return cards.find((id) => {
+    const item = catalog.find((i) => i.id === id);
+    return item && item.name.toLowerCase().includes(lower);
+  });
 }
 
 function handleCheckoutStarted(input: V2Input): V2Output {
@@ -1602,21 +1611,22 @@ function handleCheckoutStarted(input: V2Input): V2Output {
   const mem = input.memory;
   const ca  = analyzeCart(input.cartItemIds, input.catalog);
 
-  // Skip if config disables, or already handled this session
   const alreadyHandled = !cfg.allowFinalUpsellPrompt || (mem && (mem.finalUpsellPromptShown || mem.finalUpsellDeclined));
 
   if (!alreadyHandled && ca.hasFood) {
-    // Case A: cart has food but no drink → show full drink carousel
+    // Case A: no drink → interrupt with drinks
     if (!ca.hasDrink) {
       const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds);
       if (drinkCards.length > 0) {
-        const pairing = getCartPairing(input.catalog, input.cartItemIds);
-        const message = pairing
-          ? `Sugestão do Maitre: ${pairing} ✨ Veja todas as bebidas 👇`
-          : "Que tal uma bebida para completar o pedido? 👇";
+        const pairing     = getCartPairing(input.catalog, input.cartItemIds);
+        const pinnedCardId = pairing ? findPinnedId(input.catalog, pairing, drinkCards) : undefined;
+        // Move pinned item to front so carousel shows it first with ⭐
+        const sortedCards = pinnedCardId
+          ? [pinnedCardId, ...drinkCards.filter((id) => id !== pinnedCardId)]
+          : drinkCards;
         return {
-          message,
-          cards:       drinkCards,
+          message:     "Antes de fechar, deixe-me apresentar nossas bebidas.",
+          cards:       sortedCards,
           mode:        "INTERVENTION",
           options:     [
             { label: "Adicionar depois",     value: "skip_drink_upsell" },
@@ -1624,33 +1634,36 @@ function handleCheckoutStarted(input: V2Input): V2Output {
           ],
           requiresAI:  false,
           aiDirective: "",
+          pinnedCardId,
         };
       }
     }
 
-    // Case B/C: has drink but no dessert → show full dessert carousel
+    // Case B/C: has drink but no dessert → interrupt with desserts
     if (!ca.hasDessert) {
       const dessertCards = selectDessertItems(input.catalog, input.cartItemIds);
       if (dessertCards.length > 0) {
-        const pairing = getCartPairing(input.catalog, input.cartItemIds);
-        const message = pairing
-          ? `Sugestão do Maitre: ${pairing} 🍰 Veja todas as sobremesas 👇`
-          : "Uma sobremesa para fechar com chave de ouro? 👇";
+        const pairing      = getCartPairing(input.catalog, input.cartItemIds);
+        const pinnedCardId = pairing ? findPinnedId(input.catalog, pairing, dessertCards) : undefined;
+        const sortedCards  = pinnedCardId
+          ? [pinnedCardId, ...dessertCards.filter((id) => id !== pinnedCardId)]
+          : dessertCards;
         return {
-          message,
-          cards:       dessertCards,
+          message:     "Temos também deliciosas sobremesas para completar seu pedido.",
+          cards:       sortedCards,
           mode:        "INTERVENTION",
           options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
           requiresAI:  false,
           aiDirective: "",
+          pinnedCardId,
         };
       }
     }
   }
 
-  // Case D: cart complete, or no opportunity — proceed to checkout.
+  // Case D: cart complete — proceed to checkout.
   return {
-    message:     "Perfeito 😊\nSe já estiver tudo certo, pode finalizar 👇",
+    message:     "Excelente pedido. Vamos concluir agora.",
     cards:       [],
     mode:        "CHECKOUT_SUPPORT",
     options:     [],

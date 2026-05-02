@@ -947,6 +947,10 @@ export function PedidoClient({
   const [cartOpen, setCartOpen] = useState(false);
   // Products suggested by the AI — rendered in the product grid, not in chat.
   const [suggestedProducts, setSuggestedProducts] = useState<MenuItem[]>([]);
+  // Pagination for the suggested carousel (5 per page).
+  const [suggestedPage, setSuggestedPage] = useState(0);
+  // ID of the harmonically suggested item — shown with ⭐ in the carousel.
+  const [pinnedCardId, setPinnedCardId] = useState<string | null>(null);
   // Server-side session memory — sent each turn, updated from memoryPatch responses.
   const [waiterMemory, setWaiterMemory] = useState<Partial<WaiterMemory>>({});
 
@@ -1176,6 +1180,7 @@ export function PedidoClient({
         const rawCards    = (Array.isArray(data?.data?.cards)   ? data.data.cards   : []) as string[];
         const apiOptions  = (Array.isArray(data?.data?.options) ? data.data.options : []) as WaiterOption[];
         const responseMode = (data?.data?.mode ?? "BROWSE") as string;
+        const newPinned   = (data?.data?.pinnedCardId ?? null) as string | null;
 
         if (data?.data?.memoryPatch && typeof data.data.memoryPatch === "object") {
           setWaiterMemory((prev) => ({ ...prev, ...data.data.memoryPatch }));
@@ -1197,12 +1202,15 @@ export function PedidoClient({
           if (resolved.length > 0) {
             hasShownCards = true;
             setSuggestedProducts(resolved);
+            setSuggestedPage(0);
+            setPinnedCardId(newPinned);
           }
         }
 
         // Clear stale grid when this response carries no valid cards.
         if (allowCards && !hasShownCards) {
           setSuggestedProducts([]);
+          setPinnedCardId(null);
         }
 
         // Cards and buttons are always shown together when both are present.
@@ -2285,18 +2293,30 @@ export function PedidoClient({
                   className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
                   style={{ scrollbarWidth: "none" }}
                 >
-                  {suggestedProducts.map((item) => (
-                    <ProductCard
-                      key={item.id}
-                      item={item}
-                      qty={itemCartQty(item, cart)}
-                      onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
-                      onOpen={() => setSelectedProduct(item)}
-                    />
+                  {suggestedProducts.slice(suggestedPage * 5, suggestedPage * 5 + 5).map((item) => (
+                    <div key={item.id} className="relative shrink-0">
+                      {pinnedCardId === item.id && (
+                        <span className="absolute -top-1 -right-1 z-10 rounded-full bg-yellow-400 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">⭐</span>
+                      )}
+                      <ProductCard
+                        item={item}
+                        qty={itemCartQty(item, cart)}
+                        onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                        onOpen={() => setSelectedProduct(item)}
+                      />
+                    </div>
                   ))}
+                  {suggestedProducts.length > (suggestedPage + 1) * 5 && (
+                    <button
+                      onClick={() => setSuggestedPage((p) => p + 1)}
+                      className="flex h-44 w-24 shrink-0 items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white text-xs text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors"
+                    >
+                      + Ver mais
+                    </button>
+                  )}
                 </div>
                 <button
-                  onClick={() => setSuggestedProducts([])}
+                  onClick={() => { setSuggestedProducts([]); setPinnedCardId(null); setSuggestedPage(0); }}
                   className="py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   ← Voltar ao cardápio
@@ -2420,23 +2440,40 @@ export function PedidoClient({
                 <>
                   <div className="mb-3 flex items-center justify-between">
                     <button
-                      onClick={() => setSuggestedProducts([])}
+                      onClick={() => { setSuggestedProducts([]); setPinnedCardId(null); setSuggestedPage(0); }}
                       className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
                     >
                       ← Voltar ao cardápio
                     </button>
+                    {suggestedProducts.length > 5 && (
+                      <span className="text-xs text-gray-400">
+                        {suggestedPage * 5 + 1}–{Math.min((suggestedPage + 1) * 5, suggestedProducts.length)} de {suggestedProducts.length}
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-                    {suggestedProducts.map((item) => (
-                      <DesktopProductCard
-                        key={item.id}
-                        item={item}
-                        qty={itemCartQty(item, cart)}
-                        onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
-                        onOpen={() => setSelectedProduct(item)}
-                      />
+                    {suggestedProducts.slice(suggestedPage * 5, suggestedPage * 5 + 5).map((item) => (
+                      <div key={item.id} className="relative">
+                        {pinnedCardId === item.id && (
+                          <span className="absolute top-2 right-2 z-10 rounded-full bg-yellow-400 px-2 py-0.5 text-xs font-bold text-white shadow">⭐ Sugestão</span>
+                        )}
+                        <DesktopProductCard
+                          item={item}
+                          qty={itemCartQty(item, cart)}
+                          onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                          onOpen={() => setSelectedProduct(item)}
+                        />
+                      </div>
                     ))}
                   </div>
+                  {suggestedProducts.length > (suggestedPage + 1) * 5 && (
+                    <button
+                      onClick={() => setSuggestedPage((p) => p + 1)}
+                      className="mt-3 w-full rounded-xl border border-dashed border-gray-300 py-2.5 text-sm text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors"
+                    >
+                      + Ver mais opções
+                    </button>
+                  )}
                 </>
               ) : currentCategoryItems.length > 0 ? (
                 <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">

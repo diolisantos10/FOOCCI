@@ -73,6 +73,7 @@ export interface AIWebTurnOutput {
   mode:               WaiterMode;     // UI rendering state
   options:            WaiterOption[]; // quick-reply buttons
   suggestedItemName?: string;
+  pinnedCardId?:      string;         // item shown first in carousel with ⭐
   /** Memory patch to be stored client-side and sent back on the next request. */
   memoryPatch?: Partial<WaiterBrainV2.WaiterMemory>;
 }
@@ -188,7 +189,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   });
 
   if (!v2.requiresAI) {
-    return { reply: v2.message, cards: v2.cards, mode: v2.mode, options: v2.options, memoryPatch: v2.memoryPatch };
+    return { reply: v2.message, cards: v2.cards, mode: v2.mode, options: v2.options, pinnedCardId: v2.pinnedCardId, memoryPatch: v2.memoryPatch };
   }
 
   // ── AI pipeline (ON_USER_MESSAGE / AFTER_CHECKOUT) ──────────

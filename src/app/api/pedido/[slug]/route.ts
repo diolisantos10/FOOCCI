@@ -163,7 +163,7 @@ export async function POST(
       storytellingIA:       i.storytellingIA ?? null,
     }));
 
-    const { reply, cards, mode, options, suggestedItemName, memoryPatch } = await AIOrderService.runWebTurn({
+    const { reply, cards, mode, options, suggestedItemName, pinnedCardId, memoryPatch } = await AIOrderService.runWebTurn({
       restaurantId:  restaurant.id,
       message:       message?.trim() ?? "",
       history,
@@ -190,7 +190,7 @@ export async function POST(
       options: (options ?? []).length,
     }));
 
-    return ok({ reply, cards, mode: mode ?? "BROWSE", options: options ?? [], suggestedItemName: suggestedItemName ?? null, memoryPatch: memoryPatch ?? null });
+    return ok({ reply, cards, mode: mode ?? "BROWSE", options: options ?? [], suggestedItemName: suggestedItemName ?? null, pinnedCardId: pinnedCardId ?? null, memoryPatch: memoryPatch ?? null });
   } catch (err) {
     console.error("[POST /api/pedido/[slug]]", err);
     return serverError("Erro interno ao processar mensagem.");
