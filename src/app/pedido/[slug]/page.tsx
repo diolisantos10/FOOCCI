@@ -132,6 +132,9 @@ export default async function PedidoPage({
           description: true,
           imageUrl: true,
           hasVariants: true,
+          ingredients: true,
+          servingSize: true,
+          portionInfo: true,
           variants: {
             where: { isAvailable: true },
             orderBy: { sortOrder: "asc" },
@@ -171,6 +174,9 @@ export default async function PedidoPage({
         description: i.description ?? null,
         imageUrl: i.imageUrl ?? null,
         hasVariants: i.hasVariants,
+        ingredients: i.ingredients ?? null,
+        servingSize: i.servingSize ?? null,
+        portionInfo: i.portionInfo ?? null,
         variants: i.variants.map((v) => ({
           id: v.id,
           name: v.name,

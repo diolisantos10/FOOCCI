@@ -69,6 +69,9 @@ interface MenuItem {
   description: string | null;
   imageUrl: string | null;
   hasVariants: boolean;
+  ingredients: string | null;
+  servingSize: number | null;
+  portionInfo: string | null;
   variants: MenuItemVariant[];
   extras: Extra[];
   optionGroups: OptionGroup[];
@@ -476,6 +479,47 @@ function ProductModal({
 
           {item.description && (
             <p className="mt-2 text-sm leading-relaxed text-gray-500">{item.description}</p>
+          )}
+
+          {/* Serving size + portion info */}
+          {(item.servingSize || item.portionInfo) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {item.servingSize && (
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                  👥 Serve {item.servingSize === 4 ? "4+" : item.servingSize} {item.servingSize === 1 ? "pessoa" : "pessoas"}
+                </span>
+              )}
+              {item.portionInfo && (
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                  ⚖️ {item.portionInfo}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Ingredients */}
+          {item.ingredients && (
+            <div className="mt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Ingredientes</p>
+              <p className="mt-1 text-xs leading-relaxed text-gray-500">{item.ingredients}</p>
+            </div>
+          )}
+
+          {/* Extras */}
+          {item.extras && item.extras.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Adicionais disponíveis</p>
+              <div className="space-y-1.5">
+                {item.extras.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                    <span className="text-sm text-gray-700">{e.name}{e.portion ? ` (${e.portion})` : ""}</span>
+                    {e.price > 0 && (
+                      <span className="text-xs font-semibold text-gray-800">+ R$ {e.price.toFixed(2).replace(".", ",")}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {item.hasVariants && item.variants.length > 0 && (
