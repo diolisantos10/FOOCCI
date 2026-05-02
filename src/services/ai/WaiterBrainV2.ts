@@ -791,11 +791,13 @@ const MENU_SYNONYM_GROUPS: Array<[RegExp, RegExp]> = [
  * Returns IDs sorted by relevance and a confidence level.
  */
 function searchMenuByQuery(
-  rawQuery:     string,
-  catalog:      V2CatalogItem[],
-  cartItemIds:  string[],
-  suggestedIds: string[],
+  rawQuery:         string,
+  catalog:          V2CatalogItem[],
+  cartItemIds:      string[],
+  suggestedIds:     string[],
   limit = 5,
+  maxBudget?:       number,
+  excludeKeywords?: string[],
 ): { ids: string[]; confidence: "high" | "medium" | "low" } {
   const normQuery = normalizeSearch(rawQuery);
   const words     = normQuery.split(/\s+/).filter((w) => w.length >= 3);
@@ -806,6 +808,16 @@ function searchMenuByQuery(
 
   for (const item of catalog) {
     if (cartItemIds.includes(item.id)) continue;
+
+    // Hard-filter: budget constraint declared in the customer message.
+    if (maxBudget !== undefined && item.price > maxBudget) continue;
+
+    // Hard-filter: allergen/ingredient exclusion declared in the customer message.
+    if (excludeKeywords?.length) {
+      const nameLow = item.name.toLowerCase();
+      const descLow = (item.description ?? "").toLowerCase();
+      if (excludeKeywords.some((kw) => nameLow.includes(kw) || descLow.includes(kw))) continue;
+    }
 
     const nameNorm = normalizeSearch(item.name);
     const catNorm  = normalizeSearch(item.categoryName);
@@ -1799,6 +1811,9 @@ const PRICE_OBJECTION_RE_MSG =
 const TASTE_OBJECTION_RE_MSG =
   /n[ãa]o gosto\b|\b(frito|empanado|assado|cozido|sem cru|sem peixe|sem frango|sem carne|sem glúten)\b/i;
 
+const CONSTRAINT_RE_MSG =
+  /\b(al[eé]rgic[ao]|alergi[ao]|orçamento|sem [a-záéíóúâêôãõàç]+|intolerante)\b/i;
+
 // Per-intent copy for price objections — acknowledges before pivoting.
 const PRICE_OBJECTION_COPY: Partial<Record<CustomerIntent, string>> = {
   wants_budget_option:  "Entendido! Se a ideia é algo mais em conta, essas opções entregam muito pelo valor 👇",
@@ -1815,9 +1830,17 @@ const TASTE_OBJECTION_COPY: Partial<Record<CustomerIntent, string>> = {
   unclear:              "Sem problemas! Veja essas opções que combinam com você 👇",
 };
 
+// Per-intent copy for allergy/budget constraint messages — acknowledges restriction before pivoting.
+const CONSTRAINT_OBJECTION_COPY: Partial<Record<CustomerIntent, string>> = {
+  wants_recommendation: "Entendido! Levando em conta sua restrição, separei as melhores opções pra você 👇",
+  wants_budget_option:  "Entendido! Respeitando seu orçamento e restrições, essas são as melhores escolhas 👇",
+  unclear:              "Entendido! Levei em conta sua restrição — veja essas opções 👇",
+};
+
 /**
- * Returns objection-pivoting copy when a price or taste objection is detected.
+ * Returns objection-pivoting copy when a price, taste, or constraint objection is detected.
  * Returns null when no objection signal is present — caller falls back to default copy.
+ * Priority: price > taste > constraint (allergy/budget) so the most specific copy wins.
  */
 function buildObjectionCopy(message: string, intent: CustomerIntent): string | null {
   if (PRICE_OBJECTION_RE_MSG.test(message)) {
@@ -1828,12 +1851,16 @@ function buildObjectionCopy(message: string, intent: CustomerIntent): string | n
     return TASTE_OBJECTION_COPY[intent] ??
            "Sem problemas! Separei opções que combinam com você 👇";
   }
+  if (CONSTRAINT_RE_MSG.test(message)) {
+    return CONSTRAINT_OBJECTION_COPY[intent] ??
+           "Entendido! Levei em conta sua restrição — veja essas opções 👇";
+  }
   return null;
 }
 
 /**
  * Returns context-aware copy for the high-confidence search fast-path.
- * Objection messages get empathy-first pivoting copy instead of a generic "Encontrei".
+ * Objection and constraint messages get empathy-first pivoting copy instead of a generic "Encontrei".
  */
 function buildSearchCopy(message: string): string {
   if (PRICE_OBJECTION_RE_MSG.test(message)) {
@@ -1842,7 +1869,60 @@ function buildSearchCopy(message: string): string {
   if (TASTE_OBJECTION_RE_MSG.test(message)) {
     return "Sem problemas! Nossos pratos quentes e empanados fazem muito sucesso — separei os melhores 👇";
   }
+  if (CONSTRAINT_RE_MSG.test(message)) {
+    return "Entendido! Levei em conta sua restrição — veja essas opções 👇";
+  }
   return "Encontrei essas opções pra você 👇";
+}
+
+/**
+ * Parses explicit constraints declared in the customer message.
+ * Extracts allergen keywords from "alérgico/a a X" patterns and a numeric
+ * maxBudget from "R$ X" when "orçamento" or "máximo" appears nearby.
+ */
+function extractMessageConstraints(
+  msg: string,
+): { maxBudget?: number; excludeKeywords: string[] } {
+  const excludeKeywords: string[] = [];
+
+  const allergyRe = /al[eé]rgic[ao]?\s+[àa]\s+([\wÀ-ž]+)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = allergyRe.exec(msg)) !== null) {
+    const kw = m[1]?.trim().toLowerCase();
+    if (kw) excludeKeywords.push(kw);
+  }
+
+  let maxBudget: number | undefined;
+  if (/orçamento|budget|máximo\s+[ée]/i.test(msg)) {
+    const bm = /R\$\s*(\d{2,4}(?:[,.]?\d{2})?)/i.exec(msg);
+    if (bm?.[1]) maxBudget = parseFloat(bm[1].replace(",", "."));
+  }
+
+  return { maxBudget, excludeKeywords };
+}
+
+/**
+ * Post-filters a card ID list against declared constraints (maxBudget, excludeKeywords).
+ * Returns the original list unchanged when no constraints are active.
+ */
+function applyConstraints(
+  ids:              string[],
+  catalog:          V2CatalogItem[],
+  maxBudget?:       number,
+  excludeKeywords?: string[],
+): string[] {
+  if (maxBudget === undefined && !excludeKeywords?.length) return ids;
+  return ids.filter((id) => {
+    const item = catalog.find((c) => c.id === id);
+    if (!item) return true;
+    if (maxBudget !== undefined && item.price > maxBudget) return false;
+    if (excludeKeywords?.length) {
+      const nameLow = item.name.toLowerCase();
+      const descLow = (item.description ?? "").toLowerCase();
+      if (excludeKeywords.some((kw) => nameLow.includes(kw) || descLow.includes(kw))) return false;
+    }
+    return true;
+  });
 }
 
 function handleUserMessage(input: V2Input): V2Output {
@@ -1850,17 +1930,23 @@ function handleUserMessage(input: V2Input): V2Output {
   const { catalog, cartItemIds } = input;
   const suggestedIds = input.memory?.suggestedProductIds ?? [];
 
+  const msgRaw  = input.message ?? "";
+  const msgLow  = msgRaw.toLowerCase().trim();
+
+  // Extract explicit constraints declared in the customer message
+  // (e.g. "alérgico a camarão", "orçamento máximo R$ 60").
+  const { maxBudget, excludeKeywords: excludedIngredients } = extractMessageConstraints(msgRaw);
+
   // Convenience wrapper — threads config to buildCommercialResponse for every deterministic path.
-  // If the customer message contains a price or taste objection, the copy is pivoted via
-  // buildObjectionCopy() so the reply acknowledges the objection before presenting cards.
-  const suggest = (intent: CustomerIntent, cards: string[], mode: WaiterMode): V2Output => {
+  // Applies message-level constraints (allergy, budget) before building the response so card lists
+  // are always safe to render. Also pivots copy via buildObjectionCopy() when an objection is detected.
+  const suggest = (intent: CustomerIntent, rawIds: string[], mode: WaiterMode): V2Output => {
+    const cards = applyConstraints(rawIds, catalog, maxBudget, excludedIngredients);
+    if (cards.length === 0 && rawIds.length > 0) return noCardsFound();
     const base    = buildCommercialResponse({ intent, selectedProducts: cards, mode }, cfg);
     const message = buildObjectionCopy(msgRaw, intent) ?? base.message;
     return { ...base, message, requiresAI: false, aiDirective: "" };
   };
-
-  const msgRaw  = input.message ?? "";
-  const msgLow  = msgRaw.toLowerCase().trim();
 
   // ── Special path: pre-checkout "Ver opções" button (backward compat) ─────────
   if (msgLow === "see_final_suggestions") {
@@ -1922,7 +2008,7 @@ function handleUserMessage(input: V2Input): V2Output {
   };
   if (msgLow in DISCOVERY_SEARCH) {
     const query  = DISCOVERY_SEARCH[msgLow]!;
-    const result = searchMenuByQuery(query, catalog, cartItemIds, suggestedIds);
+    const result = searchMenuByQuery(query, catalog, cartItemIds, suggestedIds, 5, maxBudget, excludedIngredients);
     if (result.ids.length > 0) return suggest("asks_category", result.ids, "SUGGESTION");
     return noCardsFound();
   }
@@ -1930,7 +2016,9 @@ function handleUserMessage(input: V2Input): V2Output {
   // ── Menu search: explicit product / category queries ─────────────────────────
   // If the customer is asking about a specific food (sushi, temaki, coca, etc.),
   // surface matching catalog items immediately — no generic qualification.
-  const searchResult = searchMenuByQuery(msgRaw, catalog, cartItemIds, suggestedIds);
+  // Constraints (maxBudget, excludedIngredients) are applied inside searchMenuByQuery
+  // so allergen items or over-budget items are excluded before scoring.
+  const searchResult = searchMenuByQuery(msgRaw, catalog, cartItemIds, suggestedIds, 5, maxBudget, excludedIngredients);
   if (searchResult.confidence === "high") {
     return {
       message:     buildSearchCopy(msgRaw),
