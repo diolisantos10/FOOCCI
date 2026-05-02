@@ -1457,12 +1457,12 @@ function buildAfterCheckoutDirective(): string {
 // ─── event handlers ───────────────────────────────────────────
 
 function handleEntry(catalog: V2CatalogItem[]): V2Output {
-  // Act as consultant from the first turn: scan the menu and ask ONE qualifying question.
-  // STRICTLY FORBIDDEN to return cards on entry — State 0 always shows the probe question.
+  // Consultant first turn: scan the menu taxonomy and present a qualifying question.
+  // PROHIBITED from showing product cards on entry (State 0 rule — no cards before probing).
   const probe = buildDynamicProbeQuestion(catalog);
   return {
     ...probe,
-    message: "Bem-vindo! O que te apetece hoje? 😊",
+    message: "Bem-vindo! Vamos encontrar o ideal pra você 😊",
   };
 }
 
@@ -1720,9 +1720,10 @@ const QUAL_QUESTION: Pick<V2Output, "message" | "options" | "cards" | "mode" | "
 };
 
 /**
- * Builds a catalog-driven discovery question for undecided customers.
- * Reads actual menu categories — works with any cuisine, no hardcoded labels.
- * Button values use the "discovery:TERM" prefix so handleUserMessage resolves them dynamically.
+ * Builds a catalog-driven qualifying question for undecided customers.
+ * Derives the menu taxonomy from actual category frequency — no hardcoded cuisine labels.
+ * Works for any menu: Japanese today, Italian tomorrow, logic unchanged.
+ * Button values use "discovery:TERM" prefix for dynamic resolution in handleUserMessage.
  */
 function buildDynamicProbeQuestion(
   catalog: V2CatalogItem[],
@@ -1730,7 +1731,7 @@ function buildDynamicProbeQuestion(
   const tagged    = tagCatalog(catalog);
   const mainItems = tagged.filter((i) => !i.tags.includes("drink") && !i.tags.includes("dessert"));
 
-  // Count items per category and pick the top 3 most represented
+  // Rank categories by item count and take the top 3 most represented food categories
   const catFreq = new Map<string, number>();
   for (const item of mainItems) {
     catFreq.set(item.category, (catFreq.get(item.category) ?? 0) + 1);
@@ -1742,13 +1743,17 @@ function buildDynamicProbeQuestion(
 
   if (topCats.length < 2) return { ...QUAL_QUESTION };
 
+  // Truncate very long category names so they fit cleanly as button labels
+  const truncate = (s: string, max = 22): string =>
+    s.length > max ? `${s.slice(0, max - 1)}…` : s;
+
   const options: WaiterOption[] = topCats.map((catName) => ({
-    label: catName,
+    label: truncate(catName),
     value: `discovery:${catName.toLowerCase()}`,
   }));
 
   return {
-    message:     "O que te apetece hoje?",
+    message:     "Que tipo de experiência você procura hoje?",
     options,
     cards:       [],
     mode:        "BROWSE",
@@ -1930,60 +1935,22 @@ function applyConstraints(
 }
 
 /**
- * Returns a "requiresAI" output for State-1 curated picks.
- * The brain pre-selects the cards; the AI generates the contextual Maître D' copy
- * and calls suggest_upsell for each predetermined ID in order.
+ * Deterministic State-1 response: brain pre-selects cards, returns them directly.
+ * No AI call required — cards are guaranteed to reach the frontend every time.
+ * Uses the expert-recommendation copy mandated by the Maître D' spec.
  */
 function buildCuratedResponse(
-  catalog:         V2CatalogItem[],
-  preferenceLabel: string,
+  _catalog:        V2CatalogItem[],
+  _preferenceLabel: string,
   cardIds:         string[],
 ): V2Output {
-  const profile     = analyzeMenuProfile(catalog);
-  const cuisineCtx  = profile.cuisineSignals.length > 0
-    ? profile.cuisineSignals.join("/")
-    : "gastronomia";
-
-  const itemLines = cardIds
-    .map((id) => {
-      const item = catalog.find((c) => c.id === id);
-      return item
-        ? `  • "${item.name}" — R$ ${item.price.toFixed(2)} [ID: ${item.id}]`
-        : null;
-    })
-    .filter(Boolean)
-    .join("\n");
-
-  const aiDirective = [
-    BASE_DIRECTIVE,
-    "",
-    "━━━ ESTADO 1 — CURATED PICK (PÓS-SONDAGEM) ━━━",
-    `Cliente expressou: "${preferenceLabel}"`,
-    `Contexto: cardápio de ${cuisineCtx}`,
-    "",
-    `SELEÇÃO CURADA — apresente EXATAMENTE estes ${cardIds.length} itens:`,
-    itemLines,
-    "",
-    "TAREFA:",
-    "  → 1 frase (máx. 15 palavras) estilo Maître D' premium.",
-    '  → Modelo: "Entendido. Para quem busca [PREFERÊNCIA], estas são as joias do nosso cardápio 👇"',
-    "  → Vocabulário do domínio: sushi → 'joias do itamae'; pizza → 'seleção do forno'; burgers → 'hits da churrasqueira'; genérico → 'curadoria especial'.",
-    "  → Após a frase: chame suggest_upsell para CADA ID listado acima (em ordem).",
-    "PROIBIDO ABSOLUTAMENTE:",
-    "  → Sugerir qualquer ID diferente dos listados.",
-    "  → Fazer perguntas ao cliente.",
-    "  → Texto adicional após os cards.",
-    "  → Chamar suggest_upsell mais de 3 vezes.",
-    "━━━",
-  ].join("\n");
-
   return {
-    message:     "",
-    cards:       [],   // AI generates cards via suggest_upsell with the predefined IDs
+    message:     "Baseado na sua preferência, estas são as experiências ideais 👇",
+    cards:       cardIds,
     mode:        "SUGGESTION",
     options:     [],
-    requiresAI:  true,
-    aiDirective,
+    requiresAI:  false,
+    aiDirective: "",
   };
 }
 
@@ -2523,7 +2490,14 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
     patch.finalUpsellPromptShown = true;
   }
 
-  // Track qualifying question count for anti-loop rule (max 2 before forcing cards).
+  // Track qualifying question count to enforce the 2-state mandate.
+  // ON_ENTRY: entry probe counts as State 0 shown → set to 1 so user's next message
+  //   (whether typed or button-tapped) enters State 1 and receives cards.
+  if (input.event === "ON_ENTRY" && output.options.length > 0 && output.cards.length === 0) {
+    patch.qualificationCount = 1;
+  }
+  // ON_USER_MESSAGE: increment when a qualification question is shown (options, no cards);
+  //   reset to 0 when cards are delivered so a fresh probe cycle can start later.
   if (input.event === "ON_USER_MESSAGE") {
     if (output.options.length > 0 && output.cards.length === 0) {
       patch.qualificationCount = (mem.qualificationCount ?? 0) + 1;
