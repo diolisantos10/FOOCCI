@@ -24,7 +24,8 @@ export interface CustomerProfile {
   silentCartItems?:      string[][];  // per-item hint arrays; resolved against catalog by name
   permissionResponse?:   "accept" | "decline";
   requiresIdle?:         boolean;
-  expectsCheckoutUpsell?: boolean;    // ON_CHECKOUT_STARTED must return options gate
+  expectsCheckoutUpsell?: boolean;    // ON_CHECKOUT_STARTED must return cards (active upsell)
+  requiresSearchCards?:   boolean;    // last ON_USER_MESSAGE must return cards[] (search/ingredient profiles)
 }
 
 // ── Shared item shape ─────────────────────────────────────────────────────────

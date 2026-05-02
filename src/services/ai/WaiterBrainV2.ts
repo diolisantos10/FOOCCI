@@ -1533,7 +1533,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
       const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds, 3);
       if (drinkCards.length > 0) {
         return {
-          message:     "Excelente escolha. Separei algumas bebidas que combinam com seu pedido 👇",
+          message:     "Separei as bebidas ideais para o seu pedido 👇",
           cards:       drinkCards,
           mode:        "INTERVENTION",
           options:     [
@@ -1551,7 +1551,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
       const dessertCards = selectDessertItems(input.catalog, input.cartItemIds, 3);
       if (dessertCards.length > 0) {
         return {
-          message:     "Para fechar bem, separei algumas sobremesas pra você 👇",
+          message:     "Dê uma olhada nessas sobremesas antes de fechar 👇",
           cards:       dessertCards,
           mode:        "INTERVENTION",
           options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
@@ -1815,7 +1815,7 @@ function handleUserMessage(input: V2Input): V2Output {
     const dessertCards = selectDessertItems(catalog, cartItemIds, 5);
     if (dessertCards.length > 0) {
       return {
-        message:     "Sem problema. Também vou te mostrar nossas sobremesas pra fechar bem 👇",
+        message:     "Dê uma olhada nessas sobremesas antes de fechar 👇",
         cards:       dessertCards,
         mode:        "INTERVENTION",
         options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],

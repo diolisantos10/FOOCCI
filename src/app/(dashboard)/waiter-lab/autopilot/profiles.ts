@@ -291,32 +291,34 @@ export const CUSTOMER_PROFILES: CustomerProfile[] = [
   {
     id:       "sushi-search",
     name:     "Busca por Sushi",
-    goal:     "Perguntar opções de sushi e receber cards diretos",
+    goal:     "Perguntar opções de sushi e receber cards diretos — sem qualification question",
     behavior: "direct",
     intentMessages: [
       "quais opções de sushi vocês têm?",
       "me mostra os sushis",
     ],
-    requiresCart:     false,
-    requiresCheckout: false,
+    requiresCart:        false,
+    requiresCheckout:    false,
+    requiresSearchCards: true,   // last ON_USER_MESSAGE must return cards (no "Leve/Completo" buttons)
     expectedOutcome:
-      "searchMenuByQuery('sushi') confidence=high → cards[] com uramaki/temaki/hot roll. Sunomono/shimeji não aparecem.",
+      "searchMenuByQuery('sushi') confidence=high → cards[] com uramaki/temaki/hot roll. Zero qualification questions. Sunomono/shimeji não aparecem.",
   },
 
   // ── R: Busca por Frango ───────────────────────────────────────────────────────
   {
     id:       "frango-search",
     name:     "Busca por Frango",
-    goal:     "Pedir opções com frango e receber cards por ingrediente",
+    goal:     "Pedir opções com frango e receber cards por ingrediente — sem qualification question",
     behavior: "direct",
     intentMessages: [
       "quero opções com frango",
       "tem alguma coisa com frango aqui?",
     ],
-    requiresCart:     false,
-    requiresCheckout: false,
+    requiresCart:        false,
+    requiresCheckout:    false,
+    requiresSearchCards: true,   // last ON_USER_MESSAGE must return cards
     expectedOutcome:
-      "Synonym group frango → cards[] com itens que contêm frango no nome/descrição. Confidence medium→high.",
+      "Synonym group frango → cards[] com itens que contêm frango no nome/descrição. Confidence medium→high. Zero qualification questions.",
   },
 
   // ════════════════════════════════════════════════════════════

@@ -225,7 +225,8 @@ async function runScenario(
       seq.push({
         event:        "ON_USER_MESSAGE",
         message:      msg,
-        requireCards: isLast && profile.requiresCart && catalogIds.size > 0,
+        requireCards: isLast && catalogIds.size > 0 &&
+          (profile.requiresCart || profile.requiresSearchCards === true),
       });
     });
 
@@ -402,27 +403,25 @@ async function runScenario(
           }
         }
 
-        // ON_CHECKOUT_STARTED: expect active upsell (cards) or permission gate (options)
+        // ON_CHECKOUT_STARTED: expect active upsell — Waiter must show cards directly (no modal)
         if (event === "ON_CHECKOUT_STARTED" && profile.expectsCheckoutUpsell) {
-          const hasUpsell = response.cards.length > 0 || response.options.length > 0;
-          if (!hasUpsell) {
+          const hasCards = response.cards.length > 0;
+          if (!hasCards) {
             stepFailures   = [...stepFailures, "missed_final_upsell"];
             stepAssertions = [
               ...stepAssertions,
               {
-                label:  "Checkout upsell esperado (cards ativos ou options gate)",
+                label:  "Checkout upsell ativo: cards de bebida/sobremesa esperados",
                 pass:   false,
-                detail: `cards=0, options=0, mode=${response.mode}`,
+                detail: `cards=0, options=${response.options.length}, mode=${response.mode}`,
               },
             ];
           } else {
             stepAssertions = [
               ...stepAssertions,
               {
-                label: response.cards.length > 0
-                  ? "Checkout upsell ativo: cards retornados"
-                  : "Checkout upsell gate presente via options",
-                pass: true,
+                label: `Checkout upsell ativo: ${response.cards.length} card(s) retornado(s)`,
+                pass:  true,
               },
             ];
           }
