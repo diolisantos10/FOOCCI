@@ -14,6 +14,18 @@ type ColMap = {
   nome?: number;
   descricao?: number;
   preco?: number;
+  ingredients?: number;
+  showInDelivery?: number;
+  showInDineIn?: number;
+  hasVariants?: number;
+  servingSize?: number;
+  portionInfo?: number;
+  code?: number;
+  tagFunil?: number;
+  perfilPaladar?: number;
+  harmonizacaoSugerida?: number;
+  alergenosDetalhados?: number;
+  storytellingIA?: number;
 };
 
 function normalizeHeader(v: unknown): string {
@@ -25,39 +37,25 @@ function normalizeHeader(v: unknown): string {
     .replace(/\s+/g, " ");
 }
 
-const FOTO_KEYS = new Set([
-  "foto", "imagem", "image", "img", "foto / imagem",
-  "url", "url da foto", "url da imagem", "link", "link da foto",
-  "photo", "picture", "pic", "thumbnail", "thumb",
-]);
-const CAT_KEYS = new Set(["categoria", "category", "cat", "grupo", "group"]);
-const NOME_KEYS = new Set([
-  "nome do item",
-  "nome",
-  "item",
-  "produto",
-  "name",
-  "product",
-  "titulo",
-  "title",
-]);
-const DESC_KEYS = new Set([
-  "descricao",
-  "description",
-  "desc",
-  "detalhe",
-  "detalhes",
-  "observacao",
-  "observacao do item",
-]);
-// Root prefixes for price: also matches compound Neemo headers like
-// "Preço Cardápio", "Preço Delivery", "Preço Site" (first match wins).
-const PRECO_PREFIXES = ["preco", "price", "valor", "value", "custo", "cost"];
+const FOTO_KEYS        = new Set(["foto","imagem","image","img","foto / imagem","url","url da foto","url da imagem","link","link da foto","photo","picture","pic","thumbnail","thumb"]);
+const CAT_KEYS         = new Set(["categoria","category","cat","grupo","group"]);
+const NOME_KEYS        = new Set(["nome do item","nome","item","produto","name","product","titulo","title"]);
+const DESC_KEYS        = new Set(["descricao","description","desc","detalhe","detalhes","observacao","observacao do item"]);
+const INGR_KEYS        = new Set(["ingredients","ingredientes","composicao","composição"]);
+const DELIVERY_KEYS    = new Set(["showindelivery","delivery","show in delivery","exibir delivery","canal delivery"]);
+const DINEIN_KEYS      = new Set(["showindineIn","showindine-in","salao","salão","dine in","dine-in","show in salao","exibir salao"]);
+const VARIANTS_KEYS    = new Set(["hasvariants","variantes","has variants","tem variantes"]);
+const SERVING_KEYS     = new Set(["servingsize","serving size","serve","serve pessoas","pessoas"]);
+const PORTION_KEYS     = new Set(["portioninfo","porcao","porção","portion","porcao info","informacao de porcao"]);
+const CODE_KEYS        = new Set(["code","codigo","código","codigo interno","sku"]);
+const FUNIL_KEYS       = new Set(["tag_funil","tagfunil","funil","etapa","etapa do funil"]);
+const PALADAR_KEYS     = new Set(["perfil_paladar","perfilpaladar","paladar","perfil de paladar","perfil paladar"]);
+const HARMONIZ_KEYS    = new Set(["harmonizacao_sugerida","harmonizacaosugerida","harmonizacao","harmonização sugerida","harmonizacao sugerida"]);
+const ALERGENOS_KEYS   = new Set(["alergenos_detalhados","alergenosdetalhados","alergenos","alérgenos","alergenos detalhados"]);
+const STORY_KEYS       = new Set(["storytelling_ia","storytellingia","storytelling","narrativa ia","storytelling ia"]);
+const PRECO_PREFIXES   = ["preco","price","valor","value","custo","cost"];
 
-function matchesSet(k: string, exact: Set<string>): boolean {
-  return exact.has(k);
-}
-
+function matchesSet(k: string, exact: Set<string>): boolean { return exact.has(k); }
 function matchesPricePrefix(k: string): boolean {
   return PRECO_PREFIXES.some((p) => k === p || k.startsWith(p + " "));
 }
@@ -66,10 +64,22 @@ function detectColumns(headerRow: unknown[]): ColMap {
   const map: ColMap = {};
   headerRow.forEach((h, i) => {
     const k = normalizeHeader(h);
-    if (matchesSet(k, FOTO_KEYS)) map.foto = i;
-    else if (matchesSet(k, CAT_KEYS)) map.categoria = i;
-    else if (matchesSet(k, NOME_KEYS)) map.nome = i;
-    else if (matchesSet(k, DESC_KEYS)) map.descricao = i;
+    if      (matchesSet(k, FOTO_KEYS))      map.foto = i;
+    else if (matchesSet(k, CAT_KEYS))       map.categoria = i;
+    else if (matchesSet(k, NOME_KEYS))      map.nome = i;
+    else if (matchesSet(k, DESC_KEYS))      map.descricao = i;
+    else if (matchesSet(k, INGR_KEYS))      map.ingredients = i;
+    else if (matchesSet(k, DELIVERY_KEYS))  map.showInDelivery = i;
+    else if (matchesSet(k, DINEIN_KEYS))    map.showInDineIn = i;
+    else if (matchesSet(k, VARIANTS_KEYS))  map.hasVariants = i;
+    else if (matchesSet(k, SERVING_KEYS))   map.servingSize = i;
+    else if (matchesSet(k, PORTION_KEYS))   map.portionInfo = i;
+    else if (matchesSet(k, CODE_KEYS))      map.code = i;
+    else if (matchesSet(k, FUNIL_KEYS))     map.tagFunil = i;
+    else if (matchesSet(k, PALADAR_KEYS))   map.perfilPaladar = i;
+    else if (matchesSet(k, HARMONIZ_KEYS))  map.harmonizacaoSugerida = i;
+    else if (matchesSet(k, ALERGENOS_KEYS)) map.alergenosDetalhados = i;
+    else if (matchesSet(k, STORY_KEYS))     map.storytellingIA = i;
     else if (map.preco === undefined && matchesPricePrefix(k)) map.preco = i;
   });
   return map;
@@ -126,30 +136,48 @@ async function parseSpreadsheet(buffer: Buffer): Promise<ImportPreview> {
     const get = (idx: number | undefined): string =>
       idx !== undefined ? String(row[idx] ?? "").trim() : "";
 
-    const foto = get(colMap.foto);
-    const categoria = get(colMap.categoria);
-    const nome = get(colMap.nome);
-    const descricao = get(colMap.descricao);
-    const rawCell = colMap.preco !== undefined ? row[colMap.preco] : "";
-    const precoRaw = String(rawCell ?? "").trim();
+    const foto        = get(colMap.foto);
+    const categoria   = get(colMap.categoria);
+    const nome        = get(colMap.nome);
+    const descricao   = get(colMap.descricao);
+    const ingredients = get(colMap.ingredients);
+    const rawCell     = colMap.preco !== undefined ? row[colMap.preco] : "";
+    const precoRaw    = String(rawCell ?? "").trim();
+
+    // Boolean helpers
+    const parseBool = (idx: number | undefined, defaultVal: boolean): boolean => {
+      if (idx === undefined) return defaultVal;
+      const v = String(row[idx] ?? "").toLowerCase().trim();
+      if (v === "false" || v === "0" || v === "não" || v === "nao" || v === "no") return false;
+      if (v === "true"  || v === "1" || v === "sim" || v === "yes")               return true;
+      return defaultVal;
+    };
+    const showInDelivery      = parseBool(colMap.showInDelivery, true);
+    const showInDineIn        = parseBool(colMap.showInDineIn, true);
+    const hasVariants         = parseBool(colMap.hasVariants, false);
+
+    const servingSizeRaw = get(colMap.servingSize);
+    const servingSize    = servingSizeRaw ? (parseInt(servingSizeRaw) || null) : null;
+    const portionInfo    = get(colMap.portionInfo);
+    const code           = get(colMap.code);
+    const tagFunil             = get(colMap.tagFunil);
+    const perfilPaladar        = get(colMap.perfilPaladar);
+    const harmonizacaoSugerida = get(colMap.harmonizacaoSugerida);
+    const alergenosDetalhados  = get(colMap.alergenosDetalhados);
+    const storytellingIA       = get(colMap.storytellingIA);
 
     // Skip entirely empty rows
     const allEmpty = !foto && !categoria && !nome && !descricao && !precoRaw;
-    if (allEmpty) {
-      skippedCount++;
-      continue;
-    }
+    if (allEmpty) { skippedCount++; continue; }
 
     // Validate
     const errors: string[] = [];
     if (!categoria) errors.push("Categoria ausente");
-    if (!nome) errors.push("Nome do item ausente");
+    if (!nome)      errors.push("Nome do item ausente");
 
     const { value: preco, valid: precoValid } = normalizePrice(rawCell);
     if (!precoValid) {
-      errors.push(
-        precoRaw ? `Preço inválido: "${precoRaw}"` : "Preço ausente"
-      );
+      errors.push(precoRaw ? `Preço inválido: "${precoRaw}"` : "Preço ausente");
     }
 
     const status: RowStatus = errors.length > 0 ? "error" : "valid";
@@ -162,15 +190,13 @@ async function parseSpreadsheet(buffer: Buffer): Promise<ImportPreview> {
     }
 
     rows.push({
-      rowIndex,
-      foto,
-      categoria,
-      nome,
-      descricao,
-      precoRaw,
-      preco,
-      status,
-      errors,
+      rowIndex, foto, categoria, nome, descricao, ingredients,
+      precoRaw, preco,
+      showInDelivery, showInDineIn, hasVariants,
+      servingSize, portionInfo, code,
+      tagFunil, perfilPaladar, harmonizacaoSugerida,
+      alergenosDetalhados, storytellingIA,
+      status, errors,
     });
   }
 
