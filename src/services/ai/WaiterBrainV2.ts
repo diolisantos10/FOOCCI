@@ -2102,7 +2102,7 @@ function handleUserMessage(input: V2Input): V2Output {
     return noCardsFound();
   }
 
-  // ── Special path: user skipped drink upsell → offer all desserts ────────────
+  // ── Special path: user skipped drink upsell → offer desserts (no skip button) ─
   if (msgLow === "skip_drink_upsell") {
     const dessertCards = selectDessertItems(catalog, cartItemIds);
     if (dessertCards.length > 0) {
@@ -2110,9 +2110,10 @@ function handleUserMessage(input: V2Input): V2Output {
         message:     "Feche com chave de ouro — o favorito dos clientes 🍰",
         cards:       dessertCards,
         mode:        "INTERVENTION",
-        options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
+        options:     [],
         requiresAI:  false,
         aiDirective: "",
+        memoryPatch: { checkoutUpsellStage: "dessert_shown" },
       };
     }
     return {
@@ -2122,6 +2123,7 @@ function handleUserMessage(input: V2Input): V2Output {
       options:     [],
       requiresAI:  false,
       aiDirective: "",
+      memoryPatch: { checkoutUpsellStage: "completed" },
     };
   }
 
@@ -2300,37 +2302,9 @@ function handleUserMessage(input: V2Input): V2Output {
     }
     case "checkout_intent": {
       if (!hasItems) break;
-      const ca = analyzeCart(cartItemIds, catalog);
-      if (!ca.hasDrink) {
-        const drinkCards = selectDrinkItems(catalog, cartItemIds);
-        if (drinkCards.length > 0) {
-          return {
-            message:     "Antes de finalizar — uma bebida vai bem com seu pedido 👇",
-            cards:       drinkCards,
-            mode:        "INTERVENTION",
-            options:     [
-              { label: "Adicionar depois",    value: "skip_drink_upsell" },
-              { label: "Finalizar sem bebida", value: "continue_checkout" },
-            ],
-            requiresAI:  false,
-            aiDirective: "",
-          };
-        }
-      }
-      if (!ca.hasDessert) {
-        const dessertCards = selectDessertItems(catalog, cartItemIds);
-        if (dessertCards.length > 0) {
-          return {
-            message:     "Antes de finalizar — separei algumas sobremesas pra você 👇",
-            cards:       dessertCards,
-            mode:        "INTERVENTION",
-            options:     [{ label: "Finalizar sem sobremesa", value: "continue_checkout" }],
-            requiresAI:  false,
-            aiDirective: "",
-          };
-        }
-      }
-      return { message: "Perfeito! Pode finalizar quando quiser 😊", cards: [], mode: "CHECKOUT_SUPPORT", options: [], requiresAI: false, aiDirective: "" };
+      // Delegate to the same stage machine used by the Finalizar button
+      // so typing "finalizar" advances through the same drink→dessert→checkout sequence.
+      return handleCheckoutStarted(input);
     }
   }
 
@@ -2494,11 +2468,8 @@ export function validateWaiterResponse(
       options = options.filter((o) => CHECKOUT_SAFE_OPTIONS.has(o.value));
     }
 
-    // 9. No confirmation buttons alongside product cards
-    // Exception: active checkout upsell (INTERVENTION) may carry skip/continue options
-    const isCheckoutUpsell = mode === "INTERVENTION" &&
-      options.some((o) => o.value === "skip_drink_upsell" || o.value === "continue_checkout");
-    if (cards.length > 0 && !isCheckoutUpsell) options = [];
+    // 9. No confirmation buttons alongside product cards — always strip options when cards present.
+    if (cards.length > 0) options = [];
 
     if (snap) {
       const fixes: string[] = [];
