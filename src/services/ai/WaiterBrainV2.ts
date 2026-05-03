@@ -2613,8 +2613,10 @@ export function decide(input: V2Input): V2Output {
     }
   })();
   const validated   = validateWaiterResponse(raw, input.catalog, input.event);
-  const memoryPatch = computeMemoryPatch(input, validated);
-  const result      = { ...validated, memoryPatch };
+  // computeMemoryPatch reads raw.memoryPatch (set by handlers like handleCheckoutStarted).
+  // Must receive `raw` not `validated` — validateWaiterResponse strips memoryPatch/pinnedCardId.
+  const memoryPatch = computeMemoryPatch(input, raw);
+  const result      = { ...validated, memoryPatch, pinnedCardId: raw.pinnedCardId };
 
   if (DEBUG_ENABLED) {
     const cfg = input.config ?? DEFAULT_WAITER_CONFIG;

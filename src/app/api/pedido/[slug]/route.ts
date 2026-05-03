@@ -74,9 +74,10 @@ export async function GET(
     return ok({
       restaurantName: restaurant.name,
       categories: categories.map((c) => ({
-        id:       c.id,
-        name:     c.name,
-        imageUrl: c.imageUrl ?? null,
+        id:          c.id,
+        name:        c.name,
+        description: c.description ?? null,
+        imageUrl:    c.imageUrl ?? null,
         items: c.items.map((i) => ({
           id:          i.id,
           name:        i.name,

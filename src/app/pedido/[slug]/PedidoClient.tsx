@@ -13,7 +13,14 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
-import type { WaiterMemory } from "@/services/ai/WaiterBrainV2";
+import type { WaiterMemory, CheckoutUpsellStage } from "@/services/ai/WaiterBrainV2";
+
+const UPSELL_STAGE_ORDER: Record<CheckoutUpsellStage, number> = {
+  none: 0, drink_shown: 1, dessert_shown: 2, completed: 3,
+};
+function maxUpsellStage(a: CheckoutUpsellStage | undefined, b: CheckoutUpsellStage | undefined): CheckoutUpsellStage {
+  return (UPSELL_STAGE_ORDER[b ?? "none"] ?? 0) >= (UPSELL_STAGE_ORDER[a ?? "none"] ?? 0) ? (b ?? "none") : (a ?? "none");
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1242,7 +1249,13 @@ export function PedidoClient({
         if (data?.data?.memoryPatch && typeof data.data.memoryPatch === "object") {
           // Update ref synchronously so the next sendText call (even before re-render)
           // ships the latest memory to the server — prevents stage repeat on rapid clicks.
-          waiterMemoryRef.current = { ...waiterMemoryRef.current, ...data.data.memoryPatch };
+          // max-stage-wins: checkoutUpsellStage can only advance, never downgrade.
+          const patch = data.data.memoryPatch as Partial<WaiterMemory>;
+          const mergedStage = maxUpsellStage(
+            waiterMemoryRef.current.checkoutUpsellStage,
+            patch.checkoutUpsellStage,
+          );
+          waiterMemoryRef.current = { ...waiterMemoryRef.current, ...patch, checkoutUpsellStage: mergedStage };
           setWaiterMemory(waiterMemoryRef.current);
         }
 
