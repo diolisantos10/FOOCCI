@@ -404,7 +404,7 @@ function FeaturedCard({
       onClick={onClick}
       className="snap-start shrink-0 w-40 rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden text-left hover:shadow-md hover:border-orange-100 transition-all"
     >
-      <div className="h-40 bg-gray-100 overflow-hidden">
+      <div className="h-36 bg-gray-100 overflow-hidden">
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

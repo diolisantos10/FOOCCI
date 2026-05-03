@@ -356,7 +356,7 @@ function TypingIndicator() {
 // ── Product card ──────────────────────────────────────────────────────────────
 // Thumbnail — uniform h-44 w-36. Image + name + price + add. No description.
 
-const CARD_IMG_H = "h-36"; // square image zone for w-36 card (144×144px)
+const CARD_IMG_H = "h-[72px]"; // compact image zone — keeps browsing carousel light
 
 function ProductCard({
   item,
@@ -371,7 +371,7 @@ function ProductCard({
 }) {
   return (
     /* Fixed outer size keeps the grid perfectly uniform regardless of name length */
-    <div className="flex h-60 w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <div className="flex h-44 w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
 
       {/* Image zone — fixed height, tappable */}
       <button onClick={onOpen} className={`block w-full shrink-0 overflow-hidden ${CARD_IMG_H}`}>
@@ -1141,6 +1141,11 @@ export function PedidoClient({
 
   const currentCategoryItems = useMemo(
     () => categories.find((c) => c.id === selectedCategoryId)?.items ?? [],
+    [categories, selectedCategoryId],
+  );
+
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === selectedCategoryId) ?? null,
     [categories, selectedCategoryId],
   );
 
@@ -2359,19 +2364,26 @@ export function PedidoClient({
                 </button>
               </div>
             ) : currentCategoryItems.length > 0 ? (
-              <div
-                className="flex gap-3 overflow-x-auto px-3 py-1 [&::-webkit-scrollbar]:hidden"
-                style={{ scrollbarWidth: "none" }}
-              >
-                {currentCategoryItems.map((item) => (
-                  <ProductCard
-                    key={item.id}
-                    item={item}
-                    qty={itemCartQty(item, cart)}
-                    onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
-                    onOpen={() => setSelectedProduct(item)}
-                  />
-                ))}
+              <div className="px-3 pt-1.5 pb-1">
+                {selectedCategory?.description && (
+                  <p className="mb-1.5 text-[11px] leading-snug text-gray-500 line-clamp-2">
+                    {selectedCategory.description}
+                  </p>
+                )}
+                <div
+                  className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
+                  style={{ scrollbarWidth: "none" }}
+                >
+                  {currentCategoryItems.map((item) => (
+                    <ProductCard
+                      key={item.id}
+                      item={item}
+                      qty={itemCartQty(item, cart)}
+                      onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                      onOpen={() => setSelectedProduct(item)}
+                    />
+                  ))}
+                </div>
               </div>
             ) : null}
           </div>
@@ -2499,17 +2511,24 @@ export function PedidoClient({
                   </div>
                 </>
               ) : currentCategoryItems.length > 0 ? (
-                <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-                  {currentCategoryItems.map((item) => (
-                    <DesktopProductCard
-                      key={item.id}
-                      item={item}
-                      qty={itemCartQty(item, cart)}
-                      onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
-                      onOpen={() => setSelectedProduct(item)}
-                    />
-                  ))}
-                </div>
+                <>
+                  {selectedCategory?.description && (
+                    <p className="mb-3 text-sm leading-snug text-gray-500 line-clamp-2">
+                      {selectedCategory.description}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+                    {currentCategoryItems.map((item) => (
+                      <DesktopProductCard
+                        key={item.id}
+                        item={item}
+                        qty={itemCartQty(item, cart)}
+                        onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                        onOpen={() => setSelectedProduct(item)}
+                      />
+                    ))}
+                  </div>
+                </>
               ) : (
                 <div className="flex h-full items-center justify-center">
                   <p className="text-sm text-gray-400">Nenhum item nesta categoria.</p>
