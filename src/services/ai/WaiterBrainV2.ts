@@ -770,12 +770,19 @@ const QUERY_STOPWORDS = new Set([
  * receive a bonus score — enabling "sushi" to surface uramaki, hot roll, etc.
  */
 const MENU_SYNONYM_GROUPS: Array<[RegExp, RegExp]> = [
-  // Sushi family — "sushi"/"sushis" query surfaces all sushi-style items (plural forms included)
-  // Item pattern deliberately excludes bare "combo" to avoid matching frango/other combos.
-  [
-    /\b(sushis?|sashimis?|niguiris?|nigiris?|uramakis?|hossomakis?|hosso.?makis?|hot.?rolls?|temakis?|makis?|combinados?)\b/i,
-    /sushi|sashimi|niguiri|nigiri|uramaki|hossomaki|hot.?roll|temaki|maki|combinado/i,
-  ],
+  // ── Sushi subcategories — STRICT ─────────────────────────────────────────
+  // Each specific term returns only products of that exact type.
+  // Prevents "temaki" from pulling in hot rolls, uramakis, etc.
+  [/\btemakis?\b/i,             /temaki/i],
+  [/\bhot[\s.-]?rolls?\b/i,     /hot.?roll/i],
+  [/\buramakis?\b/i,            /uramaki/i],
+  [/\bsashimis?\b/i,            /sashimi/i],
+  [/\b(niguiris?|nigiris?)\b/i, /niguiri|nigiri/i],
+  [/\bhosso.?makis?\b/i,        /hossomaki/i],
+  // ── Sushi family — BROAD (generic "sushi" keyword only) ─────────────────
+  // "sushi" / "sushis" → all sushi-family main products.
+  // Accessories are excluded separately via ACCESSORY_ITEM_RE penalty.
+  [/\bsushis?\b/i, /sushi|sashimi|niguiri|nigiri|uramaki|hossomaki|hot.?roll|temaki|maki|combinado/i],
   // Ramen / noodle family
   [
     /\b(l[aá]men|ramen|yakisoba|macarr|yakis)\b/i,
