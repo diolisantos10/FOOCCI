@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import { Decimal } from "@prisma/client/runtime/library";
+import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 
 async function getMpToken(restaurantId: string): Promise<string | null> {
   const cfg = await prisma.integrationConfig.findUnique({
@@ -152,15 +153,9 @@ export async function POST(req: NextRequest) {
     }),
   ]);
 
-  // Update customer stats
-  await prisma.customer.updateMany({
-    where: { id: (await prisma.order.findUnique({ where: { id: payment.order.id }, select: { customerId: true } }))?.customerId ?? "" },
-    data: {
-      totalOrders: { increment: 1 },
-      totalSpend: { increment: new Decimal((mpPaymentData.transaction_amount as number) ?? Number(payment.amount)) },
-      lastOrderAt: new Date(),
-    },
-  });
+  // Sync CRM metrics through the centralized service.
+  // crmSyncedAt guards against double-counting on repeated webhooks.
+  await CustomerMetricsSyncService.syncOrderToCustomerMetrics(payment.order.id, "mp_webhook");
 
   return NextResponse.json({ received: true });
 }

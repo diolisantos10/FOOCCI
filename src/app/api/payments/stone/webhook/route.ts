@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyWebhookSignature } from "@/lib/stone";
 import { auditLog } from "@/lib/audit";
+import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -99,6 +100,10 @@ export async function POST(req: NextRequest) {
       newStatus: "PAID",
     },
   });
+
+  // Sync CRM metrics through the centralized service.
+  // crmSyncedAt guards against double-counting on repeated webhooks.
+  await CustomerMetricsSyncService.syncOrderToCustomerMetrics(payment.orderId, "stone_webhook");
 
   return NextResponse.json({ ok: true });
 }

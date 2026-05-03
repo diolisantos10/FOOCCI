@@ -13,6 +13,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
+import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 import type {
   CreateDraftInput,
   UpdateDraftInput,
@@ -422,18 +423,12 @@ export class OrderDraftService {
         },
       });
 
-      // Denormalize customer stats
-      await tx.customer.update({
-        where: { id: draft.customerId },
-        data: {
-          totalOrders: { increment: 1 },
-          totalSpend: { increment: total },
-          lastOrderAt: new Date(),
-        },
-      });
-
       return newOrder;
     });
+
+    // Sync CRM metrics through the centralized service (idempotent, sets crmSyncedAt).
+    // Kept outside the transaction so a sync failure does not roll back a confirmed order.
+    await CustomerMetricsSyncService.syncOrderToCustomerMetrics(order.id, "draft_confirm");
 
     return serviceOk(order);
   }

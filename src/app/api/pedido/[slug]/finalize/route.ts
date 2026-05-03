@@ -15,7 +15,9 @@
  *   - DB prices used, not client-supplied prices
  *   - 30-second idempotency window (duplicate submit / double-click safe)
  *   - Phase-1 DB writes wrapped in a single Prisma transaction
+ *   - Phone normalized to E.164 before customer upsert (prevents duplicate customers)
  *   - Anonymous orders get a unique GUEST phone (no shared WALK-IN merging)
+ *   - CRM counter update routed through CustomerMetricsSyncService (idempotent)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -27,6 +29,8 @@ import { decrypt } from "@/lib/crypto";
 import { Decimal } from "@prisma/client/runtime/library";
 import { createHash, randomUUID } from "crypto";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { toE164 } from "@/lib/phone";
+import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -155,9 +159,12 @@ export async function POST(
     return NextResponse.json({ orderId: existingOrder.id, confirmed: true });
   }
 
-  // ── Unique guest phone per anonymous order ────────────────────
-  // Prevents all anonymous orders from merging into a single "WALK-IN" customer.
-  const phone = customerPhone?.trim() || `GUEST-${randomUUID()}`;
+  // ── Phone normalization + unique guest phone ──────────────────
+  // Normalize Brazilian numbers to E.164 so that "11999990000" and
+  // "+5511999990000" resolve to the same Customer row (phone_restaurantId unique).
+  // Anonymous orders get a per-order GUEST-uuid so they never merge.
+  const rawPhone = customerPhone?.trim() ?? "";
+  const phone    = rawPhone ? (toE164(rawPhone) || rawPhone) : `GUEST-${randomUUID()}`;
 
   const subtotal = verifiedCart.reduce((acc, item) => acc + item.price * item.qty, 0);
 
@@ -316,8 +323,8 @@ export async function POST(
   };
   const dbMethod = paymentMethodSub ? (methodMap[paymentMethodSub] ?? "CASH") : "CASH";
 
-  await prisma.$transaction(async (tx) => {
-    await tx.payment.create({
+  await prisma.$transaction([
+    prisma.payment.create({
       data: {
         orderId:     orderId,
         method:      dbMethod,
@@ -325,20 +332,18 @@ export async function POST(
         amount:      new Decimal(subtotal),
         paymentMode: isDelivery ? "PAY_ON_DELIVERY" : "PAY_ON_PICKUP",
       },
-    });
-    await tx.order.update({
+    }),
+    prisma.order.update({
       where: { id: orderId },
       data:  { status: "CONFIRMED" },
-    });
-    await tx.customer.update({
-      where: { id: customerId },
-      data: {
-        totalOrders: { increment: 1 },
-        totalSpend:  { increment: new Decimal(subtotal) },
-        lastOrderAt: new Date(),
-      },
-    });
-  });
+    }),
+  ]);
+
+  // Sync CRM metrics through the centralized service (idempotent, sets crmSyncedAt).
+  // Customer counter update is NOT inside the order transaction so that a sync
+  // failure does not roll back a successfully confirmed order. The rebuild script
+  // corrects any gap if the process crashes between these two steps.
+  await CustomerMetricsSyncService.syncOrderToCustomerMetrics(orderId, "finalize");
 
   return NextResponse.json({ orderId, confirmed: true });
 }

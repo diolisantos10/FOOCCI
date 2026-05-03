@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { attachPaymentSchema, updatePaymentStatusSchema } from "@/validators/order";
 import { PaymentService } from "@/services/payment/PaymentService";
+import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 import {
   ok, created, badRequest, unauthorized, notFound, conflict, serverError,
 } from "@/lib/api-response";
@@ -59,6 +60,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!result.ok) {
       if (result.status === 404) return notFound(result.error);
       return badRequest(result.error);
+    }
+
+    // When a staff member manually marks a payment as PAID, sync CRM metrics.
+    if (parsed.data.status === "PAID") {
+      await CustomerMetricsSyncService.syncOrderToCustomerMetrics(params.id, "manual_payment");
     }
 
     return ok(result.data);

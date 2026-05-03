@@ -332,6 +332,7 @@ model Order {
   completedAt       DateTime?
   cancelledAt       DateTime?
   idempotencyKey    String?     @unique
+  crmSyncedAt       DateTime?   // set once customer metrics have been counted for this order
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
