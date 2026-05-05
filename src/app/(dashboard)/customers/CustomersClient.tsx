@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { NewCustomerButton } from "./NewCustomerButton";
 
 export type SortCol = "totalSpend" | "totalOrders" | "lastOrderAt";
 export type SortDir = "asc" | "desc";
@@ -248,8 +249,13 @@ export default function CustomersClient({
           <tbody className="divide-y divide-gray-100">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                  Nenhum cliente encontrado.
+                <td colSpan={7} className="px-4 py-10 text-center">
+                  <p className="text-sm text-gray-400">Nenhum cliente encontrado.</p>
+                  {!search && filter === "all" && (
+                    <div className="mt-3 flex justify-center">
+                      <NewCustomerButton />
+                    </div>
+                  )}
                 </td>
               </tr>
             )}
@@ -308,7 +314,14 @@ export default function CustomersClient({
       {/* Mobile cards */}
       <div className="space-y-2 sm:hidden">
         {rows.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-400">Nenhum cliente encontrado.</p>
+          <div className="py-10 text-center">
+            <p className="text-sm text-gray-400">Nenhum cliente encontrado.</p>
+            {!search && filter === "all" && (
+              <div className="mt-3 flex justify-center">
+                <NewCustomerButton />
+              </div>
+            )}
+          </div>
         ) : (
           rows.map((c) => (
             <div
