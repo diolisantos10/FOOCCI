@@ -24,14 +24,14 @@ type FormState = {
 
 const EMPTY: FormState = { name: "", phone: "", email: "", birthDate: "", notes: "" };
 
-export function NewCustomerButton() {
+export function NewCustomerButton({ onCreated }: { onCreated?: (id: string) => void } = {}) {
   const router   = useRouter();
   const nameRef  = useRef<HTMLInputElement>(null);
   const [open,    setOpen]    = useState(false);
   const [busy,    setBusy]    = useState(false);
   const [error,   setError]   = useState("");
   const [form,    setForm]    = useState<FormState>(EMPTY);
-  // createdId is set on success so we can navigate + show confirmation
+  // createdId is set on success so we can show confirmation before acting
   const [createdId, setCreatedId] = useState<string | null>(null);
 
   // Focus name field when modal opens
@@ -41,12 +41,21 @@ export function NewCustomerButton() {
     }
   }, [open, createdId]);
 
-  // Auto-navigate after brief success display
+  // After brief success display: navigate to profile OR call onCreated callback
   useEffect(() => {
     if (!createdId) return;
-    const t = setTimeout(() => router.push(`/customers/${createdId}`), 1400);
+    const t = setTimeout(() => {
+      if (onCreated) {
+        onCreated(createdId);
+        setOpen(false);
+        reset();
+      } else {
+        router.push(`/customers/${createdId}`);
+      }
+    }, 1400);
     return () => clearTimeout(t);
-  }, [createdId, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createdId]);
 
   function patch(key: keyof FormState) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -61,7 +70,13 @@ export function NewCustomerButton() {
 
   function close() {
     if (createdId) {
-      router.push(`/customers/${createdId}`);
+      if (onCreated) {
+        onCreated(createdId);
+        setOpen(false);
+        reset();
+      } else {
+        router.push(`/customers/${createdId}`);
+      }
       return;
     }
     setOpen(false);
@@ -170,14 +185,25 @@ export function NewCustomerButton() {
                 </div>
                 <div>
                   <p className="text-base font-bold text-gray-900">Cliente criado com sucesso.</p>
-                  <p className="mt-1 text-sm text-gray-500">Redirecionando para o perfil…</p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {onCreated ? "Atualizando lista…" : "Redirecionando para o perfil…"}
+                  </p>
                 </div>
-                <button
-                  onClick={() => router.push(`/customers/${createdId}`)}
-                  className="rounded-lg bg-orange-500 px-6 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
-                >
-                  Ver perfil agora
-                </button>
+                {onCreated ? (
+                  <button
+                    onClick={() => { onCreated(createdId); setOpen(false); reset(); }}
+                    className="rounded-lg bg-orange-500 px-6 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+                  >
+                    Fechar
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => router.push(`/customers/${createdId}`)}
+                    className="rounded-lg bg-orange-500 px-6 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+                  >
+                    Ver perfil agora
+                  </button>
+                )}
               </div>
             ) : (
               /* ── Form ─────────────────────────────────────────────────── */

@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
+import { NewCustomerButton } from "@/app/(dashboard)/customers/NewCustomerButton";
 
 // ── Label maps ─────────────────────────────────────────────────────────────────
 
@@ -441,7 +442,8 @@ function CustomersTab({
           </button>
         ))}
         <span className="text-xs text-gray-400 ml-1">{customers.length} clientes</span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <NewCustomerButton onCreated={() => applyFilter(filter)} />
           {customers.length > 0 && (
             <button
               onClick={() => exportCSV(customers)}
