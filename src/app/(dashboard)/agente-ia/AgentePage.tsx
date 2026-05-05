@@ -41,6 +41,13 @@ const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: "cardapio",    label: "Agente Cardápio",   icon: "🍽" },
 ];
 
+type SectionId = "garcom" | "agenteCRM";
+
+const SECTIONS: Array<{ id: SectionId; label: string; icon: string }> = [
+  { id: "garcom",    label: "Garçom IA",  icon: "🤖" },
+  { id: "agenteCRM", label: "Agente CRM", icon: "📊" },
+];
+
 // ── Option tables ─────────────────────────────────────────────────────────────
 
 const PRESETS: Array<{
@@ -363,6 +370,7 @@ function OptionCard({
 
 export function AgentePage() {
   const [activeTab, setActiveTab] = useState<TabId>("base");
+  const [activeSection, setActiveSection] = useState<SectionId>("garcom");
 
   // ── Brand config state (tabs: Base da IA + Cardápio) ──────────────────────
   const [form, setForm]     = useState<UpsertBrandConfigInput>(DEFAULT_BRAND_CONFIG);
@@ -526,11 +534,32 @@ export function AgentePage() {
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Agente IA</h1>
+        <h1 className="text-xl font-bold text-gray-900">Agentes IA</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Configure como o agente de vendas IA se comporta com os seus clientes.
+          Gerencie seus agentes de atendimento e relacionamento com clientes.
         </p>
       </div>
+
+      {/* ── Section switcher ───────────────────────────────────────────────── */}
+      <div className="flex gap-1 rounded-xl bg-gray-100 p-1 mb-6">
+        {SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setActiveSection(s.id)}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+              activeSection === s.id
+                ? "bg-white shadow-sm text-gray-900"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <span className="text-base leading-none">{s.icon}</span>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {activeSection === "garcom" && (<>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
       <div className="flex gap-1 border-b border-gray-200 mb-6">
@@ -986,6 +1015,72 @@ export function AgentePage() {
         </form>
       )}
 
+      </>)}
+
+      {/* ── Agente CRM ─────────────────────────────────────────────────────── */}
+      {activeSection === "agenteCRM" && (
+        <div className="space-y-6">
+
+          {/* Propósito */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">Agente CRM</h2>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Inteligência dedicada a relacionamento, retenção e reativação de clientes.
+                Separado do Garçom IA para foco total em relacionamento e receita.
+              </p>
+            </div>
+            <div className="rounded-lg border border-brand-100 bg-brand-50 p-4 space-y-2">
+              <p className="text-sm font-medium text-brand-800">Responsabilidades do Agente CRM:</p>
+              <ul className="space-y-1.5 text-sm text-brand-700">
+                {[
+                  "Identificar clientes inativos e acionar reativação",
+                  "Segmentar clientes por temperatura (Ativo, Morno, Frio)",
+                  "Sugerir mensagens personalizadas por segmento",
+                  "Monitorar oportunidades de fidelização",
+                  "Disparar alertas de VIPs em risco",
+                ].map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <span className="text-brand-500 font-bold">✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Segmentação por temperatura */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-gray-900">Segmentação por temperatura</h2>
+            <div className="space-y-2">
+              {[
+                { icon: "🟢", label: "Ativo",       desc: "Pedido nos últimos 30 dias — manter engajamento",        bg: "bg-green-50",  text: "text-green-700"  },
+                { icon: "🟡", label: "Morno",       desc: "Sem pedido entre 31 e 60 dias — momento de reativação",  bg: "bg-yellow-50", text: "text-yellow-700" },
+                { icon: "🔴", label: "Frio",        desc: "Sem pedido há mais de 60 dias — oferta agressiva",       bg: "bg-red-50",    text: "text-red-700"    },
+                { icon: "⬛", label: "Nunca pediu", desc: "Cadastrado mas sem pedido — ativar primeiro pedido",     bg: "bg-gray-50",   text: "text-gray-700"   },
+              ].map((s) => (
+                <div key={s.label} className={`flex items-start gap-3 rounded-lg border border-gray-100 ${s.bg} p-3`}>
+                  <span className="text-lg leading-none mt-0.5">{s.icon}</span>
+                  <div>
+                    <p className={`text-sm font-semibold ${s.text}`}>{s.label}</p>
+                    <p className="text-xs text-gray-500">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Em breve */}
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Em breve</p>
+            <p className="text-sm font-medium text-gray-700">Automações CRM inteligentes</p>
+            <p className="mt-1 text-xs text-gray-400">
+              Disparo automático de mensagens por temperatura, campanhas segmentadas e relatórios de retenção.
+            </p>
+          </div>
+
+        </div>
+      )}
     </div>
   );
 }
