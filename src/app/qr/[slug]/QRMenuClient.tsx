@@ -210,19 +210,16 @@ function ProductModal({
         className="w-full h-full flex flex-col sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Image — hero height for appetite appeal */}
-        <div className="relative w-full h-64 sm:h-72 shrink-0">
+        {/* Image — square container, full photo visible */}
+        <div className="relative w-full aspect-square shrink-0 bg-white">
           {item.imageUrl ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.imageUrl}
-                alt={item.name}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-            </>
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={item.imageUrl}
+              alt={item.name}
+              className="w-full h-full object-contain"
+              loading="lazy"
+            />
           ) : (
             <div className="w-full h-full bg-orange-50 flex items-center justify-center text-8xl">
               🍽️
