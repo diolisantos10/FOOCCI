@@ -462,7 +462,7 @@ function ProductModal({
       <div className="w-full h-full flex flex-col sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white">
 
         {/* ── Image — square container, full photo visible ── */}
-        <div className="relative w-full aspect-square shrink-0 bg-white">
+        <div className="relative w-full shrink-0 bg-white" style={{ aspectRatio: "1 / 1" }}>
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
