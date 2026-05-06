@@ -18,6 +18,7 @@ interface IntegrationView {
 interface TestResult {
   success: boolean;
   message: string;
+  debug?:  unknown; // Saipos only — safe diagnostic payload, no secrets
 }
 
 type Provider = "whatsapp" | "stone" | "mercadopago" | "tipos" | "openai" | "saipos";
@@ -887,6 +888,38 @@ function SaiposForm({
   );
 }
 
+// ── Saipos auth debug panel (shown after a failed Test Connection) ────────────
+
+function SaiposAuthDebugPanel({ debug }: { debug: Record<string, unknown> }) {
+  const rows: [string, string][] = [
+    ["Auth URL",       String(debug.authUrl ?? "—")],
+    ["Body keys",      Array.isArray(debug.requestBodyKeys)
+      ? (debug.requestBodyKeys as string[]).join(", ")
+      : String(debug.requestBodyKeys ?? "—")],
+    ["idPartner",      `exists=${debug.idPartnerExists}  len=${debug.idPartnerLength}  preview=${debug.idPartnerPreview}`],
+    ["secret",         `exists=${debug.secretExists}  len=${debug.secretLength}  preview=${debug.secretPreview}`],
+    ["cod_store",      String(debug.codStore ?? "—")],
+    ["environment",    String(debug.environment ?? "—")],
+    ["HTTP status",    String(debug.responseStatus ?? "—")],
+    ["Error code",     String(debug.responseErrorCode ?? "—")],
+    ["Error message",  String(debug.responseErrorMessage ?? "—")],
+  ];
+
+  return (
+    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+      <p className="mb-2 text-xs font-semibold text-gray-500">Diagnóstico Saipos Auth</p>
+      <div className="space-y-1.5">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex min-w-0 gap-2">
+            <span className="w-28 shrink-0 text-[10px] font-medium text-gray-400 uppercase tracking-wide">{label}</span>
+            <span className="min-w-0 flex-1 break-all font-mono text-[11px] text-gray-800">{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Detail panel ──────────────────────────────────────────────────────────────
 
 function DetailPanel({
@@ -1013,14 +1046,20 @@ function DetailPanel({
 
           {/* Test result */}
           {testResult && (
-            <div className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
-              testResult.success
-                ? "border-green-200 bg-green-50 text-green-700"
-                : "border-orange-200 bg-orange-50 text-orange-700"
-            }`}>
-              <span>{testResult.success ? "✓" : "⚠"}</span>
-              <span>{testResult.message}</span>
-            </div>
+            <>
+              <div className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+                testResult.success
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : "border-orange-200 bg-orange-50 text-orange-700"
+              }`}>
+                <span>{testResult.success ? "✓" : "⚠"}</span>
+                <span>{testResult.message}</span>
+              </div>
+              {/* Safe auth diagnostics — Saipos only, always shown when available */}
+              {provider === "saipos" && testResult.debug && (
+                <SaiposAuthDebugPanel debug={testResult.debug as Record<string, unknown>} />
+              )}
+            </>
           )}
 
           {/* Config form (owner-only) */}

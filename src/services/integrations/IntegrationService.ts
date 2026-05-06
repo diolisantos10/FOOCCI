@@ -44,6 +44,7 @@ export interface IntegrationView {
 export interface TestResult {
   success: boolean;
   message: string;
+  debug?:  unknown; // populated by Saipos test for safe on-screen diagnostics
 }
 
 // ── Internal raw config shapes ────────────────────────────────────────────────

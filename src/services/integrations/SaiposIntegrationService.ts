@@ -41,6 +41,23 @@ interface SaiposAuthResponse {
   token: string;
 }
 
+// Safe diagnostic payload returned from auth attempts — never includes full secrets.
+export interface SaiposAuthDebug {
+  authUrl:              string;
+  requestBodyKeys:      string[];
+  idPartnerExists:      boolean;
+  idPartnerLength:      number;
+  idPartnerPreview:     string;
+  secretExists:         boolean;
+  secretLength:         number;
+  secretPreview:        string;
+  codStore:             string;
+  environment:          string;
+  responseStatus:       number | null;
+  responseErrorCode:    string | number | null;
+  responseErrorMessage: string | null;
+}
+
 interface SaiposOrderItem {
   name:             string;
   unit_price:       number; // cents
@@ -139,78 +156,109 @@ export class SaiposIntegrationService {
     }
   }
 
-  // ── Auth ────────────────────────────────────────────────────────────────────
+  // ── Auth — internal attempt (returns token + safe diagnostics) ──────────────
 
-  static async getAuthToken(raw: SaiposRaw): Promise<string> {
-    const base    = apiBase(raw.environment);
-    const authUrl = `${base}/auth`;
+  private static async _attemptAuth(raw: SaiposRaw): Promise<{ token: string | null; debug: SaiposAuthDebug }> {
+    const authUrl    = `${apiBase(raw.environment)}/auth`;
+    const body       = { idPartner: raw.idPartner, secret: raw.apiKey };
 
-    // Safe credential diagnostics — never log secret values, only metadata
+    const debug: SaiposAuthDebug = {
+      authUrl,
+      requestBodyKeys:      Object.keys(body),            // ["idPartner", "secret"]
+      idPartnerExists:      Boolean(raw.idPartner),
+      idPartnerLength:      raw.idPartner?.length ?? 0,
+      idPartnerPreview:     (raw.idPartner?.length ?? 0) >= 8
+        ? `${raw.idPartner.slice(0, 4)}...${raw.idPartner.slice(-4)}`
+        : "(too short)",
+      secretExists:         Boolean(raw.apiKey),
+      secretLength:         raw.apiKey?.length ?? 0,
+      secretPreview:        (raw.apiKey?.length ?? 0) >= 4
+        ? `${raw.apiKey.slice(0, 2)}...${raw.apiKey.slice(-2)}`
+        : "(too short or empty)",
+      codStore:             raw.codStore,
+      environment:          raw.environment,
+      responseStatus:       null,
+      responseErrorCode:    null,
+      responseErrorMessage: null,
+    };
+
     console.log(
       `[saipos/auth] url=${authUrl}` +
-      ` bodyKeys=["idPartner","secret"]` +
-      ` idPartnerExists=${Boolean(raw.idPartner)}` +
-      ` idPartnerLen=${raw.idPartner?.length ?? 0}` +
-      ` idPartnerPreview=${raw.idPartner ? `${raw.idPartner.slice(0, 4)}...${raw.idPartner.slice(-4)}` : "(empty)"}` +
-      ` secretExists=${Boolean(raw.apiKey)}` +
-      ` secretLen=${raw.apiKey?.length ?? 0}` +
-      ` codStore=${raw.codStore}`
+      ` bodyKeys=${JSON.stringify(debug.requestBodyKeys)}` +
+      ` idPartnerLen=${debug.idPartnerLength} idPartnerPreview=${debug.idPartnerPreview}` +
+      ` secretLen=${debug.secretLength} secretPreview=${debug.secretPreview}` +
+      ` codStore=${debug.codStore}`
     );
 
-    const res = await fetch(authUrl, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ idPartner: raw.idPartner, secret: raw.apiKey }),
-      signal:  AbortSignal.timeout(10_000),
-    });
-
-    const responseText = await res.text().catch(() => "");
-
-    // Parse structured error details if available
-    let errorCode: string | number | undefined;
-    let errorMessage: string | undefined;
     try {
-      const parsed = JSON.parse(responseText) as Record<string, unknown>;
-      errorCode   = (parsed.code ?? parsed.error_code ?? parsed.errorCode) as string | number | undefined;
-      errorMessage = (parsed.message ?? parsed.error ?? parsed.mensagem) as string | undefined;
-    } catch { /* response is not JSON */ }
+      const res  = await fetch(authUrl, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(body),
+        signal:  AbortSignal.timeout(10_000),
+      });
+      const text = await res.text().catch(() => "");
+      debug.responseStatus = res.status;
 
-    console.log(
-      `[saipos/auth] responseStatus=${res.status}` +
-      (errorCode    !== undefined ? ` errorCode=${errorCode}`                   : "") +
-      (errorMessage               ? ` errorMessage=${errorMessage.slice(0, 200)}` : "")
-    );
+      try {
+        const parsed            = JSON.parse(text) as Record<string, unknown>;
+        debug.responseErrorCode    = (parsed.code ?? parsed.error_code ?? parsed.errorCode) as string | number | null ?? null;
+        debug.responseErrorMessage = (parsed.message ?? parsed.error ?? parsed.mensagem)    as string | null          ?? null;
+      } catch { /* text not JSON */ }
 
-    if (!res.ok) {
-      throw new Error(`Saipos auth failed (HTTP ${res.status}): ${responseText.slice(0, 200)}`);
+      console.log(
+        `[saipos/auth] responseStatus=${res.status}` +
+        (debug.responseErrorCode    !== null ? ` errorCode=${debug.responseErrorCode}`                      : "") +
+        (debug.responseErrorMessage          ? ` errorMessage=${debug.responseErrorMessage.slice(0, 200)}`  : "")
+      );
+
+      if (!res.ok) return { token: null, debug };
+
+      let data: SaiposAuthResponse;
+      try { data = JSON.parse(text) as SaiposAuthResponse; } catch { return { token: null, debug }; }
+      return { token: data.token ?? null, debug };
+    } catch (err) {
+      debug.responseErrorMessage = err instanceof Error ? err.message : String(err);
+      return { token: null, debug };
     }
+  }
 
-    let data: SaiposAuthResponse;
-    try {
-      data = JSON.parse(responseText) as SaiposAuthResponse;
-    } catch {
-      throw new Error(`Saipos auth returned non-JSON: ${responseText.slice(0, 100)}`);
+  // ── Auth — public (throws on failure; used by order-send flow) ───────────────
+
+  static async getAuthToken(raw: SaiposRaw): Promise<string> {
+    const { token, debug } = await SaiposIntegrationService._attemptAuth(raw);
+    if (!token) {
+      throw new Error(
+        `Saipos auth failed (HTTP ${debug.responseStatus ?? "N/A"}): ${debug.responseErrorMessage ?? "unknown error"}`
+      );
     }
-
-    if (!data.token) throw new Error("Saipos auth response missing token");
-    return data.token;
+    return token;
   }
 
   // ── Test connection ─────────────────────────────────────────────────────────
 
-  static async testConnection(restaurantId: string): Promise<{ success: boolean; message: string }> {
+  static async testConnection(restaurantId: string): Promise<{ success: boolean; message: string; debug?: SaiposAuthDebug }> {
     const raw = await SaiposIntegrationService.getDecryptedConfig(restaurantId);
     if (!raw) return { success: false, message: "Integração Saipos não configurada ou inativa." };
     if (!raw.apiKey || !raw.idPartner || !raw.codStore) {
       return { success: false, message: "Configuração incompleta (API Key, ID do parceiro ou Código da loja em falta)." };
     }
-    try {
-      await SaiposIntegrationService.getAuthToken(raw);
-      return { success: true, message: `Conectado ao Saipos (${raw.environment === "PRODUCTION" ? "Produção" : "Homologação"}) com sucesso.` };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      return { success: false, message: `Falha na autenticação Saipos: ${msg}` };
+
+    const { token, debug } = await SaiposIntegrationService._attemptAuth(raw);
+
+    if (!token) {
+      return {
+        success: false,
+        message: `Falha na autenticação Saipos (HTTP ${debug.responseStatus ?? "N/A"}): ${debug.responseErrorMessage ?? "erro desconhecido"}`,
+        debug,
+      };
     }
+
+    return {
+      success: true,
+      message: `Conectado ao Saipos (${raw.environment === "PRODUCTION" ? "Produção" : "Homologação"}) com sucesso.`,
+      debug,
+    };
   }
 
   // ── Map Foocci order to Saipos payload ──────────────────────────────────────
