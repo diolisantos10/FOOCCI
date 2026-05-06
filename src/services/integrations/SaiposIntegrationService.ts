@@ -236,12 +236,38 @@ export class SaiposIntegrationService {
   }
 
   // ── Test connection ─────────────────────────────────────────────────────────
+  // Loads config directly (ignores isActive) so testing always works even when
+  // the integration is disabled. Returns an explicit warning when disabled.
 
   static async testConnection(restaurantId: string): Promise<{ success: boolean; message: string; debug?: SaiposAuthDebug }> {
-    const raw = await SaiposIntegrationService.getDecryptedConfig(restaurantId);
-    if (!raw) return { success: false, message: "Integração Saipos não configurada ou inativa." };
-    if (!raw.apiKey || !raw.idPartner || !raw.codStore) {
-      return { success: false, message: "Configuração incompleta (API Key, ID do parceiro ou Código da loja em falta)." };
+    // Load row directly — do NOT filter by isActive here
+    const row = await prisma.integrationConfig.findUnique({
+      where: { restaurantId_provider: { restaurantId, provider: "saipos" } },
+    });
+
+    if (!row) {
+      return { success: false, message: "Integração Saipos não configurada. Salve as credenciais primeiro." };
+    }
+
+    let raw: SaiposRaw;
+    try {
+      raw = JSON.parse(decrypt(row.configBlob)) as SaiposRaw;
+    } catch {
+      return { success: false, message: "Falha ao ler credenciais salvas (configuração corrompida)." };
+    }
+
+    // Enumerate each missing field explicitly
+    const missing: string[] = [];
+    if (!raw.environment) missing.push("environment");
+    if (!raw.idPartner)   missing.push("idPartner");
+    if (!raw.codStore)    missing.push("codStore");
+    if (!raw.apiKey)      missing.push("secret");
+
+    if (missing.length > 0) {
+      return {
+        success: false,
+        message: `Configuração incompleta — campos em falta: ${missing.join(", ")}.`,
+      };
     }
 
     const { token, debug } = await SaiposIntegrationService._attemptAuth(raw);
@@ -254,9 +280,14 @@ export class SaiposIntegrationService {
       };
     }
 
+    const envLabel     = raw.environment === "PRODUCTION" ? "Produção" : "Homologação";
+    const disabledNote = !row.isActive
+      ? " Teste executado com integração desativada. Ative e salve para enviar pedidos automaticamente."
+      : "";
+
     return {
       success: true,
-      message: `Conectado ao Saipos (${raw.environment === "PRODUCTION" ? "Produção" : "Homologação"}) com sucesso.`,
+      message: `Conectado ao Saipos (${envLabel}) com sucesso.${disabledNote}`,
       debug,
     };
   }

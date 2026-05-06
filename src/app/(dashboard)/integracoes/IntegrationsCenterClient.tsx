@@ -668,6 +668,7 @@ function SaiposForm({
   // apiKeyPreview is safe to display (e.g. "1e28...aa05") but NEVER goes into an input value
   const existingSecretPreview = f.apiKeyPreview ?? null;
 
+  const [isActive,        setIsActive]       = useState(view?.isActive ?? true);
   const [environment,     setEnvironment]    = useState(f.environment    ?? "HOMOLOGATION");
   const [apiKey,          setApiKey]         = useState(""); // ALWAYS empty on load
   const [idPartner,       setIdPartner]      = useState(f.idPartner      ?? "");
@@ -683,6 +684,7 @@ function SaiposForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    setIsActive(view?.isActive ?? true);
     setEnvironment(f.environment    ?? "HOMOLOGATION");
     setApiKey(""); // NEVER populate with secret value or preview
     setIdPartner(f.idPartner        ?? "");
@@ -733,6 +735,7 @@ function SaiposForm({
     e.preventDefault();
     if (!validate()) return;
     onSave({
+      isActive,
       environment,
       apiKey:          apiKey.trim(), // empty string → backend keeps existing encrypted secret
       idPartner:       idPartner.trim(),
@@ -748,6 +751,36 @@ function SaiposForm({
 
   return (
     <form onSubmit={handleSubmit} className="w-full min-w-0 space-y-4 overflow-hidden">
+
+      {/* ── Ativar integração ─────────────────────────────────────── */}
+      <button
+        type="button"
+        onClick={() => setIsActive((v) => !v)}
+        className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition ${
+          isActive
+            ? "border-violet-200 bg-violet-50"
+            : "border-gray-200 bg-gray-50"
+        }`}
+      >
+        <div className="text-left">
+          <p className={`text-sm font-semibold ${isActive ? "text-violet-800" : "text-gray-600"}`}>
+            Ativar integração Saipos
+          </p>
+          <p className="mt-0.5 text-xs text-gray-400">
+            {isActive
+              ? "Integração ativa — pedidos confirmados são enviados ao Saipos."
+              : "Integração desativada — credenciais salvas mas pedidos não são enviados."}
+          </p>
+        </div>
+        {/* Toggle pill */}
+        <div className={`relative ml-4 h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
+          isActive ? "bg-violet-600" : "bg-gray-300"
+        }`}>
+          <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+            isActive ? "translate-x-5" : "translate-x-0"
+          }`} />
+        </div>
+      </button>
 
       <SelectField
         label="Ambiente"

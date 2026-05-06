@@ -66,6 +66,7 @@ export const saiposConfigSchema = z.object({
   autoSendOrders:  z.union([z.boolean(), z.string().transform((v) => v === "true")]),
   syncCatalog:     z.union([z.boolean(), z.string().transform((v) => v === "true")]),
   paymentMappings: z.string().optional(), // JSON string: { "CASH": 1, "PIX": 2, ... }
+  isActive:        z.union([z.boolean(), z.string().transform((v) => v === "true")]).optional(),
 });
 
 export type SaiposConfigInput = z.infer<typeof saiposConfigSchema>;

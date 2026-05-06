@@ -290,18 +290,24 @@ export class IntegrationService {
 
     const blob = encodeConfig(newRaw);
 
+    // Saipos lets the user explicitly control the enabled/disabled state.
+    // All other providers always activate on save.
+    const isActive = provider === "saipos"
+      ? ((input as SaiposConfigInput).isActive ?? true)
+      : true;
+
     const row = await prisma.integrationConfig.upsert({
       where: { restaurantId_provider: { restaurantId, provider } },
       create: {
         restaurantId,
         provider,
         configBlob: blob,
-        isActive:   true,
+        isActive,
         lastError:  null,
       },
       update: {
         configBlob: blob,
-        isActive:   true,
+        isActive,
         lastError:  null,
       },
     });
