@@ -664,32 +664,36 @@ function SaiposForm({
   onSave: (data: Record<string, unknown>) => void;
 }) {
   const f = view?.fields ?? {};
+  // apiKeyPreview is safe to display (e.g. "1e28...aa05") but NEVER goes into an input value
+  const existingSecretPreview = f.apiKeyPreview ?? null;
 
-  const [environment,     setEnvironment]     = useState(f.environment     ?? "HOMOLOGATION");
-  const [apiKey,          setApiKey]          = useState("");
-  const [idPartner,       setIdPartner]       = useState(f.idPartner       ?? "");
-  const [codStore,        setCodStore]        = useState(f.codStore        ?? "");
-  const [autoSendOrders,  setAutoSendOrders]  = useState((f.autoSendOrders ?? "true") === "true");
-  const [syncCatalog,     setSyncCatalog]     = useState((f.syncCatalog    ?? "false") === "true");
+  const [environment,     setEnvironment]    = useState(f.environment    ?? "HOMOLOGATION");
+  const [apiKey,          setApiKey]         = useState(""); // ALWAYS empty on load
+  const [idPartner,       setIdPartner]      = useState(f.idPartner      ?? "");
+  const [codStore,        setCodStore]       = useState(f.codStore       ?? "");
+  const [autoSendOrders,  setAutoSendOrders] = useState((f.autoSendOrders ?? "true") === "true");
+  const [syncCatalog,     setSyncCatalog]    = useState((f.syncCatalog   ?? "false") === "true");
   const [paymentMappings, setPaymentMappings] = useState(
     f.paymentMappings && f.paymentMappings !== "{}"
       ? f.paymentMappings
       : JSON.stringify({ CASH: 1, PIX: 2, CREDIT_CARD: 3, DEBIT_CARD: 4 }, null, 2)
   );
   const [copied, setCopied] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    setEnvironment(f.environment     ?? "HOMOLOGATION");
-    setApiKey("");
-    setIdPartner(f.idPartner         ?? "");
-    setCodStore(f.codStore           ?? "");
+    setEnvironment(f.environment    ?? "HOMOLOGATION");
+    setApiKey(""); // NEVER populate with secret value or preview
+    setIdPartner(f.idPartner        ?? "");
+    setCodStore(f.codStore          ?? "");
     setAutoSendOrders((f.autoSendOrders ?? "true") === "true");
-    setSyncCatalog((f.syncCatalog    ?? "false") === "true");
+    setSyncCatalog((f.syncCatalog   ?? "false") === "true");
     setPaymentMappings(
       f.paymentMappings && f.paymentMappings !== "{}"
         ? f.paymentMappings
         : JSON.stringify({ CASH: 1, PIX: 2, CREDIT_CARD: 3, DEBIT_CARD: 4 }, null, 2)
     );
+    setErrors({});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view?.provider]);
 
@@ -704,14 +708,46 @@ function SaiposForm({
     });
   };
 
+  function validate(): boolean {
+    const e: Record<string, string> = {};
+    if (!idPartner.trim())
+      e.idPartner = "ID do parceiro obrigatório.";
+    else if (idPartner.includes("@"))
+      e.idPartner = "ID do parceiro não deve ser um endereço de e-mail.";
+    if (!codStore.trim())
+      e.codStore = "Código do estabelecimento obrigatório.";
+    else if (!/^\d+$/.test(codStore.trim()))
+      e.codStore = "Código do estabelecimento deve conter apenas números.";
+    // Secret only required on first configuration (no existing secret stored)
+    if (!existingSecretPreview && !apiKey.trim())
+      e.apiKey = "Secret obrigatório na primeira configuração.";
+    try { JSON.parse(paymentMappings); } catch {
+      e.paymentMappings = "JSON inválido no mapeamento de pagamentos.";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    onSave({
+      environment,
+      apiKey:          apiKey.trim(), // empty string → backend keeps existing encrypted secret
+      idPartner:       idPartner.trim(),
+      codStore:        codStore.trim(),
+      autoSendOrders,
+      syncCatalog,
+      paymentMappings,
+    });
+  };
+
+  const inputCls = "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition";
+  const errCls   = "mt-1 text-xs text-red-500";
+
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSave({ environment, apiKey, idPartner, codStore, autoSendOrders, syncCatalog, paymentMappings });
-      }}
-      className="space-y-4"
-    >
+    <form onSubmit={handleSubmit} className="w-full min-w-0 space-y-4 overflow-hidden">
+
       <SelectField
         label="Ambiente"
         name="environment"
@@ -723,32 +759,57 @@ function SaiposForm({
         onChange={setEnvironment}
       />
 
-      <TextField
-        label="ID do parceiro (idPartner)"
-        name="idPartner"
-        placeholder="Ex: 1234"
-        hint="Fornecido pela equipe Saipos no cadastro do parceiro."
-        value={idPartner}
-        onChange={setIdPartner}
-      />
+      {/* ID do parceiro */}
+      <div>
+        <TextField
+          label="ID do parceiro (idPartner)"
+          name="idPartner"
+          placeholder="Ex: 49f2fe58c6c5de7cf2b43c741d08b374"
+          hint="Fornecido pela equipe Saipos no cadastro do parceiro."
+          value={idPartner}
+          onChange={(v) => { setIdPartner(v); setErrors((p) => ({ ...p, idPartner: "" })); }}
+        />
+        {errors.idPartner && <p className={errCls}>{errors.idPartner}</p>}
+      </div>
 
-      <TextField
-        label="Código do estabelecimento (cod_store)"
-        name="codStore"
-        placeholder="Ex: 9876"
-        hint="Código do seu restaurante na plataforma Saipos."
-        value={codStore}
-        onChange={setCodStore}
-      />
+      {/* Código do estabelecimento */}
+      <div>
+        <TextField
+          label="Código do estabelecimento (cod_store)"
+          name="codStore"
+          placeholder="Ex: 87877"
+          hint="Código numérico do seu restaurante na plataforma Saipos."
+          value={codStore}
+          onChange={(v) => { setCodStore(v); setErrors((p) => ({ ...p, codStore: "" })); }}
+        />
+        {errors.codStore && <p className={errCls}>{errors.codStore}</p>}
+      </div>
 
-      <SecretField
-        label="API Key (chave do parceiro)"
-        name="apiKey"
-        placeholder={f.apiKeyPreview ? `Atual: ${f.apiKeyPreview} — deixe em branco para manter` : "Cole sua API Key Saipos"}
-        hint="Deixe em branco para manter a chave atual."
-        value={apiKey}
-        onChange={setApiKey}
-      />
+      {/* Secret — input is ALWAYS empty on load; preview shown as a separate label */}
+      <div>
+        <p className="mb-1 text-sm font-medium text-gray-700">
+          Secret / Senha de acesso à API Saipos
+        </p>
+        {existingSecretPreview && (
+          <p className="mb-1.5 text-xs text-gray-500">
+            Secret atual salva:{" "}
+            <span className="font-mono font-semibold text-gray-700">{existingSecretPreview}</span>
+          </p>
+        )}
+        <input
+          type="password"
+          name="saiposSecret"
+          placeholder="Cole a nova senha"
+          value={apiKey}
+          autoComplete="new-password"
+          onChange={(e) => { setApiKey(e.target.value); setErrors((p) => ({ ...p, apiKey: "" })); }}
+          className={inputCls}
+        />
+        <p className="mt-1 text-xs text-gray-400">
+          Cole aqui a Senha para acesso à API da integração Saipos. Deixe em branco para manter a atual.
+        </p>
+        {errors.apiKey && <p className={errCls}>{errors.apiKey}</p>}
+      </div>
 
       <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
         <p className="text-xs font-semibold text-gray-700">Comportamento</p>
@@ -768,28 +829,35 @@ function SaiposForm({
         />
       </div>
 
-      <div>
+      {/* Payment mappings — max-w-full prevents textarea from forcing modal width */}
+      <div className="min-w-0">
         <label className="mb-1.5 block text-sm font-medium text-gray-700">
           Mapeamento de pagamentos
           <span className="ml-1 font-normal text-gray-400">(JSON)</span>
         </label>
         <textarea
           value={paymentMappings}
-          onChange={(e) => setPaymentMappings(e.target.value)}
+          onChange={(e) => {
+            setPaymentMappings(e.target.value);
+            setErrors((p) => ({ ...p, paymentMappings: "" }));
+          }}
           rows={5}
           spellCheck={false}
-          className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 font-mono text-xs text-gray-800 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition"
+          className="w-full max-w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 font-mono text-xs text-gray-800 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition"
         />
-        <p className="mt-1 text-xs text-gray-400">
-          Mapeie cada método Foocci (CASH, PIX, CREDIT_CARD, DEBIT_CARD…) ao código numérico do PDV Saipos.
-        </p>
+        {errors.paymentMappings
+          ? <p className={errCls}>{errors.paymentMappings}</p>
+          : <p className="mt-1 text-xs text-gray-400">
+              Mapeie cada método Foocci (CASH, PIX, CREDIT_CARD, DEBIT_CARD…) ao código numérico do PDV Saipos.
+            </p>
+        }
       </div>
 
-      {/* Webhook URL (read-only) */}
-      <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
+      {/* Webhook URL — min-w-0 on flex container prevents URL from forcing overflow */}
+      <div className="min-w-0 overflow-hidden rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
         <p className="text-xs font-medium text-violet-800">URL do webhook para configurar no Saipos:</p>
-        <div className="mt-1.5 flex items-center gap-2">
-          <p className="flex-1 break-all font-mono text-xs text-violet-700">{webhookUrl}</p>
+        <div className="mt-1.5 flex min-w-0 items-start gap-2">
+          <p className="min-w-0 flex-1 break-all font-mono text-xs text-violet-700">{webhookUrl}</p>
           <button
             type="button"
             onClick={handleCopy}
@@ -802,9 +870,9 @@ function SaiposForm({
 
       <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
         <p className="text-xs font-medium text-amber-800">Códigos de integração nos produtos</p>
-        <p className="mt-1 text-xs text-amber-700">
-          Para cada produto no cardápio, preencha o campo <strong>Código Saipos</strong> com o código PDV
-          correspondente (campo <code>saiposIntegrationCode</code>). Sem esse código, o item é enviado
+        <p className="mt-1 text-xs text-amber-700 break-words">
+          Para cada produto no cardápio, preencha o campo <strong>Código Saipos</strong> com o código
+          PDV correspondente (<code>saiposIntegrationCode</code>). Sem esse código, o item é enviado
           sem referência PDV e pode não ser reconhecido no caixa.
         </p>
       </div>
@@ -913,7 +981,7 @@ function DetailPanel({
         </div>
 
         {/* Scroll body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+        <div className="flex-1 overflow-x-hidden overflow-y-auto px-5 py-5 space-y-6">
 
           {/* Status summary */}
           {(lastTested || view?.lastError) && (
