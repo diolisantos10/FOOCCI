@@ -16,6 +16,7 @@ import type {
   UpdateRestaurantInput,
 } from "@/validators/restaurant";
 import type { Restaurant, User } from "@prisma/client";
+import { RestaurantDefaultsService } from "./RestaurantDefaultsService";
 
 export type RestaurantWithOwner = {
   restaurant: Restaurant;
@@ -72,6 +73,12 @@ export class RestaurantService {
     });
 
     const { password: _pwd, ...ownerWithoutPassword } = result.owner;
+
+    // Fire-and-forget: create default configs after registration.
+    // Non-blocking so the registration response is not delayed by defaults creation.
+    RestaurantDefaultsService.createRestaurantDefaults(result.restaurant.id).catch((e) =>
+      console.error("[RestaurantService.register] createRestaurantDefaults failed:", e)
+    );
 
     return serviceOk({
       restaurant: result.restaurant,

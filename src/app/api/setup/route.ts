@@ -20,6 +20,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { hash } from "bcryptjs";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { RestaurantDefaultsService } from "@/services/restaurant/RestaurantDefaultsService";
 
 const setupSchema = z.object({
   restaurantName: z.string().min(2).max(100),
@@ -122,6 +123,11 @@ export async function POST(req: NextRequest) {
         { status: 403 }
       );
     }
+
+    // Fire-and-forget: create default configs for the new restaurant.
+    RestaurantDefaultsService.createRestaurantDefaults(result.restaurant.id).catch((e) =>
+      console.error("[POST /api/setup] createRestaurantDefaults failed:", e)
+    );
 
     const { password: _pwd, ...ownerWithoutPassword } = result.owner;
 
