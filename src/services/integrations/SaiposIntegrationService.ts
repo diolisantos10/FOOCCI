@@ -142,20 +142,56 @@ export class SaiposIntegrationService {
   // ── Auth ────────────────────────────────────────────────────────────────────
 
   static async getAuthToken(raw: SaiposRaw): Promise<string> {
-    const base = apiBase(raw.environment);
-    const res = await fetch(`${base}/auth`, {
+    const base    = apiBase(raw.environment);
+    const authUrl = `${base}/auth`;
+
+    // Safe credential diagnostics — never log secret values, only metadata
+    console.log(
+      `[saipos/auth] url=${authUrl}` +
+      ` bodyKeys=["idPartner","secret"]` +
+      ` idPartnerExists=${Boolean(raw.idPartner)}` +
+      ` idPartnerLen=${raw.idPartner?.length ?? 0}` +
+      ` idPartnerPreview=${raw.idPartner ? `${raw.idPartner.slice(0, 4)}...${raw.idPartner.slice(-4)}` : "(empty)"}` +
+      ` secretExists=${Boolean(raw.apiKey)}` +
+      ` secretLen=${raw.apiKey?.length ?? 0}` +
+      ` codStore=${raw.codStore}`
+    );
+
+    const res = await fetch(authUrl, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ id_partner: raw.idPartner, key: raw.apiKey }),
+      body:    JSON.stringify({ idPartner: raw.idPartner, secret: raw.apiKey }),
       signal:  AbortSignal.timeout(10_000),
     });
 
+    const responseText = await res.text().catch(() => "");
+
+    // Parse structured error details if available
+    let errorCode: string | number | undefined;
+    let errorMessage: string | undefined;
+    try {
+      const parsed = JSON.parse(responseText) as Record<string, unknown>;
+      errorCode   = (parsed.code ?? parsed.error_code ?? parsed.errorCode) as string | number | undefined;
+      errorMessage = (parsed.message ?? parsed.error ?? parsed.mensagem) as string | undefined;
+    } catch { /* response is not JSON */ }
+
+    console.log(
+      `[saipos/auth] responseStatus=${res.status}` +
+      (errorCode    !== undefined ? ` errorCode=${errorCode}`                   : "") +
+      (errorMessage               ? ` errorMessage=${errorMessage.slice(0, 200)}` : "")
+    );
+
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Saipos auth failed (HTTP ${res.status}): ${text.slice(0, 200)}`);
+      throw new Error(`Saipos auth failed (HTTP ${res.status}): ${responseText.slice(0, 200)}`);
     }
 
-    const data = await res.json() as SaiposAuthResponse;
+    let data: SaiposAuthResponse;
+    try {
+      data = JSON.parse(responseText) as SaiposAuthResponse;
+    } catch {
+      throw new Error(`Saipos auth returned non-JSON: ${responseText.slice(0, 100)}`);
+    }
+
     if (!data.token) throw new Error("Saipos auth response missing token");
     return data.token;
   }
