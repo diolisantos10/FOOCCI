@@ -19,12 +19,14 @@ import { encrypt, decrypt, maskSecret } from "@/lib/crypto";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
+import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
 import type {
   IntegrationProvider,
   StoneConfigInput,
   MercadoPagoConfigInput,
   TiposConfigInput,
   OpenAIConfigInput,
+  SaiposConfigInput,
 } from "@/validators/integrations";
 
 // ── Public view type (safe for API responses) ─────────────────────────────────
@@ -50,8 +52,17 @@ interface StoneRaw   { environment: string; clientId: string; clientSecret: stri
 interface MpRaw      { environment: string; accessToken: string }
 interface TiposRaw   { baseUrl: string; apiKey: string; accountId?: string }
 interface OpenAIRaw  { apiKey: string }
+interface SaiposRaw  {
+  environment:     string;
+  apiKey:          string;
+  idPartner:       string;
+  codStore:        string;
+  autoSendOrders:  boolean;
+  syncCatalog:     boolean;
+  paymentMappings: Record<string, number>;
+}
 
-type AnyRaw = StoneRaw | MpRaw | TiposRaw | OpenAIRaw;
+type AnyRaw = StoneRaw | MpRaw | TiposRaw | OpenAIRaw | SaiposRaw;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -85,6 +96,18 @@ function maskView(raw: AnyRaw, provider: IntegrationProvider): Record<string, st
       baseUrl:       r.baseUrl,
       apiKeyPreview: maskSecret(r.apiKey),
       accountId:     r.accountId ?? null,
+    };
+  }
+  if (provider === "saipos") {
+    const r = raw as SaiposRaw;
+    return {
+      environment:      r.environment,
+      apiKeyPreview:    maskSecret(r.apiKey),
+      idPartner:        r.idPartner,
+      codStore:         r.codStore,
+      autoSendOrders:   String(r.autoSendOrders),
+      syncCatalog:      String(r.syncCatalog),
+      paymentMappings:  JSON.stringify(r.paymentMappings ?? {}),
     };
   }
   // openai
@@ -146,7 +169,7 @@ export class IntegrationService {
 
     // Ensure all known providers appear, even if not yet configured
     const configuredProviders = new Set(otherViews.map((v) => v.provider));
-    const unconfigured: IntegrationView[] = (["stone", "mercadopago", "tipos", "openai"] as IntegrationProvider[])
+    const unconfigured: IntegrationView[] = (["stone", "mercadopago", "tipos", "openai", "saipos"] as IntegrationProvider[])
       .filter((p) => !configuredProviders.has(p))
       .map((p) => ({
         provider:     p,
@@ -205,7 +228,7 @@ export class IntegrationService {
   static async upsert(
     provider: IntegrationProvider,
     restaurantId: string,
-    input: StoneConfigInput | MercadoPagoConfigInput | TiposConfigInput | OpenAIConfigInput
+    input: StoneConfigInput | MercadoPagoConfigInput | TiposConfigInput | OpenAIConfigInput | SaiposConfigInput
   ): Promise<ServiceResult<IntegrationView>> {
     // Load existing decrypted config to preserve secrets if empty strings sent
     let existingRaw: AnyRaw | null = null;
@@ -240,6 +263,22 @@ export class IntegrationService {
         baseUrl:   inp.baseUrl,
         apiKey:    inp.apiKey || old?.apiKey || "",
         accountId: inp.accountId,
+      };
+    } else if (provider === "saipos") {
+      const inp = input as SaiposConfigInput;
+      const old = existingRaw as SaiposRaw | null;
+      let paymentMappings: Record<string, number> = old?.paymentMappings ?? {};
+      if (inp.paymentMappings) {
+        try { paymentMappings = JSON.parse(inp.paymentMappings); } catch { /* keep existing */ }
+      }
+      newRaw = {
+        environment:    inp.environment,
+        apiKey:         (inp.apiKey as string) || old?.apiKey || "",
+        idPartner:      inp.idPartner,
+        codStore:       inp.codStore,
+        autoSendOrders: Boolean(inp.autoSendOrders),
+        syncCatalog:    Boolean(inp.syncCatalog),
+        paymentMappings,
       };
     } else {
       // openai
@@ -305,6 +344,7 @@ export class IntegrationService {
       if (provider === "stone")            result = await IntegrationService._testStone(raw as StoneRaw);
       else if (provider === "mercadopago") result = await IntegrationService._testMercadoPago(raw as MpRaw);
       else if (provider === "tipos")       result = await IntegrationService._testTipos(raw as TiposRaw);
+      else if (provider === "saipos")      result = await IntegrationService._testSaipos(restaurantId);
       else                                 result = await IntegrationService._testOpenAI(raw as OpenAIRaw);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
@@ -412,6 +452,11 @@ export class IntegrationService {
     } catch {
       return { success: false, message: "Não foi possível alcançar a OpenAI. Verifique sua conexão." };
     }
+  }
+
+  private static async _testSaipos(restaurantId: string): Promise<TestResult> {
+    const result = await SaiposIntegrationService.testConnection(restaurantId);
+    return result;
   }
 
   private static async _testTipos(raw: TiposRaw): Promise<TestResult> {

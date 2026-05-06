@@ -20,7 +20,7 @@ interface TestResult {
   message: string;
 }
 
-type Provider = "whatsapp" | "stone" | "mercadopago" | "tipos" | "openai";
+type Provider = "whatsapp" | "stone" | "mercadopago" | "tipos" | "openai" | "saipos";
 
 // ── Integration metadata (display config) ─────────────────────────────────────
 
@@ -65,6 +65,13 @@ const INTEGRATIONS: {
     description: "Motor de IA dos agentes Foocci — GPT-4o para atendimento e vendas automáticas.",
     icon:        "🤖",
     color:       "bg-[#10a37f]",
+  },
+  {
+    provider:    "saipos",
+    name:        "Saipos",
+    description: "PDV e gestão de pedidos — envio automático de pedidos ao caixa e atualizações de status em tempo real.",
+    icon:        "🖥️",
+    color:       "bg-violet-600",
   },
 ];
 
@@ -340,7 +347,7 @@ function WhatsAppForm({
 }: {
   view: IntegrationView | null;
   saving: boolean;
-  onSave: (data: Record<string, string>) => void;
+  onSave: (data: Record<string, unknown>) => void;
 }) {
   const f = view?.fields ?? {};
   const [instanceName, setInstanceName] = useState(f.instanceName ?? "");
@@ -415,7 +422,7 @@ function StoneForm({
 }: {
   view: IntegrationView | null;
   saving: boolean;
-  onSave: (data: Record<string, string>) => void;
+  onSave: (data: Record<string, unknown>) => void;
 }) {
   const f = view?.fields ?? {};
   const [environment, setEnvironment] = useState(f.environment ?? "sandbox");
@@ -474,7 +481,7 @@ function MercadoPagoForm({
 }: {
   view: IntegrationView | null;
   saving: boolean;
-  onSave: (data: Record<string, string>) => void;
+  onSave: (data: Record<string, unknown>) => void;
 }) {
   const f = view?.fields ?? {};
   const [environment, setEnvironment] = useState(f.environment ?? "test");
@@ -524,7 +531,7 @@ function TiposForm({
 }: {
   view: IntegrationView | null;
   saving: boolean;
-  onSave: (data: Record<string, string>) => void;
+  onSave: (data: Record<string, unknown>) => void;
 }) {
   const f = view?.fields ?? {};
   const [baseUrl, setBaseUrl]     = useState(f.baseUrl ?? "");
@@ -626,6 +633,192 @@ function OpenAIForm({
   );
 }
 
+function CheckboxField({
+  label, hint, name, checked, onChange,
+}: {
+  label: string; hint?: string; name: string;
+  checked: boolean; onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <input
+        id={name}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-violet-600"
+      />
+      <div>
+        <label htmlFor={name} className="text-sm font-medium text-gray-700 cursor-pointer">{label}</label>
+        {hint && <p className="mt-0.5 text-xs text-gray-400">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
+function SaiposForm({
+  view, saving, onSave,
+}: {
+  view: IntegrationView | null;
+  saving: boolean;
+  onSave: (data: Record<string, unknown>) => void;
+}) {
+  const f = view?.fields ?? {};
+
+  const [environment,     setEnvironment]     = useState(f.environment     ?? "HOMOLOGATION");
+  const [apiKey,          setApiKey]          = useState("");
+  const [idPartner,       setIdPartner]       = useState(f.idPartner       ?? "");
+  const [codStore,        setCodStore]        = useState(f.codStore        ?? "");
+  const [autoSendOrders,  setAutoSendOrders]  = useState((f.autoSendOrders ?? "true") === "true");
+  const [syncCatalog,     setSyncCatalog]     = useState((f.syncCatalog    ?? "false") === "true");
+  const [paymentMappings, setPaymentMappings] = useState(
+    f.paymentMappings && f.paymentMappings !== "{}"
+      ? f.paymentMappings
+      : JSON.stringify({ CASH: 1, PIX: 2, CREDIT_CARD: 3, DEBIT_CARD: 4 }, null, 2)
+  );
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setEnvironment(f.environment     ?? "HOMOLOGATION");
+    setApiKey("");
+    setIdPartner(f.idPartner         ?? "");
+    setCodStore(f.codStore           ?? "");
+    setAutoSendOrders((f.autoSendOrders ?? "true") === "true");
+    setSyncCatalog((f.syncCatalog    ?? "false") === "true");
+    setPaymentMappings(
+      f.paymentMappings && f.paymentMappings !== "{}"
+        ? f.paymentMappings
+        : JSON.stringify({ CASH: 1, PIX: 2, CREDIT_CARD: 3, DEBIT_CARD: 4 }, null, 2)
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view?.provider]);
+
+  const webhookUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/api/integrations/saipos/webhook`
+    : "/api/integrations/saipos/webhook";
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(webhookUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({ environment, apiKey, idPartner, codStore, autoSendOrders, syncCatalog, paymentMappings });
+      }}
+      className="space-y-4"
+    >
+      <SelectField
+        label="Ambiente"
+        name="environment"
+        value={environment}
+        options={[
+          { value: "HOMOLOGATION", label: "Homologação (teste)" },
+          { value: "PRODUCTION",   label: "Produção" },
+        ]}
+        onChange={setEnvironment}
+      />
+
+      <TextField
+        label="ID do parceiro (idPartner)"
+        name="idPartner"
+        placeholder="Ex: 1234"
+        hint="Fornecido pela equipe Saipos no cadastro do parceiro."
+        value={idPartner}
+        onChange={setIdPartner}
+      />
+
+      <TextField
+        label="Código do estabelecimento (cod_store)"
+        name="codStore"
+        placeholder="Ex: 9876"
+        hint="Código do seu restaurante na plataforma Saipos."
+        value={codStore}
+        onChange={setCodStore}
+      />
+
+      <SecretField
+        label="API Key (chave do parceiro)"
+        name="apiKey"
+        placeholder={f.apiKeyPreview ? `Atual: ${f.apiKeyPreview} — deixe em branco para manter` : "Cole sua API Key Saipos"}
+        hint="Deixe em branco para manter a chave atual."
+        value={apiKey}
+        onChange={setApiKey}
+      />
+
+      <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+        <p className="text-xs font-semibold text-gray-700">Comportamento</p>
+        <CheckboxField
+          label="Enviar pedidos automaticamente"
+          name="autoSendOrders"
+          checked={autoSendOrders}
+          onChange={setAutoSendOrders}
+          hint="Quando ativo, cada pedido confirmado é enviado ao Saipos automaticamente."
+        />
+        <CheckboxField
+          label="Sincronizar cardápio"
+          name="syncCatalog"
+          checked={syncCatalog}
+          onChange={setSyncCatalog}
+          hint="Em breve — sincronização do cardápio Foocci com o catálogo Saipos."
+        />
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Mapeamento de pagamentos
+          <span className="ml-1 font-normal text-gray-400">(JSON)</span>
+        </label>
+        <textarea
+          value={paymentMappings}
+          onChange={(e) => setPaymentMappings(e.target.value)}
+          rows={5}
+          spellCheck={false}
+          className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 font-mono text-xs text-gray-800 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition"
+        />
+        <p className="mt-1 text-xs text-gray-400">
+          Mapeie cada método Foocci (CASH, PIX, CREDIT_CARD, DEBIT_CARD…) ao código numérico do PDV Saipos.
+        </p>
+      </div>
+
+      {/* Webhook URL (read-only) */}
+      <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
+        <p className="text-xs font-medium text-violet-800">URL do webhook para configurar no Saipos:</p>
+        <div className="mt-1.5 flex items-center gap-2">
+          <p className="flex-1 break-all font-mono text-xs text-violet-700">{webhookUrl}</p>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="shrink-0 rounded-lg border border-violet-200 bg-white px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-50 transition"
+          >
+            {copied ? "Copiado!" : "Copiar"}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+        <p className="text-xs font-medium text-amber-800">Códigos de integração nos produtos</p>
+        <p className="mt-1 text-xs text-amber-700">
+          Para cada produto no cardápio, preencha o campo <strong>Código Saipos</strong> com o código PDV
+          correspondente (campo <code>saiposIntegrationCode</code>). Sem esse código, o item é enviado
+          sem referência PDV e pode não ser reconhecido no caixa.
+        </p>
+      </div>
+
+      <div className="flex justify-end pt-1">
+        <button type="submit" disabled={saving}
+          className="rounded-xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50 transition">
+          {saving ? "Salvando…" : "Salvar"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── Detail panel ──────────────────────────────────────────────────────────────
 
 function DetailPanel({
@@ -651,13 +844,13 @@ function DetailPanel({
 
   const clearFeedback = () => { setFeedback(null); setTestResult(null); };
 
-  const handleSave = async (data: Record<string, string>) => {
+  const handleSave = async (data: Record<string, unknown>) => {
     setSaving(true);
     clearFeedback();
     const { ok, data: res } = await apiFetch(
       `/api/integrations/${provider}`,
       "PUT",
-      data
+      data as object
     );
     setSaving(false);
     if (ok) {
@@ -771,6 +964,7 @@ function DetailPanel({
               {provider === "mercadopago" && <MercadoPagoForm view={view} saving={saving} onSave={handleSave} />}
               {provider === "tipos"       && <TiposForm       view={view} saving={saving} onSave={handleSave} />}
               {provider === "openai"      && <OpenAIForm      view={view} saving={saving} onSave={handleSave} />}
+              {provider === "saipos"      && <SaiposForm      view={view} saving={saving} onSave={handleSave} />}
             </div>
           ) : (
             <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">

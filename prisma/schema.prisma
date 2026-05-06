@@ -217,6 +217,8 @@ model MenuItem {
   harmonizacaoSugerida String?  // item ID or name to suggest at checkout if category missing from cart
   alergenosDetalhados  String?  // comma-separated allergen list (glúten, lactose, frutos do mar…)
   storytellingIA       String?  // curated narrative to use when customer asks "what makes it special"
+  // ── Saipos POS integration ────────────────────────────────────────────
+  saiposIntegrationCode String? // codigo_saipos — PDV code sent as integration_code in Saipos orders
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -239,6 +241,7 @@ model MenuItemVariant {
   portion     String?                    // e.g. "300g", "500ml"
   isAvailable Boolean  @default(true)
   sortOrder   Int      @default(0)
+  saiposIntegrationCode String?          // PDV code for this variant
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -333,6 +336,11 @@ model Order {
   cancelledAt       DateTime?
   idempotencyKey    String?     @unique
   crmSyncedAt       DateTime?   // set once customer metrics have been counted for this order
+  // ── Saipos POS integration fields ────────────────────────────────────
+  saiposSentAt      DateTime?   // when the order was successfully sent to Saipos
+  saiposOrderId     String?     // Saipos internal order reference (from their response)
+  saiposStatus      String?     // latest status received from Saipos webhook
+  saiposError       String?     // last error message if send failed
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
@@ -839,6 +847,7 @@ model MenuItemExtra {
   price       Decimal  @db.Decimal(10, 2)
   portion     String?                    // e.g. "100g", "50ml", "1 porção"
   isAvailable Boolean  @default(true)
+  saiposIntegrationCode String?          // PDV code for this extra/add-on
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -878,6 +887,7 @@ model OptionGroupItem {
   portion     String?                    // e.g. "50g"
   isAvailable Boolean  @default(true)
   sortOrder   Int      @default(0)
+  saiposIntegrationCode String?          // PDV code sent as choice_items[].integration_code
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

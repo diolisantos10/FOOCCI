@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, ServiceResult, PaginatedResult } from "@/types";
 import type { UpdateOrderStatusInput, OrderListQuery } from "@/validators/order";
 import type { Order, OrderItem, Payment, OrderStatus } from "@prisma/client";
+import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
 
 export type OrderWithDetails = Order & {
   items: OrderItem[];
@@ -160,6 +161,14 @@ export class OrderService {
         ...(input.status === "CANCELLED" && { cancelledAt: now }),
       },
     });
+
+    // Fire-and-forget: send to Saipos when order is confirmed.
+    // maybeSendOrder checks integration enabled + idempotency guard internally.
+    if (input.status === "CONFIRMED") {
+      SaiposIntegrationService.maybeSendOrder(restaurantId, orderId).catch((e) =>
+        console.error("[saipos] updateStatus send failed:", e)
+      );
+    }
 
     return serviceOk(updated);
   }

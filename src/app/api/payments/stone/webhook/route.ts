@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyWebhookSignature } from "@/lib/stone";
 import { auditLog } from "@/lib/audit";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
+import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -104,6 +105,11 @@ export async function POST(req: NextRequest) {
   // Sync CRM metrics through the centralized service.
   // crmSyncedAt guards against double-counting on repeated webhooks.
   await CustomerMetricsSyncService.syncOrderToCustomerMetrics(payment.orderId, "stone_webhook");
+
+  // Fire-and-forget: forward confirmed order to Saipos if integration is active.
+  SaiposIntegrationService.maybeSendOrder(payment.order.restaurantId, payment.orderId).catch((e) =>
+    console.error("[saipos] stone-webhook send failed:", e)
+  );
 
   return NextResponse.json({ ok: true });
 }

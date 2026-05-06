@@ -12,7 +12,7 @@
 
 import { z } from "zod";
 
-export const VALID_PROVIDERS = ["stone", "mercadopago", "tipos", "openai"] as const;
+export const VALID_PROVIDERS = ["stone", "mercadopago", "tipos", "openai", "saipos"] as const;
 export type IntegrationProvider = (typeof VALID_PROVIDERS)[number];
 
 export function isValidProvider(v: string): v is IntegrationProvider {
@@ -56,6 +56,20 @@ export const openaiConfigSchema = z.object({
 
 export type OpenAIConfigInput = z.infer<typeof openaiConfigSchema>;
 
+// ── Saipos ────────────────────────────────────────────────────────────────────
+
+export const saiposConfigSchema = z.object({
+  environment:     z.enum(["HOMOLOGATION", "PRODUCTION"]),
+  apiKey:          z.string(),                             // empty = keep existing
+  idPartner:       z.string().min(1, "ID do parceiro obrigatório"),
+  codStore:        z.string().min(1, "Código do estabelecimento obrigatório"),
+  autoSendOrders:  z.union([z.boolean(), z.string().transform((v) => v === "true")]),
+  syncCatalog:     z.union([z.boolean(), z.string().transform((v) => v === "true")]),
+  paymentMappings: z.string().optional(), // JSON string: { "CASH": 1, "PIX": 2, ... }
+});
+
+export type SaiposConfigInput = z.infer<typeof saiposConfigSchema>;
+
 // ── Union dispatcher ──────────────────────────────────────────────────────────
 
 export function parseProviderConfig(provider: IntegrationProvider, body: unknown) {
@@ -64,5 +78,6 @@ export function parseProviderConfig(provider: IntegrationProvider, body: unknown
     case "mercadopago": return mercadopagoConfigSchema.safeParse(body);
     case "tipos":       return tiposConfigSchema.safeParse(body);
     case "openai":      return openaiConfigSchema.safeParse(body);
+    case "saipos":      return saiposConfigSchema.safeParse(body);
   }
 }
