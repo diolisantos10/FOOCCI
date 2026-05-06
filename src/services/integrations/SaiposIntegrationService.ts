@@ -54,6 +54,7 @@ export interface SaiposAuthDebug {
   codStore:             string;
   environment:          string;
   responseStatus:       number | null;
+  responseBodyKeys:     string[] | null; // keys present in the JSON response body
   responseErrorCode:    string | number | null;
   responseErrorMessage: string | null;
 }
@@ -132,6 +133,41 @@ function toCents(decimal: unknown): number {
   return Math.round(Number(decimal) * 100);
 }
 
+// Extracts error code + message from Saipos response bodies.
+// Checks top-level fields first, then nested under response.data (axios-style wrapping).
+// message returns null when nothing is found; callers apply their own fallback.
+function extractSaiposError(body: Record<string, unknown>): {
+  code:     string | number | null;
+  message:  string | null;
+  bodyKeys: string[];
+} {
+  const nested = body.data != null && typeof body.data === "object"
+    ? body.data as Record<string, unknown>
+    : null;
+
+  const code = (
+    body.errorCode    ??
+    body.code         ??
+    body.error_code   ??
+    nested?.errorCode ??
+    nested?.code      ??
+    nested?.error_code
+  ) as string | number | null ?? null;
+
+  const message = (
+    body.errorMessage    ??
+    body.message         ??
+    body.error           ??
+    body.mensagem        ??
+    nested?.errorMessage ??
+    nested?.message      ??
+    nested?.error        ??
+    nested?.mensagem
+  ) as string | null ?? null;
+
+  return { code, message, bodyKeys: Object.keys(body) };
+}
+
 function shortDisplayId(orderId: string): string {
   // Use last 6 chars of CUID as a short display reference, e.g. "#a1b2c3"
   return `#${orderId.slice(-6).toUpperCase()}`;
@@ -178,6 +214,7 @@ export class SaiposIntegrationService {
       codStore:             raw.codStore,
       environment:          raw.environment,
       responseStatus:       null,
+      responseBodyKeys:     null,
       responseErrorCode:    null,
       responseErrorMessage: null,
     };
@@ -201,15 +238,23 @@ export class SaiposIntegrationService {
       debug.responseStatus = res.status;
 
       try {
-        const parsed            = JSON.parse(text) as Record<string, unknown>;
-        debug.responseErrorCode    = (parsed.code ?? parsed.error_code ?? parsed.errorCode) as string | number | null ?? null;
-        debug.responseErrorMessage = (parsed.message ?? parsed.error ?? parsed.mensagem)    as string | null          ?? null;
-      } catch { /* text not JSON */ }
+        const parsed = JSON.parse(text) as Record<string, unknown>;
+        const { code, message, bodyKeys } = extractSaiposError(parsed);
+        debug.responseBodyKeys     = bodyKeys;
+        debug.responseErrorCode    = code;
+        debug.responseErrorMessage = message;
+      } catch { /* response body is not JSON */ }
+
+      // Apply fallback message only on error responses where no message was found
+      if (!res.ok && !debug.responseErrorMessage) {
+        debug.responseErrorMessage = "Mensagem de erro não retornada pela Saipos.";
+      }
 
       console.log(
         `[saipos/auth] responseStatus=${res.status}` +
-        (debug.responseErrorCode    !== null ? ` errorCode=${debug.responseErrorCode}`                      : "") +
-        (debug.responseErrorMessage          ? ` errorMessage=${debug.responseErrorMessage.slice(0, 200)}`  : "")
+        (debug.responseBodyKeys     ? ` bodyKeys=[${debug.responseBodyKeys.join(",")}]`             : "") +
+        (debug.responseErrorCode    !== null ? ` errorCode=${debug.responseErrorCode}`              : "") +
+        (debug.responseErrorMessage ? ` errorMessage=${debug.responseErrorMessage.slice(0, 200)}`   : "")
       );
 
       if (!res.ok) return { token: null, debug };

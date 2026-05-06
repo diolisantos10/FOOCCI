@@ -925,17 +925,20 @@ function SaiposForm({
 
 function SaiposAuthDebugPanel({ debug }: { debug: Record<string, unknown> }) {
   const rows: [string, string][] = [
-    ["Auth URL",       String(debug.authUrl ?? "—")],
-    ["Body keys",      Array.isArray(debug.requestBodyKeys)
+    ["Auth URL",        String(debug.authUrl ?? "—")],
+    ["Body keys",       Array.isArray(debug.requestBodyKeys)
       ? (debug.requestBodyKeys as string[]).join(", ")
       : String(debug.requestBodyKeys ?? "—")],
-    ["idPartner",      `exists=${debug.idPartnerExists}  len=${debug.idPartnerLength}  preview=${debug.idPartnerPreview}`],
-    ["secret",         `exists=${debug.secretExists}  len=${debug.secretLength}  preview=${debug.secretPreview}`],
-    ["cod_store",      String(debug.codStore ?? "—")],
-    ["environment",    String(debug.environment ?? "—")],
-    ["HTTP status",    String(debug.responseStatus ?? "—")],
-    ["Error code",     String(debug.responseErrorCode ?? "—")],
-    ["Error message",  String(debug.responseErrorMessage ?? "—")],
+    ["idPartner",       `exists=${debug.idPartnerExists}  len=${debug.idPartnerLength}  preview=${debug.idPartnerPreview}`],
+    ["secret",          `exists=${debug.secretExists}  len=${debug.secretLength}  preview=${debug.secretPreview}`],
+    ["cod_store",       String(debug.codStore ?? "—")],
+    ["environment",     String(debug.environment ?? "—")],
+    ["HTTP status",     String(debug.responseStatus ?? "—")],
+    ["Resp body keys",  Array.isArray(debug.responseBodyKeys)
+      ? (debug.responseBodyKeys as string[]).join(", ")
+      : "—"],
+    ["Error code",      String(debug.responseErrorCode ?? "—")],
+    ["Error message",   String(debug.responseErrorMessage ?? "—")],
   ];
 
   return (
