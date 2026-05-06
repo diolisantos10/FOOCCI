@@ -207,11 +207,11 @@ function ProductModal({
     <div className="fixed inset-0 z-50 bg-white flex flex-col sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm">
       {/* Desktop: centered card */}
       <div
-        className="w-full h-full flex flex-col sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white"
+        className="w-full h-full flex flex-col sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Image — square container, full photo visible */}
-        <div className="relative w-full shrink-0 bg-white" style={{ aspectRatio: "1 / 1" }}>
+        {/* Image — square-ish, capped at 50vh so content stays visible */}
+        <div className="relative w-full shrink-0 bg-white overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img

@@ -458,11 +458,11 @@ function ProductModal({
         if (Math.abs(dx) > 80 && Math.abs(dx) > dy * 1.5) onClose();
       }}
     >
-      {/* Card — full-screen on mobile, centered on desktop */}
-      <div className="w-full h-full flex flex-col sm:max-w-md sm:h-auto sm:max-h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white">
+      {/* Card — full-screen on mobile, 92vh centered on desktop */}
+      <div className="w-full h-full flex flex-col sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white">
 
-        {/* ── Image — square container, full photo visible ── */}
-        <div className="relative w-full shrink-0 bg-white" style={{ aspectRatio: "1 / 1" }}>
+        {/* ── Image — square-ish, capped at 50 vh so content stays visible ── */}
+        <div className="relative w-full shrink-0 bg-white overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
