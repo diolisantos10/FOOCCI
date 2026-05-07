@@ -4,6 +4,11 @@ import { useState, useEffect, useMemo } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 
+// Display name for the active manager/POS integration shown in order detail.
+// When Saipos is active this is "Saipos". Replace here (or derive from order data)
+// when another provider is introduced — no other file needs to change.
+const MANAGER_INTEGRATION_DISPLAY_NAME = "Saipos";
+
 // ─── Types ────────────────────────────────────────────────────
 
 type OrderStatus =
@@ -839,7 +844,13 @@ function StatusTimeline({ order }: { order: MockOrder }) {
 
 // ─── SaiposSection ────────────────────────────────────────────
 
-function SaiposSection({ order }: { order: MockOrder }) {
+function SaiposSection({
+  order,
+  managerIntegrationDisplayName = MANAGER_INTEGRATION_DISPLAY_NAME,
+}: {
+  order: MockOrder;
+  managerIntegrationDisplayName?: string;
+}) {
   const saiposStatus        = order.saiposStatus        ?? null;
   const saiposSentAt        = order.saiposSentAt        ?? null;
   const saiposError         = order.saiposError         ?? null;
@@ -850,26 +861,28 @@ function SaiposSection({ order }: { order: MockOrder }) {
   const hasSaiposData = saiposStatus || saiposSentAt || saiposLastAttemptAt;
   if (!hasSaiposData) return null;
 
+  const n = managerIntegrationDisplayName;
+
   const statusMessage = (() => {
     if (saiposSentAt) {
-      return { text: "Pedido enviado para a Saipos.", color: "text-green-700", bg: "bg-green-50 border-green-100" };
+      return { text: `Pedido enviado para a ${n}.`, color: "text-green-700", bg: "bg-green-50 border-green-100" };
     }
     if (saiposStatus === "PENDING_SAIPOS_VALIDATION") {
       return {
-        text: "Validação pendente na Saipos. O pedido foi criado no Foocci, mas ainda não pôde ser enviado para a Saipos porque a autenticação retornou errorCode 902.",
+        text: `Erro 902 — credenciais aguardando validação da ${n}. O pedido foi criado no Foocci, mas ainda não pôde ser enviado porque a autenticação retornou errorCode 902.`,
         color: "text-amber-700",
         bg: "bg-amber-50 border-amber-100",
       };
     }
     if (saiposStatus === "FAILED" || saiposStatus === "ORDER_SEND_FAILED") {
-      return { text: "Falha ao enviar pedido para a Saipos.", color: "text-red-700", bg: "bg-red-50 border-red-100" };
+      return { text: `Falha ao enviar pedido para a ${n}.`, color: "text-red-700", bg: "bg-red-50 border-red-100" };
     }
-    return { text: "Aguardando tentativa de envio para a Saipos.", color: "text-gray-500", bg: "bg-gray-50 border-gray-100" };
+    return { text: `Aguardando tentativa de envio para a ${n}.`, color: "text-gray-500", bg: "bg-gray-50 border-gray-100" };
   })();
 
   return (
     <div className="border-t border-dashed border-gray-200 pt-4">
-      <SectionLabel>Integração Saipos</SectionLabel>
+      <SectionLabel>Integração {n}</SectionLabel>
 
       <div className={`mb-3 rounded-lg border px-3 py-2 text-xs font-medium ${statusMessage.bg} ${statusMessage.color}`}>
         {statusMessage.text}
@@ -877,7 +890,7 @@ function SaiposSection({ order }: { order: MockOrder }) {
 
       <div className="space-y-1.5">
         {saiposStatus && (
-          <Row label="Status Saipos" value={saiposStatus} />
+          <Row label={`Status ${n}`} value={saiposStatus} />
         )}
         {saiposLastAttemptAt && (
           <Row label="Última tentativa" value={new Date(saiposLastAttemptAt).toLocaleString("pt-BR")} />
@@ -892,7 +905,7 @@ function SaiposSection({ order }: { order: MockOrder }) {
           <Row label="Enviado em" value={new Date(saiposSentAt).toLocaleString("pt-BR")} />
         )}
         {saiposOrderId && (
-          <Row label="ID externo Saipos" value={saiposOrderId} />
+          <Row label={`ID externo ${n}`} value={saiposOrderId} />
         )}
       </div>
 
