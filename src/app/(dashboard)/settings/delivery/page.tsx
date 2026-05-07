@@ -29,7 +29,7 @@ interface DeliveryZone {
 interface DeliveryFormState {
   enabled: boolean;
   pickupEnabled: boolean;
-  mode: "simple" | "advanced" | "distance";
+  mode: "simple" | "advanced" | "distance" | "manual";
   fee: string;
   estimatedMinutes: string;
   areaDescription: string;
@@ -88,7 +88,7 @@ function CoverageOverview({
   form,
   zones,
 }: {
-  mode: "simple" | "advanced" | "distance";
+  mode: "simple" | "advanced" | "distance" | "manual";
   form: DeliveryFormState;
   zones: DeliveryZone[];
 }) {
@@ -272,7 +272,7 @@ function CommercialSummary({
   form,
   zones,
 }: {
-  mode: "simple" | "advanced" | "distance";
+  mode: "simple" | "advanced" | "distance" | "manual";
   form: DeliveryFormState;
   zones: DeliveryZone[];
 }) {
@@ -381,6 +381,10 @@ function simulateDelivery(
 ): SimResult {
   if (!form.enabled) {
     return { allowed: false, blockedReason: "Delivery está desativado.", fee: 0, effectiveFee: 0, freeDeliveryApplied: false, minOrderBlocked: false };
+  }
+
+  if (form.mode === "manual") {
+    return { allowed: true, zoneName: "Frete manual", fee: 0, effectiveFee: 0, freeDeliveryApplied: false, minOrderBlocked: false };
   }
 
   const freeAbove = toNum(form.freeDeliveryAbove);
@@ -1078,7 +1082,7 @@ export default function DeliveryPage() {
                 title="Configuração de entrega"
                 subtitle="Escolha como deseja estruturar sua política de entrega."
               />
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <button
                   type="button"
                   onClick={() => setForm((f) => ({ ...f, mode: "simple" }))}
@@ -1119,6 +1123,20 @@ export default function DeliveryPage() {
                   <p className="text-sm font-semibold text-gray-900">Por distância</p>
                   <p className="mt-0.5 text-xs text-gray-500">
                     Taxa calculada com base nos km percorridos.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, mode: "manual" }))}
+                  className={`rounded-xl border p-4 text-left transition ${
+                    form.mode === "manual"
+                      ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300"
+                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-gray-900">Manual</p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    Frete combinado pelo restaurante a cada pedido.
                   </p>
                 </button>
               </div>
@@ -1359,6 +1377,23 @@ export default function DeliveryPage() {
                       placeholder="Ex: Entregamos em toda a cidade num raio de 10 km do restaurante."
                     />
                   </Field>
+                </div>
+              </PageCard>
+            )}
+
+            {/* ── Manual mode ─────────────────────────────────────────────────── */}
+            {form.mode === "manual" && (
+              <PageCard>
+                <SectionHeading
+                  title="Frete manual"
+                  subtitle="O frete será combinado com o cliente após cada pedido."
+                />
+                <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <p className="font-semibold">Como funciona</p>
+                  <p className="mt-1 text-xs leading-relaxed">
+                    No checkout, o cliente verá <strong>&quot;Frete a combinar&quot;</strong>. Você entra em contato para confirmar o valor antes de aceitar o pedido.
+                    Ideal para áreas irregulares ou quando o frete varia por região.
+                  </p>
                 </div>
               </PageCard>
             )}

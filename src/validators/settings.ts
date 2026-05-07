@@ -20,7 +20,7 @@ export const upsertDeliverySchema = z.object({
   pickupEnabled:    z.boolean().default(true),
 
   // UI mode
-  mode:             z.enum(["simple", "advanced", "distance"]).default("simple"),
+  mode:             z.enum(["simple", "advanced", "distance", "manual"]).default("simple"),
 
   // Simple-mode flat config
   fee:              z.number().min(0).nullable().optional(),

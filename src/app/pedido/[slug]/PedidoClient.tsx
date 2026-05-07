@@ -105,8 +105,8 @@ type UIState = "idle" | "thinking";
 type Stage =
   | "BROWSE"
   | "DELIVERY_TYPE"
-  | "ADDRESS_INPUT"
-  | "ADDRESS_DETAILS"
+  | "CEP_INPUT"
+  | "ADDRESS_COMPLETE"
   | "ADDRESS_CONFIRM"
   | "ASK_NAME"
   | "PAYMENT"
@@ -119,10 +119,14 @@ type PaymentMode = "pay_now" | "pay_on_delivery" | "pay_on_pickup";
 type PaymentMethodSub = "card_machine" | "pix_in_person" | "cash";
 
 interface Address {
+  cep: string;
   street: string;
   number: string;
   neighborhood: string;
+  city: string;
+  state: string;
   complement: string;
+  referencePoint: string;
 }
 
 interface PromoBanner {
@@ -140,7 +144,9 @@ interface Props {
   knownCustomerPhone?: string | null;
   knownCustomerName?: string | null;
   knownCustomerId?: string | null;
-  knownDefaultAddress?: { street: string; number: string; neighborhood: string; complement: string } | null;
+  knownDefaultAddress?: { street: string; number: string; neighborhood: string; complement: string; cep?: string; city?: string; state?: string } | null;
+  deliveryFee?: number | null;
+  deliveryMode?: string;
   /** Instagram profile URL — shown as icon in ordering header if provided. */
   instagramUrl?: string | null;
   /** TikTok profile URL — shown as icon in ordering header if provided. */
@@ -240,20 +246,21 @@ function itemMinPrice(item: MenuItem): number {
 // the chat directly from client state — they never vary or hallucinate.
 
 const CHECKOUT_ENTRY_PROMPT: Partial<Record<Stage, string>> = {
-  DELIVERY_TYPE:   "Vai receber em casa ou prefere retirar? 👇",
-  ADDRESS_INPUT:   "Rua e número, por favor 👇",
-  ADDRESS_DETAILS: "Bairro (e complemento, se tiver) 👇",
-  ADDRESS_CONFIRM: "Endereço certo? Confirma para seguir 👇",
-  ASK_NAME:        "Como posso te chamar? 😊",
-  PAYMENT:         "Quer pagar agora ou na entrega? 👇",
-  PAYMENT_METHOD:  "Como prefere pagar? 👇",
-  REVIEW_ORDER:    "Quase pronto! Confere e confirma 👇",
+  DELIVERY_TYPE:    "Vai receber em casa ou prefere retirar? 👇",
+  CEP_INPUT:        "Qual é o seu CEP? 📍",
+  ADDRESS_COMPLETE: "Confirme o endereço de entrega 👇",
+  ADDRESS_CONFIRM:  "Endereço certo? Confirma para seguir 👇",
+  ASK_NAME:         "Como posso te chamar? 😊",
+  PAYMENT:          "Quer pagar agora ou na entrega? 👇",
+  PAYMENT_METHOD:   "Como prefere pagar? 👇",
+  REVIEW_ORDER:     "Quase pronto! Confere e confirma 👇",
 };
 
 function formatAddress(a: Address): string {
   const line1 = [a.street, a.number].filter(Boolean).join(", ");
   const line2 = [a.neighborhood, a.complement].filter(Boolean).join(" — ");
-  return [line1, line2].filter(Boolean).join(", ");
+  const line3 = [a.city, a.state].filter(Boolean).join("/");
+  return [line1, line2, line3].filter(Boolean).join(", ");
 }
 
 function resolvePaymentMethod(
@@ -284,8 +291,8 @@ function computeResumeStage(
 ): Stage {
   if (!deliveryMethod) return "DELIVERY_TYPE";
   if (deliveryMethod === "delivery") {
-    if (!address.street.trim())        return "ADDRESS_INPUT";
-    if (!address.neighborhood.trim())  return "ADDRESS_DETAILS";
+    if (!address.cep.trim())    return "CEP_INPUT";
+    if (!address.number.trim()) return "ADDRESS_COMPLETE";
   }
   if (!customerName.trim()) return "ASK_NAME";
   if (!paymentMode)         return "PAYMENT";
@@ -967,6 +974,79 @@ const PASSIVE_TRIGGER_MS   = 5_000;  // 5 s
 // After declining, how long before the prompt may appear again.
 const SILENT_COOLDOWN_MS   = 5 * 60 * 1000; // 5 min
 
+// ── Address complete panel ────────────────────────────────────────────────────
+// Shown after ViaCEP auto-fills street/neighborhood/city/state.
+// Customer fills: number (required), complement and referencePoint (optional).
+
+function AddressCompletePanel({
+  address,
+  onConfirm,
+  onEditCep,
+}: {
+  address: Address;
+  onConfirm: (number: string, complement: string, referencePoint: string) => void;
+  onEditCep: () => void;
+}) {
+  const [num, setNum] = useState("");
+  const [comp, setComp] = useState("");
+  const [ref, setRef] = useState("");
+
+  return (
+    <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
+      <div className="mb-3 rounded-lg bg-gray-50 px-3 py-2">
+        <p className="text-xs font-semibold text-gray-900">
+          {address.street || "Logradouro não encontrado"}
+        </p>
+        <p className="text-xs text-gray-500">
+          {[address.neighborhood, address.city, address.state].filter(Boolean).join(", ")}
+          {address.cep ? ` · ${address.cep}` : ""}
+        </p>
+        <button
+          type="button"
+          onClick={onEditCep}
+          className="mt-1 text-[10px] underline"
+          style={{ color: "var(--brand-primary)" }}
+        >
+          Alterar CEP
+        </button>
+      </div>
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={num}
+          onChange={(e) => setNum(e.target.value)}
+          placeholder="Número *"
+          autoFocus
+          className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <input
+          type="text"
+          value={comp}
+          onChange={(e) => setComp(e.target.value)}
+          placeholder="Complemento (apto, bloco…)"
+          className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <input
+          type="text"
+          value={ref}
+          onChange={(e) => setRef(e.target.value)}
+          placeholder="Ponto de referência (opcional)"
+          className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+      </div>
+      <button
+        type="button"
+        onClick={() => onConfirm(num, comp, ref)}
+        disabled={!num.trim()}
+        className="mt-3 w-full rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+        style={{ backgroundColor: "var(--brand-primary)" }}
+      >
+        Confirmar endereço
+      </button>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function PedidoClient({
@@ -976,6 +1056,7 @@ export function PedidoClient({
   instagramUrl = null, tiktokUrl = null,
   banners = [],
   brandPrimaryColor = null, brandSecondaryColor = null,
+  deliveryFee = null, deliveryMode = "simple",
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -1106,9 +1187,19 @@ export function PedidoClient({
 
   // ── Checkout data ─────────────────────────────────────────────────
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup" | null>(null);
-  const [address, setAddress] = useState<Address>(
-    knownDefaultAddress ?? { street: "", number: "", neighborhood: "", complement: "" }
-  );
+  const [address, setAddress] = useState<Address>({
+    cep:            knownDefaultAddress?.cep          ?? "",
+    street:         knownDefaultAddress?.street        ?? "",
+    number:         knownDefaultAddress?.number        ?? "",
+    neighborhood:   knownDefaultAddress?.neighborhood  ?? "",
+    city:           knownDefaultAddress?.city          ?? "",
+    state:          knownDefaultAddress?.state         ?? "",
+    complement:     knownDefaultAddress?.complement    ?? "",
+    referencePoint: "",
+  });
+  const [cepInputValue,  setCepInputValue]  = useState("");
+  const [cepLoading,     setCepLoading]     = useState(false);
+  const [cepError,       setCepError]       = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
   const [paymentMethodSub, setPaymentMethodSub] = useState<PaymentMethodSub | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -1721,42 +1812,64 @@ export function PedidoClient({
           pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
         }
       } else {
-        setStage("ADDRESS_INPUT");
+        setStage("CEP_INPUT");
         pushUserMessage("🛵 Entrega");
-        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_INPUT"]!);
+        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["CEP_INPUT"]!);
       }
     },
     [pushUserMessage, pushAssistantMessage, customerName],
   );
 
-  const handleAddressInput = useCallback(
-    (text: string) => {
-      pushUserMessage(text);
-      const { street, number } = parseStreetLine(text);
-      if (!street.trim()) {
-        pushAssistantMessage("Não entendi o endereço 😅 Me passa a rua e o número, ex: Rua das Flores, 123");
+  const handleCepLookup = useCallback(
+    async (rawCep: string) => {
+      const cleanCep = rawCep.replace(/\D/g, "");
+      if (cleanCep.length !== 8) {
+        setCepError("CEP inválido — use 8 dígitos.");
         return;
       }
-      setAddress((prev) => ({ ...prev, street, number }));
-      setStage("ADDRESS_DETAILS");
-      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_DETAILS"]!);
+      setCepLoading(true);
+      setCepError(null);
+      try {
+        const res  = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const data = await res.json() as { erro?: boolean; logradouro?: string; bairro?: string; localidade?: string; uf?: string };
+        if (!res.ok || data.erro) {
+          setCepError("CEP não encontrado. Verifique e tente novamente.");
+          return;
+        }
+        const formatted = cleanCep.slice(0, 5) + "-" + cleanCep.slice(5);
+        setAddress((prev) => ({
+          ...prev,
+          cep:          formatted,
+          street:       data.logradouro ?? "",
+          neighborhood: data.bairro     ?? "",
+          city:         data.localidade ?? "",
+          state:        data.uf         ?? "",
+        }));
+        pushUserMessage(`CEP ${formatted}`);
+        setStage("ADDRESS_COMPLETE");
+        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_COMPLETE"]!);
+      } catch {
+        setCepError("Erro ao buscar CEP. Verifique sua conexão e tente novamente.");
+      } finally {
+        setCepLoading(false);
+      }
     },
     [pushUserMessage, pushAssistantMessage],
   );
 
-  const handleAddressDetails = useCallback(
-    (text: string) => {
-      pushUserMessage(text);
-      const { neighborhood, complement } = parseNeighborhoodLine(text);
-      if (!neighborhood.trim()) {
-        pushAssistantMessage("Me falta o bairro 👇");
-        return;
-      }
-      setAddress((prev) => ({ ...prev, neighborhood, complement }));
+  const handleAddressComplete = useCallback(
+    (num: string, complement: string, referencePoint: string) => {
+      if (!num.trim()) return;
+      setAddress((prev) => ({
+        ...prev,
+        number:         num.trim(),
+        complement:     complement.trim(),
+        referencePoint: referencePoint.trim(),
+      }));
       setStage("ADDRESS_CONFIRM");
       pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_CONFIRM"]!);
     },
-    [pushUserMessage, pushAssistantMessage],
+    [pushAssistantMessage],
   );
 
   const handleAddressConfirm = useCallback(() => {
@@ -1892,8 +2005,6 @@ export function PedidoClient({
     }
 
     switch (stage) {
-      case "ADDRESS_INPUT":   handleAddressInput(text);   break;
-      case "ADDRESS_DETAILS": handleAddressDetails(text); break;
       case "ASK_NAME":        handleNameInput(text);      break;
       // Post-order: route to AFTER_CHECKOUT directive (logistics-only, no product suggestions)
       case "DONE":
@@ -1944,12 +2055,83 @@ export function PedidoClient({
       );
     }
 
+    if (stage === "CEP_INPUT") {
+      return (
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
+          <p className="mb-2 text-xs font-semibold text-gray-500">Qual é o seu CEP? 📍</p>
+          <div className="flex gap-2">
+            <input
+              type="tel"
+              inputMode="numeric"
+              value={cepInputValue}
+              onChange={(e) => {
+                let v = e.target.value.replace(/\D/g, "").slice(0, 8);
+                if (v.length > 5) v = v.slice(0, 5) + "-" + v.slice(5);
+                setCepInputValue(v);
+                setCepError(null);
+              }}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleCepLookup(cepInputValue); }}
+              placeholder="00000-000"
+              maxLength={9}
+              disabled={cepLoading}
+              autoFocus
+              className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:opacity-50"
+              style={{ "--tw-ring-color": "var(--brand-primary)" } as React.CSSProperties}
+            />
+            <button
+              type="button"
+              onClick={() => void handleCepLookup(cepInputValue)}
+              disabled={cepLoading || cepInputValue.replace(/\D/g, "").length < 8}
+              className="rounded-xl px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: "var(--brand-primary)" }}
+            >
+              {cepLoading ? "…" : "Buscar"}
+            </button>
+          </div>
+          {cepError && (
+            <p className="mt-2 text-xs text-red-600">{cepError}</p>
+          )}
+          <p className="mt-2 text-xs text-gray-400">
+            Não sabe o CEP?{" "}
+            <a
+              href="https://buscacepinter.correios.com.br/app/endereco/index.php"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              Consultar nos Correios
+            </a>
+          </p>
+        </div>
+      );
+    }
+
+    if (stage === "ADDRESS_COMPLETE") {
+      return (
+        <AddressCompletePanel
+          address={address}
+          onConfirm={handleAddressComplete}
+          onEditCep={() => {
+            setAddress((prev) => ({ ...prev, cep: "", street: "", neighborhood: "", city: "", state: "" }));
+            setCepInputValue(address.cep);
+            setStage("CEP_INPUT");
+          }}
+        />
+      );
+    }
+
     if (stage === "ADDRESS_CONFIRM") {
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
           <div className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
             <p className="font-semibold">{address.street}, {address.number}</p>
             <p>{address.neighborhood}{address.complement ? ` — ${address.complement}` : ""}</p>
+            {(address.city || address.state) && (
+              <p className="text-gray-500">{[address.city, address.state].filter(Boolean).join("/")} {address.cep ? `· ${address.cep}` : ""}</p>
+            )}
+            {address.referencePoint && (
+              <p className="text-gray-500">Ref: {address.referencePoint}</p>
+            )}
           </div>
           <div className="flex gap-2">
             <button
@@ -1963,8 +2145,9 @@ export function PedidoClient({
               onClick={() => {
                 // Explicit address edit — clear collected address so the user
                 // re-enters it from scratch (not auto-skipped by computeResumeStage).
-                setAddress({ street: "", number: "", neighborhood: "", complement: "" });
-                setStage("ADDRESS_INPUT");
+                setAddress({ cep: "", street: "", number: "", neighborhood: "", city: "", state: "", complement: "", referencePoint: "" });
+                setCepInputValue("");
+                setStage("CEP_INPUT");
               }}
               className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
             >
@@ -2019,7 +2202,10 @@ export function PedidoClient({
     }
 
     if (stage === "REVIEW_ORDER") {
-      const total  = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const isManualFee = deliveryMethod === "delivery" && deliveryMode === "manual";
+      const appliedFee  = deliveryMethod === "delivery" && !isManualFee ? (deliveryFee ?? 0) : 0;
+      const total       = subtotal + appliedFee;
       const pmLabel = resolvePaymentMethod(paymentMode, paymentMethodSub) ?? "—";
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
@@ -2035,9 +2221,23 @@ export function PedidoClient({
             ))}
           </div>
 
+          {/* Delivery fee row */}
+          {deliveryMethod === "delivery" && (
+            <div className="flex justify-between py-0.5 text-xs text-gray-600">
+              <span>Taxa de entrega</span>
+              <span>
+                {isManualFee
+                  ? "A combinar"
+                  : appliedFee === 0
+                  ? "Grátis"
+                  : `R$ ${appliedFee.toFixed(2).replace(".", ",")}`}
+              </span>
+            </div>
+          )}
+
           {/* Total */}
           <div className="flex justify-between border-t border-gray-100 pt-1.5 pb-2 text-sm font-bold text-gray-900">
-            <span>Total</span>
+            <span>Total{isManualFee ? " (+ frete)" : ""}</span>
             <span>R$ {total.toFixed(2).replace(".", ",")}</span>
           </div>
 
@@ -2131,12 +2331,8 @@ export function PedidoClient({
   // Text input is hidden during the two entry phases (identifying / choosing) —
   // those phases own the bottom control surface with their own dedicated panels.
   const showInput = (stage === "BROWSE" && entryPhase === "browsing")
-    || stage === "ADDRESS_INPUT"
-    || stage === "ADDRESS_DETAILS"
     || stage === "ASK_NAME";
   const inputPlaceholder =
-    stage === "ADDRESS_INPUT"   ? "Ex: Rua das Flores, 123" :
-    stage === "ADDRESS_DETAILS" ? "Ex: Vila Madalena, apto 42" :
     stage === "ASK_NAME"        ? "Seu nome…" :
     "Peça uma sugestão…";
 

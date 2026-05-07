@@ -44,7 +44,14 @@ export default async function PedidoPage({
   });
 
 
+
   if (!restaurant) notFound();
+
+  // ── Delivery config (fee + mode shown in checkout) ───────────────────────────
+  const deliveryConfig = await prisma.deliveryConfig.findUnique({
+    where: { restaurantId: restaurant.id },
+    select: { mode: true, fee: true, enabled: true },
+  });
 
   // ── Brand config (social links for ordering header) ──────────────────────────
   const brandConfig = await prisma.restaurantBrandConfig.findUnique({
@@ -222,6 +229,8 @@ export default async function PedidoPage({
       brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
       brandSecondaryColor={brandConfig?.brandSecondaryColor ?? null}
       banners={activeBanners}
+      deliveryMode={deliveryConfig?.mode ?? "simple"}
+      deliveryFee={deliveryConfig?.fee != null ? Number(deliveryConfig.fee) : null}
     />
   );
 }

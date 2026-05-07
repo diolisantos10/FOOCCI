@@ -10,8 +10,6 @@ export default function StorePage() {
     address: "",
     description: "",
     logoUrl: "",
-    instagram: "",
-    ifood: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,8 +25,6 @@ export default function StorePage() {
           address:     data.address      ?? "",
           description: data.description  ?? "",
           logoUrl:     data.logoUrl      ?? "",
-          instagram:   data.instagram    ?? "",
-          ifood:       data.ifood        ?? "",
         });
       setLoading(false);
     });
@@ -137,45 +133,6 @@ export default function StorePage() {
                 className="mt-3 h-16 w-16 rounded-2xl border border-gray-100 object-cover shadow-sm"
               />
             )}
-          </Field>
-        </div>
-      </PageCard>
-
-      {/* Social media */}
-      <PageCard>
-        <SectionHeading
-          title="Redes sociais"
-          subtitle="Links exibidos no rodapé do cardápio online."
-        />
-        <div className="space-y-4">
-          <Field label="Instagram">
-            <div className="flex items-center rounded-xl border border-gray-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition overflow-hidden bg-white">
-              <span className="border-r border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400 select-none">
-                instagram.com/
-              </span>
-              <input
-                className="flex-1 bg-transparent px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
-                value={form.instagram}
-                onChange={set("instagram")}
-                placeholder="seurestaurante"
-                maxLength={60}
-              />
-            </div>
-          </Field>
-
-          <Field label="iFood">
-            <div className="flex items-center rounded-xl border border-gray-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition overflow-hidden bg-white">
-              <span className="border-r border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400 select-none">
-                ifood.com.br/
-              </span>
-              <input
-                className="flex-1 bg-transparent px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
-                value={form.ifood}
-                onChange={set("ifood")}
-                placeholder="restaurante/seurestaurante"
-                maxLength={120}
-              />
-            </div>
           </Field>
         </div>
       </PageCard>

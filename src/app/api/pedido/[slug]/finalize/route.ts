@@ -43,10 +43,14 @@ const cartItemSchema = z.object({
 });
 
 const addressSchema = z.object({
-  street:       z.string().default(""),
-  number:       z.string().default(""),
-  neighborhood: z.string().default(""),
-  complement:   z.string().default(""),
+  cep:            z.string().default(""),
+  street:         z.string().default(""),
+  number:         z.string().default(""),
+  neighborhood:   z.string().default(""),
+  city:           z.string().default(""),
+  state:          z.string().default(""),
+  complement:     z.string().default(""),
+  referencePoint: z.string().default(""),
 });
 
 const bodySchema = z.object({
@@ -169,6 +173,28 @@ export async function POST(
 
   const subtotal = verifiedCart.reduce((acc, item) => acc + item.price * item.qty, 0);
 
+  // ── Delivery fee from restaurant config ───────────────────────
+  const deliveryCfg = deliveryMethod === "delivery"
+    ? await prisma.deliveryConfig.findUnique({
+        where: { restaurantId },
+        select: { mode: true, fee: true, freeDeliveryAbove: true },
+      })
+    : null;
+
+  const deliveryFeeAmount = (() => {
+    if (!deliveryCfg || deliveryMethod !== "delivery") return 0;
+    if (deliveryCfg.mode === "simple" && deliveryCfg.fee != null) {
+      const fee = Number(deliveryCfg.fee);
+      const freeAbove = deliveryCfg.freeDeliveryAbove != null ? Number(deliveryCfg.freeDeliveryAbove) : null;
+      if (freeAbove != null && freeAbove > 0 && subtotal >= freeAbove) return 0;
+      return fee;
+    }
+    // manual / advanced / distance — fee to be confirmed separately
+    return 0;
+  })();
+
+  const orderTotal = subtotal + deliveryFeeAmount;
+
   // ── Phase-1 transaction: customer + address + order ───────────
   let orderId: string;
   let customerId: string;
@@ -190,10 +216,10 @@ export async function POST(
             street:       address.street || "—",
             number:       address.number || "—",
             neighborhood: address.neighborhood || "—",
-            complement:   address.complement || null,
-            city:         "",
-            state:        "",
-            zipCode:      "",
+            complement:   address.complement  || null,
+            city:         address.city        || "",
+            state:        address.state       || "",
+            zipCode:      address.cep         || "",
           },
           select: { id: true },
         });
@@ -207,9 +233,9 @@ export async function POST(
           status:         "PENDING",
           type:           deliveryMethod === "delivery" ? "DELIVERY" : "PICKUP",
           subtotal:       new Decimal(subtotal),
-          deliveryFee:    new Decimal(0),
+          deliveryFee:    new Decimal(deliveryFeeAmount),
           discount:       new Decimal(0),
-          total:          new Decimal(subtotal),
+          total:          new Decimal(orderTotal),
           deliveryAddressId,
           idempotencyKey: ikey,
           items: {
@@ -259,7 +285,7 @@ export async function POST(
         const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? "";
         const mpResult = await createMPPaymentLink(mpToken, {
           orderId:          orderId,
-          amount:           subtotal,
+          amount:           orderTotal,
           description:      `Pedido – ${restaurantId}`,
           expiresInMinutes: 30,
           notificationUrl:  appUrl ? `${appUrl}/api/payments/mercadopago/webhook` : undefined,
@@ -277,7 +303,7 @@ export async function POST(
       try {
         const stoneResult = await createPaymentLink({
           orderId:          orderId,
-          amount:           subtotal,
+          amount:           orderTotal,
           description:      `Pedido – ${restaurantId}`,
           expiresInMinutes: 30,
         });
@@ -298,7 +324,7 @@ export async function POST(
           orderId:           orderId,
           method:            "ONLINE",
           status:            "LINK_SENT",
-          amount:            new Decimal(subtotal),
+          amount:            new Decimal(orderTotal),
           paymentMode:       "PAY_NOW",
           providerName,
           providerReference,
@@ -330,7 +356,7 @@ export async function POST(
         orderId:     orderId,
         method:      dbMethod,
         status:      isDelivery ? "PAY_ON_DELIVERY" : "PAY_ON_PICKUP",
-        amount:      new Decimal(subtotal),
+        amount:      new Decimal(orderTotal),
         paymentMode: isDelivery ? "PAY_ON_DELIVERY" : "PAY_ON_PICKUP",
       },
     }),
