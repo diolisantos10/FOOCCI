@@ -23,6 +23,19 @@ import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import type { PaymentMethod, OrderStatus } from "@prisma/client";
 
+// ── Structured auth error that preserves Saipos error codes ──────────────────
+
+export class SaiposAuthError extends Error {
+  constructor(
+    message: string,
+    public readonly errorCode: string | number | null = null,
+    public readonly responseStatus: number | null = null,
+  ) {
+    super(message);
+    this.name = "SaiposAuthError";
+  }
+}
+
 // ── Internal config shape (stored encrypted as configBlob) ────────────────────
 
 export interface SaiposRaw {
@@ -273,11 +286,56 @@ export class SaiposIntegrationService {
   static async getAuthToken(raw: SaiposRaw): Promise<string> {
     const { token, debug } = await SaiposIntegrationService._attemptAuth(raw);
     if (!token) {
-      throw new Error(
-        `Saipos auth failed (HTTP ${debug.responseStatus ?? "N/A"}): ${debug.responseErrorMessage ?? "unknown error"}`
+      throw new SaiposAuthError(
+        `Saipos auth failed (HTTP ${debug.responseStatus ?? "N/A"}): ${debug.responseErrorMessage ?? "unknown error"}`,
+        debug.responseErrorCode,
+        debug.responseStatus,
       );
     }
     return token;
+  }
+
+  // ── Test with a temporary secret — does NOT save anything ─────────────────
+
+  static async testWithTempSecret(restaurantId: string, tempSecret: string): Promise<{ success: boolean; message: string; debug: SaiposAuthDebug }> {
+    const row = await prisma.integrationConfig.findUnique({
+      where: { restaurantId_provider: { restaurantId, provider: "saipos" } },
+    });
+    if (!row) {
+      const debug: SaiposAuthDebug = {
+        authUrl: "", requestBodyKeys: [], idPartnerExists: false, idPartnerLength: 0,
+        idPartnerPreview: "", secretExists: false, secretLength: 0, secretPreview: "",
+        codStore: "", environment: "", responseStatus: null, responseBodyKeys: null,
+        responseErrorCode: null, responseErrorMessage: "Integração não configurada.",
+      };
+      return { success: false, message: "Integração Saipos não configurada.", debug };
+    }
+
+    let raw: SaiposRaw;
+    try {
+      raw = JSON.parse(decrypt(row.configBlob)) as SaiposRaw;
+    } catch {
+      const debug: SaiposAuthDebug = {
+        authUrl: "", requestBodyKeys: [], idPartnerExists: false, idPartnerLength: 0,
+        idPartnerPreview: "", secretExists: false, secretLength: 0, secretPreview: "",
+        codStore: "", environment: "", responseStatus: null, responseBodyKeys: null,
+        responseErrorCode: null, responseErrorMessage: "Configuração corrompida.",
+      };
+      return { success: false, message: "Falha ao ler configuração salva.", debug };
+    }
+
+    // Swap in the temp secret for this test only
+    const testRaw: SaiposRaw = { ...raw, apiKey: tempSecret };
+    const { token, debug } = await SaiposIntegrationService._attemptAuth(testRaw);
+
+    if (!token) {
+      return {
+        success: false,
+        message: `Teste com secret temporário falhou (HTTP ${debug.responseStatus ?? "N/A"}): ${debug.responseErrorMessage ?? "erro desconhecido"}`,
+        debug,
+      };
+    }
+    return { success: true, message: "Secret temporário autenticado com sucesso na Saipos.", debug };
   }
 
   // ── Test connection ─────────────────────────────────────────────────────────
@@ -523,19 +581,72 @@ export class SaiposIntegrationService {
     if (!order || order.restaurantId !== restaurantId) return;
     if (order.saiposSentAt) return; // already sent
 
+    const attemptAt = new Date();
     try {
       await SaiposIntegrationService.createOrder(restaurantId, orderId);
+      // createOrder already writes saiposSentAt; record attempt timestamp too
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { saiposLastAttemptAt: attemptAt },
+      }).catch(() => {/* non-critical */});
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg            = err instanceof Error ? err.message : String(err);
+      const is902          = err instanceof SaiposAuthError && String(err.errorCode) === "902";
+      const saiposStatus   = is902 ? "PENDING_SAIPOS_VALIDATION" : "FAILED";
+      const errorCode      = err instanceof SaiposAuthError ? String(err.errorCode ?? "") : "";
       console.error(`[saipos] Failed to send order ${orderId}:`, msg);
-      // Record the failure — keep the Foocci order intact
       await prisma.order.update({
         where: { id: orderId },
         data: {
-          saiposStatus: "FAILED",
-          saiposError:  msg.slice(0, 500),
+          saiposStatus:        saiposStatus,
+          saiposError:         msg.slice(0, 500),
+          saiposLastErrorCode: errorCode || null,
+          saiposLastAttemptAt: attemptAt,
         },
       }).catch(() => {/* non-critical */});
+    }
+  }
+
+  // ── Retry sending a specific order (idempotent) ─────────────────────────────
+  // Skips if order was already successfully sent (saiposSentAt is set).
+
+  static async retryOrder(restaurantId: string, orderId: string): Promise<{ sent: boolean; message: string; saiposStatus: string }> {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, restaurantId: true, saiposSentAt: true },
+    });
+
+    if (!order || order.restaurantId !== restaurantId) {
+      return { sent: false, message: "Pedido não encontrado.", saiposStatus: "NOT_FOUND" };
+    }
+
+    if (order.saiposSentAt) {
+      return { sent: false, message: "Pedido já foi enviado ao Saipos com sucesso.", saiposStatus: "ALREADY_SENT" };
+    }
+
+    const attemptAt = new Date();
+    try {
+      await SaiposIntegrationService.createOrder(restaurantId, orderId);
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { saiposLastAttemptAt: attemptAt, saiposLastErrorCode: null },
+      }).catch(() => {/* non-critical */});
+      return { sent: true, message: "Pedido enviado ao Saipos com sucesso.", saiposStatus: "SENT" };
+    } catch (err) {
+      const msg       = err instanceof Error ? err.message : String(err);
+      const is902     = err instanceof SaiposAuthError && String(err.errorCode) === "902";
+      const status    = is902 ? "PENDING_SAIPOS_VALIDATION" : "FAILED";
+      const errorCode = err instanceof SaiposAuthError ? String(err.errorCode ?? "") : "";
+      await prisma.order.update({
+        where: { id: orderId },
+        data: {
+          saiposStatus:        status,
+          saiposError:         msg.slice(0, 500),
+          saiposLastErrorCode: errorCode || null,
+          saiposLastAttemptAt: attemptAt,
+        },
+      }).catch(() => {/* non-critical */});
+      return { sent: false, message: msg.slice(0, 300), saiposStatus: status };
     }
   }
 

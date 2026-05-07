@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type IntegrationStatus = "unconfigured" | "active" | "error";
+type IntegrationStatus = "unconfigured" | "active" | "error" | "pending_validation";
 
 interface IntegrationView {
   provider:     string;
@@ -103,6 +103,13 @@ function StatusBadge({ status }: { status: IntegrationStatus }) {
       <span className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-600">
         <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
         Erro
+      </span>
+    );
+  if (status === "pending_validation")
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        Validação pendente
       </span>
     );
   return (
@@ -911,6 +918,9 @@ function SaiposForm({
         </p>
       </div>
 
+      {/* Temporary secret tester — tests without overwriting the stored secret */}
+      <SaiposTempSecretTester />
+
       <div className="flex justify-end pt-1">
         <button type="submit" disabled={saving}
           className="rounded-xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50 transition">
@@ -952,6 +962,111 @@ function SaiposAuthDebugPanel({ debug }: { debug: Record<string, unknown> }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Saipos copy diagnostics button ───────────────────────────────────────────
+
+function SaiposCopyDiagnosticsButton({ debug }: { debug: Record<string, unknown> }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    const payload = {
+      authUrl:              debug.authUrl,
+      bodyKeys:             debug.requestBodyKeys,
+      idPartnerPreview:     debug.idPartnerPreview,
+      idPartnerLength:      debug.idPartnerLength,
+      secretPreview:        debug.secretPreview,
+      secretLength:         debug.secretLength,
+      codStore:             debug.codStore,
+      environment:          debug.environment,
+      httpStatus:           debug.responseStatus,
+      responseBodyKeys:     debug.responseBodyKeys,
+      errorCode:            debug.responseErrorCode,
+      errorMessage:         debug.responseErrorMessage,
+    };
+    navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
+    >
+      {copied ? "✓ Diagnóstico copiado!" : "Copiar diagnóstico para suporte"}
+    </button>
+  );
+}
+
+// ── Saipos temp secret tester ─────────────────────────────────────────────────
+
+function SaiposTempSecretTester() {
+  const [tempSecret, setTempSecret] = useState("");
+  const [loading,    setLoading]    = useState(false);
+  const [result,     setResult]     = useState<{ success: boolean; message: string; debug?: Record<string, unknown> } | null>(null);
+
+  const handleTest = async () => {
+    if (!tempSecret.trim()) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const res  = await fetch("/api/integrations/saipos/test-secret", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ tempSecret: tempSecret.trim() }),
+      });
+      const data = await res.json().catch(() => ({})) as { success?: boolean; message?: string; debug?: Record<string, unknown> };
+      setResult({
+        success: Boolean(data.success),
+        message: data.message ?? "Erro desconhecido.",
+        debug:   data.debug as Record<string, unknown> | undefined,
+      });
+    } catch {
+      setResult({ success: false, message: "Erro de rede ao testar." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-4 space-y-3">
+      <p className="text-xs font-semibold text-amber-800">Testar com secret temporário</p>
+      <p className="text-xs text-amber-700">
+        Testa a autenticação com um secret diferente sem alterar o secret salvo.
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="password"
+          placeholder="Cole o secret temporário"
+          value={tempSecret}
+          autoComplete="off"
+          onChange={(e) => setTempSecret(e.target.value)}
+          className="flex-1 rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 transition"
+        />
+        <button
+          type="button"
+          onClick={handleTest}
+          disabled={loading || !tempSecret.trim()}
+          className="shrink-0 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-40 transition"
+        >
+          {loading ? "…" : "Testar"}
+        </button>
+      </div>
+      {result && (
+        <div className={`rounded-xl border px-3 py-2 text-xs font-medium ${
+          result.success
+            ? "border-green-200 bg-green-50 text-green-700"
+            : "border-red-200 bg-red-50 text-red-600"
+        }`}>
+          {result.success ? "✓" : "⚠"} {result.message}
+        </div>
+      )}
+      {result?.debug && <SaiposAuthDebugPanel debug={result.debug} />}
     </div>
   );
 }
@@ -1091,9 +1206,28 @@ function DetailPanel({
                 <span>{testResult.success ? "✓" : "⚠"}</span>
                 <span>{testResult.message}</span>
               </div>
+
+              {/* Saipos-specific: errorCode 902 explanation */}
+              {provider === "saipos" && !testResult.success &&
+                (testResult.debug as Record<string, unknown> | undefined)?.responseErrorCode?.toString() === "902" && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-1">
+                  <p className="font-semibold">errorCode 902 — Credenciais pendentes de validação Saipos</p>
+                  <p>
+                    O Foocci está enviando URL, <code>idPartner</code> e <code>secret</code> no formato correto
+                    (<code>{`{ idPartner, secret }`}</code>), mas a Saipos retornou errorCode 902.
+                    Isso indica que o par <code>idPartner</code> + <code>secret</code> ainda não foi aprovado
+                    pela Saipos para o ambiente de homologação. Confirme com a Saipos se o <code>idPartner</code> está
+                    vinculado ao <code>secret</code> no cadastro do parceiro.
+                  </p>
+                </div>
+              )}
+
               {/* Safe auth diagnostics — Saipos only, always shown when available */}
               {provider === "saipos" && testResult.debug && (
-                <SaiposAuthDebugPanel debug={testResult.debug as Record<string, unknown>} />
+                <>
+                  <SaiposAuthDebugPanel debug={testResult.debug as Record<string, unknown>} />
+                  <SaiposCopyDiagnosticsButton debug={testResult.debug as Record<string, unknown>} />
+                </>
               )}
             </>
           )}

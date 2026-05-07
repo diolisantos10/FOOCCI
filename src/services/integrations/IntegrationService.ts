@@ -33,7 +33,7 @@ import type {
 
 export interface IntegrationView {
   provider: string;
-  status:   "unconfigured" | "active" | "error";
+  status:   "unconfigured" | "active" | "error" | "pending_validation";
   isActive: boolean;
   lastTestedAt: string | null;
   lastError:    string | null;
@@ -132,10 +132,13 @@ function dbRowToView(row: {
     // decryption failed — config corrupt, treat as error
   }
 
-  // isActive drives status; lastError now stores any test message (success or failure)
+  // isActive drives status; lastError now stores any test message (success or failure).
+  // [PENDING_VALIDATION] prefix means Saipos returned errorCode 902 — credentials pending approval.
   const status: IntegrationView["status"] =
-    row.isActive    ? "active" :
-    row.lastTestedAt ? "error" : "unconfigured";
+    row.isActive ? "active" :
+    !row.lastTestedAt ? "unconfigured" :
+    (row.provider === "saipos" && row.lastError?.startsWith("[PENDING_VALIDATION]"))
+      ? "pending_validation" : "error";
 
   return {
     provider,
@@ -358,12 +361,18 @@ export class IntegrationService {
       result = { success: false, message: `Erro ao testar: ${msg}` };
     }
 
+    // For Saipos 902, prefix lastError with [PENDING_VALIDATION] so dbRowToView can detect it.
+    const pendingValidation = (result as { _pendingValidation?: boolean })._pendingValidation === true;
+    const storedError = pendingValidation
+      ? `[PENDING_VALIDATION] ${result.message}`
+      : result.message;
+
     // Persist test outcome — always store the message so UI can show it on reopen
     await prisma.integrationConfig.update({
       where: { restaurantId_provider: { restaurantId, provider } },
       data: {
         lastTestedAt: new Date(),
-        lastError:    result.message,   // stored for both success and failure
+        lastError:    storedError,
         isActive:     result.success,
       },
     });
@@ -461,9 +470,11 @@ export class IntegrationService {
     }
   }
 
-  private static async _testSaipos(restaurantId: string): Promise<TestResult> {
+  private static async _testSaipos(restaurantId: string): Promise<TestResult & { _pendingValidation?: boolean }> {
     const result = await SaiposIntegrationService.testConnection(restaurantId);
-    return result;
+    const debug  = result.debug as Record<string, unknown> | undefined;
+    const is902  = !result.success && String(debug?.responseErrorCode) === "902";
+    return { ...result, _pendingValidation: is902 };
   }
 
   private static async _testTipos(raw: TiposRaw): Promise<TestResult> {

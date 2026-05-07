@@ -4,6 +4,7 @@ import Link from "next/link";
 import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
+import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 
 export const metadata = { title: "Pedido" };
 
@@ -168,6 +169,64 @@ export default async function OrderDetailPage({
             <p className="text-sm text-gray-400">Nenhum registro de pagamento ainda.</p>
           )}
         </div>
+
+        {/* Saipos POS integration */}
+        {(order.saiposStatus || order.saiposSentAt || order.saiposError) && (
+          <div className="rounded-xl border border-violet-100 bg-white p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-violet-400">
+              Saipos PDV
+            </h2>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              {order.saiposStatus && (
+                <div>
+                  <dt className="text-gray-500">Status Saipos</dt>
+                  <dd className="font-medium">{order.saiposStatus}</dd>
+                </div>
+              )}
+              {order.saiposSentAt && (
+                <div>
+                  <dt className="text-gray-500">Enviado em</dt>
+                  <dd className="font-medium">
+                    {new Date(order.saiposSentAt).toLocaleString("pt-BR")}
+                  </dd>
+                </div>
+              )}
+              {order.saiposOrderId && (
+                <div>
+                  <dt className="text-gray-500">ID Saipos</dt>
+                  <dd className="font-mono font-medium text-xs">{order.saiposOrderId}</dd>
+                </div>
+              )}
+              {order.saiposLastAttemptAt && (
+                <div>
+                  <dt className="text-gray-500">Última tentativa</dt>
+                  <dd className="font-medium">
+                    {new Date(order.saiposLastAttemptAt).toLocaleString("pt-BR")}
+                  </dd>
+                </div>
+              )}
+              {order.saiposLastErrorCode && (
+                <div>
+                  <dt className="text-gray-500">Código de erro</dt>
+                  <dd className="font-mono font-medium text-red-600">{order.saiposLastErrorCode}</dd>
+                </div>
+              )}
+              {order.saiposError && (
+                <div className="col-span-2">
+                  <dt className="text-gray-500">Erro</dt>
+                  <dd className="font-medium text-red-600 text-xs break-words">{order.saiposError}</dd>
+                </div>
+              )}
+            </dl>
+            <div className="mt-4">
+              <SaiposRetryButton
+                orderId={order.id}
+                saiposSentAt={order.saiposSentAt?.toISOString() ?? null}
+                saiposStatus={order.saiposStatus ?? null}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
