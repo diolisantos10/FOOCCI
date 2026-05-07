@@ -21,6 +21,12 @@ export async function POST(req: NextRequest) {
   if (!ctx) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
+  if (ctx.role !== "OWNER") {
+    return NextResponse.json(
+      { error: "Apenas o proprietário pode reenviar pedidos para a Saipos." },
+      { status: 403 }
+    );
+  }
 
   let body: unknown;
   try {
