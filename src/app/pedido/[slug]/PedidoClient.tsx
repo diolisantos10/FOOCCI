@@ -201,6 +201,14 @@ function isValidName(text: string): boolean {
   return /[a-z]/i.test(t);
 }
 
+function formatDisplayPhone(raw: string): string {
+  const d = raw.replace(/\D/g, "");
+  const local = d.startsWith("55") && d.length > 11 ? d.slice(2) : d;
+  if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+  if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  return raw;
+}
+
 function norm(s: string) {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -849,7 +857,7 @@ function CartDrawer({
 }
 
 // ── PhoneEntryCard ────────────────────────────────────────────────────────────
-// Shown to web (non-WhatsApp) users: lightweight phone input to identify them.
+// Phone-first identification: step 1 = phone only, step 2 = name only (new customers).
 
 function PhoneEntryCard({
   slug,
@@ -857,68 +865,126 @@ function PhoneEntryCard({
   onSkip,
 }: {
   slug: string;
-  onIdentified: (name: string | null, customerId?: string) => void;
+  onIdentified: (name: string | null, customerId?: string, displayPhone?: string) => void;
   onSkip: () => void;
 }) {
-  const [nameInput,  setNameInput]  = useState("");
-  const [phoneInput, setPhoneInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [phase, setPhase]               = useState<"phone" | "name">("phone");
+  const [phoneInput, setPhoneInput]     = useState("");
+  const [nameInput,  setNameInput]      = useState("");
+  const [collectedPhone, setCollectedPhone] = useState("");
+  const [loading, setLoading]           = useState(false);
+  const [error,   setError]             = useState<string | null>(null);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handlePhoneSubmit(e: FormEvent) {
     e.preventDefault();
     const ph = phoneInput.trim();
-    if (!ph) return;
+    const digits = ph.replace(/\D/g, "");
+    if (digits.length < 10) { setError("Informe um WhatsApp válido."); return; }
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/qr/${slug}/identify`, {
+      const res  = await fetch(`/api/qr/${slug}/identify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: ph, name: nameInput.trim() }),
+        body: JSON.stringify({ phone: ph }),
       });
       const data: { found: boolean; name?: string; customerId?: string } = await res.json();
-      const resolved = data.name ?? (nameInput.trim() ? nameInput.trim().split(/\s+/)[0]! : null);
-      // Persist phone + name + customerId so other pages can reuse identity
-      if (resolved) {
+      const displayPh = formatDisplayPhone(ph);
+      if (data.found && data.name) {
+        // Existing customer — no name needed
         try {
           sessionStorage.setItem(
             `foocci-customer-${slug}`,
-            JSON.stringify({ phone: ph, name: resolved, customerId: data.customerId })
+            JSON.stringify({ phone: ph, name: data.name, customerId: data.customerId, displayPhone: displayPh }),
           );
         } catch { /* ignore */ }
+        onIdentified(data.name, data.customerId, displayPh);
+      } else {
+        // New customer — ask name next
+        setCollectedPhone(ph);
+        setPhase("name");
       }
-      onIdentified(resolved, data.customerId);
     } catch {
       setError("Erro ao verificar. Tente novamente.");
+    } finally {
       setLoading(false);
     }
   }
 
+  async function handleNameSubmit(e: FormEvent) {
+    e.preventDefault();
+    const name = nameInput.trim();
+    if (name.length < 2) { setError("Informe seu nome."); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const res  = await fetch(`/api/qr/${slug}/identify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: collectedPhone, name }),
+      });
+      const data: { found: boolean; name?: string; customerId?: string } = await res.json();
+      const firstName  = name.trim().split(/\s+/)[0]!;
+      const resolved   = data.name ?? firstName;
+      const displayPh  = formatDisplayPhone(collectedPhone);
+      try {
+        sessionStorage.setItem(
+          `foocci-customer-${slug}`,
+          JSON.stringify({ phone: collectedPhone, name: resolved, customerId: data.customerId, displayPhone: displayPh }),
+        );
+      } catch { /* ignore */ }
+      onIdentified(resolved, data.customerId, displayPh);
+    } catch {
+      setError("Erro ao salvar. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (phase === "name") {
+    return (
+      <div className="rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-4 max-w-sm w-full">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Novo cadastro</p>
+        <p className="mb-3 text-xs text-gray-500">Pra gente identificar seu pedido.</p>
+        <form onSubmit={handleNameSubmit} className="flex flex-col gap-2.5">
+          <input
+            type="text"
+            inputMode="text"
+            autoCapitalize="words"
+            autoFocus
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            placeholder="Seu nome"
+            style={{ fontSize: "16px" }}
+            className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
+          />
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <button
+            type="submit"
+            disabled={!nameInput.trim() || loading}
+            className="rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-40 transition-all"
+            style={{ backgroundColor: "var(--brand-primary)" }}
+          >
+            {loading ? "Salvando…" : "Continuar →"}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-4 max-w-sm w-full">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-        Identificação rápida
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Identificação rápida</p>
+      <p className="mb-3 text-xs text-gray-500">
+        Usamos seu WhatsApp para identificar seu cadastro e facilitar seus pedidos.
       </p>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
-        {/* Name */}
-        <input
-          type="text"
-          inputMode="text"
-          autoCapitalize="words"
-          value={nameInput}
-          onChange={(e) => setNameInput(e.target.value)}
-          placeholder="Seu nome — Ex: João Silva"
-          style={{ fontSize: "16px" }}
-          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
-        />
-        {/* Phone */}
+      <form onSubmit={handlePhoneSubmit} className="flex flex-col gap-2.5">
         <input
           type="tel"
           inputMode="numeric"
           value={phoneInput}
           onChange={(e) => setPhoneInput(e.target.value)}
-          placeholder="Seu WhatsApp — Ex: (11) 99999-9999"
+          placeholder="(11) 99999-9999"
           style={{ fontSize: "16px" }}
           className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#25d366] focus:outline-none"
         />
@@ -927,18 +993,44 @@ function PhoneEntryCard({
           type="submit"
           disabled={!phoneInput.trim() || loading}
           className="rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-40 transition-all"
-          style={{ backgroundColor: 'var(--brand-primary)' }}
+          style={{ backgroundColor: "var(--brand-primary)" }}
         >
           {loading ? "Verificando…" : "Continuar →"}
         </button>
-        <button
-          type="button"
-          onClick={onSkip}
-          className="py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-        >
+        <button type="button" onClick={onSkip} className="py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
           Pular →
         </button>
       </form>
+    </div>
+  );
+}
+
+// ── CustomerIdentityStrip ─────────────────────────────────────────────────────
+// Thin bar shown below the header once the customer is identified.
+// Shows "Olá, {name} · {phone}" and a "Trocar" button.
+
+function CustomerIdentityStrip({
+  name,
+  displayPhone,
+  onReset,
+}: {
+  name: string | null;
+  displayPhone: string | null;
+  onReset: () => void;
+}) {
+  if (!name && !displayPhone) return null;
+  const label = name
+    ? `Olá, ${name}${displayPhone ? ` · ${displayPhone}` : ""}`
+    : `Cliente identificado${displayPhone ? ` · ${displayPhone}` : ""}`;
+  return (
+    <div className="shrink-0 flex items-center justify-between gap-2 border-b border-gray-100 bg-white/80 px-4 py-1.5">
+      <p className="min-w-0 truncate text-xs text-gray-600">{label}</p>
+      <button
+        onClick={onReset}
+        className="shrink-0 text-[11px] font-medium text-gray-400 transition-colors hover:text-gray-700"
+      >
+        Trocar
+      </button>
     </div>
   );
 }
@@ -1098,16 +1190,20 @@ export function PedidoClient({
   // Drives a fixed step sequence without calling the AI for each step.
   const [guidedMode, setGuidedMode] = useState(false);
 
-  // ── Cross-flow identity: read what /qr/[slug] already stored ──────
-  const [storedCustomer] = useState<{ phone: string; name: string; customerId?: string } | null>(() => {
+  // ── Cross-flow identity: read what /qr/[slug] or a prior session stored ───
+  const [storedCustomer] = useState<{
+    phone: string; name: string; customerId?: string; displayPhone?: string;
+  } | null>(() => {
     if (typeof window === "undefined") return null;
     try {
       const raw = sessionStorage.getItem(`foocci-customer-${slug}`);
-      return raw ? (JSON.parse(raw) as { phone: string; name: string; customerId?: string }) : null;
+      return raw
+        ? (JSON.parse(raw) as { phone: string; name: string; customerId?: string; displayPhone?: string })
+        : null;
     } catch { return null; }
   });
 
-  // Effective phone: from server (WhatsApp link) or from QR identification
+  // Effective phone: from server (WhatsApp link) or from session-stored identify response
   const effectiveCustomerPhone = knownCustomerPhone ?? storedCustomer?.phone ?? null;
   // Effective customerId: from server prop or from session-stored identify response
   const effectiveCustomerId = knownCustomerId ?? storedCustomer?.customerId ?? undefined;
@@ -1115,6 +1211,13 @@ export function PedidoClient({
   // customerName declared early so enterBrowsing / handlePhoneIdentified can reference its setter
   const [customerName, setCustomerName] = useState(
     knownCustomerName?.trim().split(/\s+/)[0] ?? storedCustomer?.name ?? "",
+  );
+
+  // ── Display phone for identity strip ──────────────────────────────
+  const [identifiedPhone, setIdentifiedPhone] = useState<string | null>(
+    knownCustomerPhone
+      ? formatDisplayPhone(knownCustomerPhone)
+      : (storedCustomer?.displayPhone ?? null),
   );
 
   // ── Entry / identification ─────────────────────────────────────────
@@ -1138,9 +1241,20 @@ export function PedidoClient({
   const [sessionCustomerId, setSessionCustomerId] = useState<string | undefined>(undefined);
   const resolvedCustomerId = effectiveCustomerId ?? sessionCustomerId;
 
-  function handlePhoneIdentified(name: string | null, customerId?: string) {
+  function handlePhoneIdentified(name: string | null, customerId?: string, displayPhone?: string) {
     if (customerId) setSessionCustomerId(customerId);
+    if (displayPhone) setIdentifiedPhone(displayPhone);
     enterBrowsing(name);
+  }
+
+  function handleResetIdentity() {
+    try { sessionStorage.removeItem(`foocci-customer-${slug}`); } catch { /* ignore */ }
+    try { sessionStorage.removeItem(`foocci-entry-${slug}`); } catch { /* ignore */ }
+    setIdentifiedName(null);
+    setCustomerName("");
+    setIdentifiedPhone(null);
+    setSessionCustomerId(undefined);
+    setEntryPhase("identifying");
   }
 
   // ── Stage / flow ──────────────────────────────────────────────────
@@ -2437,6 +2551,15 @@ export function PedidoClient({
 
         {header}
 
+        {/* Identity strip — thin bar shown when customer is recognised */}
+        {entryPhase === "browsing" && (identifiedName || identifiedPhone) && (
+          <CustomerIdentityStrip
+            name={identifiedName}
+            displayPhone={identifiedPhone}
+            onReset={handleResetIdentity}
+          />
+        )}
+
         {/* Chat messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#ece5dd]">
 
@@ -2445,7 +2568,7 @@ export function PedidoClient({
             <>
               <div className="flex justify-start">
                 <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 text-sm leading-relaxed shadow-sm text-gray-900">
-                  Olá! 👋 Para personalizarmos seu atendimento, informe seu nome e WhatsApp.
+                  Olá! 👋 Informe seu WhatsApp para identificarmos seu cadastro. 📱
                 </div>
               </div>
               <div className="flex justify-start">
