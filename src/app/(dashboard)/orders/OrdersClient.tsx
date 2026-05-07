@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
+import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -50,6 +51,13 @@ interface MockOrder {
   items: OrderItem[];
   profile?: CustomerProfile;
   conversationId?: string | null;
+  // Saipos POS integration — undefined for demo/mock orders, populated from API
+  saiposSentAt?:        string | null;
+  saiposOrderId?:       string | null;
+  saiposStatus?:        string | null;
+  saiposError?:         string | null;
+  saiposLastErrorCode?: string | null;
+  saiposLastAttemptAt?: string | null;
 }
 
 // ─── API response type (from GET /api/orders) ─────────────────
@@ -79,6 +87,13 @@ interface ApiOrder {
   items: ApiOrderItem[];
   payment: { method: string } | null;
   orderDraft?: { conversationId?: string | null } | null;
+  // Saipos POS integration
+  saiposSentAt:        string | null;
+  saiposOrderId:       string | null;
+  saiposStatus:        string | null;
+  saiposError:         string | null;
+  saiposLastErrorCode: string | null;
+  saiposLastAttemptAt: string | null;
 }
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -132,6 +147,12 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
       totalSpend:  parseFloat(o.customer.totalSpend),
     },
     conversationId: o.orderDraft?.conversationId ?? null,
+    saiposSentAt:        o.saiposSentAt        ?? null,
+    saiposOrderId:       o.saiposOrderId       ?? null,
+    saiposStatus:        o.saiposStatus        ?? null,
+    saiposError:         o.saiposError         ?? null,
+    saiposLastErrorCode: o.saiposLastErrorCode ?? null,
+    saiposLastAttemptAt: o.saiposLastAttemptAt ?? null,
   };
 }
 
@@ -816,6 +837,78 @@ function StatusTimeline({ order }: { order: MockOrder }) {
   );
 }
 
+// ─── SaiposSection ────────────────────────────────────────────
+
+function SaiposSection({ order }: { order: MockOrder }) {
+  const saiposStatus        = order.saiposStatus        ?? null;
+  const saiposSentAt        = order.saiposSentAt        ?? null;
+  const saiposError         = order.saiposError         ?? null;
+  const saiposLastErrorCode = order.saiposLastErrorCode ?? null;
+  const saiposLastAttemptAt = order.saiposLastAttemptAt ?? null;
+  const saiposOrderId       = order.saiposOrderId       ?? null;
+
+  const hasSaiposData = saiposStatus || saiposSentAt || saiposLastAttemptAt;
+  if (!hasSaiposData) return null;
+
+  const statusMessage = (() => {
+    if (saiposSentAt) {
+      return { text: "Pedido enviado para a Saipos.", color: "text-green-700", bg: "bg-green-50 border-green-100" };
+    }
+    if (saiposStatus === "PENDING_SAIPOS_VALIDATION") {
+      return {
+        text: "Validação pendente na Saipos. O pedido foi criado no Foocci, mas ainda não pôde ser enviado para a Saipos porque a autenticação retornou errorCode 902.",
+        color: "text-amber-700",
+        bg: "bg-amber-50 border-amber-100",
+      };
+    }
+    if (saiposStatus === "FAILED" || saiposStatus === "ORDER_SEND_FAILED") {
+      return { text: "Falha ao enviar pedido para a Saipos.", color: "text-red-700", bg: "bg-red-50 border-red-100" };
+    }
+    return { text: "Aguardando tentativa de envio para a Saipos.", color: "text-gray-500", bg: "bg-gray-50 border-gray-100" };
+  })();
+
+  return (
+    <div className="border-t border-dashed border-gray-200 pt-4">
+      <SectionLabel>Integração Saipos</SectionLabel>
+
+      <div className={`mb-3 rounded-lg border px-3 py-2 text-xs font-medium ${statusMessage.bg} ${statusMessage.color}`}>
+        {statusMessage.text}
+      </div>
+
+      <div className="space-y-1.5">
+        {saiposStatus && (
+          <Row label="Status Saipos" value={saiposStatus} />
+        )}
+        {saiposLastAttemptAt && (
+          <Row label="Última tentativa" value={new Date(saiposLastAttemptAt).toLocaleString("pt-BR")} />
+        )}
+        {saiposLastErrorCode && (
+          <Row label="Código do erro" value={saiposLastErrorCode} />
+        )}
+        {saiposError && (
+          <Row label="Último erro" value={<span className="max-w-[180px] break-words text-right text-red-600">{saiposError}</span>} />
+        )}
+        {saiposSentAt && (
+          <Row label="Enviado em" value={new Date(saiposSentAt).toLocaleString("pt-BR")} />
+        )}
+        {saiposOrderId && (
+          <Row label="ID externo Saipos" value={saiposOrderId} />
+        )}
+      </div>
+
+      {!saiposSentAt && (
+        <div className="mt-3">
+          <SaiposRetryButton
+            orderId={order.id}
+            saiposSentAt={saiposSentAt}
+            saiposStatus={saiposStatus}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── DetailPanel (Order Ticket) ───────────────────────────────
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -1007,6 +1100,9 @@ function DetailPanel({
             </div>
           </div>
         </div>
+
+        {/* 7. Integração Saipos */}
+        <SaiposSection order={order} />
 
       </div>
     </div>
