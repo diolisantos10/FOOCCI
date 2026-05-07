@@ -30,6 +30,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { createHash, randomUUID } from "crypto";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { toE164 } from "@/lib/phone";
+import { isGuestIdentifier } from "@/lib/guest";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -176,7 +177,7 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       const customer = await tx.customer.upsert({
         where:  { phone_restaurantId: { phone, restaurantId } },
-        create: { restaurantId, name: customerName, phone },
+        create: { restaurantId, name: customerName, phone, isGuest: isGuestIdentifier(phone) },
         update: { name: customerName },
         select: { id: true },
       });
@@ -339,11 +340,11 @@ export async function POST(
     }),
   ]);
 
-  // Sync CRM metrics through the centralized service (idempotent, sets crmSyncedAt).
-  // Customer counter update is NOT inside the order transaction so that a sync
-  // failure does not roll back a successfully confirmed order. The rebuild script
-  // corrects any gap if the process crashes between these two steps.
-  await CustomerMetricsSyncService.syncOrderToCustomerMetrics(orderId, "finalize");
+  // Guest sessions are excluded from CRM — their orders count as anonymous traffic,
+  // not as real customer relationships. Skip the metric sync entirely for guests.
+  if (!isGuestIdentifier(phone)) {
+    await CustomerMetricsSyncService.syncOrderToCustomerMetrics(orderId, "finalize");
+  }
 
   return NextResponse.json({ orderId, confirmed: true });
 }

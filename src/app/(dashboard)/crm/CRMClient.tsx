@@ -7,6 +7,7 @@ import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/se
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
 import { NewCustomerButton } from "@/app/(dashboard)/customers/NewCustomerButton";
+import { isGuestIdentifier } from "@/lib/guest";
 
 // ── Label maps ─────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ const CUSTOMER_FILTER_LABELS: Record<string, string> = {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatPhone(phone: string) {
+  if (isGuestIdentifier(phone)) return "—";
   const d = phone.replace(/\D/g, "");
   if (d.length === 13) return `+${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4,9)}-${d.slice(9)}`;
   return phone;
@@ -207,7 +209,7 @@ function exportCSV(customers: CRMCustomer[]) {
   const header = "Nome,Telefone,Último pedido,Gasto total (R$)";
   const rows = customers.map((c) => [
     `"${c.name.replace(/"/g, '""')}"`,
-    c.phone,
+    isGuestIdentifier(c.phone) ? "" : c.phone,
     c.lastOrderAt ? new Date(c.lastOrderAt).toLocaleDateString("pt-BR") : "",
     c.totalSpend.toFixed(2).replace(".", ","),
   ].join(","));
@@ -354,16 +356,18 @@ function ReactivationHelper({
                       <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
                       <p className="text-[10px] text-gray-400">{formatPhone(c.phone)}</p>
                     </div>
-                    <button
-                      onClick={() => copyFor(c)}
-                      className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                        copied === c.id
-                          ? "bg-green-100 text-green-700"
-                          : "bg-brand-50 text-brand-700 hover:bg-brand-100"
-                      }`}
-                    >
-                      {copied === c.id ? "✓ Copiado" : "Copiar"}
-                    </button>
+                    {!isGuestIdentifier(c.phone) && (
+                      <button
+                        onClick={() => copyFor(c)}
+                        className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                          copied === c.id
+                            ? "bg-green-100 text-green-700"
+                            : "bg-brand-50 text-brand-700 hover:bg-brand-100"
+                        }`}
+                      >
+                        {copied === c.id ? "✓ Copiado" : "Copiar"}
+                      </button>
+                    )}
                   </div>
                 ))}
                 {customers.length > 30 && (

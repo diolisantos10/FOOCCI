@@ -61,6 +61,7 @@ export default async function CustomersPage({
 
   const andClauses = [
     { restaurantId: session.user.restaurantId },
+    { isGuest: false },
     filterClause,
     ...(search ? [{ OR: [
       { name:  { contains: search, mode: "insensitive" as const } },

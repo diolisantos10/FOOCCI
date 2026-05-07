@@ -26,7 +26,7 @@ export { isCrmCountable } from "./crm-countable";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type SyncResult = "synced" | "skipped_already_synced" | "skipped_not_countable" | "skipped_no_customer";
+type SyncResult = "synced" | "skipped_already_synced" | "skipped_not_countable" | "skipped_no_customer" | "skipped_guest";
 
 // ── Service ────────────────────────────────────────────────────────────────────
 
@@ -56,6 +56,9 @@ export class CustomerMetricsSyncService {
         payment: {
           select: { paymentMode: true, status: true },
         },
+        customer: {
+          select: { isGuest: true },
+        },
       },
     });
 
@@ -70,6 +73,10 @@ export class CustomerMetricsSyncService {
 
     if (!order.customerId) {
       return "skipped_no_customer";
+    }
+
+    if (order.customer?.isGuest) {
+      return "skipped_guest";
     }
 
     if (!isCrmCountable(order)) {

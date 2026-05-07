@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { isGuestIdentifier } from "@/lib/guest";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -99,7 +100,7 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
     id:         o.id,
     num:        index + 1,
     customer:   o.customer.name,
-    phone:      o.customer.phone,
+    phone:      isGuestIdentifier(o.customer.phone) ? "Telefone não informado" : o.customer.phone,
     channel:    "Online",
     total:      parseFloat(o.total),
     subtotal:   parseFloat(o.subtotal),

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { isGuestIdentifier } from "@/lib/guest";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -535,7 +536,7 @@ function HeaderSection({
           </div>
 
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-gray-400">
-            <span>{phone}</span>
+            <span>{isGuestIdentifier(phone) ? "Conta de convidado" : phone}</span>
             {email && <><span>·</span><span>{email}</span></>}
             <span>·</span>
             <span>
@@ -1025,9 +1026,11 @@ export default function CustomerProfileClient({
   const [editErr,   setEditErr]   = useState("");
   const [editBusy,  setEditBusy]  = useState(false);
 
+  const isGuest = isGuestIdentifier(phone);
+
   function openEdit() {
     setEditName(name);
-    setEditPhone(phone);
+    setEditPhone(isGuest ? "" : phone);
     setEditEmail(email ?? "");
     setEditErr("");
     setEditOpen(true);
@@ -1037,12 +1040,13 @@ export default function CustomerProfileClient({
     setEditBusy(true);
     setEditErr("");
     try {
+      const phoneValue = editPhone.trim();
       const res = await fetch(`/api/customers/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name:  editName.trim(),
-          phone: editPhone.trim(),
+          ...(phoneValue ? { phone: phoneValue } : {}),
           email: editEmail.trim() || null,
         }),
       });
@@ -1119,10 +1123,13 @@ export default function CustomerProfileClient({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Telefone</label>
+                <label className="mb-1 block text-xs font-semibold text-gray-600">
+                  Telefone {isGuest && <span className="font-normal text-gray-400">(opcional)</span>}
+                </label>
                 <input
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder={isGuest ? "Ex: +5511999990000" : undefined}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                 />
               </div>
@@ -1149,7 +1156,7 @@ export default function CustomerProfileClient({
               </button>
               <button
                 onClick={submitEdit}
-                disabled={editBusy || !editName.trim() || !editPhone.trim()}
+                disabled={editBusy || !editName.trim() || (!isGuest && !editPhone.trim())}
                 className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50"
               >
                 {editBusy ? "Salvando…" : "Salvar"}

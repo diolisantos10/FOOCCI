@@ -8,6 +8,7 @@ import {
   useMemo,
   FormEvent,
 } from "react";
+import { isGuestIdentifier } from "@/lib/guest";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -758,7 +759,9 @@ function ThreadPanel({
               <p className="truncate text-sm font-bold text-gray-900">
                 {thread.customer.name}
               </p>
-              <p className="text-xs text-gray-500">{thread.customer.phone}</p>
+              <p className="text-xs text-gray-500">
+                {isGuestIdentifier(thread.customer.phone) ? "Telefone não informado" : thread.customer.phone}
+              </p>
             </div>
           </div>
 

@@ -26,7 +26,7 @@ export default async function CRMPage() {
     const [restaurant, rows, opResult, statsResult, brandConfig] = await Promise.all([
       prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
       prisma.customer.findMany({
-        where: { restaurantId },
+        where: { restaurantId, isGuest: false },
         orderBy: [{ totalSpend: "desc" }, { lastOrderAt: "desc" }],
         select: {
           id: true, name: true, phone: true,

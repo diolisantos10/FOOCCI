@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { isGuestIdentifier } from "@/lib/guest";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -207,7 +208,9 @@ export default function ConversationDetailPage({
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-900">{conv.customer.name}</p>
-            <p className="text-xs text-gray-500">{conv.customer.phone}</p>
+            <p className="text-xs text-gray-500">
+              {isGuestIdentifier(conv.customer.phone) ? "Telefone não informado" : conv.customer.phone}
+            </p>
           </div>
         </div>
 

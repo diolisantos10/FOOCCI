@@ -127,7 +127,7 @@ export class CRMService {
     const sixtyDaysAgo  = new Date(now.getTime() - 60 * 86_400_000);
     const sevenDaysAgo  = new Date(now.getTime() - 7  * 86_400_000);
 
-    let where: Record<string, unknown> = { restaurantId };
+    let where: Record<string, unknown> = { restaurantId, isGuest: false };
 
     if (filter === "inactive") {
       where = {
@@ -199,9 +199,9 @@ export class CRMService {
     const todayMonth = now.getMonth() + 1;
     const todayDay   = now.getDate();
 
-    // Fetch all active customers in one query
+    // Fetch all active, non-guest customers in one query
     const customers = await prisma.customer.findMany({
-      where: { restaurantId, isActive: true },
+      where: { restaurantId, isActive: true, isGuest: false },
       select: {
         id: true, name: true, phone: true,
         totalSpend: true, totalOrders: true,
@@ -401,15 +401,15 @@ export class CRMService {
       bronze, prata, ouro, diamante,
       channelData,
     ] = await Promise.all([
-      prisma.customer.count({ where: { restaurantId } }),
-      prisma.customer.count({ where: { restaurantId, lastOrderAt: { gte: thirtyDaysAgo } } }),
-      prisma.customer.count({ where: { restaurantId, lastOrderAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } } }),
-      prisma.customer.count({ where: { restaurantId, lastOrderAt: { lt: sixtyDaysAgo } } }),
-      prisma.customer.count({ where: { restaurantId, createdAt: newCustomersFilter } }),
-      prisma.customer.count({ where: { restaurantId, totalSpend: { lt:  300 } } }),
-      prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 300, lt:  800 } } }),
-      prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 800, lt: 2000 } } }),
-      prisma.customer.count({ where: { restaurantId, totalSpend: { gte: 2000 } } }),
+      prisma.customer.count({ where: { restaurantId, isGuest: false } }),
+      prisma.customer.count({ where: { restaurantId, isGuest: false, lastOrderAt: { gte: thirtyDaysAgo } } }),
+      prisma.customer.count({ where: { restaurantId, isGuest: false, lastOrderAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } } }),
+      prisma.customer.count({ where: { restaurantId, isGuest: false, lastOrderAt: { lt: sixtyDaysAgo } } }),
+      prisma.customer.count({ where: { restaurantId, isGuest: false, createdAt: newCustomersFilter } }),
+      prisma.customer.count({ where: { restaurantId, isGuest: false, totalSpend: { lt:  300 } } }),
+      prisma.customer.count({ where: { restaurantId, isGuest: false, totalSpend: { gte: 300, lt:  800 } } }),
+      prisma.customer.count({ where: { restaurantId, isGuest: false, totalSpend: { gte: 800, lt: 2000 } } }),
+      prisma.customer.count({ where: { restaurantId, isGuest: false, totalSpend: { gte: 2000 } } }),
       prisma.order.groupBy({
         by: ["customerId", "type"],
         where: { restaurantId },

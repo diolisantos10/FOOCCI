@@ -4,6 +4,7 @@ import Link from "next/link";
 import { authOptions } from "@/lib/auth";
 import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
+import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 
 export const metadata = { title: "Pedido" };
@@ -58,7 +59,9 @@ export default async function OrderDetailPage({
               >
                 {order.customer.name}
               </Link>
-              <p className="text-sm text-gray-500">{order.customer.phone}</p>
+              <p className="text-sm text-gray-500">
+                {isGuestIdentifier(order.customer.phone) ? "Telefone não informado" : order.customer.phone}
+              </p>
             </div>
             <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
               {STATUS_LABELS[order.status] ?? order.status}
