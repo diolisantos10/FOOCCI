@@ -30,14 +30,14 @@ export default async function QRMenuPage({
 }) {
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug: params.slug },
-    select: { id: true, name: true, logoUrl: true },
+    select: { id: true, name: true, logoUrl: true, phone: true },
   });
 
   if (!restaurant) notFound();
 
   const brandConfig = await prisma.restaurantBrandConfig.findUnique({
     where: { restaurantId: restaurant.id },
-    select: { brandPrimaryColor: true },
+    select: { brandPrimaryColor: true, instagramUrl: true, tiktokUrl: true },
   });
 
   const rawCategories = await prisma.menuCategory.findMany({
@@ -127,6 +127,9 @@ export default async function QRMenuPage({
       featured={featured}
       promoBanner={promoBanner}
       brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
+      instagramUrl={brandConfig?.instagramUrl ?? null}
+      tiktokUrl={brandConfig?.tiktokUrl ?? null}
+      restaurantPhone={restaurant.phone ?? null}
     />
   );
 }
