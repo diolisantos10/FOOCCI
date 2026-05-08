@@ -35,6 +35,11 @@ export default async function QRMenuPage({
 
   if (!restaurant) notFound();
 
+  const brandConfig = await prisma.restaurantBrandConfig.findUnique({
+    where: { restaurantId: restaurant.id },
+    select: { googleReviewUrl: true },
+  });
+
   const rawCategories = await prisma.menuCategory.findMany({
     where: {
       restaurantId: restaurant.id,
@@ -68,6 +73,7 @@ export default async function QRMenuPage({
     .map((c) => ({
       id: c.id,
       name: c.name,
+      description: c.description ?? null,
       items: c.items.map((i) => ({
         id: i.id,
         name: i.name,
@@ -105,6 +111,7 @@ export default async function QRMenuPage({
       categories={sortedCategories}
       featured={featured}
       promoBanner={promoBanner}
+      googleReviewUrl={brandConfig?.googleReviewUrl ?? null}
     />
   );
 }

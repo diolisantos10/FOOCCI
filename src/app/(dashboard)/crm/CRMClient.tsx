@@ -566,9 +566,209 @@ function AutomationsTab({ initialAutomations }: { initialAutomations: Automation
   );
 }
 
+// ── Ações Tab ─────────────────────────────────────────────────────────────────
+
+type ActionReadiness = "SUGGESTED_TEMPLATE" | "READY_TO_CONFIGURE" | "COMING_SOON";
+
+const READINESS_CONFIG: Record<ActionReadiness, { label: string; bg: string; text: string }> = {
+  SUGGESTED_TEMPLATE: { label: "Sugerida",             bg: "bg-brand-100",   text: "text-brand-700"  },
+  READY_TO_CONFIGURE: { label: "Pronta p/ configurar", bg: "bg-green-100",   text: "text-green-700"  },
+  COMING_SOON:        { label: "Em breve",              bg: "bg-yellow-100",  text: "text-yellow-700" },
+};
+
+const TIER_BADGE: Record<string, { bg: string; text: string; icon: string }> = {
+  DIAMANTE: { bg: "bg-cyan-100",   text: "text-cyan-700",   icon: "💎" },
+  OURO:     { bg: "bg-amber-100",  text: "text-amber-700",  icon: "🥇" },
+  PRATA:    { bg: "bg-gray-200",   text: "text-gray-700",   icon: "🥈" },
+  BRONZE:   { bg: "bg-orange-100", text: "text-orange-700", icon: "🥉" },
+};
+
+const SEGMENT_BADGE: Record<string, { bg: string; text: string; label: string }> = {
+  QUENTE:     { bg: "bg-red-100",    text: "text-red-700",    label: "Quente"     },
+  MORNO:      { bg: "bg-orange-100", text: "text-orange-700", label: "Morno"      },
+  FRIO:       { bg: "bg-blue-100",   text: "text-blue-700",   label: "Frio"       },
+  SEM_PEDIDOS:{ bg: "bg-gray-100",   text: "text-gray-500",   label: "Sem pedidos"},
+};
+
+interface ActionTemplate {
+  id: string;
+  title: string;
+  objective: string;
+  channel: string;
+  readiness: ActionReadiness;
+  hasAudienceQuery: boolean;
+}
+
+const ACTION_TEMPLATES: ActionTemplate[] = [
+  { id: "recuperar-frios",    title: "Recuperar clientes frios",         objective: "Reativar clientes que pararam de comprar",     channel: "WhatsApp", readiness: "SUGGESTED_TEMPLATE", hasAudienceQuery: true  },
+  { id: "reativar-mornos",    title: "Reativar clientes mornos",         objective: "Aquecer clientes com baixa frequência",        channel: "WhatsApp", readiness: "SUGGESTED_TEMPLATE", hasAudienceQuery: true  },
+  { id: "segunda-compra",     title: "Incentivar segunda compra",        objective: "Converter clientes de 1 pedido em recorrentes",channel: "WhatsApp", readiness: "SUGGESTED_TEMPLATE", hasAudienceQuery: true  },
+  { id: "clientes-vip",       title: "Campanha para clientes VIP",       objective: "Fidelizar clientes Ouro e Diamante",           channel: "WhatsApp", readiness: "SUGGESTED_TEMPLATE", hasAudienceQuery: true  },
+  { id: "pedido-avaliacao",   title: "Pedido de avaliação",              objective: "Aumentar avaliações de clientes recentes",     channel: "WhatsApp", readiness: "SUGGESTED_TEMPLATE", hasAudienceQuery: true  },
+  { id: "recorrente-sumido",  title: "Cliente recorrente sumido",        objective: "Trazer de volta quem pedia muito",             channel: "WhatsApp", readiness: "SUGGESTED_TEMPLATE", hasAudienceQuery: true  },
+  { id: "aniversariantes",    title: "Aniversariantes do mês",           objective: "Enviar oferta especial de aniversário",        channel: "WhatsApp", readiness: "COMING_SOON",        hasAudienceQuery: false },
+  { id: "aumentar-bebidas",   title: "Aumentar venda de bebidas",        objective: "Oferecer bebidas a quem não costuma pedir",    channel: "WhatsApp", readiness: "COMING_SOON",        hasAudienceQuery: false },
+  { id: "aumentar-sobremesas",title: "Aumentar venda de sobremesas",     objective: "Oferecer sobremesas a novos clientes",         channel: "WhatsApp", readiness: "COMING_SOON",        hasAudienceQuery: false },
+  { id: "carrinho-abandonado",title: "Carrinho abandonado",              objective: "Recuperar pedidos não finalizados",            channel: "WhatsApp", readiness: "COMING_SOON",        hasAudienceQuery: false },
+];
+
+type CustomerPreview = {
+  id: string; name: string; phone: string;
+  tier: string; segment: string;
+  totalOrders: number; totalSpend: number; lastOrderAt: string | null;
+};
+
+function ActionConfigDrawer({ template, onClose }: { template: ActionTemplate; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [count, setCount]     = useState<number | null>(null);
+  const [customers, setCustomers] = useState<CustomerPreview[]>([]);
+  const [computed, setComputed]   = useState(false);
+
+  useEffect(() => {
+    if (!template.hasAudienceQuery) { setLoading(false); return; }
+    fetch(`/api/crm/audience?template=${template.id}`)
+      .then((r) => r.json())
+      .then((json) => {
+        setCount(json.count ?? 0);
+        setCustomers(json.customers ?? []);
+        setComputed(json.computed ?? false);
+      })
+      .catch(() => { /* silent */ })
+      .finally(() => setLoading(false));
+  }, [template.id, template.hasAudienceQuery]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-h-[85vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl sm:max-w-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b border-gray-100">
+          <div>
+            <p className="text-base font-bold text-gray-900">{template.title}</p>
+            <p className="mt-0.5 text-xs text-gray-500">{template.objective}</p>
+          </div>
+          <button type="button" onClick={onClose} className="shrink-0 rounded-full p-1.5 hover:bg-gray-100 transition-colors text-gray-400">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {/* Audience count */}
+          <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+            {loading ? (
+              <p className="text-sm text-gray-400">Calculando público…</p>
+            ) : !template.hasAudienceQuery || !computed ? (
+              <p className="text-sm text-gray-500">Esta ação precisa de mais dados para calcular o público.</p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-bold text-gray-900">{count}</span>
+                <span className="text-sm text-gray-500">cliente{count !== 1 ? "s" : ""} no público estimado</span>
+              </div>
+            )}
+          </div>
+
+          {/* Customer preview */}
+          {!loading && computed && customers.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-semibold text-gray-600">
+                Prévia — até {customers.length} cliente{customers.length !== 1 ? "s" : ""}
+              </p>
+              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                {customers.map((c) => {
+                  const tierCfg  = TIER_BADGE[c.tier]    ?? { bg: "bg-orange-100", text: "text-orange-700", icon: "🥉" };
+                  const segCfg   = SEGMENT_BADGE[c.segment] ?? { bg: "bg-gray-100", text: "text-gray-500", label: "—" };
+                  return (
+                    <div key={c.id} className="flex items-center justify-between rounded-xl border border-gray-100 bg-white px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${tierCfg.bg} ${tierCfg.text}`}>
+                          {tierCfg.icon}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
+                          <p className="text-[10px] text-gray-400">{c.phone}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-3">
+                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${segCfg.bg} ${segCfg.text}`}>
+                          {segCfg.label}
+                        </span>
+                        <div className="text-right">
+                          <p className="text-[10px] text-gray-500">{c.totalOrders}× pedidos</p>
+                          <p className="text-[10px] text-gray-400">R${c.totalSpend.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Send disabled notice */}
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-center">
+            <p className="text-xs text-gray-400">Envio de mensagens disponível em breve.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AcoesTab() {
+  const [openTemplate, setOpenTemplate] = useState<ActionTemplate | null>(null);
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold text-gray-900">Ações de marketing</h2>
+        <p className="mt-0.5 text-xs text-gray-500">Templates prontos para campanhas de reativação e fidelização.</p>
+      </div>
+
+      {ACTION_TEMPLATES.map((t) => {
+        const rc = READINESS_CONFIG[t.readiness];
+        return (
+          <div key={t.id} className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${rc.bg} ${rc.text}`}>
+                      {rc.label}
+                    </span>
+                    <span className="text-[10px] text-gray-400">{t.channel}</span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-900">{t.title}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{t.objective}</p>
+                </div>
+              </div>
+              {t.readiness !== "COMING_SOON" && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setOpenTemplate(t)}
+                    className="rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
+                  >
+                    Ver público e configurar
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {openTemplate && (
+        <ActionConfigDrawer template={openTemplate} onClose={() => setOpenTemplate(null)} />
+      )}
+    </div>
+  );
+}
+
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "overview" | "opportunities" | "customers" | "automations" | "agente";
+type Tab = "overview" | "opportunities" | "customers" | "automations" | "acoes" | "agente";
 
 export function CRMClient({
   initialCustomers,
@@ -593,6 +793,7 @@ export function CRMClient({
     { id: "overview",       label: "Visão Geral" },
     { id: "opportunities",  label: "Oportunidades", badge: initialOpportunities.length || undefined },
     { id: "customers",      label: "Clientes" },
+    { id: "acoes",          label: "Ações" },
     { id: "automations",    label: "Automações" },
     { id: "agente",         label: "Agente IA" },
   ];
@@ -651,6 +852,9 @@ export function CRMClient({
           initialFilter={customerFilter}
           onImportOpen={() => setShowImport(true)}
         />
+      )}
+      {tab === "acoes" && (
+        <AcoesTab />
       )}
       {tab === "automations" && (
         <AutomationsTab initialAutomations={initialAutomations} />
