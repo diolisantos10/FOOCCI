@@ -61,6 +61,7 @@ const bodySchema = z.object({
   paymentMode:      z.enum(["pay_now", "pay_on_delivery", "pay_on_pickup"]),
   paymentMethodSub: z.enum(["card_machine", "pix_in_person", "cash"]).nullable().optional(),
   customerPhone:    z.string().optional(),
+  clientDeliveryFee: z.number().nonnegative().optional(),
 });
 
 // ── Idempotency ───────────────────────────────────────────────────────────────
@@ -111,7 +112,7 @@ export async function POST(
 
   const {
     cart, customerName, deliveryMethod, address,
-    paymentMode, paymentMethodSub, customerPhone,
+    paymentMode, paymentMethodSub, customerPhone, clientDeliveryFee,
   } = parsed.data;
 
   // ── Validate cart against DB (prevent price tampering) ────────
@@ -177,19 +178,35 @@ export async function POST(
   const deliveryCfg = deliveryMethod === "delivery"
     ? await prisma.deliveryConfig.findUnique({
         where: { restaurantId },
-        select: { mode: true, fee: true, freeDeliveryAbove: true },
+        select: {
+          mode: true, fee: true, freeDeliveryAbove: true,
+          distanceBaseFee: true, distanceMinFee: true, distanceMaxFee: true,
+        },
       })
     : null;
 
   const deliveryFeeAmount = (() => {
     if (!deliveryCfg || deliveryMethod !== "delivery") return 0;
+
+    const freeAbove = deliveryCfg.freeDeliveryAbove != null ? Number(deliveryCfg.freeDeliveryAbove) : null;
+    const isFreeOrder = freeAbove != null && freeAbove > 0 && subtotal >= freeAbove;
+    if (isFreeOrder) return 0;
+
     if (deliveryCfg.mode === "simple" && deliveryCfg.fee != null) {
-      const fee = Number(deliveryCfg.fee);
-      const freeAbove = deliveryCfg.freeDeliveryAbove != null ? Number(deliveryCfg.freeDeliveryAbove) : null;
-      if (freeAbove != null && freeAbove > 0 && subtotal >= freeAbove) return 0;
-      return fee;
+      return Number(deliveryCfg.fee);
     }
-    // manual / advanced / distance — fee to be confirmed separately
+
+    if (deliveryCfg.mode === "distance" || deliveryCfg.mode === "advanced") {
+      const baseFee  = deliveryCfg.distanceBaseFee  != null ? Number(deliveryCfg.distanceBaseFee)  : 0;
+      const minFee   = deliveryCfg.distanceMinFee   != null ? Number(deliveryCfg.distanceMinFee)   : baseFee;
+      const maxFee   = deliveryCfg.distanceMaxFee   != null ? Number(deliveryCfg.distanceMaxFee)   : Infinity;
+      // Use client-calculated fee (shown to customer) but clamp to [max(baseFee, minFee), maxFee]
+      const floorFee = Math.max(baseFee, minFee);
+      const raw      = clientDeliveryFee != null ? clientDeliveryFee : floorFee;
+      return Math.min(Math.max(raw, floorFee), maxFee === Infinity ? raw : maxFee);
+    }
+
+    // manual — fee to be agreed at delivery
     return 0;
   })();
 

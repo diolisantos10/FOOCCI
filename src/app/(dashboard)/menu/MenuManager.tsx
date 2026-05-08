@@ -259,16 +259,20 @@ function ImageUpload({
 
 function SortableItemRow({
   item,
+  categoryId,
   categorySource,
   categoryIsAvailable,
   filterActive,
+  otherManualCategories,
   onSave,
   onEdit,
 }: {
   item: Item;
+  categoryId: string;
   categorySource: MenuSource;
   categoryIsAvailable: boolean;
   filterActive?: boolean;
+  otherManualCategories: Category[];
   onSave: (
     id: string,
     patch: Partial<{
@@ -289,12 +293,24 @@ function SortableItemRow({
   } = useSortable({ id: item.id });
 
   const editable = categorySource === "MANUAL";
+  const [placingIn, setPlacingIn] = useState<string | null>(null);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
   };
+
+  async function handleDuplicate(targetCategoryId: string) {
+    if (placingIn) return;
+    setPlacingIn(targetCategoryId);
+    try {
+      await apiFetch(`/api/menu/items/${item.id}/placements`, "POST", { categoryId: targetCategoryId });
+    } catch { /* ignore */ }
+    setPlacingIn(null);
+    setDuplicateOpen(false);
+  }
 
   return (
     <li
@@ -358,6 +374,41 @@ function SortableItemRow({
                 disabled={!item.isAvailable}
                 onChange={() => onSave(item.id, { showInDineIn: !item.showInDineIn })}
               />
+              {otherManualCategories.length > 0 && (
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => setDuplicateOpen((o) => !o)}
+                    className="rounded px-2 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 transition-colors"
+                    title="Adicionar em outra categoria"
+                  >
+                    + Duplicar
+                  </button>
+                  {duplicateOpen && (
+                    <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                      <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                        Adicionar em categoria
+                      </p>
+                      {otherManualCategories.map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          disabled={!!placingIn}
+                          onClick={() => handleDuplicate(cat.id)}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {placingIn === cat.id ? (
+                            <span className="h-3 w-3 animate-spin rounded-full border-2 border-orange-400 border-t-transparent" />
+                          ) : (
+                            <span className="h-3 w-3 rounded-full bg-orange-200" />
+                          )}
+                          {cat.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -456,6 +507,7 @@ function AddItemForm({
 
 function CategoryCard({
   category,
+  allCategories,
   dragListeners,
   filterActive,
   onChange,
@@ -463,6 +515,7 @@ function CategoryCard({
   onEditItem,
 }: {
   category: Category;
+  allCategories: Category[];
   dragListeners?: Record<string, unknown>;
   filterActive?: boolean;
   onChange: (updated: Category) => void;
@@ -732,9 +785,13 @@ function CategoryCard({
                 <SortableItemRow
                   key={item.id}
                   item={item}
+                  categoryId={category.id}
                   categorySource={category.source}
                   categoryIsAvailable={category.isAvailable}
                   filterActive={filterActive}
+                  otherManualCategories={allCategories.filter(
+                    (c) => c.id !== category.id && c.source === "MANUAL"
+                  )}
                   onSave={saveItem}
                   onEdit={(it) => onEditItem(it, category.id)}
                 />
@@ -2729,6 +2786,7 @@ export function MenuManager({
               <SortableCategoryCard
                 key={cat.id}
                 category={cat}
+                allCategories={categories}
                 filterActive={isFilterActive}
                 onChange={updateCategory}
                 onDelete={removeCategory}

@@ -148,6 +148,8 @@ interface Props {
   knownDefaultAddress?: { street: string; number: string; neighborhood: string; complement: string; cep?: string; city?: string; state?: string } | null;
   deliveryFee?: number | null;
   deliveryMode?: string;
+  deliveryEstimatedMinutes?: number | null;
+  averagePreparationMinutes?: number | null;
   /** Instagram profile URL — shown as icon in ordering header if provided. */
   instagramUrl?: string | null;
   /** TikTok profile URL — shown as icon in ordering header if provided. */
@@ -1150,6 +1152,7 @@ export function PedidoClient({
   banners = [],
   brandPrimaryColor = null, brandSecondaryColor = null,
   deliveryFee = null, deliveryMode = "simple",
+  deliveryEstimatedMinutes = null, averagePreparationMinutes = null,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -2066,6 +2069,9 @@ export function PedidoClient({
           address,
           paymentMode,
           paymentMethodSub,
+          clientDeliveryFee: deliveryMethod === "delivery" && deliveryMode !== "manual"
+            ? (deliveryFee ?? 0)
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -2236,6 +2242,13 @@ export function PedidoClient({
     }
 
     if (stage === "ADDRESS_CONFIRM") {
+      const prepMin  = averagePreparationMinutes ?? 20;
+      const etaLow   = deliveryMethod === "pickup"
+        ? prepMin - 5
+        : prepMin + (deliveryEstimatedMinutes ?? 30) - 10;
+      const etaHigh  = deliveryMethod === "pickup"
+        ? prepMin + 10
+        : prepMin + (deliveryEstimatedMinutes ?? 30) + 10;
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
           <div className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
@@ -2248,6 +2261,9 @@ export function PedidoClient({
               <p className="text-gray-500">Ref: {address.referencePoint}</p>
             )}
           </div>
+          <p className="mb-2 text-xs text-gray-500">
+            ⏱ Previsão de {deliveryMethod === "pickup" ? "retirada" : "entrega"}: <span className="font-semibold text-gray-700">{Math.max(5, etaLow)}–{etaHigh} min</span>
+          </p>
           <div className="flex gap-2">
             <button
               onClick={handleAddressConfirm}
@@ -2322,6 +2338,13 @@ export function PedidoClient({
       const appliedFee  = deliveryMethod === "delivery" && !isManualFee ? (deliveryFee ?? 0) : 0;
       const total       = subtotal + appliedFee;
       const pmLabel = resolvePaymentMethod(paymentMode, paymentMethodSub) ?? "—";
+      const prepMin  = averagePreparationMinutes ?? 20;
+      const etaLow   = deliveryMethod === "pickup"
+        ? prepMin - 5
+        : prepMin + (deliveryEstimatedMinutes ?? 30) - 10;
+      const etaHigh  = deliveryMethod === "pickup"
+        ? prepMin + 10
+        : prepMin + (deliveryEstimatedMinutes ?? 30) + 10;
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
           <p className="mb-2 text-xs font-semibold text-gray-500">Revise seu pedido</p>
@@ -2373,6 +2396,10 @@ export function PedidoClient({
               </p>
             )}
             <p><span className="font-semibold text-gray-800">Pagamento:</span> {pmLabel}</p>
+            <p>
+              <span className="font-semibold text-gray-800">Previsão:</span>{" "}
+              ⏱ {Math.max(5, etaLow)}–{etaHigh} min
+            </p>
           </div>
 
           <div className="flex gap-2">

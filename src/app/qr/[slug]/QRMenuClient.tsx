@@ -60,123 +60,140 @@ function formatPrice(n: number) {
   });
 }
 
-// ── Welcome Modal (popup) ─────────────────────────────────────────────────────
-// Appears once per session. Optional — can be skipped freely.
-// On submit: calls /api/qr/[slug]/identify and passes greeting back to parent.
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-type WelcomePhase = "idle" | "loading" | "done";
+function fmtPhone(raw: string): string {
+  const d = raw.replace(/\D/g, "");
+  const local = d.startsWith("55") && d.length > 11 ? d.slice(2) : d;
+  if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+  if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  return raw;
+}
+
+// ── WelcomeModal ──────────────────────────────────────────────────────────────
+// Phone-first identification: step 1 = WhatsApp only, step 2 = name (new customers only).
+// Appears once per session. Can be skipped.
 
 function WelcomeModal({
   slug,
   onClose,
 }: {
   slug: string;
-  onClose: (greeting: string | null) => void;
+  onClose: (identity: { name: string | null; displayPhone: string | null; customerId?: string } | null) => void;
 }) {
-  const [name, setName]   = useState("");
-  const [phone, setPhone] = useState("");
-  const [phase, setPhase] = useState<WelcomePhase>("idle");
+  const [step,           setStep]           = useState<"phone" | "name">("phone");
+  const [phoneInput,     setPhoneInput]     = useState("");
+  const [nameInput,      setNameInput]      = useState("");
+  const [collectedPhone, setCollectedPhone] = useState("");
+  const [loading,        setLoading]        = useState(false);
+  const [error,          setError]          = useState<string | null>(null);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handlePhoneSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!phone.trim() || phase === "loading") return;
-    setPhase("loading");
+    const ph = phoneInput.trim();
+    if (ph.replace(/\D/g, "").length < 10) { setError("Informe um WhatsApp válido."); return; }
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/qr/${slug}/identify`, {
+      const res  = await fetch(`/api/qr/${slug}/identify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, name: name.trim() }),
+        body: JSON.stringify({ phone: ph }),
       });
       const data: { found: boolean; name?: string; customerId?: string } = await res.json();
-      const firstName = data.name ?? name.trim().split(/\s+/)[0] ?? "";
-      // Store for /pedido/[slug] so it can pre-identify without asking again
-      try {
-        sessionStorage.setItem(
-          `foocci-customer-${slug}`,
-          JSON.stringify({ phone: phone.trim(), name: firstName, customerId: data.customerId }),
-        );
-      } catch { /* incognito storage quota */ }
-      onClose(firstName ? `Olá, ${firstName}! 👋` : "Bem-vindo! 👋");
-    } catch {
-      onClose(name.trim() ? `Olá, ${name.trim().split(/\s+/)[0]}! 👋` : "Bem-vindo! 👋");
-    }
+      const displayPh = fmtPhone(ph);
+      if (data.found && data.name) {
+        // Existing customer — no name needed
+        try {
+          sessionStorage.setItem(`foocci-customer-${slug}`,
+            JSON.stringify({ phone: ph, name: data.name, customerId: data.customerId, displayPhone: displayPh }));
+        } catch { /* ignore */ }
+        onClose({ name: data.name, displayPhone: displayPh, customerId: data.customerId });
+      } else {
+        setCollectedPhone(ph);
+        setStep("name");
+      }
+    } catch { setError("Erro ao verificar. Tente novamente."); }
+    finally    { setLoading(false); }
   }
 
-  const canSubmit = phone.trim().length >= 8 && phase !== "loading";
+  async function handleNameSubmit(e: FormEvent) {
+    e.preventDefault();
+    const name = nameInput.trim();
+    if (name.length < 2) { setError("Informe seu nome."); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const res  = await fetch(`/api/qr/${slug}/identify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: collectedPhone, name }),
+      });
+      const data: { found: boolean; name?: string; customerId?: string } = await res.json();
+      const firstName  = data.name ?? name.split(/\s+/)[0]!;
+      const displayPh  = fmtPhone(collectedPhone);
+      try {
+        sessionStorage.setItem(`foocci-customer-${slug}`,
+          JSON.stringify({ phone: collectedPhone, name: firstName, customerId: data.customerId, displayPhone: displayPh }));
+      } catch { /* ignore */ }
+      onClose({ name: firstName, displayPhone: displayPh, customerId: data.customerId });
+    } catch { setError("Erro ao salvar. Tente novamente."); }
+    finally    { setLoading(false); }
+  }
+
+  const inputCls = "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60";
+  const btnCls   = "w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/60 backdrop-blur-sm">
-      <div
-        className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Drag handle — mobile only */}
+      <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-center pt-3 sm:hidden">
           <div className="h-1 w-10 rounded-full bg-gray-200" />
         </div>
 
-        {/* Accent bar */}
-        <div className="mx-6 mt-5 rounded-2xl px-5 py-4 text-white shadow-sm" style={{ backgroundColor: 'var(--brand-primary)' }}>
-          <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Bem-vindo!</p>
+        <div className="mx-6 mt-5 rounded-2xl px-5 py-4 text-white shadow-sm" style={{ backgroundColor: "var(--brand-primary)" }}>
+          <p className="text-xs font-semibold uppercase tracking-wider opacity-80">
+            {step === "phone" ? "Identificação rápida" : "Novo cadastro"}
+          </p>
           <p className="mt-0.5 text-base font-bold leading-snug">
-            Antes de ver o cardápio,<br />se apresente 😊
+            {step === "phone"
+              ? "Pra personalizar seu atendimento, informe seu WhatsApp. 📱"
+              : "Como podemos te chamar? 😊"}
           </p>
         </div>
 
         <div className="px-6 pb-7 pt-5">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Name */}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-gray-500">
-                Seu nome
-              </label>
-              <input
-                type="text"
-                inputMode="text"
-                autoCapitalize="words"
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: João Silva"
-                disabled={phase === "loading"}
-                style={{ fontSize: "16px" }}
-                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60"
-              />
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-gray-500">
-                Seu WhatsApp
-              </label>
-              <input
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="(11) 99999-9999"
-                disabled={phase === "loading"}
-                style={{ fontSize: "16px" }}
-                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:opacity-60"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="w-full rounded-2xl py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
-              style={{ backgroundColor: 'var(--brand-primary)' }}
-            >
-              {phase === "loading" ? "Verificando…" : "Ver o cardápio →"}
-            </button>
-          </form>
-
-          <button
-            type="button"
-            onClick={() => onClose(null)}
-            className="mt-3 w-full py-2 text-xs text-gray-400 transition-colors hover:text-gray-600"
-          >
+          {step === "phone" ? (
+            <form onSubmit={handlePhoneSubmit} className="space-y-3">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-gray-500">Seu WhatsApp</label>
+                <input type="tel" inputMode="numeric" autoComplete="tel"
+                  value={phoneInput} onChange={(e) => { setPhoneInput(e.target.value); setError(null); }}
+                  placeholder="(11) 99999-9999" disabled={loading} style={{ fontSize: "16px" }} className={inputCls} />
+              </div>
+              {error && <p className="text-xs text-red-500">{error}</p>}
+              <button type="submit" disabled={!phoneInput.trim() || loading} className={btnCls}
+                style={{ backgroundColor: "var(--brand-primary)" }}>
+                {loading ? "Verificando…" : "Continuar →"}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleNameSubmit} className="space-y-3">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-gray-500">Seu nome</label>
+                <input type="text" inputMode="text" autoCapitalize="words" autoFocus
+                  value={nameInput} onChange={(e) => { setNameInput(e.target.value); setError(null); }}
+                  placeholder="Ex: João Silva" disabled={loading} style={{ fontSize: "16px" }} className={inputCls} />
+              </div>
+              {error && <p className="text-xs text-red-500">{error}</p>}
+              <button type="submit" disabled={!nameInput.trim() || loading} className={btnCls}
+                style={{ backgroundColor: "var(--brand-primary)" }}>
+                {loading ? "Salvando…" : "Continuar →"}
+              </button>
+            </form>
+          )}
+          <button type="button" onClick={() => onClose(null)}
+            className="mt-3 w-full py-2 text-xs text-gray-400 transition-colors hover:text-gray-600">
             Pular identificação
           </button>
         </div>
@@ -522,24 +539,51 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
   const [activeCategory, setActiveCategory] = useState<string>(
     categories[0]?.id ?? ""
   );
-  const [greeting, setGreeting] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState<boolean>(false);
+
+  // ── Identity state ─────────────────────────────────────────────
+  const [identifiedName,  setIdentifiedName]  = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = sessionStorage.getItem(`foocci-customer-${slug}`);
+      if (raw) return (JSON.parse(raw) as { name?: string }).name ?? null;
+    } catch { /* ignore */ }
+    return null;
+  });
+  const [identifiedPhone, setIdentifiedPhone] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = sessionStorage.getItem(`foocci-customer-${slug}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { phone?: string; displayPhone?: string };
+        return parsed.displayPhone ?? (parsed.phone ? fmtPhone(parsed.phone) : null);
+      }
+    } catch { /* ignore */ }
+    return null;
+  });
 
   const navRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
 
-  // Show welcome modal once per session
+  // Show welcome modal once per session (skip if already identified)
   useEffect(() => {
-    const key = `qr-welcome-seen-${slug}`;
-    if (!sessionStorage.getItem(key)) {
-      setShowWelcome(true);
-    }
+    const seen = sessionStorage.getItem(`qr-welcome-seen-${slug}`);
+    const identified = !!sessionStorage.getItem(`foocci-customer-${slug}`);
+    if (!seen && !identified) setShowWelcome(true);
   }, [slug]);
 
-  function handleWelcomeClose(g: string | null) {
-    setGreeting(g);
+  function handleWelcomeClose(identity: { name: string | null; displayPhone: string | null; customerId?: string } | null) {
+    if (identity?.name) { setIdentifiedName(identity.name); setIdentifiedPhone(identity.displayPhone); }
     setShowWelcome(false);
     sessionStorage.setItem(`qr-welcome-seen-${slug}`, "1");
+  }
+
+  function handleResetIdentity() {
+    try { sessionStorage.removeItem(`foocci-customer-${slug}`); } catch { /* ignore */ }
+    try { sessionStorage.removeItem(`qr-welcome-seen-${slug}`);  } catch { /* ignore */ }
+    setIdentifiedName(null);
+    setIdentifiedPhone(null);
+    setShowWelcome(true);
   }
 
   // IntersectionObserver: update active category chip as user scrolls
@@ -659,18 +703,21 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
             )}
           </div>
 
-          {/* Greeting chip — shown after welcome modal resolves */}
-          {greeting && (
+          {/* Identity strip — shown after identification */}
+          {(identifiedName || identifiedPhone) && (
             <div className="mx-auto max-w-2xl px-4 pb-3">
               <div className="flex items-center justify-between rounded-full bg-orange-50 border border-orange-100 px-4 py-2.5">
-                <span className="text-sm font-semibold text-orange-700">{greeting}</span>
+                <span className="text-sm font-semibold text-orange-700">
+                  {identifiedName ? `Olá, ${identifiedName}` : "Olá"}
+                  {identifiedPhone && <span className="font-normal text-orange-500"> · {identifiedPhone}</span>}
+                </span>
                 <button
                   type="button"
-                  onClick={() => setGreeting(null)}
-                  className="ml-3 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[10px] text-orange-500 hover:bg-orange-200 transition-colors"
-                  aria-label="Fechar saudação"
+                  onClick={handleResetIdentity}
+                  className="ml-3 shrink-0 rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-medium text-orange-600 hover:bg-orange-200 transition-colors"
+                  aria-label="Trocar identificação"
                 >
-                  ✕
+                  Trocar
                 </button>
               </div>
             </div>

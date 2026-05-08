@@ -190,6 +190,7 @@ model MenuCategory {
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   items      MenuItem[]
+  placements MenuItemPlacement[]
 
   @@index([restaurantId])
   @@map("menu_categories")
@@ -230,9 +231,24 @@ model MenuItem {
   variants        MenuItemVariant[]
   extras          MenuItemExtra[]
   optionGroups    OptionGroup[]
+  placements      MenuItemPlacement[]
 
   @@index([categoryId])
   @@map("menu_items")
+}
+
+model MenuItemPlacement {
+  id         String @id @default(cuid())
+  itemId     String
+  categoryId String
+  sortOrder  Int    @default(0)
+
+  item     MenuItem     @relation(fields: [itemId],     references: [id], onDelete: Cascade)
+  category MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, categoryId])
+  @@index([categoryId])
+  @@map("menu_item_placements")
 }
 
 model MenuItemVariant {

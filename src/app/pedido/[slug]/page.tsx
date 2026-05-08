@@ -42,7 +42,7 @@ export default async function PedidoPage({
     where: { slug },
     select: {
       id: true, name: true, logoUrl: true, phone: true,
-      storeProfile: { select: { whatsappPhone: true } },
+      storeProfile: { select: { whatsappPhone: true, averagePreparationMinutes: true } },
     },
   });
 
@@ -53,7 +53,7 @@ export default async function PedidoPage({
   // ── Delivery config (fee + mode shown in checkout) ───────────────────────────
   const deliveryConfig = await prisma.deliveryConfig.findUnique({
     where: { restaurantId: restaurant.id },
-    select: { mode: true, fee: true, enabled: true },
+    select: { mode: true, fee: true, enabled: true, estimatedMinutes: true },
   });
 
   // ── Brand config (social links for ordering header) ──────────────────────────
@@ -136,15 +136,8 @@ export default async function PedidoPage({
         where: { isActive: true, isAvailable: true, showInDelivery: true },
         orderBy: { sortOrder: "asc" },
         select: {
-          id: true,
-          name: true,
-          price: true,
-          description: true,
-          imageUrl: true,
-          hasVariants: true,
-          ingredients: true,
-          servingSize: true,
-          portionInfo: true,
+          id: true, name: true, price: true, description: true, imageUrl: true,
+          hasVariants: true, ingredients: true, servingSize: true, portionInfo: true,
           variants: {
             where: { isAvailable: true },
             orderBy: { sortOrder: "asc" },
@@ -167,54 +160,77 @@ export default async function PedidoPage({
           },
         },
       },
+      placements: {
+        where: { item: { isActive: true, isAvailable: true, showInDelivery: true } },
+        orderBy: { sortOrder: "asc" },
+        include: {
+          item: {
+            select: {
+              id: true, name: true, price: true, description: true, imageUrl: true,
+              hasVariants: true, ingredients: true, servingSize: true, portionInfo: true,
+              variants: {
+                where: { isAvailable: true },
+                orderBy: { sortOrder: "asc" },
+                select: { id: true, name: true, price: true, portion: true },
+              },
+              extras: {
+                where: { isAvailable: true },
+                orderBy: { name: "asc" },
+                select: { id: true, name: true, price: true, portion: true, quantity: true },
+              },
+              optionGroups: {
+                orderBy: { sortOrder: "asc" },
+                include: {
+                  options: {
+                    where: { isAvailable: true },
+                    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+                    select: { id: true, name: true, price: true, portion: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
-  const categories = rawCategories
-    .filter((c) => c.items.length > 0)
-    .map((c) => ({
-      id: c.id,
-      name: c.name,
-      description: c.description ?? null,
-      imageUrl: c.imageUrl ?? null,
-      items: c.items.map((i) => ({
-        id: i.id,
-        name: i.name,
-        price: Number(i.price),
-        description: i.description ?? null,
-        imageUrl: i.imageUrl ?? null,
-        hasVariants: i.hasVariants,
-        ingredients: i.ingredients ?? null,
-        servingSize: i.servingSize ?? null,
-        portionInfo: i.portionInfo ?? null,
-        variants: i.variants.map((v) => ({
-          id: v.id,
-          name: v.name,
-          price: Number(v.price),
-          portion: v.portion ?? null,
-        })),
-        extras: i.extras.map((e) => ({
-          id: e.id,
-          name: e.name,
-          price: Number(e.price),
-          portion: e.portion ?? null,
-          quantity: e.quantity,
-        })),
-        optionGroups: i.optionGroups.map((g) => ({
-          id: g.id,
-          name: g.name,
-          required: g.required,
-          minSelect: g.minSelect,
-          maxSelect: g.maxSelect,
-          options: g.options.map((o) => ({
-            id: o.id,
-            name: o.name,
-            price: Number(o.price),
-            portion: o.portion ?? null,
-          })),
-        })),
+  function mapPedidoItem(i: typeof rawCategories[0]["items"][0]) {
+    return {
+      id: i.id,
+      name: i.name,
+      price: Number(i.price),
+      description: i.description ?? null,
+      imageUrl: i.imageUrl ?? null,
+      hasVariants: i.hasVariants,
+      ingredients: i.ingredients ?? null,
+      servingSize: i.servingSize ?? null,
+      portionInfo: i.portionInfo ?? null,
+      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: Number(v.price), portion: v.portion ?? null })),
+      extras: i.extras.map((e) => ({ id: e.id, name: e.name, price: Number(e.price), portion: e.portion ?? null, quantity: e.quantity })),
+      optionGroups: i.optionGroups.map((g) => ({
+        id: g.id, name: g.name, required: g.required, minSelect: g.minSelect, maxSelect: g.maxSelect,
+        options: g.options.map((o) => ({ id: o.id, name: o.name, price: Number(o.price), portion: o.portion ?? null })),
       })),
-    }));
+    };
+  }
+
+  const categories = rawCategories
+    .map((c) => {
+      const ownIds = new Set(c.items.map((i) => i.id));
+      const placedItems = c.placements.map((p) => p.item).filter((i) => !ownIds.has(i.id));
+      return {
+        id: c.id, name: c.name, description: c.description ?? null, imageUrl: c.imageUrl ?? null,
+        items: [...c.items, ...placedItems].map(mapPedidoItem),
+      };
+    })
+    .filter((c) => c.items.length > 0);
+
+  // Inject "⭐ Mais pedidos" synthetic category as first section (top 10 items)
+  const bestSellers = categories.flatMap((c) => c.items).slice(0, 10);
+  const allCategories = bestSellers.length > 0
+    ? [{ id: "__best__", name: "⭐ Mais pedidos", description: null, imageUrl: null, items: bestSellers }, ...categories]
+    : categories;
 
   return (
     <PedidoClient
@@ -222,7 +238,7 @@ export default async function PedidoPage({
       restaurantName={restaurant.name}
       logoUrl={restaurant.logoUrl ?? null}
       phone={restaurant.storeProfile?.whatsappPhone ?? restaurant.phone ?? null}
-      categories={categories}
+      categories={allCategories}
       knownCustomerPhone={knownCustomerPhone}
       knownCustomerName={knownCustomerName}
       knownCustomerId={knownCustomerId}
@@ -234,6 +250,8 @@ export default async function PedidoPage({
       banners={activeBanners}
       deliveryMode={deliveryConfig?.mode ?? "simple"}
       deliveryFee={deliveryConfig?.fee != null ? Number(deliveryConfig.fee) : null}
+      deliveryEstimatedMinutes={deliveryConfig?.estimatedMinutes ?? null}
+      averagePreparationMinutes={restaurant.storeProfile?.averagePreparationMinutes ?? null}
     />
   );
 }
