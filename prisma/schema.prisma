@@ -57,6 +57,7 @@ model Restaurant {
   integrationConfigs IntegrationConfig[]
   promotions         Promotion[]
   crmAutomations     CRMAutomation[]
+  crmCustomActions   CRMCustomAction[]
   crmActionLogs      CRMActionLog[]
   crmProfile         RestaurantCRMProfile?
   autoSimulatorConfig AutoSimulatorConfig?
@@ -1236,6 +1237,29 @@ model CRMAutomation {
   @@unique([restaurantId, trigger])
   @@index([restaurantId])
   @@map("crm_automations")
+}
+
+/// Manually-created CRM action template by the restaurant owner.
+/// Never triggers sending by itself — status stays DRAFT until a future
+/// scheduling layer is built.
+model CRMCustomAction {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  name          String
+  objective     String   // RECUPERAR | RECOMPRA | TICKET | BEBIDA | SOBREMESA | AVALIACAO | VIP | ANIVERSARIO | OUTRO
+  targetSegment String   // TODOS | QUENTE | MORNO | FRIO | NOVOS | RECORRENTES | VIP | PRIMEIRO_PEDIDO | ...
+  channel       String   @default("WHATSAPP")   // WHATSAPP | MANUAL | CRM_AGENT
+  message       String   @db.Text
+  notes         String?  @db.Text
+  status        String   @default("DRAFT")       // DRAFT (only status for now)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([restaurantId, status])
+  @@map("crm_custom_actions")
 }
 
 // ═══════════════════════════════════════════

@@ -69,7 +69,310 @@ function TierBadge({ tier }: { tier: CustomerTier }) {
   );
 }
 
-// ── Ações Tab ─────────────────────────────────────────────────────────────────
+// ── Custom Action types ───────────────────────────────────────────────────────
+
+type CustomActionRow = {
+  id:            string;
+  name:          string;
+  objective:     string;
+  targetSegment: string;
+  channel:       string;
+  message:       string;
+  notes:         string | null;
+  status:        string;
+  createdAt:     string;
+};
+
+const OBJECTIVE_LABELS: Record<string, string> = {
+  RECUPERAR:   "Recuperar clientes",
+  RECOMPRA:    "Aumentar recompra",
+  TICKET:      "Aumentar ticket médio",
+  BEBIDA:      "Vender bebida",
+  SOBREMESA:   "Vender sobremesa",
+  AVALIACAO:   "Pedir avaliação",
+  VIP:         "Valorizar clientes VIP",
+  ANIVERSARIO: "Aniversário",
+  OUTRO:       "Outro",
+};
+
+const SEGMENT_LABELS: Record<string, string> = {
+  TODOS:             "Todos os clientes",
+  QUENTE:            "Clientes quentes",
+  MORNO:             "Clientes mornos",
+  FRIO:              "Clientes frios",
+  NOVOS:             "Novos clientes",
+  RECORRENTES:       "Clientes recorrentes",
+  VIP:               "Clientes VIP",
+  PRIMEIRO_PEDIDO:   "Clientes com 1 pedido",
+  INATIVO_X_DIAS:    "Clientes sem comprar há X dias",
+  PRODUTO_ESPECIFICO:"Compraram produto/categoria específica",
+  SEM_BEBIDA:        "Não compram bebida",
+  SEM_SOBREMESA:     "Não compram sobremesa",
+  PERSONALIZADO:     "Personalizado",
+};
+
+const CHANNEL_LABELS: Record<string, string> = {
+  WHATSAPP:  "WhatsApp",
+  MANUAL:    "Manual por enquanto",
+  CRM_AGENT: "Agente CRM futuro",
+};
+
+// ── Create Action Modal ───────────────────────────────────────────────────────
+
+type CreateActionFormErrors = Partial<Record<"name" | "objective" | "targetSegment" | "message", string>>;
+
+function CreateActionModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (action: CustomActionRow) => void;
+}) {
+  const [name,          setName]          = useState("");
+  const [objective,     setObjective]     = useState("");
+  const [targetSegment, setTargetSegment] = useState("");
+  const [channel,       setChannel]       = useState("WHATSAPP");
+  const [message,       setMessage]       = useState("");
+  const [notes,         setNotes]         = useState("");
+  const [errors,        setErrors]        = useState<CreateActionFormErrors>({});
+  const [saving,        setSaving]        = useState(false);
+  const [copied,        setCopied]        = useState(false);
+
+  function validate(): CreateActionFormErrors {
+    const e: CreateActionFormErrors = {};
+    if (!name.trim())          e.name          = "Nome é obrigatório";
+    if (!objective)            e.objective      = "Selecione um objetivo";
+    if (!targetSegment)        e.targetSegment  = "Selecione um segmento";
+    if (!message.trim())       e.message        = "Mensagem é obrigatória";
+    return e;
+  }
+
+  async function handleSave() {
+    const e = validate();
+    if (Object.keys(e).length > 0) { setErrors(e); return; }
+    setSaving(true);
+    setErrors({});
+    try {
+      const res = await fetch("/api/crm/custom-actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), objective, targetSegment, channel, message: message.trim(), notes: notes.trim() || null }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const fieldErrs = (body as { details?: Record<string, string[]> }).details ?? {};
+        const mapped: CreateActionFormErrors = {};
+        if (fieldErrs.name?.[0])          mapped.name          = fieldErrs.name[0];
+        if (fieldErrs.objective?.[0])     mapped.objective     = fieldErrs.objective[0];
+        if (fieldErrs.targetSegment?.[0]) mapped.targetSegment = fieldErrs.targetSegment[0];
+        if (fieldErrs.message?.[0])       mapped.message       = fieldErrs.message[0];
+        setErrors(Object.keys(mapped).length > 0 ? mapped : { name: "Erro ao salvar. Tente novamente." });
+        return;
+      }
+      const json = await res.json();
+      onCreated(json.data as CustomActionRow);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function copyMessage() {
+    navigator.clipboard.writeText(message);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const VARIABLE_HINTS = ["{nome}", "{restaurante}", "{ultimo_pedido}", "{produto_favorito}"];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl bg-white shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Criar ação personalizada</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Salvará como rascunho no seu CRM</p>
+          </div>
+          <button onClick={onClose} className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body — scrollable */}
+        <div className="overflow-y-auto p-5 space-y-4 flex-1">
+
+          {/* 1. Nome */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-700">
+              Nome da ação <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: Reativação de clientes do almoço"
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 transition ${
+                errors.name ? "border-red-300 focus:ring-red-100" : "border-gray-200 focus:border-brand-400 focus:ring-brand-100"
+              }`}
+            />
+            {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
+          </div>
+
+          {/* 2. Objetivo */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-700">
+              Objetivo <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={objective}
+              onChange={(e) => setObjective(e.target.value)}
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 transition ${
+                errors.objective ? "border-red-300 focus:ring-red-100" : "border-gray-200 focus:border-brand-400 focus:ring-brand-100"
+              }`}
+            >
+              <option value="">Selecione um objetivo</option>
+              {Object.entries(OBJECTIVE_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            {errors.objective && <p className="mt-1 text-xs text-red-500">{errors.objective}</p>}
+          </div>
+
+          {/* 3. Segmento */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-700">
+              Público-alvo / Segmento <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={targetSegment}
+              onChange={(e) => setTargetSegment(e.target.value)}
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 transition ${
+                errors.targetSegment ? "border-red-300 focus:ring-red-100" : "border-gray-200 focus:border-brand-400 focus:ring-brand-100"
+              }`}
+            >
+              <option value="">Selecione um segmento</option>
+              {Object.entries(SEGMENT_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            {errors.targetSegment && <p className="mt-1 text-xs text-red-500">{errors.targetSegment}</p>}
+          </div>
+
+          {/* 4. Canal */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-700">Canal</label>
+            <div className="flex gap-2">
+              {Object.entries(CHANNEL_LABELS).map(([k, v]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setChannel(k)}
+                  className={`flex-1 rounded-xl border py-2 text-xs font-semibold transition-colors ${
+                    channel === k
+                      ? "border-brand-400 bg-brand-50 text-brand-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 5. Mensagem */}
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-xs font-semibold text-gray-700">
+                Mensagem <span className="text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={copyMessage}
+                disabled={!message.trim()}
+                className={`text-xs font-semibold transition-colors disabled:opacity-40 ${
+                  copied ? "text-green-600" : "text-brand-600 hover:text-brand-700"
+                }`}
+              >
+                {copied ? "✓ Copiado!" : "Copiar mensagem"}
+              </button>
+            </div>
+            <textarea
+              rows={5}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Oi {nome}! 👋 Temos uma oferta especial para você..."
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 transition ${
+                errors.message ? "border-red-300 focus:ring-red-100" : "border-gray-200 focus:border-brand-400 focus:ring-brand-100"
+              }`}
+            />
+            {errors.message && <p className="mt-1 text-xs text-red-500">{errors.message}</p>}
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {VARIABLE_HINTS.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setMessage((m) => m + v)}
+                  className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600 hover:bg-gray-200 transition-colors"
+                >
+                  {v}
+                </button>
+              ))}
+              <span className="ml-1 text-[10px] text-gray-400">clique para inserir variável</span>
+            </div>
+          </div>
+
+          {/* 6. Observações internas */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-700">
+              Observações internas <span className="font-normal text-gray-400">(opcional)</span>
+            </label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notas para sua equipe — não aparecem para o cliente"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-800 resize-none focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
+            />
+          </div>
+
+          {/* 7. Status info */}
+          <div className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2.5">
+            <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-bold text-gray-600">Rascunho</span>
+            <p className="text-xs text-gray-500">A ação será salva como rascunho. Disparo automático em breve.</p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-2 border-t border-gray-100 px-5 py-4 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? "Salvando…" : "Salvar rascunho"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Ações Tab types ───────────────────────────────────────────────────────────
 
 type ActionReadiness = "READY" | "COMING_SOON" | "NEEDS_DATA";
 
@@ -354,7 +657,23 @@ function ActionConfigDrawer({
 // ── Ações Tab ─────────────────────────────────────────────────────────────────
 
 function AcoesTab({ stats }: { stats: OverviewStats }) {
-  const [selectedTemplate, setSelectedTemplate] = useState<ActionTemplate | null>(null);
+  const [selectedTemplate,  setSelectedTemplate]  = useState<ActionTemplate | null>(null);
+  const [showCreateModal,   setShowCreateModal]    = useState(false);
+  const [customActions,     setCustomActions]      = useState<CustomActionRow[]>([]);
+  const [loadingCustom,     setLoadingCustom]      = useState(true);
+  const [expandedCustom,    setExpandedCustom]     = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/crm/custom-actions")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setCustomActions(json.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingCustom(false));
+  }, []);
+
+  function handleActionCreated(action: CustomActionRow) {
+    setCustomActions((prev) => [action, ...prev]);
+  }
 
   const vipCount = (stats.segments.find((s) => s.tier === "OURO")?.count ?? 0) +
                    (stats.segments.find((s) => s.tier === "DIAMANTE")?.count ?? 0);
@@ -379,11 +698,22 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-base font-bold text-gray-900">Ações de CRM</h2>
-        <p className="mt-0.5 text-xs text-gray-500">
-          Templates prontos para engajar, recuperar e fidelizar clientes via WhatsApp.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-gray-900">Ações de CRM</h2>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Templates prontos para engajar, recuperar e fidelizar clientes via WhatsApp.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="shrink-0 flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Criar ação
+        </button>
       </div>
 
       {/* Summary cards */}
@@ -401,6 +731,100 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
           </div>
         ))}
       </div>
+
+      {/* ── Minhas ações ─────────────────────────────────────────────────────── */}
+      <div>
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
+          Minhas ações
+        </h3>
+
+        {loadingCustom ? (
+          <div className="py-6 text-center text-sm text-gray-400">Carregando…</div>
+        ) : customActions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 py-10 text-center">
+            <span className="text-3xl">✍️</span>
+            <p className="mt-2 text-sm font-semibold text-gray-500">Nenhuma ação criada ainda</p>
+            <p className="mt-0.5 text-xs text-gray-400">
+              Clique em &quot;Criar ação&quot; para montar sua primeira ação personalizada.
+            </p>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="mt-4 rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 transition-colors"
+            >
+              Criar primeira ação
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {customActions.map((action) => {
+              const isExpanded = expandedCustom === action.id;
+              return (
+                <div key={action.id} className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                          {OBJECTIVE_LABELS[action.objective] ?? action.objective}
+                        </span>
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                          {SEGMENT_LABELS[action.targetSegment] ?? action.targetSegment}
+                        </span>
+                        <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                          Rascunho
+                        </span>
+                      </div>
+                      <p className="text-sm font-bold text-gray-900 truncate">{action.name}</p>
+                    </div>
+                    {/* Expand toggle */}
+                    <button
+                      onClick={() => setExpandedCustom(isExpanded ? null : action.id)}
+                      className="shrink-0 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
+                    >
+                      {isExpanded ? "Fechar" : "Ver"}
+                    </button>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="border-t border-gray-50 bg-gray-50 px-4 py-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <p className="font-semibold text-gray-400 uppercase tracking-wide text-[10px]">Canal</p>
+                          <p className="text-gray-700 mt-0.5">{CHANNEL_LABELS[action.channel] ?? action.channel}</p>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-400 uppercase tracking-wide text-[10px]">Criada em</p>
+                          <p className="text-gray-700 mt-0.5">
+                            {new Date(action.createdAt).toLocaleDateString("pt-BR")}
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-400 uppercase tracking-wide text-[10px] mb-1">Mensagem</p>
+                        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 whitespace-pre-wrap">
+                          {action.message}
+                        </div>
+                      </div>
+                      {action.notes && (
+                        <div>
+                          <p className="font-semibold text-gray-400 uppercase tracking-wide text-[10px] mb-1">Observações internas</p>
+                          <p className="text-xs text-gray-500 italic">{action.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Ações sugeridas ──────────────────────────────────────────────────── */}
+      <div>
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
+          Ações sugeridas
+        </h3>
 
       {/* Action templates grid */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -448,14 +872,24 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
             </div>
           );
         })}
-      </div>
+      </div>{/* end templates grid */}
 
-      {/* Drawer */}
+      </div>{/* end Ações sugeridas section */}
+
+      {/* Config drawer for suggested templates */}
       {selectedTemplate && (
         <ActionConfigDrawer
           template={selectedTemplate}
           audienceCount={getAudienceCount(selectedTemplate.audienceKey)}
           onClose={() => setSelectedTemplate(null)}
+        />
+      )}
+
+      {/* Create custom action modal */}
+      {showCreateModal && (
+        <CreateActionModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={handleActionCreated}
         />
       )}
     </div>
