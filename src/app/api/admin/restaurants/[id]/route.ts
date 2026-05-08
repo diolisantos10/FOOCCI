@@ -7,25 +7,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { checkAdminRequest } from "@/lib/admin-auth";
 
 function checkAdminSecret(req: NextRequest): NextResponse | null {
-  const adminSecret = process.env.ADMIN_SECRET;
-  if (!adminSecret) {
+  if (!process.env.ADMIN_SECRET) {
     return NextResponse.json(
       { error: "This endpoint is disabled. Set ADMIN_SECRET to enable it." },
       { status: 403 }
     );
   }
-  const provided = req.headers.get("x-admin-secret") ?? "";
-  if (provided !== adminSecret) {
+  if (!checkAdminRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   return null;
 }
 
 const patchSchema = z.object({
+  name:     z.string().min(1).max(120).optional(),
   isActive: z.boolean().optional(),
-  plan: z.enum(["STARTER", "GROWTH", "PRO"]).optional(),
+  plan:     z.enum(["STARTER", "GROWTH", "PRO"]).optional(),
 });
 
 export async function PATCH(
@@ -64,15 +64,12 @@ export async function PATCH(
   const updated = await prisma.restaurant.update({
     where: { id },
     data: {
+      ...(parsed.data.name     !== undefined && { name:     parsed.data.name }),
       ...(parsed.data.isActive !== undefined && { isActive: parsed.data.isActive }),
-      ...(parsed.data.plan !== undefined && { plan: parsed.data.plan }),
+      ...(parsed.data.plan     !== undefined && { plan:     parsed.data.plan }),
     },
     select: {
-      id: true,
-      name: true,
-      isActive: true,
-      plan: true,
-      updatedAt: true,
+      id: true, name: true, isActive: true, plan: true, updatedAt: true,
     },
   });
 

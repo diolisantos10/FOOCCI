@@ -10,17 +10,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createRestaurantSchema } from "@/validators/restaurant";
 import { RestaurantService } from "@/services/restaurant/RestaurantService";
+import { checkAdminRequest } from "@/lib/admin-auth";
 
 function checkAdminSecret(req: NextRequest): NextResponse | null {
-  const adminSecret = process.env.ADMIN_SECRET;
-  if (!adminSecret) {
+  if (!process.env.ADMIN_SECRET) {
     return NextResponse.json(
       { error: "This endpoint is disabled. Set ADMIN_SECRET to enable it." },
       { status: 403 }
     );
   }
-  const provided = req.headers.get("x-admin-secret") ?? "";
-  if (provided !== adminSecret) {
+  if (!checkAdminRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   return null;

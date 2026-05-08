@@ -32,6 +32,9 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/integrations\/saipos\/webhook$/, // Saipos webhook (public — Saipos servers have no JWT)
   /^\/api\/media(\/.*)?$/,             // Public media (product images stored in DB)
   /^\/api\/health$/,                   // Health check (post-deploy validation)
+  // Global admin area — auth handled by admin cookie + layout, NOT by NextAuth
+  /^\/admin(\/.*)?$/,                  // Admin UI pages
+  /^\/api\/admin(\/.*)?$/,             // Admin API routes (each verifies x-admin-secret or admin cookie)
 ];
 
 function isPublicPath(pathname: string): boolean {
