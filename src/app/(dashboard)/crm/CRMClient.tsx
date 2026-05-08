@@ -372,9 +372,42 @@ function CreateActionModal({
   );
 }
 
+// ── Audience data types ───────────────────────────────────────────────────────
+
+type CustomerPreview = {
+  id:          string;
+  name:        string;
+  phone:       string;
+  tier:        string;
+  segment:     string;
+  totalOrders: number;
+  totalSpend:  number;
+  lastOrderAt: string | null;
+};
+
+type AudienceData = {
+  count:     number;
+  customers: CustomerPreview[];
+  computed:  boolean;
+};
+
+const TIER_BADGE: Record<string, { bg: string; text: string; icon: string }> = {
+  DIAMANTE: { bg: "bg-cyan-100",   text: "text-cyan-700",   icon: "💎" },
+  OURO:     { bg: "bg-amber-100",  text: "text-amber-700",  icon: "🥇" },
+  PRATA:    { bg: "bg-gray-200",   text: "text-gray-700",   icon: "🥈" },
+  BRONZE:   { bg: "bg-orange-100", text: "text-orange-700", icon: "🥉" },
+};
+
+const SEGMENT_BADGE: Record<string, { bg: string; text: string; label: string }> = {
+  QUENTE:      { bg: "bg-red-100",    text: "text-red-700",    label: "Quente"   },
+  MORNO:       { bg: "bg-amber-100",  text: "text-amber-700",  label: "Morno"    },
+  FRIO:        { bg: "bg-blue-100",   text: "text-blue-700",   label: "Frio"     },
+  SEM_PEDIDOS: { bg: "bg-gray-100",   text: "text-gray-500",   label: "Sem pedidos" },
+};
+
 // ── Ações Tab types ───────────────────────────────────────────────────────────
 
-type ActionReadiness = "READY" | "COMING_SOON" | "NEEDS_DATA";
+type ActionReadiness = "SUGGESTED_TEMPLATE" | "DRAFT" | "READY_TO_CONFIGURE" | "COMING_SOON" | "NEEDS_DATA";
 
 interface ActionTemplate {
   id: string;
@@ -384,6 +417,7 @@ interface ActionTemplate {
   targetLabel: string;
   description: string;
   readiness: ActionReadiness;
+  hasAudienceQuery: boolean;
   audienceKey: keyof OverviewStats | "vip" | null;
   suggestedMessage: string;
 }
@@ -396,7 +430,8 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     objective: "Reconquistar clientes que somem há mais de 60 dias",
     targetLabel: "Frios (60d+)",
     description: "Clientes que não pedem há mais de 60 dias têm alto risco de perda definitiva. Uma oferta especial pode reativá-los.",
-    readiness: "READY",
+    readiness: "SUGGESTED_TEMPLATE",
+    hasAudienceQuery: true,
     audienceKey: "frioCustomers",
     suggestedMessage: "Fala {nome}! 😊 Sentimos sua falta! Que tal voltar com um desconto especial de 10% no seu próximo pedido? Use o código VOLTEI e aproveite!",
   },
@@ -407,7 +442,8 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     objective: "Engajar clientes que sumiram entre 31–60 dias",
     targetLabel: "Mornos (31–60d)",
     description: "Clientes mornos estão a um passo de se tornarem frios. Uma lembrança carinhosa no momento certo faz a diferença.",
-    readiness: "READY",
+    readiness: "SUGGESTED_TEMPLATE",
+    hasAudienceQuery: true,
     audienceKey: "mornoCustomers",
     suggestedMessage: "Oi {nome}! 👋 Faz um tempo que não vemos você por aqui. Tem uma novidade deliciosa esperando — quer ver o cardápio atualizado?",
   },
@@ -418,7 +454,8 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     objective: "Fidelizar clientes após o primeiro pedido",
     targetLabel: "1º pedido (últimos 30d)",
     description: "O segundo pedido é o mais importante para criar um vínculo. Aborde novos clientes enquanto a experiência é fresca.",
-    readiness: "READY",
+    readiness: "SUGGESTED_TEMPLATE",
+    hasAudienceQuery: true,
     audienceKey: "newCustomers",
     suggestedMessage: "Oi {nome}, que bom ter você conosco! 🎉 Como foi o seu primeiro pedido? Aproveite 15% de desconto no próximo com o código VOLTEMAIS!",
   },
@@ -429,7 +466,8 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     objective: "Recompensar e reter clientes de alto valor",
     targetLabel: "Ouro + Diamante",
     description: "Seus melhores clientes merecem tratamento especial. Uma ação exclusiva reforça o relacionamento e aumenta a recorrência.",
-    readiness: "READY",
+    readiness: "SUGGESTED_TEMPLATE",
+    hasAudienceQuery: true,
     audienceKey: "vip",
     suggestedMessage: "Olá {nome}! 💎 Você é um cliente especial e temos uma oferta exclusiva para você. Use o código VIP20 para 20% de desconto no próximo pedido — apenas para VIPs!",
   },
@@ -438,9 +476,10 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     emoji: "⭐",
     title: "Pedido de avaliação",
     objective: "Aumentar avaliações Google e iFood",
-    targetLabel: "Clientes recentes (30d)",
+    targetLabel: "Clientes recentes (7d)",
     description: "Clientes satisfeitos raramente avaliam sem um lembrete. Peça no momento certo para maximizar as estrelas.",
-    readiness: "READY",
+    readiness: "SUGGESTED_TEMPLATE",
+    hasAudienceQuery: true,
     audienceKey: "ativoCustomers",
     suggestedMessage: "Oi {nome}! 🌟 Adoramos ter você como cliente. Pode nos dar 5 minutinhos e deixar uma avaliação? Sua opinião faz toda a diferença para nós! ⭐⭐⭐⭐⭐",
   },
@@ -451,7 +490,8 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     objective: "Surpreender clientes no dia especial",
     targetLabel: "Aniversariantes do mês",
     description: "Mensagens de aniversário personalizadas geram alta taxa de conversão e fortalecem o vínculo emocional com o cliente.",
-    readiness: "NEEDS_DATA",
+    readiness: "READY_TO_CONFIGURE",
+    hasAudienceQuery: false,
     audienceKey: null,
     suggestedMessage: "Feliz aniversário, {nome}! 🎉🎂 Hoje é seu dia especial e queremos comemorar junto com você. Ganhe uma sobremesa grátis no próximo pedido — use o código ANIVERSARIO!",
   },
@@ -462,7 +502,8 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     objective: "Elevar ticket médio com upsell de sobremesas",
     targetLabel: "Clientes sem sobremesa",
     description: "Clientes que nunca pediram sobremesas representam uma grande oportunidade de aumentar o ticket médio sem custo de aquisição.",
-    readiness: "NEEDS_DATA",
+    readiness: "READY_TO_CONFIGURE",
+    hasAudienceQuery: false,
     audienceKey: null,
     suggestedMessage: "Ei {nome}! 🍰 Você sabia que temos sobremesas irresistíveis? Adicione uma ao seu próximo pedido e ganhe 10% de desconto na sobremesa!",
   },
@@ -473,7 +514,8 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     objective: "Elevar ticket médio com upsell de bebidas",
     targetLabel: "Clientes sem bebidas",
     description: "Clientes que pedem apenas comida raramente adicionam bebidas. Uma oferta focada pode mudar esse padrão facilmente.",
-    readiness: "NEEDS_DATA",
+    readiness: "READY_TO_CONFIGURE",
+    hasAudienceQuery: false,
     audienceKey: null,
     suggestedMessage: "Oi {nome}! 🥤 Que tal uma bebida gelada com seu próximo pedido? Temos opções incríveis — adicione ao carrinho e ganhe frete grátis!",
   },
@@ -485,6 +527,7 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     targetLabel: "Rascunhos abandonados",
     description: "Clientes que iniciaram um pedido mas não concluíram estão a um passo da compra. Um lembrete gentil converte.",
     readiness: "COMING_SOON",
+    hasAudienceQuery: false,
     audienceKey: null,
     suggestedMessage: "Ei {nome}, você esqueceu algo! 🛒 Seu pedido ainda está esperando. Finalize agora e ganhe frete grátis!",
   },
@@ -493,9 +536,10 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     emoji: "🔔",
     title: "Recorrente sumido",
     objective: "Reativar clientes com histórico de recorrência",
-    targetLabel: "Frequentes + mornos",
+    targetLabel: "Frequentes + frios",
     description: "Clientes que pediam regularmente e pararam merecem abordagem diferente — eles já confiam em você e são mais fáceis de recuperar.",
-    readiness: "READY",
+    readiness: "SUGGESTED_TEMPLATE",
+    hasAudienceQuery: true,
     audienceKey: "mornoCustomers",
     suggestedMessage: "Oi {nome}! 👀 Notamos que você não aparece há um tempo. Saudade! Que tal fazer um pedido hoje? Tem novidades esperando por você.",
   },
@@ -506,7 +550,8 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     objective: "Usar preferências para gerar recompra",
     targetLabel: "VIP com histórico de pedidos",
     description: "Clientes VIP têm padrões de consumo claros. Personalizar a oferta com o produto favorito aumenta muito a taxa de conversão.",
-    readiness: "NEEDS_DATA",
+    readiness: "READY_TO_CONFIGURE",
+    hasAudienceQuery: false,
     audienceKey: null,
     suggestedMessage: "Oi {nome}! ❤️ Sabemos que você adora [produto favorito]. Hoje temos uma condição especial exatamente para você — confira!",
   },
@@ -518,30 +563,43 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     targetLabel: "Clientes com ticket baixo",
     description: "Clientes com ticket abaixo da média têm potencial de crescimento. Combos atrativos apresentam o cardápio completo de forma irresistível.",
     readiness: "COMING_SOON",
+    hasAudienceQuery: false,
     audienceKey: null,
     suggestedMessage: "Ei {nome}! 🍽️ Montamos um combo especial para você economizar e comer mais! Confira os combos do dia com até 30% de desconto.",
   },
 ];
 
 const READINESS_CONFIG: Record<ActionReadiness, { label: string; bg: string; text: string }> = {
-  READY:       { label: "Pronto",          bg: "bg-green-100",  text: "text-green-700"  },
-  COMING_SOON: { label: "Em breve",        bg: "bg-yellow-100", text: "text-yellow-700" },
-  NEEDS_DATA:  { label: "Precisa de dados",bg: "bg-gray-100",   text: "text-gray-500"   },
+  SUGGESTED_TEMPLATE: { label: "Sugerida",          bg: "bg-brand-100",   text: "text-brand-700"  },
+  DRAFT:              { label: "Rascunho",           bg: "bg-gray-100",    text: "text-gray-600"   },
+  READY_TO_CONFIGURE: { label: "Pronta p/ configurar", bg: "bg-green-100", text: "text-green-700" },
+  COMING_SOON:        { label: "Em breve",           bg: "bg-yellow-100",  text: "text-yellow-700" },
+  NEEDS_DATA:         { label: "Precisa de dados",   bg: "bg-gray-100",    text: "text-gray-500"   },
 };
 
 // ── Action Config Drawer ───────────────────────────────────────────────────────
 
 function ActionConfigDrawer({
   template,
-  audienceCount,
   onClose,
 }: {
   template: ActionTemplate;
-  audienceCount: number | null;
   onClose: () => void;
 }) {
-  const [message, setMessage] = useState(template.suggestedMessage);
-  const [copied, setCopied] = useState(false);
+  const [message,  setMessage]  = useState(template.suggestedMessage);
+  const [copied,   setCopied]   = useState(false);
+  const [audience, setAudience] = useState<{ count: number; customers: CustomerPreview[]; computed: boolean } | null>(null);
+  const [loadingAudience, setLoadingAudience] = useState(false);
+
+  useEffect(() => {
+    if (!template.hasAudienceQuery) return;
+    setLoadingAudience(true);
+    fetch(`/api/crm/audience?template=${encodeURIComponent(template.id)}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setAudience(json.data ?? null))
+      .catch(() => {})
+      .finally(() => setLoadingAudience(false));
+  }, [template.id, template.hasAudienceQuery]);
 
   function copyMessage() {
     navigator.clipboard.writeText(message);
@@ -549,14 +607,20 @@ function ActionConfigDrawer({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const rc = READINESS_CONFIG[template.readiness];
+
+  const audienceCount = audience?.computed
+    ? audience.count
+    : null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-2xl bg-white shadow-xl overflow-hidden"
+        className="w-full max-w-lg rounded-2xl bg-white shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-2xl">{template.emoji}</span>
             <div>
@@ -574,7 +638,7 @@ function ActionConfigDrawer({
           </button>
         </div>
 
-        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="p-5 space-y-4 overflow-y-auto flex-1">
           {/* Info grid */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-gray-50 px-3 py-2.5">
@@ -582,9 +646,14 @@ function ActionConfigDrawer({
               <p className="mt-0.5 text-sm font-semibold text-gray-800">{template.targetLabel}</p>
             </div>
             <div className="rounded-xl bg-gray-50 px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Audiência estimada</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Público estimado</p>
               <p className="mt-0.5 text-sm font-semibold text-gray-800">
-                {audienceCount !== null ? `${audienceCount} clientes` : "—"}
+                {loadingAudience
+                  ? <span className="text-gray-400 text-xs">Calculando…</span>
+                  : audienceCount !== null
+                    ? <>{audienceCount} <span className="font-normal text-gray-500">clientes</span></>
+                    : <span className="text-gray-400 text-xs">indisponível</span>
+                }
               </p>
             </div>
             <div className="rounded-xl bg-gray-50 px-3 py-2.5">
@@ -598,16 +667,65 @@ function ActionConfigDrawer({
             </div>
             <div className="rounded-xl bg-gray-50 px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Status</p>
-              {(() => {
-                const cfg = READINESS_CONFIG[template.readiness];
-                return (
-                  <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
-                    {cfg.label}
-                  </span>
-                );
-              })()}
+              <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${rc.bg} ${rc.text}`}>
+                {rc.label}
+              </span>
             </div>
           </div>
+
+          {/* Customer preview list */}
+          {template.hasAudienceQuery && (
+            <div>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                Prévia do público
+              </p>
+              {loadingAudience ? (
+                <div className="py-4 text-center text-xs text-gray-400">Carregando clientes…</div>
+              ) : !audience?.computed ? (
+                <div className="rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500">
+                  Esta ação precisa de mais dados para calcular o público.
+                </div>
+              ) : audience.customers.length === 0 ? (
+                <div className="rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500">
+                  Nenhum cliente neste segmento no momento.
+                </div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-xl border border-gray-100 p-2">
+                  {audience.customers.map((c) => {
+                    const tierCfg = TIER_BADGE[c.tier] ?? { bg: "bg-orange-100", text: "text-orange-700", icon: "🥉" };
+                    const segCfg  = SEGMENT_BADGE[c.segment] ?? { bg: "bg-gray-100", text: "text-gray-500", label: "—" };
+                    return (
+                      <div key={c.id} className="flex items-center gap-2 rounded-lg bg-gray-50 px-2.5 py-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
+                          <p className="text-[10px] text-gray-400">{c.phone}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${tierCfg.bg} ${tierCfg.text}`}>
+                            {tierCfg.icon}
+                          </span>
+                          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${segCfg.bg} ${segCfg.text}`}>
+                            {segCfg.label}
+                          </span>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[10px] font-semibold text-gray-700">
+                            R${c.totalSpend.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}
+                          </p>
+                          <p className="text-[10px] text-gray-400">{c.totalOrders} pedidos</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {audience.count > audience.customers.length && (
+                    <p className="text-center text-[10px] text-gray-400 py-1">
+                      +{audience.count - audience.customers.length} clientes não exibidos
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Message editor */}
           <div>
@@ -630,7 +748,7 @@ function ActionConfigDrawer({
         </div>
 
         {/* Footer */}
-        <div className="flex gap-2 border-t border-gray-100 px-5 py-4">
+        <div className="flex gap-2 border-t border-gray-100 px-5 py-4 shrink-0">
           <button
             onClick={copyMessage}
             className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors ${
@@ -880,7 +998,6 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
       {selectedTemplate && (
         <ActionConfigDrawer
           template={selectedTemplate}
-          audienceCount={getAudienceCount(selectedTemplate.audienceKey)}
           onClose={() => setSelectedTemplate(null)}
         />
       )}

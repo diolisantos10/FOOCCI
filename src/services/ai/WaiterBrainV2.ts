@@ -737,6 +737,130 @@ function selectPairingItems(catalog: V2CatalogItem[], cartItemIds: string[], lim
   return (pairings.length > 0 ? pairings : notCart.sort(tagSort)).slice(0, limit).map((i) => i.id);
 }
 
+// ─── Strict discovery filters ────────────────────────────────
+// Each function returns only items that positively match the intent
+// AND do not match any exclusion pattern — zero filler guarantee.
+
+const RAW_SUSHI_INCLUDE = /sashimi|niguiri|nigiri|uramaki|hossomaki|sushi|maki|combinado\s+misto|combinado\s+cru|especial.*cru|cru.*especial/i;
+const RAW_SUSHI_EXCLUDE = /hot[\s.-]?roll|yakisoba|lamen|ramen|teppan|empanado|grelhado|cozido|assado|frito|frango\s+(?!sushi)/i;
+
+const HOT_INCLUDE = /yakisoba|lamen|ramen|hot[\s.-]?roll|teppan|empanado|grelhado|cozido|assado|frito|quente/i;
+const HOT_EXCLUDE = /sashimi|niguiri|nigiri|uramaki|hossomaki(?!.*hot)/i;
+
+/**
+ * Returns sushi/raw items only — hot rolls, hot dishes, drinks, accessories excluded.
+ * Used when the customer selects "Cru / Sushi" in the discovery flow.
+ */
+function filterDiscoveryCruSushi(catalog: V2CatalogItem[], cartItemIds: string[]): string[] {
+  return catalog
+    .filter((item) => {
+      if (cartItemIds.includes(item.id)) return false;
+      const text = `${item.name} ${item.categoryName} ${item.description ?? ""}`;
+      if (isDrinkCategory(item.categoryName))   return false;
+      if (isDessertCategory(item.categoryName)) return false;
+      if (isAccessoryItem(item))                return false;
+      if (HOT_INCLUDE.test(text) && !RAW_SUSHI_INCLUDE.test(text)) return false; // hot-only items
+      if (RAW_SUSHI_EXCLUDE.test(item.name))    return false; // hot roll by name
+      return RAW_SUSHI_INCLUDE.test(text);
+    })
+    .sort(bySort)
+    .map((i) => i.id);
+}
+
+/**
+ * Returns hot/cooked items only — raw sushi, drinks, accessories excluded.
+ * Used when the customer selects "Quente" in the discovery flow.
+ */
+function filterDiscoveryQuente(catalog: V2CatalogItem[], cartItemIds: string[]): string[] {
+  return catalog
+    .filter((item) => {
+      if (cartItemIds.includes(item.id)) return false;
+      const text = `${item.name} ${item.categoryName} ${item.description ?? ""}`;
+      if (isDrinkCategory(item.categoryName))   return false;
+      if (isDessertCategory(item.categoryName)) return false;
+      if (isAccessoryItem(item))                return false;
+      if (HOT_EXCLUDE.test(item.name) && !HOT_INCLUDE.test(item.name)) return false; // raw-only items
+      return HOT_INCLUDE.test(text);
+    })
+    .sort(bySort)
+    .map((i) => i.id);
+}
+
+/**
+ * Returns temaki items only.
+ * Used when the customer selects "Temaki" in the discovery flow.
+ */
+function filterDiscoveryTemaki(catalog: V2CatalogItem[], cartItemIds: string[]): string[] {
+  return catalog
+    .filter((item) => {
+      if (cartItemIds.includes(item.id)) return false;
+      if (isDrinkCategory(item.categoryName))   return false;
+      if (isDessertCategory(item.categoryName)) return false;
+      if (isAccessoryItem(item))                return false;
+      return /temaki/i.test(`${item.name} ${item.categoryName}`);
+    })
+    .sort(bySort)
+    .map((i) => i.id);
+}
+
+/**
+ * Returns salmon items only.
+ * Used when the customer selects "Salmão" in the discovery flow.
+ */
+function filterDiscoverySalmao(catalog: V2CatalogItem[], cartItemIds: string[]): string[] {
+  return catalog
+    .filter((item) => {
+      if (cartItemIds.includes(item.id)) return false;
+      if (isDrinkCategory(item.categoryName))   return false;
+      if (isDessertCategory(item.categoryName)) return false;
+      if (isAccessoryItem(item))                return false;
+      return /salm[aã]o|salmon/i.test(`${item.name} ${item.categoryName} ${item.description ?? ""}`);
+    })
+    .sort(bySort)
+    .map((i) => i.id);
+}
+
+/**
+ * Returns hot roll items only.
+ * Used when the customer selects "Hot Roll" in the discovery flow.
+ */
+function filterDiscoveryHotRoll(catalog: V2CatalogItem[], cartItemIds: string[]): string[] {
+  return catalog
+    .filter((item) => {
+      if (cartItemIds.includes(item.id)) return false;
+      if (isDrinkCategory(item.categoryName))   return false;
+      if (isDessertCategory(item.categoryName)) return false;
+      if (isAccessoryItem(item))                return false;
+      return /hot[\s.-]?roll/i.test(`${item.name} ${item.categoryName}`);
+    })
+    .sort(bySort)
+    .map((i) => i.id);
+}
+
+/** Standard "no results for this discovery type" response — offers the discovery question again. */
+function discoveryNoResults(catalog: V2CatalogItem[]): V2Output {
+  const profile = analyzeMenuProfile(catalog);
+  const isSushi = profile.cuisineSignals.includes("sushi");
+  return {
+    message:     "Não encontrei opções nessa linha agora. Prefere ver outra categoria?",
+    cards:       [],
+    mode:        "BROWSE",
+    options:     isSushi
+      ? [
+          { label: "Cru / Sushi", value: "discovery_cru_sushi" },
+          { label: "Quente",      value: "discovery_quente"    },
+          { label: "Temaki",      value: "discovery_temaki"    },
+        ]
+      : [
+          { label: "Leve",              value: "light"    },
+          { label: "Completo",          value: "complete" },
+          { label: "Para compartilhar", value: "group"    },
+        ],
+    requiresAI:  false,
+    aiDirective: "",
+  };
+}
+
 // ─── Menu search ─────────────────────────────────────────────
 
 function normalizeSearch(s: string): string {
@@ -1796,13 +1920,34 @@ function buildInterventionDirective(): string {
 
 /**
  * User accepted the passive permission prompt ("Quero sugestão ✨").
- * Run the Sales Specialist Core as if user said "me sugere algo":
+ *
+ * For sushi restaurants: ask one discovery question before showing products —
+ * returning unfiltered cards risks showing unrelated items (drinks, accessories).
+ * For other restaurants: return context-aware suggestion cards directly.
  *   - Empty cart     → qualification buttons (Leve / Completo / Para compartilhar)
  *   - Cart has items → context-aware suggestion cards (deterministic)
  *   - Fallback       → AI pipeline for complex cases
  */
 function handlePermissionAccepted(input: V2Input): V2Output {
   const { catalog, cartItemIds } = input;
+
+  // Sushi menu: show discovery question first (never return generic mix for sushi)
+  const profile = analyzeMenuProfile(catalog);
+  if (profile.cuisineSignals.includes("sushi")) {
+    return {
+      message:     "Boa! Você prefere algo cru, quente ou tipo temaki?",
+      cards:       [],
+      mode:        "BROWSE",
+      options:     [
+        { label: "Cru / Sushi", value: "discovery_cru_sushi" },
+        { label: "Quente",      value: "discovery_quente"    },
+        { label: "Temaki",      value: "discovery_temaki"    },
+      ],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
   const suggestedIds = input.memory?.suggestedProductIds ?? [];
   const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 5, suggestedIds);
   if (cards.length > 0) {
@@ -2057,32 +2202,33 @@ function handleUserMessage(input: V2Input): V2Output {
     return { ...base, message, requiresAI: false, aiDirective: "" };
   };
 
-  // ── Discovery answer paths — map button values to catalog search ─────────────
-  // These are fired when the user taps a discovery option (e.g. "Cru / Sushi").
+  // ── Discovery answer paths — strict intent-matched filters ───────────────────
+  // Each path uses a dedicated filter function that enforces inclusion AND exclusion.
+  // Zero-match → offer the discovery question again (no filler products).
   if (msgLow === "discovery_cru_sushi" || msgLow === "cru / sushi" || msgLow === "cru/sushi" || msgLow === "sashimi/niguiri") {
-    const ids = searchMenuByQuery("sashimi niguiri uramaki hossomaki sushi combinado misto", catalog, cartItemIds, []);
-    if (ids.ids.length > 0) return { message: "Separei as melhores opções crus e frescos pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
-    return noCardsFound();
+    const ids = filterDiscoveryCruSushi(catalog, cartItemIds);
+    if (ids.length > 0) return { message: "Separei as melhores opções cruas e frescas pra você 👇", cards: ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+    return discoveryNoResults(catalog);
   }
   if (msgLow === "discovery_quente" || msgLow === "quente") {
-    const ids = searchMenuByQuery("yakisoba lamen ramen hot roll quente grelhado cozido teppan", catalog, cartItemIds, []);
-    if (ids.ids.length > 0) return { message: "Ótima pedida! Separei as melhores opções quentes 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
-    return noCardsFound();
+    const ids = filterDiscoveryQuente(catalog, cartItemIds);
+    if (ids.length > 0) return { message: "Ótima pedida! Separei as melhores opções quentes 👇", cards: ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+    return discoveryNoResults(catalog);
   }
   if (msgLow === "discovery_temaki" || msgLow === "temaki") {
-    const ids = searchMenuByQuery("temaki", catalog, cartItemIds, []);
-    if (ids.ids.length > 0) return { message: "Separei nossos temakis pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
-    return noCardsFound();
+    const ids = filterDiscoveryTemaki(catalog, cartItemIds);
+    if (ids.length > 0) return { message: "Separei nossos temakis pra você 👇", cards: ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+    return discoveryNoResults(catalog);
   }
   if (msgLow === "discovery_salmao" || msgLow === "salmão" || msgLow === "salmao") {
-    const ids = searchMenuByQuery("salmao salmon salmão", catalog, cartItemIds, []);
-    if (ids.ids.length > 0) return { message: "Separei as opções com salmão pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
-    return noCardsFound();
+    const ids = filterDiscoverySalmao(catalog, cartItemIds);
+    if (ids.length > 0) return { message: "Separei as opções com salmão pra você 👇", cards: ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+    return discoveryNoResults(catalog);
   }
   if (msgLow === "discovery_hot_roll" || msgLow === "hot roll" || msgLow === "hot_roll") {
-    const ids = searchMenuByQuery("hot roll", catalog, cartItemIds, []);
-    if (ids.ids.length > 0) return { message: "Separei nossos hot rolls pra você 👇", cards: ids.ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
-    return noCardsFound();
+    const ids = filterDiscoveryHotRoll(catalog, cartItemIds);
+    if (ids.length > 0) return { message: "Separei nossos hot rolls pra você 👇", cards: ids, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "" };
+    return discoveryNoResults(catalog);
   }
 
   // ── Special path: pre-checkout "Ver opções" button (backward compat) ─────────
