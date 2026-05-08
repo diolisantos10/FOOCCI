@@ -6,6 +6,7 @@
  */
 
 import { notFound } from "next/navigation";
+import Script from "next/script";
 import { prisma } from "@/lib/prisma";
 import { PedidoClient } from "./PedidoClient";
 import { phoneCandidates } from "@/lib/phone";
@@ -59,7 +60,11 @@ export default async function PedidoPage({
   // ── Brand config (social links for ordering header) ──────────────────────────
   const brandConfig = await prisma.restaurantBrandConfig.findUnique({
     where: { restaurantId: restaurant.id },
-    select: { instagramUrl: true, tiktokUrl: true, brandPrimaryColor: true, brandSecondaryColor: true },
+    select: {
+      instagramUrl: true, tiktokUrl: true,
+      brandPrimaryColor: true, brandSecondaryColor: true,
+      ga4MeasurementId: true, gtmId: true,
+    },
   });
 
   // ── WhatsApp / known-user identification ─────────────────────────────────────
@@ -232,26 +237,66 @@ export default async function PedidoPage({
     ? [{ id: "__best__", name: "⭐ Mais pedidos", description: null, imageUrl: null, items: bestSellers }, ...categories]
     : categories;
 
+  const ga4Id = brandConfig?.ga4MeasurementId ?? null;
+  const gtmId = brandConfig?.gtmId ?? null;
+
   return (
-    <PedidoClient
-      slug={slug}
-      restaurantName={restaurant.name}
-      logoUrl={restaurant.logoUrl ?? null}
-      phone={restaurant.storeProfile?.whatsappPhone ?? restaurant.phone ?? null}
-      categories={allCategories}
-      knownCustomerPhone={knownCustomerPhone}
-      knownCustomerName={knownCustomerName}
-      knownCustomerId={knownCustomerId}
-      knownDefaultAddress={knownDefaultAddress}
-      instagramUrl={brandConfig?.instagramUrl ?? null}
-      tiktokUrl={brandConfig?.tiktokUrl ?? null}
-      brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
-      brandSecondaryColor={brandConfig?.brandSecondaryColor ?? null}
-      banners={activeBanners}
-      deliveryMode={deliveryConfig?.mode ?? "simple"}
-      deliveryFee={deliveryConfig?.fee != null ? Number(deliveryConfig.fee) : null}
-      deliveryEstimatedMinutes={deliveryConfig?.estimatedMinutes ?? null}
-      averagePreparationMinutes={restaurant.storeProfile?.averagePreparationMinutes ?? null}
-    />
+    <>
+      {/* Google Tag Manager */}
+      {gtmId && (
+        <>
+          <Script id="gtm-head" strategy="afterInteractive">{`
+(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','${gtmId}');
+          `}</Script>
+          <noscript>
+            <iframe
+              src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}
+              height="0" width="0" style={{ display: "none", visibility: "hidden" }}
+            />
+          </noscript>
+        </>
+      )}
+
+      {/* Google Analytics 4 */}
+      {ga4Id && (
+        <>
+          <Script
+            src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`}
+            strategy="afterInteractive"
+          />
+          <Script id="ga4-init" strategy="afterInteractive">{`
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${ga4Id}');
+          `}</Script>
+        </>
+      )}
+
+      <PedidoClient
+        slug={slug}
+        restaurantName={restaurant.name}
+        logoUrl={restaurant.logoUrl ?? null}
+        phone={restaurant.storeProfile?.whatsappPhone ?? restaurant.phone ?? null}
+        categories={allCategories}
+        knownCustomerPhone={knownCustomerPhone}
+        knownCustomerName={knownCustomerName}
+        knownCustomerId={knownCustomerId}
+        knownDefaultAddress={knownDefaultAddress}
+        instagramUrl={brandConfig?.instagramUrl ?? null}
+        tiktokUrl={brandConfig?.tiktokUrl ?? null}
+        brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
+        brandSecondaryColor={brandConfig?.brandSecondaryColor ?? null}
+        banners={activeBanners}
+        deliveryMode={deliveryConfig?.mode ?? "simple"}
+        deliveryFee={deliveryConfig?.fee != null ? Number(deliveryConfig.fee) : null}
+        deliveryEstimatedMinutes={deliveryConfig?.estimatedMinutes ?? null}
+        averagePreparationMinutes={restaurant.storeProfile?.averagePreparationMinutes ?? null}
+        ga4Id={ga4Id}
+      />
+    </>
   );
 }

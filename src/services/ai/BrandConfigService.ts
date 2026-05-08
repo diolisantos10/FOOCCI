@@ -128,6 +128,8 @@ export class BrandConfigService {
       googleReviewUrl: null,
       ifoodReviewUrl: null,
       brandPersona: null,
+      ga4MeasurementId: null,
+      gtmId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

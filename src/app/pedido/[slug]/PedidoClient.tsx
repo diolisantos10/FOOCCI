@@ -180,6 +180,8 @@ interface Props {
   banners?: PromoBanner[];
   brandPrimaryColor?: string | null;
   brandSecondaryColor?: string | null;
+  /** GA4 Measurement ID — used to fire gtag events client-side. */
+  ga4Id?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1422,6 +1424,7 @@ export function PedidoClient({
   brandPrimaryColor = null, brandSecondaryColor = null,
   deliveryFee = null, deliveryMode = "simple",
   deliveryEstimatedMinutes = null, averagePreparationMinutes = null,
+  ga4Id = null,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -1462,6 +1465,34 @@ export function PedidoClient({
     if (savedConvId) setConvId(savedConvId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── UTM capture — read from URL params and persist to sessionStorage ──────────
+  const utmKey = `foocci-utm-${slug}`;
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const source   = sp.get("utm_source");
+    const medium   = sp.get("utm_medium");
+    const campaign = sp.get("utm_campaign");
+    const content  = sp.get("utm_content");
+    const tlid     = sp.get("_tlid");
+    if (source || medium || campaign || content || tlid) {
+      sessionStorage.setItem(utmKey, JSON.stringify({ source, medium, campaign, content, tlid }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function getUtm(): { source?: string; medium?: string; campaign?: string; content?: string; tlid?: string } {
+    try {
+      const raw = sessionStorage.getItem(utmKey);
+      return raw ? (JSON.parse(raw) as { source?: string; medium?: string; campaign?: string; content?: string; tlid?: string }) : {};
+    } catch { return {}; }
+  }
+
+  function fireGtag(event: string, params?: Record<string, string | number | undefined>) {
+    if (!ga4Id) return;
+    const w = window as typeof window & { gtag?: (...args: unknown[]) => void };
+    if (typeof w.gtag === "function") w.gtag("event", event, params ?? {});
+  }
 
   // ── Cart ──────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -1858,6 +1889,7 @@ export function PedidoClient({
   useEffect(() => {
     if (entryPhase !== "browsing" || greetedRef.current) return;
     greetedRef.current = true;
+    fireGtag("view_menu", { restaurant: restaurantName, ...getUtm() });
     const name = identifiedName;
     const base = name
       ? `Bem-vindo, ${name}! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`
@@ -1971,13 +2003,15 @@ export function PedidoClient({
         ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
         : [...cart, { id: item.id, baseItemId: item.id, name: item.name, price: item.price, qty: 1 }];
       setCart(newCart);
+      fireGtag("add_to_cart", { item_name: item.name, value: item.price, currency: "BRL" });
       lastActivityRef.current = Date.now();
       idleFiredRef.current    = false;
       if (stage === "BROWSE") {
         sendText("", newCart, stage, activeUpsell, { event: "ON_ITEM_ADDED", lastAddedId: item.id, silent: true });
       }
     },
-    [cart, stage, activeUpsell, sendText],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cart, stage, activeUpsell, sendText, ga4Id],
   );
 
   const handleVariantAdd = useCallback(
@@ -1994,10 +2028,12 @@ export function PedidoClient({
           }];
       setCart(newCart);
       setSelectedProduct(null);
+      fireGtag("add_to_cart", { item_name: `${item.name} — ${variant.name}`, value: variant.price, currency: "BRL" });
       lastActivityRef.current = Date.now();
       idleFiredRef.current    = false;
     },
-    [cart],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cart, ga4Id],
   );
 
   const handleCustomizedAdd = useCallback(
@@ -2031,13 +2067,15 @@ export function PedidoClient({
 
       setCart(newCart);
       setSelectedProduct(null);
+      fireGtag("add_to_cart", { item_name: item.name, value: finalPrice, currency: "BRL" });
       lastActivityRef.current = Date.now();
       idleFiredRef.current    = false;
       if (stage === "BROWSE") {
         sendText("", newCart, stage, activeUpsell, { event: "ON_ITEM_ADDED", lastAddedId: item.id, silent: true });
       }
     },
-    [cart, stage, activeUpsell, sendText],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cart, stage, activeUpsell, sendText, ga4Id],
   );
 
   // ── Guided flow step handler ──────────────────────────────────────
@@ -2400,6 +2438,9 @@ export function PedidoClient({
     if (!customerName.trim() || !paymentMode || cart.length === 0) return;
     if (paymentMode !== "pay_now" && !paymentMethodSub) return;
 
+    const utm = getUtm();
+    fireGtag("submit_order", { currency: "BRL", value: cart.reduce((s, i) => s + i.price * i.qty, 0) });
+
     setUi("thinking");
     try {
       const res = await fetch(`/api/pedido/${slug}/finalize`, {
@@ -2415,6 +2456,11 @@ export function PedidoClient({
           clientDeliveryFee: deliveryMethod === "delivery" && deliveryMode !== "manual"
             ? (deliveryFee ?? 0)
             : undefined,
+          trackingLinkId:  utm.tlid    || undefined,
+          trafficSource:   utm.source  || undefined,
+          trafficMedium:   utm.medium  || undefined,
+          trafficCampaign: utm.campaign || undefined,
+          trafficContent:  utm.content  || undefined,
         }),
       });
       const data = await res.json();
@@ -2435,7 +2481,8 @@ export function PedidoClient({
     } finally {
       setUi("idle");
     }
-  }, [slug, cart, customerName, deliveryMethod, address, paymentMode, paymentMethodSub]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, cart, customerName, deliveryMethod, address, paymentMode, paymentMethodSub, ga4Id]);
 
   const handleBackToBrowse = useCallback(() => {
     // Return to browsing without wiping checkout data.

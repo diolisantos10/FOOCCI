@@ -83,6 +83,12 @@ const bodySchema = z.object({
   paymentMethodSub: z.enum(["card_machine", "pix_in_person", "cash"]).nullable().optional(),
   customerPhone:    z.string().optional(),
   clientDeliveryFee: z.number().nonnegative().optional(),
+  // UTM / channel attribution
+  trackingLinkId:   z.string().optional(),
+  trafficSource:    z.string().max(100).optional(),
+  trafficMedium:    z.string().max(100).optional(),
+  trafficCampaign:  z.string().max(100).optional(),
+  trafficContent:   z.string().max(100).optional(),
 });
 
 // ── Idempotency ───────────────────────────────────────────────────────────────
@@ -134,6 +140,7 @@ export async function POST(
   const {
     cart, customerName, deliveryMethod, address,
     paymentMode, paymentMethodSub, customerPhone, clientDeliveryFee,
+    trackingLinkId, trafficSource, trafficMedium, trafficCampaign, trafficContent,
   } = parsed.data;
 
   // ── Validate cart against DB (prevent price tampering) ────────
@@ -347,6 +354,11 @@ export async function POST(
           total:          new Decimal(orderTotal),
           deliveryAddressId,
           idempotencyKey: ikey,
+          trackingLinkId:  trackingLinkId  ?? null,
+          trafficSource:   trafficSource   ?? null,
+          trafficMedium:   trafficMedium   ?? null,
+          trafficCampaign: trafficCampaign ?? null,
+          trafficContent:  trafficContent  ?? null,
           items: {
             create: verifiedCart.map((item) => ({
               menuItemId:   item.menuItemId,
