@@ -1,0 +1,5 @@
+# Force nixpacks to install devDependencies during the build phase.
+# Without this, NODE_ENV=production causes npm ci to omit devDependencies,
+# which breaks the Next.js build (eslint-config-next, typescript, etc.)
+[phases.install]
+cmds = ["npm ci --include=dev"]
