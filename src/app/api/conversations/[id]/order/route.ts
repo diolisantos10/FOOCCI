@@ -1,9 +1,13 @@
 /**
  * GET /api/conversations/[id]/order
  *
- * Returns the most recent active (non-delivered, non-cancelled) Order
- * for the customer linked to this conversation.
- * Returns null in `data` when no active order exists.
+ * Returns two fields:
+ *   - `order`  — most recent active (non-delivered, non-cancelled) Order, or null
+ *   - `draft`  — active (OPEN) OrderDraft linked to this conversation, or null
+ *
+ * The draft panel is displayed in the Chat Inbox when the AI is still collecting
+ * the order (before confirm_order is called). Once the order is confirmed, `order`
+ * is populated and `draft` will be CONFIRMED/absent.
  */
 
 import { NextRequest } from "next/server";
@@ -21,36 +25,60 @@ export async function GET(
   try {
     const conversation = await prisma.conversation.findUnique({
       where:  { id: params.id },
-      select: { customerId: true, restaurantId: true },
+      select: { id: true, customerId: true, restaurantId: true },
     });
 
     if (!conversation || conversation.restaurantId !== ctx.restaurantId) {
       return notFound("Conversation not found");
     }
 
-    if (!conversation.customerId) return ok(null);
+    if (!conversation.customerId) return ok({ order: null, draft: null });
 
-    const order = await prisma.order.findFirst({
-      where: {
-        customerId:   conversation.customerId,
-        restaurantId: ctx.restaurantId,
-        status:       { notIn: ["DELIVERED", "CANCELLED"] },
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id:        true,
-        status:    true,
-        total:     true,
-        type:      true,
-        createdAt: true,
-        items: {
-          select: { name: true, quantity: true, price: true },
-          take:   5,
+    const [order, draft] = await Promise.all([
+      prisma.order.findFirst({
+        where: {
+          customerId:   conversation.customerId,
+          restaurantId: ctx.restaurantId,
+          status:       { notIn: ["DELIVERED", "CANCELLED"] },
         },
-      },
-    });
+        orderBy: { createdAt: "desc" },
+        select: {
+          id:        true,
+          status:    true,
+          total:     true,
+          type:      true,
+          createdAt: true,
+          items: {
+            select: { name: true, quantity: true, price: true },
+            take:   5,
+          },
+        },
+      }),
 
-    return ok(order ?? null);
+      prisma.orderDraft.findFirst({
+        where: {
+          conversationId: conversation.id,
+          restaurantId:   ctx.restaurantId,
+          status:         "OPEN",
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id:             true,
+          fulfillmentType: true,
+          totalAmount:    true,
+          updatedAt:      true,
+          items: {
+            select: {
+              quantity:  true,
+              unitPrice: true,
+              menuItem:  { select: { name: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return ok({ order: order ?? null, draft: draft ?? null });
   } catch (err) {
     console.error("[GET /api/conversations/[id]/order]", err);
     return serverError();

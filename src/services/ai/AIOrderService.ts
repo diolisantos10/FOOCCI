@@ -813,6 +813,7 @@ async function sendWhatsAppReply(
         data: {
           conversationId,
           direction: "OUTBOUND",
+          senderType: "AI",
           content: text,
           type: "TEXT",
           sentAt: now,

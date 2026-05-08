@@ -31,6 +31,20 @@ interface ActiveOrder {
   items:     ActiveOrderItem[];
 }
 
+interface ActiveDraftItem {
+  quantity:  number;
+  unitPrice: string;
+  menuItem:  { name: string } | null;
+}
+
+interface ActiveDraft {
+  id:              string;
+  fulfillmentType: string;
+  totalAmount:     string;
+  updatedAt:       string;
+  items:           ActiveDraftItem[];
+}
+
 interface ConvSummary {
   id: string;
   status: ConvStatus;
@@ -154,6 +168,7 @@ export function AtendimentoClient({
   const [loadingThread, setLoadingThread] = useState(false);
 
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
+  const [activeDraft, setActiveDraft] = useState<ActiveDraft | null>(null);
 
   // Mobile navigation: "list" shows the conversation list, "thread" shows the active thread
   const [mobileView, setMobileView] = useState<"list" | "thread">("list");
@@ -224,19 +239,21 @@ export function AtendimentoClient({
     if (!selectedId) {
       setThread(null);
       setActiveOrder(null);
+      setActiveDraft(null);
       return;
     }
     setLoadingThread(true);
     fetchThread(selectedId).finally(() => setLoadingThread(false));
     // mark as read
     fetch(`/api/conversations/${selectedId}/read`, { method: "POST" }).catch(() => {});
-    // fetch active order for this conversation's customer
+    // fetch active order / draft for this conversation
     fetch(`/api/conversations/${selectedId}/order`)
       .then((r) => r.json())
-      .then((res: { success: boolean; data: ActiveOrder | null }) => {
-        setActiveOrder(res.success ? (res.data ?? null) : null);
+      .then((res: { success: boolean; data: { order: ActiveOrder | null; draft: ActiveDraft | null } | null }) => {
+        setActiveOrder(res.success ? (res.data?.order ?? null) : null);
+        setActiveDraft(res.success ? (res.data?.draft ?? null) : null);
       })
-      .catch(() => setActiveOrder(null));
+      .catch(() => { setActiveOrder(null); setActiveDraft(null); });
     // poll thread
     const id = setInterval(() => fetchThread(selectedId), 4000);
     return () => clearInterval(id);
@@ -512,6 +529,7 @@ export function AtendimentoClient({
             bottomRef={bottomRef}
             onBack={handleMobileBack}
             activeOrder={activeOrder}
+            activeDraft={activeDraft}
           />
         ) : null}
       </section>
@@ -534,6 +552,51 @@ interface ThreadPanelProps {
   bottomRef: React.RefObject<HTMLDivElement>;
   onBack?: () => void;
   activeOrder?: ActiveOrder | null;
+  activeDraft?: ActiveDraft | null;
+}
+
+// ── ActiveDraftPanel ──────────────────────────────────────────
+
+const FULFILLMENT_LABEL: Record<string, string> = {
+  DELIVERY: "Entrega",
+  PICKUP:   "Retirada",
+  DINE_IN:  "Mesa",
+};
+
+function ActiveDraftPanel({ draft }: { draft: ActiveDraft }) {
+  const items   = draft.items.slice(0, 4);
+  const more    = draft.items.length - items.length;
+  const total   = parseFloat(draft.totalAmount);
+  const label   = FULFILLMENT_LABEL[draft.fulfillmentType] ?? draft.fulfillmentType;
+
+  return (
+    <div className="mt-2 rounded-xl border-2 border-blue-300 bg-blue-50/40 overflow-hidden shadow-sm">
+      <div className="flex items-center gap-1.5 border-b border-blue-200 bg-blue-100/60 px-3 py-1.5">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-blue-700">
+          Rascunho IA
+        </span>
+        <span className="ml-1 rounded-full bg-blue-200 px-2 py-px text-[10px] font-semibold text-blue-800">
+          {label}
+        </span>
+        <span className="ml-auto text-[10px] text-blue-500">em andamento</span>
+      </div>
+      <div className="px-3 py-2">
+        {items.length === 0 ? (
+          <p className="text-xs text-blue-400 italic">Nenhum item adicionado ainda</p>
+        ) : (
+          <p className="truncate text-xs text-gray-700">
+            {items.map((i) => `${i.quantity}× ${i.menuItem?.name ?? "?"}`).join(" · ")}
+            {more > 0 && <span className="text-gray-400"> +{more}</span>}
+          </p>
+        )}
+        {total > 0 && (
+          <p className="mt-0.5 text-xs font-bold text-gray-800">
+            R$ {total.toFixed(2).replace(".", ",")}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── ActiveOrderPanel ──────────────────────────────────────────
@@ -727,6 +790,7 @@ function ThreadPanel({
   bottomRef,
   onBack,
   activeOrder,
+  activeDraft,
 }: ThreadPanelProps) {
   const badge = getHandlerBadge(thread);
   const channel = CHANNEL_META[thread.channel] ?? { label: thread.channel, icon: "💬" };
@@ -824,8 +888,9 @@ function ThreadPanel({
           )}
         </div>
 
-        {/* Row 3: active order panel */}
+        {/* Row 3: active order / draft panel */}
         {activeOrder && <ActiveOrderPanel order={activeOrder} />}
+        {!activeOrder && activeDraft && <ActiveDraftPanel draft={activeDraft} />}
       </div>
 
       {/* ── Message thread ────────────────────────────────────────────── */}

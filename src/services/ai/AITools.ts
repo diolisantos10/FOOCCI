@@ -429,6 +429,16 @@ async function execConfirmOrder(
     0
   );
 
+  // Pre-fetch menu item names so the order snapshot is accurate from creation
+  const menuItemIds = draft.items
+    .map((i) => i.menuItemId)
+    .filter((id): id is string => id !== null);
+  const menuItemRows = await prisma.menuItem.findMany({
+    where: { id: { in: menuItemIds } },
+    select: { id: true, name: true },
+  });
+  const nameMap = Object.fromEntries(menuItemRows.map((m) => [m.id, m.name]));
+
   const order = await prisma.$transaction(async (tx) => {
     const newOrder = await tx.order.create({
       data: {
@@ -436,6 +446,7 @@ async function execConfirmOrder(
         customerId: ctx.customerId,
         orderDraftId: ctx.draftId!,
         status: "PENDING",
+        source: "whatsapp",
         type:
           fulfillmentType === "DELIVERY" ? "DELIVERY"
           : fulfillmentType === "PICKUP"  ? "PICKUP"
@@ -445,7 +456,7 @@ async function execConfirmOrder(
         items: {
           create: draft.items.map((di) => ({
             menuItemId: di.menuItemId,
-            name: "Item", // populated below via update — snapshot will be enriched
+            name: (di.menuItemId ? nameMap[di.menuItemId] : null) ?? "Item",
             price: di.unitPrice,
             quantity: di.quantity,
             notes: di.notes,
@@ -454,23 +465,6 @@ async function execConfirmOrder(
         },
       },
     });
-
-    // Enrich order items with menu item names (snapshot)
-    const menuItems = await tx.menuItem.findMany({
-      where: { id: { in: draft.items.map((i) => i.menuItemId).filter((id): id is string => id !== null) } },
-      select: { id: true, name: true },
-    });
-    const nameMap = Object.fromEntries(menuItems.map((m) => [m.id, m.name]));
-
-    for (const oi of await tx.orderItem.findMany({ where: { orderId: newOrder.id } })) {
-      const draftItem = draft.items.find((di) => di.menuItemId === oi.menuItemId);
-      if (draftItem) {
-        await tx.orderItem.update({
-          where: { id: oi.id },
-          data: { name: (draftItem.menuItemId ? nameMap[draftItem.menuItemId] : undefined) ?? "Item" },
-        });
-      }
-    }
 
     // Mark draft confirmed
     await tx.orderDraft.update({
