@@ -83,13 +83,15 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     create: {
       restaurantId,
       phone: event.phone,
-      name: event.phone, // placeholder; agents can update name later
+      name: event.senderName ?? event.phone, // use WhatsApp display name when available
     },
     update: {}, // do not overwrite existing customer data
   });
 
   // 4. Conversation reuse logic
-  const conversation = await resolveConversation(restaurantId, customer.id);
+  const conversation = await resolveConversation(
+    restaurantId, customer.id, customer.phone, customer.name,
+  );
 
   // 5 & 6. Persist message + update conversation atomically
   const now = new Date();
@@ -98,6 +100,7 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
       data: {
         conversationId: conversation.id,
         direction: "INBOUND",
+        senderType: "CUSTOMER",
         content: event.content,
         type: event.messageType as MessageType,
         mediaUrl: event.mediaUrl ?? null,
@@ -148,7 +151,12 @@ type _AIRef = AIOrderServiceType;
 
 // ─── conversation reuse ───────────────────────────────────────
 
-async function resolveConversation(restaurantId: string, customerId: string) {
+async function resolveConversation(
+  restaurantId: string,
+  customerId: string,
+  customerPhone: string,
+  customerName: string,
+) {
   // Prefer any OPEN or HUMAN conversation (most recent first)
   const active = await prisma.conversation.findFirst({
     where: {
@@ -186,13 +194,15 @@ async function resolveConversation(restaurantId: string, customerId: string) {
     });
   }
 
-  // Create a fresh conversation
+  // Create a fresh conversation with denormalized contact info for fast lookup
   return prisma.conversation.create({
     data: {
       restaurantId,
       customerId,
       channel: "WHATSAPP",
       status: ConversationStatus.OPEN,
+      customerPhone,
+      customerName,
     },
   });
 }

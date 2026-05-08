@@ -26,6 +26,7 @@ export interface InboundMessageEvent {
   externalMessageId: string;      // Evolution/WhatsApp message ID
   fromJid: string;                // e.g. "5511999990000@s.whatsapp.net"
   phone: string;                  // normalized E.164: "+5511999990000"
+  senderName?: string;            // WhatsApp pushName (contact display name)
   messageType: "TEXT" | "IMAGE" | "AUDIO" | "DOCUMENT";
   content: string;                // text body or caption
   mediaUrl?: string;
@@ -125,6 +126,7 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
   }
 
   const phone = jidToPhone(remoteJid);
+  const senderName = (data.pushName as string | undefined) || undefined;
   const message = data.message as Record<string, unknown> | undefined;
   const timestamp = (data.messageTimestamp as number | undefined) ?? Math.floor(Date.now() / 1000);
 
@@ -165,6 +167,7 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
     externalMessageId,
     fromJid: remoteJid,
     phone,
+    senderName,
     messageType,
     content,
     mediaUrl,

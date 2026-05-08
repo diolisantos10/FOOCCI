@@ -13,7 +13,7 @@ import { isGuestIdentifier } from "@/lib/guest";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type ConvStatus = "OPEN" | "BOT" | "HUMAN" | "RESOLVED";
-type Channel = "WHATSAPP" | "EMAIL" | "SMS";
+type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT";
 type StatusFilter = "ALL" | "OPEN" | "HUMAN" | "RESOLVED";
 
 interface ActiveOrderItem {
@@ -46,6 +46,7 @@ interface ConvSummary {
 interface Message {
   id: string;
   direction: "INBOUND" | "OUTBOUND";
+  senderType: string | null;
   content: string;
   type: string;
   mediaUrl: string | null;
@@ -66,9 +67,11 @@ interface ConvDetail extends ConvSummary {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CHANNEL_META: Record<Channel, { label: string; icon: string }> = {
-  WHATSAPP: { label: "WhatsApp", icon: "📱" },
-  EMAIL:    { label: "Email",    icon: "✉️"  },
-  SMS:      { label: "SMS",      icon: "💬"  },
+  WHATSAPP:  { label: "WhatsApp", icon: "📱" },
+  EMAIL:     { label: "Email",    icon: "✉️"  },
+  SMS:       { label: "SMS",      icon: "💬"  },
+  QR_AGENT:  { label: "Cardápio", icon: "📋"  },
+  WEB_AGENT: { label: "Web",      icon: "🌐"  },
 };
 
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
@@ -903,12 +906,15 @@ function MessageBubble({
   customerName: string;
 }) {
   const isOutbound = msg.direction === "OUTBOUND";
+  const senderLabel = isOutbound
+    ? (msg.senderType === "AI" ? "IA" : "Equipe")
+    : customerName;
 
   return (
     <div className={`flex flex-col gap-1 ${isOutbound ? "items-end" : "items-start"}`}>
       {/* Sender label */}
       <span className="px-1 text-[10px] text-gray-400">
-        {isOutbound ? "Equipe" : customerName}
+        {senderLabel}
       </span>
 
       {/* Bubble */}

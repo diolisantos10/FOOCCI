@@ -53,6 +53,7 @@ export class MessageService {
       select: {
         id: true,
         direction: true,
+        senderType: true,
         content: true,
         type: true,
         mediaUrl: true,
