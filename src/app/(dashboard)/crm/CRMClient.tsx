@@ -69,136 +69,517 @@ function TierBadge({ tier }: { tier: CustomerTier }) {
   );
 }
 
-// ── Opportunities Tab ─────────────────────────────────────────────────────────
+// ── Ações Tab ─────────────────────────────────────────────────────────────────
 
-function OpportunitiesTab({ opportunities }: { opportunities: Opportunity[] }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [editingMsg, setEditingMsg] = useState<Record<string, string>>({});
-  const [copied, setCopied] = useState<string | null>(null);
+type ActionReadiness = "READY" | "COMING_SOON" | "NEEDS_DATA";
 
-  function getMessage(opp: Opportunity) {
-    return editingMsg[opp.type] ?? opp.suggestedMessage;
-  }
+interface ActionTemplate {
+  id: string;
+  emoji: string;
+  title: string;
+  objective: string;
+  targetLabel: string;
+  description: string;
+  readiness: ActionReadiness;
+  audienceKey: keyof OverviewStats | "vip" | null;
+  suggestedMessage: string;
+}
 
-  function copyMessage(opp: Opportunity) {
-    navigator.clipboard.writeText(getMessage(opp));
-    setCopied(opp.type);
-    setTimeout(() => setCopied(null), 2000);
-  }
+const ACTION_TEMPLATES: ActionTemplate[] = [
+  {
+    id: "recuperar-frios",
+    emoji: "🥶",
+    title: "Recuperar clientes frios",
+    objective: "Reconquistar clientes que somem há mais de 60 dias",
+    targetLabel: "Frios (60d+)",
+    description: "Clientes que não pedem há mais de 60 dias têm alto risco de perda definitiva. Uma oferta especial pode reativá-los.",
+    readiness: "READY",
+    audienceKey: "frioCustomers",
+    suggestedMessage: "Fala {nome}! 😊 Sentimos sua falta! Que tal voltar com um desconto especial de 10% no seu próximo pedido? Use o código VOLTEI e aproveite!",
+  },
+  {
+    id: "reativar-mornos",
+    emoji: "🌡️",
+    title: "Reativar clientes mornos",
+    objective: "Engajar clientes que sumiram entre 31–60 dias",
+    targetLabel: "Mornos (31–60d)",
+    description: "Clientes mornos estão a um passo de se tornarem frios. Uma lembrança carinhosa no momento certo faz a diferença.",
+    readiness: "READY",
+    audienceKey: "mornoCustomers",
+    suggestedMessage: "Oi {nome}! 👋 Faz um tempo que não vemos você por aqui. Tem uma novidade deliciosa esperando — quer ver o cardápio atualizado?",
+  },
+  {
+    id: "segunda-compra",
+    emoji: "🔁",
+    title: "Garantir a segunda compra",
+    objective: "Fidelizar clientes após o primeiro pedido",
+    targetLabel: "1º pedido (últimos 30d)",
+    description: "O segundo pedido é o mais importante para criar um vínculo. Aborde novos clientes enquanto a experiência é fresca.",
+    readiness: "READY",
+    audienceKey: "newCustomers",
+    suggestedMessage: "Oi {nome}, que bom ter você conosco! 🎉 Como foi o seu primeiro pedido? Aproveite 15% de desconto no próximo com o código VOLTEMAIS!",
+  },
+  {
+    id: "clientes-vip",
+    emoji: "👑",
+    title: "Clientes VIP — oferta exclusiva",
+    objective: "Recompensar e reter clientes de alto valor",
+    targetLabel: "Ouro + Diamante",
+    description: "Seus melhores clientes merecem tratamento especial. Uma ação exclusiva reforça o relacionamento e aumenta a recorrência.",
+    readiness: "READY",
+    audienceKey: "vip",
+    suggestedMessage: "Olá {nome}! 💎 Você é um cliente especial e temos uma oferta exclusiva para você. Use o código VIP20 para 20% de desconto no próximo pedido — apenas para VIPs!",
+  },
+  {
+    id: "pedido-avaliacao",
+    emoji: "⭐",
+    title: "Pedido de avaliação",
+    objective: "Aumentar avaliações Google e iFood",
+    targetLabel: "Clientes recentes (30d)",
+    description: "Clientes satisfeitos raramente avaliam sem um lembrete. Peça no momento certo para maximizar as estrelas.",
+    readiness: "READY",
+    audienceKey: "ativoCustomers",
+    suggestedMessage: "Oi {nome}! 🌟 Adoramos ter você como cliente. Pode nos dar 5 minutinhos e deixar uma avaliação? Sua opinião faz toda a diferença para nós! ⭐⭐⭐⭐⭐",
+  },
+  {
+    id: "aniversariantes",
+    emoji: "🎂",
+    title: "Mensagem de aniversário",
+    objective: "Surpreender clientes no dia especial",
+    targetLabel: "Aniversariantes do mês",
+    description: "Mensagens de aniversário personalizadas geram alta taxa de conversão e fortalecem o vínculo emocional com o cliente.",
+    readiness: "NEEDS_DATA",
+    audienceKey: null,
+    suggestedMessage: "Feliz aniversário, {nome}! 🎉🎂 Hoje é seu dia especial e queremos comemorar junto com você. Ganhe uma sobremesa grátis no próximo pedido — use o código ANIVERSARIO!",
+  },
+  {
+    id: "aumentar-sobremesas",
+    emoji: "🍰",
+    title: "Aumentar pedidos de sobremesa",
+    objective: "Elevar ticket médio com upsell de sobremesas",
+    targetLabel: "Clientes sem sobremesa",
+    description: "Clientes que nunca pediram sobremesas representam uma grande oportunidade de aumentar o ticket médio sem custo de aquisição.",
+    readiness: "NEEDS_DATA",
+    audienceKey: null,
+    suggestedMessage: "Ei {nome}! 🍰 Você sabia que temos sobremesas irresistíveis? Adicione uma ao seu próximo pedido e ganhe 10% de desconto na sobremesa!",
+  },
+  {
+    id: "aumentar-bebidas",
+    emoji: "🥤",
+    title: "Aumentar pedidos de bebida",
+    objective: "Elevar ticket médio com upsell de bebidas",
+    targetLabel: "Clientes sem bebidas",
+    description: "Clientes que pedem apenas comida raramente adicionam bebidas. Uma oferta focada pode mudar esse padrão facilmente.",
+    readiness: "NEEDS_DATA",
+    audienceKey: null,
+    suggestedMessage: "Oi {nome}! 🥤 Que tal uma bebida gelada com seu próximo pedido? Temos opções incríveis — adicione ao carrinho e ganhe frete grátis!",
+  },
+  {
+    id: "carrinho-abandonado",
+    emoji: "🛒",
+    title: "Recuperar carrinho abandonado",
+    objective: "Converter rascunhos iniciados mas não confirmados",
+    targetLabel: "Rascunhos abandonados",
+    description: "Clientes que iniciaram um pedido mas não concluíram estão a um passo da compra. Um lembrete gentil converte.",
+    readiness: "COMING_SOON",
+    audienceKey: null,
+    suggestedMessage: "Ei {nome}, você esqueceu algo! 🛒 Seu pedido ainda está esperando. Finalize agora e ganhe frete grátis!",
+  },
+  {
+    id: "recorrente-sumido",
+    emoji: "🔔",
+    title: "Recorrente sumido",
+    objective: "Reativar clientes com histórico de recorrência",
+    targetLabel: "Frequentes + mornos",
+    description: "Clientes que pediam regularmente e pararam merecem abordagem diferente — eles já confiam em você e são mais fáceis de recuperar.",
+    readiness: "READY",
+    audienceKey: "mornoCustomers",
+    suggestedMessage: "Oi {nome}! 👀 Notamos que você não aparece há um tempo. Saudade! Que tal fazer um pedido hoje? Tem novidades esperando por você.",
+  },
+  {
+    id: "produto-favorito",
+    emoji: "❤️",
+    title: "Campanha produto favorito",
+    objective: "Usar preferências para gerar recompra",
+    targetLabel: "VIP com histórico de pedidos",
+    description: "Clientes VIP têm padrões de consumo claros. Personalizar a oferta com o produto favorito aumenta muito a taxa de conversão.",
+    readiness: "NEEDS_DATA",
+    audienceKey: null,
+    suggestedMessage: "Oi {nome}! ❤️ Sabemos que você adora [produto favorito]. Hoje temos uma condição especial exatamente para você — confira!",
+  },
+  {
+    id: "alto-ticket",
+    emoji: "💰",
+    title: "Alto ticket — combo especial",
+    objective: "Elevar o ticket médio com combos e extras",
+    targetLabel: "Clientes com ticket baixo",
+    description: "Clientes com ticket abaixo da média têm potencial de crescimento. Combos atrativos apresentam o cardápio completo de forma irresistível.",
+    readiness: "COMING_SOON",
+    audienceKey: null,
+    suggestedMessage: "Ei {nome}! 🍽️ Montamos um combo especial para você economizar e comer mais! Confira os combos do dia com até 30% de desconto.",
+  },
+];
 
-  if (opportunities.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <span className="mb-3 text-5xl">🎉</span>
-        <p className="text-sm font-semibold text-gray-700">Nenhuma oportunidade identificada agora</p>
-        <p className="mt-1 text-xs text-gray-400">
-          Quando houver clientes inativos, aniversariantes ou VIPs em risco, eles aparecerão aqui.
-        </p>
-      </div>
-    );
+const READINESS_CONFIG: Record<ActionReadiness, { label: string; bg: string; text: string }> = {
+  READY:       { label: "Pronto",          bg: "bg-green-100",  text: "text-green-700"  },
+  COMING_SOON: { label: "Em breve",        bg: "bg-yellow-100", text: "text-yellow-700" },
+  NEEDS_DATA:  { label: "Precisa de dados",bg: "bg-gray-100",   text: "text-gray-500"   },
+};
+
+// ── Action Config Drawer ───────────────────────────────────────────────────────
+
+function ActionConfigDrawer({
+  template,
+  audienceCount,
+  onClose,
+}: {
+  template: ActionTemplate;
+  audienceCount: number | null;
+  onClose: () => void;
+}) {
+  const [message, setMessage] = useState(template.suggestedMessage);
+  const [copied, setCopied] = useState(false);
+
+  function copyMessage() {
+    navigator.clipboard.writeText(message);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-xs text-gray-500">
-        {opportunities.length} oportunidade{opportunities.length > 1 ? "s" : ""} identificada{opportunities.length > 1 ? "s" : ""} hoje
-      </p>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl bg-white shadow-xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{template.emoji}</span>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">{template.title}</h2>
+              <p className="text-xs text-gray-500">{template.objective}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-      {opportunities.map((opp) => {
-        const pCfg = PRIORITY_CONFIG[opp.priority] ?? PRIORITY_CONFIG.MEDIUM!;
-        const isOpen = expanded === opp.type;
-        const msg = getMessage(opp);
+        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Info grid */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-gray-50 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Segmento alvo</p>
+              <p className="mt-0.5 text-sm font-semibold text-gray-800">{template.targetLabel}</p>
+            </div>
+            <div className="rounded-xl bg-gray-50 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Audiência estimada</p>
+              <p className="mt-0.5 text-sm font-semibold text-gray-800">
+                {audienceCount !== null ? `${audienceCount} clientes` : "—"}
+              </p>
+            </div>
+            <div className="rounded-xl bg-gray-50 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Canal</p>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <p className="text-sm font-semibold text-gray-800">WhatsApp</p>
+                <span className="rounded-full bg-yellow-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-yellow-700">
+                  Em breve
+                </span>
+              </div>
+            </div>
+            <div className="rounded-xl bg-gray-50 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Status</p>
+              {(() => {
+                const cfg = READINESS_CONFIG[template.readiness];
+                return (
+                  <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
+                    {cfg.label}
+                  </span>
+                );
+              })()}
+            </div>
+          </div>
 
-        return (
-          <div key={opp.type} className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-            {/* Header */}
-            <div className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className={`h-2 w-2 rounded-full ${pCfg.dot} shrink-0 mt-0.5`} />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                      Prioridade {pCfg.label}
-                    </span>
-                  </div>
-                  <p className="text-sm font-bold text-gray-900">{opp.title}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">{opp.description}</p>
+          {/* Message editor */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-600">
+                Mensagem sugerida
+                <span className="ml-1 font-normal text-gray-400">(edite à vontade)</span>
+              </p>
+            </div>
+            <textarea
+              rows={5}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none"
+            />
+            <p className="mt-1 text-[10px] text-gray-400">
+              Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para inserir o nome do cliente automaticamente.
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-2 border-t border-gray-100 px-5 py-4">
+          <button
+            onClick={copyMessage}
+            className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors ${
+              copied
+                ? "bg-green-100 text-green-700"
+                : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            {copied ? "✓ Copiado!" : "Copiar sugestão"}
+          </button>
+          <button
+            disabled
+            title="Disparo automático em breve"
+            className="flex-1 cursor-not-allowed rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-400"
+          >
+            Disparo em breve
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Ações Tab ─────────────────────────────────────────────────────────────────
+
+function AcoesTab({ stats }: { stats: OverviewStats }) {
+  const [selectedTemplate, setSelectedTemplate] = useState<ActionTemplate | null>(null);
+
+  const vipCount = (stats.segments.find((s) => s.tier === "OURO")?.count ?? 0) +
+                   (stats.segments.find((s) => s.tier === "DIAMANTE")?.count ?? 0);
+
+  function getAudienceCount(key: ActionTemplate["audienceKey"]): number | null {
+    if (!key) return null;
+    if (key === "vip") return vipCount;
+    const val = stats[key as keyof OverviewStats];
+    if (typeof val === "number") return val;
+    return null;
+  }
+
+  const summaryCards = [
+    { emoji: "🥶", label: "Frios",       count: stats.frioCustomers,  color: "bg-blue-50 border-blue-100",   textColor: "text-blue-700"   },
+    { emoji: "🌡️", label: "Mornos",      count: stats.mornoCustomers, color: "bg-amber-50 border-amber-100", textColor: "text-amber-700"  },
+    { emoji: "🆕", label: "Novos (mês)", count: stats.newCustomers,   color: "bg-green-50 border-green-100", textColor: "text-green-700"  },
+    { emoji: "👑", label: "VIP",          count: vipCount,             color: "bg-cyan-50 border-cyan-100",   textColor: "text-cyan-700"   },
+    { emoji: "🥤", label: "Bebidas",      count: null,                 color: "bg-gray-50 border-gray-100",   textColor: "text-gray-400"   },
+    { emoji: "🍰", label: "Sobremesas",   count: null,                 color: "bg-rose-50 border-rose-100",   textColor: "text-rose-400"   },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-base font-bold text-gray-900">Ações de CRM</h2>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Templates prontos para engajar, recuperar e fidelizar clientes via WhatsApp.
+        </p>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {summaryCards.map((card) => (
+          <div
+            key={card.label}
+            className={`rounded-2xl border px-3 py-3 text-center ${card.color}`}
+          >
+            <p className="text-base leading-none">{card.emoji}</p>
+            <p className={`mt-1.5 text-lg font-bold leading-none ${card.textColor}`}>
+              {card.count !== null ? card.count : "—"}
+            </p>
+            <p className="mt-0.5 text-[10px] font-medium text-gray-500">{card.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Action templates grid */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {ACTION_TEMPLATES.map((tpl) => {
+          const rc  = READINESS_CONFIG[tpl.readiness];
+          const count = getAudienceCount(tpl.audienceKey);
+          return (
+            <div
+              key={tpl.id}
+              className="flex flex-col rounded-2xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+            >
+              {/* Icon + title */}
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl">{tpl.emoji}</span>
+                  <p className="text-sm font-bold text-gray-900 leading-tight">{tpl.title}</p>
                 </div>
-                <span className="shrink-0 rounded-xl bg-brand-50 px-2.5 py-1 text-sm font-bold text-brand-700">
-                  {opp.count}
+              </div>
+
+              {/* Description */}
+              <p className="text-xs text-gray-500 leading-relaxed flex-1 mb-3">{tpl.description}</p>
+
+              {/* Meta row */}
+              <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                  {tpl.targetLabel}
+                </span>
+                {count !== null && (
+                  <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700">
+                    {count} clientes
+                  </span>
+                )}
+                <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${rc.bg} ${rc.text}`}>
+                  {rc.label}
                 </span>
               </div>
 
-              {/* Actions */}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  onClick={() => setExpanded(isOpen ? null : opp.type)}
-                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
-                >
-                  {isOpen ? "Fechar" : "Ver mensagem + clientes"}
-                </button>
-                <button
-                  onClick={() => copyMessage(opp)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    copied === opp.type
-                      ? "bg-green-100 text-green-700"
-                      : "bg-brand-50 text-brand-700 hover:bg-brand-100"
-                  }`}
-                >
-                  {copied === opp.type ? "✓ Copiado!" : "Copiar mensagem"}
-                </button>
-              </div>
+              {/* CTA */}
+              <button
+                onClick={() => setSelectedTemplate(tpl)}
+                className="w-full rounded-xl bg-gray-900 py-2 text-xs font-bold text-white hover:bg-gray-700 transition-colors"
+              >
+                Configurar ação
+              </button>
             </div>
+          );
+        })}
+      </div>
 
-            {/* Expanded: message editor + customer list */}
-            {isOpen && (
-              <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-4">
-                {/* Message editor */}
-                <div>
-                  <p className="mb-1.5 text-xs font-semibold text-gray-600">
-                    Mensagem sugerida <span className="font-normal text-gray-400">(edite à vontade)</span>
-                  </p>
-                  <textarea
-                    rows={4}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 resize-none"
-                    value={msg}
-                    onChange={(e) =>
-                      setEditingMsg((prev) => ({ ...prev, [opp.type]: e.target.value }))
-                    }
-                  />
-                  <p className="mt-1 text-[10px] text-gray-400">
-                    Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para inserir o nome do cliente automaticamente.
-                  </p>
-                </div>
+      {/* Drawer */}
+      {selectedTemplate && (
+        <ActionConfigDrawer
+          template={selectedTemplate}
+          audienceCount={getAudienceCount(selectedTemplate.audienceKey)}
+          onClose={() => setSelectedTemplate(null)}
+        />
+      )}
+    </div>
+  );
+}
 
-                {/* Customer list */}
-                <div>
-                  <p className="mb-2 text-xs font-semibold text-gray-600">
-                    Clientes ({opp.customers.length}{opp.count > opp.customers.length ? ` de ${opp.count}` : ""})
-                  </p>
-                  <div className="space-y-1.5">
-                    {opp.customers.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between rounded-xl bg-white border border-gray-100 px-3 py-2">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <TierBadge tier={c.tier} />
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
-                            <p className="text-[10px] text-gray-400">{formatPhone(c.phone)}</p>
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0 ml-3">
-                          <p className="text-xs text-gray-500">{relativeDate(c.lastOrderAt)}</p>
-                          <p className="text-[10px] text-gray-400">R${formatCurrency(c.totalSpend)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+// ── Programa de Relacionamento Tab ────────────────────────────────────────────
+
+function ProgramaDeRelacionamentoTab() {
+  const features = [
+    {
+      emoji: "⭐",
+      title: "Sistema de Pontos",
+      description: "Clientes acumulam pontos a cada pedido e trocam por recompensas exclusivas. Configure multiplicadores por categoria ou valor de pedido.",
+      status: "Em breve",
+      statusColor: "bg-yellow-100 text-yellow-700",
+    },
+    {
+      emoji: "🏆",
+      title: "Progressão de Tier",
+      description: "Bronze → Prata → Ouro → Diamante. Clientes sobem de nível automaticamente conforme o gasto acumulado e desbloqueiam benefícios.",
+      status: "Estrutura pronta",
+      statusColor: "bg-green-100 text-green-700",
+    },
+    {
+      emoji: "🎂",
+      title: "Recompensa de Aniversário",
+      description: "Mensagem automática e cupom especial no aniversário do cliente. Configurável: desconto fixo, % ou item grátis.",
+      status: "Em breve",
+      statusColor: "bg-yellow-100 text-yellow-700",
+    },
+    {
+      emoji: "👥",
+      title: "Programa de Indicação",
+      description: "Clientes ganham bônus por cada amigo que indicam. Rastreamento automático via link único ou código de indicação.",
+      status: "Planejado",
+      statusColor: "bg-gray-100 text-gray-500",
+    },
+    {
+      emoji: "🎁",
+      title: "Recompensas Configuráveis",
+      description: "Defina recompensas por atingir um número de pedidos, valor acumulado ou frequência. Cupons, itens grátis ou descontos.",
+      status: "Em breve",
+      statusColor: "bg-yellow-100 text-yellow-700",
+    },
+    {
+      emoji: "📊",
+      title: "Dashboard de Fidelidade",
+      description: "Visualize taxa de retenção, clientes mais engajados, custos com recompensas e ROI do programa de relacionamento.",
+      status: "Planejado",
+      statusColor: "bg-gray-100 text-gray-500",
+    },
+  ];
+
+  const tiers = [
+    { name: "Bronze",  icon: "🥉", threshold: "R$ 0",    color: "border-orange-200 bg-orange-50",  text: "text-orange-700", benefit: "Acesso ao clube" },
+    { name: "Prata",   icon: "🥈", threshold: "R$ 300",  color: "border-gray-200 bg-gray-50",      text: "text-gray-700",   benefit: "5% de cashback" },
+    { name: "Ouro",    icon: "🥇", threshold: "R$ 800",  color: "border-amber-200 bg-amber-50",    text: "text-amber-700",  benefit: "10% de cashback + Frete grátis" },
+    { name: "Diamante",icon: "💎", threshold: "R$ 2.000",color: "border-cyan-200 bg-cyan-50",      text: "text-cyan-700",   benefit: "15% + Frete grátis + Atendimento VIP" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-orange-50 px-5 py-5">
+        <div className="flex items-center gap-3 mb-2">
+          <span className="text-3xl">🤝</span>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Programa de Relacionamento</h2>
+            <p className="text-xs text-gray-500">Fidelização automática com tiers, pontos e recompensas</p>
           </div>
-        );
-      })}
+        </div>
+        <p className="text-sm text-gray-600 leading-relaxed">
+          Transforme compradores ocasionais em clientes fiéis. O programa de relacionamento automatiza recompensas,
+          reconhece clientes VIP e cria incentivos para a recorrência — tudo integrado ao seu CRM.
+        </p>
+      </div>
+
+      {/* Tier progression */}
+      <div>
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Estrutura de Tiers</h3>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {tiers.map((tier, i) => (
+            <div key={tier.name} className={`rounded-2xl border px-4 py-4 ${tier.color}`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xl">{tier.icon}</span>
+                <span className="text-[10px] font-bold text-gray-400">#{i + 1}</span>
+              </div>
+              <p className={`text-sm font-bold ${tier.text}`}>{tier.name}</p>
+              <p className="text-[11px] font-semibold text-gray-500 mt-0.5">{tier.threshold}+</p>
+              <p className="text-[10px] text-gray-500 mt-1.5 leading-tight">{tier.benefit}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Features grid */}
+      <div>
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Funcionalidades</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map((feat) => (
+            <div key={feat.title} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{feat.emoji}</span>
+                  <p className="text-sm font-bold text-gray-900">{feat.title}</p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${feat.statusColor}`}>
+                  {feat.status}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 leading-relaxed">{feat.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 p-5 text-center">
+        <p className="text-sm font-bold text-brand-800 mb-1">Quer ajudar a moldar o programa?</p>
+        <p className="text-xs text-brand-600">
+          Os tiers já estão sendo calculados automaticamente. As recompensas e o painel de fidelidade chegam nas próximas versões.
+        </p>
+      </div>
     </div>
   );
 }
@@ -572,8 +953,6 @@ function CustomersTab({
   );
 }
 
-// ── Main CRM Component ────────────────────────────────────────────────────────
-
 // ── Avaliações Tab ────────────────────────────────────────────────────────────
 
 const MOCK_REVIEWS = [
@@ -624,7 +1003,6 @@ function AvaliacoesTab({
               <Link href="/settings/marca" className="text-brand-600 underline">Adicionar →</Link>
             </p>
           )}
-          {/* Mocked reviews */}
           <div className="space-y-2 pt-1">
             {MOCK_REVIEWS.map((r) => (
               <div key={r.author} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
@@ -663,7 +1041,6 @@ function AvaliacoesTab({
               <Link href="/settings/marca" className="text-brand-600 underline">Adicionar →</Link>
             </p>
           )}
-          {/* Mocked reviews */}
           <div className="space-y-2 pt-1">
             {MOCK_REVIEWS.map((r) => (
               <div key={r.author} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
@@ -682,7 +1059,6 @@ function AvaliacoesTab({
         </div>
       </div>
 
-      {/* CTA para configurar links */}
       {!hasAnyLink && (
         <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 p-4 text-center">
           <p className="text-sm font-medium text-amber-800">Configure seus links de avaliação</p>
@@ -693,7 +1069,6 @@ function AvaliacoesTab({
         </div>
       )}
 
-      {/* Template pós-venda */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
         <h3 className="text-sm font-semibold text-gray-900">📨 Template Pós-Venda</h3>
         <p className="text-xs text-gray-500">Use este template nas campanhas de WhatsApp após o pedido.</p>
@@ -718,7 +1093,7 @@ ${googleReviewUrl ? `\n⭐ Google: ${googleReviewUrl}` : "⭐ Google: [configure
 
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "overview" | "opportunities" | "customers" | "avaliacoes";
+type Tab = "overview" | "acoes" | "customers" | "programa" | "avaliacoes";
 
 export function CRMClient({
   initialCustomers,
@@ -789,11 +1164,14 @@ export function CRMClient({
     }
   }
 
+  const friasCount = currentStats.frioCustomers + currentStats.mornoCustomers;
+
   const tabs: { id: Tab; label: string; badge?: number }[] = [
-    { id: "overview",      label: "Visão Geral" },
-    { id: "opportunities", label: "Oportunidades", badge: initialOpportunities.length || undefined },
-    { id: "customers",     label: "Clientes" },
-    { id: "avaliacoes",    label: "Avaliações" },
+    { id: "overview",  label: "Visão Geral" },
+    { id: "acoes",     label: "Ações", badge: friasCount || undefined },
+    { id: "customers", label: "Clientes" },
+    { id: "programa",  label: "Programa de Relacionamento" },
+    { id: "avaliacoes",label: "Avaliações" },
   ];
 
   function goToInactive() {
@@ -802,19 +1180,19 @@ export function CRMClient({
   }
 
   function goToOpportunities() {
-    setTab("opportunities");
+    setTab("acoes");
   }
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 max-w-5xl">
 
       {/* Tabs */}
-      <div className="mb-5 flex gap-1 rounded-xl bg-gray-100 p-1">
+      <div className="mb-5 flex gap-1 rounded-xl bg-gray-100 p-1 flex-wrap">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-all ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all whitespace-nowrap ${
               tab === t.id
                 ? "bg-white shadow-sm text-gray-900"
                 : "text-gray-500 hover:text-gray-700"
@@ -842,8 +1220,8 @@ export function CRMClient({
           onDateChange={handleDateChange}
         />
       )}
-      {tab === "opportunities" && (
-        <OpportunitiesTab opportunities={initialOpportunities} />
+      {tab === "acoes" && (
+        <AcoesTab stats={currentStats} />
       )}
       {tab === "customers" && (
         <CustomersTab
@@ -853,6 +1231,9 @@ export function CRMClient({
           onImportOpen={() => setShowImport(true)}
           reviewLinks={reviewLinks}
         />
+      )}
+      {tab === "programa" && (
+        <ProgramaDeRelacionamentoTab />
       )}
       {tab === "avaliacoes" && (
         <AvaliacoesTab

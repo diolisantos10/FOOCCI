@@ -26,6 +26,7 @@ interface Props {
   lastOrderAt: string | null;
   createdAt: string;
   isActive: boolean;
+  segment: string;
   classification: Classification;
   purchaseFrequencyDays: number;
   favoriteProduct: string | null;
@@ -49,8 +50,13 @@ export interface OrderHistoryItem {
   status: string;
   total: number;
   createdAt: string;
-  items: Array<{ name: string; quantity: number }>;
+  items: Array<{ name: string; quantity: number; price?: number }>;
   payment: string | null;
+  deliveryFee?: number;
+  discount?: number;
+  subtotal?: number;
+  type?: string;
+  notes?: string | null;
 }
 
 export interface InsightItem {
@@ -145,6 +151,13 @@ const TIER_STYLES: Record<Classification["tier"], { badge: string; avatarRing: s
   Gold:    { badge: "bg-amber-50 text-amber-700 border border-amber-200",       avatarRing: "ring-2 ring-amber-300",  avatarBg: "bg-amber-500"  },
   Silver:  { badge: "bg-gray-100 text-gray-600 border border-gray-300",         avatarRing: "ring-2 ring-gray-300",   avatarBg: "bg-gray-400"   },
   Bronze:  { badge: "bg-orange-50 text-orange-700 border border-orange-200",    avatarRing: "ring-2 ring-orange-300", avatarBg: "bg-orange-500" },
+};
+
+const SEGMENT_CONFIG: Record<string, { label: string; emoji: string; bg: string; text: string }> = {
+  QUENTE:      { label: "Quente",      emoji: "🔥", bg: "bg-red-50",    text: "text-red-700"    },
+  MORNO:       { label: "Morno",       emoji: "🌡️", bg: "bg-amber-50",  text: "text-amber-700"  },
+  FRIO:        { label: "Frio",        emoji: "🥶", bg: "bg-blue-50",   text: "text-blue-700"   },
+  SEM_PEDIDOS: { label: "Sem pedidos", emoji: "💤", bg: "bg-gray-100",  text: "text-gray-500"   },
 };
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -441,7 +454,7 @@ type HeaderProps = Pick<
   Props,
   | "name" | "phone" | "email" | "isActive" | "createdAt"
   | "totalOrders" | "totalSpend" | "lastOrderAt"
-  | "classification" | "purchaseFrequencyDays" | "favoriteProduct"
+  | "classification" | "purchaseFrequencyDays" | "favoriteProduct" | "segment"
 > & {
   onEdit: () => void;
   onDelete: () => void;
@@ -450,10 +463,12 @@ type HeaderProps = Pick<
 function HeaderSection({
   name, phone, email, isActive, createdAt,
   totalOrders, totalSpend, lastOrderAt,
-  classification, purchaseFrequencyDays, favoriteProduct,
+  classification, purchaseFrequencyDays, favoriteProduct, segment,
   onEdit, onDelete,
 }: HeaderProps) {
   const ts = TIER_STYLES[classification.tier];
+  const segCfg = SEGMENT_CONFIG[segment] ?? SEGMENT_CONFIG["SEM_PEDIDOS"]!;
+  const ticketMedio = totalOrders > 0 ? totalSpend / totalOrders : 0;
 
   const stats = [
     {
@@ -474,9 +489,9 @@ function HeaderSection({
         : "sem pedidos",
     },
     {
-      label: "Frequência",
-      value: purchaseFrequencyDays > 0 ? `${purchaseFrequencyDays}d` : "—",
-      sub:   purchaseFrequencyDays > 0 ? "entre pedidos" : "dados insuficientes",
+      label: "Ticket médio",
+      value: totalOrders > 0 ? fmtCurrency(ticketMedio) : "—",
+      sub:   totalOrders > 0 ? "por pedido" : "sem pedidos",
     },
     {
       label: "Produto favorito",
@@ -532,6 +547,10 @@ function HeaderSection({
             {/* CRM tier badge */}
             <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-sm font-semibold ${ts.badge}`}>
               {classification.icon} {classification.tier}
+            </span>
+            {/* CRM segment badge */}
+            <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-sm font-semibold ${segCfg.bg} ${segCfg.text}`}>
+              {segCfg.emoji} {segCfg.label}
             </span>
           </div>
 
@@ -744,9 +763,139 @@ function groupOrdersByDate(
     .map((key) => ({ key, label: dateGroupLabel(key), orders: map[key]! }));
 }
 
+// ─── OrderDetailModal ─────────────────────────────────────────────────────────
+
+const ORDER_TYPE_LABEL: Record<string, string> = {
+  DELIVERY: "Entrega",
+  PICKUP:   "Retirada",
+  DINE_IN:  "Mesa",
+};
+
+function OrderDetailModal({
+  order,
+  onClose,
+}: {
+  order: OrderHistoryItem;
+  onClose: () => void;
+}) {
+  const meta = STATUS_META[order.status] ?? STATUS_META["PENDING"]!;
+  const date = new Date(order.createdAt).toLocaleString("pt-BR", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-white shadow-xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              Pedido #{order.id.slice(-8).toUpperCase()}
+            </p>
+            <p className="text-sm text-gray-500 mt-0.5">{date}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${meta.badge}`}>
+              {meta.label}
+            </span>
+            <button
+              onClick={onClose}
+              className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-4 max-h-[65vh] overflow-y-auto">
+          {/* Meta row */}
+          <div className="flex flex-wrap gap-2">
+            {order.type && (
+              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
+                {ORDER_TYPE_LABEL[order.type] ?? order.type}
+              </span>
+            )}
+            {order.payment && (
+              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
+                {PAYMENT_LABELS[order.payment] ?? order.payment}
+              </span>
+            )}
+          </div>
+
+          {/* Items */}
+          <div>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Itens</p>
+            <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden">
+              {order.items.map((item, i) => (
+                <div key={i} className="flex items-center justify-between px-3 py-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-bold text-gray-600">
+                      {item.quantity}×
+                    </span>
+                    <p className="text-sm text-gray-800 truncate">{item.name}</p>
+                  </div>
+                  {item.price !== undefined && (
+                    <p className="shrink-0 text-sm font-medium text-gray-600 ml-3">
+                      {fmtCurrency(item.price * item.quantity)}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          {order.notes && (
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Observações</p>
+              <p className="text-sm text-gray-600 italic">{order.notes}</p>
+            </div>
+          )}
+
+          {/* Totals */}
+          <div className="rounded-xl border border-gray-100 overflow-hidden">
+            {order.subtotal !== undefined && (
+              <div className="flex justify-between px-4 py-2 text-sm text-gray-600">
+                <span>Subtotal</span>
+                <span>{fmtCurrency(order.subtotal)}</span>
+              </div>
+            )}
+            {order.deliveryFee !== undefined && order.deliveryFee > 0 && (
+              <div className="flex justify-between px-4 py-2 text-sm text-gray-600 border-t border-gray-50">
+                <span>Entrega</span>
+                <span>{fmtCurrency(order.deliveryFee)}</span>
+              </div>
+            )}
+            {order.discount !== undefined && order.discount > 0 && (
+              <div className="flex justify-between px-4 py-2 text-sm text-green-600 border-t border-gray-50">
+                <span>Desconto</span>
+                <span>−{fmtCurrency(order.discount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between px-4 py-3 font-bold text-gray-900 bg-gray-50 border-t border-gray-100">
+              <span>Total</span>
+              <span>{fmtCurrency(order.total)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── OrderHistory component ───────────────────────────────────────────────────
 
-function OrderHistory({ orders }: { orders: OrderHistoryItem[] }) {
+function OrderHistory({ orders, onOrderClick }: { orders: OrderHistoryItem[]; onOrderClick: (o: OrderHistoryItem) => void }) {
   if (orders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white py-16">
@@ -788,11 +937,13 @@ function OrderHistory({ orders }: { orders: OrderHistoryItem[] }) {
               });
 
               return (
-                <div
+                <button
                   key={order.id}
-                  className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 transition-colors ${
+                  type="button"
+                  onClick={() => onOrderClick(order)}
+                  className={`w-full flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 text-left transition-colors cursor-pointer ${
                     isLatest
-                      ? "border-orange-200 shadow-sm ring-1 ring-orange-100"
+                      ? "border-orange-200 shadow-sm ring-1 ring-orange-100 hover:shadow-md"
                       : "border-gray-100 hover:border-gray-200 hover:shadow-sm"
                   }`}
                 >
@@ -824,7 +975,11 @@ function OrderHistory({ orders }: { orders: OrderHistoryItem[] }) {
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${meta.badge}`}>
                     {meta.label}
                   </span>
-                </div>
+                  {/* Click cue */}
+                  <svg className="shrink-0 h-3.5 w-3.5 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
+                  </svg>
+                </button>
               );
             })}
           </div>
@@ -836,11 +991,12 @@ function OrderHistory({ orders }: { orders: OrderHistoryItem[] }) {
 
 // ─── History tab ──────────────────────────────────────────────────────────────
 
-function HistoryTab({ orders }: { orders: OrderHistoryItem[] }) {
+function HistoryTab({ orders, onOrderClick }: { orders: OrderHistoryItem[]; onOrderClick: (o: OrderHistoryItem) => void }) {
   return (
     <div className="space-y-6">
       <Section title="Histórico de Pedidos" icon="🧾">
-        <OrderHistory orders={orders} />
+        <p className="text-xs text-gray-400">Clique em um pedido para ver os detalhes.</p>
+        <OrderHistory orders={orders} onOrderClick={onOrderClick} />
       </Section>
     </div>
   );
@@ -1005,6 +1161,7 @@ export default function CustomerProfileClient({
   totalOrders,
   totalSpend,
   lastOrderAt,
+  segment,
   classification,
   purchaseFrequencyDays,
   favoriteProduct,
@@ -1017,6 +1174,7 @@ export default function CustomerProfileClient({
 }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [selectedOrder, setSelectedOrder] = useState<OrderHistoryItem | null>(null);
 
   // ── Edit modal ──────────────────────────────────────────────────────────────
   const [editOpen,  setEditOpen]  = useState(false);
@@ -1090,6 +1248,7 @@ export default function CustomerProfileClient({
         totalOrders={totalOrders}
         totalSpend={totalSpend}
         lastOrderAt={lastOrderAt}
+        segment={segment}
         classification={classification}
         purchaseFrequencyDays={purchaseFrequencyDays}
         favoriteProduct={favoriteProduct}
@@ -1103,10 +1262,18 @@ export default function CustomerProfileClient({
       {/* Tab content */}
       <div className="mx-auto max-w-7xl p-6">
         {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} addresses={addresses} />}
-        {activeTab === "history"      && <HistoryTab orders={orders} />}
+        {activeTab === "history"      && <HistoryTab orders={orders} onOrderClick={setSelectedOrder} />}
         {activeTab === "interactions" && <InteractionsTab interactions={interactions} />}
         {activeTab === "actions"      && <ActionsTab tags={tags} />}
       </div>
+
+      {/* ── Order detail modal ──────────────────────────────────────────────── */}
+      {selectedOrder && (
+        <OrderDetailModal
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+        />
+      )}
 
       {/* ── Edit modal ──────────────────────────────────────────────────────── */}
       {editOpen && (

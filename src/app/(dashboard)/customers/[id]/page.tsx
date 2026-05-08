@@ -353,6 +353,8 @@ export default async function CustomerDetailPage({
       createdAt:    true,
       isActive:     true,
       restaurantId: true,
+      tier:         true,
+      segment:      true,
       addresses: {
         orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
         select: {
@@ -371,14 +373,20 @@ export default async function CustomerDetailPage({
       orders: {
         orderBy: { createdAt: "asc" },
         select: {
-          id:        true,
-          status:    true,
-          createdAt: true,
-          total:     true,
+          id:          true,
+          status:      true,
+          createdAt:   true,
+          total:       true,
+          subtotal:    true,
+          deliveryFee: true,
+          discount:    true,
+          type:        true,
+          notes:       true,
           items: {
             select: {
               name:     true,
               quantity: true,
+              price:    true,
               menuItem: {
                 select: { category: { select: { name: true } } },
               },
@@ -426,12 +434,17 @@ export default async function CustomerDetailPage({
   const serializedOrders: OrderHistoryItem[] = [...customer.orders]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .map((o) => ({
-      id:        o.id,
-      status:    o.status,
-      total:     Number(o.total),
-      createdAt: o.createdAt.toISOString(),
-      items:     o.items.map((i) => ({ name: i.name, quantity: i.quantity })),
-      payment:   o.payment?.method ?? null,
+      id:          o.id,
+      status:      o.status,
+      total:       Number(o.total),
+      subtotal:    Number(o.subtotal),
+      deliveryFee: Number(o.deliveryFee),
+      discount:    Number(o.discount),
+      type:        o.type ?? undefined,
+      notes:       o.notes ?? null,
+      createdAt:   o.createdAt.toISOString(),
+      items:       o.items.map((i) => ({ name: i.name, quantity: i.quantity, price: Number(i.price) })),
+      payment:     o.payment?.method ?? null,
     }));
 
   const { purchaseFrequencyDays, favoriteProduct } = computeHeader(customer.orders as OrderRow[]);
@@ -467,6 +480,7 @@ export default async function CustomerDetailPage({
         lastOrderAt={customer.lastOrderAt?.toISOString() ?? null}
         createdAt={customer.createdAt.toISOString()}
         isActive={customer.isActive}
+        segment={customer.segment}
         classification={classification}
         purchaseFrequencyDays={purchaseFrequencyDays}
         favoriteProduct={favoriteProduct}
