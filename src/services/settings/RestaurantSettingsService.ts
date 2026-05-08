@@ -17,43 +17,149 @@ import type {
   StorePolicies,
 } from "@prisma/client";
 
-// ── Store (Restaurant fields) ──────────────────────────────────────────────────
+// ── Store ─────────────────────────────────────────────────────────────────────
 
-type StoreSummary = {
-  id: string;
-  name: string;
-  phone: string | null;
-  address: string | null;
-  description: string | null;
-  logoUrl: string | null;
-};
+const STORE_PROFILE_SELECT = {
+  tradeName: true, legalName: true, cuisineType: true,
+  cnpj: true, stateRegistration: true, municipalRegistration: true,
+  taxRegime: true, legalResponsibleName: true, legalResponsibleCpf: true,
+  cep: true, street: true, streetNumber: true, complement: true,
+  neighborhood: true, city: true, state: true, country: true,
+  referencePoint: true, latitude: true, longitude: true,
+  mainPhone: true, whatsappPhone: true, secondaryPhone: true,
+  secondaryWhatsapp: true, mainEmail: true, financeEmail: true, supportEmail: true,
+  ownerName: true, ownerRole: true, ownerPhone: true, ownerWhatsapp: true, ownerEmail: true,
+  managerName: true, managerRole: true, managerPhone: true, managerWhatsapp: true, managerEmail: true,
+  deliveryEnabled: true, pickupEnabled: true, dineInEnabled: true, averagePreparationMinutes: true,
+} as const;
 
 export class RestaurantSettingsService {
-  static async getStore(restaurantId: string): Promise<ServiceResult<StoreSummary>> {
+  static async getStore(restaurantId: string) {
     const r = await prisma.restaurant.findUnique({
       where: { id: restaurantId },
-      select: { id: true, name: true, phone: true, address: true, description: true, logoUrl: true },
+      select: {
+        id: true, name: true, slug: true, phone: true, description: true,
+        logoUrl: true, timezone: true,
+        storeProfile: { select: STORE_PROFILE_SELECT },
+      },
     });
     if (!r) return serviceFail("Restaurant not found", 404);
-    return serviceOk(r);
+    return serviceOk({ ...r, storeProfile: r.storeProfile ?? null });
   }
 
-  static async updateStore(
-    restaurantId: string,
-    input: UpsertStoreInput
-  ): Promise<ServiceResult<StoreSummary>> {
-    const r = await prisma.restaurant.update({
-      where: { id: restaurantId },
-      data: {
-        name:        input.name,
-        phone:       input.phone       ?? null,
-        address:     input.address     ?? null,
-        description: input.description ?? null,
-        logoUrl:     input.logoUrl     ?? null,
-      },
-      select: { id: true, name: true, phone: true, address: true, description: true, logoUrl: true },
-    });
-    return serviceOk(r);
+  static async updateStore(restaurantId: string, input: UpsertStoreInput) {
+    // Build structured address summary for backward-compat restaurant.address field
+    const parts = [input.street, input.streetNumber, input.neighborhood, input.city, input.state]
+      .filter(Boolean).join(", ");
+    const addressSummary = parts || null;
+
+    // Keep restaurant.phone in sync with whatsappPhone (primary contact)
+    const syncedPhone = input.whatsappPhone ?? input.mainPhone ?? null;
+
+    await prisma.$transaction([
+      prisma.restaurant.update({
+        where: { id: restaurantId },
+        data: {
+          name:        input.name,
+          description: input.description ?? null,
+          address:     addressSummary,
+          phone:       syncedPhone,
+          timezone:    input.timezone    ?? undefined,
+        },
+      }),
+      prisma.storeProfile.upsert({
+        where:  { restaurantId },
+        create: {
+          restaurantId,
+          tradeName:    input.tradeName    ?? null,
+          legalName:    input.legalName    ?? null,
+          cuisineType:  input.cuisineType  ?? null,
+          cnpj:                  input.cnpj                  ?? null,
+          stateRegistration:     input.stateRegistration     ?? null,
+          municipalRegistration: input.municipalRegistration ?? null,
+          taxRegime:             input.taxRegime             ?? null,
+          legalResponsibleName:  input.legalResponsibleName  ?? null,
+          legalResponsibleCpf:   input.legalResponsibleCpf   ?? null,
+          cep:            input.cep            ?? null,
+          street:         input.street         ?? null,
+          streetNumber:   input.streetNumber   ?? null,
+          complement:     input.complement     ?? null,
+          neighborhood:   input.neighborhood   ?? null,
+          city:           input.city           ?? null,
+          state:          input.state          ?? null,
+          country:        input.country        ?? null,
+          referencePoint: input.referencePoint ?? null,
+          latitude:       input.latitude       ?? null,
+          longitude:      input.longitude      ?? null,
+          mainPhone:         input.mainPhone         ?? null,
+          whatsappPhone:     input.whatsappPhone     ?? null,
+          secondaryPhone:    input.secondaryPhone    ?? null,
+          secondaryWhatsapp: input.secondaryWhatsapp ?? null,
+          mainEmail:         input.mainEmail         ?? null,
+          financeEmail:      input.financeEmail       ?? null,
+          supportEmail:      input.supportEmail       ?? null,
+          ownerName:       input.ownerName       ?? null,
+          ownerRole:       input.ownerRole       ?? null,
+          ownerPhone:      input.ownerPhone      ?? null,
+          ownerWhatsapp:   input.ownerWhatsapp   ?? null,
+          ownerEmail:      input.ownerEmail      ?? null,
+          managerName:     input.managerName     ?? null,
+          managerRole:     input.managerRole     ?? null,
+          managerPhone:    input.managerPhone    ?? null,
+          managerWhatsapp: input.managerWhatsapp ?? null,
+          managerEmail:    input.managerEmail    ?? null,
+          deliveryEnabled: input.deliveryEnabled ?? true,
+          pickupEnabled:   input.pickupEnabled   ?? true,
+          dineInEnabled:   input.dineInEnabled   ?? true,
+          averagePreparationMinutes: input.averagePreparationMinutes ?? null,
+        },
+        update: {
+          tradeName:    input.tradeName    ?? null,
+          legalName:    input.legalName    ?? null,
+          cuisineType:  input.cuisineType  ?? null,
+          cnpj:                  input.cnpj                  ?? null,
+          stateRegistration:     input.stateRegistration     ?? null,
+          municipalRegistration: input.municipalRegistration ?? null,
+          taxRegime:             input.taxRegime             ?? null,
+          legalResponsibleName:  input.legalResponsibleName  ?? null,
+          legalResponsibleCpf:   input.legalResponsibleCpf   ?? null,
+          cep:            input.cep            ?? null,
+          street:         input.street         ?? null,
+          streetNumber:   input.streetNumber   ?? null,
+          complement:     input.complement     ?? null,
+          neighborhood:   input.neighborhood   ?? null,
+          city:           input.city           ?? null,
+          state:          input.state          ?? null,
+          country:        input.country        ?? null,
+          referencePoint: input.referencePoint ?? null,
+          latitude:       input.latitude       ?? null,
+          longitude:      input.longitude      ?? null,
+          mainPhone:         input.mainPhone         ?? null,
+          whatsappPhone:     input.whatsappPhone     ?? null,
+          secondaryPhone:    input.secondaryPhone    ?? null,
+          secondaryWhatsapp: input.secondaryWhatsapp ?? null,
+          mainEmail:         input.mainEmail         ?? null,
+          financeEmail:      input.financeEmail       ?? null,
+          supportEmail:      input.supportEmail       ?? null,
+          ownerName:       input.ownerName       ?? null,
+          ownerRole:       input.ownerRole       ?? null,
+          ownerPhone:      input.ownerPhone      ?? null,
+          ownerWhatsapp:   input.ownerWhatsapp   ?? null,
+          ownerEmail:      input.ownerEmail      ?? null,
+          managerName:     input.managerName     ?? null,
+          managerRole:     input.managerRole     ?? null,
+          managerPhone:    input.managerPhone    ?? null,
+          managerWhatsapp: input.managerWhatsapp ?? null,
+          managerEmail:    input.managerEmail    ?? null,
+          ...(input.deliveryEnabled !== undefined ? { deliveryEnabled: input.deliveryEnabled } : {}),
+          ...(input.pickupEnabled   !== undefined ? { pickupEnabled:   input.pickupEnabled   } : {}),
+          ...(input.dineInEnabled   !== undefined ? { dineInEnabled:   input.dineInEnabled   } : {}),
+          averagePreparationMinutes: input.averagePreparationMinutes ?? null,
+        },
+      }),
+    ]);
+
+    return RestaurantSettingsService.getStore(restaurantId);
   }
 
   // ── Delivery ─────────────────────────────────────────────────────────────────

@@ -53,6 +53,7 @@ model Restaurant {
   businessHours      BusinessHours[]
   paymentSettings    PaymentSettings?
   storePolicies      StorePolicies?
+  storeProfile       StoreProfile?
   integrationConfigs IntegrationConfig[]
   promotions         Promotion[]
   crmAutomations     CRMAutomation[]
@@ -1021,6 +1022,75 @@ model PaymentSettings {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("payment_settings")
+}
+
+// ─── StoreProfile ─────────────────────────────────────────────────────────────
+//  Complete fiscal, address, contact and operational data for the restaurant.
+//  Extends the base Restaurant row without bloating it.
+
+model StoreProfile {
+  id           String @id @default(cuid())
+  restaurantId String @unique
+
+  // ── Dados da loja ──────────────────────────────────────────
+  tradeName    String?  // Nome fantasia
+  legalName    String?  // Razão social
+  cuisineType  String?  // Tipo de cozinha / segmento
+
+  // ── Dados fiscais ──────────────────────────────────────────
+  cnpj                  String?
+  stateRegistration     String?  // Inscrição estadual
+  municipalRegistration String?  // Inscrição municipal
+  taxRegime             String?  // Regime tributário
+  legalResponsibleName  String?
+  legalResponsibleCpf   String?
+
+  // ── Endereço estruturado ────────────────────────────────────
+  cep            String?
+  street         String?
+  streetNumber   String?
+  complement     String?
+  neighborhood   String?
+  city           String?
+  state          String?
+  country        String?  @default("Brasil")
+  referencePoint String?
+  latitude       Float?
+  longitude      Float?
+
+  // ── Contatos ───────────────────────────────────────────────
+  mainPhone         String?
+  whatsappPhone     String?
+  secondaryPhone    String?
+  secondaryWhatsapp String?
+  mainEmail         String?
+  financeEmail      String?
+  supportEmail      String?
+
+  // ── Responsáveis ───────────────────────────────────────────
+  ownerName       String?
+  ownerRole       String?
+  ownerPhone      String?
+  ownerWhatsapp   String?
+  ownerEmail      String?
+  managerName     String?
+  managerRole     String?
+  managerPhone    String?
+  managerWhatsapp String?
+  managerEmail    String?
+
+  // ── Operação ───────────────────────────────────────────────
+  deliveryEnabled           Boolean @default(true)
+  pickupEnabled             Boolean @default(true)
+  dineInEnabled             Boolean @default(true)
+  averagePreparationMinutes Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("store_profiles")
 }
 
 model StorePolicies {

@@ -2,12 +2,67 @@ import { z } from "zod";
 
 // ── Store ──────────────────────────────────────────────────────────────────────
 
+const str   = (max: number) => z.string().max(max).nullable().optional();
+const phone  = () => z.string().max(30).nullable().optional();
+
 export const upsertStoreSchema = z.object({
+  // ── Dados básicos (Restaurant table) ──────────────────────────
   name:        z.string().min(1, "Nome obrigatório").max(120),
-  phone:       z.string().max(30).nullable().optional(),
-  address:     z.string().max(300).nullable().optional(),
-  description: z.string().max(1000).nullable().optional(),
-  logoUrl:     z.string().max(500).nullable().optional(),
+  description: str(1000),
+  timezone:    str(60),
+
+  // ── Dados da loja (StoreProfile) ──────────────────────────────
+  tradeName:   str(120),
+  legalName:   str(200),
+  cuisineType: str(100),
+
+  // ── Dados fiscais ──────────────────────────────────────────────
+  cnpj:                  str(20),
+  stateRegistration:     str(60),
+  municipalRegistration: str(60),
+  taxRegime:             str(100),
+  legalResponsibleName:  str(120),
+  legalResponsibleCpf:   str(20),
+
+  // ── Endereço ───────────────────────────────────────────────────
+  cep:            str(10),
+  street:         str(200),
+  streetNumber:   str(20),
+  complement:     str(100),
+  neighborhood:   str(100),
+  city:           str(100),
+  state:          str(2),
+  country:        str(60),
+  referencePoint: str(200),
+  latitude:       z.number().nullable().optional(),
+  longitude:      z.number().nullable().optional(),
+
+  // ── Contatos ──────────────────────────────────────────────────
+  mainPhone:         phone(),
+  whatsappPhone:     phone(),
+  secondaryPhone:    phone(),
+  secondaryWhatsapp: phone(),
+  mainEmail:         str(120),
+  financeEmail:      str(120),
+  supportEmail:      str(120),
+
+  // ── Responsáveis ──────────────────────────────────────────────
+  ownerName:       str(120),
+  ownerRole:       str(80),
+  ownerPhone:      phone(),
+  ownerWhatsapp:   phone(),
+  ownerEmail:      str(120),
+  managerName:     str(120),
+  managerRole:     str(80),
+  managerPhone:    phone(),
+  managerWhatsapp: phone(),
+  managerEmail:    str(120),
+
+  // ── Operação ──────────────────────────────────────────────────
+  deliveryEnabled:           z.boolean().optional(),
+  pickupEnabled:             z.boolean().optional(),
+  dineInEnabled:             z.boolean().optional(),
+  averagePreparationMinutes: z.number().int().min(1).max(300).nullable().optional(),
 });
 
 export type UpsertStoreInput = z.infer<typeof upsertStoreSchema>;

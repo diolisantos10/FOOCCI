@@ -30,7 +30,10 @@ export default async function QRMenuPage({
 }) {
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug: params.slug },
-    select: { id: true, name: true, logoUrl: true, phone: true },
+    select: {
+      id: true, name: true, logoUrl: true, phone: true,
+      storeProfile: { select: { whatsappPhone: true } },
+    },
   });
 
   if (!restaurant) notFound();
@@ -129,7 +132,7 @@ export default async function QRMenuPage({
       brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
       instagramUrl={brandConfig?.instagramUrl ?? null}
       tiktokUrl={brandConfig?.tiktokUrl ?? null}
-      restaurantPhone={restaurant.phone ?? null}
+      restaurantPhone={restaurant.storeProfile?.whatsappPhone ?? restaurant.phone ?? null}
     />
   );
 }
