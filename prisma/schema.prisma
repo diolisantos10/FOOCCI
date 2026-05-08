@@ -64,6 +64,8 @@ model Restaurant {
   simulationRuns      SimulationRun[]
   trackingLinks       TrackingLink[]
   importJobs          ImportJob[]
+  tierSettings        TierSettings?
+  tierBenefits        TierBenefit[]
 
   @@map("restaurants")
 }
@@ -1451,4 +1453,51 @@ model TrackingLink {
   @@unique([restaurantId, slug])
   @@index([restaurantId])
   @@map("tracking_links")
+}
+
+// ═══════════════════════════════════════════
+//  RELATIONSHIP PROGRAM
+// ═══════════════════════════════════════════
+
+/// Per-restaurant tier thresholds. If absent, defaults from crm-helpers are used.
+model TierSettings {
+  id               String   @id @default(cuid())
+  restaurantId     String   @unique
+
+  /// PRATA thresholds (OR logic — either is enough to qualify)
+  silverMinSpend   Decimal  @default(300)  @db.Decimal(10, 2)
+  silverMinOrders  Int      @default(0)    // 0 = spend-only
+
+  /// OURO thresholds
+  goldMinSpend     Decimal  @default(800)  @db.Decimal(10, 2)
+  goldMinOrders    Int      @default(0)
+
+  /// DIAMANTE thresholds
+  diamondMinSpend  Decimal  @default(2000) @db.Decimal(10, 2)
+  diamondMinOrders Int      @default(0)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("tier_settings")
+}
+
+/// Custom benefits per tier, configured by the restaurant.
+model TierBenefit {
+  id           String   @id @default(cuid())
+  restaurantId String
+  tier         String   // BRONZE | PRATA | OURO | DIAMANTE
+  title        String
+  description  String?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, tier])
+  @@map("tier_benefits")
 }

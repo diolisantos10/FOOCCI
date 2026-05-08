@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
+import { ProgramaTab } from "./ProgramaTab";
 import { NewCustomerButton } from "@/app/(dashboard)/customers/NewCustomerButton";
 import { isGuestIdentifier } from "@/lib/guest";
 
@@ -1013,127 +1014,6 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
   );
 }
 
-// ── Programa de Relacionamento Tab ────────────────────────────────────────────
-
-function ProgramaDeRelacionamentoTab() {
-  const features = [
-    {
-      emoji: "⭐",
-      title: "Sistema de Pontos",
-      description: "Clientes acumulam pontos a cada pedido e trocam por recompensas exclusivas. Configure multiplicadores por categoria ou valor de pedido.",
-      status: "Em breve",
-      statusColor: "bg-yellow-100 text-yellow-700",
-    },
-    {
-      emoji: "🏆",
-      title: "Progressão de Tier",
-      description: "Bronze → Prata → Ouro → Diamante. Clientes sobem de nível automaticamente conforme o gasto acumulado e desbloqueiam benefícios.",
-      status: "Estrutura pronta",
-      statusColor: "bg-green-100 text-green-700",
-    },
-    {
-      emoji: "🎂",
-      title: "Recompensa de Aniversário",
-      description: "Mensagem automática e cupom especial no aniversário do cliente. Configurável: desconto fixo, % ou item grátis.",
-      status: "Em breve",
-      statusColor: "bg-yellow-100 text-yellow-700",
-    },
-    {
-      emoji: "👥",
-      title: "Programa de Indicação",
-      description: "Clientes ganham bônus por cada amigo que indicam. Rastreamento automático via link único ou código de indicação.",
-      status: "Planejado",
-      statusColor: "bg-gray-100 text-gray-500",
-    },
-    {
-      emoji: "🎁",
-      title: "Recompensas Configuráveis",
-      description: "Defina recompensas por atingir um número de pedidos, valor acumulado ou frequência. Cupons, itens grátis ou descontos.",
-      status: "Em breve",
-      statusColor: "bg-yellow-100 text-yellow-700",
-    },
-    {
-      emoji: "📊",
-      title: "Dashboard de Fidelidade",
-      description: "Visualize taxa de retenção, clientes mais engajados, custos com recompensas e ROI do programa de relacionamento.",
-      status: "Planejado",
-      statusColor: "bg-gray-100 text-gray-500",
-    },
-  ];
-
-  const tiers = [
-    { name: "Bronze",  icon: "🥉", threshold: "R$ 0",    color: "border-orange-200 bg-orange-50",  text: "text-orange-700", benefit: "Acesso ao clube" },
-    { name: "Prata",   icon: "🥈", threshold: "R$ 300",  color: "border-gray-200 bg-gray-50",      text: "text-gray-700",   benefit: "5% de cashback" },
-    { name: "Ouro",    icon: "🥇", threshold: "R$ 800",  color: "border-amber-200 bg-amber-50",    text: "text-amber-700",  benefit: "10% de cashback + Frete grátis" },
-    { name: "Diamante",icon: "💎", threshold: "R$ 2.000",color: "border-cyan-200 bg-cyan-50",      text: "text-cyan-700",   benefit: "15% + Frete grátis + Atendimento VIP" },
-  ];
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-orange-50 px-5 py-5">
-        <div className="flex items-center gap-3 mb-2">
-          <span className="text-3xl">🤝</span>
-          <div>
-            <h2 className="text-base font-bold text-gray-900">Programa de Relacionamento</h2>
-            <p className="text-xs text-gray-500">Fidelização automática com tiers, pontos e recompensas</p>
-          </div>
-        </div>
-        <p className="text-sm text-gray-600 leading-relaxed">
-          Transforme compradores ocasionais em clientes fiéis. O programa de relacionamento automatiza recompensas,
-          reconhece clientes VIP e cria incentivos para a recorrência — tudo integrado ao seu CRM.
-        </p>
-      </div>
-
-      {/* Tier progression */}
-      <div>
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Estrutura de Tiers</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {tiers.map((tier, i) => (
-            <div key={tier.name} className={`rounded-2xl border px-4 py-4 ${tier.color}`}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xl">{tier.icon}</span>
-                <span className="text-[10px] font-bold text-gray-400">#{i + 1}</span>
-              </div>
-              <p className={`text-sm font-bold ${tier.text}`}>{tier.name}</p>
-              <p className="text-[11px] font-semibold text-gray-500 mt-0.5">{tier.threshold}+</p>
-              <p className="text-[10px] text-gray-500 mt-1.5 leading-tight">{tier.benefit}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Features grid */}
-      <div>
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">Funcionalidades</h3>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((feat) => (
-            <div key={feat.title} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">{feat.emoji}</span>
-                  <p className="text-sm font-bold text-gray-900">{feat.title}</p>
-                </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${feat.statusColor}`}>
-                  {feat.status}
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 leading-relaxed">{feat.description}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* CTA */}
-      <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 p-5 text-center">
-        <p className="text-sm font-bold text-brand-800 mb-1">Quer ajudar a moldar o programa?</p>
-        <p className="text-xs text-brand-600">
-          Os tiers já estão sendo calculados automaticamente. As recompensas e o painel de fidelidade chegam nas próximas versões.
-        </p>
-      </div>
-    </div>
-  );
-}
 
 // ── CSV Export ────────────────────────────────────────────────────────────────
 
@@ -1784,7 +1664,7 @@ export function CRMClient({
         />
       )}
       {tab === "programa" && (
-        <ProgramaDeRelacionamentoTab />
+        <ProgramaTab />
       )}
       {tab === "avaliacoes" && (
         <AvaliacoesTab
