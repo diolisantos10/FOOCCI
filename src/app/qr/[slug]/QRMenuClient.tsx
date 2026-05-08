@@ -36,6 +36,7 @@ type Item = {
 type Category = {
   id: string;
   name: string;
+  description: string | null;
   items: Item[];
 };
 
@@ -49,6 +50,7 @@ type Props = {
   instagramUrl?: string | null;
   tiktokUrl?: string | null;
   restaurantPhone?: string | null;
+  googleReviewUrl?: string | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -533,7 +535,7 @@ function PlaceholderBanner() {
 
 // ── Main Client Component ─────────────────────────────────────────────────────
 
-export function QRMenuClient({ slug, restaurant, categories, featured, promoBanner, brandPrimaryColor, instagramUrl, tiktokUrl, restaurantPhone }: Props) {
+export function QRMenuClient({ slug, restaurant, categories, featured, promoBanner, brandPrimaryColor, instagramUrl, tiktokUrl, restaurantPhone, googleReviewUrl }: Props) {
   const pc = brandPrimaryColor || '#f97316';
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>(
@@ -701,6 +703,22 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
                 )}
               </div>
             )}
+
+            {/* Google Review button — only when URL is configured */}
+            {googleReviewUrl && (
+              <div className="mt-4">
+                <a
+                  href={googleReviewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Avaliar restaurante no Google"
+                  className="inline-flex items-center gap-2 rounded-full border border-yellow-300 bg-yellow-50 px-5 py-2.5 text-sm font-semibold text-yellow-800 shadow-sm transition hover:bg-yellow-100 active:scale-95"
+                >
+                  <span aria-hidden="true">⭐</span>
+                  Avaliar restaurante
+                </a>
+              </div>
+            )}
           </div>
 
           {/* Identity strip — shown after identification */}
@@ -778,6 +796,17 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
                   {cat.name}
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── CATEGORY DESCRIPTION STRIP ───────────────────────── */}
+        {categories.find((c) => c.id === activeCategory)?.description && (
+          <div className="bg-white border-b border-gray-100">
+            <div className="mx-auto max-w-2xl px-4 py-2">
+              <p className="text-[11px] leading-snug text-gray-500">
+                {categories.find((c) => c.id === activeCategory)!.description}
+              </p>
             </div>
           </div>
         )}
