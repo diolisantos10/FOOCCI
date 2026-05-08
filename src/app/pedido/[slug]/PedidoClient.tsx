@@ -2236,6 +2236,20 @@ export function PedidoClient({
         return;
       }
 
+      // "open_whatsapp:NUMBER" → open WhatsApp in new tab (HUMAN_CONTACT response)
+      if (value.startsWith("open_whatsapp:")) {
+        const number = value.replace("open_whatsapp:", "").replace(/\D/g, "");
+        if (number) window.open(`https://wa.me/${number}`, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      // "open_url:URL" → open social/external link in new tab (SOCIAL_CHANNELS response)
+      if (value.startsWith("open_url:")) {
+        const url = value.replace("open_url:", "");
+        if (url) window.open(url, "_blank", "noopener,noreferrer");
+        return;
+      }
+
       // All other values (qualification, custom choices) → send to API.
       // displayText shows the human label in the bubble; value goes to the backend.
       setSuggestedProducts([]);

@@ -187,6 +187,12 @@ export interface V2Input {
   message?:     string;      // raw user message (for intent detection)
   memory?:      WaiterMemory;    // current session memory — client passes this in
   config?:      WaiterSalesConfig; // optional per-restaurant config override
+  /** Store contact / social channels — used by HUMAN_CONTACT and SOCIAL_CHANNELS handlers. */
+  storeChannels?: {
+    whatsapp?:  string | null;
+    instagram?: string | null;
+    tiktok?:    string | null;
+  };
 }
 
 /** Rendering mode returned to the client so the UI knows how to behave. */
@@ -226,6 +232,10 @@ export type CustomerIntent =
   | "asks_category"
   | "checkout_intent"
   | "restriction_based"
+  | "explain_product_or_category"
+  | "human_contact"
+  | "social_channels"
+  | "ordering_support"
   | "unclear";
 
 export type SalesOpportunity =
@@ -1935,7 +1945,7 @@ function handlePermissionAccepted(input: V2Input): V2Output {
   const profile = analyzeMenuProfile(catalog);
   if (profile.cuisineSignals.includes("sushi")) {
     return {
-      message:     "Boa! Você prefere algo cru, quente ou tipo temaki?",
+      message:     "Boa 😊 Você prefere algo cru, quente ou tipo temaki? Se quiser, também pode me dizer o que você gosta.",
       cards:       [],
       mode:        "BROWSE",
       options:     [
@@ -2179,6 +2189,38 @@ function applyConstraints(
   });
 }
 
+// ─── culinary knowledge dictionary ─────────────────────────────
+// Short, accurate explanations for common culinary terms.
+// Used by the EXPLAIN_CATEGORY_OR_PRODUCT intent handler.
+const CULINARY_DICT: Record<string, string> = {
+  uramaki:       "Uramaki é o inside-out roll — arroz por fora, recheio por dentro. Versátil e muito popular.",
+  temaki:        "Temaki é um cone de alga nori recheado, feito na hora. Crocante por fora e generoso por dentro.",
+  niguiri:       "Niguiri é uma fatia de peixe fresco sobre um bolinho de arroz temperado. Simples e elegante.",
+  nigirizushi:   "Nigirizushi é uma fatia de peixe fresco sobre um bolinho de arroz temperado. Simples e elegante.",
+  sashimi:       "Sashimi é peixe cru fatiado, sem arroz — destaque total para o frescor do peixe.",
+  "hot roll":    "Hot roll é um sushi frito, quente e crocante por fora, cremoso por dentro.",
+  hotroll:       "Hot roll é um sushi frito, quente e crocante por fora, cremoso por dentro.",
+  california:    "Califórnia é um uramaki clássico com pepino, kani e cream cheese. Leve e refrescante.",
+  califórnia:    "Califórnia é um uramaki clássico com pepino, kani e cream cheese. Leve e refrescante.",
+  filadélfia:    "Filadélfia é um uramaki com cream cheese e salmão — cremoso e muito pedido.",
+  philadelphia:  "Philadelphia é um uramaki com cream cheese e salmão — cremoso e muito pedido.",
+  tartar:        "Tártara é peixe cru picado e temperado, servido sobre arroz ou com acompanhamentos.",
+  tártara:       "Tártara é peixe cru picado e temperado, servido sobre arroz ou com acompanhamentos.",
+  yakisoba:      "Yakisoba é macarrão salteado na chapa com legumes e proteína — prato quente de origem japonesa.",
+  gyoza:         "Gyoza são pastéis japoneses recheados, grelhados ou no vapor. Ótima pedida para entrada.",
+  edamame:       "Edamame são vagens de soja levemente salgadas — entrada leve e nutritiva.",
+  combinado:     "Combinado é uma seleção de vários tipos de sushi/sashimi, ideal para experimentar.",
+  ceviche:       "Ceviche é peixe cru marinado no limão com temperos — fresco e intenso.",
+  japa:          "Japa é o apelido carinhoso para comida japonesa: sushi, sashimi, temaki e afins.",
+};
+
+function findCulinaryExplanation(msgLow: string): string | null {
+  for (const [term, explanation] of Object.entries(CULINARY_DICT)) {
+    if (msgLow.includes(term)) return explanation;
+  }
+  return null;
+}
+
 function handleUserMessage(input: V2Input): V2Output {
   const cfg          = input.config ?? DEFAULT_WAITER_CONFIG;
   const { catalog, cartItemIds } = input;
@@ -2278,6 +2320,101 @@ function handleUserMessage(input: V2Input): V2Output {
       aiDirective: "",
       memoryPatch: { checkoutUpsellStage: "completed" },
     };
+  }
+
+  // ── Handle open_whatsapp / open_url values if echoed back by the frontend ────
+  if (/^open_whatsapp:|^open_url:/.test(msgLow)) {
+    return {
+      message:     "Perfeito 😊 pode nos contactar quando quiser.",
+      cards:       [],
+      mode:        "BROWSE",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
+  // ── ORDERING_SUPPORT — "como faço para pedir?", "como adiciono?" ─────────────
+  const ORDERING_SUPPORT_RE = /como\s+(fa[çc]o\s+para\s+pedir|pe[çc]o|adiciono(\s+itens?|\s+no\s+carrinho)?|finalizo|confirmo\s+o\s+pedido|pago(\s+o\s+pedido)?)|como\s+funciona(\s+o\s+pedido|\s+a\s+entrega|\s+o\s+delivery)?|como\s+(usar|fazer\s+o\s+pedido)/i;
+  if (ORDERING_SUPPORT_RE.test(msgLow)) {
+    return {
+      message:     "É simples: escolha os itens, adicione ao carrinho e toque em Finalizar Pedido. Se tiver dúvida com algum prato, é só me perguntar! 😊",
+      cards:       [],
+      mode:        "BROWSE",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
+  // ── HUMAN_CONTACT — "quero falar com o restaurante", "falar com atendente" ────
+  const HUMAN_CONTACT_RE = /quero\s+falar\s+com|falar\s+com\s+(atendente|algu[eé]m|humano|a\s+loja|o\s+restaurante)|atendimento\s+humano|tem\s+(atendente|humano\?|algu[eé]m\s+pra\s+atender)|ligar\s+para\s+o\s+restaurante|telefone\s+do\s+restaurante|preciso\s+de\s+atendimento/i;
+  if (HUMAN_CONTACT_RE.test(msgLow)) {
+    const wa = input.storeChannels?.whatsapp;
+    if (wa) {
+      const waClean = wa.replace(/\D/g, "");
+      return {
+        message:     "Pode entrar em contato com nossa equipe pelo WhatsApp 👇",
+        cards:       [],
+        mode:        "BROWSE",
+        options:     [{ label: "💬 Abrir WhatsApp", value: `open_whatsapp:${waClean}` }],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
+    return {
+      message:     "Para falar com nossa equipe, use o ícone de contato na página. Posso ajudar com o cardápio por aqui 😊",
+      cards:       [],
+      mode:        "BROWSE",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
+  // ── SOCIAL_CHANNELS — "qual o Instagram?", "vocês têm TikTok?" ──────────────
+  const SOCIAL_CHANNELS_RE = /instagram|tiktok|tik\s*tok|rede[s]?\s+social|nos\s+siga|seguir\s+(voc[êe]s|a\s+loja|o\s+restaurante)/i;
+  if (SOCIAL_CHANNELS_RE.test(msgLow)) {
+    const channels = input.storeChannels;
+    const opts: WaiterOption[] = [];
+    if (/instagram/i.test(msgLow)) {
+      if (channels?.instagram) {
+        opts.push({ label: "📸 Instagram", value: `open_url:${channels.instagram}` });
+      } else {
+        return { message: "Ainda não temos Instagram configurado aqui. Fique de olho em breve! 😊", cards: [], mode: "BROWSE", options: [], requiresAI: false, aiDirective: "" };
+      }
+    } else if (/tiktok|tik\s*tok/i.test(msgLow)) {
+      if (channels?.tiktok) {
+        opts.push({ label: "🎵 TikTok", value: `open_url:${channels.tiktok}` });
+      } else {
+        return { message: "Ainda não temos TikTok configurado aqui. Fique de olho em breve! 😊", cards: [], mode: "BROWSE", options: [], requiresAI: false, aiDirective: "" };
+      }
+    } else {
+      if (channels?.instagram) opts.push({ label: "📸 Instagram", value: `open_url:${channels.instagram}` });
+      if (channels?.tiktok)    opts.push({ label: "🎵 TikTok",    value: `open_url:${channels.tiktok}`    });
+    }
+    if (opts.length > 0) {
+      return { message: "Veja nossas redes sociais 👇", cards: [], mode: "BROWSE", options: opts, requiresAI: false, aiDirective: "" };
+    }
+    return { message: "Ainda não configuramos nossas redes por aqui. Mas em breve! 😊", cards: [], mode: "BROWSE", options: [], requiresAI: false, aiDirective: "" };
+  }
+
+  // ── EXPLAIN_CATEGORY_OR_PRODUCT — "o que é X?", "qual a diferença entre X e Y?" ──
+  const EXPLAIN_RE = /\bo\s+que\s+[eéê]\s+|\bo\s+que\s+s[aã]o\s+|qual\s+a\s+diferen[çc]a\s+entre\s+|\bme\s+explica\s+|\bcomo\s+[eéê]\s+feito\s+|\bo\s+que\s+(tem|vem)\s+(no|na|nos|nas)\s+/i;
+  if (EXPLAIN_RE.test(msgLow)) {
+    const explanation = findCulinaryExplanation(msgLow);
+    if (explanation) {
+      const related = searchMenuByQuery(msgRaw, catalog, cartItemIds, [], maxBudget, excludedIngredients);
+      return {
+        message:     explanation,
+        cards:       related.confidence !== "low" ? related.ids.slice(0, 3) : [],
+        mode:        "SUGGESTION",
+        options:     [],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
+    // Term not in dictionary → fall through to AI path below
   }
 
   // ── Ambiguous-help detection — fires BEFORE menu search ─────────────────────

@@ -178,6 +178,21 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
                              (event === "ON_CHECKOUT_STARTED" && input.upsellOffered != null),
   };
 
+  // Fetch store channels for HUMAN_CONTACT / SOCIAL_CHANNELS deterministic handlers.
+  // Only incurs DB cost on ON_USER_MESSAGE events; all other events skip this fetch.
+  let storeChannels: WaiterBrainV2.V2Input["storeChannels"] | undefined;
+  if (event === "ON_USER_MESSAGE") {
+    const [channelBrandCfg, storeProfileRow] = await Promise.all([
+      prisma.restaurantBrandConfig.findUnique({ where: { restaurantId }, select: { instagramUrl: true, tiktokUrl: true } }),
+      prisma.storeProfile.findUnique({ where: { restaurantId }, select: { whatsappPhone: true } }),
+    ]);
+    storeChannels = {
+      whatsapp:  storeProfileRow?.whatsappPhone ?? null,
+      instagram: channelBrandCfg?.instagramUrl  ?? null,
+      tiktok:    channelBrandCfg?.tiktokUrl      ?? null,
+    };
+  }
+
   const v2 = WaiterBrainV2.decide({
     event,
     cartItemIds,
@@ -186,6 +201,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     catalog: catalogItems,
     message,
     memory: waiterMemory,
+    storeChannels,
   });
 
   if (!v2.requiresAI) {
