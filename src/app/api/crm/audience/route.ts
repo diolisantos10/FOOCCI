@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
       case "clientes-vip": {
         const where = { restaurantId: rid, isGuest: false, tier: { in: ["OURO", "DIAMANTE"] } };
         const [rows, count] = await Promise.all([
-          prisma.customer.findMany({ where, orderBy: [{ tier: "asc" }, { totalSpend: "desc" }], take: PREVIEW_LIMIT, select: baseSelect }),
+          prisma.customer.findMany({ where, orderBy: { totalSpend: "desc" }, take: PREVIEW_LIMIT, select: baseSelect }),
           prisma.customer.count({ where }),
         ]);
         return ok<AudienceResponse>({ count, customers: serialize(rows as Row[]), computed: true });
