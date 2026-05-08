@@ -4,8 +4,8 @@
 
 -- ── Customer: persisted tier and segment ─────────────────────────────────────
 
-ALTER TABLE "customers" ADD COLUMN "tier"    TEXT NOT NULL DEFAULT 'BRONZE';
-ALTER TABLE "customers" ADD COLUMN "segment" TEXT NOT NULL DEFAULT 'SEM_PEDIDOS';
+ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "tier"    TEXT NOT NULL DEFAULT 'BRONZE';
+ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "segment" TEXT NOT NULL DEFAULT 'SEM_PEDIDOS';
 
 -- Backfill tier from current totalSpend
 UPDATE "customers"
@@ -27,18 +27,18 @@ END;
 
 -- ── Order: source channel and import timestamp ────────────────────────────────
 
-ALTER TABLE "orders" ADD COLUMN "source"     TEXT;
-ALTER TABLE "orders" ADD COLUMN "importedAt" TIMESTAMP(3);
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "source"     TEXT;
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "importedAt" TIMESTAMP(3);
 
 -- ── OrderItem: category, variant and addon snapshots ─────────────────────────
 
-ALTER TABLE "order_items" ADD COLUMN "categoryId"   TEXT;
-ALTER TABLE "order_items" ADD COLUMN "categoryName" TEXT;
-ALTER TABLE "order_items" ADD COLUMN "variantName"  TEXT;
-ALTER TABLE "order_items" ADD COLUMN "addonsJson"   JSONB;
+ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "categoryId"   TEXT;
+ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "categoryName" TEXT;
+ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "variantName"  TEXT;
+ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "addonsJson"   JSONB;
 
 -- Create index on categoryId for analytics queries
-CREATE INDEX "order_items_categoryId_idx" ON "order_items"("categoryId");
+CREATE INDEX IF NOT EXISTS "order_items_categoryId_idx" ON "order_items"("categoryId");
 
 -- Backfill categoryId and categoryName from MenuItem → MenuCategory
 -- Only fills rows where menuItemId is set and category can be resolved.
