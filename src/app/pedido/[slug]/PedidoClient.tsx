@@ -93,11 +93,33 @@ interface MenuCategory {
   items: MenuItem[];
 }
 
+interface SelectedOption {
+  groupId: string;
+  groupName: string;
+  optionId: string;
+  optionName: string;
+  qty: number;
+  priceAdjustment: number;
+}
+
+interface SelectedExtra {
+  extraId: string;
+  name: string;
+  unitPrice: number;
+  qty: number;
+}
+
 interface CartItem {
   id: string;
+  baseItemId: string;
   name: string;
   price: number;
   qty: number;
+  notes?: string;
+  variantId?: string;
+  variantName?: string;
+  selectedOptions?: SelectedOption[];
+  selectedExtras?: SelectedExtra[];
 }
 
 type HistoryEntry = { role: "user" | "assistant"; content: string };
@@ -235,7 +257,11 @@ function findDessertCat(cats: MenuCategory[]) {
 }
 
 function itemCartQty(item: MenuItem, cart: CartItem[]): number {
-  if (!item.hasVariants) return cart.find((c) => c.id === item.id)?.qty ?? 0;
+  if (!item.hasVariants) {
+    return cart
+      .filter((c) => c.baseItemId === item.id || c.id === item.id)
+      .reduce((sum, c) => sum + c.qty, 0);
+  }
   return cart
     .filter((c) => item.variants.some((v) => `${item.id}_${v.id}` === c.id))
     .reduce((sum, c) => sum + c.qty, 0);
@@ -449,6 +475,7 @@ function ProductModal({
   item,
   qty,
   onAdd,
+  onAddCustomized,
   onAddVariant,
   cart,
   onClose,
@@ -456,12 +483,80 @@ function ProductModal({
   item: MenuItem;
   qty: number;
   onAdd: () => void;
+  onAddCustomized?: (notes: string, selectedOptions: SelectedOption[], selectedExtras: SelectedExtra[]) => void;
   onAddVariant?: (variant: MenuItemVariant) => void;
   cart?: CartItem[];
   onClose: () => void;
 }) {
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
+
+  const paidExtras = item.extras.filter((e) => e.price > 0);
+  const freeExtras = item.extras.filter((e) => e.price === 0);
+  const hasCustomization = !item.hasVariants && (item.optionGroups.length > 0 || paidExtras.length > 0);
+
+  const [optionQtys, setOptionQtys] = useState<Record<string, number>>({});
+  const [extraQtys, setExtraQtys]   = useState<Record<string, number>>({});
+  const [notes, setNotes]           = useState("");
+  const [errors, setErrors]         = useState<string[]>([]);
+
+  function groupTotal(group: OptionGroup) {
+    return group.options.reduce((s, o) => s + (optionQtys[o.id] ?? 0), 0);
+  }
+
+  const optionsExtra = item.optionGroups
+    .flatMap((g) => g.options)
+    .reduce((s, o) => s + (optionQtys[o.id] ?? 0) * o.price, 0);
+  const extrasExtra = paidExtras.reduce((s, e) => s + (extraQtys[e.id] ?? 0) * e.price, 0);
+  const finalPrice  = item.price + optionsExtra + extrasExtra;
+
+  function changeOptionQty(group: OptionGroup, optionId: string, delta: number) {
+    setErrors([]);
+    setOptionQtys((prev) => {
+      const cur    = prev[optionId] ?? 0;
+      const newQty = Math.max(0, cur + delta);
+      const total  = groupTotal(group) - cur + newQty;
+      if (delta > 0 && group.maxSelect > 0 && total > group.maxSelect) return prev;
+      return { ...prev, [optionId]: newQty };
+    });
+  }
+
+  function changeExtraQty(extraId: string, delta: number) {
+    setExtraQtys((prev) => ({ ...prev, [extraId]: Math.max(0, (prev[extraId] ?? 0) + delta) }));
+  }
+
+  function handleConfirmAdd() {
+    if (!hasCustomization) { onAdd(); return; }
+
+    const errs: string[] = [];
+    for (const group of item.optionGroups) {
+      const total     = groupTotal(group);
+      const minNeeded = group.required ? Math.max(group.minSelect, 1) : group.minSelect;
+      if (total < minNeeded) {
+        errs.push(`"${group.name}": selecione pelo menos ${minNeeded} opção`);
+      }
+    }
+    if (errs.length > 0) { setErrors(errs); return; }
+
+    const selectedOptions: SelectedOption[] = item.optionGroups.flatMap((group) =>
+      group.options
+        .filter((o) => (optionQtys[o.id] ?? 0) > 0)
+        .map((o) => ({
+          groupId:         group.id,
+          groupName:       group.name,
+          optionId:        o.id,
+          optionName:      o.name,
+          qty:             optionQtys[o.id]!,
+          priceAdjustment: o.price,
+        })),
+    );
+
+    const selectedExtras: SelectedExtra[] = paidExtras
+      .filter((e) => (extraQtys[e.id] ?? 0) > 0)
+      .map((e) => ({ extraId: e.id, name: e.name, unitPrice: e.price, qty: extraQtys[e.id]! }));
+
+    onAddCustomized?.(notes, selectedOptions, selectedExtras);
+  }
 
   return (
     <div
@@ -494,7 +589,7 @@ function ProductModal({
             </div>
           )}
 
-          {/* Back arrow — top left, same as iFood */}
+          {/* Back arrow — top left */}
           <button
             onClick={onClose}
             className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60 active:scale-90 transition-transform text-lg"
@@ -503,7 +598,7 @@ function ProductModal({
           </button>
         </div>
 
-        {/* ── Content — name + description scroll, variants if any ── */}
+        {/* ── Content — scrollable ── */}
         <div className="flex-1 overflow-y-auto px-6 pt-5 pb-2">
           <h2 className="text-xl font-bold leading-snug text-gray-900">{item.name}</h2>
 
@@ -535,23 +630,126 @@ function ProductModal({
             </div>
           )}
 
-          {/* Extras */}
-          {item.extras && item.extras.length > 0 && (
+          {/* ── Option groups ── */}
+          {item.optionGroups.map((group) => {
+            const total = groupTotal(group);
+            return (
+              <div key={group.id} className="mt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-700">{group.name}</p>
+                  {group.required && (
+                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-[9px] font-bold uppercase text-red-500">
+                      Obrigatório
+                    </span>
+                  )}
+                  {group.maxSelect > 0 && (
+                    <span className="ml-auto text-[10px] text-gray-400">{total}/{group.maxSelect}</span>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  {group.options.map((option) => {
+                    const oQty = optionQtys[option.id] ?? 0;
+                    return (
+                      <div key={option.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800 font-medium">{option.name}</p>
+                          {option.portion && <p className="text-xs text-gray-400">{option.portion}</p>}
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 ml-3">
+                          {option.price > 0 && (
+                            <span className="text-xs font-semibold text-gray-600">
+                              + R$ {option.price.toFixed(2).replace(".", ",")}
+                            </span>
+                          )}
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => changeOptionQty(group, option.id, -1)}
+                              disabled={oQty === 0}
+                              className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 text-gray-500 disabled:opacity-30 hover:bg-gray-100 active:scale-90 transition-transform text-base"
+                            >
+                              −
+                            </button>
+                            <span className="w-4 text-center text-sm font-bold text-gray-900">{oQty}</span>
+                            <button
+                              type="button"
+                              onClick={() => changeOptionQty(group, option.id, 1)}
+                              disabled={group.maxSelect > 0 && total >= group.maxSelect}
+                              className="flex h-7 w-7 items-center justify-center rounded-full text-white disabled:opacity-30 hover:opacity-90 active:scale-90 transition-transform text-sm font-bold"
+                              style={{ backgroundColor: 'var(--brand-primary)' }}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* ── Paid extras (interactive) ── */}
+          {paidExtras.length > 0 && (
             <div className="mt-4">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Adicionais disponíveis</p>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-700">Adicionais</p>
               <div className="space-y-1.5">
-                {item.extras.map((e) => (
-                  <div key={e.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                {paidExtras.map((extra) => {
+                  const eQty = extraQtys[extra.id] ?? 0;
+                  return (
+                    <div key={extra.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800 font-medium">
+                          {extra.name}{extra.portion ? ` (${extra.portion})` : ""}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        <span className="text-xs font-semibold text-gray-600">
+                          + R$ {extra.price.toFixed(2).replace(".", ",")}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => changeExtraQty(extra.id, -1)}
+                            disabled={eQty === 0}
+                            className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 text-gray-500 disabled:opacity-30 hover:bg-gray-100 active:scale-90 transition-transform text-base"
+                          >
+                            −
+                          </button>
+                          <span className="w-4 text-center text-sm font-bold text-gray-900">{eQty}</span>
+                          <button
+                            type="button"
+                            onClick={() => changeExtraQty(extra.id, 1)}
+                            className="flex h-7 w-7 items-center justify-center rounded-full text-white hover:opacity-90 active:scale-90 transition-transform text-sm font-bold"
+                            style={{ backgroundColor: 'var(--brand-primary)' }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Free extras (read-only) ── */}
+          {freeExtras.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Incluído</p>
+              <div className="space-y-1.5">
+                {freeExtras.map((e) => (
+                  <div key={e.id} className="flex items-center rounded-lg bg-gray-50 px-3 py-2">
                     <span className="text-sm text-gray-700">{e.name}{e.portion ? ` (${e.portion})` : ""}</span>
-                    {e.price > 0 && (
-                      <span className="text-xs font-semibold text-gray-800">+ R$ {e.price.toFixed(2).replace(".", ",")}</span>
-                    )}
                   </div>
                 ))}
               </div>
             </div>
           )}
 
+          {/* ── Variants ── */}
           {item.hasVariants && item.variants.length > 0 && (
             <div className="mt-5">
               <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
@@ -584,20 +782,47 @@ function ProductModal({
               </div>
             </div>
           )}
+
+          {/* ── Notes (only for items with interactive customization) ── */}
+          {hasCustomization && (
+            <div className="mt-4 mb-2">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                Observações
+              </p>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Ex: sem cebola, bem passado…"
+                rows={2}
+                maxLength={200}
+                style={{ fontSize: "16px" }}
+                className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-gray-300 focus:outline-none"
+              />
+            </div>
+          )}
         </div>
 
         {/* ── Footer — price + CTA pinned to bottom ── */}
         <div className="shrink-0 px-6 pb-8 pt-4 border-t border-gray-100 bg-white">
+          {/* Validation errors */}
+          {errors.length > 0 && (
+            <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 space-y-0.5">
+              {errors.map((e, i) => (
+                <p key={i} className="text-xs text-red-600">{e}</p>
+              ))}
+            </div>
+          )}
+
           {!item.hasVariants ? (
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Preço</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  R$ {item.price.toFixed(2).replace(".", ",")}
+                  R$ {finalPrice.toFixed(2).replace(".", ",")}
                 </p>
               </div>
               <button
-                onClick={onAdd}
+                onClick={handleConfirmAdd}
                 className="flex-1 rounded-2xl py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90 active:scale-95 transition-all"
                 style={{ backgroundColor: 'var(--brand-primary)' }}
               >
@@ -802,6 +1027,15 @@ function CartDrawer({
                   {/* Name + price */}
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-900">{item.name}</p>
+                    {(item.selectedOptions?.length || item.selectedExtras?.length || item.notes) && (
+                      <p className="mt-0.5 text-[10px] text-gray-400 line-clamp-1">
+                        {[
+                          item.selectedOptions?.map((o) => `${o.qty}× ${o.optionName}`).join(", "),
+                          item.selectedExtras?.map((e) => `${e.qty}× ${e.name}`).join(", "),
+                          item.notes,
+                        ].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-500">
                       R$ {item.price.toFixed(2).replace(".", ",")} × {item.qty}
                     </p>
@@ -1672,11 +1906,10 @@ export function PedidoClient({
       const existing = cart.find((c) => c.id === item.id);
       const newCart = existing
         ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
-        : [...cart, { id: item.id, name: item.name, price: item.price, qty: 1 }];
+        : [...cart, { id: item.id, baseItemId: item.id, name: item.name, price: item.price, qty: 1 }];
       setCart(newCart);
       lastActivityRef.current = Date.now();
       idleFiredRef.current    = false;
-      // Call WaiterBrain with ON_ITEM_ADDED for contextual praise (deterministic, no AI cost).
       if (stage === "BROWSE") {
         sendText("", newCart, stage, activeUpsell, { event: "ON_ITEM_ADDED", lastAddedId: item.id, silent: true });
       }
@@ -1691,14 +1924,57 @@ export function PedidoClient({
       const existing = cart.find((c) => c.id === cartId);
       const newCart  = existing
         ? cart.map((c) => c.id === cartId ? { ...c, qty: c.qty + 1 } : c)
-        : [...cart, { id: cartId, name: cartName, price: variant.price, qty: 1 }];
+        : [...cart, {
+            id: cartId, baseItemId: item.id, name: cartName,
+            price: variant.price, qty: 1,
+            variantId: variant.id, variantName: variant.name,
+          }];
       setCart(newCart);
       setSelectedProduct(null);
       lastActivityRef.current = Date.now();
       idleFiredRef.current    = false;
-      // suggestOnAdd: false — AI is not called on variant add; cart updates silently.
     },
     [cart],
+  );
+
+  const handleCustomizedAdd = useCallback(
+    (item: MenuItem, notes: string, selectedOptions: SelectedOption[], selectedExtras: SelectedExtra[]) => {
+      const optionsExtra = selectedOptions.reduce((s, o) => s + o.priceAdjustment * o.qty, 0);
+      const extrasExtra  = selectedExtras.reduce((s, e) => s + e.unitPrice * e.qty, 0);
+      const finalPrice   = item.price + optionsExtra + extrasExtra;
+      const hasAny       = notes.trim() || selectedOptions.length > 0 || selectedExtras.length > 0;
+
+      let newCart: CartItem[];
+      if (!hasAny) {
+        const existing = cart.find((c) => c.id === item.id);
+        newCart = existing
+          ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
+          : [...cart, { id: item.id, baseItemId: item.id, name: item.name, price: finalPrice, qty: 1 }];
+      } else {
+        newCart = [
+          ...cart,
+          {
+            id:              `${item.id}_c${uid()}`,
+            baseItemId:      item.id,
+            name:            item.name,
+            price:           finalPrice,
+            qty:             1,
+            notes:           notes.trim() || undefined,
+            selectedOptions: selectedOptions.length > 0 ? selectedOptions : undefined,
+            selectedExtras:  selectedExtras.length  > 0 ? selectedExtras  : undefined,
+          },
+        ];
+      }
+
+      setCart(newCart);
+      setSelectedProduct(null);
+      lastActivityRef.current = Date.now();
+      idleFiredRef.current    = false;
+      if (stage === "BROWSE") {
+        sendText("", newCart, stage, activeUpsell, { event: "ON_ITEM_ADDED", lastAddedId: item.id, silent: true });
+      }
+    },
+    [cart, stage, activeUpsell, sendText],
   );
 
   // ── Guided flow step handler ──────────────────────────────────────
@@ -1823,7 +2099,8 @@ export function PedidoClient({
       if (value === "add_to_cart") {
         const firstItem = suggestedProducts[0];
         if (firstItem) {
-          if (firstItem.hasVariants) setSelectedProduct(firstItem);
+          if (firstItem.hasVariants || firstItem.optionGroups.length > 0 || firstItem.extras.some((e) => e.price > 0))
+            setSelectedProduct(firstItem);
           else handleItemAdd(firstItem);
         }
         return;
@@ -2353,11 +2630,22 @@ export function PedidoClient({
           <p className="mb-2 text-xs font-semibold text-gray-500">Revise seu pedido</p>
 
           {/* Cart items */}
-          <div className="mb-2 max-h-24 overflow-y-auto">
+          <div className="mb-2 max-h-28 overflow-y-auto">
             {cart.map((c) => (
-              <div key={c.id} className="flex justify-between py-0.5 text-xs text-gray-700">
-                <span>{c.name} × {c.qty}</span>
-                <span>R$ {(c.price * c.qty).toFixed(2).replace(".", ",")}</span>
+              <div key={c.id} className="py-0.5">
+                <div className="flex justify-between text-xs text-gray-700">
+                  <span>{c.name} × {c.qty}</span>
+                  <span>R$ {(c.price * c.qty).toFixed(2).replace(".", ",")}</span>
+                </div>
+                {(c.selectedOptions?.length || c.selectedExtras?.length || c.notes) && (
+                  <p className="text-[10px] text-gray-400 line-clamp-1 ml-1">
+                    {[
+                      c.selectedOptions?.map((o) => `${o.qty}× ${o.optionName}`).join(", "),
+                      c.selectedExtras?.map((e) => `${e.qty}× ${e.name}`).join(", "),
+                      c.notes,
+                    ].filter(Boolean).join(" · ")}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -2613,7 +2901,8 @@ export function PedidoClient({
               msg={msg}
               onOptionSelect={handleOptionSelect}
               onItemAdd={(item) => {
-                if (item.hasVariants) setSelectedProduct(item);
+                if (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0))
+                  setSelectedProduct(item);
                 else handleItemAdd(item);
               }}
             />
@@ -2666,15 +2955,26 @@ export function PedidoClient({
                 Editar
               </button>
             </div>
-            <div className="mb-3 max-h-[100px] space-y-1 overflow-y-auto">
+            <div className="mb-3 max-h-[120px] space-y-1 overflow-y-auto">
               {cart.map((item) => (
-                <div key={item.id} className="flex justify-between text-xs">
-                  <span className="min-w-0 truncate text-gray-700">
-                    {item.qty}&times; {item.name}
-                  </span>
-                  <span className="ml-2 shrink-0 font-medium text-gray-600">
-                    R$ {(item.price * item.qty).toFixed(2).replace(".", ",")}
-                  </span>
+                <div key={item.id} className="text-xs">
+                  <div className="flex justify-between">
+                    <span className="min-w-0 truncate text-gray-700">
+                      {item.qty}&times; {item.name}
+                    </span>
+                    <span className="ml-2 shrink-0 font-medium text-gray-600">
+                      R$ {(item.price * item.qty).toFixed(2).replace(".", ",")}
+                    </span>
+                  </div>
+                  {(item.selectedOptions?.length || item.selectedExtras?.length || item.notes) && (
+                    <p className="text-[10px] text-gray-400 line-clamp-1 ml-3">
+                      {[
+                        item.selectedOptions?.map((o) => `${o.qty}× ${o.optionName}`).join(", "),
+                        item.selectedExtras?.map((e) => `${e.qty}× ${e.name}`).join(", "),
+                        item.notes,
+                      ].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -2726,7 +3026,7 @@ export function PedidoClient({
                       <ProductCard
                         item={item}
                         qty={itemCartQty(item, cart)}
-                        onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                        onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? setSelectedProduct(item) : handleItemAdd(item)}
                         onOpen={() => setSelectedProduct(item)}
                       />
                     </div>
@@ -2755,7 +3055,7 @@ export function PedidoClient({
                       key={item.id}
                       item={item}
                       qty={itemCartQty(item, cart)}
-                      onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                      onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? setSelectedProduct(item) : handleItemAdd(item)}
                       onOpen={() => setSelectedProduct(item)}
                     />
                   ))}
@@ -2879,7 +3179,7 @@ export function PedidoClient({
                         <DesktopProductCard
                           item={item}
                           qty={itemCartQty(item, cart)}
-                          onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                          onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? setSelectedProduct(item) : handleItemAdd(item)}
                           onOpen={() => setSelectedProduct(item)}
                         />
                       </div>
@@ -2899,7 +3199,7 @@ export function PedidoClient({
                         key={item.id}
                         item={item}
                         qty={itemCartQty(item, cart)}
-                        onAdd={() => item.hasVariants ? setSelectedProduct(item) : handleItemAdd(item)}
+                        onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? setSelectedProduct(item) : handleItemAdd(item)}
                         onOpen={() => setSelectedProduct(item)}
                       />
                     ))}
@@ -2963,6 +3263,9 @@ export function PedidoClient({
             handleItemAdd(selectedProduct);
             setSelectedProduct(null);
           }}
+          onAddCustomized={(notes, selectedOptions, selectedExtras) =>
+            handleCustomizedAdd(selectedProduct, notes, selectedOptions, selectedExtras)
+          }
           onAddVariant={(variant) => handleVariantAdd(selectedProduct, variant)}
           cart={cart}
           onClose={() => setSelectedProduct(null)}

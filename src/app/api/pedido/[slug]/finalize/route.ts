@@ -35,11 +35,32 @@ import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncSe
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
+const selectedOptionSchema = z.object({
+  groupId:         z.string(),
+  groupName:       z.string(),
+  optionId:        z.string(),
+  optionName:      z.string(),
+  qty:             z.number().int().positive(),
+  priceAdjustment: z.number(),
+});
+
+const selectedExtraSchema = z.object({
+  extraId:   z.string(),
+  name:      z.string(),
+  unitPrice: z.number().nonnegative(),
+  qty:       z.number().int().positive(),
+});
+
 const cartItemSchema = z.object({
-  id:    z.string(),
-  name:  z.string(),
-  price: z.number().positive(),
-  qty:   z.number().int().positive(),
+  id:          z.string(),
+  baseItemId:  z.string().optional(),
+  name:        z.string(),
+  price:       z.number().positive(),
+  qty:         z.number().int().positive(),
+  notes:       z.string().max(500).optional(),
+  variantName: z.string().optional(),
+  selectedOptions: z.array(selectedOptionSchema).optional(),
+  selectedExtras:  z.array(selectedExtraSchema).optional(),
 });
 
 const addressSchema = z.object({
@@ -116,29 +137,60 @@ export async function POST(
   } = parsed.data;
 
   // ── Validate cart against DB (prevent price tampering) ────────
-  const itemIds = [...new Set(cart.map((i) => i.id))];
-  const dbItems = await prisma.menuItem.findMany({
-    where: {
-      id:          { in: itemIds },
-      isActive:    true,
-      isAvailable: true,
-      category:    { restaurantId, isActive: true },
-    },
-    select: {
-      id:         true,
-      price:      true,
-      categoryId: true,
-      category:   { select: { name: true } },
-    },
-  });
+  // baseItemId is set for customized items and variants; fall back to id for plain items.
+  function resolveMenuItemId(item: { id: string; baseItemId?: string }): string {
+    return item.baseItemId ?? item.id;
+  }
+
+  const itemIds = [...new Set(cart.map(resolveMenuItemId))];
+
+  // Collect option/extra IDs for DB price lookup
+  const allOptionIds = [...new Set(
+    cart.flatMap((i) => (i.selectedOptions ?? []).map((o) => o.optionId)),
+  )];
+  const allExtraIds = [...new Set(
+    cart.flatMap((i) => (i.selectedExtras ?? []).map((e) => e.extraId)),
+  )];
+
+  const [dbItems, dbOptionItems, dbExtras] = await Promise.all([
+    prisma.menuItem.findMany({
+      where: {
+        id:          { in: itemIds },
+        isActive:    true,
+        isAvailable: true,
+        category:    { restaurantId, isActive: true },
+      },
+      select: {
+        id:         true,
+        price:      true,
+        categoryId: true,
+        category:   { select: { name: true } },
+      },
+    }),
+    allOptionIds.length > 0
+      ? prisma.optionGroupItem.findMany({
+          where: { id: { in: allOptionIds }, isAvailable: true },
+          select: { id: true, price: true },
+        })
+      : Promise.resolve([]),
+    allExtraIds.length > 0
+      ? prisma.menuItemExtra.findMany({
+          where: { id: { in: allExtraIds }, isAvailable: true },
+          select: { id: true, price: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
   const dbItemMap = new Map(dbItems.map((i) => [i.id, {
     price:        Number(i.price),
     categoryId:   i.categoryId,
     categoryName: i.category?.name ?? null,
   }]));
+  const dbOptionPriceMap = new Map(dbOptionItems.map((o) => [o.id, Number(o.price)]));
+  const dbExtraPriceMap  = new Map(dbExtras.map((e) => [e.id, Number(e.price)]));
 
   for (const item of cart) {
-    if (!dbItemMap.has(item.id)) {
+    if (!dbItemMap.has(resolveMenuItemId(item))) {
       return NextResponse.json(
         { error: `Item indisponível: ${item.name}` },
         { status: 400 },
@@ -146,13 +198,41 @@ export async function POST(
     }
   }
 
-  // Use DB prices — not the prices the client sent
-  const verifiedCart = cart.map((item) => ({
-    ...item,
-    price:        dbItemMap.get(item.id)!.price,
-    categoryId:   dbItemMap.get(item.id)!.categoryId,
-    categoryName: dbItemMap.get(item.id)!.categoryName,
-  }));
+  // Use DB prices throughout — prevents price tampering on base items AND add-ons
+  const verifiedCart = cart.map((item) => {
+    const menuItemId = resolveMenuItemId(item);
+    const dbEntry = dbItemMap.get(menuItemId)!;
+
+    const optionsExtra = (item.selectedOptions ?? []).reduce((s, o) => {
+      const dbPrice = dbOptionPriceMap.get(o.optionId) ?? 0;
+      return s + dbPrice * o.qty;
+    }, 0);
+    const extrasExtra = (item.selectedExtras ?? []).reduce((s, e) => {
+      const dbPrice = dbExtraPriceMap.get(e.extraId) ?? 0;
+      return s + dbPrice * e.qty;
+    }, 0);
+    const computedPrice = dbEntry.price + optionsExtra + extrasExtra;
+
+    // Rebuild selectedOptions/selectedExtras with DB-verified prices
+    const verifiedOptions = (item.selectedOptions ?? []).map((o) => ({
+      ...o,
+      priceAdjustment: dbOptionPriceMap.get(o.optionId) ?? 0,
+    }));
+    const verifiedExtras = (item.selectedExtras ?? []).map((e) => ({
+      ...e,
+      unitPrice: dbExtraPriceMap.get(e.extraId) ?? 0,
+    }));
+
+    return {
+      ...item,
+      menuItemId,
+      price:           computedPrice,
+      categoryId:      dbEntry.categoryId,
+      categoryName:    dbEntry.categoryName,
+      selectedOptions: verifiedOptions,
+      selectedExtras:  verifiedExtras,
+    };
+  });
 
   // ── Idempotency: return existing order on duplicate submit ─────
   const ikey = makeIdempotencyKey(restaurantId, customerName, verifiedCart);
@@ -269,13 +349,18 @@ export async function POST(
           idempotencyKey: ikey,
           items: {
             create: verifiedCart.map((item) => ({
-              menuItemId:   item.id,
+              menuItemId:   item.menuItemId,
               name:         item.name,
               price:        new Decimal(item.price),
               quantity:     item.qty,
               total:        new Decimal(item.price * item.qty),
               categoryId:   item.categoryId   ?? null,
               categoryName: item.categoryName ?? null,
+              variantName:  item.variantName  ?? null,
+              notes:        item.notes        ?? null,
+              addonsJson:   (item.selectedOptions?.length || item.selectedExtras?.length)
+                ? { options: item.selectedOptions ?? [], extras: item.selectedExtras ?? [] }
+                : undefined,
             })),
           },
         },
