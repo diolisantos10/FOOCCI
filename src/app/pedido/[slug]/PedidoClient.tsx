@@ -494,6 +494,10 @@ function ProductModal({
   const paidExtras = item.extras.filter((e) => e.price > 0);
   const freeExtras = item.extras.filter((e) => e.price === 0);
   const hasCustomization = !item.hasVariants && (item.optionGroups.length > 0 || paidExtras.length > 0);
+  // A removal group is optional and all its options are free — use checkboxes
+  function isRemovalGroup(group: OptionGroup) {
+    return !group.required && group.options.every((o) => o.price === 0);
+  }
 
   const [optionQtys, setOptionQtys] = useState<Record<string, number>>({});
   const [extraQtys, setExtraQtys]   = useState<Record<string, number>>({});
@@ -526,7 +530,12 @@ function ProductModal({
   }
 
   function handleConfirmAdd() {
-    if (!hasCustomization) { onAdd(); return; }
+    // Simple product with a note → route through customized add so note is persisted
+    if (!hasCustomization) {
+      if (notes.trim()) { onAddCustomized?.(notes, [], []); }
+      else { onAdd(); }
+      return;
+    }
 
     const errs: string[] = [];
     for (const group of item.optionGroups) {
@@ -632,7 +641,8 @@ function ProductModal({
 
           {/* ── Option groups ── */}
           {item.optionGroups.map((group) => {
-            const total = groupTotal(group);
+            const total    = groupTotal(group);
+            const removal  = isRemovalGroup(group);
             return (
               <div key={group.id} className="mt-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -642,13 +652,38 @@ function ProductModal({
                       Obrigatório
                     </span>
                   )}
-                  {group.maxSelect > 0 && (
+                  {!removal && group.maxSelect > 0 && (
                     <span className="ml-auto text-[10px] text-gray-400">{total}/{group.maxSelect}</span>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   {group.options.map((option) => {
                     const oQty = optionQtys[option.id] ?? 0;
+                    if (removal) {
+                      // Checkbox style for removal groups
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => {
+                            setErrors([]);
+                            setOptionQtys((prev) => ({ ...prev, [option.id]: prev[option.id] ? 0 : 1 }));
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                            oQty > 0 ? "bg-orange-50 border border-orange-200" : "bg-gray-50 border border-transparent"
+                          }`}
+                        >
+                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-xs font-bold transition-colors ${
+                            oQty > 0 ? "border-orange-500 bg-orange-500 text-white" : "border-gray-300 bg-white text-transparent"
+                          }`}>✓</span>
+                          <span className="flex-1 text-sm text-gray-800 font-medium">{option.name}</span>
+                          {option.portion && (
+                            <span className="shrink-0 text-xs text-gray-400">{option.portion}</span>
+                          )}
+                        </button>
+                      );
+                    }
+                    // Stepper style for combo/paid groups
                     return (
                       <div key={option.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5">
                         <div className="flex-1 min-w-0">
@@ -784,7 +819,7 @@ function ProductModal({
           )}
 
           {/* ── Notes (only for items with interactive customization) ── */}
-          {hasCustomization && (
+          {!item.hasVariants && (
             <div className="mt-4 mb-2">
               <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                 Observações

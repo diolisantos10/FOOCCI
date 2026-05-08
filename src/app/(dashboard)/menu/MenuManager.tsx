@@ -39,6 +39,24 @@ type Extra = {
   price: number;
 };
 
+type OptionGroupItem = {
+  id:        string;
+  name:      string;
+  price:     number;
+  portion:   string | null;
+  sortOrder: number;
+};
+
+type OptionGroup = {
+  id:        string;
+  name:      string;
+  required:  boolean;
+  minSelect: number;
+  maxSelect: number;
+  sortOrder: number;
+  options:   OptionGroupItem[];
+};
+
 type Item = {
   id: string;
   name: string;
@@ -1627,6 +1645,19 @@ function EditItemModal({
   const [extraAddBusy, setExtraAddBusy] = useState(false);
   const [extraAddError, setExtraAddError] = useState("");
 
+  // OptionGroups state
+  const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
+  const [ogLoading, setOgLoading] = useState(false);
+  const [addingGroup, setAddingGroup] = useState(false);
+  const [newGroup, setNewGroup] = useState({ name: "", required: false, minSelect: "1", maxSelect: "1" });
+  const [groupBusy, setGroupBusy] = useState(false);
+  const [groupError, setGroupError] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [addingOptionTo, setAddingOptionTo] = useState<string | null>(null);
+  const [newOption, setNewOption] = useState({ name: "", price: "0", portion: "" });
+  const [optionBusy, setOptionBusy] = useState(false);
+  const [optionError, setOptionError] = useState("");
+
   const variantSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -1662,6 +1693,18 @@ function EditItemModal({
     setError("");
     setAddError("");
     setExtraAddError("");
+    // Load option groups fresh
+    setOptionGroups([]);
+    setAddingGroup(false);
+    setGroupError("");
+    setExpandedGroups(new Set());
+    setAddingOptionTo(null);
+    setOptionError("");
+    setOgLoading(true);
+    apiFetch(`/api/menu/items/${item.id}/option-groups`, "GET")
+      .then((d) => setOptionGroups(d.data ?? []))
+      .catch(() => {})
+      .finally(() => setOgLoading(false));
   }, [item?.id]);
 
   // Close on Escape
@@ -1772,6 +1815,81 @@ function EditItemModal({
       setExtras((es) => es.filter((e) => e.id !== extraId));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao remover extra.");
+    }
+  }
+
+  // ── Option-group CRUD ───────────────────────────────────────────────────────
+
+  async function handleAddGroup() {
+    if (!item) return;
+    const min = parseInt(newGroup.minSelect, 10);
+    const max = parseInt(newGroup.maxSelect, 10);
+    if (!newGroup.name.trim()) { setGroupError("Nome do grupo é obrigatório."); return; }
+    if (isNaN(min) || min < 0 || isNaN(max) || max < 0) { setGroupError("Min/max inválidos."); return; }
+    setGroupBusy(true);
+    setGroupError("");
+    try {
+      const d = await apiFetch(`/api/menu/items/${item.id}/option-groups`, "POST", {
+        name:      newGroup.name.trim(),
+        required:  newGroup.required,
+        minSelect: min,
+        maxSelect: max,
+        sortOrder: optionGroups.length,
+      });
+      const created: OptionGroup = { ...d.data, options: [] };
+      setOptionGroups((gs) => [...gs, created]);
+      setExpandedGroups((s) => new Set([...s, created.id]));
+      setNewGroup({ name: "", required: false, minSelect: "1", maxSelect: "1" });
+      setAddingGroup(false);
+    } catch (e: unknown) {
+      setGroupError(e instanceof Error ? e.message : "Erro ao criar grupo.");
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
+  async function handleDeleteGroup(groupId: string) {
+    try {
+      await apiFetch(`/api/menu/option-groups/${groupId}`, "DELETE");
+      setOptionGroups((gs) => gs.filter((g) => g.id !== groupId));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao remover grupo.");
+    }
+  }
+
+  async function handleAddOption(groupId: string) {
+    const price = parseFloat(newOption.price);
+    if (!newOption.name.trim()) { setOptionError("Nome da opção é obrigatório."); return; }
+    if (isNaN(price) || price < 0) { setOptionError("Preço inválido."); return; }
+    setOptionBusy(true);
+    setOptionError("");
+    try {
+      const d = await apiFetch(`/api/menu/option-groups/${groupId}/options`, "POST", {
+        name:      newOption.name.trim(),
+        price,
+        portion:   newOption.portion.trim() || null,
+        sortOrder: (optionGroups.find((g) => g.id === groupId)?.options.length ?? 0),
+      });
+      setOptionGroups((gs) =>
+        gs.map((g) => g.id === groupId ? { ...g, options: [...g.options, { ...d.data, price: Number(d.data.price) }] } : g)
+      );
+      setNewOption({ name: "", price: "0", portion: "" });
+      setAddingOptionTo(null);
+    } catch (e: unknown) {
+      setOptionError(e instanceof Error ? e.message : "Erro ao adicionar opção.");
+    } finally {
+      setOptionBusy(false);
+    }
+  }
+
+  async function handleDeleteOption(groupId: string, optionId: string) {
+    try {
+      await apiFetch(`/api/menu/option-items/${optionId}`, "DELETE");
+      setOptionGroups((gs) =>
+        gs.map((g) => g.id === groupId ? { ...g, options: g.options.filter((o) => o.id !== optionId) } : g)
+      );
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao remover opção.");
     }
   }
 
@@ -1950,6 +2068,229 @@ function EditItemModal({
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
               />
             </div>
+          </div>
+
+          {/* ── Grupos de opções ──────────────────────────────────────── */}
+          <div className="px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                  Grupos de opções
+                </p>
+                <p className="text-[11px] text-gray-400">Combos, escolhas obrigatórias ou remoções</p>
+              </div>
+              {optionGroups.length > 0 && (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-600">
+                  {optionGroups.length}
+                </span>
+              )}
+            </div>
+
+            {ogLoading && (
+              <p className="text-xs text-gray-400">Carregando…</p>
+            )}
+
+            {!ogLoading && optionGroups.length === 0 && !addingGroup && (
+              <p className="rounded-lg border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
+                Nenhum grupo — clique abaixo para adicionar
+              </p>
+            )}
+
+            {/* Group list */}
+            {optionGroups.map((group) => {
+              const expanded = expandedGroups.has(group.id);
+              return (
+                <div key={group.id} className="rounded-xl border border-blue-100 bg-blue-50 overflow-hidden">
+                  {/* Group header */}
+                  <div className="flex items-center gap-2 px-3 py-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedGroups((s) => {
+                        const n = new Set(s);
+                        n.has(group.id) ? n.delete(group.id) : n.add(group.id);
+                        return n;
+                      })}
+                      className="flex-1 min-w-0 text-left"
+                    >
+                      <p className="truncate text-sm font-semibold text-gray-800">{group.name}</p>
+                      <p className="text-[11px] text-gray-500">
+                        {group.required ? "Obrigatório" : "Opcional"} · {group.minSelect}–{group.maxSelect} seleções · {group.options.length} opções
+                      </p>
+                    </button>
+                    <span className="shrink-0 text-[10px] text-gray-400">{expanded ? "▲" : "▼"}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteGroup(group.id)}
+                      className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      aria-label="Remover grupo"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Expanded options */}
+                  {expanded && (
+                    <div className="border-t border-blue-100 bg-white px-3 pb-3 pt-2 space-y-2">
+                      {group.options.length === 0 && !addingOptionTo && (
+                        <p className="text-xs text-gray-400">Nenhuma opção ainda.</p>
+                      )}
+                      {group.options.map((opt) => (
+                        <div key={opt.id} className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-800">{opt.name}</p>
+                            {opt.portion && <p className="text-[11px] text-gray-400">{opt.portion}</p>}
+                          </div>
+                          <span className="shrink-0 text-xs font-semibold text-gray-600">
+                            {opt.price > 0 ? `+R$ ${opt.price.toFixed(2)}` : "grátis"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteOption(group.id, opt.id)}
+                            className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                            aria-label="Remover opção"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Add option form */}
+                      {addingOptionTo === group.id ? (
+                        <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50 p-2 space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              value={newOption.name}
+                              onChange={(e) => setNewOption((f) => ({ ...f, name: e.target.value }))}
+                              placeholder="Nome da opção"
+                              className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            />
+                            <div className="relative w-24">
+                              <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
+                              <input
+                                value={newOption.price}
+                                onChange={(e) => setNewOption((f) => ({ ...f, price: e.target.value }))}
+                                placeholder="0,00"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="w-full rounded-lg border border-gray-300 pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              />
+                            </div>
+                          </div>
+                          <input
+                            value={newOption.portion}
+                            onChange={(e) => setNewOption((f) => ({ ...f, portion: e.target.value }))}
+                            placeholder="Porção (ex: 100g) — opcional"
+                            className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                          {optionError && <p className="text-[11px] text-red-600">{optionError}</p>}
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleAddOption(group.id)}
+                              disabled={optionBusy}
+                              className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+                            >
+                              {optionBusy ? "…" : "Adicionar"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setAddingOptionTo(null); setNewOption({ name: "", price: "0", portion: "" }); setOptionError(""); }}
+                              className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => { setAddingOptionTo(group.id); setNewOption({ name: "", price: "0", portion: "" }); setOptionError(""); }}
+                          className="text-xs font-medium text-blue-500 hover:text-blue-700"
+                        >
+                          + Adicionar opção
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Add group form */}
+            {addingGroup ? (
+              <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-3 space-y-2">
+                <p className="text-[11px] font-medium text-blue-700">Novo grupo de opções</p>
+                <input
+                  value={newGroup.name}
+                  onChange={(e) => setNewGroup((f) => ({ ...f, name: e.target.value }))}
+                  placeholder='Nome (ex: "Escolha seus 2 temakis")'
+                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+                <div className="flex gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      id="og-required"
+                      type="checkbox"
+                      checked={newGroup.required}
+                      onChange={(e) => setNewGroup((f) => ({ ...f, required: e.target.checked }))}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400"
+                    />
+                    <label htmlFor="og-required" className="text-xs text-gray-700">Obrigatório</label>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <label className="text-xs text-gray-600">Mín.</label>
+                    <input
+                      value={newGroup.minSelect}
+                      onChange={(e) => setNewGroup((f) => ({ ...f, minSelect: e.target.value }))}
+                      type="number"
+                      min="0"
+                      className="w-14 rounded-lg border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <label className="text-xs text-gray-600">Máx.</label>
+                    <input
+                      value={newGroup.maxSelect}
+                      onChange={(e) => setNewGroup((f) => ({ ...f, maxSelect: e.target.value }))}
+                      type="number"
+                      min="1"
+                      className="w-14 rounded-lg border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                  </div>
+                </div>
+                {groupError && <p className="text-[11px] text-red-600">{groupError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddGroup}
+                    disabled={groupBusy}
+                    className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+                  >
+                    {groupBusy ? "…" : "Criar grupo"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAddingGroup(false); setNewGroup({ name: "", required: false, minSelect: "1", maxSelect: "1" }); setGroupError(""); }}
+                    className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddingGroup(true)}
+                className="flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-700"
+              >
+                <span className="text-base leading-none">+</span> Adicionar grupo de opções
+              </button>
+            )}
           </div>
 
           {/* ── Adicionais ────────────────────────────────────────────── */}

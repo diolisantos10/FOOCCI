@@ -92,10 +92,15 @@ interface MockOrder {
 // ─── API response type (from GET /api/orders) ─────────────────
 
 interface ApiOrderItem {
-  name: string;
-  price: string;
-  quantity: number;
-  notes?: string | null;
+  name:       string;
+  price:      string;
+  quantity:   number;
+  notes?:     string | null;
+  variantName?: string | null;
+  addonsJson?: {
+    options?: { groupName: string; optionName: string; qty: number; priceAdjustment: number }[];
+    extras?:  { name: string; unitPrice: number; qty: number }[];
+  } | null;
 }
 
 interface ApiOrder {
@@ -165,12 +170,24 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
             .filter(Boolean)
             .join(", ")
         : "Retirada no local",
-    items: o.items.map((item) => ({
-      name:  item.name,
-      qty:   item.quantity,
-      price: parseFloat(item.price),
-      note:  item.notes ?? undefined,
-    })),
+    items: o.items.map((item) => {
+      const addons: string[] = [];
+      if (item.variantName) addons.push(item.variantName);
+      for (const opt of item.addonsJson?.options ?? []) {
+        const label = opt.qty > 1 ? `${opt.qty}× ${opt.optionName}` : opt.optionName;
+        addons.push(opt.priceAdjustment > 0 ? `${label} (+R$ ${(opt.priceAdjustment * opt.qty).toFixed(2)})` : label);
+      }
+      for (const ext of item.addonsJson?.extras ?? []) {
+        addons.push(`${ext.qty > 1 ? `${ext.qty}× ` : ""}${ext.name} (+R$ ${(ext.unitPrice * ext.qty).toFixed(2)})`);
+      }
+      return {
+        name:   item.name,
+        qty:    item.quantity,
+        price:  parseFloat(item.price),
+        note:   item.notes ?? undefined,
+        addons: addons.length > 0 ? addons : undefined,
+      };
+    }),
     profile: {
       totalOrders: o.customer.totalOrders,
       totalSpend:  parseFloat(o.customer.totalSpend),
