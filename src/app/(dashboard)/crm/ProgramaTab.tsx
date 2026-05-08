@@ -357,7 +357,7 @@ function BenefitsPanel({
               {d.description && <p className="text-[10px] text-gray-400">{d.description}</p>}
             </div>
           ))}
-          <p className="text-[10px] text-gray-400 mt-1">Sugestões — clique em "+ Adicionar" para personalizar</p>
+          <p className="text-[10px] text-gray-400 mt-1">Sugestões — clique em &quot;+ Adicionar&quot; para personalizar</p>
         </div>
       )}
 
