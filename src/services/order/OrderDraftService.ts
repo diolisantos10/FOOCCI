@@ -347,7 +347,17 @@ export class OrderDraftService {
     const draft = await prisma.orderDraft.findUnique({
       where: { id: draftId },
       include: {
-        items: { include: { menuItem: { select: { name: true } } } },
+        items: {
+          include: {
+            menuItem: {
+              select: {
+                name:       true,
+                categoryId: true,
+                category:   { select: { name: true } },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -389,23 +399,26 @@ export class OrderDraftService {
       const newOrder = await tx.order.create({
         data: {
           restaurantId,
-          customerId: draft.customerId,
-          orderDraftId: draftId,
-          type: draft.fulfillmentType as "DELIVERY" | "PICKUP" | "DINE_IN",
+          customerId:        draft.customerId,
+          orderDraftId:      draftId,
+          type:              draft.fulfillmentType as "DELIVERY" | "PICKUP" | "DINE_IN",
+          source:            "whatsapp",
           subtotal,
           deliveryFee,
           discount,
           total,
-          notes: input.notes ?? draft.notes ?? null,
+          notes:             input.notes ?? draft.notes ?? null,
           deliveryAddressId: draft.deliveryAddressId ?? null,
           items: {
             create: draft.items.map((item) => ({
-              menuItemId: item.menuItemId,
-              name: item.menuItem?.name ?? "Item", // snapshot
-              price: item.unitPrice,    // snapshot
-              quantity: item.quantity,
-              notes: item.notes ?? null,
-              total: new Decimal(item.unitPrice).times(item.quantity),
+              menuItemId:   item.menuItemId,
+              name:         item.menuItem?.name ?? "Item",          // snapshot
+              price:        item.unitPrice,                          // snapshot
+              quantity:     item.quantity,
+              notes:        item.notes ?? null,
+              total:        new Decimal(item.unitPrice).times(item.quantity),
+              categoryId:   item.menuItem?.categoryId   ?? null,    // snapshot
+              categoryName: item.menuItem?.category?.name ?? null,  // snapshot
             })),
           },
         },

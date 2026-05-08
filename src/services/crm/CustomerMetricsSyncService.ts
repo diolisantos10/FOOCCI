@@ -22,6 +22,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
 import { isCrmCountable } from "./crm-countable";
+import { computeTier, computeSegment } from "./crm-helpers";
 export { isCrmCountable } from "./crm-countable";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -94,12 +95,25 @@ export class CustomerMetricsSyncService {
       });
       if (fresh?.crmSyncedAt) return; // Another call won the race — do nothing
 
+      // Read current totals so we can compute the new tier/segment atomically
+      const current = await tx.customer.findUnique({
+        where:  { id: order.customerId! },
+        select: { totalSpend: true, totalOrders: true },
+      });
+
+      const newTotalSpend  = Number(current?.totalSpend  ?? 0) + Number(amount);
+      const newTotalOrders = (current?.totalOrders ?? 0) + 1;
+      const tier    = computeTier(newTotalSpend);
+      const segment = computeSegment(now, newTotalOrders); // now = lastOrderAt after this sync
+
       await tx.customer.update({
         where: { id: order.customerId! },
         data: {
-          totalOrders: { increment: 1 },
-          totalSpend:  { increment: amount },
+          totalOrders: newTotalOrders,
+          totalSpend:  new Decimal(newTotalSpend),
           lastOrderAt: now,
+          tier,
+          segment,
         },
       });
 
@@ -152,6 +166,8 @@ export class CustomerMetricsSyncService {
       : null;
 
     const now = new Date();
+    const tier    = computeTier(totalSpend);
+    const segment = computeSegment(lastOrderAt, totalOrders);
 
     await prisma.$transaction(async (tx) => {
       await tx.customer.update({
@@ -160,6 +176,8 @@ export class CustomerMetricsSyncService {
           totalOrders,
           totalSpend: new Decimal(totalSpend),
           lastOrderAt,
+          tier,
+          segment,
         },
       });
 

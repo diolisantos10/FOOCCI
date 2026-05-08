@@ -114,6 +114,8 @@ model Customer {
   totalOrders  Int       @default(0)
   totalSpend   Decimal   @default(0) @db.Decimal(10, 2)
   lastOrderAt  DateTime?
+  tier         String    @default("BRONZE")      // BRONZE | PRATA | OURO | DIAMANTE — persisted by CustomerMetricsSyncService
+  segment      String    @default("SEM_PEDIDOS") // QUENTE | MORNO | FRIO | SEM_PEDIDOS — persisted by CustomerMetricsSyncService
   isActive     Boolean   @default(true)
   isGuest      Boolean   @default(false) // true = anonymous session; excluded from CRM lists and metric sync
   createdAt    DateTime  @default(now())
@@ -354,6 +356,8 @@ model Order {
   cancelledAt       DateTime?
   idempotencyKey    String?     @unique
   crmSyncedAt       DateTime?   // set once customer metrics have been counted for this order
+  source            String?     // pedido | qr | whatsapp | manual | import — origin channel
+  importedAt        DateTime?   // set for historically imported orders; actual event date
   // ── Saipos POS integration fields ────────────────────────────────────
   saiposSentAt         DateTime?   // when the order was successfully sent to Saipos
   saiposOrderId        String?     // Saipos internal order reference (from their response)
@@ -378,19 +382,24 @@ model Order {
 }
 
 model OrderItem {
-  id         String  @id @default(cuid())
-  orderId    String
-  menuItemId String?
-  name       String  // snapshot of name at order time
-  price      Decimal @db.Decimal(10, 2)
-  quantity   Int
-  notes      String?
-  total      Decimal @db.Decimal(10, 2)
+  id           String  @id @default(cuid())
+  orderId      String
+  menuItemId   String?
+  name         String  // snapshot of name at order time
+  price        Decimal @db.Decimal(10, 2)
+  quantity     Int
+  notes        String?
+  total        Decimal @db.Decimal(10, 2)
+  categoryId   String? // FK snapshot — stays even if category is later deleted
+  categoryName String? // name snapshot at order time — stays even if category is renamed
+  variantName  String? // selected variant name snapshot if applicable
+  addonsJson   Json?   // JSON snapshot of selected add-ons / options / customizations
 
-  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItem MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
+  @@index([categoryId])
   @@map("order_items")
 }
 

@@ -124,9 +124,18 @@ export async function POST(
       isAvailable: true,
       category:    { restaurantId, isActive: true },
     },
-    select: { id: true, price: true },
+    select: {
+      id:         true,
+      price:      true,
+      categoryId: true,
+      category:   { select: { name: true } },
+    },
   });
-  const dbItemMap = new Map(dbItems.map((i) => [i.id, Number(i.price)]));
+  const dbItemMap = new Map(dbItems.map((i) => [i.id, {
+    price:        Number(i.price),
+    categoryId:   i.categoryId,
+    categoryName: i.category?.name ?? null,
+  }]));
 
   for (const item of cart) {
     if (!dbItemMap.has(item.id)) {
@@ -140,7 +149,9 @@ export async function POST(
   // Use DB prices — not the prices the client sent
   const verifiedCart = cart.map((item) => ({
     ...item,
-    price: dbItemMap.get(item.id)!,
+    price:        dbItemMap.get(item.id)!.price,
+    categoryId:   dbItemMap.get(item.id)!.categoryId,
+    categoryName: dbItemMap.get(item.id)!.categoryName,
   }));
 
   // ── Idempotency: return existing order on duplicate submit ─────
@@ -249,6 +260,7 @@ export async function POST(
           customerId:     customer.id,
           status:         "PENDING",
           type:           deliveryMethod === "delivery" ? "DELIVERY" : "PICKUP",
+          source:         "pedido",
           subtotal:       new Decimal(subtotal),
           deliveryFee:    new Decimal(deliveryFeeAmount),
           discount:       new Decimal(0),
@@ -257,11 +269,13 @@ export async function POST(
           idempotencyKey: ikey,
           items: {
             create: verifiedCart.map((item) => ({
-              menuItemId: item.id,
-              name:       item.name,
-              price:      new Decimal(item.price),
-              quantity:   item.qty,
-              total:      new Decimal(item.price * item.qty),
+              menuItemId:   item.id,
+              name:         item.name,
+              price:        new Decimal(item.price),
+              quantity:     item.qty,
+              total:        new Decimal(item.price * item.qty),
+              categoryId:   item.categoryId   ?? null,
+              categoryName: item.categoryName ?? null,
             })),
           },
         },
