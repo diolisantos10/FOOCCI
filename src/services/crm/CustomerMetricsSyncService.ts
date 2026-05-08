@@ -146,10 +146,11 @@ export class CustomerMetricsSyncService {
     const orders = await prisma.order.findMany({
       where:  { customerId },
       select: {
-        id:        true,
-        status:    true,
-        total:     true,
-        createdAt: true,
+        id:         true,
+        status:     true,
+        total:      true,
+        createdAt:  true,
+        importedAt: true,  // historical date for imported orders
         payment: { select: { paymentMode: true, status: true } },
       },
     });
@@ -158,11 +159,12 @@ export class CustomerMetricsSyncService {
 
     const totalOrders = countable.length;
     const totalSpend  = countable.reduce((s, o) => s + Number(o.total), 0);
+    // For imported orders, importedAt holds the real historical date; fall back to createdAt.
     const lastOrderAt = countable.length > 0
-      ? countable.reduce((latest, o) =>
-          o.createdAt > latest ? o.createdAt : latest,
-          countable[0]!.createdAt
-        )
+      ? countable.reduce((latest, o) => {
+          const orderDate = o.importedAt ?? o.createdAt;
+          return orderDate > latest ? orderDate : latest;
+        }, countable[0]!.importedAt ?? countable[0]!.createdAt)
       : null;
 
     const now = new Date();

@@ -63,6 +63,7 @@ model Restaurant {
   autoSimulatorConfig AutoSimulatorConfig?
   simulationRuns      SimulationRun[]
   trackingLinks       TrackingLink[]
+  importJobs          ImportJob[]
 
   @@map("restaurants")
 }
@@ -690,6 +691,35 @@ model Offer {
 
   @@index([restaurantId])
   @@map("offers")
+}
+
+// ═══════════════════════════════════════════
+//  IMPORT JOBS
+
+model ImportJob {
+  id                String    @id @default(cuid())
+  restaurantId      String
+  type              String    // "customers" | "orders" | "customers_orders"
+  filename          String    @default("")
+  status            String    // "VALIDATING" | "IMPORTING" | "COMPLETED" | "FAILED"
+  totalRows         Int       @default(0)
+  validRows         Int       @default(0)
+  errorRows         Int       @default(0)
+  warningRows       Int       @default(0)
+  createdCustomers  Int       @default(0)
+  updatedCustomers  Int       @default(0)
+  createdOrders     Int       @default(0)
+  createdItems      Int       @default(0)
+  skippedDuplicates Int       @default(0)
+  unmatchedProducts Int       @default(0)
+  reportJson        Json?
+  createdAt         DateTime  @default(now())
+  completedAt       DateTime?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@map("import_jobs")
 }
 
 enum MenuSource {
