@@ -139,8 +139,8 @@ export const upsertBrandConfigSchema = z.object({
   brandSecondaryColor: z.string().max(20).nullable().optional(),
   instagramUrl:        z.string().url().max(200).nullable().optional(),
   tiktokUrl:           z.string().url().max(200).nullable().optional(),
-  googleReviewUrl:     z.string().url().max(500).nullable().optional(),
-  ifoodReviewUrl:      z.string().url().max(500).nullable().optional(),
+  googleReviewUrl:     z.string().min(1).max(500).nullable().optional(),
+  ifoodReviewUrl:      z.string().min(1).max(500).nullable().optional(),
 
   // Brand Persona
   brandPersona:        brandPersonaSchema.optional(),

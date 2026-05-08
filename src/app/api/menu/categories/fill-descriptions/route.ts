@@ -33,6 +33,23 @@ const KNOWN_DESCRIPTIONS: Record<string, string> = {
   tataki:       "Peixe levemente grelhado por fora e cru por dentro, fatiado e temperado",
   tiradito:     "Inspiração peruana: fatias de peixe marinadas em molho cítrico e especiarias",
   robata:       "Itens grelhados na brasa ao estilo japonês, selados para preservar os sucos naturais",
+
+  // Restaurant-specific categories
+  jhow:                        "Sushi especial envolto em peixe e finalizado com recheio cremoso",
+  poke:                        "Bowl com arroz, ingredientes frescos, molhos e toppings a escolher",
+  "lámen":                     "Caldo quente com macarrão oriental, proteína e acompanhamentos",
+  lamen:                       "Caldo quente com macarrão oriental, proteína e acompanhamentos",
+  "pratos quentes":            "Pratos completos preparados quentes para uma refeição mais robusta",
+  "porções":                   "Entradas e acompanhamentos para compartilhar ou complementar o pedido",
+  combos:                      "Combinações prontas para quem quer variedade em um pedido",
+  "festival cazza (delivery)": "Seleção completa da casa para experimentar várias opções",
+  "festival cazza":            "Seleção completa da casa para experimentar várias opções",
+  "molho, extra e hashi":      "Complementos, molhos e utensílios para acompanhar o pedido",
+  "molho extra e hashi":       "Complementos, molhos e utensílios para acompanhar o pedido",
+  extras:                      "Complementos e acompanhamentos adicionais",
+  "cazza hot":                 "Criações quentes especiais da casa, com finalização marcante",
+  "rodízio presencial":        "Opção para consumo no salão, conforme disponibilidade",
+  "rodizio presencial":        "Opção para consumo no salão, conforme disponibilidade",
 };
 
 function normalize(name: string): string {

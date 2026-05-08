@@ -742,9 +742,9 @@ function selectPairingItems(catalog: V2CatalogItem[], cartItemIds: string[], lim
 // AND do not match any exclusion pattern — zero filler guarantee.
 
 const RAW_SUSHI_INCLUDE = /sashimi|niguiri|nigiri|uramaki|hossomaki|sushi|maki|combinado\s+misto|combinado\s+cru|especial.*cru|cru.*especial/i;
-const RAW_SUSHI_EXCLUDE = /hot[\s.-]?roll|yakisoba|lamen|ramen|teppan|empanado|grelhado|cozido|assado|frito|frango\s+(?!sushi)/i;
+const RAW_SUSHI_EXCLUDE = /flambado|maçaricado|hot[\s.-]?roll|yakisoba|lamen|ramen|teppan|empanado|grelhado|cozido|assado|frito|quente|crocante|frango\s+(?!sushi)/i;
 
-const HOT_INCLUDE = /yakisoba|lamen|ramen|hot[\s.-]?roll|teppan|empanado|grelhado|cozido|assado|frito|quente/i;
+const HOT_INCLUDE = /flambado|maçaricado|yakisoba|lamen|ramen|hot[\s.-]?roll|teppan|empanado|grelhado|cozido|assado|frito|quente/i;
 const HOT_EXCLUDE = /sashimi|niguiri|nigiri|uramaki|hossomaki(?!.*hot)/i;
 
 /**
@@ -760,7 +760,7 @@ function filterDiscoveryCruSushi(catalog: V2CatalogItem[], cartItemIds: string[]
       if (isDessertCategory(item.categoryName)) return false;
       if (isAccessoryItem(item))                return false;
       if (HOT_INCLUDE.test(text) && !RAW_SUSHI_INCLUDE.test(text)) return false; // hot-only items
-      if (RAW_SUSHI_EXCLUDE.test(item.name))    return false; // hot roll by name
+      if (RAW_SUSHI_EXCLUDE.test(text))          return false; // cooked/heat terms in name+category+description
       return RAW_SUSHI_INCLUDE.test(text);
     })
     .sort(bySort)
