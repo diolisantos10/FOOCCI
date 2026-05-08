@@ -1562,9 +1562,12 @@ export function PedidoClient({
     if (entryPhase !== "browsing" || greetedRef.current) return;
     greetedRef.current = true;
     const name = identifiedName;
-    const greeting = name
+    const base = name
       ? `Bem-vindo, ${name}! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`
       : `Bem-vindo! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`;
+    const greeting = phone
+      ? `${base}\n\nSe preferir falar direto com a loja, toque no ícone do WhatsApp no topo da tela.`
+      : base;
     setMessages((prev) => [
       ...prev,
       {
