@@ -389,6 +389,7 @@ function SortableItemRow({
                       <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                         Adicionar em categoria
                       </p>
+                      <div className="max-h-48 overflow-y-auto">
                       {otherManualCategories.map((cat) => (
                         <button
                           key={cat.id}
@@ -405,6 +406,7 @@ function SortableItemRow({
                           {cat.name}
                         </button>
                       ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1281,13 +1283,39 @@ function TopBar({
   onAdded,
   onNewItem,
   onBulkPrice,
+  onCategoriesUpdated,
 }: {
   categories: Category[];
   onAdded: (cat: Category) => void;
   onNewItem: () => void;
   onBulkPrice: () => void;
+  onCategoriesUpdated: () => void;
 }) {
   const totalItems = categories.reduce((n, c) => n + c.items.length, 0);
+  const [fillingDesc, setFillingDesc] = useState(false);
+  const [fillResult, setFillResult] = useState<string | null>(null);
+
+  async function handleFillDescriptions() {
+    setFillingDesc(true);
+    setFillResult(null);
+    try {
+      const res = await fetch("/api/menu/categories/fill-descriptions", { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        const n = json.data?.updated ?? 0;
+        setFillResult(n > 0 ? `${n} descrição(ões) preenchida(s).` : "Nenhuma categoria sem descrição encontrada.");
+        if (n > 0) onCategoriesUpdated();
+      } else {
+        setFillResult("Erro ao preencher descrições.");
+      }
+    } catch {
+      setFillResult("Erro de rede.");
+    } finally {
+      setFillingDesc(false);
+      setTimeout(() => setFillResult(null), 4000);
+    }
+  }
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-xs text-gray-500">
@@ -1296,6 +1324,9 @@ function TopBar({
         {" · "}
         {totalItems} item
         {totalItems !== 1 ? "s" : ""}
+        {fillResult && (
+          <span className="ml-2 text-green-600 font-medium">{fillResult}</span>
+        )}
       </p>
       <div className="flex items-center gap-2">
         <Link
@@ -1305,13 +1336,24 @@ function TopBar({
           Importar planilha
         </Link>
         {categories.length > 0 && (
-          <button
-            type="button"
-            onClick={onBulkPrice}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
-          >
-            Ajustar preços
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={onBulkPrice}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Ajustar preços
+            </button>
+            <button
+              type="button"
+              onClick={handleFillDescriptions}
+              disabled={fillingDesc}
+              title="Preenche descrições vazias para categorias com nomes conhecidos (sushi, sashimi etc.)"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {fillingDesc ? "…" : "Preencher descrições"}
+            </button>
+          </>
         )}
         {categories.some((c) => c.source === "MANUAL") && (
           <button
@@ -2742,6 +2784,7 @@ export function MenuManager({
         onAdded={addCategory}
         onNewItem={() => setNewItemOpen(true)}
         onBulkPrice={() => setBulkPriceOpen(true)}
+        onCategoriesUpdated={refresh}
       />
 
       {/* Category filter */}

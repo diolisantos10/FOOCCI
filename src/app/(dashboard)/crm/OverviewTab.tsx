@@ -211,7 +211,7 @@ export function OverviewTab({
             <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-green-500" />
-                🟢 Ativo: {ativoPct}% ({stats.ativoCustomers})
+                🔥 Quente: {ativoPct}% ({stats.ativoCustomers})
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-yellow-400" />

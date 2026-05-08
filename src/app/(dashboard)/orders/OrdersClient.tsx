@@ -22,6 +22,29 @@ type OrderStatus =
 
 type StatusFilter = "PENDING" | "PREPARING" | "READY" | "DELAYED" | null;
 
+type SortKey =
+  | "recent"
+  | "oldest"
+  | "delayed"
+  | "value_desc"
+  | "value_asc"
+  | "vip_first"
+  | "cold_first"
+  | "status"
+  | "wait";
+
+const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
+  { value: "recent",     label: "Mais recentes"        },
+  { value: "oldest",     label: "Mais antigos"          },
+  { value: "delayed",    label: "Mais atrasados"        },
+  { value: "value_desc", label: "Maior valor"           },
+  { value: "value_asc",  label: "Menor valor"           },
+  { value: "vip_first",  label: "Clientes VIP primeiro" },
+  { value: "cold_first", label: "Clientes frios primeiro" },
+  { value: "status",     label: "Status do pedido"      },
+  { value: "wait",       label: "Tempo de espera"       },
+];
+
 interface OrderItem {
   name: string;
   qty: number;
@@ -33,6 +56,7 @@ interface OrderItem {
 interface CustomerProfile {
   totalOrders: number;
   totalSpend: number;
+  lastOrderAt?: string | null;
   note?: string;
 }
 
@@ -82,7 +106,7 @@ interface ApiOrder {
   deliveryFee: string;
   total: string;
   createdAt: string;
-  customer: { name: string; phone: string; totalOrders: number; totalSpend: string };
+  customer: { name: string; phone: string; totalOrders: number; totalSpend: string; lastOrderAt: string | null };
   deliveryAddress: {
     street: string;
     number: string;
@@ -150,6 +174,7 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
     profile: {
       totalOrders: o.customer.totalOrders,
       totalSpend:  parseFloat(o.customer.totalSpend),
+      lastOrderAt: o.customer.lastOrderAt ?? null,
     },
     conversationId: o.orderDraft?.conversationId ?? null,
     saiposSentAt:        o.saiposSentAt        ?? null,
@@ -349,9 +374,17 @@ function customerSpendTier(spend: number): { label: string; icon: string; color:
 }
 
 function customerTag(totalOrders: number, spend: number): { label: string; color: string } {
-  if (totalOrders <= 1) return { label: "Novo cliente", color: "text-emerald-700 bg-emerald-50" };
-  if (spend >= 800)     return { label: "VIP",          color: "text-purple-700 bg-purple-50"   };
-  return                       { label: "Recorrente",   color: "text-blue-700 bg-blue-50"       };
+  if (totalOrders <= 1) return { label: "Novo",       color: "text-emerald-700 bg-emerald-50" };
+  if (spend >= 800)     return { label: "VIP",        color: "text-purple-700 bg-purple-50"   };
+  return                       { label: "Recorrente", color: "text-blue-700 bg-blue-50"       };
+}
+
+function customerTemperature(lastOrderAt: string | null | undefined): { label: string; color: string } | null {
+  if (!lastOrderAt) return null;
+  const days = Math.floor((Date.now() - new Date(lastOrderAt).getTime()) / 86_400_000);
+  if (days <= 30)  return { label: "Quente", color: "text-orange-700 bg-orange-50" };
+  if (days <= 60)  return { label: "Morno",  color: "text-yellow-700 bg-yellow-50" };
+  return                  { label: "Frio",   color: "text-sky-700 bg-sky-50"       };
 }
 
 function priorityScore(order: MockOrder): number {
@@ -363,6 +396,41 @@ function priorityScore(order: MockOrder): number {
   return scores[order.status];
 }
 
+function applySort(orders: MockOrder[], sort: SortKey): MockOrder[] {
+  const s = [...orders];
+  switch (sort) {
+    case "recent":
+      return s.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    case "oldest":
+      return s.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    case "delayed":
+      return s.sort((a, b) => {
+        const aM = isDelayed(a) ? minutesSince(a.createdAt) : 0;
+        const bM = isDelayed(b) ? minutesSince(b.createdAt) : 0;
+        return bM - aM;
+      });
+    case "value_desc":
+      return s.sort((a, b) => b.total - a.total);
+    case "value_asc":
+      return s.sort((a, b) => a.total - b.total);
+    case "vip_first":
+      return s.sort((a, b) => (b.profile?.totalSpend ?? 0) - (a.profile?.totalSpend ?? 0));
+    case "cold_first": {
+      const daysSince = (o: MockOrder) => {
+        const d = o.profile?.lastOrderAt;
+        return d ? Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000) : 0;
+      };
+      return s.sort((a, b) => daysSince(b) - daysSince(a));
+    }
+    case "status":
+      return s.sort((a, b) => priorityScore(a) - priorityScore(b));
+    case "wait":
+      return s.sort((a, b) => minutesSince(b.createdAt) - minutesSince(a.createdAt));
+    default:
+      return s;
+  }
+}
+
 
 // ─── SearchBar ────────────────────────────────────────────────
 
@@ -370,23 +438,27 @@ function SearchBar({
   searchQuery,
   dateFrom,
   dateTo,
+  sortBy,
   onSearchChange,
   onDateFromChange,
   onDateToChange,
+  onSortChange,
   onClear,
 }: {
   searchQuery: string;
   dateFrom: string;
   dateTo: string;
+  sortBy: SortKey;
   onSearchChange: (v: string) => void;
   onDateFromChange: (v: string) => void;
   onDateToChange: (v: string) => void;
+  onSortChange: (v: SortKey) => void;
   onClear: () => void;
 }) {
   return (
     <div className="shrink-0 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
       <div className="flex flex-wrap gap-2">
-        {/* Date inputs — side-by-side on all sizes */}
+        {/* Date inputs */}
         <div className="flex min-w-0 flex-1 gap-2">
           <input
             type="date"
@@ -401,7 +473,7 @@ function SearchBar({
             className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
           />
         </div>
-        {/* Text search — full-width on mobile, flex-1 on wider screens */}
+        {/* Text search */}
         <input
           type="text"
           value={searchQuery}
@@ -409,6 +481,19 @@ function SearchBar({
           placeholder="Busque por cliente ou pedido…"
           className="w-full min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200 sm:w-auto"
         />
+        {/* Sort dropdown */}
+        <div className="flex items-center gap-1.5">
+          <span className="shrink-0 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Ordenar</span>
+          <select
+            value={sortBy}
+            onChange={(e) => onSortChange(e.target.value as SortKey)}
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
         {/* Action buttons */}
         <div className="flex w-full gap-2 sm:w-auto">
           <button className="flex-1 rounded-lg bg-orange-500 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600 sm:flex-none">
@@ -601,10 +686,35 @@ function OrderCard({
           </span>
         </div>
 
-        {/* Row 2: customer (prominent) + total (secondary) */}
-        <div className="mt-1.5 flex items-baseline justify-between">
-          <span className="text-base font-bold text-gray-900">{order.customer}</span>
-          <span className="text-xs font-semibold text-gray-500">{fmtCurrency(order.total)}</span>
+        {/* Row 2: customer name + inline tags + total */}
+        <div className="mt-1.5 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-base font-bold text-gray-900 leading-tight">{order.customer}</span>
+              {order.profile && (() => {
+                const { totalOrders, totalSpend, lastOrderAt } = order.profile!;
+                const tier = customerSpendTier(totalSpend);
+                const tag  = customerTag(totalOrders, totalSpend);
+                const temp = customerTemperature(lastOrderAt);
+                return (
+                  <>
+                    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tier.color}`}>
+                      {tier.icon} {tier.label}
+                    </span>
+                    <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${tag.color}`}>
+                      {tag.label}
+                    </span>
+                    {temp && (
+                      <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${temp.color}`}>
+                        {temp.label}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+          <span className="shrink-0 text-xs font-semibold text-gray-500">{fmtCurrency(order.total)}</span>
         </div>
 
         {/* Row 3: meta */}
@@ -616,32 +726,22 @@ function OrderCard({
           {order.payment}
         </p>
 
-        {/* Row 3.5: customer profile strip */}
+        {/* Row 3.5: spend context + note (tags moved inline to Row 2) */}
         {order.profile && (() => {
           const { totalOrders, totalSpend, note } = order.profile!;
-          const tier = customerSpendTier(totalSpend);
-          const tag  = customerTag(totalOrders, totalSpend);
           return (
-            <div className="mt-2 rounded-lg bg-gray-50 px-2.5 py-1.5 border border-gray-100">
-              <div className="flex flex-wrap items-center gap-1">
-                <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tier.color}`}>
-                  {tier.icon} {tier.label}
-                </span>
-                <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${tag.color}`}>
-                  {tag.label}
-                </span>
-                <span className="text-[10px] text-gray-400">
-                  {totalOrders === 1 ? "1 pedido" : `${totalOrders} pedidos`}
-                  {" · "}
-                  {totalSpend.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                </span>
-              </div>
+            <>
+              <p className="mt-0.5 text-[10px] text-gray-400">
+                {totalOrders === 1 ? "1 pedido" : `${totalOrders} pedidos`}
+                {" · "}
+                {totalSpend.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} gasto
+              </p>
               {note && (
                 <p className="mt-1 text-[10px] text-gray-500 leading-tight">
                   📝 {note}
                 </p>
               )}
-            </div>
+            </>
           );
         })()}
 
@@ -1132,6 +1232,7 @@ export default function OrdersClient() {
   const [searchQuery,  setSearchQuery]  = useState("");
   const [dateFrom,     setDateFrom]     = useState("");
   const [dateTo,       setDateTo]       = useState("");
+  const [sortBy,       setSortBy]       = useState<SortKey>("status");
   const [,             setTick]         = useState(0);
 
   useEffect(() => {
@@ -1151,8 +1252,8 @@ export default function OrdersClient() {
   }, []);
 
   const filtered  = useMemo(
-    () => [...orders].sort((a, b) => priorityScore(a) - priorityScore(b)),
-    [orders]
+    () => applySort(orders, sortBy),
+    [orders, sortBy]
   );
   const displayed = useMemo(() => {
     let result = filtered;
@@ -1213,10 +1314,12 @@ export default function OrdersClient() {
         searchQuery={searchQuery}
         dateFrom={dateFrom}
         dateTo={dateTo}
+        sortBy={sortBy}
         onSearchChange={setSearchQuery}
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
-        onClear={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); }}
+        onSortChange={setSortBy}
+        onClear={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); setSortBy("status"); }}
       />
 
       <StatusRow

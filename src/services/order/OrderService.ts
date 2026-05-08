@@ -18,7 +18,7 @@ import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrat
 export type OrderWithDetails = Order & {
   items: OrderItem[];
   payment: Payment | null;
-  customer: { name: string; phone: string; totalOrders: number; totalSpend: unknown };
+  customer: { name: string; phone: string; totalOrders: number; totalSpend: unknown; lastOrderAt: Date | null };
   deliveryAddress: {
     street: string;
     number: string;
@@ -70,7 +70,7 @@ export class OrderService {
         include: {
           items: true,
           payment: true,
-          customer: { select: { name: true, phone: true, totalOrders: true, totalSpend: true } },
+          customer: { select: { name: true, phone: true, totalOrders: true, totalSpend: true, lastOrderAt: true } },
           deliveryAddress: {
             select: {
               street: true,
