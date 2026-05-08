@@ -43,8 +43,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/orders",      label: "Pedidos",   icon: "📋" },
       { href: "/atendimento", label: "Chat",       icon: "🎧" },
+      { href: "/chat",        label: "Chat IA",    icon: "🤖" },
       { href: "/menu",        label: "Cardápio",   icon: "🍽️" },
-      { href: "/agente-ia",   label: "Agentes IA", icon: "🤖" },
+      { href: "/agente-ia",   label: "Agentes IA", icon: "✨" },
     ],
   },
   {

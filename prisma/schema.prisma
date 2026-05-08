@@ -480,9 +480,15 @@ enum PaymentStatus {
 model Conversation {
   id            String             @id @default(cuid())
   restaurantId  String
-  customerId    String
+  customerId    String?
   channel       Channel            @default(WHATSAPP)
   status        ConversationStatus @default(OPEN)
+  aiEnabled     Boolean            @default(true)   // false when human has taken over
+  sessionId     String?            // stable browser session ID for web agent tracking
+  customerName  String?            // denormalized — set for anonymous web sessions
+  customerPhone String?            // denormalized — set when customer identifies
+  orderId       String?
+  orderDraftId  String?
   assignedTo    String?
   resolvedAt    DateTime?
   lastMessageAt DateTime?          // updated on every new message; used for inbox sort
@@ -490,14 +496,17 @@ model Conversation {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  customer   Customer   @relation(fields: [customerId], references: [id])
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer   Customer?   @relation(fields: [customerId], references: [id])
   messages   Message[]
 
   @@index([restaurantId])
   @@index([customerId])
   @@index([restaurantId, status])
   @@index([restaurantId, lastMessageAt])
+  @@index([sessionId])
+  @@index([customerPhone])
+  @@index([channel])
   @@map("conversations")
 }
 
@@ -505,6 +514,7 @@ model Message {
   id                String      @id @default(cuid())
   conversationId    String
   direction         Direction   @default(INBOUND)
+  senderType        String?     // CUSTOMER | AI | HUMAN | SYSTEM
   content           String
   type              MessageType @default(TEXT)
   mediaUrl          String?
@@ -528,6 +538,9 @@ enum Channel {
   WHATSAPP
   EMAIL
   SMS
+  WEB_AGENT
+  QR_AGENT
+  MANUAL
 }
 
 enum ConversationStatus {
@@ -535,6 +548,8 @@ enum ConversationStatus {
   BOT
   HUMAN
   RESOLVED
+  AI_ATENDENDO
+  HUMANO_ASSUMIU
 }
 
 enum Direction {

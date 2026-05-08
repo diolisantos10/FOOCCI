@@ -1409,6 +1409,25 @@ export function PedidoClient({
   );
   const [selectedProduct, setSelectedProduct] = useState<MenuItem | null>(null);
 
+  // ── Chat Inbox — session + conversation tracking ─────────────────
+  // sessionId: stable per-tab identifier (survives re-renders, resets on new tab)
+  // convId:    returned by server on first logged message, stored in sessionStorage
+  const sessionIdRef = useRef<string>(uid());
+  const [convId, setConvId] = useState<string | null>(null);
+  useEffect(() => {
+    const sKey = `foocci_sid_${slug}`;
+    const cKey = `foocci_cid_${slug}`;
+    const existing = sessionStorage.getItem(sKey);
+    if (existing) {
+      sessionIdRef.current = existing;
+    } else {
+      sessionStorage.setItem(sKey, sessionIdRef.current);
+    }
+    const savedConvId = sessionStorage.getItem(cKey);
+    if (savedConvId) setConvId(savedConvId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Cart ──────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -1679,6 +1698,8 @@ export function PedidoClient({
             lastAddedId,
             categoryIntro: categoryIntro ?? null,
             waiterMemory:  Object.keys(waiterMemoryRef.current).length > 0 ? waiterMemoryRef.current : undefined,
+            sessionId:     sessionIdRef.current,
+            conversationId: convId ?? undefined,
           }),
         });
 
@@ -1688,6 +1709,13 @@ export function PedidoClient({
         const apiOptions  = (Array.isArray(data?.data?.options) ? data.data.options : []) as WaiterOption[];
         const responseMode = (data?.data?.mode ?? "BROWSE") as string;
         const newPinned   = (data?.data?.pinnedCardId ?? null) as string | null;
+
+        // Persist conversationId returned by server (created on first logged message)
+        const returnedConvId = data?.data?.conversationId as string | null | undefined;
+        if (returnedConvId && returnedConvId !== convId) {
+          setConvId(returnedConvId);
+          try { sessionStorage.setItem(`foocci_cid_${slug}`, returnedConvId); } catch { /* ignore */ }
+        }
 
         if (data?.data?.memoryPatch && typeof data.data.memoryPatch === "object") {
           // Update ref synchronously so the next sendText call (even before re-render)

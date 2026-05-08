@@ -396,6 +396,11 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     return;
   }
 
+  if (!conversation.customerId || !conversation.customer) {
+    console.warn(`[AIOrderService] Conversation ${conversationId} has no customer — skipping`);
+    return;
+  }
+
   // Only process OPEN conversations (BOT is already being processed elsewhere)
   if (
     conversation.status === ConversationStatus.HUMAN ||
@@ -404,7 +409,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
     return;
   }
 
-  const { restaurantId, customerId } = conversation;
+  const { restaurantId, customerId } = conversation as typeof conversation & { customerId: string };
 
   // 2. Mark as BOT
   await prisma.conversation.update({
@@ -432,7 +437,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
   }
 
   const evolutionConfig = configResult.data;
-  const toPhone = conversation.customer.phone.replace(/^\+/, "");
+  const toPhone = conversation.customer!.phone.replace(/^\+/, "");
 
   // 4. Find current OPEN draft
   const existingDraft = await prisma.orderDraft.findFirst({
@@ -822,7 +827,7 @@ async function safeHandoff(conversationId: string, message: string): Promise<voi
       select: { restaurantId: true, customer: { select: { phone: true } } },
     });
 
-    if (conv) {
+    if (conv && conv.customer) {
       const cfgResult = await EvolutionConfigService.getSnapshot(conv.restaurantId);
       if (cfgResult.ok) {
         const phone = conv.customer.phone.replace(/^\+/, "");

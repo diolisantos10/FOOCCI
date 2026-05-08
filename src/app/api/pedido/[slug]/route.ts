@@ -18,6 +18,8 @@ import { AIOrderService } from "@/services/ai/AIOrderService";
 import type { V2Event } from "@/services/ai/WaiterBrainV2";
 import type { OrderStage } from "@/lib/agent/types";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+import { ConversationLogService } from "@/services/conversation/ConversationLogService";
+import { Channel } from "@prisma/client";
 
 // ── Request shape ─────────────────────────────────────────────────────────────
 
@@ -35,6 +37,7 @@ interface PedidoChatRequest {
   paymentMethod?:  string | null;
   customerName?:   string | null;
   customerPhone?:  string | null;
+  customerId?:     string;
   categoryIntro?:  { name: string; description: string } | null;
   // ── V2 fields ─────────────────────────────────────────────────
   event?:               V2Event;
@@ -42,6 +45,9 @@ interface PedidoChatRequest {
   /** Product IDs already shown as cards this session (for de-duplication). */
   suggestedProductIds?: string[];
   waiterMemory?:        Record<string, unknown>;
+  // ── Chat Inbox ────────────────────────────────────────────────
+  sessionId?:      string;   // stable browser session ID
+  conversationId?: string;   // existing conversation, returned on first turn
 }
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -126,11 +132,14 @@ export async function POST(
       paymentMethod  = null,
       customerName   = null,
       customerPhone  = null,
+      customerId,
       categoryIntro  = null,
       event               = "ON_USER_MESSAGE",
       lastAddedId,
       suggestedProductIds,
       waiterMemory,
+      sessionId,
+      conversationId: reqConvId,
     } = body;
 
     // ON_IDLE and non-AI events may arrive with an empty message
@@ -138,6 +147,50 @@ export async function POST(
       return badRequest("message is required for ON_USER_MESSAGE.");
     }
     if (!Array.isArray(history)) return badRequest("history must be an array.");
+
+    // ── Chat Inbox: conversation logging ─────────────────────────────────────
+    // Only log real user messages (ON_USER_MESSAGE with non-empty content).
+    // All errors are caught so ordering never breaks due to logging failures.
+    let conversationId: string | null = reqConvId ?? null;
+
+    if (event === "ON_USER_MESSAGE" && message?.trim() && sessionId) {
+      try {
+        conversationId = await ConversationLogService.ensureConversation({
+          restaurantId:  restaurant.id,
+          sessionId,
+          customerId:    customerId   ?? null,
+          customerName:  customerName ?? null,
+          customerPhone: customerPhone ?? null,
+          channel:       Channel.QR_AGENT,
+        });
+
+        // Log customer message
+        await ConversationLogService.logMessage({
+          conversationId,
+          restaurantId: restaurant.id,
+          senderType:   "CUSTOMER",
+          content:      message.trim(),
+        });
+
+        // Check if AI is suppressed for this conversation
+        const aiEnabled = await ConversationLogService.isAiEnabled(conversationId, restaurant.id);
+        if (!aiEnabled) {
+          return ok({
+            reply:             "Um atendente da loja assumiu essa conversa. Aguarde um momento.",
+            cards:             [],
+            mode:              "BROWSE",
+            options:           [],
+            suggestedItemName: null,
+            pinnedCardId:      null,
+            memoryPatch:       null,
+            conversationId,
+          });
+        }
+      } catch (logErr) {
+        console.error("[waiter] conversation logging failed (non-fatal)", logErr);
+        // continue — ordering must not break due to logging failure
+      }
+    }
 
     // Fetch flat catalog for WaiterBrainV2 card selection (lightweight query)
     const catalogRows = await prisma.menuItem.findMany({
@@ -191,7 +244,26 @@ export async function POST(
       options: (options ?? []).length,
     }));
 
-    return ok({ reply, cards, mode: mode ?? "BROWSE", options: options ?? [], suggestedItemName: suggestedItemName ?? null, pinnedCardId: pinnedCardId ?? null, memoryPatch: memoryPatch ?? null });
+    // Log AI reply (fire-and-forget)
+    if (conversationId && reply && event === "ON_USER_MESSAGE") {
+      ConversationLogService.logMessage({
+        conversationId,
+        restaurantId: restaurant.id,
+        senderType:   "AI",
+        content:      reply,
+      }).catch((e) => console.error("[waiter] AI reply logging failed (non-fatal)", e));
+    }
+
+    return ok({
+      reply,
+      cards,
+      mode:              mode ?? "BROWSE",
+      options:           options ?? [],
+      suggestedItemName: suggestedItemName ?? null,
+      pinnedCardId:      pinnedCardId ?? null,
+      memoryPatch:       memoryPatch ?? null,
+      conversationId,
+    });
   } catch (err) {
     console.error("[POST /api/pedido/[slug]]", err);
     return serverError("Erro interno ao processar mensagem.");

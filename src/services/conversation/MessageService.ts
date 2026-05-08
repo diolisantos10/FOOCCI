@@ -108,6 +108,11 @@ export class MessageService {
     }
 
     const config = configResult.data;
+
+    if (!conv.customer) {
+      return serviceFail("Conversation has no linked customer — cannot send via Evolution", 422);
+    }
+
     // Strip '+' prefix — Evolution expects bare number string
     const toNumber = conv.customer.phone.replace(/^\+/, "");
 

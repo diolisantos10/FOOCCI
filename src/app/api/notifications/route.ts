@@ -89,6 +89,7 @@ export async function GET(req: NextRequest) {
     });
 
     for (const conv of convs) {
+      if (!conv.customer) continue;
       const firstName = conv.customer.name.trim().split(/\s+/)[0];
 
       let priority: NotifPriority;

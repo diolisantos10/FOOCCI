@@ -234,7 +234,7 @@ export class RealConversationService {
 
       classified.push({
         id:            conv.id,
-        customerLabel: `Cliente #${conv.customerId.slice(-4).toUpperCase()}`,
+        customerLabel: `Cliente #${(conv.customerId ?? "????").slice(-4).toUpperCase()}`,
         label,
         score,
         cartValue,

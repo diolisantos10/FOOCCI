@@ -1,0 +1,60 @@
+/**
+ * GET /api/chat/conversations/[id]
+ *
+ * Full conversation detail with all messages (oldest-first).
+ * Marks unread messages as read and resets unreadCount.
+ */
+
+import { NextRequest } from "next/server";
+import { getTenantContext } from "@/lib/tenant";
+import { prisma } from "@/lib/prisma";
+import { ok, unauthorized, notFound, serverError } from "@/lib/api-response";
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const ctx = getTenantContext(req);
+    if (!ctx) return unauthorized();
+
+    const { id } = await params;
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id },
+      include: {
+        customer: { select: { id: true, name: true, phone: true, tier: true } },
+        messages: {
+          orderBy: { sentAt: "asc" },
+          select: {
+            id:         true,
+            direction:  true,
+            senderType: true,
+            content:    true,
+            type:       true,
+            isRead:     true,
+            sentAt:     true,
+            metadata:   true,
+          },
+        },
+      },
+    });
+
+    if (!conversation || conversation.restaurantId !== ctx.restaurantId) {
+      return notFound();
+    }
+
+    // Reset unread counter when agent opens the thread
+    if (conversation.unreadCount > 0) {
+      await prisma.conversation.update({
+        where: { id },
+        data:  { unreadCount: 0 },
+      });
+    }
+
+    return ok(conversation);
+  } catch (err) {
+    console.error("[GET /api/chat/conversations/[id]]", err);
+    return serverError();
+  }
+}

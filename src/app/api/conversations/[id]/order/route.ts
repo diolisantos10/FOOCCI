@@ -28,6 +28,8 @@ export async function GET(
       return notFound("Conversation not found");
     }
 
+    if (!conversation.customerId) return ok(null);
+
     const order = await prisma.order.findFirst({
       where: {
         customerId:   conversation.customerId,
