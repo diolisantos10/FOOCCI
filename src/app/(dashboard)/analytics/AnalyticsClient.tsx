@@ -15,6 +15,46 @@ import type {
   Insight,
 } from "@/services/analytics/AnalyticsService";
 
+// ─── Analytics Agent types ────────────────────────────────────────────────────
+// Mirrors AnalyticsInsightService — defined here to avoid bundling server code.
+
+type InsightSeverity = "GOOD" | "INFO" | "WARNING" | "CRITICAL" | "OPPORTUNITY";
+
+interface AgentInsight {
+  id:             string;
+  type:           string;
+  severity:       InsightSeverity;
+  title:          string;
+  explanation:    string;
+  metric?:        string;
+  recommendation: string;
+  ctaLabel?:      string;
+  ctaTarget?:     string;
+}
+
+interface ComparisonPoint {
+  current:  number;
+  previous: number;
+  deltaPct: number;
+  trend:    "UP" | "DOWN" | "STABLE";
+}
+
+interface PeriodComparison {
+  available:          boolean;
+  unavailableReason?: string;
+  revenue:   ComparisonPoint;
+  orders:    ComparisonPoint;
+  avgTicket: ComparisonPoint;
+}
+
+interface AgentReport {
+  summary:     string;
+  insights:    AgentInsight[];
+  comparison:  PeriodComparison;
+  hasData:     boolean;
+  dataQuality: "NONE" | "LOW" | "SUFFICIENT";
+}
+
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
 function toISO(d: Date) {
@@ -44,7 +84,7 @@ const PRESETS: { id: Preset; label: string }[] = [
 function presetRange(preset: Preset): { from: string; to: string } {
   const t = today();
   switch (preset) {
-    case "today":     return { from: toISO(t),           to: toISO(t) };
+    case "today":     return { from: toISO(t),             to: toISO(t) };
     case "yesterday": return { from: toISO(addDays(t,-1)), to: toISO(addDays(t,-1)) };
     case "7d":        return { from: toISO(addDays(t,-6)), to: toISO(t) };
     case "30d":       return { from: toISO(addDays(t,-29)), to: toISO(t) };
@@ -69,15 +109,15 @@ function fmtNum(v: number) {
 // ─── Segment / tier config ────────────────────────────────────────────────────
 
 const SEGMENT_LABEL: Record<string, string> = {
-  QUENTE:     "Quente",
-  MORNO:      "Morno",
-  FRIO:       "Frio",
+  QUENTE:      "Quente",
+  MORNO:       "Morno",
+  FRIO:        "Frio",
   SEM_PEDIDOS: "Sem pedidos",
 };
 const SEGMENT_COLOR: Record<string, string> = {
-  QUENTE:     "bg-rose-500",
-  MORNO:      "bg-amber-400",
-  FRIO:       "bg-sky-400",
+  QUENTE:      "bg-rose-500",
+  MORNO:       "bg-amber-400",
+  FRIO:        "bg-sky-400",
   SEM_PEDIDOS: "bg-gray-300",
 };
 
@@ -94,7 +134,7 @@ const TIER_COLOR: Record<string, string> = {
   BRONZE:   "bg-orange-400",
 };
 
-// ─── Micro-components ─────────────────────────────────────────────────────────
+// ─── Base micro-components ────────────────────────────────────────────────────
 
 function Card({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
@@ -187,7 +227,7 @@ function Sparkline({ points, height = 64 }: { points: DailyPoint[]; height?: num
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="none">
       <defs>
         <linearGradient id="sparkg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25" />
+          <stop offset="0%"   stopColor="#6366f1" stopOpacity="0.25" />
           <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
         </linearGradient>
       </defs>
@@ -232,7 +272,7 @@ function StackedBar({ segments, colorMap, labelMap }: {
   );
 }
 
-// ─── Insight card ─────────────────────────────────────────────────────────────
+// ─── Original insight card (from AnalyticsService) ────────────────────────────
 
 const INSIGHT_STYLE: Record<string, { bg: string; text: string; icon: string }> = {
   warning: { bg: "bg-amber-50 border-amber-200",  text: "text-amber-800",  icon: "⚠️" },
@@ -252,15 +292,248 @@ function InsightCard({ insight }: { insight: Insight }) {
   );
 }
 
+// ─── Analytics Agent components ───────────────────────────────────────────────
+
+const SEVERITY_STYLE: Record<InsightSeverity, {
+  border: string; bg: string; badge: string; badgeText: string; icon: string;
+}> = {
+  GOOD:        { border: "border-green-200",  bg: "bg-green-50",   badge: "bg-green-100",  badgeText: "text-green-700",  icon: "✅" },
+  INFO:        { border: "border-blue-200",   bg: "bg-blue-50",    badge: "bg-blue-100",   badgeText: "text-blue-700",   icon: "💡" },
+  WARNING:     { border: "border-amber-200",  bg: "bg-amber-50",   badge: "bg-amber-100",  badgeText: "text-amber-700",  icon: "⚠️" },
+  CRITICAL:    { border: "border-red-200",    bg: "bg-red-50",     badge: "bg-red-100",    badgeText: "text-red-700",    icon: "🚨" },
+  OPPORTUNITY: { border: "border-indigo-200", bg: "bg-indigo-50",  badge: "bg-indigo-100", badgeText: "text-indigo-700", icon: "🎯" },
+};
+
+const SEVERITY_LABEL: Record<InsightSeverity, string> = {
+  GOOD:        "Bom",
+  INFO:        "Info",
+  WARNING:     "Alerta",
+  CRITICAL:    "Crítico",
+  OPPORTUNITY: "Oportunidade",
+};
+
+function AgentInsightCard({ insight }: { insight: AgentInsight }) {
+  const s = SEVERITY_STYLE[insight.severity];
+  return (
+    <div className={`flex flex-col rounded-xl border p-4 gap-3 ${s.border} ${s.bg}`}>
+      {/* Badge + icon */}
+      <div className="flex items-center justify-between">
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${s.badge} ${s.badgeText}`}>
+          {SEVERITY_LABEL[insight.severity]}
+        </span>
+        <span className="text-lg leading-none">{s.icon}</span>
+      </div>
+
+      {/* Title */}
+      <div>
+        <p className="text-sm font-semibold text-gray-900">{insight.title}</p>
+        {insight.metric && (
+          <p className="mt-0.5 text-xs font-bold text-gray-500">{insight.metric}</p>
+        )}
+      </div>
+
+      {/* Explanation */}
+      <p className="text-xs text-gray-600 leading-relaxed">{insight.explanation}</p>
+
+      {/* Recommendation */}
+      <p className="text-xs text-gray-500 italic">{insight.recommendation}</p>
+
+      {/* CTA */}
+      {insight.ctaLabel && insight.ctaTarget && (
+        <a
+          href={insight.ctaTarget}
+          className="mt-auto inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors w-fit"
+        >
+          {insight.ctaLabel}
+          <span>→</span>
+        </a>
+      )}
+    </div>
+  );
+}
+
+function ComparisonRow({ comparison }: { comparison: PeriodComparison }) {
+  if (!comparison.available) return null;
+
+  const Arrow = ({ trend }: { trend: "UP" | "DOWN" | "STABLE" }) => {
+    if (trend === "UP")   return <span className="text-green-600 font-bold">↑</span>;
+    if (trend === "DOWN") return <span className="text-red-500  font-bold">↓</span>;
+    return <span className="text-gray-400 font-bold">→</span>;
+  };
+
+  const DeltaLabel = ({ pt, isGoodUp = true }: { pt: ComparisonPoint; isGoodUp?: boolean }) => {
+    const isPositive = pt.deltaPct > 2;
+    const isNegative = pt.deltaPct < -2;
+    const color =
+      isPositive ? (isGoodUp ? "text-green-600" : "text-red-500")  :
+      isNegative ? (isGoodUp ? "text-red-500"   : "text-green-600") :
+      "text-gray-400";
+    return (
+      <span className={`text-xs font-semibold ${color}`}>
+        {pt.deltaPct >= 0 ? "+" : ""}{pt.deltaPct.toFixed(1)}%
+      </span>
+    );
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+        Comparativo com período anterior
+      </p>
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Receita",       pt: comparison.revenue,   fmt: fmtBRL },
+          { label: "Pedidos",       pt: comparison.orders,    fmt: fmtNum },
+          { label: "Ticket médio",  pt: comparison.avgTicket, fmt: fmtBRL },
+        ].map(({ label, pt, fmt }) => (
+          <div key={label} className="text-center">
+            <p className="text-xs text-gray-500 mb-1">{label}</p>
+            <div className="flex items-center justify-center gap-1">
+              <Arrow trend={pt.trend} />
+              <DeltaLabel pt={pt} />
+            </div>
+            <p className="mt-0.5 text-[11px] text-gray-400">
+              {fmt(pt.previous)} → <span className="font-semibold text-gray-700">{fmt(pt.current)}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AgentSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4 py-2">
+      <div className="h-4 w-3/4 rounded bg-indigo-100" />
+      <div className="h-4 w-1/2 rounded bg-indigo-100" />
+      <div className="grid grid-cols-3 gap-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-32 rounded-xl bg-indigo-100" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function QuestionBoxPlaceholder() {
+  return (
+    <div className="rounded-xl border border-dashed border-indigo-200 bg-white p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-base">💬</span>
+        <p className="text-sm font-semibold text-gray-700">Pergunte ao Gerente Comercial IA</p>
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Ex: Como vender mais sobremesa?"
+          readOnly
+          className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-400 cursor-not-allowed"
+        />
+        <button
+          disabled
+          className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-400 cursor-not-allowed"
+        >
+          Perguntar
+        </button>
+      </div>
+      <p className="mt-2 text-[11px] text-gray-400">
+        Perguntas ao agente serão conectadas em uma próxima etapa.
+      </p>
+    </div>
+  );
+}
+
+function AgentPanel({ data, loading }: { data: AgentReport | null; loading: boolean }) {
+  return (
+    <div className="rounded-xl border-2 border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-white p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xl shadow-sm">
+          🧠
+        </div>
+        <div>
+          <h2 className="text-base font-bold text-gray-900">Gerente Comercial IA</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Leitura inteligente dos seus dados para ajudar você a vender mais.
+          </p>
+        </div>
+      </div>
+
+      {loading && <AgentSkeleton />}
+
+      {!loading && !data && (
+        <p className="text-sm text-gray-400">Não foi possível carregar a análise. Tente novamente.</p>
+      )}
+
+      {!loading && data && !data.hasData && (
+        <div className="rounded-xl border border-dashed border-indigo-200 bg-white p-6 text-center">
+          <p className="text-2xl mb-2">📊</p>
+          <p className="text-sm text-gray-500 max-w-md mx-auto">{data.summary}</p>
+          {data.dataQuality === "NONE" && (
+            <p className="mt-2 text-xs text-gray-400">
+              Use <strong>Links Rastreáveis</strong> ou <strong>Importação de Histórico</strong> para começar.
+            </p>
+          )}
+        </div>
+      )}
+
+      {!loading && data && data.hasData && (
+        <>
+          {/* Executive summary */}
+          <div className="rounded-xl bg-white border border-indigo-100 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-400 mb-2">Resumo executivo</p>
+            <p className="text-sm text-gray-700 leading-relaxed">{data.summary}</p>
+          </div>
+
+          {/* Period comparison */}
+          {data.comparison.available ? (
+            <ComparisonRow comparison={data.comparison} />
+          ) : data.comparison.unavailableReason ? (
+            <p className="text-xs text-gray-400 italic px-1">{data.comparison.unavailableReason}</p>
+          ) : null}
+
+          {/* Insight cards */}
+          {data.insights.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 px-1">
+                Oportunidades e alertas
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {data.insights.map((ins) => (
+                  <AgentInsightCard key={ins.id} insight={ins} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.insights.length === 0 && (
+            <div className="rounded-xl bg-green-50 border border-green-200 p-4 text-center">
+              <p className="text-sm text-green-700 font-medium">✅ Nenhum alerta crítico no período!</p>
+              <p className="text-xs text-green-600 mt-1">Seus principais indicadores estão saudáveis.</p>
+            </div>
+          )}
+
+          {/* Question box placeholder */}
+          <QuestionBoxPlaceholder />
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function AnalyticsClient() {
-  const [preset, setPreset]     = useState<Preset>("30d");
-  const [from, setFrom]         = useState(() => presetRange("30d").from);
-  const [to,   setTo]           = useState(() => presetRange("30d").to);
-  const [loading, setLoading]   = useState(false);
-  const [data, setData]         = useState<AnalyticsOverview | null>(null);
-  const [error, setError]       = useState<string | null>(null);
+  const [preset, setPreset]   = useState<Preset>("30d");
+  const [from, setFrom]       = useState(() => presetRange("30d").from);
+  const [to,   setTo]         = useState(() => presetRange("30d").to);
+  const [loading, setLoading] = useState(false);
+  const [data, setData]       = useState<AnalyticsOverview | null>(null);
+  const [error, setError]     = useState<string | null>(null);
+
+  const [agentData,    setAgentData]    = useState<AgentReport | null>(null);
+  const [agentLoading, setAgentLoading] = useState(false);
 
   const load = useCallback(async (f: string, t: string) => {
     setLoading(true);
@@ -277,7 +550,24 @@ export function AnalyticsClient() {
     }
   }, []);
 
-  useEffect(() => { void load(from, to); }, [from, to, load]);
+  const loadAgent = useCallback(async (f: string, t: string) => {
+    setAgentLoading(true);
+    try {
+      const res  = await fetch(`/api/analytics/agent?from=${f}&to=${t}`);
+      const json = await res.json() as { data?: AgentReport; error?: string };
+      if (res.ok && json.data) setAgentData(json.data);
+      else setAgentData(null);
+    } catch {
+      setAgentData(null);
+    } finally {
+      setAgentLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(from, to);
+    void loadAgent(from, to);
+  }, [from, to, load, loadAgent]);
 
   function handlePreset(p: Preset) {
     setPreset(p);
@@ -339,16 +629,19 @@ export function AnalyticsClient() {
 
       {/* ── KPI overview ── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <KpiCard label="Receita"        value={kpi ? fmtBRL(kpi.revenue)      : "—"} />
-        <KpiCard label="Pedidos"        value={kpi ? fmtNum(kpi.orders)       : "—"} />
-        <KpiCard label="Ticket médio"   value={kpi ? fmtBRL(kpi.avgTicket)    : "—"} />
-        <KpiCard label="Novos clientes" value={kpi ? fmtNum(kpi.newCustomers) : "—"} />
+        <KpiCard label="Receita"        value={kpi ? fmtBRL(kpi.revenue)         : "—"} />
+        <KpiCard label="Pedidos"        value={kpi ? fmtNum(kpi.orders)          : "—"} />
+        <KpiCard label="Ticket médio"   value={kpi ? fmtBRL(kpi.avgTicket)       : "—"} />
+        <KpiCard label="Novos clientes" value={kpi ? fmtNum(kpi.newCustomers)    : "—"} />
         <KpiCard label="Cancelamentos"  value={kpi ? fmtNum(kpi.cancelledOrders) : "—"}
                  sub={kpi ? fmtPct(kpi.cancellationRate) + " do total" : undefined} />
         <KpiCard label="Cancelamento %" value={kpi ? fmtPct(kpi.cancellationRate) : "—"} />
       </div>
 
-      {/* ── Insights ── */}
+      {/* ── Analytics Agent Panel ── */}
+      <AgentPanel data={agentData} loading={agentLoading} />
+
+      {/* ── Insights (from AnalyticsService, kept for context) ── */}
       {data && data.insights.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.insights.map((ins, i) => <InsightCard key={i} insight={ins} />)}
