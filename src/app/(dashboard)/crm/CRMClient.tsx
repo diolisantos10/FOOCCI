@@ -72,6 +72,31 @@ function TierBadge({ tier }: { tier: CustomerTier }) {
 
 // ── Custom Action types ───────────────────────────────────────────────────────
 
+// ── Campaign types ────────────────────────────────────────────────────────────
+
+type CampaignRecipientRow = {
+  id:            string;
+  customerId:    string;
+  customerName:  string;
+  customerPhone: string;
+  messageText:   string;
+  status:        string;
+};
+
+type CampaignHistoryRow = {
+  id:            string;
+  name:          string;
+  objective:     string | null;
+  status:        string;
+  totalAudience: number;
+  totalSent:     number;
+  totalFailed:   number;
+  createdAt:     string;
+  sentAt:        string | null;
+};
+
+// ── Custom action types ───────────────────────────────────────────────────────
+
 type CustomActionRow = {
   id:            string;
   name:          string;
@@ -583,14 +608,18 @@ const READINESS_CONFIG: Record<ActionReadiness, { label: string; bg: string; tex
 function ActionConfigDrawer({
   template,
   onClose,
+  onStartCampaign,
 }: {
   template: ActionTemplate;
   onClose: () => void;
+  onStartCampaign?: (campaignId: string, recipients: CampaignRecipientRow[]) => void;
 }) {
   const [message,  setMessage]  = useState(template.suggestedMessage);
   const [copied,   setCopied]   = useState(false);
   const [audience, setAudience] = useState<{ count: number; customers: CustomerPreview[]; computed: boolean } | null>(null);
   const [loadingAudience, setLoadingAudience] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [prepError, setPrepError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!template.hasAudienceQuery) return;
@@ -606,6 +635,36 @@ function ActionConfigDrawer({
     navigator.clipboard.writeText(message);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handlePrepareCampaign() {
+    if (!onStartCampaign) return;
+    setPreparing(true);
+    setPrepError(null);
+    try {
+      const res = await fetch("/api/crm/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:            template.title,
+          templateId:      template.id,
+          targetSegment:   template.id,
+          messageTemplate: message,
+          objective:       template.objective,
+        }),
+      });
+      const json = await res.json() as { data?: { campaignId: string; recipients: CampaignRecipientRow[] }; error?: string };
+      if (!res.ok || !json.data) {
+        setPrepError("Erro ao preparar campanha. Tente novamente.");
+        return;
+      }
+      onStartCampaign(json.data.campaignId, json.data.recipients);
+      onClose();
+    } catch {
+      setPrepError("Falha de rede. Tente novamente.");
+    } finally {
+      setPreparing(false);
+    }
   }
 
   const rc = READINESS_CONFIG[template.readiness];
@@ -749,6 +808,11 @@ function ActionConfigDrawer({
         </div>
 
         {/* Footer */}
+        {prepError && (
+          <p className="border-t border-red-100 bg-red-50 px-5 py-2 text-xs text-red-600">
+            {prepError}
+          </p>
+        )}
         <div className="flex gap-2 border-t border-gray-100 px-5 py-4 shrink-0">
           <button
             onClick={copyMessage}
@@ -760,14 +824,187 @@ function ActionConfigDrawer({
           >
             {copied ? "✓ Copiado!" : "Copiar sugestão"}
           </button>
-          <button
-            disabled
-            title="Disparo automático em breve"
-            className="flex-1 cursor-not-allowed rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-400"
-          >
-            Disparo em breve
+          {onStartCampaign && template.hasAudienceQuery && audience?.computed ? (
+            <button
+              onClick={handlePrepareCampaign}
+              disabled={preparing || audience.count === 0}
+              className="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {preparing ? "Preparando…" : audience.count === 0 ? "Sem público" : `Preparar disparo →`}
+            </button>
+          ) : (
+            <button
+              disabled
+              title="Calcule o público antes de disparar"
+              className="flex-1 cursor-not-allowed rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-400"
+            >
+              {loadingAudience ? "Calculando público…" : "Calcule o público"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Campaign Review Modal ─────────────────────────────────────────────────────
+
+const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
+  DRAFT:    "Rascunho",
+  SENDING:  "Enviando",
+  SENT:     "Enviado",
+  CANCELLED:"Cancelado",
+  SCHEDULED:"Agendado",
+};
+
+function CampaignReviewModal({
+  campaignId,
+  initialRecipients,
+  onClose,
+  onSent,
+}: {
+  campaignId:        string;
+  initialRecipients: CampaignRecipientRow[];
+  onClose:           () => void;
+  onSent:            () => void;
+}) {
+  const [messages, setMessages] = useState<Record<string, string>>(
+    () => Object.fromEntries(initialRecipients.map((r) => [r.id, r.messageText]))
+  );
+  const [removed,  setRemoved]  = useState<Set<string>>(new Set());
+  const [sending,  setSending]  = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
+  const [result,   setResult]   = useState<{ totalSent: number; totalFailed: number } | null>(null);
+
+  const active = initialRecipients.filter((r) => !removed.has(r.id));
+
+  async function handleSend() {
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/crm/campaigns/${campaignId}/send`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          messages: active.map((r) => ({ recipientId: r.id, messageText: messages[r.id] ?? r.messageText })),
+        }),
+      });
+      const json = await res.json() as {
+        data?: { totalSent: number; totalFailed: number };
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) {
+        if (json.error === "whatsapp_not_configured") {
+          setError("WhatsApp não configurado neste restaurante. Configure a integração em Configurações > Integrações.");
+        } else {
+          setError(json.message ?? "Erro ao enviar. Tente novamente.");
+        }
+        return;
+      }
+      setResult(json.data!);
+      onSent();
+    } catch {
+      setError("Falha de rede. Tente novamente.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Revisar e enviar</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {active.length} destinatário{active.length !== 1 ? "s" : ""} · Canal: WhatsApp
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 transition-colors">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
+
+        {/* Result state */}
+        {result ? (
+          <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+            <span className="text-4xl">{result.totalFailed === 0 ? "✅" : result.totalSent === 0 ? "❌" : "⚠️"}</span>
+            <p className="text-base font-bold text-gray-900">
+              {result.totalSent} enviada{result.totalSent !== 1 ? "s" : ""}
+              {result.totalFailed > 0 ? ` · ${result.totalFailed} falha${result.totalFailed !== 1 ? "s" : ""}` : ""}
+            </p>
+            <p className="text-sm text-gray-500">
+              As mensagens aparecem no Chat Inbox de cada conversa.
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-2 rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-700 transition-colors"
+            >
+              Fechar
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Recipients list */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+              {active.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-8">Nenhum destinatário selecionado.</p>
+              ) : active.map((r) => (
+                <div key={r.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-gray-900 truncate">{r.customerName}</p>
+                      <p className="text-[10px] text-gray-400">{r.customerPhone}</p>
+                    </div>
+                    <button
+                      onClick={() => setRemoved((prev) => new Set([...prev, r.id]))}
+                      className="shrink-0 rounded-lg border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={messages[r.id] ?? r.messageText}
+                    onChange={(e) => setMessages((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-100 resize-none"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Error */}
+            {error && (
+              <p className="border-t border-red-100 bg-red-50 px-5 py-2.5 text-xs text-red-600">
+                {error}
+              </p>
+            )}
+
+            {/* Footer */}
+            <div className="border-t border-gray-100 px-5 py-4 shrink-0 flex gap-2">
+              <button
+                onClick={onClose}
+                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={sending || active.length === 0}
+                className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {sending ? "Enviando…" : `Enviar ${active.length} mensagem${active.length !== 1 ? "s" : ""}`}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -781,6 +1018,21 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
   const [customActions,     setCustomActions]      = useState<CustomActionRow[]>([]);
   const [loadingCustom,     setLoadingCustom]      = useState(true);
   const [expandedCustom,    setExpandedCustom]     = useState<string | null>(null);
+
+  // Campaign review flow
+  const [activeCampaign, setActiveCampaign] = useState<{ id: string; recipients: CampaignRecipientRow[] } | null>(null);
+
+  // Campaign history
+  const [campaigns,       setCampaigns]       = useState<CampaignHistoryRow[]>([]);
+  const [loadingHistory,  setLoadingHistory]  = useState(true);
+
+  useEffect(() => {
+    fetch("/api/crm/campaigns")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setCampaigns(json.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingHistory(false));
+  }, []);
 
   useEffect(() => {
     fetch("/api/crm/custom-actions")
@@ -995,11 +1247,81 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
 
       </div>{/* end Ações sugeridas section */}
 
+      {/* ── Histórico de ações ─────────────────────────────────────────────── */}
+      {(campaigns.length > 0 || !loadingHistory) && (
+        <div>
+          <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
+            Histórico de ações
+          </h3>
+          {loadingHistory ? (
+            <div className="py-4 text-center text-sm text-gray-400">Carregando…</div>
+          ) : campaigns.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-gray-100 py-6 text-center text-xs text-gray-400">
+              Nenhuma campanha enviada ainda. Use os templates acima para disparar sua primeira ação.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {campaigns.map((c) => {
+                const statusCfg: Record<string, { bg: string; text: string }> = {
+                  DRAFT:     { bg: "bg-gray-100",   text: "text-gray-600"  },
+                  SENDING:   { bg: "bg-blue-100",   text: "text-blue-700"  },
+                  SENT:      { bg: "bg-green-100",  text: "text-green-700" },
+                  CANCELLED: { bg: "bg-red-100",    text: "text-red-600"   },
+                  SCHEDULED: { bg: "bg-amber-100",  text: "text-amber-700" },
+                };
+                const sc = statusCfg[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                const sentDate = c.sentAt
+                  ? new Date(c.sentAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
+                  : new Date(c.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+                return (
+                  <div key={c.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">WhatsApp · {sentDate}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
+                        {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
+                      </span>
+                      {c.status === "SENT" && (
+                        <p className="mt-0.5 text-[10px] text-gray-500">
+                          {c.totalSent} enviados
+                          {c.totalFailed > 0 && <span className="text-red-500"> · {c.totalFailed} falhas</span>}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Config drawer for suggested templates */}
       {selectedTemplate && (
         <ActionConfigDrawer
           template={selectedTemplate}
           onClose={() => setSelectedTemplate(null)}
+          onStartCampaign={(campaignId, recipients) => {
+            setActiveCampaign({ id: campaignId, recipients });
+          }}
+        />
+      )}
+
+      {/* Campaign review modal */}
+      {activeCampaign && (
+        <CampaignReviewModal
+          campaignId={activeCampaign.id}
+          initialRecipients={activeCampaign.recipients}
+          onClose={() => setActiveCampaign(null)}
+          onSent={() => {
+            // Refresh history after sending
+            fetch("/api/crm/campaigns")
+              .then((r) => r.ok ? r.json() : Promise.reject())
+              .then((json) => setCampaigns(json.data ?? []))
+              .catch(() => {});
+          }}
         />
       )}
 

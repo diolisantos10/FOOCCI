@@ -581,40 +581,54 @@ enum MessageType {
 // ═══════════════════════════════════════════
 
 model Campaign {
-  id           String         @id @default(cuid())
-  restaurantId String
-  name         String
-  message      String
-  segmentId    String?
-  scheduledAt  DateTime?
-  sentAt       DateTime?
-  status       CampaignStatus @default(DRAFT)
-  totalSent    Int            @default(0)
-  totalRead    Int            @default(0)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id             String         @id @default(cuid())
+  restaurantId   String
+  name           String
+  message        String
+  objective      String?        // RECUPERAR | RECOMPRA | TICKET | BEBIDA | SOBREMESA | AVALIACAO | VIP | OUTRO
+  channel        String         @default("WHATSAPP")
+  targetSegment  String?        // FRIO | MORNO | QUENTE | VIP | PRIMEIRO_PEDIDO | RECENTE_AVALIACAO | RECORRENTE_SUMIDO | TODOS | etc.
+  templateId     String?        // links back to the action template id (e.g. "recuperar-frios")
+  segmentId      String?
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  status         CampaignStatus @default(DRAFT)
+  totalAudience  Int            @default(0)
+  totalSent      Int            @default(0)
+  totalFailed    Int            @default(0)
+  totalRead      Int            @default(0)
+  totalResponded Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   restaurant Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   segment    CustomerSegment?   @relation(fields: [segmentId], references: [id])
   executions CampaignExecution[]
 
   @@index([restaurantId])
+  @@index([restaurantId, status])
   @@map("campaigns")
 }
 
 model CampaignExecution {
-  id           String          @id @default(cuid())
-  campaignId   String
-  customerId   String
-  status       ExecutionStatus @default(PENDING)
-  sentAt       DateTime?
-  readAt       DateTime?
-  errorMessage String?
-  createdAt    DateTime        @default(now())
+  id            String          @id @default(cuid())
+  campaignId    String
+  restaurantId  String?         // denormalized for fast tenant-scoped queries
+  customerId    String
+  customerName  String?         // snapshot at campaign creation
+  customerPhone String?         // snapshot at campaign creation
+  messageText   String?         @db.Text  // personalized message for this recipient
+  status        ExecutionStatus @default(PENDING)
+  sentAt        DateTime?
+  readAt        DateTime?
+  failedReason  String?
+  errorMessage  String?
+  createdAt     DateTime        @default(now())
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
+  @@index([restaurantId])
   @@map("campaign_executions")
 }
 
