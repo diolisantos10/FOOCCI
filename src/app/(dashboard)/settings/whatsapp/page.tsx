@@ -7,6 +7,8 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
+type EvoStatus = "loading" | "configured" | "not_configured";
+
 type AgentMode = "RECEPTIONIST_ONLY" | "HUMAN_ASSISTED" | "AI_ORDERING_EXPERIMENTAL";
 
 type Form = {
@@ -46,23 +48,28 @@ const MODE_OPTIONS: { value: AgentMode; label: string; desc: string }[] = [
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function WhatsAppSettingsPage() {
-  const [form, setForm]       = useState<Form>(DEFAULTS);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving]   = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [error, setError]     = useState<string | null>(null);
+  const [form, setForm]         = useState<Form>(DEFAULTS);
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [success, setSuccess]   = useState<string | null>(null);
+  const [error, setError]       = useState<string | null>(null);
+  const [evoStatus, setEvoStatus] = useState<EvoStatus>("loading");
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await apiFetch("/api/whatsapp-agent");
-    if (res.ok && res.data) {
+    const [agentRes, evoRes] = await Promise.all([
+      apiFetch("/api/whatsapp-agent"),
+      apiFetch("/api/evolution/config"),
+    ]);
+    if (agentRes.ok && agentRes.data) {
       setForm({
-        agentMode:      res.data.agentMode      ?? "RECEPTIONIST_ONLY",
-        welcomeMessage: res.data.welcomeMessage ?? DEFAULTS.welcomeMessage,
-        menuUrl:        res.data.menuUrl        ?? "",
-        handoffMessage: res.data.handoffMessage ?? DEFAULTS.handoffMessage,
+        agentMode:      agentRes.data.agentMode      ?? "RECEPTIONIST_ONLY",
+        welcomeMessage: agentRes.data.welcomeMessage ?? DEFAULTS.welcomeMessage,
+        menuUrl:        agentRes.data.menuUrl        ?? "",
+        handoffMessage: agentRes.data.handoffMessage ?? DEFAULTS.handoffMessage,
       });
     }
+    setEvoStatus(evoRes.ok && evoRes.data?.isActive ? "configured" : "not_configured");
     setLoading(false);
   }, []);
 
@@ -105,6 +112,27 @@ export default function WhatsAppSettingsPage() {
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
+
+      {/* ── Status da integração Evolution ─────────────────────────── */}
+      {evoStatus !== "loading" && (
+        <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
+          evoStatus === "configured"
+            ? "border-green-200 bg-green-50"
+            : "border-amber-200 bg-amber-50"
+        }`}>
+          <span className="text-lg shrink-0">{evoStatus === "configured" ? "✅" : "⚠️"}</span>
+          <div>
+            <p className={`text-sm font-semibold ${evoStatus === "configured" ? "text-green-800" : "text-amber-800"}`}>
+              {evoStatus === "configured" ? "Evolution API conectada" : "Evolution API não configurada"}
+            </p>
+            <p className={`text-xs mt-0.5 ${evoStatus === "configured" ? "text-green-600" : "text-amber-600"}`}>
+              {evoStatus === "configured"
+                ? "WhatsApp ativo — mensagens serão enviadas e recebidas normalmente."
+                : "Sem integração ativa, as mensagens automáticas não serão disparadas. Configure em Integrações > WhatsApp Business."}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Modo do agente ─────────────────────────────────────────── */}
       <PageCard>

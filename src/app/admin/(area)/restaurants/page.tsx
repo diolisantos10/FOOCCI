@@ -128,7 +128,28 @@ function SuccessPanel({ info, onClose }: { info: SuccessInfo; onClose: () => voi
           ))}
         </div>
 
-        <div className="mt-5 flex gap-3">
+        {/* Safe-mode defaults notice */}
+        <div className="mt-4 rounded-xl border border-blue-800/40 bg-blue-950/30 px-4 py-3 flex gap-3">
+          <span className="text-blue-400 shrink-0 mt-0.5">ℹ</span>
+          <div>
+            <p className="text-blue-200 text-xs font-semibold mb-1">Modo Piloto Seguro ativo</p>
+            <ul className="text-blue-300/80 text-[11px] space-y-0.5 list-none">
+              <li>— WhatsApp: Recepcionista apenas (sem IA de pedidos)</li>
+              <li>— Automações CRM: todas desativadas por padrão</li>
+              <li>— Pagamento online: somente se provedor estiver configurado</li>
+            </ul>
+            <a
+              href="/admin/preflight"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block text-[11px] text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+            >
+              Rodar diagnóstico completo (Pré-piloto) ↗
+            </a>
+          </div>
+        </div>
+
+        <div className="mt-4 flex gap-3">
           <a
             href={info.deliveryUrl}
             target="_blank"
@@ -503,6 +524,19 @@ function LinksPopover({ row, onClose }: { row: RestaurantRow; onClose: () => voi
               </div>
             </div>
           ))}
+
+          {/* Preflight shortcut — admin-side only link, no copy needed */}
+          <a
+            href="/admin/preflight"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between gap-3 bg-violet-950/40 border border-violet-800/40 rounded-xl px-3 py-2.5 hover:bg-violet-900/40 transition-colors"
+          >
+            <div className="min-w-0">
+              <p className="text-[10px] text-violet-400 uppercase tracking-wide">Diagnóstico</p>
+              <p className="text-xs text-violet-300 mt-0.5">Rodar Pré-piloto ↗</p>
+            </div>
+          </a>
         </div>
         <button type="button" onClick={onClose} className="w-full mt-4 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl py-2 text-sm font-medium transition-colors">
           Fechar
