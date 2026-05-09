@@ -33,7 +33,7 @@ export interface DailyPoint {
 
 export interface ProductRow {
   name:      string;
-  category:  string | null;
+  category:  string;   // "Sem categoria" when categoryName is null
   revenue:   number;
   qty:       number;
   orderCount: number;
@@ -267,7 +267,7 @@ export class AnalyticsService {
 
     return rows.map((r) => ({
       name:       r.name,
-      category:   r.category ?? null,
+      category:   r.category?.trim() || "Sem categoria",
       revenue:    toNum(r.revenue),
       qty:        toNum(r.qty),
       orderCount: toNum(r.order_count),
