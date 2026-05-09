@@ -11,6 +11,8 @@ interface Owner {
   isActive: boolean;
 }
 
+type SetupLabel = "PENDENTE" | "EM_CONFIGURACAO" | "PRONTO_PARA_TESTE" | "PRONTO_PARA_PILOTO";
+
 interface RestaurantRow {
   id: string;
   name: string;
@@ -21,6 +23,7 @@ interface RestaurantRow {
   plan: "STARTER" | "GROWTH" | "PRO";
   createdAt: string;
   owner: Owner | null;
+  setup: SetupLabel;
 }
 
 interface SuccessInfo {
@@ -40,6 +43,13 @@ const PLAN_COLORS: Record<string, string> = {
   STARTER: "bg-gray-700 text-gray-300",
   GROWTH:  "bg-blue-900/60 text-blue-300",
   PRO:     "bg-violet-900/60 text-violet-300",
+};
+
+const SETUP_BADGE: Record<SetupLabel, { label: string; cls: string }> = {
+  PENDENTE:           { label: "Pendente",         cls: "bg-gray-800 text-gray-400" },
+  EM_CONFIGURACAO:    { label: "Em configuração",  cls: "bg-blue-900/50 text-blue-300" },
+  PRONTO_PARA_TESTE:  { label: "Pronto p/ teste",  cls: "bg-amber-900/50 text-amber-300" },
+  PRONTO_PARA_PILOTO: { label: "Pronto p/ piloto", cls: "bg-green-900/50 text-green-300" },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -696,6 +706,7 @@ export default function AdminRestaurantsPage() {
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Owner</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Plano</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Criado</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Setup</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Ações</th>
                 </tr>
@@ -729,6 +740,11 @@ export default function AdminRestaurantsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{fmtDate(r.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${SETUP_BADGE[r.setup ?? "PENDENTE"].cls}`}>
+                        {SETUP_BADGE[r.setup ?? "PENDENTE"].label}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <button
                         onClick={() => toggleActive(r)}

@@ -45,20 +45,46 @@ export async function GET(req: NextRequest) {
         select: { id: true, name: true, email: true, isActive: true },
         take: 1,
       },
+      // Lightweight onboarding signal fields
+      storeProfile: { select: { cep: true, mainPhone: true } },
+      deliveryConfig: { select: { enabled: true, pickupEnabled: true } },
+      _count: { select: { menuCategories: true } },
+      onboardingStatus: { select: { finalTestCompletedAt: true } },
     },
   });
 
-  const data = restaurants.map((r) => ({
-    id: r.id,
-    name: r.name,
-    slug: r.slug,
-    email: r.email,
-    phone: r.phone,
-    isActive: r.isActive,
-    plan: r.plan,
-    createdAt: r.createdAt,
-    owner: r.users[0] ?? null,
-  }));
+  const data = restaurants.map((r) => {
+    // Compute a simple onboarding readiness label for the admin list
+    const hasPhone   = !!(r.storeProfile?.mainPhone || r.phone);
+    const hasAddress = !!r.storeProfile?.cep;
+    const hasMenu    = r._count.menuCategories > 0;
+    const testDone   = !!r.onboardingStatus?.finalTestCompletedAt;
+    const deliveryOk = !!(r.deliveryConfig?.enabled || r.deliveryConfig?.pickupEnabled);
+
+    let setup: "PENDENTE" | "EM_CONFIGURACAO" | "PRONTO_PARA_TESTE" | "PRONTO_PARA_PILOTO";
+    if (testDone) {
+      setup = "PRONTO_PARA_PILOTO";
+    } else if (hasPhone && hasAddress && hasMenu && deliveryOk) {
+      setup = "PRONTO_PARA_TESTE";
+    } else if (hasPhone || hasAddress || hasMenu) {
+      setup = "EM_CONFIGURACAO";
+    } else {
+      setup = "PENDENTE";
+    }
+
+    return {
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      email: r.email,
+      phone: r.phone,
+      isActive: r.isActive,
+      plan: r.plan,
+      createdAt: r.createdAt,
+      owner: r.users[0] ?? null,
+      setup,
+    };
+  });
 
   return NextResponse.json({ data });
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import type { OnboardingStatusData } from "@/app/api/onboarding/status/route";
 
 // ─── Time-filter types ────────────────────────────────────────
 type Period = "today" | "yesterday" | "7days" | "month" | "year";
@@ -303,6 +304,90 @@ function ToggleBtn({
     >
       {children}
     </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  0. SetupCard — shown until onboarding is complete
+// ─────────────────────────────────────────────────────────────
+
+type SetupStatus = OnboardingStatusData | null;
+
+const SETUP_READINESS_STYLE: Record<
+  NonNullable<SetupStatus>["readiness"],
+  { bar: string; badge: string; badgeText: string }
+> = {
+  NAO_INICIADO:       { bar: "bg-gray-300",  badge: "bg-gray-100 text-gray-600",  badgeText: "Não iniciado" },
+  EM_CONFIGURACAO:    { bar: "bg-blue-400",  badge: "bg-blue-50 text-blue-700",   badgeText: "Em configuração" },
+  PRONTO_PARA_TESTE:  { bar: "bg-amber-400", badge: "bg-amber-50 text-amber-700", badgeText: "Pronto para teste" },
+  PRONTO_PARA_PILOTO: { bar: "bg-green-500", badge: "bg-green-50 text-green-700", badgeText: "Pronto para piloto" },
+  BLOQUEADO:          { bar: "bg-red-400",   badge: "bg-red-50 text-red-700",     badgeText: "Bloqueado" },
+};
+
+function SetupCard({ setup }: { setup: SetupStatus }) {
+  if (!setup || setup.readiness === "PRONTO_PARA_PILOTO") return null;
+
+  const stepsArr = Object.values(setup.steps);
+  const completedCount = stepsArr.filter((s) => s.status === "COMPLETE").length;
+  const pct = Math.round((completedCount / stepsArr.length) * 100);
+  const s = SETUP_READINESS_STYLE[setup.readiness];
+
+  const blockedSteps = Object.entries(setup.steps)
+    .filter(([, v]) => v.status === "BLOCKED")
+    .map(([, v]) => v.message);
+  const pendingSteps = Object.entries(setup.steps)
+    .filter(([, v]) => v.status === "PENDING")
+    .slice(0, 2)
+    .map(([, v]) => v.message);
+
+  return (
+    <div className="rounded-2xl border border-orange-200 bg-white shadow-sm overflow-hidden">
+      <div className="px-5 py-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-xl">⚙️</div>
+          <div>
+            <p className="font-semibold text-gray-900 leading-tight">Configure seu restaurante</p>
+            <p className="text-xs text-gray-500 mt-0.5">Complete a configuração antes de receber os primeiros pedidos.</p>
+          </div>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ${s.badge}`}>{s.badgeText}</span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="px-5 pb-2">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-500 ${s.bar}`} style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-xs font-semibold text-gray-500">{completedCount}/{stepsArr.length}</span>
+        </div>
+      </div>
+
+      {/* Blockers / pending hints */}
+      {(blockedSteps.length > 0 || pendingSteps.length > 0) && (
+        <div className="px-5 pb-3 space-y-1">
+          {blockedSteps.slice(0, 2).map((msg, i) => (
+            <p key={i} className="text-xs text-red-600 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />{msg}
+            </p>
+          ))}
+          {pendingSteps.map((msg, i) => (
+            <p key={i} className="text-xs text-amber-600 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />{msg}
+            </p>
+          ))}
+        </div>
+      )}
+
+      <div className="border-t border-gray-100 px-5 py-3 bg-gray-50">
+        <Link
+          href="/onboarding"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+        >
+          Continuar configuração →
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -979,7 +1064,15 @@ function RevenueHeadline({ period }: { period: Period }) {
 // ─────────────────────────────────────────────────────────────
 
 export default function DashboardClient({ userName }: { userName: string }) {
-  const [period, setPeriod] = useState<Period>("today");
+  const [period, setPeriod]     = useState<Period>("today");
+  const [setup, setSetup]       = useState<SetupStatus>(null);
+
+  useEffect(() => {
+    fetch("/api/onboarding/status")
+      .then((r) => r.json())
+      .then((j: { data?: OnboardingStatusData }) => { if (j.data) setSetup(j.data); })
+      .catch(() => { /* silent — dashboard works without onboarding status */ });
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -987,6 +1080,9 @@ export default function DashboardClient({ userName }: { userName: string }) {
 
         {/* ── 1. GREETING ── */}
         <GreetingSection userName={userName} />
+
+        {/* ── 0. SETUP CARD — only when onboarding is incomplete ── */}
+        <SetupCard setup={setup} />
 
         {/* ── 2. BANNERS ── */}
         <BannerSection />
