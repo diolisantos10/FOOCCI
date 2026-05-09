@@ -899,6 +899,12 @@ model WhatsAppAgentConfig {
   id              String   @id @default(cuid())
   restaurantId    String   @unique
 
+  // Behavior mode — controls whether WhatsApp uses full AI ordering or receptionist-only
+  // RECEPTIONIST_ONLY       (default) — greet, answer basics, send menu link, hand off
+  // HUMAN_ASSISTED          — same as receptionist but escalates to human sooner
+  // AI_ORDERING_EXPERIMENTAL — full AIOrderService sales agent (opt-in only)
+  agentMode       String   @default("RECEPTIONIST_ONLY")
+
   // Personality
   agentName       String   @default("Agente")
   tone            String   @default("informal")      // informal | neutral | premium

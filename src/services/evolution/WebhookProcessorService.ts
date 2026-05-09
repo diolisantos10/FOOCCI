@@ -118,25 +118,48 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     }),
   ]);
 
-  // 7. Phase 4: trigger AI for OPEN and BOT conversations.
-  //    HUMAN conversations are handled by a staff agent — AI must not interfere.
-  const shouldTriggerAI =
+  // 7. Route to the correct agent based on WhatsApp mode.
+  //    HUMAN / RESOLVED conversations are never touched by AI.
+  //
+  //    agentMode values (from WhatsAppAgentConfig):
+  //      RECEPTIONIST_ONLY       (default) — WhatsAppReceptionistService
+  //      HUMAN_ASSISTED          — same receptionist path, escalates faster
+  //      AI_ORDERING_EXPERIMENTAL — full AIOrderService sales agent (opt-in)
+  const shouldRespond =
     conversation.status === ConversationStatus.OPEN ||
     conversation.status === ConversationStatus.BOT;
 
-  if (shouldTriggerAI) {
-    // Dynamic import breaks potential circular references and lets the module
-    // initialise cleanly. Errors are swallowed — the message is already saved
-    // and a human agent can always respond manually via the inbox.
-    void import("@/services/ai/AIOrderService")
-      .then(({ AIOrderService }) =>
-        AIOrderService.processTurn(conversation.id).catch((err) =>
-          console.error("[WebhookProcessor] AI turn failed:", err)
+  if (shouldRespond) {
+    // Read agent mode; default to RECEPTIONIST_ONLY if no config row exists.
+    const agentCfg = await prisma.whatsAppAgentConfig.findUnique({
+      where:  { restaurantId },
+      select: { agentMode: true },
+    });
+    const agentMode = agentCfg?.agentMode ?? "RECEPTIONIST_ONLY";
+
+    if (agentMode === "AI_ORDERING_EXPERIMENTAL") {
+      // Opt-in only — full sales/ordering agent.
+      void import("@/services/ai/AIOrderService")
+        .then(({ AIOrderService }) =>
+          AIOrderService.processTurn(conversation.id).catch((err) =>
+            console.error("[WebhookProcessor] AI ordering turn failed:", err)
+          )
         )
-      )
-      .catch((err) =>
-        console.error("[WebhookProcessor] AI module load failed:", err)
-      );
+        .catch((err) =>
+          console.error("[WebhookProcessor] AI ordering module load failed:", err)
+        );
+    } else {
+      // Default path — receptionist handles RECEPTIONIST_ONLY and HUMAN_ASSISTED.
+      void import("@/services/ai/WhatsAppReceptionistService")
+        .then(({ WhatsAppReceptionistService }) =>
+          WhatsAppReceptionistService.respond(conversation.id).catch((err) =>
+            console.error("[WebhookProcessor] Receptionist failed:", err)
+          )
+        )
+        .catch((err) =>
+          console.error("[WebhookProcessor] Receptionist module load failed:", err)
+        );
+    }
   }
 
   return {
