@@ -89,6 +89,7 @@ export async function resolveAudience(
     restaurantId: rid,
     isGuest:      false,
     isActive:     true,
+    hasOptedOut:  false,
     phone:        { not: "" },
   };
 
@@ -387,11 +388,33 @@ export class CrmCampaignService {
       select: { id: true, customerId: true, customerPhone: true, messageText: true },
     });
 
+    // Pre-fetch opt-out status for all customers in this batch (safety check)
+    const customerIds = executions.map((e) => e.customerId).filter(Boolean) as string[];
+    const optedOutIds = new Set(
+      customerIds.length > 0
+        ? (await prisma.customer.findMany({
+            where: { id: { in: customerIds }, hasOptedOut: true },
+            select: { id: true },
+          })).map((c) => c.id)
+        : []
+    );
+
     let totalSent   = 0;
     let totalFailed = 0;
     const results: SendResult["results"] = [];
 
     for (const exec of executions) {
+      // LGPD safety: skip opted-out customers even if they slipped into the execution list
+      if (exec.customerId && optedOutIds.has(exec.customerId)) {
+        await prisma.campaignExecution.update({
+          where: { id: exec.id },
+          data:  { status: "FAILED", failedReason: "Cliente opt-out" },
+        });
+        totalFailed++;
+        results.push({ id: exec.id, status: "FAILED", error: "Cliente opt-out" });
+        continue;
+      }
+
       const phone = exec.customerPhone?.replace(/^\+/, "");
       if (!phone) {
         await prisma.campaignExecution.update({

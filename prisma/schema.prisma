@@ -123,6 +123,8 @@ model Customer {
   segment      String    @default("SEM_PEDIDOS") // QUENTE | MORNO | FRIO | SEM_PEDIDOS — persisted by CustomerMetricsSyncService
   isActive     Boolean   @default(true)
   isGuest      Boolean   @default(false) // true = anonymous session; excluded from CRM lists and metric sync
+  hasOptedOut  Boolean   @default(false) // LGPD: customer requested opt-out from marketing messages
+  optOutAt     DateTime?                 // timestamp of last opt-out request
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

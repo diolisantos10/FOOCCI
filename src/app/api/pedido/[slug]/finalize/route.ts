@@ -403,6 +403,22 @@ export async function POST(
         })()
       : null;
 
+    // Guard: if no real payment provider is configured, abort with a clear error.
+    // Stone in mock mode (no STONE_CLIENT_ID) would produce fake test URLs — block it.
+    const stoneConfigured = !!(process.env.STONE_CLIENT_ID && process.env.STONE_CLIENT_SECRET);
+    if (!mpToken && !stoneConfigured) {
+      console.warn(
+        "[finalize] pay_now requested but no online payment provider is configured.",
+        { restaurantId, orderId, mpActive: !!mpCfg?.isActive, stoneConfigured: false }
+      );
+      // Clean up the order we just created
+      await prisma.order.delete({ where: { id: orderId } }).catch(() => null);
+      return NextResponse.json(
+        { error: "Pagamento online não configurado. Escolha pagamento na entrega ou retire no balcão." },
+        { status: 503 }
+      );
+    }
+
     let providerReference: string;
     let paymentUrl: string;
     let expiresAtStr: string;

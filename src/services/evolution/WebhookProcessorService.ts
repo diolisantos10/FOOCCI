@@ -61,9 +61,15 @@ export class WebhookProcessorService {
 // ─── inbound message ─────────────────────────────────────────
 
 async function handleInboundMessage(event: InboundMessageEvent): Promise<ProcessResult> {
+  const t0 = Date.now();
+
   // 1. Resolve restaurant from instanceName
   const configResult = await EvolutionConfigService.findRestaurantByInstance(event.instanceName);
   if (!configResult.ok) {
+    console.warn(
+      "[WebhookProcessor] Unknown instanceName — webhook ignored.",
+      { instanceName: event.instanceName, externalMessageId: event.externalMessageId, phone: event.phone }
+    );
     return { handled: false, detail: `Unknown instance: ${event.instanceName}` };
   }
   const { restaurantId } = configResult.data;
@@ -162,6 +168,11 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     }
   }
 
+  console.log(
+    "[WebhookProcessor] Inbound message processed.",
+    { restaurantId, conversationId: conversation.id, phone: event.phone, ms: Date.now() - t0 }
+  );
+
   return {
     handled: true,
     action: "message_persisted",
@@ -239,7 +250,7 @@ async function handleStatusUpdate(event: MessageStatusUpdateEvent): Promise<Proc
   });
 
   if (!message) {
-    // Can happen for messages sent before Phase 3 go-live — safe to ignore.
+    // Silently ignore — happens for messages sent before Chat Inbox go-live.
     return { handled: false, detail: `Message not found: ${event.externalMessageId}` };
   }
 
@@ -260,14 +271,14 @@ async function handleStatusUpdate(event: MessageStatusUpdateEvent): Promise<Proc
 
 async function handleConnectionUpdate(event: ConnectionUpdateEvent): Promise<ProcessResult> {
   if (event.state === "close") {
-    await EvolutionConfigService.deactivate(
-      await instanceToRestaurantId(event.instanceName)
-    );
+    const restaurantId = await instanceToRestaurantId(event.instanceName);
+    console.warn("[WebhookProcessor] Evolution instance disconnected.", { instanceName: event.instanceName, restaurantId });
+    await EvolutionConfigService.deactivate(restaurantId);
     return { handled: true, action: "instance_deactivated" };
   }
 
   if (event.state === "open") {
-    // Reactivate if it was previously marked inactive
+    console.log("[WebhookProcessor] Evolution instance connected.", { instanceName: event.instanceName });
     await prisma.evolutionConfig.updateMany({
       where: { instanceName: event.instanceName },
       data: { isActive: true },

@@ -120,20 +120,21 @@ interface ValidationError {
 // ── Preview / Result types ────────────────────────────────────────────────────
 
 export interface OrderImportPreview {
-  totalRows:         number;
-  validRows:         number;
-  errorRows:         number;
-  warningRows:       number;
-  uniqueOrders:      number;
-  newCustomers:      number;
-  existingCustomers: number;
-  productsMatched:   number;
-  productsUnmatched: number;
-  duplicateOrders:   number;
-  errors:            Array<{ row: number; reason: string }>;
-  warnings:          string[];
-  unmatchedProducts: Array<{ name: string; count: number }>;
-  sampleOrders:      Array<{
+  totalRows:           number;
+  validRows:           number;
+  errorRows:           number;
+  warningRows:         number;
+  uniqueOrders:        number;
+  newCustomers:        number;
+  existingCustomers:   number;
+  productsMatched:     number;
+  productsUnmatched:   number;
+  uncategorizedItems:  number; // matched but no category resolved from file or DB
+  duplicateOrders:     number;
+  errors:              Array<{ row: number; reason: string }>;
+  warnings:            string[];
+  unmatchedProducts:   Array<{ name: string; count: number }>;
+  sampleOrders:        Array<{
     phone:      string;
     date:       string;
     total:      number;
@@ -392,9 +393,10 @@ export class OrderImportService {
     // ── Gather product match stats ────────────────────────────────────────────
 
     const unmatchedNameCount = new Map<string, number>(); // name → count
-    let productsMatched = 0;
-    let productsUnmatched = 0;
-    let warningRows = 0;
+    let productsMatched    = 0;
+    let productsUnmatched  = 0;
+    let uncategorizedItems = 0;
+    let warningRows        = 0;
 
     for (const group of groups) {
       for (const item of group.items) {
@@ -402,8 +404,12 @@ export class OrderImportService {
         const match = matchProduct(item.productName, productMap);
         if (match) {
           productsMatched++;
+          // Resolved category = file column (if mapped) OR DB category
+          const resolvedCategory = item.productCategory ?? match.categoryName ?? null;
+          if (!resolvedCategory) uncategorizedItems++;
         } else {
           productsUnmatched++;
+          uncategorizedItems++; // unmatched items always land without category
           unmatchedNameCount.set(item.productName, (unmatchedNameCount.get(item.productName) ?? 0) + 1);
           group.warnings.push(`Produto não encontrado: "${item.productName}"`);
         }
@@ -457,17 +463,18 @@ export class OrderImportService {
       return {
         totalRows,
         validRows,
-        errorRows:         errors.length,
+        errorRows:           errors.length,
         warningRows,
-        uniqueOrders:      groups.length,
+        uniqueOrders:        groups.length,
         newCustomers,
-        existingCustomers: existingCustCount,
+        existingCustomers:   existingCustCount,
         productsMatched,
         productsUnmatched,
+        uncategorizedItems,
         duplicateOrders,
-        errors:            errors.slice(0, 20),
-        warnings:          groups.flatMap((g) => g.warnings).slice(0, 20),
-        unmatchedProducts: unmatchedList.slice(0, 30),
+        errors:              errors.slice(0, 20),
+        warnings:            groups.flatMap((g) => g.warnings).slice(0, 20),
+        unmatchedProducts:   unmatchedList.slice(0, 30),
         sampleOrders,
       } satisfies OrderImportPreview;
     }

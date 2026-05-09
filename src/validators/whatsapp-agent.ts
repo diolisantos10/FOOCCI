@@ -2,9 +2,12 @@ import { z } from "zod";
 
 // ── Enums ──────────────────────────────────────────────────────────────────────
 
+export const AGENT_MODES  = ["RECEPTIONIST_ONLY", "HUMAN_ASSISTED", "AI_ORDERING_EXPERIMENTAL"] as const;
 export const AGENT_TONES  = ["informal", "neutral", "premium"] as const;
 export const AGENT_STYLES = ["direct", "consultive", "sales_driven"] as const;
 export const FLOW_TYPES   = ["order", "handoff", "menu", "promotions", "custom"] as const;
+
+export type AgentMode = (typeof AGENT_MODES)[number];
 
 export type FlowType = (typeof FLOW_TYPES)[number];
 
@@ -38,6 +41,7 @@ const optionalUrl = z
 // ── Main schema ────────────────────────────────────────────────────────────────
 
 export const upsertAgentConfigSchema = z.object({
+  agentMode:       z.enum(AGENT_MODES).default("RECEPTIONIST_ONLY"),
   agentName:       z.string().min(1, "Nome obrigatório").max(50).default("Agente"),
   tone:            z.enum(AGENT_TONES).default("informal"),
   style:           z.enum(AGENT_STYLES).default("sales_driven"),
@@ -54,6 +58,7 @@ export const upsertAgentConfigSchema = z.object({
 export type UpsertAgentConfigInput = z.infer<typeof upsertAgentConfigSchema>;
 
 export const AGENT_DEFAULTS: UpsertAgentConfigInput = {
+  agentMode:       "RECEPTIONIST_ONLY",
   agentName:       "Agente",
   tone:            "informal",
   style:           "sales_driven",
