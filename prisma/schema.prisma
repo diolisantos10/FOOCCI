@@ -67,6 +67,7 @@ model Restaurant {
   tierSettings        TierSettings?
   tierBenefits        TierBenefit[]
   onboardingStatus    RestaurantOnboardingStatus?
+  productSalesAggregates ProductSalesAggregate[]
 
   @@map("restaurants")
 }
@@ -118,7 +119,8 @@ model Customer {
   birthDate    DateTime?
   notes        String?
   document             String?                         // CPF or CNPJ
-  financialBalance     Decimal?  @db.Decimal(10, 2)   // Saldo Financeiro
+  financialBalance       Decimal?  @db.Decimal(10, 2)   // Saldo Financeiro Total
+  financialBalancePeriod Decimal?  @db.Decimal(10, 2)   // Saldo Financeiro do Período
   importedOrderCount   Int?                            // Qtd. Pedidos — from external import
   importedTotalSpent   Decimal?  @db.Decimal(10, 2)   // Valor Total — from external import
   importedLastOrderAt  DateTime?                       // Última Compra — from external import
@@ -720,6 +722,28 @@ model Offer {
 
 // ═══════════════════════════════════════════
 //  IMPORT JOBS
+
+model ProductSalesAggregate {
+  id           String   @id @default(cuid())
+  restaurantId String
+  sourceSystem String   @default("SAIPOS")
+  periodStart  DateTime
+  periodEnd    DateTime
+  categoryName String
+  productName  String?
+  quantitySold Int      @default(0)
+  grossRevenue Decimal  @default(0) @db.Decimal(12, 2)
+  percent      Decimal? @db.Decimal(6, 4)
+  rowType      String   // CATEGORY | PRODUCT
+  importKey    String   // deduplication fingerprint (unique per restaurant+period+product)
+  createdAt    DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([importKey])
+  @@index([restaurantId])
+  @@map("product_sales_aggregates")
+}
 
 model ImportJob {
   id                String    @id @default(cuid())
