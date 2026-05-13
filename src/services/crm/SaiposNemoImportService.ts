@@ -133,7 +133,14 @@ export interface NoPhoneImportableCustomer {
   notes: string | null;
   addresses: NemoAddressGroup[];
   sourceSystems: string[];
-  dedupStrategy: "DOCUMENT" | "EMAIL" | "CREATE";
+  /**
+   * DOCUMENT  — matched to an existing customer by CPF/CNPJ
+   * EMAIL     — matched by email
+   * NAME_ADDRESS — matched by name + primary street address
+   * CREATE    — no match found; will create a new record
+   * NEEDS_REVIEW — ambiguous (multiple potential matches or conflicting data)
+   */
+  dedupStrategy: "DOCUMENT" | "EMAIL" | "NAME_ADDRESS" | "CREATE" | "NEEDS_REVIEW";
 }
 
 export interface NoPhoneCustomer {
@@ -156,6 +163,7 @@ export interface MatchStats {
   noPhoneCount: number;            // total no-phone rows (importable + skipped)
   noPhoneImportableCount: number;  // will be imported as non-contactable CRM records
   noPhoneSkippedCount: number;     // insufficient data — truly skipped
+  noPhoneNeedsReviewCount: number; // ambiguous within-batch duplicates flagged NEEDS_REVIEW
   noPhoneWithDocument: number;     // importable rows that have a CPF/CNPJ
   noPhoneWithEmail: number;        // importable rows that have an email
   noPhoneWithAddress: number;      // importable rows that have an address
@@ -187,6 +195,8 @@ export interface SaiposNemoPreview {
   sampleNoPhone: NoPhoneCustomer[];
   sampleNoPhoneImportable: NoPhoneImportableCustomer[];
   topProducts: ProductSalesRow[];
+  noPhoneWarning: string;
+  importMode: "RAW_FILES" | "COMPILED_WORKBOOK";
 }
 
 export interface StoredReport {
@@ -771,6 +781,42 @@ function buildNemoOnlyRecord(nemo: NemoCustomerRow): MergedCustomer {
   };
 }
 
+// ── Within-batch duplicate detection ─────────────────────────────────────────
+
+function normalizeForDedup(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function flagBatchDuplicates(records: NoPhoneImportableCustomer[]): void {
+  // Only flag records that lack both document and email (no reliable dedup key)
+  // and share the same normalized name+primary-street as another record in the batch.
+  const nameAddrCount = new Map<string, number>();
+  for (const r of records) {
+    if (r.document || r.email) continue; // has a reliable key — skip
+    const normName = normalizeForDedup(r.name);
+    const street = r.addresses[0]?.street ?? "";
+    const key = `${normName}::${normalizeForDedup(street).slice(0, 20)}`;
+    nameAddrCount.set(key, (nameAddrCount.get(key) ?? 0) + 1);
+  }
+  for (const r of records) {
+    if (r.document || r.email) continue;
+    const normName = normalizeForDedup(r.name);
+    const street = r.addresses[0]?.street ?? "";
+    const key = `${normName}::${normalizeForDedup(street).slice(0, 20)}`;
+    if ((nameAddrCount.get(key) ?? 0) > 1) {
+      r.dedupStrategy = "NEEDS_REVIEW";
+    } else if (r.dedupStrategy === "CREATE" && street) {
+      r.dedupStrategy = "NAME_ADDRESS"; // single match possible — mark for address-based dedup at execute
+    }
+  }
+}
+
 function hasUsefulData(row: SaiposCustomerRow): boolean {
   const name = cleanName(row.nome);
   if (!name) return false; // no valid name = nothing meaningful to store
@@ -876,17 +922,23 @@ export function matchAndMerge(saipos: SaiposCustomerRow[], nemo: NemoCustomerRow
     }
   }
 
+  // Step 4: Within-batch duplicate detection for no-phone importable rows
+  // Flag as NEEDS_REVIEW if multiple rows share the same name+primary-street
+  // (without document or email to disambiguate)
+  flagBatchDuplicates(noPhoneImportable);
+
   // Compute stats
-  const saiposWithPhone       = saiposPhone.size;
-  const nemoWithPhone         = nemoPhone.size;
-  const phoneMatches          = [...saiposPhone.keys()].filter(p => nemoPhone.has(p)).length;
-  const saiposOnly            = saiposWithPhone - phoneMatches;
-  const nemoOnly              = nemoWithPhone - phoneMatches;
-  const readyCount            = merged.filter(r => r.importStatus === "READY").length;
-  const needsReviewCount      = merged.filter(r => r.importStatus !== "READY").length;
-  const noPhoneWithDocument   = noPhoneImportable.filter(r => r.document).length;
-  const noPhoneWithEmail      = noPhoneImportable.filter(r => r.email).length;
-  const noPhoneWithAddress    = noPhoneImportable.filter(r => r.addresses.length > 0).length;
+  const saiposWithPhone          = saiposPhone.size;
+  const nemoWithPhone            = nemoPhone.size;
+  const phoneMatches             = [...saiposPhone.keys()].filter(p => nemoPhone.has(p)).length;
+  const saiposOnly               = saiposWithPhone - phoneMatches;
+  const nemoOnly                 = nemoWithPhone - phoneMatches;
+  const readyCount               = merged.filter(r => r.importStatus === "READY").length;
+  const needsReviewCount         = merged.filter(r => r.importStatus !== "READY").length;
+  const noPhoneWithDocument      = noPhoneImportable.filter(r => r.document).length;
+  const noPhoneWithEmail         = noPhoneImportable.filter(r => r.email).length;
+  const noPhoneWithAddress       = noPhoneImportable.filter(r => r.addresses.length > 0).length;
+  const noPhoneNeedsReviewCount  = noPhoneImportable.filter(r => r.dedupStrategy === "NEEDS_REVIEW").length;
 
   return {
     merged,
@@ -900,9 +952,10 @@ export function matchAndMerge(saipos: SaiposCustomerRow[], nemo: NemoCustomerRow
       phoneMatches,
       saiposOnly,
       nemoOnly,
-      noPhoneCount:          noPhoneImportable.length + noPhone.length,
-      noPhoneImportableCount: noPhoneImportable.length,
-      noPhoneSkippedCount:    noPhone.length,
+      noPhoneCount:            noPhoneImportable.length + noPhone.length,
+      noPhoneImportableCount:  noPhoneImportable.length,
+      noPhoneSkippedCount:     noPhone.length,
+      noPhoneNeedsReviewCount,
       noPhoneWithDocument,
       noPhoneWithEmail,
       noPhoneWithAddress,
@@ -915,11 +968,20 @@ export function matchAndMerge(saipos: SaiposCustomerRow[], nemo: NemoCustomerRow
 
 // ── Preview report ─────────────────────────────────────────────────────────────
 
-export function buildPreview(match: MatchResult, sold: SoldItemsResult): SaiposNemoPreview {
+export function buildPreview(
+  match: MatchResult,
+  sold: SoldItemsResult,
+  importMode: SaiposNemoPreview["importMode"] = "RAW_FILES",
+): SaiposNemoPreview {
   const topProducts = sold.rows
     .filter(r => r.rowType === "PRODUCT")
     .sort((a, b) => b.grossRevenue - a.grossRevenue)
     .slice(0, 10);
+
+  const noPhoneImportableCount = match.stats.noPhoneImportableCount;
+  const noPhoneWarning = noPhoneImportableCount > 0
+    ? `${noPhoneImportableCount} cliente(s) sem telefone serão importados como não contatáveis para enriquecimento futuro. Eles não entrarão em campanhas WhatsApp até receberem telefone válido.`
+    : "Nenhum cliente sem telefone encontrado para importação.";
 
   return {
     stats: match.stats,
@@ -937,6 +999,8 @@ export function buildPreview(match: MatchResult, sold: SoldItemsResult): SaiposN
     sampleNoPhone:             match.noPhone.slice(0, 10),
     sampleNoPhoneImportable:   match.noPhoneImportable.slice(0, 10),
     topProducts,
+    noPhoneWarning,
+    importMode,
   };
 }
 
@@ -1093,7 +1157,8 @@ export async function executeImport(
   for (const r of noPhoneImportable) {
     let existingId: string | null = null;
 
-    // Dedup: document → email → create new
+    // Dedup: document → email → name+address → create new
+    // NEEDS_REVIEW: ambiguous within-batch rows are created as new records (safe)
     if (r.document) {
       const found = await prisma.customer.findFirst({
         where: { restaurantId, document: r.document },
@@ -1107,6 +1172,29 @@ export async function executeImport(
         select: { id: true },
       });
       if (found) existingId = found.id;
+    }
+    // Rule 3: name + address dedup (only for NAME_ADDRESS strategy — skip NEEDS_REVIEW)
+    if (!existingId && r.dedupStrategy === "NAME_ADDRESS" && r.addresses[0]?.street) {
+      const normName = normalizeForDedup(r.name);
+      const street   = normalizeForDedup(r.addresses[0].street);
+      const candidates = await prisma.customer.findMany({
+        where: {
+          restaurantId,
+          phone: null,
+          // Prisma mode insensitive search on name
+          name: { contains: normName.split(" ")[0] ?? r.name, mode: "insensitive" },
+        },
+        select: { id: true, name: true, addresses: { select: { street: true, city: true } } },
+      });
+      const matches = candidates.filter(c => {
+        const cn = normalizeForDedup(c.name);
+        if (!cn.includes(normName.split(" ")[0]!)) return false;
+        return c.addresses.some(a =>
+          normalizeForDedup(a.street).slice(0, 15) === street.slice(0, 15)
+        );
+      });
+      if (matches.length === 1) existingId = matches[0]!.id; // single unambiguous match
+      // if 0 or >1 matches → existingId stays null → create new (safe)
     }
 
     if (existingId) {
@@ -1245,5 +1333,392 @@ export async function executeImport(
     addressesCreated,
     productAggregatesCreated: productAggCreated,
     productAggregatesSkipped: productAggSkipped,
+  };
+}
+
+// ── Compiled workbook parser ───────────────────────────────────────────────────
+//
+// Parses Foocci_Base_Compilada_Saipos_Nemo.xlsx which has pre-merged sheets:
+//   Clientes_Master  — contactable customers (with phone)
+//   Sem_Telefone     — no-phone customers pre-classified
+//   Produtos_Agregados — aggregate sales data
+//
+// The compiled workbook is produced by a prior merge run. This parser reads the
+// output directly without re-running matchAndMerge() against the raw files.
+//
+
+export interface CompiledWorkbookParseResult {
+  merged:            MergedCustomer[];
+  noPhoneImportable: NoPhoneImportableCustomer[];
+  noPhone:           NoPhoneCustomer[];
+  soldRows:          ProductSalesRow[];
+  soldMeta:          SoldItemsMeta;
+  stats:             MatchStats;
+}
+
+function findSheet(wb: XLSX.WorkBook, candidates: string[]): XLSX.WorkSheet | null {
+  for (const c of candidates) {
+    const name = wb.SheetNames.find(n =>
+      n.toLowerCase().replace(/[^a-z]/g, "").includes(c.toLowerCase().replace(/[^a-z]/g, ""))
+    );
+    if (name && wb.Sheets[name]) return wb.Sheets[name]!;
+  }
+  return null;
+}
+
+function parseMasterSheet(ws: XLSX.WorkSheet): { contactable: MergedCustomer[]; noPhoneImportable: NoPhoneImportableCustomer[]; noPhone: NoPhoneCustomer[] } {
+  const raw2D = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
+  if (raw2D.length < 2) return { contactable: [], noPhoneImportable: [], noPhone: [] };
+
+  const colInfos = buildColInfos(raw2D[0] as unknown[]);
+  const nomeIdx        = findColIdx(colInfos, ["nome"]);
+  const phoneIdx       = findColIdx(colInfos, ["telefone", "fone", "celular"]);
+  const cpfIdx         = findColIdx(colInfos, ["cpf/cnpj", "cpf cnpj", "cpf", "cnpj"]);
+  const emailIdx       = findColIdx(colInfos, ["email"]);
+  const aniverIdx      = findColIdx(colInfos, ["data aniversario", "aniversario"]);
+  const endIdx         = findColIdx(colInfos, ["endereco", "logradouro", "rua"]);
+  const numIdx         = findColIdx(colInfos, ["numero"]);
+  const bairroIdx      = findColIdx(colInfos, ["bairro"]);
+  const cidadeIdx      = findColIdx(colInfos, ["cidade"]);
+  const estadoIdx      = findColIdx(colInfos, ["estado"]);
+  const cepIdx         = findColIdx(colInfos, ["cep"]);
+  const compIdx        = findColIdx(colInfos, ["complemento"]);
+  const qtdIdx         = findColIdx(colInfos, ["qtd. pedidos", "qtd pedidos", "pedidos", "quantidade pedidos"]);
+  const totalIdx       = findColIdx(colInfos, ["valor total", "total gasto", "total"]);
+  const ticketIdx      = findColIdx(colInfos, ["ticket medio", "ticket medico"]);
+  const lastOrderIdx   = findColIdx(colInfos, ["ultima compra", "ultimo pedido"]);
+  const saldoTotalIdx  = (() => {
+    let i = findColIdx(colInfos, ["saldo financeiro total"]);
+    if (i < 0) i = findColIdx(colInfos, ["saldo financeiro"], 1);
+    return i;
+  })();
+  const saldoPeriodoIdx = (() => {
+    let i = findColIdx(colInfos, ["saldo financeiro do periodo", "saldo financeiro periodo"]);
+    if (i < 0) i = findColIdx(colInfos, ["saldo financeiro"], 2);
+    return i;
+  })();
+  const obsIdx         = findColIdx(colInfos, ["observacao interna", "observacao", "obs"]);
+  const sourceIdx      = findColIdx(colInfos, ["source system", "source", "origem", "sistema"]);
+
+  const contactable:      MergedCustomer[]           = [];
+  const noPhoneImportable: NoPhoneImportableCustomer[] = [];
+  const noPhone:           NoPhoneCustomer[]            = [];
+
+  for (let r = 1; r < raw2D.length; r++) {
+    const row = raw2D[r] as unknown[];
+    if (row.every(v => !v || String(v).trim() === "")) continue;
+
+    const rawPhone      = cellStr(row, phoneIdx);
+    const normalizedPh  = normalizePhone(rawPhone);
+    const nome          = cellStr(row, nomeIdx) || null;
+    const cpfCnpj       = cellStr(row, cpfIdx)  || null;
+    const email         = cellStr(row, emailIdx).toLowerCase() || null;
+    const birthDate     = cellDate(row, aniverIdx);
+    const endereco      = cellStr(row, endIdx) || null;
+    const qtdPedidos    = parseIntField(cellStr(row, qtdIdx));
+    const valorTotal    = parseDecimalField(cellStr(row, totalIdx));
+    const ticketMedio   = parseDecimalField(cellStr(row, ticketIdx));
+    const ultimaCompra  = cellDate(row, lastOrderIdx);
+    const saldoTotal    = parseDecimalField(cellStr(row, saldoTotalIdx));
+    const saldoPeriodo  = parseDecimalField(cellStr(row, saldoPeriodoIdx));
+    const observacao    = cellStr(row, obsIdx) || null;
+    const rawSource     = cellStr(row, sourceIdx) || "SAIPOS+NEMO";
+    const sourceSystem  = (rawSource.includes("NEMO") && rawSource.includes("SAIPOS"))
+      ? "SAIPOS+NEMO"
+      : rawSource.includes("NEMO") ? "NEMO" : "SAIPOS";
+
+    const addrGroup: NemoAddressGroup = {
+      street:       endereco,
+      number:       cellStr(row, numIdx) || null,
+      neighborhood: cellStr(row, bairroIdx) || null,
+      city:         cellStr(row, cidadeIdx) || null,
+      complement:   cellStr(row, compIdx) || null,
+      reference:    null,
+      state:        cellStr(row, estadoIdx) || null,
+      zipCode:      cellStr(row, cepIdx) || null,
+    };
+    const addresses = endereco ? [addrGroup] : [];
+    const document = cpfCnpj?.replace(/\D/g, "") || null;
+
+    if (normalizedPh) {
+      // Contactable customer
+      contactable.push({
+        name:                 cleanName(nome) ?? nome ?? "Sem nome",
+        phone:                normalizedPh,
+        document,
+        email,
+        birthDate,
+        importedOrderCount:   qtdPedidos,
+        importedTotalSpent:   valorTotal,
+        averageTicket:        ticketMedio,
+        importedLastOrderAt:  ultimaCompra,
+        financialBalance:     saldoTotal,
+        financialBalancePeriod: saldoPeriodo,
+        notes:                observacao,
+        addresses,
+        sourceSystems:        [sourceSystem],
+        importStatus:         "READY",
+        crmContactable:       true,
+        sourceSystem,
+      });
+    } else {
+      // No-phone row from master sheet
+      const fakeRow: SaiposCustomerRow = {
+        nome, cpfCnpj, dataAniversario: birthDate, email,
+        rawPhone, normalizedPhone: null,
+        endereco, complemento: cellStr(row, compIdx) || null,
+        qtdPedidos, valorTotal, ticketMedio, ultimaCompra,
+        saldoTotal, saldoPeriodo, observacao, rowIndex: r,
+      };
+      if (hasUsefulData(fakeRow)) {
+        const rec = buildNoPhoneRecord(fakeRow);
+        // Override source tag to reflect compiled workbook origin
+        rec.sourceSystems = [sourceSystem];
+        if (rec.notes) rec.notes = rec.notes.replace("[Saipos - Sem Telefone]", "[Compilado - Sem Telefone]");
+        noPhoneImportable.push(rec);
+      } else {
+        noPhone.push({ nome, cpfCnpj, email, rawPhone, qtdPedidos, valorTotal });
+      }
+    }
+  }
+
+  return { contactable, noPhoneImportable, noPhone };
+}
+
+function parseSemTelefoneSheet(ws: XLSX.WorkSheet): { noPhoneImportable: NoPhoneImportableCustomer[]; noPhone: NoPhoneCustomer[] } {
+  const raw2D = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
+  if (raw2D.length < 2) return { noPhoneImportable: [], noPhone: [] };
+
+  const colInfos    = buildColInfos(raw2D[0] as unknown[]);
+  const nomeIdx     = findColIdx(colInfos, ["nome"]);
+  const cpfIdx      = findColIdx(colInfos, ["cpf/cnpj", "cpf cnpj", "cpf", "cnpj"]);
+  const emailIdx    = findColIdx(colInfos, ["email"]);
+  const aniverIdx   = findColIdx(colInfos, ["data aniversario", "aniversario"]);
+  const endIdx      = findColIdx(colInfos, ["endereco", "logradouro", "rua"]);
+  const numIdx      = findColIdx(colInfos, ["numero"]);
+  const bairroIdx   = findColIdx(colInfos, ["bairro"]);
+  const cidadeIdx   = findColIdx(colInfos, ["cidade"]);
+  const estadoIdx   = findColIdx(colInfos, ["estado"]);
+  const cepIdx      = findColIdx(colInfos, ["cep"]);
+  const compIdx     = findColIdx(colInfos, ["complemento"]);
+  const qtdIdx      = findColIdx(colInfos, ["qtd. pedidos", "qtd pedidos", "pedidos"]);
+  const totalIdx    = findColIdx(colInfos, ["valor total", "total"]);
+  const ticketIdx   = findColIdx(colInfos, ["ticket medio"]);
+  const lastOrderIdx = findColIdx(colInfos, ["ultima compra", "ultimo pedido"]);
+  const saldoTotalIdx = findColIdx(colInfos, ["saldo financeiro total", "saldo financeiro"]);
+  const saldoPeriodoIdx = findColIdx(colInfos, ["saldo financeiro do periodo", "saldo financeiro periodo"]);
+  const obsIdx      = findColIdx(colInfos, ["observacao interna", "observacao", "obs"]);
+
+  const noPhoneImportable: NoPhoneImportableCustomer[] = [];
+  const noPhone: NoPhoneCustomer[] = [];
+
+  for (let r = 1; r < raw2D.length; r++) {
+    const row = raw2D[r] as unknown[];
+    if (row.every(v => !v || String(v).trim() === "")) continue;
+
+    const nome      = cellStr(row, nomeIdx) || null;
+    const cpfCnpj   = cellStr(row, cpfIdx) || null;
+    const email     = cellStr(row, emailIdx).toLowerCase() || null;
+    const endereco  = cellStr(row, endIdx) || null;
+    const qtdPedidos = parseIntField(cellStr(row, qtdIdx));
+    const valorTotal = parseDecimalField(cellStr(row, totalIdx));
+
+    const addrGroup: NemoAddressGroup = {
+      street:       endereco,
+      number:       cellStr(row, numIdx) || null,
+      neighborhood: cellStr(row, bairroIdx) || null,
+      city:         cellStr(row, cidadeIdx) || null,
+      complement:   cellStr(row, compIdx) || null,
+      reference:    null,
+      state:        cellStr(row, estadoIdx) || null,
+      zipCode:      cellStr(row, cepIdx) || null,
+    };
+    const addresses = endereco ? [addrGroup] : [];
+    const document  = cpfCnpj?.replace(/\D/g, "") || null;
+
+    const fakeRow: SaiposCustomerRow = {
+      nome, cpfCnpj, dataAniversario: cellDate(row, aniverIdx), email,
+      rawPhone: "", normalizedPhone: null,
+      endereco, complemento: cellStr(row, compIdx) || null,
+      qtdPedidos, valorTotal,
+      ticketMedio: parseDecimalField(cellStr(row, ticketIdx)),
+      ultimaCompra: cellDate(row, lastOrderIdx),
+      saldoTotal: parseDecimalField(cellStr(row, saldoTotalIdx)),
+      saldoPeriodo: parseDecimalField(cellStr(row, saldoPeriodoIdx)),
+      observacao: cellStr(row, obsIdx) || null,
+      rowIndex: r,
+    };
+
+    if (hasUsefulData(fakeRow)) {
+      const rec = buildNoPhoneRecord(fakeRow);
+      rec.sourceSystems = ["SAIPOS"];
+      rec.notes = rec.notes?.replace("[Saipos - Sem Telefone]", "[Sem_Telefone Sheet]") ?? "[Sem_Telefone Sheet]";
+      // Ensure addresses from separate columns are captured
+      if (addresses.length > 0 && rec.addresses.length === 0) rec.addresses = addresses;
+      if (document) rec.document = document;
+      noPhoneImportable.push(rec);
+    } else {
+      noPhone.push({ nome, cpfCnpj, email, rawPhone: "", qtdPedidos, valorTotal });
+    }
+  }
+
+  return { noPhoneImportable, noPhone };
+}
+
+function parseProdutosAgregadosSheet(ws: XLSX.WorkSheet): SoldItemsResult {
+  const raw2D = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
+  if (raw2D.length < 2) return {
+    meta: { periodStart: null, periodEnd: null, reportTypes: null },
+    rows: [], categoryCount: 0, productCount: 0,
+    totalQuantity: 0, totalRevenue: 0,
+    originalRowCount: 0, consolidatedRowCount: 0, duplicateGroups: [],
+  };
+
+  // Scan first few rows for period metadata
+  let metaStart: Date | null = null;
+  let metaEnd:   Date | null = null;
+  let metaTypes: string | null = null;
+  let dataStartRow = 0;
+
+  for (let r = 0; r < Math.min(5, raw2D.length); r++) {
+    const row = raw2D[r] as unknown[];
+    const line = row.map(v => String(v ?? "").trim()).join(" ");
+    if (line.match(/Data\s+Inicial/i) || line.match(/periodo/i)) {
+      const { start, end, types } = parsePeriodFromMetaRow(row);
+      if (start) metaStart = start;
+      if (end)   metaEnd   = end;
+      if (types) metaTypes = types;
+    }
+    const colInfos = buildColInfos(row);
+    const catIdx   = findColIdx(colInfos, ["categoria"]);
+    const prodIdx  = findColIdx(colInfos, ["produto", "item"]);
+    if (catIdx >= 0 || prodIdx >= 0) { dataStartRow = r; break; }
+  }
+
+  // Parse using same logic as parseSoldItemsFile on the located header row
+  const headerRow = raw2D[dataStartRow] as unknown[];
+  const colInfos  = buildColInfos(headerRow);
+  const catIdx    = findColIdx(colInfos, ["categoria", "category"]);
+  const prodIdx   = findColIdx(colInfos, ["produto", "product", "item"]);
+  const qtyIdx    = findColIdx(colInfos, ["quantidade", "qtde", "qtd", "qty"]);
+  const revIdx    = findColIdx(colInfos, ["receita bruta", "receita", "total", "valor"]);
+  const pctIdx    = findColIdx(colInfos, ["percentual", "percent", "%"]);
+
+  const rows: ProductSalesRow[] = [];
+  let currentCategory = "";
+
+  for (let r = dataStartRow + 1; r < raw2D.length; r++) {
+    const row = raw2D[r] as unknown[];
+    if (row.every(v => !v || String(v).trim() === "")) continue;
+
+    const catStr  = catIdx >= 0 ? cellStr(row, catIdx) : "";
+    const prodStr = prodIdx >= 0 ? cellStr(row, prodIdx) : "";
+    const qty     = parseDecimalField(cellStr(row, qtyIdx)) ?? 0;
+    const rev     = parseDecimalField(cellStr(row, revIdx)) ?? 0;
+    const pct     = pctIdx >= 0 ? parseDecimalField(cellStr(row, pctIdx)) : null;
+
+    if (!catStr && !prodStr) continue;
+
+    if (catStr && !prodStr) {
+      currentCategory = catStr;
+      rows.push({ rowType: "CATEGORY", categoryName: catStr, productName: null, quantitySold: qty, grossRevenue: rev, percent: pct });
+    } else {
+      if (!currentCategory && catStr) currentCategory = catStr;
+      rows.push({ rowType: "PRODUCT", categoryName: currentCategory, productName: prodStr || catStr, quantitySold: qty, grossRevenue: rev, percent: pct });
+    }
+  }
+
+  const { consolidated, originalCount, removedCount, duplicateGroups } = consolidateProductRows(rows);
+  const categoryCount = consolidated.filter(r => r.rowType === "CATEGORY").length;
+  const productCount  = consolidated.filter(r => r.rowType === "PRODUCT").length;
+  const totalQuantity = consolidated.filter(r => r.rowType === "PRODUCT").reduce((s, r) => s + r.quantitySold, 0);
+  const totalRevenue  = consolidated.filter(r => r.rowType === "PRODUCT").reduce((s, r) => s + r.grossRevenue, 0);
+
+  return {
+    meta: { periodStart: metaStart, periodEnd: metaEnd, reportTypes: metaTypes },
+    rows: consolidated,
+    categoryCount, productCount, totalQuantity, totalRevenue,
+    originalRowCount: originalCount, consolidatedRowCount: removedCount, duplicateGroups,
+  };
+}
+
+export function parseCompiledWorkbook(buffer: Buffer): CompiledWorkbookParseResult {
+  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
+
+  // ── Clientes_Master sheet ─────────────────────────────────────────────────
+  const masterSheet     = findSheet(wb, ["Clientes_Master", "ClientesMaster", "clientes master", "master"]);
+  const masterResult    = masterSheet
+    ? parseMasterSheet(masterSheet)
+    : { contactable: [], noPhoneImportable: [], noPhone: [] };
+
+  // ── Sem_Telefone sheet ────────────────────────────────────────────────────
+  const semTelSheet     = findSheet(wb, ["Sem_Telefone", "SemTelefone", "sem telefone"]);
+  const semTelResult    = semTelSheet
+    ? parseSemTelefoneSheet(semTelSheet)
+    : { noPhoneImportable: [], noPhone: [] };
+
+  // ── Produtos_Agregados sheet ──────────────────────────────────────────────
+  const prodSheet       = findSheet(wb, ["Produtos_Agregados", "ProdutosAgregados", "produtos agregados", "itens vendidos"]);
+  const soldResult      = prodSheet
+    ? parseProdutosAgregadosSheet(prodSheet)
+    : {
+        meta: { periodStart: null, periodEnd: null, reportTypes: null },
+        rows: [], categoryCount: 0, productCount: 0,
+        totalQuantity: 0, totalRevenue: 0,
+        originalRowCount: 0, consolidatedRowCount: 0, duplicateGroups: [],
+      };
+
+  // ── Merge no-phone records from both sheets ───────────────────────────────
+  // Dedup between master no-phone rows and Sem_Telefone sheet: prefer Sem_Telefone entries
+  const allNoPhoneImportable: NoPhoneImportableCustomer[] = [
+    ...semTelResult.noPhoneImportable,
+    ...masterResult.noPhoneImportable.filter(m => {
+      // Skip master no-phone rows that are already in Sem_Telefone (by document or email)
+      const docMatch = m.document && semTelResult.noPhoneImportable.some(s => s.document === m.document);
+      const emailMatch = m.email && semTelResult.noPhoneImportable.some(s => s.email === m.email);
+      return !docMatch && !emailMatch;
+    }),
+  ];
+
+  const allNoPhone: NoPhoneCustomer[] = [
+    ...semTelResult.noPhone,
+    ...masterResult.noPhone,
+  ];
+
+  // Within-batch duplicate detection
+  flagBatchDuplicates(allNoPhoneImportable);
+
+  const noPhoneWithDocument     = allNoPhoneImportable.filter(r => r.document).length;
+  const noPhoneWithEmail        = allNoPhoneImportable.filter(r => r.email).length;
+  const noPhoneWithAddress      = allNoPhoneImportable.filter(r => r.addresses.length > 0).length;
+  const noPhoneNeedsReviewCount = allNoPhoneImportable.filter(r => r.dedupStrategy === "NEEDS_REVIEW").length;
+
+  const stats: MatchStats = {
+    saiposTotal:            0, // not applicable for compiled workbook
+    nemoTotal:              0,
+    saiposWithPhone:        0,
+    nemoWithPhone:          0,
+    phoneMatches:           0,
+    saiposOnly:             0,
+    nemoOnly:               0,
+    noPhoneCount:           allNoPhoneImportable.length + allNoPhone.length,
+    noPhoneImportableCount: allNoPhoneImportable.length,
+    noPhoneSkippedCount:    allNoPhone.length,
+    noPhoneNeedsReviewCount,
+    noPhoneWithDocument,
+    noPhoneWithEmail,
+    noPhoneWithAddress,
+    conflictCount:          masterResult.contactable.filter(r => r.importStatus !== "READY").length,
+    readyCount:             masterResult.contactable.filter(r => r.importStatus === "READY").length,
+    needsReviewCount:       masterResult.contactable.filter(r => r.importStatus !== "READY").length,
+  };
+
+  return {
+    merged:            masterResult.contactable,
+    noPhoneImportable: allNoPhoneImportable,
+    noPhone:           allNoPhone,
+    soldRows:          soldResult.rows,
+    soldMeta:          soldResult.meta,
+    stats,
   };
 }

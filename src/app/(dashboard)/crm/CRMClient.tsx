@@ -1635,6 +1635,12 @@ function CustomersTab({
                           {c.contactStatus === "SEM_TELEFONE" && (
                             <span className="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500">Sem telefone</span>
                           )}
+                          {!c.crmContactable && c.contactStatus !== "SEM_TELEFONE" && (
+                            <span className="ml-1.5 inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-medium text-red-600">Não contatável</span>
+                          )}
+                          {c.dataEnrichmentStatus === "NEEDS_ENRICHMENT" && (
+                            <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-700">Precisa enriquecer</span>
+                          )}
                         </p>
                         <span className="text-[11px] text-gray-400">
                           {formatPhone(c.phone)}
@@ -1688,6 +1694,12 @@ function CustomersTab({
                         {c.name}
                         {c.contactStatus === "SEM_TELEFONE" && (
                           <span className="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500">Sem telefone</span>
+                        )}
+                        {!c.crmContactable && c.contactStatus !== "SEM_TELEFONE" && (
+                          <span className="ml-1.5 inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-medium text-red-600">Não contatável</span>
+                        )}
+                        {c.dataEnrichmentStatus === "NEEDS_ENRICHMENT" && (
+                          <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-700">Precisa enriquecer</span>
                         )}
                       </p>
                       <span className="text-xs text-gray-400">

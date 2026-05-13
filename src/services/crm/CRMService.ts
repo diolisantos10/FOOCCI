@@ -34,8 +34,9 @@ export type CRMCustomer = {
   tier: CustomerTier;
   isActive: boolean;
   birthDate: string | null;
-  crmContactable: boolean;    // false = no valid phone; excluded from campaigns
-  contactStatus: string | null;
+  crmContactable: boolean;          // false = no valid phone; excluded from campaigns
+  contactStatus: string | null;     // CONTACTABLE | SEM_TELEFONE | OPT_OUT | NEEDS_REVIEW
+  dataEnrichmentStatus: string | null; // COMPLETE | PARTIAL | NEEDS_ENRICHMENT | NEEDS_REVIEW
 };
 
 function serializeCustomer(c: {
@@ -49,22 +50,24 @@ function serializeCustomer(c: {
   birthDate: Date | null;
   crmContactable?: boolean;
   contactStatus?: string | null;
+  dataEnrichmentStatus?: string | null;
 }): CRMCustomer {
   const spend = Number(c.totalSpend);
   const days = daysSince(c.lastOrderAt);
   return {
-    id:                 c.id,
-    name:               c.name,
-    phone:              c.phone ?? "",
-    totalSpend:         spend,
-    totalOrders:        c.totalOrders,
-    lastOrderAt:        c.lastOrderAt?.toISOString() ?? null,
-    daysSinceLastOrder: days,
-    tier:               getTier(spend),
-    isActive:           c.isActive,
-    birthDate:          c.birthDate?.toISOString() ?? null,
-    crmContactable:     c.crmContactable ?? true,
-    contactStatus:      c.contactStatus ?? null,
+    id:                   c.id,
+    name:                 c.name,
+    phone:                c.phone ?? "",
+    totalSpend:           spend,
+    totalOrders:          c.totalOrders,
+    lastOrderAt:          c.lastOrderAt?.toISOString() ?? null,
+    daysSinceLastOrder:   days,
+    tier:                 getTier(spend),
+    isActive:             c.isActive,
+    birthDate:            c.birthDate?.toISOString() ?? null,
+    crmContactable:       c.crmContactable ?? true,
+    contactStatus:        c.contactStatus ?? null,
+    dataEnrichmentStatus: c.dataEnrichmentStatus ?? null,
   };
 }
 
