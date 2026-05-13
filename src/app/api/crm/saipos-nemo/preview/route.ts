@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     const nemoRows   = parseNemoFile(nemoBuf);
     const soldResult = soldBuf
       ? parseSoldItemsFile(soldBuf)
-      : { meta: { periodStart: null, periodEnd: null, reportTypes: null }, rows: [], categoryCount: 0, productCount: 0, totalQuantity: 0, totalRevenue: 0 };
+      : { meta: { periodStart: null, periodEnd: null, reportTypes: null }, rows: [], categoryCount: 0, productCount: 0, totalQuantity: 0, totalRevenue: 0, originalRowCount: 0, consolidatedRowCount: 0, duplicateGroups: [] };
 
     const matchResult = matchAndMerge(saiposRows, nemoRows);
     const preview     = buildPreview(matchResult, soldResult);

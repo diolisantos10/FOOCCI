@@ -78,13 +78,25 @@ export interface SoldItemsMeta {
   reportTypes: string | null;
 }
 
+export interface DuplicateAggregateGroup {
+  categoryName: string;
+  productName: string | null;
+  rowType: ProductRowType;
+  originalCount: number;
+  totalQuantitySold: number;
+  totalGrossRevenue: number;
+}
+
 export interface SoldItemsResult {
   meta: SoldItemsMeta;
-  rows: ProductSalesRow[];
+  rows: ProductSalesRow[];           // already consolidated — safe to insert
   categoryCount: number;
   productCount: number;
   totalQuantity: number;
   totalRevenue: number;
+  originalRowCount: number;          // raw row count before consolidation
+  consolidatedRowCount: number;      // rows removed (duplicate keys merged)
+  duplicateGroups: DuplicateAggregateGroup[];
 }
 
 export interface MergedCustomer {
@@ -142,6 +154,10 @@ export interface SaiposNemoPreview {
   productCount: number;
   totalQuantity: number;
   totalRevenue: number;
+  originalProductRowCount: number;
+  consolidatedRowCount: number;
+  duplicateAggregateGroupsCount: number;
+  duplicateAggregateGroups: DuplicateAggregateGroup[];
   sampleMerged: MergedCustomer[];
   sampleNoPhone: NoPhoneCustomer[];
   topProducts: ProductSalesRow[];
@@ -439,6 +455,56 @@ export function parseNemoFile(buffer: Buffer): NemoCustomerRow[] {
   return rows;
 }
 
+// ── Product row consolidation ─────────────────────────────────────────────────
+
+function consolidateProductRows(rows: ProductSalesRow[]): {
+  consolidated: ProductSalesRow[];
+  originalCount: number;
+  removedCount: number;
+  duplicateGroups: DuplicateAggregateGroup[];
+} {
+  const keyMap = new Map<string, ProductSalesRow[]>();
+  for (const row of rows) {
+    const key = `${row.rowType}::${row.categoryName}::${row.productName ?? ""}`;
+    const group = keyMap.get(key) ?? [];
+    group.push(row);
+    keyMap.set(key, group);
+  }
+
+  const consolidated: ProductSalesRow[] = [];
+  const duplicateGroups: DuplicateAggregateGroup[] = [];
+  let removedCount = 0;
+
+  for (const [, group] of keyMap) {
+    if (group.length === 1) {
+      consolidated.push(group[0]!);
+    } else {
+      const first = group[0]!;
+      const totalQty = group.reduce((s, r) => s + r.quantitySold, 0);
+      const totalRev = group.reduce((s, r) => s + r.grossRevenue, 0);
+      consolidated.push({
+        rowType:      first.rowType,
+        categoryName: first.categoryName,
+        productName:  first.productName,
+        quantitySold: totalQty,
+        grossRevenue: totalRev,
+        percent:      first.percent,
+      });
+      duplicateGroups.push({
+        categoryName:     first.categoryName,
+        productName:      first.productName,
+        rowType:          first.rowType,
+        originalCount:    group.length,
+        totalQuantitySold: totalQty,
+        totalGrossRevenue: totalRev,
+      });
+      removedCount += group.length - 1;
+    }
+  }
+
+  return { consolidated, originalCount: rows.length, removedCount, duplicateGroups };
+}
+
 // ── Saipos ItensVendidos parser ────────────────────────────────────────────────
 
 function parsePeriodFromMetaRow(row: unknown[]): { start: Date | null; end: Date | null; types: string | null } {
@@ -462,10 +528,10 @@ export function parseSoldItemsFile(buffer: Buffer): SoldItemsResult {
   const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const sheetName = wb.SheetNames[0];
   const ws = wb.Sheets[sheetName!];
-  if (!ws) return { meta: { periodStart: null, periodEnd: null, reportTypes: null }, rows: [], categoryCount: 0, productCount: 0, totalQuantity: 0, totalRevenue: 0 };
+  if (!ws) return { meta: { periodStart: null, periodEnd: null, reportTypes: null }, rows: [], categoryCount: 0, productCount: 0, totalQuantity: 0, totalRevenue: 0, originalRowCount: 0, consolidatedRowCount: 0, duplicateGroups: [] };
 
   const raw2D = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
-  if (raw2D.length < 2) return { meta: { periodStart: null, periodEnd: null, reportTypes: null }, rows: [], categoryCount: 0, productCount: 0, totalQuantity: 0, totalRevenue: 0 };
+  if (raw2D.length < 2) return { meta: { periodStart: null, periodEnd: null, reportTypes: null }, rows: [], categoryCount: 0, productCount: 0, totalQuantity: 0, totalRevenue: 0, originalRowCount: 0, consolidatedRowCount: 0, duplicateGroups: [] };
 
   // First row(s) contain metadata; scan for period
   let metaStart: Date | null = null;
@@ -546,13 +612,18 @@ export function parseSoldItemsFile(buffer: Buffer): SoldItemsResult {
   totalQuantity = catRows.reduce((s, r) => s + r.quantitySold, 0);
   totalRevenue  = catRows.reduce((s, r) => s + r.grossRevenue, 0);
 
+  const { consolidated, originalCount, removedCount, duplicateGroups } = consolidateProductRows(productRows);
+
   return {
     meta: { periodStart: metaStart, periodEnd: metaEnd, reportTypes: metaTypes },
-    rows: productRows,
+    rows: consolidated,
     categoryCount,
     productCount,
     totalQuantity,
     totalRevenue,
+    originalRowCount: originalCount,
+    consolidatedRowCount: removedCount,
+    duplicateGroups,
   };
 }
 
@@ -770,6 +841,10 @@ export function buildPreview(match: MatchResult, sold: SoldItemsResult): SaiposN
     productCount:  sold.productCount,
     totalQuantity: sold.totalQuantity,
     totalRevenue:  sold.totalRevenue,
+    originalProductRowCount:      sold.originalRowCount,
+    consolidatedRowCount:          sold.consolidatedRowCount,
+    duplicateAggregateGroupsCount: sold.duplicateGroups.length,
+    duplicateAggregateGroups:      sold.duplicateGroups,
     sampleMerged:  match.merged.slice(0, 10),
     sampleNoPhone: match.noPhone.slice(0, 10),
     topProducts,
@@ -924,6 +999,15 @@ export async function executeImport(
 
   // ── Insert product sales aggregates ───────────────────────────────────────
   if (soldRows.length > 0 && soldMeta.periodStart && soldMeta.periodEnd) {
+    // Pre-flight: block if duplicate importKeys remain after consolidation
+    const importKeys = soldRows.map(r =>
+      makeImportKey(restaurantId, "SAIPOS", soldMeta.periodStart!, soldMeta.periodEnd!, r.categoryName, r.productName, r.rowType)
+    );
+    const uniqueKeys = new Set(importKeys);
+    if (uniqueKeys.size !== importKeys.length) {
+      throw new Error("Importação bloqueada: ainda existem chaves agregadas duplicadas.");
+    }
+
     const aggRows = soldRows.map(r => ({
       id:          `psa_${Math.random().toString(36).slice(2)}`,
       restaurantId,
