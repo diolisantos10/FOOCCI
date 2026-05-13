@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isGuestIdentifier } from "@/lib/guest";
+import type { CustomerIntelligenceReport } from "@/services/crm/CustomerIntelligenceService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ interface Props {
   importedTotalSpent: number | null;
   importedLastOrderAt: string | null;
   averageTicket: number | null;
+  intelligence: CustomerIntelligenceReport;
 }
 
 export interface InteractionItem {
@@ -695,6 +697,174 @@ function AddressList({ addresses }: { addresses: AddressItem[] }) {
 
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 
+// ─── Intelligence section ─────────────────────────────────────────────────────
+
+const CONTACTABILITY_STYLE: Record<string, { badge: string; label: string }> = {
+  CONTACTABLE:     { badge: "bg-green-100 text-green-700",  label: "Contatável"       },
+  NON_CONTACTABLE: { badge: "bg-red-100 text-red-700",      label: "Não contatável"   },
+  OPT_OUT:         { badge: "bg-gray-200 text-gray-600",    label: "Opt-out"          },
+  NEEDS_REVIEW:    { badge: "bg-amber-100 text-amber-700",  label: "Revisar"          },
+};
+
+const PRIORITY_STYLE: Record<string, { bar: string; label: string }> = {
+  NONE:   { bar: "bg-gray-200",   label: "Completo"  },
+  LOW:    { bar: "bg-blue-400",   label: "Baixa"     },
+  MEDIUM: { bar: "bg-amber-400",  label: "Média"     },
+  HIGH:   { bar: "bg-red-500",    label: "Alta"      },
+};
+
+const SIGNAL_STATUS_STYLE: Record<string, { chip: string }> = {
+  INFERRED:     { chip: "bg-blue-50 text-blue-700"   },
+  CONFIRMED:    { chip: "bg-green-50 text-green-700" },
+  REJECTED:     { chip: "bg-gray-100 text-gray-500"  },
+  NEEDS_REVIEW: { chip: "bg-amber-50 text-amber-700" },
+};
+
+const SIGNAL_STATUS_LABEL: Record<string, string> = {
+  INFERRED:     "Inferido",
+  CONFIRMED:    "Confirmado",
+  REJECTED:     "Descartado",
+  NEEDS_REVIEW: "Revisar",
+};
+
+function IntelligenceSection({ intel }: { intel: CustomerIntelligenceReport }) {
+  const contactStyle = CONTACTABILITY_STYLE[intel.contactabilityStatus] ?? CONTACTABILITY_STYLE.NEEDS_REVIEW!;
+  const priorityStyle = PRIORITY_STYLE[intel.enrichmentPriority] ?? PRIORITY_STYLE.NONE!;
+  const scoreBarWidth = `${intel.completenessScore}%`;
+  const scoreColor =
+    intel.completenessScore >= 85 ? "bg-green-500"
+    : intel.completenessScore >= 50 ? "bg-amber-400"
+    : "bg-red-500";
+
+  const fieldLabels: Record<string, string> = {
+    phone:       "Telefone",
+    name:        "Nome completo",
+    email:       "E-mail",
+    document:    "CPF / CNPJ",
+    birthDate:   "Aniversário",
+    address:     "Endereço",
+    preferences: "Preferências",
+  };
+
+  const channelLabel: Record<string, string> = {
+    WHATSAPP: "WhatsApp",
+    INTERNAL: "Interno",
+    MANUAL:   "Manual",
+  };
+
+  const visibleSignals = intel.signals.filter((s) => s.status !== "REJECTED").slice(0, 5);
+
+  return (
+    <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      {/* Score bar */}
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-xs font-semibold text-gray-500">Completude do cadastro</span>
+          <span className="text-xs font-bold text-gray-700">{intel.completenessScore}%</span>
+        </div>
+        <div className="h-2 w-full rounded-full bg-gray-100">
+          <div
+            className={`h-2 rounded-full transition-all ${scoreColor}`}
+            style={{ width: scoreBarWidth }}
+          />
+        </div>
+      </div>
+
+      {/* Contactability + enrichment priority */}
+      <div className="flex items-center justify-between px-4 py-3">
+        <span className="text-xs text-gray-500">Contatabilidade</span>
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${contactStyle.badge}`}>
+          {contactStyle.label}
+        </span>
+      </div>
+
+      {!intel.campaignEligible && (
+        <div className="px-4 py-2">
+          <p className="text-[11px] text-red-600 leading-snug">
+            {intel.contactabilityStatus === "NON_CONTACTABLE"
+              ? "Cliente sem telefone — não entra em campanhas WhatsApp."
+              : intel.contactabilityStatus === "OPT_OUT"
+              ? "Cliente solicitou opt-out de comunicações."
+              : "Cliente inelegível para campanhas WhatsApp."}
+          </p>
+        </div>
+      )}
+
+      {/* Enrichment priority */}
+      {intel.enrichmentPriority !== "NONE" && (
+        <div className="flex items-center justify-between px-4 py-3">
+          <span className="text-xs text-gray-500">Prioridade de enriquecimento</span>
+          <span className={`inline-flex h-2 w-2 rounded-full ${priorityStyle.bar}`} title={priorityStyle.label} />
+        </div>
+      )}
+
+      {/* Recommended next action */}
+      {intel.recommendedNextDataToCollect && (
+        <div className="px-4 py-3">
+          <p className="text-[11px] text-gray-500 mb-0.5">Próximo dado sugerido</p>
+          <p className="text-xs font-medium text-gray-700 capitalize">{intel.recommendedNextDataToCollect}</p>
+        </div>
+      )}
+
+      {/* Missing fields */}
+      {intel.missingFields.length > 0 && (
+        <div className="px-4 py-3">
+          <p className="text-[11px] text-gray-500 mb-1.5">Dados ausentes</p>
+          <div className="flex flex-wrap gap-1">
+            {intel.missingFields.map((f) => (
+              <span key={f} className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">
+                {fieldLabels[f] ?? f}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Enrichment opportunities */}
+      {intel.enrichmentOpportunities.length > 0 && (
+        <div className="px-4 py-3">
+          <p className="text-[11px] text-gray-500 mb-1.5">Oportunidades de enriquecimento</p>
+          <ul className="space-y-2">
+            {intel.enrichmentOpportunities.slice(0, 3).map((op) => (
+              <li key={op.id} className="text-[11px] text-gray-600 leading-snug">
+                <span className="font-medium text-gray-700">{op.title}</span>
+                {" — "}
+                <span className="text-gray-500">{op.description}</span>
+                {" "}
+                <span className="text-[10px] text-gray-400">({channelLabel[op.channel] ?? op.channel})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Inferred signals */}
+      {visibleSignals.length > 0 && (
+        <div className="px-4 py-3">
+          <p className="text-[11px] text-gray-500 mb-1.5">Sinais de dados</p>
+          <ul className="space-y-1.5">
+            {visibleSignals.map((s) => {
+              const style = SIGNAL_STATUS_STYLE[s.status] ?? SIGNAL_STATUS_STYLE.INFERRED!;
+              return (
+                <li key={s.id} className="flex items-start gap-2">
+                  <span className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${style.chip}`}>
+                    {SIGNAL_STATUS_LABEL[s.status] ?? s.status}
+                  </span>
+                  <span className="text-[11px] text-gray-600 leading-snug">
+                    {s.value
+                      ? <>Possível preferência: <span className="font-medium">{s.value}</span>{s.notes ? ` — ${s.notes}` : ""}</>
+                      : s.notes ?? s.type}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OverviewTab({
   behavior,
   insights,
@@ -706,6 +876,7 @@ function OverviewTab({
   importedTotalSpent,
   importedLastOrderAt,
   averageTicket,
+  intelligence,
 }: {
   behavior: BehaviorData;
   insights: InsightItem[];
@@ -717,6 +888,7 @@ function OverviewTab({
   importedTotalSpent: number | null;
   importedLastOrderAt: string | null;
   averageTicket: number | null;
+  intelligence: CustomerIntelligenceReport;
 }) {
   const hasImported = document !== null || financialBalance !== null || importedOrderCount !== null || importedTotalSpent !== null || importedLastOrderAt !== null || averageTicket !== null || notes !== null;
 
@@ -735,6 +907,10 @@ function OverviewTab({
 
       {/* Right column — 1/3 */}
       <div className="space-y-6">
+        <Section title="Inteligência do cliente" icon="🧠">
+          <IntelligenceSection intel={intelligence} />
+        </Section>
+
         <Section title="Endereços" icon="📍">
           <AddressList addresses={addresses} />
         </Section>
@@ -1239,6 +1415,7 @@ export default function CustomerProfileClient({
   importedTotalSpent,
   importedLastOrderAt,
   averageTicket,
+  intelligence,
 }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -1329,7 +1506,7 @@ export default function CustomerProfileClient({
 
       {/* Tab content */}
       <div className="mx-auto max-w-7xl p-6">
-        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} addresses={addresses} notes={notes} document={document} financialBalance={financialBalance} importedOrderCount={importedOrderCount} importedTotalSpent={importedTotalSpent} importedLastOrderAt={importedLastOrderAt} averageTicket={averageTicket} />}
+        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} addresses={addresses} notes={notes} document={document} financialBalance={financialBalance} importedOrderCount={importedOrderCount} importedTotalSpent={importedTotalSpent} importedLastOrderAt={importedLastOrderAt} averageTicket={averageTicket} intelligence={intelligence} />}
         {activeTab === "history"      && <HistoryTab orders={orders} onOrderClick={setSelectedOrder} />}
         {activeTab === "interactions" && <InteractionsTab interactions={interactions} />}
         {activeTab === "actions"      && <ActionsTab tags={tags} />}

@@ -5,6 +5,8 @@ import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import CustomerProfileClient from "./CustomerProfileClient";
 import type { Classification, BehaviorData, InsightItem, OrderHistoryItem, InteractionItem, CustomerTag, AddressItem } from "./CustomerProfileClient";
+import { CustomerIntelligenceService } from "@/services/crm/CustomerIntelligenceService";
+import type { CustomerIntelligenceReport } from "@/services/crm/CustomerIntelligenceService";
 
 export const metadata = { title: "Perfil do Cliente" };
 
@@ -343,25 +345,33 @@ export default async function CustomerDetailPage({
   const customer = await prisma.customer.findUnique({
     where: { id: params.id },
     select: {
-      id:                  true,
-      name:                true,
-      phone:               true,
-      email:               true,
-      totalOrders:         true,
-      totalSpend:          true,
-      lastOrderAt:         true,
-      createdAt:           true,
-      isActive:            true,
-      restaurantId:        true,
-      tier:                true,
-      segment:             true,
-      notes:               true,
-      document:            true,
-      financialBalance:    true,
-      importedOrderCount:  true,
-      importedTotalSpent:  true,
-      importedLastOrderAt: true,
-      averageTicket:       true,
+      id:                   true,
+      name:                 true,
+      phone:                true,
+      email:                true,
+      birthDate:            true,
+      totalOrders:          true,
+      totalSpend:           true,
+      lastOrderAt:          true,
+      createdAt:            true,
+      isActive:             true,
+      restaurantId:         true,
+      tier:                 true,
+      segment:              true,
+      notes:                true,
+      document:             true,
+      financialBalance:     true,
+      importedOrderCount:   true,
+      importedTotalSpent:   true,
+      importedLastOrderAt:  true,
+      averageTicket:        true,
+      crmContactable:       true,
+      contactStatus:        true,
+      hasOptedOut:          true,
+      sourceSystem:         true,
+      dataEnrichmentStatus: true,
+      dataCompletenessScore: true,
+      enrichmentNotes:      true,
       addresses: {
         orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
         select: {
@@ -417,6 +427,7 @@ export default async function CustomerDetailPage({
           },
         },
       },
+      preferences: { select: { id: true } },
     },
   });
 
@@ -474,6 +485,33 @@ export default async function CustomerDetailPage({
     purchaseFrequencyDays,
   });
 
+  const intelligence: CustomerIntelligenceReport = await CustomerIntelligenceService.getFullReport(
+    customer.restaurantId,
+    customer.id,
+    {
+      id:                   customer.id,
+      restaurantId:         customer.restaurantId,
+      name:                 customer.name,
+      phone:                customer.phone,
+      email:                customer.email,
+      document:             customer.document,
+      birthDate:            customer.birthDate,
+      notes:                customer.notes,
+      totalOrders:          customer.totalOrders,
+      totalSpend,
+      lastOrderAt:          customer.lastOrderAt,
+      sourceSystem:         customer.sourceSystem,
+      crmContactable:       customer.crmContactable,
+      contactStatus:        customer.contactStatus,
+      hasOptedOut:          customer.hasOptedOut,
+      dataEnrichmentStatus: customer.dataEnrichmentStatus,
+      hasAddresses:         customer.addresses.length > 0,
+      hasPreferences:       !!customer.preferences,
+      importedOrderCount:   customer.importedOrderCount,
+      importedTotalSpent:   customer.importedTotalSpent !== null ? Number(customer.importedTotalSpent) : null,
+    },
+  );
+
   return (
     <>
       <TopBar title={customer.name} />
@@ -504,6 +542,7 @@ export default async function CustomerDetailPage({
         importedTotalSpent={customer.importedTotalSpent !== null ? Number(customer.importedTotalSpent) : null}
         importedLastOrderAt={customer.importedLastOrderAt?.toISOString() ?? null}
         averageTicket={customer.averageTicket !== null ? Number(customer.averageTicket) : null}
+        intelligence={intelligence}
       />
     </>
   );

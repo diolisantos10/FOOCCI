@@ -68,6 +68,7 @@ model Restaurant {
   tierBenefits        TierBenefit[]
   onboardingStatus    RestaurantOnboardingStatus?
   productSalesAggregates ProductSalesAggregate[]
+  customerDataSignals CustomerDataSignal[]
 
   @@map("restaurants")
 }
@@ -135,10 +136,13 @@ model Customer {
   hasOptedOut  Boolean   @default(false) // LGPD: customer requested opt-out from marketing messages
   optOutAt     DateTime?
   crmContactable       Boolean   @default(true)  // false = no valid phone; excluded from WhatsApp campaigns
-  contactStatus        String?                   // CONTACTABLE | SEM_TELEFONE
+  contactStatus        String?                   // CONTACTABLE | SEM_TELEFONE | TELEFONE_INVALIDO | OPT_OUT | NEEDS_REVIEW
   importExternalId     String?                   // stable dedup key for re-imports
   sourceSystem         String?                   // SAIPOS | NEMO | SAIPOS+NEMO | MANUAL
-  dataEnrichmentStatus String?                   // NEEDS_ENRICHMENT | ENRICHED
+  dataEnrichmentStatus String?                   // COMPLETE | PARTIAL | NEEDS_ENRICHMENT | NEEDS_REVIEW
+  dataCompletenessScore Int?                     // 0–100 computed by CustomerIntelligenceService
+  lastEnrichmentAt     DateTime?                 // last time enrichment data was updated
+  enrichmentNotes      String?                   // free-form notes from CRM agent / human
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -149,6 +153,7 @@ model Customer {
   conversations  Conversation[]
   preferences    CustomerPreference?
   segmentMembers CustomerSegmentMembership[]
+  dataSignals    CustomerDataSignal[]
 
   @@unique([phone, restaurantId])
   @@index([restaurantId])
@@ -1575,4 +1580,45 @@ model RestaurantOnboardingStatus {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("restaurant_onboarding_statuses")
+}
+
+// ═══════════════════════════════════════════
+//  CUSTOMER INTELLIGENCE
+// ═══════════════════════════════════════════
+
+/// Inferred or collected data signals about a customer.
+/// Confirmed signals must not auto-overwrite confirmed Customer fields.
+model CustomerDataSignal {
+  id           String    @id @default(cuid())
+  restaurantId String
+  customerId   String
+
+  /// PREFERENCE | POSSIBLE_FAVORITE_PRODUCT | MISSING_FIELD | ADDRESS_CLUE | BIRTHDAY_REQUESTED | NAME_CLUE
+  type         String
+
+  /// Which customer field this signal pertains to (e.g. "birthDate", "address", "preferences.dietary")
+  field        String?
+
+  /// The inferred or collected value (stringified)
+  value        String?
+
+  /// 0–1 confidence score (1 = confirmed)
+  confidence   Float?
+
+  /// IMPORT | ORDER_HISTORY | WHATSAPP_CONVERSATION | HUMAN_NOTE | CRM_CAMPAIGN | ANALYTICS
+  source       String
+
+  /// INFERRED | CONFIRMED | REJECTED | NEEDS_REVIEW
+  status       String    @default("INFERRED")
+
+  notes        String?
+  createdAt    DateTime  @default(now())
+  reviewedAt   DateTime?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer   Customer   @relation(fields: [customerId],   references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([restaurantId, status])
+  @@map("customer_data_signals")
 }
