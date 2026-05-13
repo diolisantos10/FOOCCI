@@ -291,7 +291,7 @@ export async function buildAIContext(
     customer = {
       id:                 customerRaw.id,
       name:               customerRaw.name,
-      phone:              customerRaw.phone,
+      phone:              customerRaw.phone ?? "",
       email:              customerRaw.email,
       totalOrders:        customerRaw.totalOrders,
       totalSpend:         Number(customerRaw.totalSpend),

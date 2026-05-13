@@ -26,7 +26,7 @@ function daysSince(date: Date | null): number | null {
 export type CRMCustomer = {
   id: string;
   name: string;
-  phone: string;
+  phone: string;              // "" for no-phone imported customers
   totalSpend: number;
   totalOrders: number;
   lastOrderAt: string | null;
@@ -34,24 +34,28 @@ export type CRMCustomer = {
   tier: CustomerTier;
   isActive: boolean;
   birthDate: string | null;
+  crmContactable: boolean;    // false = no valid phone; excluded from campaigns
+  contactStatus: string | null;
 };
 
 function serializeCustomer(c: {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   totalSpend: Decimal;
   totalOrders: number;
   lastOrderAt: Date | null;
   isActive: boolean;
   birthDate: Date | null;
+  crmContactable?: boolean;
+  contactStatus?: string | null;
 }): CRMCustomer {
   const spend = Number(c.totalSpend);
   const days = daysSince(c.lastOrderAt);
   return {
     id:                 c.id,
     name:               c.name,
-    phone:              c.phone,
+    phone:              c.phone ?? "",
     totalSpend:         spend,
     totalOrders:        c.totalOrders,
     lastOrderAt:        c.lastOrderAt?.toISOString() ?? null,
@@ -59,6 +63,8 @@ function serializeCustomer(c: {
     tier:               getTier(spend),
     isActive:           c.isActive,
     birthDate:          c.birthDate?.toISOString() ?? null,
+    crmContactable:     c.crmContactable ?? true,
+    contactStatus:      c.contactStatus ?? null,
   };
 }
 

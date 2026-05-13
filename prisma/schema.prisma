@@ -114,7 +114,7 @@ model Customer {
   id           String    @id @default(cuid())
   restaurantId String
   name         String
-  phone        String    // E.164 format – WhatsApp identifier, or GUEST-{uuid} for anonymous orders
+  phone        String?   // E.164 format – WhatsApp identifier, or GUEST-{uuid} for anon; null for no-phone imports
   email        String?
   birthDate    DateTime?
   notes        String?
@@ -128,12 +128,17 @@ model Customer {
   totalOrders  Int       @default(0)
   totalSpend   Decimal   @default(0) @db.Decimal(10, 2)
   lastOrderAt  DateTime?
-  tier         String    @default("BRONZE")      // BRONZE | PRATA | OURO | DIAMANTE — persisted by CustomerMetricsSyncService
-  segment      String    @default("SEM_PEDIDOS") // QUENTE | MORNO | FRIO | SEM_PEDIDOS — persisted by CustomerMetricsSyncService
+  tier         String    @default("BRONZE")      // BRONZE | PRATA | OURO | DIAMANTE
+  segment      String    @default("SEM_PEDIDOS") // QUENTE | MORNO | FRIO | SEM_PEDIDOS
   isActive     Boolean   @default(true)
   isGuest      Boolean   @default(false) // true = anonymous session; excluded from CRM lists and metric sync
   hasOptedOut  Boolean   @default(false) // LGPD: customer requested opt-out from marketing messages
-  optOutAt     DateTime?                 // timestamp of last opt-out request
+  optOutAt     DateTime?
+  crmContactable       Boolean   @default(true)  // false = no valid phone; excluded from WhatsApp campaigns
+  contactStatus        String?                   // CONTACTABLE | SEM_TELEFONE
+  importExternalId     String?                   // stable dedup key for re-imports
+  sourceSystem         String?                   // SAIPOS | NEMO | SAIPOS+NEMO | MANUAL
+  dataEnrichmentStatus String?                   // NEEDS_ENRICHMENT | ENRICHED
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -147,6 +152,7 @@ model Customer {
 
   @@unique([phone, restaurantId])
   @@index([restaurantId])
+  @@index([restaurantId, crmContactable])
   @@map("customers")
 }
 

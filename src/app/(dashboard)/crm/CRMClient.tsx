@@ -39,7 +39,7 @@ const CUSTOMER_FILTER_LABELS: Record<string, string> = {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatPhone(phone: string) {
-  if (isGuestIdentifier(phone)) return "—";
+  if (!phone || isGuestIdentifier(phone)) return "—";
   const d = phone.replace(/\D/g, "");
   if (d.length === 13) return `+${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4,9)}-${d.slice(9)}`;
   return phone;
@@ -1361,6 +1361,7 @@ function exportCSV(customers: CRMCustomer[]) {
 
 function CopyPhoneButton({ phone }: { phone: string }) {
   const [copied, setCopied] = useState(false);
+  if (!phone || isGuestIdentifier(phone)) return null;
   function copy(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -1490,7 +1491,7 @@ function ReactivationHelper({
                       <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
                       <p className="text-[10px] text-gray-400">{formatPhone(c.phone)}</p>
                     </div>
-                    {!isGuestIdentifier(c.phone) && (
+                    {c.phone && !isGuestIdentifier(c.phone) && (
                       <button
                         onClick={() => copyFor(c)}
                         className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
@@ -1629,7 +1630,12 @@ function CustomersTab({
                   <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
                       <Link href={`/customers/${c.id}`} className="hover:text-brand-600 transition-colors">
-                        <p className="font-semibold text-gray-900 text-sm">{c.name}</p>
+                        <p className="font-semibold text-gray-900 text-sm">
+                          {c.name}
+                          {c.contactStatus === "SEM_TELEFONE" && (
+                            <span className="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500">Sem telefone</span>
+                          )}
+                        </p>
                         <span className="text-[11px] text-gray-400">
                           {formatPhone(c.phone)}
                           <CopyPhoneButton phone={c.phone} />
@@ -1678,7 +1684,12 @@ function CustomersTab({
                 <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-900 truncate">{c.name}</p>
+                      <p className="text-sm font-bold text-gray-900 truncate">
+                        {c.name}
+                        {c.contactStatus === "SEM_TELEFONE" && (
+                          <span className="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500">Sem telefone</span>
+                        )}
+                      </p>
                       <span className="text-xs text-gray-400">
                         {formatPhone(c.phone)}
                         <CopyPhoneButton phone={c.phone} />

@@ -115,7 +115,7 @@ export class MessageService {
     }
 
     // Strip '+' prefix — Evolution expects bare number string
-    const toNumber = conv.customer.phone.replace(/^\+/, "");
+    const toNumber = conv.customer.phone!.replace(/^\+/, ""); // messaging customers always have a phone
 
     let externalMessageId: string | null = null;
 

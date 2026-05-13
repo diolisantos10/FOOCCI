@@ -827,7 +827,7 @@ function ThreadPanel({
                 {thread.customer.name}
               </p>
               <p className="text-xs text-gray-500">
-                {isGuestIdentifier(thread.customer.phone) ? "Telefone não informado" : thread.customer.phone}
+                {!thread.customer.phone || isGuestIdentifier(thread.customer.phone) ? "Telefone não informado" : thread.customer.phone}
               </p>
             </div>
           </div>

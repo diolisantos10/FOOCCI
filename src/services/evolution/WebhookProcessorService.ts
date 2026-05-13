@@ -96,7 +96,7 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
 
   // 4. Conversation reuse logic
   const conversation = await resolveConversation(
-    restaurantId, customer.id, customer.phone, customer.name,
+    restaurantId, customer.id, customer.phone!, customer.name, // webhook customers came in via WhatsApp — always have a phone
   );
 
   // 5 & 6. Persist message + update conversation atomically

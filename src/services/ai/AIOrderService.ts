@@ -453,7 +453,7 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
   }
 
   const evolutionConfig = configResult.data;
-  const toPhone = conversation.customer!.phone.replace(/^\+/, "");
+  const toPhone = conversation.customer!.phone!.replace(/^\+/, ""); // WhatsApp customers always have a phone
 
   // 4. Find current OPEN draft
   const existingDraft = await prisma.orderDraft.findFirst({
@@ -847,7 +847,7 @@ async function safeHandoff(conversationId: string, message: string): Promise<voi
     if (conv && conv.customer) {
       const cfgResult = await EvolutionConfigService.getSnapshot(conv.restaurantId);
       if (cfgResult.ok) {
-        const phone = conv.customer.phone.replace(/^\+/, "");
+        const phone = conv.customer.phone!.replace(/^\+/, ""); // WhatsApp customers always have a phone
         await sendWhatsAppReply(cfgResult.data, phone, message, conversationId);
       }
     }

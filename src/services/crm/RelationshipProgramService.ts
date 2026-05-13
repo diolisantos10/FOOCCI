@@ -290,7 +290,7 @@ export class RelationshipProgramService {
         closeList.push({
           id:           c.id,
           name:         c.name,
-          phone:        c.phone,
+          phone:        c.phone ?? "",
           currentTier:  currentTierKey,
           nextTier:     next,
           totalSpend:   spend,

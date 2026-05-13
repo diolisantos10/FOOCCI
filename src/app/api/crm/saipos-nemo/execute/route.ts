@@ -62,9 +62,9 @@ export async function POST(req: NextRequest) {
       data: {
         status:            "COMPLETED",
         completedAt:       new Date(),
-        createdCustomers:  result.customersCreated,
-        updatedCustomers:  result.customersUpdated,
-        skippedDuplicates: result.customersSkippedNoPhone,
+        createdCustomers:  result.contactableCustomersCreated + result.nonContactableCustomersCreated,
+        updatedCustomers:  result.contactableCustomersUpdated + result.nonContactableCustomersUpdated,
+        skippedDuplicates: result.noPhoneSkippedInsufficientData,
         createdItems:      result.productAggregatesCreated,
       },
     });

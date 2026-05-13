@@ -32,6 +32,7 @@ export default async function CRMPage() {
           id: true, name: true, phone: true,
           totalSpend: true, totalOrders: true,
           lastOrderAt: true, isActive: true, birthDate: true,
+          crmContactable: true, contactStatus: true,
         },
       }),
       CRMService.getOpportunities(restaurantId, restaurantName),
@@ -53,7 +54,7 @@ export default async function CRMPage() {
       return {
         id:                 c.id,
         name:               c.name,
-        phone:              c.phone,
+        phone:              c.phone ?? "",
         totalSpend:         spend,
         totalOrders:        c.totalOrders,
         lastOrderAt:        c.lastOrderAt?.toISOString() ?? null,
@@ -61,6 +62,8 @@ export default async function CRMPage() {
         tier:               getTier(spend),
         isActive:           c.isActive,
         birthDate:          c.birthDate?.toISOString() ?? null,
+        crmContactable:     c.crmContactable,
+        contactStatus:      c.contactStatus ?? null,
       };
     });
 

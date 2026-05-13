@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     } as const;
 
     type Row = {
-      id: string; name: string; phone: string;
+      id: string; name: string; phone: string | null;
       tier: string; segment: string;
       totalOrders: number; totalSpend: { toNumber(): number };
       lastOrderAt: Date | null;
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
       return rows.map((r) => ({
         id:          r.id,
         name:        r.name,
-        phone:       phone(r.phone),
+        phone:       phone(r.phone ?? ""),
         tier:        r.tier,
         segment:     r.segment,
         totalOrders: r.totalOrders,
@@ -71,52 +71,52 @@ export async function GET(req: NextRequest) {
 
       case "recuperar-frios": {
         const rows = await prisma.customer.findMany({
-          where: { restaurantId: rid, isGuest: false, isActive: true, segment: "FRIO" },
+          where: { restaurantId: rid, isGuest: false, isActive: true, crmContactable: true, phone: { not: null }, segment: "FRIO" },
           orderBy: { lastOrderAt: "asc" },
           take: PREVIEW_LIMIT,
           select: baseSelect,
         });
         const count = await prisma.customer.count({
-          where: { restaurantId: rid, isGuest: false, isActive: true, segment: "FRIO" },
+          where: { restaurantId: rid, isGuest: false, isActive: true, crmContactable: true, phone: { not: null }, segment: "FRIO" },
         });
         return ok<AudienceResponse>({ count, customers: serialize(rows as Row[]), computed: true });
       }
 
       case "reativar-mornos": {
         const rows = await prisma.customer.findMany({
-          where: { restaurantId: rid, isGuest: false, isActive: true, segment: "MORNO" },
+          where: { restaurantId: rid, isGuest: false, isActive: true, crmContactable: true, phone: { not: null }, segment: "MORNO" },
           orderBy: { lastOrderAt: "asc" },
           take: PREVIEW_LIMIT,
           select: baseSelect,
         });
         const count = await prisma.customer.count({
-          where: { restaurantId: rid, isGuest: false, isActive: true, segment: "MORNO" },
+          where: { restaurantId: rid, isGuest: false, isActive: true, crmContactable: true, phone: { not: null }, segment: "MORNO" },
         });
         return ok<AudienceResponse>({ count, customers: serialize(rows as Row[]), computed: true });
       }
 
       case "segunda-compra": {
         const rows = await prisma.customer.findMany({
-          where: { restaurantId: rid, isGuest: false, totalOrders: 1 },
+          where: { restaurantId: rid, isGuest: false, crmContactable: true, phone: { not: null }, totalOrders: 1 },
           orderBy: { lastOrderAt: "desc" },
           take: PREVIEW_LIMIT,
           select: baseSelect,
         });
         const count = await prisma.customer.count({
-          where: { restaurantId: rid, isGuest: false, totalOrders: 1 },
+          where: { restaurantId: rid, isGuest: false, crmContactable: true, phone: { not: null }, totalOrders: 1 },
         });
         return ok<AudienceResponse>({ count, customers: serialize(rows as Row[]), computed: true });
       }
 
       case "clientes-vip": {
         const rows = await prisma.customer.findMany({
-          where: { restaurantId: rid, isGuest: false, tier: { in: ["OURO", "DIAMANTE"] } },
+          where: { restaurantId: rid, isGuest: false, crmContactable: true, phone: { not: null }, tier: { in: ["OURO", "DIAMANTE"] } },
           orderBy: [{ tier: "asc" }, { totalSpend: "desc" }],
           take: PREVIEW_LIMIT,
           select: baseSelect,
         });
         const count = await prisma.customer.count({
-          where: { restaurantId: rid, isGuest: false, tier: { in: ["OURO", "DIAMANTE"] } },
+          where: { restaurantId: rid, isGuest: false, crmContactable: true, phone: { not: null }, tier: { in: ["OURO", "DIAMANTE"] } },
         });
         return ok<AudienceResponse>({ count, customers: serialize(rows as Row[]), computed: true });
       }
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
         const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
         const rows = await prisma.customer.findMany({
           where: {
-            restaurantId: rid, isGuest: false,
+            restaurantId: rid, isGuest: false, crmContactable: true, phone: { not: null },
             lastOrderAt:  { gte: sevenDaysAgo },
           },
           orderBy: { lastOrderAt: "desc" },
@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
         });
         const count = await prisma.customer.count({
           where: {
-            restaurantId: rid, isGuest: false,
+            restaurantId: rid, isGuest: false, crmContactable: true, phone: { not: null },
             lastOrderAt:  { gte: sevenDaysAgo },
           },
         });
@@ -144,7 +144,7 @@ export async function GET(req: NextRequest) {
       case "recorrente-sumido": {
         const rows = await prisma.customer.findMany({
           where: {
-            restaurantId: rid, isGuest: false,
+            restaurantId: rid, isGuest: false, crmContactable: true, phone: { not: null },
             totalOrders:  { gte: 2 },
             segment:      "FRIO",
           },
@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
         });
         const count = await prisma.customer.count({
           where: {
-            restaurantId: rid, isGuest: false,
+            restaurantId: rid, isGuest: false, crmContactable: true, phone: { not: null },
             totalOrders:  { gte: 2 },
             segment:      "FRIO",
           },

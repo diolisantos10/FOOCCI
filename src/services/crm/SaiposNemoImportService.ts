@@ -101,7 +101,7 @@ export interface SoldItemsResult {
 
 export interface MergedCustomer {
   name: string;
-  phone: string;
+  phone: string;           // non-null: contactable customers always have a phone
   document: string | null;
   email: string | null;
   birthDate: Date | null;
@@ -115,6 +115,25 @@ export interface MergedCustomer {
   addresses: NemoAddressGroup[];
   sourceSystems: string[];
   importStatus: "READY" | "NEEDS_REVIEW" | "DUPLICATE_CONFLICT";
+  crmContactable: true;    // always true — contactable customers have a phone
+  sourceSystem: string;    // "SAIPOS" | "NEMO" | "SAIPOS+NEMO"
+}
+
+export interface NoPhoneImportableCustomer {
+  name: string;
+  document: string | null;
+  email: string | null;
+  birthDate: Date | null;
+  importedOrderCount: number | null;
+  importedTotalSpent: number | null;
+  averageTicket: number | null;
+  importedLastOrderAt: Date | null;
+  financialBalance: number | null;
+  financialBalancePeriod: number | null;
+  notes: string | null;
+  addresses: NemoAddressGroup[];
+  sourceSystems: string[];
+  dedupStrategy: "DOCUMENT" | "EMAIL" | "CREATE";
 }
 
 export interface NoPhoneCustomer {
@@ -134,7 +153,12 @@ export interface MatchStats {
   phoneMatches: number;
   saiposOnly: number;
   nemoOnly: number;
-  noPhoneCount: number;
+  noPhoneCount: number;            // total no-phone rows (importable + skipped)
+  noPhoneImportableCount: number;  // will be imported as non-contactable CRM records
+  noPhoneSkippedCount: number;     // insufficient data — truly skipped
+  noPhoneWithDocument: number;     // importable rows that have a CPF/CNPJ
+  noPhoneWithEmail: number;        // importable rows that have an email
+  noPhoneWithAddress: number;      // importable rows that have an address
   conflictCount: number;
   readyCount: number;
   needsReviewCount: number;
@@ -142,7 +166,8 @@ export interface MatchStats {
 
 export interface MatchResult {
   merged: MergedCustomer[];
-  noPhone: NoPhoneCustomer[];
+  noPhone: NoPhoneCustomer[];                      // skipped (insufficient data)
+  noPhoneImportable: NoPhoneImportableCustomer[];  // will be imported as non-contactable
   stats: MatchStats;
 }
 
@@ -160,21 +185,25 @@ export interface SaiposNemoPreview {
   duplicateAggregateGroups: DuplicateAggregateGroup[];
   sampleMerged: MergedCustomer[];
   sampleNoPhone: NoPhoneCustomer[];
+  sampleNoPhoneImportable: NoPhoneImportableCustomer[];
   topProducts: ProductSalesRow[];
 }
 
 export interface StoredReport {
   merged: MergedCustomer[];
-  noPhone: NoPhoneCustomer[];
+  noPhone: NoPhoneCustomer[];                      // skipped (insufficient data)
+  noPhoneImportable: NoPhoneImportableCustomer[];  // will be imported as non-contactable
   soldRows: ProductSalesRow[];
   soldMeta: SoldItemsMeta;
   preview: SaiposNemoPreview;
 }
 
 export interface SaiposNemoExecuteResult {
-  customersCreated: number;
-  customersUpdated: number;
-  customersSkippedNoPhone: number;
+  contactableCustomersCreated: number;
+  contactableCustomersUpdated: number;
+  nonContactableCustomersCreated: number;
+  nonContactableCustomersUpdated: number;
+  noPhoneSkippedInsufficientData: number;
   addressesCreated: number;
   productAggregatesCreated: number;
   productAggregatesSkipped: number;
@@ -713,6 +742,8 @@ function buildMergedRecord(saipos: SaiposCustomerRow, nemoRows: NemoCustomerRow[
     addresses,
     sourceSystems: nemoRows.length > 0 ? ["SAIPOS", "NEMO"] : ["SAIPOS"],
     importStatus: "READY",
+    crmContactable: true,
+    sourceSystem: nemoRows.length > 0 ? "SAIPOS+NEMO" : "SAIPOS",
   };
 }
 
@@ -735,6 +766,49 @@ function buildNemoOnlyRecord(nemo: NemoCustomerRow): MergedCustomer {
     addresses: nemo.addresses,
     sourceSystems: ["NEMO"],
     importStatus: "NEEDS_REVIEW", // Nemo-only = less data, flag for review
+    crmContactable: true,
+    sourceSystem: "NEMO",
+  };
+}
+
+function hasUsefulData(row: SaiposCustomerRow): boolean {
+  const name = cleanName(row.nome);
+  if (!name) return false; // no valid name = nothing meaningful to store
+  return !!(
+    row.cpfCnpj?.trim() ||
+    row.email?.trim() ||
+    row.endereco?.trim() ||
+    row.qtdPedidos !== null ||
+    row.valorTotal !== null ||
+    row.saldoTotal !== null ||
+    row.observacao?.trim()
+  );
+}
+
+function buildNoPhoneRecord(saipos: SaiposCustomerRow): NoPhoneImportableCustomer {
+  const name = cleanName(saipos.nome) ?? saipos.nome?.trim() ?? "Sem nome";
+  const document = saipos.cpfCnpj?.replace(/\D/g, "") || null;
+  const email = saipos.email?.trim() || null;
+  const notes = saipos.observacao
+    ? `[Saipos - Sem Telefone] ${saipos.observacao}`
+    : "[Saipos - Sem Telefone]";
+  const dedupStrategy: NoPhoneImportableCustomer["dedupStrategy"] =
+    document ? "DOCUMENT" : email ? "EMAIL" : "CREATE";
+  return {
+    name,
+    document: document?.length ? document : null,
+    email,
+    birthDate: saipos.dataAniversario ?? null,
+    importedOrderCount: saipos.qtdPedidos ?? null,
+    importedTotalSpent: saipos.valorTotal ?? null,
+    averageTicket: saipos.ticketMedio ?? null,
+    importedLastOrderAt: saipos.ultimaCompra ?? null,
+    financialBalance: saipos.saldoTotal ?? null,
+    financialBalancePeriod: saipos.saldoPeriodo ?? null,
+    notes,
+    addresses: buildSaiposAddresses(saipos),
+    sourceSystems: ["SAIPOS"],
+    dedupStrategy,
   };
 }
 
@@ -783,32 +857,41 @@ export function matchAndMerge(saipos: SaiposCustomerRow[], nemo: NemoCustomerRow
     merged.push(buildNemoOnlyRecord(base));
   }
 
-  // Step 3: Collect no-phone Saipos rows
+  // Step 3: Classify no-phone Saipos rows into importable vs skipped
+  const noPhoneImportable: NoPhoneImportableCustomer[] = [];
   for (const row of saipos) {
     if (!row.normalizedPhone) {
-      noPhone.push({
-        nome: row.nome,
-        cpfCnpj: row.cpfCnpj,
-        email: row.email,
-        rawPhone: row.rawPhone,
-        qtdPedidos: row.qtdPedidos,
-        valorTotal: row.valorTotal,
-      });
+      if (hasUsefulData(row)) {
+        noPhoneImportable.push(buildNoPhoneRecord(row));
+      } else {
+        noPhone.push({
+          nome: row.nome,
+          cpfCnpj: row.cpfCnpj,
+          email: row.email,
+          rawPhone: row.rawPhone,
+          qtdPedidos: row.qtdPedidos,
+          valorTotal: row.valorTotal,
+        });
+      }
     }
   }
 
   // Compute stats
-  const saiposWithPhone = saiposPhone.size;
-  const nemoWithPhone   = nemoPhone.size;
-  const phoneMatches    = [...saiposPhone.keys()].filter(p => nemoPhone.has(p)).length;
-  const saiposOnly      = saiposWithPhone - phoneMatches;
-  const nemoOnly        = nemoWithPhone - phoneMatches;
-  const readyCount      = merged.filter(r => r.importStatus === "READY").length;
-  const needsReviewCount = merged.filter(r => r.importStatus !== "READY").length;
+  const saiposWithPhone       = saiposPhone.size;
+  const nemoWithPhone         = nemoPhone.size;
+  const phoneMatches          = [...saiposPhone.keys()].filter(p => nemoPhone.has(p)).length;
+  const saiposOnly            = saiposWithPhone - phoneMatches;
+  const nemoOnly              = nemoWithPhone - phoneMatches;
+  const readyCount            = merged.filter(r => r.importStatus === "READY").length;
+  const needsReviewCount      = merged.filter(r => r.importStatus !== "READY").length;
+  const noPhoneWithDocument   = noPhoneImportable.filter(r => r.document).length;
+  const noPhoneWithEmail      = noPhoneImportable.filter(r => r.email).length;
+  const noPhoneWithAddress    = noPhoneImportable.filter(r => r.addresses.length > 0).length;
 
   return {
     merged,
-    noPhone,
+    noPhone,                // skipped — insufficient data
+    noPhoneImportable,      // will be imported as non-contactable CRM records
     stats: {
       saiposTotal: saipos.length,
       nemoTotal: nemo.length,
@@ -817,7 +900,12 @@ export function matchAndMerge(saipos: SaiposCustomerRow[], nemo: NemoCustomerRow
       phoneMatches,
       saiposOnly,
       nemoOnly,
-      noPhoneCount: noPhone.length,
+      noPhoneCount:          noPhoneImportable.length + noPhone.length,
+      noPhoneImportableCount: noPhoneImportable.length,
+      noPhoneSkippedCount:    noPhone.length,
+      noPhoneWithDocument,
+      noPhoneWithEmail,
+      noPhoneWithAddress,
       conflictCount: 0,
       readyCount,
       needsReviewCount,
@@ -845,8 +933,9 @@ export function buildPreview(match: MatchResult, sold: SoldItemsResult): SaiposN
     consolidatedRowCount:          sold.consolidatedRowCount,
     duplicateAggregateGroupsCount: sold.duplicateGroups.length,
     duplicateAggregateGroups:      sold.duplicateGroups,
-    sampleMerged:  match.merged.slice(0, 10),
-    sampleNoPhone: match.noPhone.slice(0, 10),
+    sampleMerged:              match.merged.slice(0, 10),
+    sampleNoPhone:             match.noPhone.slice(0, 10),
+    sampleNoPhoneImportable:   match.noPhoneImportable.slice(0, 10),
     topProducts,
   };
 }
@@ -883,12 +972,15 @@ export async function executeImport(
   report: StoredReport,
 ): Promise<SaiposNemoExecuteResult> {
   const { merged, noPhone, soldRows, soldMeta } = report;
+  const noPhoneImportable: NoPhoneImportableCustomer[] = report.noPhoneImportable ?? [];
 
-  let customersCreated    = 0;
-  let customersUpdated    = 0;
-  let addressesCreated    = 0;
-  let productAggCreated   = 0;
-  let productAggSkipped   = 0;
+  let contactableCreated      = 0;
+  let contactableUpdated      = 0;
+  let nonContactableCreated   = 0;
+  let nonContactableUpdated   = 0;
+  let addressesCreated        = 0;
+  let productAggCreated       = 0;
+  let productAggSkipped       = 0;
 
   // ── Upsert customers in batches ───────────────────────────────────────────
   const phones = merged.map(r => r.phone);
@@ -940,7 +1032,7 @@ export async function executeImport(
         },
       }))
     );
-    customersCreated += batch.length;
+    contactableCreated += batch.length;
     addressesCreated += batch.reduce((s, r) => s + r.addresses.filter(a => !!a.street).length, 0);
   }
 
@@ -964,7 +1056,7 @@ export async function executeImport(
         return prisma.customer.update({ where: { id: ex.id }, data: patch });
       })
     );
-    customersUpdated += batch.length;
+    contactableUpdated += batch.length;
 
     // Create new addresses for updated customers (skip if street already exists)
     for (const r of batch) {
@@ -994,6 +1086,114 @@ export async function executeImport(
         });
         addressesCreated += newAddrs.length;
       }
+    }
+  }
+
+  // ── Upsert no-phone customers as non-contactable CRM records ─────────────
+  for (const r of noPhoneImportable) {
+    let existingId: string | null = null;
+
+    // Dedup: document → email → create new
+    if (r.document) {
+      const found = await prisma.customer.findFirst({
+        where: { restaurantId, document: r.document },
+        select: { id: true },
+      });
+      if (found) existingId = found.id;
+    }
+    if (!existingId && r.email) {
+      const found = await prisma.customer.findFirst({
+        where: { restaurantId, email: r.email },
+        select: { id: true },
+      });
+      if (found) existingId = found.id;
+    }
+
+    if (existingId) {
+      await prisma.customer.update({
+        where: { id: existingId },
+        data: {
+          crmContactable:       false,
+          contactStatus:        "SEM_TELEFONE",
+          dataEnrichmentStatus: "NEEDS_ENRICHMENT",
+          ...(r.document               ? { document: r.document }                       : {}),
+          ...(r.email                  ? { email: r.email }                             : {}),
+          ...(r.birthDate              ? { birthDate: r.birthDate }                     : {}),
+          ...(r.importedOrderCount !== null ? { importedOrderCount: r.importedOrderCount } : {}),
+          ...(r.importedTotalSpent !== null ? { importedTotalSpent: r.importedTotalSpent } : {}),
+          ...(r.averageTicket !== null  ? { averageTicket: r.averageTicket }            : {}),
+          ...(r.importedLastOrderAt !== null ? { importedLastOrderAt: r.importedLastOrderAt } : {}),
+          ...(r.financialBalance !== null    ? { financialBalance: r.financialBalance }      : {}),
+          ...(r.financialBalancePeriod !== null ? { financialBalancePeriod: r.financialBalancePeriod } : {}),
+          ...(r.notes ? { notes: r.notes } : {}),
+        },
+      });
+      nonContactableUpdated++;
+      // Add any new addresses
+      if (r.addresses.length > 0) {
+        const existingAddrs = await prisma.address.findMany({
+          where: { customerId: existingId },
+          select: { street: true, city: true },
+        });
+        const existingKeys = new Set(existingAddrs.map(a => `${a.street}|${a.city}`));
+        const newAddrs = r.addresses.filter(a => !!a.street && !existingKeys.has(`${a.street}|${a.city ?? ""}`));
+        if (newAddrs.length > 0) {
+          await prisma.address.createMany({
+            data: newAddrs.map((a, i) => ({
+              customerId:   existingId!,
+              street:       a.street!,
+              number:       a.number ?? "",
+              neighborhood: a.neighborhood ?? "",
+              city:         a.city ?? "",
+              state:        a.state ?? "",
+              zipCode:      a.zipCode ?? "",
+              complement:   a.complement ?? undefined,
+              label:        a.reference ?? undefined,
+              isDefault:    i === 0 && existingAddrs.length === 0,
+            })),
+          });
+          addressesCreated += newAddrs.length;
+        }
+      }
+    } else {
+      await prisma.customer.create({
+        data: {
+          restaurantId,
+          name:                 r.name,
+          phone:                null,
+          crmContactable:       false,
+          contactStatus:        "SEM_TELEFONE",
+          dataEnrichmentStatus: "NEEDS_ENRICHMENT",
+          isGuest:              false,
+          document:             r.document ?? undefined,
+          email:                r.email ?? undefined,
+          birthDate:            r.birthDate ?? undefined,
+          importedOrderCount:   r.importedOrderCount ?? undefined,
+          importedTotalSpent:   r.importedTotalSpent ?? undefined,
+          averageTicket:        r.averageTicket ?? undefined,
+          importedLastOrderAt:  r.importedLastOrderAt ?? undefined,
+          financialBalance:     r.financialBalance ?? undefined,
+          financialBalancePeriod: r.financialBalancePeriod ?? undefined,
+          notes:                r.notes ?? undefined,
+          addresses: r.addresses.length > 0 ? {
+            create: r.addresses
+              .filter(a => !!a.street)
+              .map((a, i) => ({
+                street:       a.street!,
+                number:       a.number ?? "",
+                neighborhood: a.neighborhood ?? "",
+                city:         a.city ?? "",
+                state:        a.state ?? "",
+                zipCode:      a.zipCode ?? "",
+                complement:   a.complement ?? undefined,
+                label:        a.reference ?? undefined,
+                isDefault:    i === 0,
+              })),
+          } : undefined,
+        },
+      });
+      nonContactableCreated++;
+      addressesCreated += r.addresses.filter(a => !!a.street).length;
     }
   }
 
@@ -1037,9 +1237,11 @@ export async function executeImport(
   }
 
   return {
-    customersCreated,
-    customersUpdated,
-    customersSkippedNoPhone: noPhone.length,
+    contactableCustomersCreated:    contactableCreated,
+    contactableCustomersUpdated:    contactableUpdated,
+    nonContactableCustomersCreated: nonContactableCreated,
+    nonContactableCustomersUpdated: nonContactableUpdated,
+    noPhoneSkippedInsufficientData: noPhone.length,
     addressesCreated,
     productAggregatesCreated: productAggCreated,
     productAggregatesSkipped: productAggSkipped,

@@ -63,10 +63,11 @@ export async function POST(req: NextRequest) {
 
     // Store parsed data in ImportJob so execute can run without re-parsing files
     const storedReport: StoredReport = {
-      merged:   matchResult.merged,
-      noPhone:  matchResult.noPhone,
-      soldRows: soldResult.rows,
-      soldMeta: soldResult.meta,
+      merged:            matchResult.merged,
+      noPhone:           matchResult.noPhone,
+      noPhoneImportable: matchResult.noPhoneImportable,
+      soldRows:          soldResult.rows,
+      soldMeta:          soldResult.meta,
       preview,
     };
 

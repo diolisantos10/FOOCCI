@@ -235,7 +235,7 @@ async function run(conversationId: string): Promise<void> {
   }
 
   // Send via Evolution API and log
-  const toPhone = conversation.customer.phone.replace(/^\+/, "");
+  const toPhone = conversation.customer.phone!.replace(/^\+/, ""); // WhatsApp customers always have a phone
   await sendReply(evolutionResult.data, toPhone, replyText, conversationId);
 }
 

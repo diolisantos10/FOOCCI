@@ -404,7 +404,7 @@ export class SaiposIntegrationService {
       total:        unknown;
       createdAt:    Date;
       notes:        string | null;
-      customer:     { name: string; phone: string };
+      customer:     { name: string; phone: string | null };
       deliveryAddress: {
         street: string; number: string; complement: string | null;
         neighborhood: string; city: string; state: string; zipCode: string;
@@ -464,7 +464,7 @@ export class SaiposIntegrationService {
       total_amount: toCents(order.total),
       customer: {
         name:     order.customer.name,
-        phone:    order.customer.phone,
+        phone:    order.customer.phone ?? "",
         document: "",
       },
       order_method: orderMethod,

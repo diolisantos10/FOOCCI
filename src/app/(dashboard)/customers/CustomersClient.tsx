@@ -13,7 +13,7 @@ export type FilterTab = "all" | "vip" | "inactive" | "morno" | "frio" | "neverOr
 export type CustomerRow = {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
   totalOrders: number;
   totalSpend: number;
@@ -110,7 +110,7 @@ export default function CustomersClient({
   function openEdit(c: CustomerRow) {
     setEditTarget(c);
     setEditName(c.name);
-    setEditPhone(c.phone);
+    setEditPhone(c.phone ?? "");
     setEditEmail(c.email ?? "");
     setEditErr("");
   }
@@ -278,7 +278,7 @@ export default function CustomersClient({
                     {c.name}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-gray-600">{isGuestIdentifier(c.phone) ? "—" : c.phone}</td>
+                <td className="px-4 py-3 text-gray-600">{!c.phone || isGuestIdentifier(c.phone) ? "—" : c.phone}</td>
                 <td className="px-4 py-3 font-medium text-gray-700">
                   {c.totalSpend.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                 </td>
@@ -341,7 +341,7 @@ export default function CustomersClient({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-gray-900">{c.name}</p>
-                  <p className="truncate text-xs text-gray-500">{isGuestIdentifier(c.phone) ? "—" : c.phone}</p>
+                  <p className="truncate text-xs text-gray-500">{!c.phone || isGuestIdentifier(c.phone) ? "—" : c.phone}</p>
                 </div>
               </Link>
               <div className="shrink-0 text-right">

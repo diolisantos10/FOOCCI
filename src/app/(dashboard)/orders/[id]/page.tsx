@@ -60,7 +60,7 @@ export default async function OrderDetailPage({
                 {order.customer.name}
               </Link>
               <p className="text-sm text-gray-500">
-                {isGuestIdentifier(order.customer.phone) ? "Telefone não informado" : order.customer.phone}
+                {!order.customer.phone || isGuestIdentifier(order.customer.phone) ? "Telefone não informado" : order.customer.phone}
               </p>
             </div>
             <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">

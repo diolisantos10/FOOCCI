@@ -296,9 +296,11 @@ function DoneScreen({
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat label="Clientes criados"   value={result.customersCreated} />
-        <Stat label="Clientes atualizados" value={result.customersUpdated} />
-        <Stat label="Sem telefone (ignorados)" value={result.customersSkippedNoPhone} />
+        <Stat label="Clientes contactáveis criados"   value={result.contactableCustomersCreated} />
+        <Stat label="Clientes contactáveis atualizados" value={result.contactableCustomersUpdated} />
+        <Stat label="Sem telefone — importados no CRM" value={result.nonContactableCustomersCreated} sub="Não contatáveis" />
+        <Stat label="Sem telefone — atualizados" value={result.nonContactableCustomersUpdated} sub="Não contatáveis" />
+        <Stat label="Sem telefone — ignorados" value={result.noPhoneSkippedInsufficientData} sub="Dados insuficientes" />
         <Stat label="Endereços criados"  value={result.addressesCreated} />
         {result.productAggregatesCreated > 0 && (
           <Stat label="Agregados de vendas" value={result.productAggregatesCreated} sub="Produtos/categorias" />

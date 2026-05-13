@@ -480,7 +480,7 @@ export default async function CustomerDetailPage({
       <CustomerProfileClient
         id={customer.id}
         name={customer.name}
-        phone={customer.phone}
+        phone={customer.phone ?? ""}
         email={customer.email}
         totalOrders={customer.totalOrders}
         totalSpend={totalSpend}

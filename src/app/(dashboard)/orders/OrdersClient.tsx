@@ -182,7 +182,7 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
     id:         o.id,
     num:        index + 1,
     customer:   o.customer.name,
-    phone:      isGuestIdentifier(o.customer.phone) ? "Telefone não informado" : o.customer.phone,
+    phone:      !o.customer.phone || isGuestIdentifier(o.customer.phone) ? "Telefone não informado" : o.customer.phone,
     channel:    "Online",
     total:      parseFloat(o.total),
     subtotal:   parseFloat(o.subtotal),

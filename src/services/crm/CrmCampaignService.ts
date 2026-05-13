@@ -86,11 +86,12 @@ export async function resolveAudience(
   const now = new Date();
 
   const baseWhere = {
-    restaurantId: rid,
-    isGuest:      false,
-    isActive:     true,
-    hasOptedOut:  false,
-    phone:        { not: "" },
+    restaurantId:   rid,
+    isGuest:        false,
+    isActive:       true,
+    hasOptedOut:    false,
+    crmContactable: true,           // exclude no-phone imported customers
+    phone:          { not: null },  // belt-and-suspenders: require a real phone
   };
 
   const baseSelect = {
@@ -100,7 +101,7 @@ export async function resolveAudience(
   } as const;
 
   type Row = {
-    id: string; name: string; phone: string;
+    id: string; name: string; phone: string | null;
     tier: string; segment: string;
     totalOrders: number; totalSpend: { toNumber(): number };
     lastOrderAt: Date | null;
@@ -108,11 +109,11 @@ export async function resolveAudience(
 
   function serialize(rows: Row[]): AudienceCustomer[] {
     return rows
-      .filter((r) => !isGuestIdentifier(r.phone) && r.phone.trim() !== "")
+      .filter((r) => r.phone && !isGuestIdentifier(r.phone) && r.phone.trim() !== "")
       .map((r) => ({
         id:          r.id,
         name:        r.name,
-        phone:       r.phone,
+        phone:       r.phone!,   // filter above guarantees non-null
         tier:        r.tier,
         segment:     r.segment,
         totalOrders: r.totalOrders,
