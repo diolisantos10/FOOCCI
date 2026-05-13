@@ -226,7 +226,8 @@ function parseNemo(buffer: Buffer): NemoRow[] {
   for (const c of cols) {
     if (addrNorms.has(c.normalizedBase)) {
       const gi = c.occurrence - 1;
-      groupMap[gi][ADDR_KEYS[c.normalizedBase]!] = c.colIndex;
+      const gm = groupMap[gi];
+      if (gm) gm[ADDR_KEYS[c.normalizedBase]!] = c.colIndex;
     }
   }
 
