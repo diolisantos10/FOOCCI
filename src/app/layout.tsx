@@ -32,7 +32,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className={inter.variable}>
-      <body className="antialiased">
+      <body className="antialiased overflow-x-hidden">
         <AppVersionLogger />
         <SessionProvider>{children}</SessionProvider>
       </body>

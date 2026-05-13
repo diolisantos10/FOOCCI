@@ -1,8 +1,41 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
+
+// ─── Sound alert (Web Audio API beep, no external file needed) ────────────────
+
+const SOUND_PREF_KEY = "foocci_order_sound";
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+    // Second beep
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(1100, ctx.currentTime + 0.5);
+    gain2.gain.setValueAtTime(0.3, ctx.currentTime + 0.5);
+    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9);
+    osc2.start(ctx.currentTime + 0.5);
+    osc2.stop(ctx.currentTime + 0.9);
+  } catch {
+    // Browser may block AudioContext without user gesture — silent fail
+  }
+}
 
 // Display name for the active manager/POS integration shown in order detail.
 // When Saipos is active this is "Saipos". Replace here (or derive from order data)
@@ -1250,23 +1283,55 @@ export default function OrdersClient() {
   const [dateFrom,     setDateFrom]     = useState("");
   const [dateTo,       setDateTo]       = useState("");
   const [sortBy,       setSortBy]       = useState<SortKey>("status");
-  const [,             setTick]         = useState(0);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const saved = localStorage.getItem(SOUND_PREF_KEY);
+    return saved === null ? true : saved === "true";
+  });
+  const knownIds = useRef<Set<string>>(new Set());
+  const hasFetched = useRef(false);
 
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  function toggleSound() {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem(SOUND_PREF_KEY, String(next));
+      return next;
+    });
+  }
 
-  useEffect(() => {
+  const fetchOrders = useCallback(() => {
     fetch("/api/orders?limit=100")
       .then((r) => r.json())
       .then((res: { success: boolean; data?: { data: ApiOrder[] } }) => {
         if (res.success && Array.isArray(res.data?.data)) {
-          setOrders(res.data.data.map(apiOrderToMock));
+          const incoming = res.data.data.map(apiOrderToMock);
+
+          // Sound alert: detect new IDs after first load
+          if (hasFetched.current) {
+            const newOnes = incoming.filter((o) => !knownIds.current.has(o.id));
+            if (newOnes.length > 0 && soundEnabled) {
+              playBeep();
+            }
+          }
+          hasFetched.current = true;
+          incoming.forEach((o) => knownIds.current.add(o.id));
+
+          setOrders(incoming);
         }
       })
       .catch((err) => console.error("[OrdersClient] fetch failed", err));
-  }, []);
+  }, [soundEnabled]);
+
+  // Initial load
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // Poll every 30 seconds
+  useEffect(() => {
+    const id = setInterval(fetchOrders, 30_000);
+    return () => clearInterval(id);
+  }, [fetchOrders]);
 
   const filtered  = useMemo(
     () => applySort(orders, sortBy),
@@ -1287,13 +1352,27 @@ export default function OrdersClient() {
   }, [filtered, statusFilter, searchQuery]);
   const selectedOrder = orders.find((o) => o.id === selectedId) ?? null;
 
+  async function persistStatus(id: string, status: OrderStatus) {
+    try {
+      await fetch(`/api/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+    } catch (err) {
+      console.error("[OrdersClient] status persist failed", err);
+    }
+  }
+
   function handleAction(id: string, next: OrderStatus) {
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: next } : o)));
+    void persistStatus(id, next);
   }
 
   function handleCancel(id: string) {
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "CANCELLED" as OrderStatus } : o)));
     if (selectedId === id) setSelectedId(null);
+    void persistStatus(id, "CANCELLED");
   }
 
   function handleSelect(id: string) {
@@ -1309,23 +1388,44 @@ export default function OrdersClient() {
   }
 
   function handleBulkConfirm() {
+    const ids = [...checkedIds].filter((id) => orders.find((o) => o.id === id)?.status === "PENDING");
     setOrders((prev) =>
       prev.map((o) => checkedIds.has(o.id) && o.status === "PENDING" ? { ...o, status: "CONFIRMED" as OrderStatus } : o)
     );
     setCheckedIds(new Set());
+    ids.forEach((id) => void persistStatus(id, "CONFIRMED"));
   }
 
   function handleBulkDispatch() {
+    const ids = [...checkedIds].filter((id) => orders.find((o) => o.id === id)?.status === "READY");
     setOrders((prev) =>
       prev.map((o) => checkedIds.has(o.id) && o.status === "READY" ? { ...o, status: "OUT_FOR_DELIVERY" as OrderStatus } : o)
     );
     setCheckedIds(new Set());
+    ids.forEach((id) => void persistStatus(id, "OUT_FOR_DELIVERY"));
   }
 
   return (
     <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "calc(100vh - 56px)" }}>
 
       <PerformanceBar orders={orders} />
+
+      {/* ── Sound alert toggle ── */}
+      <div className="flex justify-end px-4 pt-2">
+        <button
+          type="button"
+          onClick={toggleSound}
+          title={soundEnabled ? "Desativar som dos pedidos" : "Ativar som dos pedidos"}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            soundEnabled
+              ? "bg-orange-50 text-orange-600 hover:bg-orange-100"
+              : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+          }`}
+        >
+          {soundEnabled ? "🔔" : "🔕"}
+          <span>{soundEnabled ? "Som ativo" : "Som desativado"}</span>
+        </button>
+      </div>
 
       <SearchBar
         searchQuery={searchQuery}

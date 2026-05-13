@@ -40,12 +40,15 @@ type Category = {
   items: Item[];
 };
 
+type PromotionBanner = { id: string; name: string; imageUrl: string };
+
 type Props = {
   slug: string;
   restaurant: { name: string; logoUrl: string | null };
   categories: Category[];
   featured: Item[];
   promoBanner?: Item | null;
+  promotionBanners?: PromotionBanner[];
   brandPrimaryColor?: string | null;
   instagramUrl?: string | null;
   tiktokUrl?: string | null;
@@ -526,7 +529,7 @@ function PlaceholderBanner() {
     <div className="mx-auto max-w-2xl px-4 pb-5">
       <div className="relative overflow-hidden rounded-2xl px-5 py-6 shadow-sm" style={{ backgroundColor: 'var(--brand-primary)' }}>
         <p className="text-xl font-bold text-white leading-snug">🔥 Combo do dia</p>
-        <p className="mt-1 text-sm text-orange-100">Pizza + bebida com desconto especial</p>
+        <p className="mt-1 text-sm text-white/80">Pizza + bebida com desconto especial</p>
         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-4xl opacity-30">🍕</span>
       </div>
     </div>
@@ -535,7 +538,7 @@ function PlaceholderBanner() {
 
 // ── Main Client Component ─────────────────────────────────────────────────────
 
-export function QRMenuClient({ slug, restaurant, categories, featured, promoBanner, brandPrimaryColor, instagramUrl, tiktokUrl, restaurantPhone, googleReviewUrl }: Props) {
+export function QRMenuClient({ slug, restaurant, categories, featured, promoBanner, promotionBanners = [], brandPrimaryColor, instagramUrl, tiktokUrl, restaurantPhone, googleReviewUrl }: Props) {
   const pc = brandPrimaryColor || '#f97316';
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>(
@@ -744,7 +747,19 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
           {/* Static promo banner */}
           <PlaceholderBanner />
 
-          {/* DB-driven promo banner */}
+          {/* Promotion image banners from Promotions table */}
+          {promotionBanners.length > 0 && (
+            <div className="mx-auto max-w-2xl px-4 pb-4 space-y-3">
+              {promotionBanners.map((b) => (
+                <div key={b.id} className="overflow-hidden rounded-2xl shadow-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={b.imageUrl} alt={b.name} className="w-full object-cover" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* DB-driven promo banner (menu category item) */}
           {promoBanner && (
             <div className="mx-auto max-w-2xl px-4 pb-5">
               <PromoBanner

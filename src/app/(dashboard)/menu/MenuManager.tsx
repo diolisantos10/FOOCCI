@@ -407,7 +407,7 @@ function SortableItemRow({
                       <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                         Adicionar em categoria
                       </p>
-                      <div className="max-h-48 overflow-y-auto">
+                      <div className="max-h-64 overflow-y-auto">
                       {otherManualCategories.map((cat) => (
                         <button
                           key={cat.id}
@@ -1103,15 +1103,16 @@ function NewItemModal({
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
         <div
-          className="relative w-full max-w-md rounded-xl bg-white shadow-2xl"
+          className="relative flex flex-col w-full max-w-md rounded-xl bg-white shadow-2xl overflow-hidden"
+          style={{ maxHeight: "90vh" }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
             <h2 className="text-sm font-semibold text-gray-900">Novo Produto</h2>
             <button type="button" onClick={onClose} className="text-lg leading-none text-gray-400 hover:text-gray-600" aria-label="Fechar">✕</button>
           </div>
 
-          <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
+          <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
             {/* Category */}
             <div className="space-y-1">
               <label className="block text-xs font-medium text-gray-700">Categoria <span className="text-red-500">*</span></label>
@@ -1313,6 +1314,33 @@ function TopBar({
   const [fillingDesc, setFillingDesc] = useState(false);
   const [fillResult, setFillResult] = useState<string | null>(null);
 
+  function downloadCSV() {
+    const rows: string[] = [
+      ["Categoria", "Produto", "Descrição", "Preço", "Ativo", "Disponível", "Ingredientes", "URL da Imagem"].join(";"),
+    ];
+    for (const cat of categories) {
+      for (const item of cat.items) {
+        rows.push([
+          cat.name,
+          item.name,
+          item.description ?? "",
+          item.price.toFixed(2).replace(".", ","),
+          item.isActive ? "Sim" : "Não",
+          item.isAvailable ? "Sim" : "Não",
+          item.ingredients ?? "",
+          item.imageUrl ?? "",
+        ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";"));
+      }
+    }
+    const blob = new Blob(["﻿" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "cardapio.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleFillDescriptions() {
     setFillingDesc(true);
     setFillResult(null);
@@ -1355,6 +1383,14 @@ function TopBar({
         </Link>
         {categories.length > 0 && (
           <>
+            <button
+              type="button"
+              onClick={downloadCSV}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              title="Baixar cardápio completo em CSV"
+            >
+              Baixar CSV
+            </button>
             <button
               type="button"
               onClick={onBulkPrice}

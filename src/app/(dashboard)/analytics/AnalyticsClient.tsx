@@ -839,6 +839,46 @@ export function AnalyticsClient() {
           </div>
         </Card>
       )}
+
+      {/* ── Slow / low-selling products ── */}
+      {data && data.topProducts.length > 5 && (() => {
+        const sorted = [...data.topProducts].sort((a, b) => a.revenue - b.revenue);
+        const slow = sorted.slice(0, Math.min(10, Math.floor(data.topProducts.length / 2)));
+        return (
+          <Card title="Produtos com baixo desempenho no período">
+            <p className="mb-3 text-xs text-gray-400">
+              Itens com menor receita no período selecionado. Considere ações de destaque, promoção ou revisão de preço.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b text-left text-gray-400">
+                    <th className="pb-2 pr-4 font-medium">Produto</th>
+                    <th className="pb-2 pr-4 font-medium">Categoria</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Receita</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Qtd vendida</th>
+                    <th className="pb-2 font-medium text-right">Pedidos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {slow.map((p, i) => (
+                    <tr key={i}>
+                      <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
+                      <td className="py-2 pr-4 text-gray-500">{p.category ?? "—"}</td>
+                      <td className="py-2 pr-4 text-right text-amber-600 font-medium">{fmtBRL(p.revenue)}</td>
+                      <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
+                      <td className="py-2 text-right text-gray-500">{fmtNum(p.orderCount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-[11px] text-gray-400 italic">
+              Produtos sem nenhuma venda no período não aparecem aqui — eles não geram registros de pedido.
+            </p>
+          </Card>
+        );
+      })()}
     </div>
   );
 }

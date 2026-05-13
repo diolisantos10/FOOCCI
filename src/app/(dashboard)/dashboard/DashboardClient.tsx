@@ -4,6 +4,16 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { OnboardingStatusData } from "@/app/api/onboarding/status/route";
 
+interface DashboardKPIs {
+  ordersToday:   number;
+  revenueToday:  number;
+  avgTicket:     number;
+  openOrders:    number;
+  totalCustomers: number;
+  revenue7Days:  number;
+  trend7Days:    Array<{ date: string; revenue: number }>;
+}
+
 // ─── Time-filter types ────────────────────────────────────────
 type Period = "today" | "yesterday" | "7days" | "month" | "year";
 
@@ -481,7 +491,25 @@ function KPICard({
   );
 }
 
-function KPISection({ period }: { period: Period }) {
+function KPISection({ period, kpis }: { period: Period; kpis: DashboardKPIs | null }) {
+  if (period === "today" && kpis) {
+    return (
+      <>
+        <KPICard label="Pedidos hoje"  value={kpis.ordersToday.toLocaleString("pt-BR")} />
+        <KPICard label="Receita hoje"  value={fmtCurrency(kpis.revenueToday)} accent />
+        <KPICard label="Ticket médio"  value={kpis.ordersToday > 0 ? fmtCurrency(kpis.avgTicket) : "—"} />
+      </>
+    );
+  }
+  if (period === "7days" && kpis) {
+    return (
+      <>
+        <KPICard label="Pedidos em aberto" value={kpis.openOrders.toLocaleString("pt-BR")} />
+        <KPICard label="Receita 7 dias"    value={fmtCurrency(kpis.revenue7Days)} accent />
+        <KPICard label="Clientes totais"   value={kpis.totalCustomers.toLocaleString("pt-BR")} />
+      </>
+    );
+  }
   const k = MOCK_PERIOD_KPIS[period];
   return (
     <>
@@ -496,8 +524,9 @@ function KPISection({ period }: { period: Period }) {
 //  3. LiveStatus
 // ─────────────────────────────────────────────────────────────
 
-function LiveStatus() {
-  const { preparing, delayed, cancelled } = MOCK_LIVE;
+function LiveStatus({ openOrders }: { openOrders: number | null }) {
+  const { delayed, cancelled } = MOCK_LIVE;
+  const preparing = openOrders ?? MOCK_LIVE.preparing;
 
   const items = [
     {
@@ -630,10 +659,18 @@ function BarChart({ data }: { data: ChartPoint[] }) {
   );
 }
 
-function SalesChart() {
+function SalesChart({ kpis }: { kpis: DashboardKPIs | null }) {
   const [view, setView] = useState<"today" | "week">("today");
-  const data = view === "today" ? MOCK_CHART_TODAY : MOCK_CHART_WEEK;
 
+  const weekData: ChartPoint[] = kpis
+    ? kpis.trend7Days.map((d) => ({
+        label:   new Date(d.date + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short" }),
+        revenue: d.revenue,
+        orders:  0,
+      }))
+    : MOCK_CHART_WEEK;
+
+  const data = view === "today" ? MOCK_CHART_TODAY : weekData;
   const totalRevenue = data.reduce((s, d) => s + d.revenue, 0);
   const totalOrders  = data.reduce((s, d) => s + d.orders,  0);
 
@@ -1066,12 +1103,20 @@ function RevenueHeadline({ period }: { period: Period }) {
 export default function DashboardClient({ userName }: { userName: string }) {
   const [period, setPeriod]     = useState<Period>("today");
   const [setup, setSetup]       = useState<SetupStatus>(null);
+  const [kpis, setKpis]         = useState<DashboardKPIs | null>(null);
 
   useEffect(() => {
     fetch("/api/onboarding/status")
       .then((r) => r.json())
       .then((j: { data?: OnboardingStatusData }) => { if (j.data) setSetup(j.data); })
-      .catch(() => { /* silent — dashboard works without onboarding status */ });
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/dashboard")
+      .then((r) => r.json())
+      .then((j: { data?: DashboardKPIs }) => { if (j.data) setKpis(j.data); })
+      .catch(() => {});
   }, []);
 
   return (
@@ -1097,11 +1142,11 @@ export default function DashboardClient({ userName }: { userName: string }) {
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
 
           {/* ── KPI CARDS ── */}
-          <KPISection period={period} />
+          <KPISection period={period} kpis={kpis} />
 
           {/* ── MAIN CHART (2 cols) + AI INSIGHTS PANEL (1 col) ── */}
           <div className="lg:col-span-2">
-            <SalesChart />
+            <SalesChart kpis={kpis} />
           </div>
 
           <div className="lg:col-span-1">

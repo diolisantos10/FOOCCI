@@ -136,6 +136,28 @@ export default async function QRMenuPage({
   // Best sellers: first 10 items across all categories
   const featured = sortedCategories.flatMap((c) => c.items).slice(0, 10);
 
+  // Active promotion image banners from Promotions table
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sun … 6=Sat
+  const rawBanners = await prisma.promotion.findMany({
+    where: {
+      restaurantId: restaurant.id,
+      status: "ACTIVE",
+      bannerImageUrl: { not: null },
+      OR: [
+        { startsAt: null },
+        { startsAt: { lte: today } },
+      ],
+      AND: [
+        { OR: [{ endsAt: null }, { endsAt: { gte: today } }] },
+      ],
+    },
+    select: { id: true, name: true, bannerImageUrl: true, daysOfWeek: true },
+  });
+  const promotionBanners = rawBanners
+    .filter((b) => !b.daysOfWeek || b.daysOfWeek.length === 0 || b.daysOfWeek.includes(dayOfWeek))
+    .map((b) => ({ id: b.id, name: b.name, imageUrl: b.bannerImageUrl! }));
+
   return (
     <QRMenuClient
       slug={params.slug}
@@ -143,6 +165,7 @@ export default async function QRMenuPage({
       categories={sortedCategories}
       featured={featured}
       promoBanner={promoBanner}
+      promotionBanners={promotionBanners}
       brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
       instagramUrl={brandConfig?.instagramUrl ?? null}
       tiktokUrl={brandConfig?.tiktokUrl ?? null}

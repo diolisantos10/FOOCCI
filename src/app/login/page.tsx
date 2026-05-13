@@ -122,6 +122,12 @@ function LoginForm() {
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
+
+        <div className="mt-4 text-center">
+          <a href="/recover" className="text-sm text-orange-500 hover:underline">
+            Esqueci minha senha
+          </a>
+        </div>
       </div>
     </div>
   );
