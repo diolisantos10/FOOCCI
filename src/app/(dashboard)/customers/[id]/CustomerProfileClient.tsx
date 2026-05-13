@@ -36,6 +36,13 @@ interface Props {
   interactions: InteractionItem[];
   tags: CustomerTag[];
   addresses: AddressItem[];
+  notes: string | null;
+  document: string | null;
+  financialBalance: number | null;
+  importedOrderCount: number | null;
+  importedTotalSpent: number | null;
+  importedLastOrderAt: string | null;
+  averageTicket: number | null;
 }
 
 export interface InteractionItem {
@@ -692,11 +699,27 @@ function OverviewTab({
   behavior,
   insights,
   addresses,
+  notes,
+  document,
+  financialBalance,
+  importedOrderCount,
+  importedTotalSpent,
+  importedLastOrderAt,
+  averageTicket,
 }: {
   behavior: BehaviorData;
   insights: InsightItem[];
   addresses: AddressItem[];
+  notes: string | null;
+  document: string | null;
+  financialBalance: number | null;
+  importedOrderCount: number | null;
+  importedTotalSpent: number | null;
+  importedLastOrderAt: string | null;
+  averageTicket: number | null;
 }) {
+  const hasImported = document !== null || financialBalance !== null || importedOrderCount !== null || importedTotalSpent !== null || importedLastOrderAt !== null || averageTicket !== null || notes !== null;
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Left column — 2/3 */}
@@ -712,20 +735,58 @@ function OverviewTab({
 
       {/* Right column — 1/3 */}
       <div className="space-y-6">
-        <Section title="Preferências" icon="❤️">
-          <Placeholder label="Restrições · Alergias · Prato favorito" height="h-24" />
-        </Section>
-
         <Section title="Endereços" icon="📍">
           <AddressList addresses={addresses} />
         </Section>
 
-        <Section title="Perfil de comportamento" icon="🧠">
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6">
-            <span className="text-xl">🧠</span>
-            <p className="mt-2 text-xs font-medium text-gray-400">Dados insuficientes ainda</p>
-          </div>
-        </Section>
+        {hasImported && (
+          <Section title="Dados Importados" icon="📥">
+            <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+              {document !== null && (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-gray-500">CPF / CNPJ</span>
+                  <span className="text-sm font-semibold text-gray-800">{document}</span>
+                </div>
+              )}
+              {financialBalance !== null && (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-gray-500">Saldo financeiro</span>
+                  <span className="text-sm font-semibold text-gray-800">{fmtCurrency(financialBalance)}</span>
+                </div>
+              )}
+              {importedOrderCount !== null && (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-gray-500">Pedidos (importado)</span>
+                  <span className="text-sm font-semibold text-gray-800">{importedOrderCount}</span>
+                </div>
+              )}
+              {importedTotalSpent !== null && (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-gray-500">Total gasto (importado)</span>
+                  <span className="text-sm font-semibold text-gray-800">{fmtCurrency(importedTotalSpent)}</span>
+                </div>
+              )}
+              {averageTicket !== null && (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-gray-500">Ticket médio (importado)</span>
+                  <span className="text-sm font-semibold text-gray-800">{fmtCurrency(averageTicket)}</span>
+                </div>
+              )}
+              {importedLastOrderAt !== null && (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-gray-500">Última compra (importado)</span>
+                  <span className="text-sm font-semibold text-gray-800">{new Date(importedLastOrderAt).toLocaleDateString("pt-BR")}</span>
+                </div>
+              )}
+              {notes !== null && (
+                <div className="px-4 py-3">
+                  <p className="text-xs text-gray-500 mb-1">Observações</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{notes}</p>
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
       </div>
     </div>
   );
@@ -1171,6 +1232,13 @@ export default function CustomerProfileClient({
   interactions,
   tags,
   addresses,
+  notes,
+  document,
+  financialBalance,
+  importedOrderCount,
+  importedTotalSpent,
+  importedLastOrderAt,
+  averageTicket,
 }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -1261,7 +1329,7 @@ export default function CustomerProfileClient({
 
       {/* Tab content */}
       <div className="mx-auto max-w-7xl p-6">
-        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} addresses={addresses} />}
+        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} addresses={addresses} notes={notes} document={document} financialBalance={financialBalance} importedOrderCount={importedOrderCount} importedTotalSpent={importedTotalSpent} importedLastOrderAt={importedLastOrderAt} averageTicket={averageTicket} />}
         {activeTab === "history"      && <HistoryTab orders={orders} onOrderClick={setSelectedOrder} />}
         {activeTab === "interactions" && <InteractionsTab interactions={interactions} />}
         {activeTab === "actions"      && <ActionsTab tags={tags} />}

@@ -5,10 +5,17 @@ import { ImportService } from "@/services/crm/ImportService";
 import { OrderImportService } from "@/services/crm/OrderImportService";
 
 const customerMappingSchema = z.object({
-  phone:    z.string().min(1),
-  name:     z.string().optional(),
-  email:    z.string().optional(),
-  birthday: z.string().optional(),
+  phone:               z.string().min(1),
+  name:                z.string().optional(),
+  email:               z.string().optional(),
+  birthday:            z.string().optional(),
+  document:            z.string().optional(),
+  financialBalance:    z.string().optional(),
+  importedOrderCount:  z.string().optional(),
+  importedTotalSpent:  z.string().optional(),
+  importedLastOrderAt: z.string().optional(),
+  averageTicket:       z.string().optional(),
+  notes:               z.string().optional(),
 });
 
 const orderMappingSchema = z.object({

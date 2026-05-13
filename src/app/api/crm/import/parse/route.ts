@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
   const buffer = Buffer.from(await (file as File).arrayBuffer());
 
   let rows: Record<string, string>[] = [];
+  let duplicateHeaders: string[] = [];
 
   try {
     const wb = XLSX.read(buffer, { type: "buffer", raw: false, cellDates: true });
@@ -56,7 +57,16 @@ export async function POST(req: NextRequest) {
     }
 
     const headerRow = rawData[0] as unknown[];
-    const headers = headerRow.map((h) => String(h ?? "").trim());
+    const rawHeaders = headerRow.map((h) => String(h ?? "").trim());
+
+    // Detect and rename duplicate headers: second occurrence → "key_2"
+    const seenHeaders = new Map<string, number>();
+    const headers = rawHeaders.map((h) => {
+      const count = (seenHeaders.get(h) ?? 0) + 1;
+      seenHeaders.set(h, count);
+      if (count === 2) duplicateHeaders.push(h);
+      return count === 1 ? h : `${h}_2`;
+    });
 
     // Remaining rows → objects keyed by header
     rows = (rawData.slice(1) as unknown[][]).map((row) => {
@@ -87,5 +97,5 @@ export async function POST(req: NextRequest) {
 
   const columns = Object.keys(rows[0] ?? {});
 
-  return NextResponse.json({ columns, rows, totalRows: rows.length });
+  return NextResponse.json({ columns, rows, totalRows: rows.length, duplicateHeaders });
 }

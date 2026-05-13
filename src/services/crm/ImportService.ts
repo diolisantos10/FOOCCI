@@ -7,6 +7,13 @@ export interface FieldMapping {
   name?: string;
   email?: string;
   birthday?: string;
+  document?: string;
+  financialBalance?: string;
+  importedOrderCount?: string;
+  importedTotalSpent?: string;
+  importedLastOrderAt?: string;
+  averageTicket?: string;
+  notes?: string;
 }
 
 export interface NormalizedRow {
@@ -14,6 +21,13 @@ export interface NormalizedRow {
   phone: string;         // E.164
   email: string | null;
   birthday: Date | null;
+  document: string | null;
+  financialBalance: number | null;
+  importedOrderCount: number | null;
+  importedTotalSpent: number | null;
+  importedLastOrderAt: Date | null;
+  averageTicket: number | null;
+  notes: string | null;
   sourceRow: number;
 }
 
@@ -101,6 +115,27 @@ function parseBirthday(raw: string | undefined | null): Date | null {
   return null;
 }
 
+// ── Decimal parsing ───────────────────────────────────────────────────────────
+
+function parseDecimal(raw: string | undefined | null): number | null {
+  if (!raw?.trim()) return null;
+  // Handle Brazilian format: "1.234,56" or "1234,56" → 1234.56
+  const normalized = raw.trim()
+    .replace(/\./g, "")   // remove thousand separators
+    .replace(",", ".");    // decimal comma → period
+  const n = parseFloat(normalized);
+  if (isNaN(n)) return null;
+  return Math.round(n * 100) / 100;
+}
+
+// ── Integer parsing ───────────────────────────────────────────────────────────
+
+function parseIntField(raw: string | undefined | null): number | null {
+  if (!raw?.trim()) return null;
+  const n = parseInt(raw.trim().replace(/\D/g, ""), 10);
+  return isNaN(n) ? null : n;
+}
+
 // ── Row processing ────────────────────────────────────────────────────────────
 
 function mapRow(
@@ -121,20 +156,27 @@ function mapRow(
   const email = mapping.email
     ? (raw[mapping.email]?.trim() || null)
     : null;
-  const birthday = mapping.birthday ? parseBirthday(raw[mapping.birthday]) : null;
+  const birthday           = mapping.birthday          ? parseBirthday(raw[mapping.birthday])                   : null;
+  const document           = mapping.document          ? (raw[mapping.document]?.trim()  || null)               : null;
+  const financialBalance   = mapping.financialBalance   ? parseDecimal(raw[mapping.financialBalance])             : null;
+  const importedOrderCount = mapping.importedOrderCount ? parseIntField(raw[mapping.importedOrderCount])          : null;
+  const importedTotalSpent = mapping.importedTotalSpent ? parseDecimal(raw[mapping.importedTotalSpent])           : null;
+  const importedLastOrderAt = mapping.importedLastOrderAt ? parseBirthday(raw[mapping.importedLastOrderAt])       : null;
+  const averageTicket      = mapping.averageTicket      ? parseDecimal(raw[mapping.averageTicket])               : null;
+  const notes              = mapping.notes              ? (raw[mapping.notes]?.trim()    || null)               : null;
 
   // Validate email format if provided
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     // non-fatal — just drop email
     return {
       ok: true,
-      row: { name, phone, email: null, birthday, sourceRow: rowIndex },
+      row: { name, phone, email: null, birthday, document, financialBalance, importedOrderCount, importedTotalSpent, importedLastOrderAt, averageTicket, notes, sourceRow: rowIndex },
     };
   }
 
   return {
     ok: true,
-    row: { name, phone, email, birthday, sourceRow: rowIndex },
+    row: { name, phone, email, birthday, document, financialBalance, importedOrderCount, importedTotalSpent, importedLastOrderAt, averageTicket, notes, sourceRow: rowIndex },
   };
 }
 
@@ -172,6 +214,13 @@ function processRows(
       if (!existing.name && row.name) existing.name = row.name;
       if (!existing.email && row.email) existing.email = row.email;
       if (!existing.birthday && row.birthday) existing.birthday = row.birthday;
+      if (!existing.document && row.document) existing.document = row.document;
+      if (existing.financialBalance === null && row.financialBalance !== null) existing.financialBalance = row.financialBalance;
+      if (existing.importedOrderCount === null && row.importedOrderCount !== null) existing.importedOrderCount = row.importedOrderCount;
+      if (existing.importedTotalSpent === null && row.importedTotalSpent !== null) existing.importedTotalSpent = row.importedTotalSpent;
+      if (existing.importedLastOrderAt === null && row.importedLastOrderAt !== null) existing.importedLastOrderAt = row.importedLastOrderAt;
+      if (existing.averageTicket === null && row.averageTicket !== null) existing.averageTicket = row.averageTicket;
+      if (!existing.notes && row.notes) existing.notes = row.notes;
     } else {
       seenPhones.set(row.phone, valid.length);
       valid.push(row);
@@ -200,7 +249,7 @@ export class ImportService {
     const phones = valid.map((r) => r.phone);
     const existingRows = await prisma.customer.findMany({
       where: { restaurantId, phone: { in: phones } },
-      select: { id: true, phone: true, name: true, email: true, birthDate: true },
+      select: { id: true, phone: true, name: true, email: true, birthDate: true, notes: true, document: true },
     });
     const existingMap = new Map(existingRows.map((c) => [c.phone, c]));
 
@@ -214,6 +263,18 @@ export class ImportService {
         if (r.name && !existing.name) patch.name = r.name;
         if (r.email && !existing.email) patch.email = r.email;
         if (r.birthday && !existing.birthDate) patch.birthDate = r.birthday;
+        if (r.document && !existing.document) patch.document = r.document;
+        if (r.financialBalance !== null) patch.financialBalance = r.financialBalance;
+        if (r.importedOrderCount !== null) patch.importedOrderCount = r.importedOrderCount;
+        if (r.importedTotalSpent !== null) patch.importedTotalSpent = r.importedTotalSpent;
+        if (r.importedLastOrderAt !== null) patch.importedLastOrderAt = r.importedLastOrderAt;
+        if (r.averageTicket !== null) patch.averageTicket = r.averageTicket;
+        if (r.notes) {
+          // Append to existing notes if already present
+          patch.notes = existing.notes
+            ? `${existing.notes}\n${r.notes}`
+            : r.notes;
+        }
         return { id: existing.id, patch };
       });
 
@@ -260,6 +321,13 @@ export class ImportService {
             phone: r.phone,
             email: r.email ?? null,
             birthDate: r.birthday ?? null,
+            document: r.document ?? null,
+            financialBalance: r.financialBalance ?? null,
+            importedOrderCount: r.importedOrderCount ?? null,
+            importedTotalSpent: r.importedTotalSpent ?? null,
+            importedLastOrderAt: r.importedLastOrderAt ?? null,
+            averageTicket: r.averageTicket ?? null,
+            notes: r.notes ?? null,
           })),
           skipDuplicates: true,
         });

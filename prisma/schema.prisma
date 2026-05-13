@@ -117,6 +117,12 @@ model Customer {
   email        String?
   birthDate    DateTime?
   notes        String?
+  document             String?                         // CPF or CNPJ
+  financialBalance     Decimal?  @db.Decimal(10, 2)   // Saldo Financeiro
+  importedOrderCount   Int?                            // Qtd. Pedidos — from external import
+  importedTotalSpent   Decimal?  @db.Decimal(10, 2)   // Valor Total — from external import
+  importedLastOrderAt  DateTime?                       // Última Compra — from external import
+  averageTicket        Decimal?  @db.Decimal(10, 2)   // Ticket Médio — from external import
   totalOrders  Int       @default(0)
   totalSpend   Decimal   @default(0) @db.Decimal(10, 2)
   lastOrderAt  DateTime?

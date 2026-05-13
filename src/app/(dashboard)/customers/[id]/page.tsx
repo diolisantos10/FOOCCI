@@ -343,18 +343,25 @@ export default async function CustomerDetailPage({
   const customer = await prisma.customer.findUnique({
     where: { id: params.id },
     select: {
-      id:           true,
-      name:         true,
-      phone:        true,
-      email:        true,
-      totalOrders:  true,
-      totalSpend:   true,
-      lastOrderAt:  true,
-      createdAt:    true,
-      isActive:     true,
-      restaurantId: true,
-      tier:         true,
-      segment:      true,
+      id:                  true,
+      name:                true,
+      phone:               true,
+      email:               true,
+      totalOrders:         true,
+      totalSpend:          true,
+      lastOrderAt:         true,
+      createdAt:           true,
+      isActive:            true,
+      restaurantId:        true,
+      tier:                true,
+      segment:             true,
+      notes:               true,
+      document:            true,
+      financialBalance:    true,
+      importedOrderCount:  true,
+      importedTotalSpent:  true,
+      importedLastOrderAt: true,
+      averageTicket:       true,
       addresses: {
         orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
         select: {
@@ -490,6 +497,13 @@ export default async function CustomerDetailPage({
         interactions={interactions}
         tags={tags}
         addresses={addresses}
+        notes={customer.notes ?? null}
+        document={customer.document ?? null}
+        financialBalance={customer.financialBalance !== null ? Number(customer.financialBalance) : null}
+        importedOrderCount={customer.importedOrderCount ?? null}
+        importedTotalSpent={customer.importedTotalSpent !== null ? Number(customer.importedTotalSpent) : null}
+        importedLastOrderAt={customer.importedLastOrderAt?.toISOString() ?? null}
+        averageTicket={customer.averageTicket !== null ? Number(customer.averageTicket) : null}
       />
     </>
   );

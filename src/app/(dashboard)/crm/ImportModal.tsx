@@ -8,17 +8,25 @@ type ImportType = "customers" | "orders" | "customers_orders";
 type Step = "type" | "upload" | "map" | "preview" | "importing" | "done";
 
 interface ParsedFile {
-  columns:   string[];
-  rows:      Record<string, string>[];
-  totalRows: number;
-  fileName:  string;
+  columns:          string[];
+  rows:             Record<string, string>[];
+  totalRows:        number;
+  fileName:         string;
+  duplicateHeaders: string[];
 }
 
 interface CustomerMapping {
-  phone:     string;
-  name?:     string;
-  email?:    string;
-  birthday?: string;
+  phone:               string;
+  name?:               string;
+  email?:              string;
+  birthday?:           string;
+  document?:           string;
+  financialBalance?:   string;
+  importedOrderCount?: string;
+  importedTotalSpent?: string;
+  importedLastOrderAt?: string;
+  averageTicket?:      string;
+  notes?:              string;
 }
 
 interface OrderMapping {
@@ -97,10 +105,17 @@ function isOrderResult(r: ImportResult): r is OrderResult { return "createdOrder
 
 const HINTS = {
   // Customer-only mapping
-  phone:           ["telefone","phone","celular","fone","tel","whatsapp","mobile"],
-  name:            ["nome","name","cliente","customer","razao","razão"],
-  email:           ["email","e-mail","mail","correio"],
-  birthday:        ["aniversario","aniversário","nascimento","birthday","data_nascimento"],
+  phone:              ["telefone","phone","celular","fone","tel","whatsapp","mobile"],
+  name:               ["nome","name","cliente","customer","razao","razão"],
+  email:              ["email","e-mail","mail","correio"],
+  birthday:           ["aniversario","aniversário","nascimento","birthday","data_nascimento","data_aniversario","data_aniversário","data_nascimento","birth_date"],
+  document:           ["cpf/cnpj","cpf","cnpj","documento","document","tax_id"],
+  financialBalance:   ["saldo_financeiro","saldo financeiro","balance","financial_balance","credit_balance"],
+  importedOrderCount: ["qtd._pedidos","qtd_pedidos","qtd. pedidos","quantidade_pedidos","pedidos","total_pedidos","order_count","totalorders"],
+  importedTotalSpent: ["valor_total","valor total","total_gasto","gasto_total","totalspend","spent","lifetime_value"],
+  importedLastOrderAt:["ultima_compra","última_compra","ultima compra","última compra","last_purchase","lastorderat","last_order_at"],
+  averageTicket:      ["ticket_medio","ticket_médio","ticket medio","ticket médio","average_ticket","averageticket","avg_order_value"],
+  notes:              ["observacao_interna","observação_interna","observacao interna","observação interna","observacoes","observações","notas","notes","internal_notes","internalnotes"],
   // Order mapping
   customerPhone:   ["telefone_cliente","telefone","phone","celular","whatsapp","fone"],
   customerName:    ["nome_cliente","cliente","nome","customer_name","name"],
@@ -129,10 +144,17 @@ function findCol(columns: string[], hints: string[]): string | undefined {
 
 function autoDetectCustomer(columns: string[]): CustomerMapping {
   return {
-    phone:    findCol(columns, HINTS.phone) ?? columns[0] ?? "",
-    name:     findCol(columns, HINTS.name),
-    email:    findCol(columns, HINTS.email),
-    birthday: findCol(columns, HINTS.birthday),
+    phone:               findCol(columns, HINTS.phone) ?? columns[0] ?? "",
+    name:                findCol(columns, HINTS.name),
+    email:               findCol(columns, HINTS.email),
+    birthday:            findCol(columns, HINTS.birthday),
+    document:            findCol(columns, HINTS.document),
+    financialBalance:    findCol(columns, HINTS.financialBalance),
+    importedOrderCount:  findCol(columns, HINTS.importedOrderCount),
+    importedTotalSpent:  findCol(columns, HINTS.importedTotalSpent),
+    importedLastOrderAt: findCol(columns, HINTS.importedLastOrderAt),
+    averageTicket:       findCol(columns, HINTS.averageTicket),
+    notes:               findCol(columns, HINTS.notes),
   };
 }
 
@@ -234,7 +256,7 @@ function UploadStep({
     const json = await res.json();
     setLoading(false);
     if (!res.ok) { setError(json.error ?? "Falha ao processar arquivo"); return; }
-    onParsed({ columns: json.columns, rows: json.rows, totalRows: json.totalRows, fileName: file.name });
+    onParsed({ columns: json.columns, rows: json.rows, totalRows: json.totalRows, fileName: file.name, duplicateHeaders: json.duplicateHeaders ?? [] });
   }
 
   function downloadTemplate() {
@@ -373,10 +395,17 @@ function MapStep({
       {/* Customer-only fields (top) */}
       {importType === "customers" && (
         <div className="space-y-3">
-          <FieldSelect label="Telefone" required value={customer.phone}    columns={parsed.columns} onChange={(v) => setC("phone", v)}    hint="Identificador único — não pode ficar em branco." />
-          <FieldSelect label="Nome"               value={customer.name}     columns={parsed.columns} onChange={(v) => setC("name", v)} />
-          <FieldSelect label="E-mail"             value={customer.email}    columns={parsed.columns} onChange={(v) => setC("email", v)} />
-          <FieldSelect label="Aniversário"        value={customer.birthday} columns={parsed.columns} onChange={(v) => setC("birthday", v)} hint="DD/MM/AAAA" />
+          <FieldSelect label="Telefone"          required value={customer.phone}               columns={parsed.columns} onChange={(v) => setC("phone", v)}               hint="Identificador único — não pode ficar em branco." />
+          <FieldSelect label="Nome"                       value={customer.name}                columns={parsed.columns} onChange={(v) => setC("name", v)} />
+          <FieldSelect label="E-mail"                     value={customer.email}               columns={parsed.columns} onChange={(v) => setC("email", v)} />
+          <FieldSelect label="Aniversário"                value={customer.birthday}            columns={parsed.columns} onChange={(v) => setC("birthday", v)}            hint="DD/MM/AAAA" />
+          <FieldSelect label="CPF / CNPJ"                 value={customer.document}            columns={parsed.columns} onChange={(v) => setC("document", v)} />
+          <FieldSelect label="Saldo Financeiro"           value={customer.financialBalance}    columns={parsed.columns} onChange={(v) => setC("financialBalance", v)}    hint="Valor em reais, ex: 150,00" />
+          <FieldSelect label="Qtd. Pedidos (importado)"   value={customer.importedOrderCount}  columns={parsed.columns} onChange={(v) => setC("importedOrderCount", v)} />
+          <FieldSelect label="Total Gasto (importado)"    value={customer.importedTotalSpent}  columns={parsed.columns} onChange={(v) => setC("importedTotalSpent", v)} />
+          <FieldSelect label="Última Compra (importado)"  value={customer.importedLastOrderAt} columns={parsed.columns} onChange={(v) => setC("importedLastOrderAt", v)} hint="DD/MM/AAAA" />
+          <FieldSelect label="Ticket Médio (importado)"   value={customer.averageTicket}       columns={parsed.columns} onChange={(v) => setC("averageTicket", v)} />
+          <FieldSelect label="Observações"                value={customer.notes}               columns={parsed.columns} onChange={(v) => setC("notes", v)} />
         </div>
       )}
 
@@ -425,7 +454,14 @@ function MapStep({
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Dados extras de cliente</p>
           <div className="space-y-3">
-            <FieldSelect label="Aniversário" value={customer.birthday} columns={parsed.columns} onChange={(v) => setC("birthday", v)} hint="DD/MM/AAAA" />
+            <FieldSelect label="Aniversário"               value={customer.birthday}            columns={parsed.columns} onChange={(v) => setC("birthday", v)}            hint="DD/MM/AAAA" />
+            <FieldSelect label="CPF / CNPJ"                value={customer.document}            columns={parsed.columns} onChange={(v) => setC("document", v)} />
+            <FieldSelect label="Saldo Financeiro"          value={customer.financialBalance}    columns={parsed.columns} onChange={(v) => setC("financialBalance", v)} />
+            <FieldSelect label="Qtd. Pedidos (importado)"  value={customer.importedOrderCount}  columns={parsed.columns} onChange={(v) => setC("importedOrderCount", v)} />
+            <FieldSelect label="Total Gasto (importado)"   value={customer.importedTotalSpent}  columns={parsed.columns} onChange={(v) => setC("importedTotalSpent", v)} />
+            <FieldSelect label="Última Compra (importado)" value={customer.importedLastOrderAt} columns={parsed.columns} onChange={(v) => setC("importedLastOrderAt", v)} />
+            <FieldSelect label="Ticket Médio (importado)"  value={customer.averageTicket}       columns={parsed.columns} onChange={(v) => setC("averageTicket", v)} />
+            <FieldSelect label="Observações"               value={customer.notes}               columns={parsed.columns} onChange={(v) => setC("notes", v)} />
           </div>
         </div>
       )}
@@ -453,12 +489,13 @@ function MapStep({
 // ── Step 4: Preview ──────────────────────────────────────────────────────────
 
 function PreviewStep({
-  preview, onConfirm, onBack, loading,
+  preview, onConfirm, onBack, loading, duplicateHeaders,
 }: {
-  preview:   Preview;
-  onConfirm: () => void;
-  onBack:    () => void;
-  loading:   boolean;
+  preview:          Preview;
+  onConfirm:        () => void;
+  onBack:           () => void;
+  loading:          boolean;
+  duplicateHeaders: string[];
 }) {
   if (isOrderPreview(preview)) {
     const stats = [
@@ -560,6 +597,12 @@ function PreviewStep({
           </div>
         ))}
       </div>
+
+      {duplicateHeaders.length > 0 && (
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+          <strong>Colunas duplicadas detectadas:</strong> {duplicateHeaders.join(", ")}. A segunda ocorrência foi renomeada para <em>nome_2</em> no mapeamento.
+        </div>
+      )}
 
       {importCount === 0 && (
         <p className="rounded-xl bg-yellow-50 border border-yellow-100 px-4 py-3 text-sm text-yellow-700">
@@ -853,7 +896,7 @@ export function ImportModal({
           )}
 
           {(step === "preview" || step === "importing") && preview && (
-            <PreviewStep preview={preview} onConfirm={handleImportConfirm} onBack={() => setStep("map")} loading={importing} />
+            <PreviewStep preview={preview} onConfirm={handleImportConfirm} onBack={() => setStep("map")} loading={importing} duplicateHeaders={parsed?.duplicateHeaders ?? []} />
           )}
 
           {step === "done" && result && (
