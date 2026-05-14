@@ -1,15 +1,5 @@
 "use client";
 
-/**
- * /agente-ia — AI Sales Agent configuration hub
- *
- * 4 tabs:
- *   1. Base da IA    — Personality, voice, greeting      → /api/brand-config
- *   2. Atendimento   — WhatsApp agent identity & flows   → /api/whatsapp-agent
- *   3. Cardápio      — Sales strategy & upsell behaviour → /api/brand-config
- *   4. CRM           — Data collection (informational)
- */
-
 import { useState, useEffect, type FormEvent } from "react";
 import {
   DEFAULT_BRAND_CONFIG,
@@ -25,42 +15,73 @@ import {
   AGENT_DEFAULTS,
   DEFAULT_MENU_OPTIONS,
   FLOW_TYPES,
+  type AgentMode,
   type MenuOption,
   type FlowType,
 } from "@/validators/whatsapp-agent";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TabId = "base" | "atendimento" | "cardapio";
+type AgentTab    = "whatsapp-host" | "waiter" | "crm" | "analytics";
+type AgentStatus = "ativo" | "parcial" | "breve";
 
-// ── Tab config ────────────────────────────────────────────────────────────────
+// ── Agent registry ────────────────────────────────────────────────────────────
 
-const TABS: Array<{ id: TabId; label: string; icon: string }> = [
-  { id: "base",        label: "Personalidade IA",  icon: "🧠" },
-  { id: "atendimento", label: "Agente Whatsapp",   icon: "💬" },
-  { id: "cardapio",    label: "Agente Cardápio",   icon: "🍽" },
-];
-
-type SectionId = "garcom" | "agenteCRM";
-
-const SECTIONS: Array<{ id: SectionId; label: string; icon: string }> = [
-  { id: "garcom",    label: "Garçom IA",  icon: "🤖" },
-  { id: "agenteCRM", label: "Agente CRM", icon: "📊" },
+const AGENT_TABS: Array<{
+  id:          AgentTab;
+  label:       string;
+  icon:        string;
+  status:      AgentStatus;
+  statusLabel: string;
+  description: string;
+}> = [
+  {
+    id:          "whatsapp-host",
+    label:       "WhatsApp Host",
+    icon:        "📱",
+    status:      "parcial",
+    statusLabel: "Parcial",
+    description: "Recepcionista no WhatsApp. Recebe clientes, exibe menu inicial, direciona pedidos e transfere para atendentes quando necessário.",
+  },
+  {
+    id:          "waiter",
+    label:       "Waiter",
+    icon:        "🍽️",
+    status:      "ativo",
+    statusLabel: "Ativo",
+    description: "Conduz pedidos no cardápio digital. Explica pratos, sugere combinações, aplica upsell e finaliza o pedido.",
+  },
+  {
+    id:          "crm",
+    label:       "CRM",
+    icon:        "📊",
+    status:      "breve",
+    statusLabel: "Em breve",
+    description: "Reativação, fidelização e relacionamento pós-venda. Segmenta clientes por temperatura e aciona campanhas personalizadas.",
+  },
+  {
+    id:          "analytics",
+    label:       "Analytics",
+    icon:        "📈",
+    status:      "breve",
+    statusLabel: "Em breve",
+    description: "Monitora KPIs do restaurante, envia alertas automáticos e gera insights de crescimento e rentabilidade.",
+  },
 ];
 
 // ── Option tables ─────────────────────────────────────────────────────────────
 
 const PRESETS: Array<{
-  value: PersonalityPreset;
-  label: string;
+  value:   PersonalityPreset;
+  label:   string;
   tagline: string;
-  badges: string[];
+  badges:  string[];
 }> = [
   { value: "traditional", label: "Tradicional", tagline: "Caloroso, acolhedor, de confiança",    badges: ["Caloroso", "Poucos emojis", "Upsell gentil"]  },
-  { value: "young",       label: "Moderno",     tagline: "Casual, animado, próximo do cliente", badges: ["Casual", "Emojis", "Upsell moderado"]          },
-  { value: "fast",        label: "Ágil",        tagline: "Direto, rápido, sem enrolação",       badges: ["Profissional", "Sem emojis", "Conciso"]        },
-  { value: "premium",     label: "Premium",     tagline: "Refinado, elegante, sofisticado",     badges: ["Formal", "Sem emojis", "Detalhado"]            },
-  { value: "aggressive",  label: "Vendas",      tagline: "Focado em conversão e upsell",        badges: ["Amigável", "Upsell proativo", "Revenue"]       },
+  { value: "young",       label: "Moderno",     tagline: "Casual, animado, próximo do cliente",  badges: ["Casual", "Emojis", "Upsell moderado"]          },
+  { value: "fast",        label: "Ágil",        tagline: "Direto, rápido, sem enrolação",        badges: ["Profissional", "Sem emojis", "Conciso"]        },
+  { value: "premium",     label: "Premium",     tagline: "Refinado, elegante, sofisticado",      badges: ["Formal", "Sem emojis", "Detalhado"]            },
+  { value: "aggressive",  label: "Vendas",      tagline: "Focado em conversão e upsell",         badges: ["Amigável", "Upsell proativo", "Revenue"]       },
 ];
 
 const FORMALITY_OPTIONS = [
@@ -70,16 +91,16 @@ const FORMALITY_OPTIONS = [
 ];
 
 const EMOJI_OPTIONS = [
-  { value: "none"       as const, label: "Nenhum",     desc: "Sem emojis"         },
-  { value: "minimal"    as const, label: "Poucos",     desc: "Só momentos-chave"  },
+  { value: "none"       as const, label: "Nenhum",     desc: "Sem emojis"          },
+  { value: "minimal"    as const, label: "Poucos",     desc: "Só momentos-chave"   },
   { value: "moderate"   as const, label: "Moderado",   desc: "Alguns por mensagem" },
-  { value: "expressive" as const, label: "Expressivo", desc: "Bastante, animado"  },
+  { value: "expressive" as const, label: "Expressivo", desc: "Bastante, animado"   },
 ];
 
 const GREETING_OPTIONS = [
-  { value: "warm"         as const, label: "Caloroso",     desc: "Acolhedor, faz o cliente se sentir bem-vindo", example: "Olá! Que bom ter você aqui 😊 O que vai ser hoje?"    },
-  { value: "professional" as const, label: "Direto",       desc: "Objetivo e sem enrolação",                    example: "Olá! Pronto para pedir?"                              },
-  { value: "casual"       as const, label: "Descontraído", desc: "Energético e próximo",                        example: "Ei! Bora pedir? 🚀 O que vai ser?"                   },
+  { value: "warm"         as const, label: "Caloroso",     desc: "Acolhedor, faz o cliente se sentir bem-vindo", example: "Olá! Que bom ter você aqui 😊 O que vai ser hoje?"  },
+  { value: "professional" as const, label: "Direto",       desc: "Objetivo e sem enrolação",                    example: "Olá! Pronto para pedir?"                            },
+  { value: "casual"       as const, label: "Descontraído", desc: "Energético e próximo",                        example: "Ei! Bora pedir? 🚀 O que vai ser?"                 },
 ] as const;
 
 const INTENSITY_OPTIONS: Array<{ value: UpsellIntensity; label: string; desc: string }> = [
@@ -89,8 +110,8 @@ const INTENSITY_OPTIONS: Array<{ value: UpsellIntensity; label: string; desc: st
 ];
 
 const FOCUS_OPTIONS: Array<{ value: SalesFocus; label: string; desc: string }> = [
-  { value: "balanced", label: "Equilibrado", desc: "Boa experiência e boa receita" },
-  { value: "ticket",   label: "Receita",     desc: "Prioriza itens de maior valor" },
+  { value: "balanced", label: "Equilibrado", desc: "Boa experiência e boa receita"  },
+  { value: "ticket",   label: "Receita",     desc: "Prioriza itens de maior valor"  },
   { value: "volume",   label: "Volume",      desc: "Foco em agilidade e quantidade" },
 ];
 
@@ -101,22 +122,27 @@ const PRIORITY_OPTIONS: Array<{ value: SalesPriority; label: string; desc: strin
 ];
 
 const UPSELL_STYLE_OPTIONS = [
-  { value: "none"      as const, label: "Desativado", desc: "Agente não sugere extras"                      },
-  { value: "gentle"    as const, label: "Leve",       desc: "Uma sugestão discreta na hora certa"           },
-  { value: "moderate"  as const, label: "Moderado",   desc: "Sugere bebida, sobremesa e complementos"      },
-  { value: "proactive" as const, label: "Proativo",   desc: "Incentiva ativamente em cada oportunidade"    },
+  { value: "none"      as const, label: "Desativado", desc: "Agente não sugere extras"                  },
+  { value: "gentle"    as const, label: "Leve",       desc: "Uma sugestão discreta na hora certa"       },
+  { value: "moderate"  as const, label: "Moderado",   desc: "Sugere bebida, sobremesa e complementos"   },
+  { value: "proactive" as const, label: "Proativo",   desc: "Incentiva ativamente em cada oportunidade" },
 ] as const;
 
-// Atendimento tab — static option tables (no API wiring yet)
 const TONE_OPTIONS = [
-  { value: "informal", label: "Informal", desc: "Você, sabe? Tranquilo"  },
-  { value: "neutral",  label: "Neutro",   desc: "Equilibrado e claro"    },
-  { value: "premium",  label: "Premium",  desc: "Sofisticado e cortês"   },
+  { value: "informal", label: "Informal", desc: "Você, sabe? Tranquilo" },
+  { value: "neutral",  label: "Neutro",   desc: "Equilibrado e claro"   },
+  { value: "premium",  label: "Premium",  desc: "Sofisticado e cortês"  },
 ];
+
 const STYLE_OPTIONS = [
-  { value: "direct",       label: "Direto",      desc: "Respostas curtas e rápidas"    },
-  { value: "consultive",   label: "Consultivo",  desc: "Explica e orienta o cliente"   },
-  { value: "sales_driven", label: "Vendas",      desc: "Sugere, engaja, converte"      },
+  { value: "direct",       label: "Direto",     desc: "Respostas curtas e rápidas"  },
+  { value: "consultive",   label: "Consultivo", desc: "Explica e orienta o cliente" },
+  { value: "sales_driven", label: "Vendas",     desc: "Sugere, engaja, converte"    },
+];
+
+const AGENT_MODE_OPTIONS: Array<{ value: AgentMode; label: string; desc: string }> = [
+  { value: "RECEPTIONIST_ONLY", label: "Recepcionista",      desc: "Responde, exibe opções e direciona o cliente"  },
+  { value: "HUMAN_ASSISTED",    label: "Com suporte humano", desc: "IA e equipe atuam juntos na mesma conversa"    },
 ];
 
 const FLOW_CONFIG: Record<FlowType, { label: string; desc: string; icon: string }> = {
@@ -147,6 +173,7 @@ function parseMenuOptions(raw: unknown): MenuOption[] {
 }
 
 interface AgentFormState {
+  agentMode:       AgentMode;
   agentName:       string;
   tone:            string;
   style:           string;
@@ -160,6 +187,7 @@ interface AgentFormState {
 function toAgentForm(d: Record<string, unknown>): AgentFormState {
   const def = AGENT_DEFAULTS;
   return {
+    agentMode:       (d.agentMode as AgentMode) ?? def.agentMode,
     agentName:       String(d.agentName       ?? def.agentName),
     tone:            String(d.tone            ?? def.tone),
     style:           String(d.style           ?? def.style),
@@ -171,6 +199,22 @@ function toAgentForm(d: Record<string, unknown>): AgentFormState {
   };
 }
 
+// ── Status badge ──────────────────────────────────────────────────────────────
+
+function StatusBadge({ status, label }: { status: AgentStatus; label: string }) {
+  const cls =
+    status === "ativo"
+      ? "bg-green-100 text-green-700 border-green-200"
+      : status === "parcial"
+      ? "bg-amber-100 text-amber-700 border-amber-200"
+      : "bg-gray-100 text-gray-500 border-gray-200";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 // ── Shared primitives ─────────────────────────────────────────────────────────
 
 function Section({
@@ -178,9 +222,9 @@ function Section({
   subtitle,
   children,
 }: {
-  title: string;
+  title:     string;
   subtitle?: string;
-  children: React.ReactNode;
+  children:  React.ReactNode;
 }) {
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-5 space-y-5">
@@ -200,11 +244,11 @@ function ChipGroup<T extends string>({
   onChange,
   cols = 3,
 }: {
-  label: string;
+  label:   string;
   options: Array<{ value: T; label: string; desc: string }>;
-  value: T;
+  value:   T;
   onChange: (v: T) => void;
-  cols?: 2 | 3 | 4;
+  cols?:   2 | 3 | 4;
 }) {
   const colClass =
     cols === 4 ? "sm:grid-cols-4" : cols === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2";
@@ -242,9 +286,9 @@ function RadioRow({
   value,
   onChange,
 }: {
-  label: string;
+  label:   string;
   options: { value: string; label: string; desc: string }[];
-  value: string;
+  value:   string;
   onChange: (v: string) => void;
 }) {
   return (
@@ -279,9 +323,7 @@ function RadioRow({
 function SaveRow({ saving, label }: { saving: boolean; label: string }) {
   return (
     <div className="flex items-center justify-end gap-3 pt-2 pb-4">
-      <p className="text-xs text-gray-400">
-        Aplicado em novas conversas imediatamente.
-      </p>
+      <p className="text-xs text-gray-400">Aplicado em novas conversas imediatamente.</p>
       <button
         type="submit"
         disabled={saving}
@@ -305,13 +347,13 @@ function CharCount({ current, max }: { current: number; max: number }) {
 function OptionCard({
   option, index, total, onChange, onRemove, onMoveUp, onMoveDown,
 }: {
-  option: MenuOption;
-  index: number;
-  total: number;
-  onChange: (patch: Partial<MenuOption>) => void;
-  onRemove: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
+  option:      MenuOption;
+  index:       number;
+  total:       number;
+  onChange:    (patch: Partial<MenuOption>) => void;
+  onRemove:    () => void;
+  onMoveUp:    () => void;
+  onMoveDown:  () => void;
 }) {
   const flow = FLOW_CONFIG[option.flow];
   return (
@@ -366,13 +408,29 @@ function OptionCard({
   );
 }
 
+function ComingSoon({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Em breve</p>
+      <p className="text-sm font-semibold text-gray-700 mb-3">{title}</p>
+      <ul className="space-y-1.5">
+        {items.map((item) => (
+          <li key={item} className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="h-1 w-1 shrink-0 rounded-full bg-gray-300" />
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function AgentePage() {
-  const [activeTab, setActiveTab] = useState<TabId>("base");
-  const [activeSection, setActiveSection] = useState<SectionId>("garcom");
+  const [activeTab, setActiveTab] = useState<AgentTab>("whatsapp-host");
 
-  // ── Brand config state (tabs: Base da IA + Cardápio) ──────────────────────
+  // Brand config state (Waiter tab) ─────────────────────────────────────────
   const [form, setForm]     = useState<UpsertBrandConfigInput>(DEFAULT_BRAND_CONFIG);
   const [loading, setLoad]  = useState(true);
   const [saving, setSaving] = useState(false);
@@ -385,7 +443,7 @@ export function AgentePage() {
       .then((json) => {
         if (json?.data) setForm({ ...DEFAULT_BRAND_CONFIG, ...json.data });
       })
-      .catch(() => {/* keep defaults */})
+      .catch(() => {})
       .finally(() => setLoad(false));
   }, []);
 
@@ -435,7 +493,7 @@ export function AgentePage() {
     }
   }
 
-  // ── WhatsApp agent state (Tab 2 — Atendimento) ───────────────────────────
+  // WhatsApp agent state (WhatsApp Host tab) ────────────────────────────────
   const [agentForm, setAgentForm]       = useState<AgentFormState>(toAgentForm({}));
   const [menuOptions, setMenuOptions]   = useState<MenuOption[]>(
     DEFAULT_MENU_OPTIONS.map((o) => ({ ...o, id: newId() }))
@@ -454,7 +512,7 @@ export function AgentePage() {
           setMenuOptions(parseMenuOptions(json.data.menuOptions));
         }
       })
-      .catch(() => {/* keep defaults */})
+      .catch(() => {})
       .finally(() => setAgentLoading(false));
   }, []);
 
@@ -469,8 +527,8 @@ export function AgentePage() {
     ]);
   }
 
-  function updateOption(id: string, patch: Partial<MenuOption>) {
-    setMenuOptions((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+  function updateOption(id: string, p: Partial<MenuOption>) {
+    setMenuOptions((prev) => prev.map((o) => (o.id === id ? { ...o, ...p } : o)));
   }
 
   function removeOption(id: string) {
@@ -529,209 +587,57 @@ export function AgentePage() {
     );
   }
 
+  const activeAgent = AGENT_TABS.find((a) => a.id === activeTab)!;
+
   return (
     <div className="mx-auto max-w-2xl p-6">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Agentes IA</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Gerencie seus agentes de atendimento e relacionamento com clientes.
+          Configure os agentes de inteligência artificial que atendem seus clientes.
         </p>
       </div>
 
-      {/* ── Section switcher ───────────────────────────────────────────────── */}
-      <div className="flex gap-1 rounded-xl bg-gray-100 p-1 mb-6">
-        {SECTIONS.map((s) => (
+      {/* Agent selector — 4 cards */}
+      <div className="grid grid-cols-2 gap-3 mb-5 sm:grid-cols-4">
+        {AGENT_TABS.map((agent) => (
           <button
-            key={s.id}
+            key={agent.id}
             type="button"
-            onClick={() => setActiveSection(s.id)}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
-              activeSection === s.id
-                ? "bg-white shadow-sm text-gray-900"
-                : "text-gray-500 hover:text-gray-700"
+            onClick={() => setActiveTab(agent.id)}
+            className={`flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ${
+              activeTab === agent.id
+                ? "border-brand-500 bg-brand-50 shadow-sm"
+                : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
             }`}
           >
-            <span className="text-base leading-none">{s.icon}</span>
-            {s.label}
+            <span className="text-2xl leading-none">{agent.icon}</span>
+            <span className={`text-sm font-bold ${activeTab === agent.id ? "text-brand-700" : "text-gray-800"}`}>
+              {agent.label}
+            </span>
+            <StatusBadge status={agent.status} label={agent.statusLabel} />
           </button>
         ))}
       </div>
 
-      {activeSection === "garcom" && (<>
-
-      {/* ── Tab bar ────────────────────────────────────────────────────────── */}
-      <div className="flex gap-1 border-b border-gray-200 mb-6">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setActiveTab(tab.id); }}
-            className={`flex items-center gap-1.5 border-b-2 px-3 pb-3 pt-1 text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? "border-brand-500 text-brand-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-            }`}
-          >
-            <span className="text-base leading-none">{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
+      {/* Active agent description bar */}
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+        <span className="mt-0.5 text-xl leading-none">{activeAgent.icon}</span>
+        <p className="flex-1 text-xs text-gray-500">{activeAgent.description}</p>
+        <StatusBadge status={activeAgent.status} label={activeAgent.statusLabel} />
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          TAB 1 — Base da IA
-      ══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === "base" && (
-        <form onSubmit={handleSave} className="space-y-6">
-
-          {/* Feedback */}
-          {success && (
-            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700">
-              Configuração salva com sucesso.
-            </div>
-          )}
-          {error && (
-            <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-              <span>{error}</span>
-              <button type="button" onClick={() => setErr(null)} className="ml-4 text-red-400 hover:text-red-600">✕</button>
-            </div>
-          )}
-
-          {/* Personalidade */}
-          <Section
-            title="Personalidade"
-            subtitle="Escolha um perfil base. As configurações abaixo ajustam-se automaticamente, mas você pode personalizar."
-          >
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {PRESETS.map((p) => {
-                const active = form.personalityPreset === p.value;
-                return (
-                  <button
-                    key={p.value}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); applyPreset(p.value); }}
-                    className={`flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ${
-                      active
-                        ? "border-brand-500 bg-brand-50 shadow-sm"
-                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                    }`}
-                  >
-                    <span className={`text-sm font-bold ${active ? "text-brand-700" : "text-gray-800"}`}>
-                      {p.label}
-                    </span>
-                    <span className={`text-xs ${active ? "text-brand-500" : "text-gray-500"}`}>
-                      {p.tagline}
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {p.badges.map((b) => (
-                        <span
-                          key={b}
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            active ? "bg-brand-100 text-brand-600" : "bg-gray-100 text-gray-500"
-                          }`}
-                        >
-                          {b}
-                        </span>
-                      ))}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Fine-tune */}
-            <div className="border-t border-gray-100 pt-4 space-y-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Ajuste fino
-              </p>
-              <ChipGroup
-                label="Formalidade"
-                options={FORMALITY_OPTIONS}
-                value={form.formality}
-                onChange={(v) => patch("formality", v)}
-              />
-              <ChipGroup
-                label="Emojis"
-                options={EMOJI_OPTIONS}
-                value={form.emojiUsage}
-                onChange={(v) => patch("emojiUsage", v)}
-                cols={4}
-              />
-            </div>
-          </Section>
-
-          {/* Saudação */}
-          <Section
-            title="Saudação"
-            subtitle="Define o estilo de abertura — não uma frase fixa, mas como o agente abre cada conversa."
-          >
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {GREETING_OPTIONS.map((opt) => {
-                const active = form.tone === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); patch("tone", opt.value); }}
-                    className={`flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ${
-                      active
-                        ? "border-brand-500 bg-brand-50"
-                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                    }`}
-                  >
-                    <span className={`text-sm font-bold ${active ? "text-brand-700" : "text-gray-800"}`}>
-                      {opt.label}
-                    </span>
-                    <span className={`text-xs ${active ? "text-brand-500" : "text-gray-400"}`}>
-                      {opt.desc}
-                    </span>
-                    <div className={`mt-1 rounded-lg px-3 py-2 text-xs leading-relaxed ${
-                      active ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-500"
-                    }`}>
-                      &ldquo;{opt.example}&rdquo;
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Abertura personalizada{" "}
-                <span className="font-normal normal-case text-gray-400">
-                  (opcional — deixe em branco para usar o estilo acima)
-                </span>
-              </label>
-              <textarea
-                value={form.greetingTemplate ?? ""}
-                onChange={(e) => patch("greetingTemplate", e.target.value || null)}
-                rows={2}
-                maxLength={300}
-                placeholder="Ex: Olá! Bem-vindo ao Restaurante XYZ 🍕 Pronto para pedir?"
-                className="w-full resize-none rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
-              />
-              <p className="mt-1 text-[11px] text-gray-400">
-                Quando preenchido, substitui o estilo selecionado acima.
-              </p>
-            </div>
-          </Section>
-
-          <SaveRow saving={saving} label="Salvar Base da IA" />
-        </form>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          TAB 2 — Atendimento  (source of truth: /api/whatsapp-agent)
-      ══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === "atendimento" && (
+      {/* ════════════════════════════════════════════════════════════════════
+          WhatsApp Host
+      ════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "whatsapp-host" && (
         <form onSubmit={saveAgentConfig} className="space-y-6">
 
-          {/* Feedback */}
           {agentOk && (
             <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700">
-              Configuração de atendimento salva.
+              Configuração salva com sucesso.
             </div>
           )}
           {agentErr && (
@@ -741,12 +647,9 @@ export function AgentePage() {
             </div>
           )}
 
-          {/* Personalidade */}
-          <Section title="Personalidade do agente WhatsApp" subtitle="Como o agente se apresenta e fala com o cliente.">
+          <Section title="Identidade do agente" subtitle="Como o agente se apresenta e interage no WhatsApp.">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Nome do agente
-              </label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Nome do agente</label>
               <input
                 type="text"
                 value={agentForm.agentName}
@@ -755,30 +658,42 @@ export function AgentePage() {
                 placeholder="Ex: Ju, Max, Agente Foocci"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
-              <p className="mt-1 text-xs text-gray-400">
-                Nome que o agente usa para se apresentar ao cliente.
-              </p>
+              <p className="mt-1 text-xs text-gray-400">Nome que o agente usa para se apresentar ao cliente.</p>
             </div>
-            <RadioRow
-              label="Tom de voz"
-              options={TONE_OPTIONS}
-              value={agentForm.tone}
-              onChange={patchAgent("tone")}
-            />
-            <RadioRow
-              label="Estilo de atendimento"
-              options={STYLE_OPTIONS}
-              value={agentForm.style}
-              onChange={patchAgent("style")}
-            />
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-700">Modo de operação</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {AGENT_MODE_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`flex cursor-pointer flex-col gap-0.5 rounded-lg border p-3 text-sm transition-colors ${
+                      agentForm.agentMode === opt.value
+                        ? "border-brand-500 bg-brand-50 text-brand-700"
+                        : "border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="sr-only"
+                      value={opt.value}
+                      checked={agentForm.agentMode === opt.value}
+                      onChange={() => setAgentForm((prev) => ({ ...prev, agentMode: opt.value }))}
+                    />
+                    <span className="font-medium">{opt.label}</span>
+                    <span className="text-xs text-gray-500">{opt.desc}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <RadioRow label="Tom de voz"          options={TONE_OPTIONS}  value={agentForm.tone}  onChange={patchAgent("tone")}  />
+            <RadioRow label="Estilo de atendimento" options={STYLE_OPTIONS} value={agentForm.style} onChange={patchAgent("style")} />
           </Section>
 
-          {/* Mensagem de boas-vindas */}
           <Section title="Mensagem de boas-vindas">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Mensagem inicial
-              </label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Mensagem inicial</label>
               <textarea
                 value={agentForm.welcomeMessage}
                 onChange={(e) => patchAgent("welcomeMessage")(e.target.value)}
@@ -789,7 +704,6 @@ export function AgentePage() {
               />
               <CharCount current={agentForm.welcomeMessage.length} max={1000} />
             </div>
-            {/* Live preview */}
             <div className="rounded-xl bg-[#dcf8c6] px-4 py-3 text-sm text-gray-800 shadow-inner max-w-xs">
               <p className="text-[11px] font-semibold text-gray-500 mb-1">Pré-visualização</p>
               <p className="whitespace-pre-wrap leading-relaxed">{agentForm.welcomeMessage || "…"}</p>
@@ -805,7 +719,6 @@ export function AgentePage() {
             </div>
           </Section>
 
-          {/* Opções de entrada */}
           <Section title="Opções de entrada">
             <p className="text-xs text-gray-500">
               Botões exibidos após a mensagem de boas-vindas. Cada opção aciona um fluxo.
@@ -822,7 +735,7 @@ export function AgentePage() {
                   option={opt}
                   index={idx}
                   total={menuOptions.length}
-                  onChange={(patch) => updateOption(opt.id, patch)}
+                  onChange={(p) => updateOption(opt.id, p)}
                   onRemove={() => removeOption(opt.id)}
                   onMoveUp={() => moveOption(opt.id, -1)}
                   onMoveDown={() => moveOption(opt.id, 1)}
@@ -864,15 +777,13 @@ export function AgentePage() {
             </div>
           </Section>
 
-          {/* Fluxo: Fazer pedido */}
           <Section title='Fluxo — "Fazer pedido"'>
             <p className="text-xs text-gray-500">
-              Ativado quando o cliente escolhe uma opção com fluxo <span className="font-semibold text-gray-700">Fazer pedido</span>.
+              Ativado quando o cliente escolhe uma opção com fluxo{" "}
+              <span className="font-semibold text-gray-700">Fazer pedido</span>.
             </p>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Mensagem ao iniciar pedido
-              </label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Mensagem ao iniciar pedido</label>
               <textarea
                 value={agentForm.orderPreMessage}
                 onChange={(e) => patchAgent("orderPreMessage")(e.target.value)}
@@ -884,7 +795,8 @@ export function AgentePage() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                URL do cardápio <span className="font-normal text-gray-400">(opcional)</span>
+                URL do cardápio{" "}
+                <span className="font-normal text-gray-400">(opcional)</span>
               </label>
               <input
                 type="url"
@@ -897,14 +809,15 @@ export function AgentePage() {
             </div>
           </Section>
 
-          {/* Fluxo: Transferência */}
           <Section title='Fluxo — "Falar com atendente"'>
             <p className="text-xs text-gray-500">
-              Ativado quando o cliente escolhe uma opção com fluxo <span className="font-semibold text-gray-700">Falar com atendente</span>.
+              Ativado quando o cliente escolhe uma opção com fluxo{" "}
+              <span className="font-semibold text-gray-700">Falar com atendente</span>.
             </p>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
-                Telefone do atendente <span className="font-normal text-gray-400">(WhatsApp, com DDI)</span>
+                Telefone do atendente{" "}
+                <span className="font-normal text-gray-400">(WhatsApp, com DDI)</span>
               </label>
               <input
                 type="tel"
@@ -916,9 +829,7 @@ export function AgentePage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Mensagem de transferência
-              </label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Mensagem de transferência</label>
               <textarea
                 value={agentForm.handoffMessage}
                 onChange={(e) => patchAgent("handoffMessage")(e.target.value)}
@@ -930,17 +841,27 @@ export function AgentePage() {
             </div>
           </Section>
 
-          <SaveRow saving={agentSaving} label="Salvar Atendimento" />
+          <ComingSoon
+            title="Recursos avançados em desenvolvimento"
+            items={[
+              "Autonomia máxima — quantas perguntas o agente responde sozinho",
+              "Regras de segurança — tópicos que o agente não deve abordar",
+              "Respostas fora do horário — mensagens automáticas quando fechado",
+              "Quando chamar humano — gatilhos automáticos de transferência",
+              "Fluxos personalizados — jornadas configuráveis por objetivo",
+            ]}
+          />
+
+          <SaveRow saving={agentSaving} label="Salvar WhatsApp Host" />
         </form>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          TAB 3 — Cardápio
-      ══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === "cardapio" && (
+      {/* ════════════════════════════════════════════════════════════════════
+          Waiter
+      ════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "waiter" && (
         <form onSubmit={handleSave} className="space-y-6">
 
-          {/* Feedback */}
           {success && (
             <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700">
               Configuração salva com sucesso.
@@ -953,17 +874,122 @@ export function AgentePage() {
             </div>
           )}
 
-          {/* Estratégia de vendas */}
           <Section
-            title="Estratégia de vendas"
-            subtitle="Como o agente deve se comportar para aumentar o ticket e as conversões."
+            title="Comportamento geral"
+            subtitle="Define a personalidade e o estilo de comunicação do Waiter com os clientes."
           >
-            <ChipGroup
-              label="Intensidade do upsell"
-              options={INTENSITY_OPTIONS}
-              value={form.upsellIntensity}
-              onChange={applyIntensity}
-            />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {PRESETS.map((p) => {
+                const active = form.personalityPreset === p.value;
+                return (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); applyPreset(p.value); }}
+                    className={`flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ${
+                      active
+                        ? "border-brand-500 bg-brand-50 shadow-sm"
+                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <span className={`text-sm font-bold ${active ? "text-brand-700" : "text-gray-800"}`}>
+                      {p.label}
+                    </span>
+                    <span className={`text-xs ${active ? "text-brand-500" : "text-gray-500"}`}>
+                      {p.tagline}
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {p.badges.map((b) => (
+                        <span
+                          key={b}
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            active ? "bg-brand-100 text-brand-600" : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {b}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="border-t border-gray-100 pt-4 space-y-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Ajuste fino</p>
+              <ChipGroup
+                label="Formalidade"
+                options={FORMALITY_OPTIONS}
+                value={form.formality}
+                onChange={(v) => patch("formality", v)}
+              />
+              <ChipGroup
+                label="Emojis"
+                options={EMOJI_OPTIONS}
+                value={form.emojiUsage}
+                onChange={(v) => patch("emojiUsage", v)}
+                cols={4}
+              />
+            </div>
+          </Section>
+
+          <Section
+            title="Saudação"
+            subtitle="Define o estilo de abertura — não uma frase fixa, mas como o agente inicia cada conversa."
+          >
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {GREETING_OPTIONS.map((opt) => {
+                const active = form.tone === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); patch("tone", opt.value); }}
+                    className={`flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ${
+                      active
+                        ? "border-brand-500 bg-brand-50"
+                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <span className={`text-sm font-bold ${active ? "text-brand-700" : "text-gray-800"}`}>
+                      {opt.label}
+                    </span>
+                    <span className={`text-xs ${active ? "text-brand-500" : "text-gray-400"}`}>
+                      {opt.desc}
+                    </span>
+                    <div className={`mt-1 rounded-lg px-3 py-2 text-xs leading-relaxed ${
+                      active ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-500"
+                    }`}>
+                      &ldquo;{opt.example}&rdquo;
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Abertura personalizada{" "}
+                <span className="font-normal normal-case text-gray-400">
+                  (opcional — deixe em branco para usar o estilo acima)
+                </span>
+              </label>
+              <textarea
+                value={form.greetingTemplate ?? ""}
+                onChange={(e) => patch("greetingTemplate", e.target.value || null)}
+                rows={2}
+                maxLength={300}
+                placeholder="Ex: Olá! Bem-vindo ao Restaurante XYZ 🍕 Pronto para pedir?"
+                className="w-full resize-none rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
+              />
+              <p className="mt-1 text-[11px] text-gray-400">
+                Quando preenchido, substitui o estilo selecionado acima.
+              </p>
+            </div>
+          </Section>
+
+          <Section
+            title="Venda guiada"
+            subtitle="Como o Waiter conduz o cliente em direção ao pedido ideal."
+          >
             <ChipGroup
               label="Foco de vendas"
               options={FOCUS_OPTIONS}
@@ -978,11 +1004,16 @@ export function AgentePage() {
             />
           </Section>
 
-          {/* Sugestões proativas */}
           <Section
-            title="Sugestões proativas"
-            subtitle="Com que frequência o agente propõe itens extras durante a conversa."
+            title="Upsell e promoções"
+            subtitle="Com que frequência o Waiter sugere itens extras e promoções ativas."
           >
+            <ChipGroup
+              label="Intensidade do upsell"
+              options={INTENSITY_OPTIONS}
+              value={form.upsellIntensity}
+              onChange={applyIntensity}
+            />
             <div className="space-y-2">
               {UPSELL_STYLE_OPTIONS.map((opt) => (
                 <label
@@ -1011,27 +1042,32 @@ export function AgentePage() {
             </div>
           </Section>
 
-          <SaveRow saving={saving} label="Salvar Cardápio" />
+          <ComingSoon
+            title="Segurança e limites"
+            items={[
+              "Tópicos que o Waiter não deve abordar",
+              "Número máximo de mensagens por sessão",
+              "Inteligência de cardápio — restrições alimentares automáticas",
+              "Sugestões baseadas no histórico do cliente",
+            ]}
+          />
+
+          <SaveRow saving={saving} label="Salvar Waiter" />
         </form>
       )}
 
-      </>)}
-
-      {/* ── Agente CRM ─────────────────────────────────────────────────────── */}
-      {activeSection === "agenteCRM" && (
+      {/* ════════════════════════════════════════════════════════════════════
+          CRM
+      ════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "crm" && (
         <div className="space-y-6">
 
-          {/* Propósito */}
-          <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">Agente CRM</h2>
-              <p className="mt-0.5 text-xs text-gray-500">
-                Inteligência dedicada a relacionamento, retenção e reativação de clientes.
-                Separado do Garçom IA para foco total em relacionamento e receita.
-              </p>
-            </div>
+          <Section
+            title="O que o Agente CRM faz"
+            subtitle="Inteligência dedicada a relacionamento, retenção e reativação de clientes."
+          >
             <div className="rounded-lg border border-brand-100 bg-brand-50 p-4 space-y-2">
-              <p className="text-sm font-medium text-brand-800">Responsabilidades do Agente CRM:</p>
+              <p className="text-sm font-medium text-brand-800">Responsabilidades:</p>
               <ul className="space-y-1.5 text-sm text-brand-700">
                 {[
                   "Identificar clientes inativos e acionar reativação",
@@ -1047,17 +1083,15 @@ export function AgentePage() {
                 ))}
               </ul>
             </div>
-          </div>
+          </Section>
 
-          {/* Segmentação por temperatura */}
-          <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
-            <h2 className="text-sm font-semibold text-gray-900">Segmentação por temperatura</h2>
+          <Section title="Segmentação por temperatura">
             <div className="space-y-2">
               {[
-                { icon: "🟢", label: "Ativo",       desc: "Pedido nos últimos 30 dias — manter engajamento",        bg: "bg-green-50",  text: "text-green-700"  },
-                { icon: "🟡", label: "Morno",       desc: "Sem pedido entre 31 e 60 dias — momento de reativação",  bg: "bg-yellow-50", text: "text-yellow-700" },
-                { icon: "🔴", label: "Frio",        desc: "Sem pedido há mais de 60 dias — oferta agressiva",       bg: "bg-red-50",    text: "text-red-700"    },
-                { icon: "⬛", label: "Nunca pediu", desc: "Cadastrado mas sem pedido — ativar primeiro pedido",     bg: "bg-gray-50",   text: "text-gray-700"   },
+                { icon: "🟢", label: "Ativo",       desc: "Pedido nos últimos 30 dias — manter engajamento",       bg: "bg-green-50",  text: "text-green-700"  },
+                { icon: "🟡", label: "Morno",       desc: "Sem pedido entre 31 e 60 dias — momento de reativação", bg: "bg-yellow-50", text: "text-yellow-700" },
+                { icon: "🔴", label: "Frio",        desc: "Sem pedido há mais de 60 dias — oferta agressiva",      bg: "bg-red-50",    text: "text-red-700"    },
+                { icon: "⬛", label: "Nunca pediu", desc: "Cadastrado mas sem pedido — ativar primeiro pedido",    bg: "bg-gray-50",   text: "text-gray-700"   },
               ].map((s) => (
                 <div key={s.label} className={`flex items-start gap-3 rounded-lg border border-gray-100 ${s.bg} p-3`}>
                   <span className="text-lg leading-none mt-0.5">{s.icon}</span>
@@ -1068,19 +1102,69 @@ export function AgentePage() {
                 </div>
               ))}
             </div>
-          </div>
+          </Section>
 
-          {/* Em breve */}
-          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Em breve</p>
-            <p className="text-sm font-medium text-gray-700">Automações CRM inteligentes</p>
-            <p className="mt-1 text-xs text-gray-400">
-              Disparo automático de mensagens por temperatura, campanhas segmentadas e relatórios de retenção.
-            </p>
-          </div>
-
+          <ComingSoon
+            title="Configurações do Agente CRM"
+            items={[
+              "Reativação automática — gatilhos e mensagens por segmento",
+              "Pós-venda — mensagens automáticas após o pedido",
+              "Pedido de avaliação — timing e canal de envio",
+              "Clientes VIP — critérios e tratamento especial",
+              "Frequência máxima de contato por período",
+              "Aprovação humana antes de envio",
+              "Canais permitidos — WhatsApp, e-mail, SMS",
+              "Campanhas automáticas por temperatura",
+            ]}
+          />
         </div>
       )}
+
+      {/* ════════════════════════════════════════════════════════════════════
+          Analytics
+      ════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "analytics" && (
+        <div className="space-y-6">
+
+          <Section
+            title="O que o Agente Analytics faz"
+            subtitle="Age como o gerente comercial do restaurante, monitorando resultados e emitindo alertas."
+          >
+            <div className="rounded-lg border border-brand-100 bg-brand-50 p-4 space-y-2">
+              <p className="text-sm font-medium text-brand-800">Responsabilidades:</p>
+              <ul className="space-y-1.5 text-sm text-brand-700">
+                {[
+                  "Monitorar KPIs em tempo real (ticket médio, taxa de recompra, conversão)",
+                  "Enviar alertas quando métricas saem do padrão",
+                  "Identificar produtos parados e oportunidades de promoção",
+                  "Gerar relatórios de rentabilidade e mix de vendas",
+                  "Recomendar ações com base em dados históricos",
+                ].map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <span className="text-brand-500 font-bold">✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </Section>
+
+          <ComingSoon
+            title="Configurações do Agente Analytics"
+            items={[
+              "KPIs monitorados — escolha quais métricas acompanhar",
+              "Alertas automáticos — limites e frequência de notificação",
+              "Frequência de insights — diário, semanal, mensal",
+              "Ticket médio — meta e desvio aceitável",
+              "Taxa de recompra — período de análise",
+              "Produtos parados — dias sem venda para alertar",
+              "Produtos mais vendidos — ranking e tendências",
+              "Margem e rentabilidade — análise por categoria",
+            ]}
+          />
+        </div>
+      )}
+
     </div>
   );
 }
