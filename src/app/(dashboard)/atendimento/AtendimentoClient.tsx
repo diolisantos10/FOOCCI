@@ -201,6 +201,10 @@ export function AtendimentoClient({
   const [text,          setText]          = useState("");
   const [sending,       setSending]       = useState(false);
   const [sendError,     setSendError]     = useState<string | null>(null);
+  const [sendNote,      setSendNote]      = useState<string | null>(null);
+
+  const [leftWidth,     setLeftWidth]     = useState<number>(320);
+  const [isDesktop,     setIsDesktop]     = useState<boolean>(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -242,6 +246,24 @@ export function AtendimentoClient({
     const id = setInterval(fetchList, 7000);
     return () => clearInterval(id);
   }, [fetchList]);
+
+  // Desktop media query + localStorage panel width
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", onChange);
+    const stored = localStorage.getItem("atendimento-left-width");
+    if (stored) {
+      const n = parseInt(stored, 10);
+      if (n >= 260 && n <= 480) setLeftWidth(n);
+    }
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    if (isDesktop) localStorage.setItem("atendimento-left-width", String(leftWidth));
+  }, [leftWidth, isDesktop]);
 
   // ── Fetch conversation thread ──────────────────────────────────────────────
   const fetchThread = useCallback(async (id: string) => {
@@ -356,6 +378,7 @@ export function AtendimentoClient({
     if (!text.trim() || !selectedId) return;
     setSending(true);
     setSendError(null);
+    setSendNote(null);
     try {
       const res = await fetch(`/api/conversations/${selectedId}/messages`, {
         method:  "POST",
@@ -364,10 +387,19 @@ export function AtendimentoClient({
       });
       if (!res.ok) {
         const json = await res.json();
-        setSendError(json.error ?? "Erro ao enviar");
+        const raw = json.error ?? "Erro ao enviar";
+        setSendError(
+          raw === "WHATSAPP_NOT_CONFIGURED"
+            ? "WhatsApp não configurado. Configure em Configurações → WhatsApp."
+            : raw
+        );
         return;
       }
+      const json = await res.json();
       setText("");
+      if (json.data?._internalOnly) {
+        setSendNote("Mensagem registrada internamente. Este canal não usa WhatsApp.");
+      }
       await fetchThread(selectedId);
     } catch {
       setSendError("Falha de rede");
@@ -390,6 +422,21 @@ export function AtendimentoClient({
     setMobileView("list");
   }
 
+  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = leftWidth;
+    const onMove = (me: MouseEvent) => {
+      setLeftWidth(Math.min(480, Math.max(260, startW + me.clientX - startX)));
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [leftWidth]);
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div
@@ -397,11 +444,14 @@ export function AtendimentoClient({
       style={{ height: "calc(100vh - 56px)" }}
     >
       {/* ── LEFT PANEL ───────────────────────────────────────────────────── */}
-      <aside className={`
-        flex-col border-r border-gray-200 bg-white
-        ${mobileView === "list" ? "flex w-full" : "hidden"}
-        lg:flex lg:w-80 lg:shrink-0
-      `}>
+      <aside
+        className={`
+          flex-col border-r border-gray-200 bg-white overflow-hidden
+          ${mobileView === "list" ? "flex w-full" : "hidden"}
+          lg:flex lg:shrink-0
+        `}
+        style={isDesktop ? { width: leftWidth } : undefined}
+      >
         {/* Search */}
         <div className="border-b border-gray-100 px-3 pt-3 pb-2">
           <form onSubmit={handleSearchSubmit} className="flex gap-2">
@@ -563,6 +613,14 @@ export function AtendimentoClient({
         </div>
       </aside>
 
+      {/* ── DRAG HANDLE — desktop only ───────────────────────────────────── */}
+      <div
+        role="separator"
+        aria-label="Redimensionar painel"
+        onMouseDown={handleDividerMouseDown}
+        className="hidden lg:flex w-1 shrink-0 cursor-col-resize bg-gray-200 hover:bg-orange-400 active:bg-orange-500 transition-colors"
+      />
+
       {/* ── RIGHT PANEL ──────────────────────────────────────────────────── */}
       <section className={`
         flex-col overflow-hidden
@@ -594,6 +652,7 @@ export function AtendimentoClient({
             setText={setText}
             sending={sending}
             sendError={sendError}
+            sendNote={sendNote}
             onSend={handleSend}
             bottomRef={bottomRef}
             onBack={handleMobileBack}
@@ -618,6 +677,7 @@ interface ThreadPanelProps {
   setText:       (v: string) => void;
   sending:       boolean;
   sendError:     string | null;
+  sendNote:      string | null;
   onSend:        (e: FormEvent) => void;
   bottomRef:     React.RefObject<HTMLDivElement>;
   onBack?:       () => void;
@@ -851,6 +911,7 @@ function ThreadPanel({
   setText,
   sending,
   sendError,
+  sendNote,
   onSend,
   bottomRef,
   onBack,
@@ -976,6 +1037,13 @@ function ThreadPanel({
       {sendError && (
         <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
           {sendError}
+        </div>
+      )}
+
+      {/* ── Send note (info) ──────────────────────────────────────────── */}
+      {sendNote && (
+        <div className="shrink-0 border-t border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-700">
+          {sendNote}
         </div>
       )}
 

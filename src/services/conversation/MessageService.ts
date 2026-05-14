@@ -75,7 +75,10 @@ export class MessageService {
   }
 
   /**
-   * Send an outbound message through Evolution API and persist it.
+   * Send an outbound message and persist it.
+   * WhatsApp conversations are delivered via Evolution API.
+   * All other channels (QR_AGENT, WEB_AGENT, MANUAL, EMAIL, SMS) are persisted
+   * internally only — no external delivery is attempted.
    */
   static async sendOutbound(
     restaurantId: string,
@@ -99,13 +102,35 @@ export class MessageService {
       );
     }
 
-    // Fetch decrypted credentials
+    const now = new Date();
+
+    // Non-WhatsApp channels: persist internally, no external delivery
+    if (conv.channel !== "WHATSAPP") {
+      const [message] = await prisma.$transaction([
+        prisma.message.create({
+          data: {
+            conversationId,
+            direction: "OUTBOUND",
+            content: input.content,
+            type: input.type as MessageType,
+            mediaUrl: input.mediaUrl ?? null,
+            sentAt: now,
+            externalMessageId: null,
+            externalStatus: null,
+          },
+        }),
+        prisma.conversation.update({
+          where: { id: conversationId },
+          data: { lastMessageAt: now },
+        }),
+      ]);
+      return serviceOk({ ...message, _internalOnly: true });
+    }
+
+    // WhatsApp: fetch decrypted credentials
     const configResult = await EvolutionConfigService.getSnapshot(restaurantId);
     if (!configResult.ok) {
-      return serviceFail(
-        `Evolution API not configured: ${configResult.error}`,
-        configResult.status
-      );
+      return serviceFail("WHATSAPP_NOT_CONFIGURED", 502);
     }
 
     const config = configResult.data;
@@ -115,7 +140,7 @@ export class MessageService {
     }
 
     // Strip '+' prefix — Evolution expects bare number string
-    const toNumber = conv.customer.phone!.replace(/^\+/, ""); // messaging customers always have a phone
+    const toNumber = conv.customer.phone!.replace(/^\+/, "");
 
     let externalMessageId: string | null = null;
 
@@ -143,8 +168,6 @@ export class MessageService {
       }
       throw err;
     }
-
-    const now = new Date();
 
     const [message] = await prisma.$transaction([
       prisma.message.create({
