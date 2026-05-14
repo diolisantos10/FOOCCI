@@ -172,6 +172,85 @@ function shouldUseImportedCategories(
   return importedCount > realCount;
 }
 
+// ─── Table sort helpers ───────────────────────────────────────────────────────
+
+const SORT_OPTS: { value: string; label: string }[] = [
+  { value: "revenue-desc", label: "Maior receita"    },
+  { value: "revenue-asc",  label: "Menor receita"    },
+  { value: "qty-desc",     label: "Maior quantidade" },
+  { value: "qty-asc",      label: "Menor quantidade" },
+  { value: "name-asc",     label: "A-Z"              },
+  { value: "name-desc",    label: "Z-A"              },
+];
+
+function applySort<T extends { name: string; revenue: number; qty: number }>(
+  rows: T[],
+  sortValue: string,
+): T[] {
+  const parts = sortValue.split("-");
+  const key   = parts[0] as "revenue" | "qty" | "name";
+  const dir   = parts[1] as "asc" | "desc";
+  const mult  = dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (key === "name") return a.name.localeCompare(b.name, "pt-BR") * mult;
+    if (key === "qty")  return (a.qty - b.qty) * mult;
+    return (a.revenue - b.revenue) * mult;
+  });
+}
+
+function ProductTableControls({
+  search, onSearch,
+  category, onCategory, categories,
+  sortValue, onSort,
+  resultCount, totalCount,
+}: {
+  search: string;        onSearch: (v: string) => void;
+  category: string;      onCategory: (v: string) => void; categories: string[];
+  sortValue: string;     onSort: (v: string) => void;
+  resultCount: number;   totalCount: number;
+}) {
+  const isFiltered = search !== "" || category !== "";
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <input
+        type="text"
+        placeholder="Buscar por nome…"
+        value={search}
+        onChange={(e) => onSearch(e.target.value)}
+        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 w-44"
+      />
+      {categories.length > 0 && (
+        <select
+          value={category}
+          onChange={(e) => onCategory(e.target.value)}
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300 max-w-[180px]"
+        >
+          <option value="">Todas as categorias</option>
+          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      )}
+      <select
+        value={sortValue}
+        onChange={(e) => onSort(e.target.value)}
+        className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+      >
+        {SORT_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      {isFiltered && (
+        <>
+          <span className="text-xs text-gray-400">{resultCount} de {totalCount}</span>
+          <button
+            onClick={() => { onSearch(""); onCategory(""); }}
+            className="text-[11px] text-indigo-500 underline hover:text-indigo-700"
+          >
+            Limpar
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Base micro-components ────────────────────────────────────────────────────
 
 function Card({ title, children, className = "" }: {
@@ -801,16 +880,32 @@ function TabProdutos({ data, loading, preset }: {
   loading: boolean;
   preset: Preset;
 }) {
+  // Hooks must be before any early return
+  const [search,    setSearch]    = useState("");
+  const [catFilter, setCatFilter] = useState("");
+  const [sortValue, setSortValue] = useState("revenue-desc");
+
   if (loading) return <Skeleton />;
 
-  const useImported    = shouldUseImportedProducts(preset, data);
-  const hasReal        = (data?.topProducts.length ?? 0) > 0;
-  const hasImported    = (data?.importedBaseline?.topProducts.length ?? 0) > 0;
+  const useImported = shouldUseImportedProducts(preset, data);
+  const hasReal     = (data?.topProducts.length ?? 0) > 0;
+  const hasImported = (data?.importedBaseline?.topProducts.length ?? 0) > 0;
 
-  // ── Imported path (Todo histórico + more imported rows than real) ──────────
+  // ── Imported path ─────────────────────────────────────────────────────────
   if (useImported && hasImported) {
-    const baseline = data!.importedBaseline!;
-    const allProducts = baseline.topProducts; // up to 150 rows
+    const baseline    = data!.importedBaseline!;
+    const allProducts = baseline.topProducts;
+
+    const categories = [...new Set(
+      allProducts.map((p) => p.category).filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+    const filtered = allProducts.filter((p) => {
+      const matchName = !search   || p.name.toLowerCase().includes(search.toLowerCase());
+      const matchCat  = !catFilter || p.category === catFilter;
+      return matchName && matchCat;
+    });
+    const sorted = applySort(filtered, sortValue);
 
     return (
       <div className="space-y-6">
@@ -862,37 +957,47 @@ function TabProdutos({ data, loading, preset }: {
           />
         </Card>
 
-        {/* Full table */}
+        {/* Full filterable/sortable table */}
         <Card title={`Tabela completa — ${fmtNum(allProducts.length)} produtos`}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b text-left text-gray-400">
-                  <th className="pb-2 pr-4 font-medium">#</th>
-                  <th className="pb-2 pr-4 font-medium">Produto</th>
-                  <th className="pb-2 pr-4 font-medium">Categoria</th>
-                  <th className="pb-2 pr-4 font-medium text-right">Receita</th>
-                  <th className="pb-2 pr-4 font-medium text-right">Qtd</th>
-                  <th className="pb-2 font-medium text-right">% receita</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {allProducts.map((p, i) => {
-                  const share = baseline.totalRevenue > 0 ? (p.revenue / baseline.totalRevenue) * 100 : 0;
-                  return (
-                    <tr key={i}>
-                      <td className="py-1.5 pr-4 text-gray-400">{i + 1}</td>
-                      <td className="py-1.5 pr-4 font-medium text-gray-800">{p.name}</td>
-                      <td className="py-1.5 pr-4 text-gray-500">{p.category || "—"}</td>
-                      <td className="py-1.5 pr-4 text-right font-medium">{fmtBRL(p.revenue)}</td>
-                      <td className="py-1.5 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
-                      <td className="py-1.5 text-right text-gray-400">{share.toFixed(1)}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ProductTableControls
+            search={search}       onSearch={setSearch}
+            category={catFilter}  onCategory={setCatFilter}  categories={categories}
+            sortValue={sortValue}  onSort={setSortValue}
+            resultCount={sorted.length}  totalCount={allProducts.length}
+          />
+          {sorted.length === 0 ? (
+            <Empty msg="Nenhum produto encontrado com esses filtros." />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b text-left text-gray-400">
+                    <th className="pb-2 pr-4 font-medium">#</th>
+                    <th className="pb-2 pr-4 font-medium">Produto</th>
+                    <th className="pb-2 pr-4 font-medium">Categoria</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Receita</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Qtd</th>
+                    <th className="pb-2 font-medium text-right">% receita</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {sorted.map((p, i) => {
+                    const share = baseline.totalRevenue > 0 ? (p.revenue / baseline.totalRevenue) * 100 : 0;
+                    return (
+                      <tr key={i}>
+                        <td className="py-1.5 pr-4 text-gray-400">{i + 1}</td>
+                        <td className="py-1.5 pr-4 font-medium text-gray-800">{p.name}</td>
+                        <td className="py-1.5 pr-4 text-gray-500">{p.category || "—"}</td>
+                        <td className="py-1.5 pr-4 text-right font-medium">{fmtBRL(p.revenue)}</td>
+                        <td className="py-1.5 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
+                        <td className="py-1.5 text-right text-gray-400">{share.toFixed(1)}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
 
         {/* Sem classificação callout */}
@@ -1022,6 +1127,10 @@ function TabCategorias({ data, loading, preset }: {
   loading: boolean;
   preset: Preset;
 }) {
+  // Hooks before early returns
+  const [catSearch, setCatSearch] = useState("");
+  const [catSort,   setCatSort]   = useState("revenue-desc");
+
   if (loading) return <Skeleton />;
 
   const useImported = shouldUseImportedCategories(preset, data);
@@ -1032,6 +1141,12 @@ function TabCategorias({ data, loading, preset }: {
   if (useImported && hasImported) {
     const baseline   = data!.importedBaseline!;
     const categories = baseline.topCategories;
+
+    // Apply search + sort to the detail table only (bar charts use full list)
+    const filteredCats = catSearch
+      ? categories.filter((c) => c.name.toLowerCase().includes(catSearch.toLowerCase()))
+      : categories;
+    const sortedCats = applySort(filteredCats, catSort);
 
     return (
       <div className="space-y-6">
@@ -1081,35 +1196,61 @@ function TabCategorias({ data, loading, preset }: {
           </div>
         </Card>
 
-        {/* Detail table */}
+        {/* Searchable/sortable detail table */}
         <Card title="Detalhamento por categoria">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b text-left text-gray-400">
-                  <th className="pb-2 pr-4 font-medium">#</th>
-                  <th className="pb-2 pr-4 font-medium">Categoria</th>
-                  <th className="pb-2 pr-4 font-medium text-right">Receita</th>
-                  <th className="pb-2 pr-4 font-medium text-right">Qtd</th>
-                  <th className="pb-2 font-medium text-right">% receita</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {categories.map((cat, i) => {
-                  const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
-                  return (
-                    <tr key={i}>
-                      <td className="py-2 pr-4 text-gray-400">{i + 1}</td>
-                      <td className="py-2 pr-4 font-medium text-gray-800">{cat.name}</td>
-                      <td className="py-2 pr-4 text-right font-medium">{fmtBRL(cat.revenue)}</td>
-                      <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(cat.qty)}</td>
-                      <td className="py-2 text-right text-gray-400">{share.toFixed(1)}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              placeholder="Buscar categoria…"
+              value={catSearch}
+              onChange={(e) => setCatSearch(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 w-44"
+            />
+            <select
+              value={catSort}
+              onChange={(e) => setCatSort(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+            >
+              {SORT_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {catSearch && (
+              <>
+                <span className="text-xs text-gray-400">{sortedCats.length} de {categories.length}</span>
+                <button onClick={() => setCatSearch("")} className="text-[11px] text-indigo-500 underline hover:text-indigo-700">Limpar</button>
+              </>
+            )}
           </div>
+          {sortedCats.length === 0 ? (
+            <Empty msg="Nenhuma categoria encontrada." />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b text-left text-gray-400">
+                    <th className="pb-2 pr-4 font-medium">#</th>
+                    <th className="pb-2 pr-4 font-medium">Categoria</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Receita</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Qtd</th>
+                    <th className="pb-2 font-medium text-right">% receita</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {sortedCats.map((cat, i) => {
+                    const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
+                    return (
+                      <tr key={i}>
+                        <td className="py-2 pr-4 text-gray-400">{i + 1}</td>
+                        <td className="py-2 pr-4 font-medium text-gray-800">{cat.name}</td>
+                        <td className="py-2 pr-4 text-right font-medium">{fmtBRL(cat.revenue)}</td>
+                        <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(cat.qty)}</td>
+                        <td className="py-2 text-right text-gray-400">{share.toFixed(1)}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
 
         {/* Top products per category — derived from imported product rows */}

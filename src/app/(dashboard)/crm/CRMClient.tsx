@@ -26,7 +26,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; dot: string }> = {
 };
 
 const CUSTOMER_FILTER_LABELS: Record<string, string> = {
-  all:          "Top Gasto",
+  all:          "Todos os clientes",
   inactive:     "Inativos 30d+",
   morno:        "Mornos (31–60d)",
   frio:         "Frios (60d+)",
@@ -35,6 +35,40 @@ const CUSTOMER_FILTER_LABELS: Record<string, string> = {
   firstTime:    "1º pedido",
   recent:       "Recentes",
 };
+
+type CRMSortKey = "spend" | "orders" | "lastOrder" | "name";
+type CRMSortDir = "asc" | "desc";
+
+const CRM_SORT_OPTS: { value: string; label: string }[] = [
+  { value: "spend-desc",     label: "Maior gasto"                },
+  { value: "spend-asc",      label: "Menor gasto"                },
+  { value: "orders-desc",    label: "Mais pedidos"               },
+  { value: "orders-asc",     label: "Menos pedidos"              },
+  { value: "lastOrder-desc", label: "Última compra mais recente" },
+  { value: "lastOrder-asc",  label: "Última compra mais antiga"  },
+  { value: "name-asc",       label: "Nome A-Z"                   },
+  { value: "name-desc",      label: "Nome Z-A"                   },
+];
+
+function applyCRMSort(
+  customers: import("@/services/crm/CRMService").CRMCustomer[],
+  sortValue: string,
+): import("@/services/crm/CRMService").CRMCustomer[] {
+  const parts   = sortValue.split("-");
+  const key     = parts[0] as CRMSortKey;
+  const dir     = parts[1] as CRMSortDir;
+  const mult    = dir === "asc" ? 1 : -1;
+  return [...customers].sort((a, b) => {
+    if (key === "name")      return a.name.localeCompare(b.name, "pt-BR") * mult;
+    if (key === "orders")    return (a.totalOrders - b.totalOrders) * mult;
+    if (key === "lastOrder") {
+      const ta = a.lastOrderAt ? new Date(a.lastOrderAt).getTime() : 0;
+      const tb = b.lastOrderAt ? new Date(b.lastOrderAt).getTime() : 0;
+      return (ta - tb) * mult;
+    }
+    return (a.totalSpend - b.totalSpend) * mult;
+  });
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -1538,7 +1572,8 @@ function CustomersTab({
   const [customers, setCustomers] = useState<CRMCustomer[]>(
     initialFilter === "all" ? initialCustomers : []
   );
-  const [loading, setLoading] = useState(initialFilter !== "all");
+  const [loading,   setLoading]   = useState(initialFilter !== "all");
+  const [sortValue, setSortValue] = useState("spend-desc");
 
   useEffect(() => {
     if (initialFilter !== "all") {
@@ -1560,6 +1595,7 @@ function CustomersTab({
     setLoading(false);
   }
 
+  const sortedCustomers = applyCRMSort(customers, sortValue);
   const tierOrder: CustomerTier[] = ["DIAMANTE", "OURO", "PRATA", "BRONZE"];
   const filterKeys = Object.keys(CUSTOMER_FILTER_LABELS) as CRMFilter[];
 
@@ -1580,6 +1616,14 @@ function CustomersTab({
             {CUSTOMER_FILTER_LABELS[f]}
           </button>
         ))}
+        <select
+          value={sortValue}
+          onChange={(e) => setSortValue(e.target.value)}
+          className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 focus:outline-none focus:ring-1 focus:ring-brand-300"
+          aria-label="Ordenar clientes"
+        >
+          {CRM_SORT_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
         <span className="text-xs text-gray-400 ml-1">{customers.length} clientes</span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <NewCustomerButton onCreated={() => applyFilter(filter)} />
@@ -1626,12 +1670,15 @@ function CustomersTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {customers.map((c) => (
+                {sortedCustomers.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
                       <Link href={`/customers/${c.id}`} className="hover:text-brand-600 transition-colors">
                         <p className="font-semibold text-gray-900 text-sm">
                           {c.name}
+                          {c.isUsingImportedData && (
+                            <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-700">Histórico importado</span>
+                          )}
                           {c.contactStatus === "SEM_TELEFONE" && (
                             <span className="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500">Sem telefone</span>
                           )}
@@ -1685,7 +1732,7 @@ function CustomersTab({
 
           {/* Mobile cards */}
           <div className="sm:hidden space-y-2">
-            {customers.map((c) => (
+            {sortedCustomers.map((c) => (
               <Link key={c.id} href={`/customers/${c.id}`}>
                 <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between gap-2">

@@ -168,7 +168,10 @@ export class RelationshipProgramService {
 
     const customers = await prisma.customer.findMany({
       where:  { restaurantId, isGuest: false },
-      select: { id: true, totalSpend: true, totalOrders: true },
+      select: {
+        id: true, totalSpend: true, totalOrders: true,
+        importedTotalSpent: true, importedOrderCount: true,
+      },
     });
 
     let updated = 0;
@@ -177,11 +180,12 @@ export class RelationshipProgramService {
       const chunk = customers.slice(i, i + 100);
       await Promise.all(
         chunk.map((c) => {
-          const tier = computeTierWithSettings(
-            Number(c.totalSpend),
-            c.totalOrders,
-            settings,
-          );
+          // Use imported historical spend when no real Foocci spend exists yet
+          const realSpend   = Number(c.totalSpend);
+          const realOrders  = c.totalOrders;
+          const effSpend    = realSpend  > 0 ? realSpend  : Number(c.importedTotalSpent  ?? 0);
+          const effOrders   = realOrders > 0 ? realOrders : (c.importedOrderCount ?? 0);
+          const tier = computeTierWithSettings(effSpend, effOrders, settings);
           return prisma.customer.update({
             where: { id: c.id },
             data:  { tier },
@@ -202,14 +206,16 @@ export class RelationshipProgramService {
     const customers = await prisma.customer.findMany({
       where:  { restaurantId, isGuest: false },
       select: {
-        id:          true,
-        name:        true,
-        phone:       true,
-        tier:        true,
-        totalSpend:  true,
-        totalOrders: true,
-        lastOrderAt: true,
-        segment:     true,
+        id:                 true,
+        name:               true,
+        phone:              true,
+        tier:               true,
+        totalSpend:         true,
+        totalOrders:        true,
+        lastOrderAt:        true,
+        segment:            true,
+        importedTotalSpent: true,
+        importedOrderCount: true,
       },
     });
 
@@ -222,10 +228,14 @@ export class RelationshipProgramService {
     };
 
     for (const c of customers) {
-      const tier = (c.tier as TierKey) in tierBuckets ? (c.tier as TierKey) : "BRONZE";
+      const tier      = (c.tier as TierKey) in tierBuckets ? (c.tier as TierKey) : "BRONZE";
+      const realSpend = Number(c.totalSpend);
+      const effSpend  = realSpend > 0 ? realSpend : Number(c.importedTotalSpent ?? 0);
+      const realOrds  = c.totalOrders;
+      const effOrders = realOrds > 0 ? realOrds : (c.importedOrderCount ?? 0);
       tierBuckets[tier].count   += 1;
-      tierBuckets[tier].revenue += Number(c.totalSpend);
-      tierBuckets[tier].orders  += c.totalOrders;
+      tierBuckets[tier].revenue += effSpend;
+      tierBuckets[tier].orders  += effOrders;
     }
 
     const TIER_ORDER: TierKey[] = ["BRONZE", "PRATA", "OURO", "DIAMANTE"];
@@ -270,8 +280,11 @@ export class RelationshipProgramService {
       const next = nextTier(currentTierKey);
       if (!next) continue; // already DIAMANTE
 
-      const spend = Number(c.totalSpend);
-      const orders = c.totalOrders;
+      // Use effective spend/orders (imported as fallback when no real Foocci data)
+      const realSpend  = Number(c.totalSpend);
+      const realOrders = c.totalOrders;
+      const spend      = realSpend  > 0 ? realSpend  : Number(c.importedTotalSpent  ?? 0);
+      const orders     = realOrders > 0 ? realOrders : (c.importedOrderCount ?? 0);
 
       let nextMinSpend  = 0;
       let nextMinOrders = 0;
