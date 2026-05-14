@@ -70,7 +70,7 @@ function today() {
   return new Date(new Date().toLocaleDateString("en-CA")); // YYYY-MM-DD local
 }
 
-type Preset = "today" | "yesterday" | "7d" | "30d" | "90d" | "year" | "custom";
+type Preset = "today" | "yesterday" | "7d" | "30d" | "90d" | "year" | "all" | "custom";
 
 const PRESETS: { id: Preset; label: string }[] = [
   { id: "today",     label: "Hoje" },
@@ -79,21 +79,36 @@ const PRESETS: { id: Preset; label: string }[] = [
   { id: "30d",       label: "30 dias" },
   { id: "90d",       label: "90 dias" },
   { id: "year",      label: "12 meses" },
+  { id: "all",       label: "Todo histórico" },
   { id: "custom",    label: "Personalizado" },
 ];
 
 function presetRange(preset: Preset): { from: string; to: string } {
   const t = today();
   switch (preset) {
-    case "today":     return { from: toISO(t),             to: toISO(t) };
-    case "yesterday": return { from: toISO(addDays(t,-1)), to: toISO(addDays(t,-1)) };
-    case "7d":        return { from: toISO(addDays(t,-6)), to: toISO(t) };
+    case "today":     return { from: toISO(t),              to: toISO(t) };
+    case "yesterday": return { from: toISO(addDays(t, -1)), to: toISO(addDays(t, -1)) };
+    case "7d":        return { from: toISO(addDays(t, -6)), to: toISO(t) };
     case "30d":       return { from: toISO(addDays(t,-29)), to: toISO(t) };
     case "90d":       return { from: toISO(addDays(t,-89)), to: toISO(t) };
     case "year":      return { from: toISO(addDays(t,-364)), to: toISO(t) };
+    case "all":       return { from: "2000-01-01",           to: toISO(t) };
     default:          return { from: toISO(addDays(t,-29)), to: toISO(t) };
   }
 }
+
+// ─── Tab config ───────────────────────────────────────────────────────────────
+
+const TABS = [
+  { id: "visao-geral",  label: "Visão Geral"        },
+  { id: "produtos",     label: "Produtos"            },
+  { id: "categorias",   label: "Categorias"          },
+  { id: "clientes",     label: "Clientes"            },
+  { id: "canais",       label: "Canais"              },
+  { id: "historico",    label: "Histórico Importado" },
+] as const;
+
+type Tab = (typeof TABS)[number]["id"];
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -172,6 +187,23 @@ function Skeleton() {
       <div className="h-4 w-2/3 rounded bg-gray-100" />
       <div className="h-4 w-1/2 rounded bg-gray-100" />
     </div>
+  );
+}
+
+// ─── Source badge ─────────────────────────────────────────────────────────────
+
+function SourceBadge({ source }: { source: "foocci" | "importado" }) {
+  if (source === "foocci") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
+        📋 Pedidos Foocci
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+      📦 Histórico importado — dados agregados, não pedidos detalhados
+    </span>
   );
 }
 
@@ -431,7 +463,6 @@ function AgentInsightCard({ insight }: { insight: AgentInsight }) {
   const s = SEVERITY_STYLE[insight.severity];
   return (
     <div className={`flex flex-col rounded-xl border p-4 gap-3 ${s.border} ${s.bg}`}>
-      {/* Badge + icon */}
       <div className="flex items-center justify-between">
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${s.badge} ${s.badgeText}`}>
           {SEVERITY_LABEL[insight.severity]}
@@ -439,7 +470,6 @@ function AgentInsightCard({ insight }: { insight: AgentInsight }) {
         <span className="text-lg leading-none">{s.icon}</span>
       </div>
 
-      {/* Title */}
       <div>
         <p className="text-sm font-semibold text-gray-900">{insight.title}</p>
         {insight.metric && (
@@ -447,13 +477,9 @@ function AgentInsightCard({ insight }: { insight: AgentInsight }) {
         )}
       </div>
 
-      {/* Explanation */}
       <p className="text-xs text-gray-600 leading-relaxed">{insight.explanation}</p>
-
-      {/* Recommendation */}
       <p className="text-xs text-gray-500 italic">{insight.recommendation}</p>
 
-      {/* CTA */}
       {insight.ctaLabel && insight.ctaTarget && (
         <a
           href={insight.ctaTarget}
@@ -562,7 +588,6 @@ function QuestionBoxPlaceholder() {
 function AgentPanel({ data, loading }: { data: AgentReport | null; loading: boolean }) {
   return (
     <div className="rounded-xl border-2 border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-white p-6 space-y-5">
-      {/* Header */}
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xl shadow-sm">
           🧠
@@ -595,20 +620,17 @@ function AgentPanel({ data, loading }: { data: AgentReport | null; loading: bool
 
       {!loading && data && data.hasData && (
         <>
-          {/* Executive summary */}
           <div className="rounded-xl bg-white border border-indigo-100 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-indigo-400 mb-2">Resumo executivo</p>
             <p className="text-sm text-gray-700 leading-relaxed">{data.summary}</p>
           </div>
 
-          {/* Period comparison */}
           {data.comparison.available ? (
             <ComparisonRow comparison={data.comparison} />
           ) : data.comparison.unavailableReason ? (
             <p className="text-xs text-gray-400 italic px-1">{data.comparison.unavailableReason}</p>
           ) : null}
 
-          {/* Insight cards */}
           {data.insights.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 px-1">
@@ -629,12 +651,497 @@ function AgentPanel({ data, loading }: { data: AgentReport | null; loading: bool
             </div>
           )}
 
-          {/* Question box placeholder */}
           <QuestionBoxPlaceholder />
         </>
       )}
     </div>
   );
+}
+
+// ─── Tab content sections ─────────────────────────────────────────────────────
+
+function TabVisaoGeral({
+  data, loading, agentData, agentLoading,
+}: {
+  data: AnalyticsOverview | null;
+  loading: boolean;
+  agentData: AgentReport | null;
+  agentLoading: boolean;
+}) {
+  const kpi = data?.kpi;
+  const hasRealOrders = (kpi?.orders ?? 0) > 0;
+  const hasImported   = (data?.importedBaseline?.rowCount ?? 0) > 0;
+
+  return (
+    <div className="space-y-6">
+      {/* KPI grid — real Foocci orders */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <SourceBadge source="foocci" />
+          {!hasRealOrders && (
+            <span className="text-xs text-gray-400">Sem pedidos no período selecionado</span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          <KpiCard label="Receita"        value={kpi ? fmtBRL(kpi.revenue)         : "—"} />
+          <KpiCard label="Pedidos"        value={kpi ? fmtNum(kpi.orders)          : "—"} />
+          <KpiCard label="Ticket médio"   value={kpi ? fmtBRL(kpi.avgTicket)       : "—"} />
+          <KpiCard label="Novos clientes" value={kpi ? fmtNum(kpi.newCustomers)    : "—"} />
+          <KpiCard label="Cancelamentos"  value={kpi ? fmtNum(kpi.cancelledOrders) : "—"}
+                   sub={kpi ? fmtPct(kpi.cancellationRate) + " do total" : undefined} />
+          <KpiCard label="Cancelamento %" value={kpi ? fmtPct(kpi.cancellationRate) : "—"} />
+        </div>
+      </div>
+
+      {/* Teaser when imported baseline exists but no real orders */}
+      {!hasRealOrders && hasImported && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 flex items-start gap-3">
+          <span className="text-xl shrink-0">📦</span>
+          <div>
+            <p className="text-sm font-semibold text-indigo-900">Histórico importado disponível</p>
+            <p className="mt-0.5 text-xs text-indigo-700">
+              Há {fmtNum(data!.importedBaseline!.rowCount)} registros do Saipos/Nemo com receita histórica de{" "}
+              <strong>{fmtBRL(data!.importedBaseline!.totalRevenue)}</strong>.
+              Acesse a aba <strong>Histórico Importado</strong>, <strong>Produtos</strong> ou{" "}
+              <strong>Categorias</strong> para explorar.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Analytics Agent */}
+      <AgentPanel data={agentData} loading={agentLoading} />
+
+      {/* AnalyticsService legacy insights */}
+      {data && data.insights.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {data.insights.map((ins, i) => <InsightCard key={i} insight={ins} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TabProdutos({ data, loading }: { data: AnalyticsOverview | null; loading: boolean }) {
+  const hasReal     = (data?.topProducts.length ?? 0) > 0;
+  const hasImported = (data?.importedBaseline?.topProducts.length ?? 0) > 0;
+
+  if (loading) return <Skeleton />;
+
+  if (hasReal) {
+    const slow = data!.topProducts.length > 5
+      ? [...data!.topProducts].sort((a, b) => a.revenue - b.revenue)
+          .slice(0, Math.min(10, Math.floor(data!.topProducts.length / 2)))
+      : [];
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <SourceBadge source="foocci" />
+        </div>
+
+        <Card title="Produtos mais vendidos">
+          <BarChart
+            data={data!.topProducts as unknown as Record<string, number | string>[]}
+            valueKey="revenue"
+            labelKey="name"
+            color="bg-indigo-500"
+          />
+        </Card>
+
+        <Card title="Tabela completa — produtos">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b text-left text-gray-400">
+                  <th className="pb-2 pr-4 font-medium">#</th>
+                  <th className="pb-2 pr-4 font-medium">Produto</th>
+                  <th className="pb-2 pr-4 font-medium">Categoria</th>
+                  <th className="pb-2 pr-4 font-medium text-right">Receita</th>
+                  <th className="pb-2 pr-4 font-medium text-right">Qtd</th>
+                  <th className="pb-2 font-medium text-right">Pedidos</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {data!.topProducts.map((p, i) => (
+                  <tr key={i}>
+                    <td className="py-2 pr-4 text-gray-400">{i + 1}</td>
+                    <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
+                    <td className="py-2 pr-4 text-gray-500">{p.category ?? "—"}</td>
+                    <td className="py-2 pr-4 text-right font-medium">{fmtBRL(p.revenue)}</td>
+                    <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
+                    <td className="py-2 text-right text-gray-500">{fmtNum(p.orderCount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        {slow.length > 0 && (
+          <Card title="Produtos com baixo desempenho no período">
+            <p className="mb-3 text-xs text-gray-400">
+              Itens com menor receita no período. Considere ações de destaque, promoção ou revisão de preço.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b text-left text-gray-400">
+                    <th className="pb-2 pr-4 font-medium">Produto</th>
+                    <th className="pb-2 pr-4 font-medium">Categoria</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Receita</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Qtd vendida</th>
+                    <th className="pb-2 font-medium text-right">Pedidos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {slow.map((p, i) => (
+                    <tr key={i}>
+                      <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
+                      <td className="py-2 pr-4 text-gray-500">{p.category ?? "—"}</td>
+                      <td className="py-2 pr-4 text-right text-amber-600 font-medium">{fmtBRL(p.revenue)}</td>
+                      <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
+                      <td className="py-2 text-right text-gray-500">{fmtNum(p.orderCount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-[11px] text-gray-400 italic">
+              Produtos sem nenhuma venda no período não aparecem aqui — eles não geram registros de pedido.
+            </p>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  if (hasImported) {
+    const baseline = data!.importedBaseline!;
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <SourceBadge source="importado" />
+        </div>
+
+        {/* KPIs */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-xl bg-gray-50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Receita histórica</p>
+            <p className="mt-1 text-lg font-bold text-gray-900">{fmtBRL(baseline.totalRevenue)}</p>
+          </div>
+          <div className="rounded-xl bg-gray-50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Qtd vendida</p>
+            <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.totalQuantity)}</p>
+          </div>
+          <div className="rounded-xl bg-gray-50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Produtos</p>
+            <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.topProducts.length)}</p>
+          </div>
+          <div className="rounded-xl bg-gray-50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Sem classificação</p>
+            <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.semClassificacaoCount)}</p>
+          </div>
+        </div>
+
+        <Card title="Top produtos por receita">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b text-left text-gray-400">
+                  <th className="pb-1.5 pr-3 font-medium">#</th>
+                  <th className="pb-1.5 pr-3 font-medium">Produto</th>
+                  <th className="pb-1.5 pr-3 font-medium">Categoria</th>
+                  <th className="pb-1.5 pr-3 font-medium text-right">Receita</th>
+                  <th className="pb-1.5 font-medium text-right">Qtd</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {baseline.topProducts.map((p, i) => {
+                  const share = baseline.totalRevenue > 0 ? (p.revenue / baseline.totalRevenue) * 100 : 0;
+                  return (
+                    <tr key={i}>
+                      <td className="py-1.5 pr-3 text-gray-400">{i + 1}</td>
+                      <td className="py-1.5 pr-3 font-medium text-gray-800">{p.name}</td>
+                      <td className="py-1.5 pr-3 text-gray-500">{p.category}</td>
+                      <td className="py-1.5 pr-3 text-right text-gray-700">{fmtBRL(p.revenue)}</td>
+                      <td className="py-1.5 text-right text-gray-500">
+                        <span className="text-gray-700">{fmtNum(p.qty)}</span>
+                        <span className="ml-1.5 text-gray-300">({share.toFixed(1)}%)</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        {baseline.semClassificacaoCount > 0 && (
+          <p className="text-[11px] text-amber-600">
+            ⚠ {baseline.semClassificacaoCount} produto{baseline.semClassificacaoCount !== 1 ? "s" : ""} sem classificação de categoria.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return <Empty msg="Sem dados de produtos no período." />;
+}
+
+function TabCategorias({ data, loading }: { data: AnalyticsOverview | null; loading: boolean }) {
+  const hasReal     = (data?.categories.length ?? 0) > 0;
+  const hasImported = (data?.importedBaseline?.topCategories.length ?? 0) > 0;
+
+  if (loading) return <Skeleton />;
+
+  if (hasReal) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <SourceBadge source="foocci" />
+        </div>
+        <Card title="Desempenho por categoria">
+          <div className="space-y-2">
+            {data!.categories.map((cat) => (
+              <div key={cat.name} className="flex items-center gap-3 text-xs">
+                <span className="w-28 shrink-0 truncate text-right text-gray-600">{cat.name}</span>
+                <div className="flex-1 rounded-full bg-gray-100 h-2.5">
+                  <div className="bg-violet-500 h-2.5 rounded-full" style={{ width: `${cat.share}%` }} />
+                </div>
+                <span className="w-20 shrink-0 text-right font-medium">{fmtBRL(cat.revenue)}</span>
+                <span className="w-12 shrink-0 text-right text-gray-400">{fmtPct(cat.share)}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (hasImported) {
+    const baseline = data!.importedBaseline!;
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <SourceBadge source="importado" />
+        </div>
+
+        <Card title="Top categorias por receita">
+          <div className="space-y-2">
+            {baseline.topCategories.map((cat, i) => {
+              const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
+              return (
+                <div key={i} className="flex items-center gap-3 text-xs">
+                  <span className="w-32 shrink-0 truncate text-right text-gray-600">{cat.name}</span>
+                  <div className="flex-1 rounded-full bg-gray-100 h-2.5">
+                    <div className="bg-indigo-400 h-2.5 rounded-full" style={{ width: `${share.toFixed(1)}%` }} />
+                  </div>
+                  <span className="w-20 shrink-0 text-right font-medium text-gray-800">{fmtBRL(cat.revenue)}</span>
+                  <span className="w-16 shrink-0 text-right text-gray-400">{fmtNum(cat.qty)} un</span>
+                  <span className="w-10 shrink-0 text-right text-gray-400">{share.toFixed(1)}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        {/* Table with product breakdown per category */}
+        <Card title="Categorias — detalhamento">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b text-left text-gray-400">
+                  <th className="pb-1.5 pr-3 font-medium">#</th>
+                  <th className="pb-1.5 pr-3 font-medium">Categoria</th>
+                  <th className="pb-1.5 pr-3 font-medium text-right">Receita</th>
+                  <th className="pb-1.5 pr-3 font-medium text-right">Qtd</th>
+                  <th className="pb-1.5 font-medium text-right">% receita</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {baseline.topCategories.map((cat, i) => {
+                  const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
+                  return (
+                    <tr key={i}>
+                      <td className="py-1.5 pr-3 text-gray-400">{i + 1}</td>
+                      <td className="py-1.5 pr-3 font-medium text-gray-800">{cat.name}</td>
+                      <td className="py-1.5 pr-3 text-right text-gray-700">{fmtBRL(cat.revenue)}</td>
+                      <td className="py-1.5 pr-3 text-right text-gray-500">{fmtNum(cat.qty)}</td>
+                      <td className="py-1.5 text-right text-gray-500">{share.toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  return <Empty msg="Sem dados de categorias no período." />;
+}
+
+function TabClientes({ data, loading }: { data: AnalyticsOverview | null; loading: boolean }) {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <SourceBadge source="foocci" />
+      </div>
+
+      {/* Top customers */}
+      <Card title="Top clientes no período">
+        {loading ? <Skeleton /> : data && data.topCustomers.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b text-left text-gray-400">
+                  <th className="pb-1.5 pr-3 font-medium">Nome</th>
+                  <th className="pb-1.5 pr-3 font-medium text-right">Gasto</th>
+                  <th className="pb-1.5 pr-3 font-medium text-right">Pedidos</th>
+                  <th className="pb-1.5 font-medium">Tier</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {data.topCustomers.map((c) => (
+                  <tr key={c.id}>
+                    <td className="py-1.5 pr-3 font-medium text-gray-800">{c.name}</td>
+                    <td className="py-1.5 pr-3 text-right">{fmtBRL(c.totalSpend)}</td>
+                    <td className="py-1.5 pr-3 text-right text-gray-500">{c.totalOrders}</td>
+                    <td className="py-1.5">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-gray-300"}`}>
+                        {TIER_LABEL[c.tier] ?? c.tier}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : !loading && <Empty />}
+      </Card>
+
+      {/* Segments + Tiers */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card title="Segmentos CRM (base total)">
+          {loading ? <Skeleton /> : data ? (
+            <StackedBar
+              segments={data.segments.map((s) => ({ key: s.segment, count: s.count, share: s.share }))}
+              colorMap={SEGMENT_COLOR}
+              labelMap={SEGMENT_LABEL}
+            />
+          ) : <Empty />}
+        </Card>
+
+        <Card title="Tiers de clientes (base total)">
+          {loading ? <Skeleton /> : data ? (
+            <StackedBar
+              segments={data.tiers.map((t) => ({ key: t.tier, count: t.count, share: t.share }))}
+              colorMap={TIER_COLOR}
+              labelMap={TIER_LABEL}
+            />
+          ) : <Empty />}
+        </Card>
+      </div>
+
+      {/* Attach rates */}
+      <Card title="Taxa de attach (complementos)">
+        {loading ? <Skeleton /> : data && data.attachRates.length > 0 ? (
+          <div className="grid gap-6 sm:grid-cols-2">
+            {data.attachRates.map((ar) => (
+              <div key={ar.label} className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-gray-700">{ar.label}</span>
+                  <span className="text-lg font-bold text-gray-900">{fmtPct(ar.rate)}</span>
+                </div>
+                <div className="h-2.5 w-full rounded-full bg-gray-100">
+                  <div
+                    className={`h-2.5 rounded-full transition-all ${ar.rate >= 40 ? "bg-green-500" : ar.rate >= 20 ? "bg-amber-400" : "bg-rose-400"}`}
+                    style={{ width: `${Math.min(ar.rate, 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-400">
+                  {fmtNum(ar.withCount)} de {fmtNum(ar.total)} pedidos · {fmtBRL(ar.addedRevenue)} em receita
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : !loading && <Empty />}
+      </Card>
+    </div>
+  );
+}
+
+function TabCanais({ data, loading }: { data: AnalyticsOverview | null; loading: boolean }) {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <SourceBadge source="foocci" />
+      </div>
+
+      <Card title="Canais de origem">
+        {loading ? <Skeleton /> : data && data.channels.length > 0 ? (
+          <div className="space-y-2">
+            {data.channels.map((ch) => (
+              <div key={ch.source} className="flex items-center gap-3 text-xs">
+                <span className="w-24 shrink-0 truncate text-right capitalize text-gray-600">{ch.source}</span>
+                <div className="flex-1 rounded-full bg-gray-100 h-2.5">
+                  <div className="bg-teal-500 h-2.5 rounded-full" style={{ width: `${ch.share}%` }} />
+                </div>
+                <span className="w-10 shrink-0 text-right text-gray-500">{fmtNum(ch.orders)}</span>
+                <span className="w-20 shrink-0 text-right font-medium">{fmtBRL(ch.revenue)}</span>
+                <span className="w-12 shrink-0 text-right text-gray-400">{fmtPct(ch.share)}</span>
+              </div>
+            ))}
+          </div>
+        ) : !loading && <Empty />}
+      </Card>
+
+      <Card title="Receita por dia">
+        {loading ? <Skeleton /> : data && data.salesByDay.length > 0 ? (
+          <div className="space-y-3">
+            <Sparkline points={data.salesByDay} height={80} />
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b text-left text-gray-400">
+                    <th className="pb-1.5 pr-4 font-medium">Data</th>
+                    <th className="pb-1.5 pr-4 font-medium text-right">Receita</th>
+                    <th className="pb-1.5 font-medium text-right">Pedidos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {[...data.salesByDay].reverse().slice(0, 14).map((pt) => (
+                    <tr key={pt.date}>
+                      <td className="py-1 pr-4 text-gray-600">{pt.date}</td>
+                      <td className="py-1 pr-4 text-right font-medium">{fmtBRL(pt.revenue)}</td>
+                      <td className="py-1 text-right text-gray-600">{fmtNum(pt.orders)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : !loading && <Empty />}
+      </Card>
+    </div>
+  );
+}
+
+function TabHistorico({ data, loading }: { data: AnalyticsOverview | null; loading: boolean }) {
+  if (loading) return <Skeleton />;
+  if (!data?.importedBaseline) {
+    return (
+      <div className="space-y-4">
+        <Empty msg="Nenhum histórico importado disponível para este restaurante." />
+        <p className="text-center text-xs text-gray-400">
+          Importe seu histórico do Saipos/Nemo em <strong>Configurações → Importação</strong> para ver seus dados aqui.
+        </p>
+      </div>
+    );
+  }
+  return <ImportedBaselineSection baseline={data.importedBaseline} />;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -646,6 +1153,7 @@ export function AnalyticsClient() {
   const [loading, setLoading] = useState(false);
   const [data, setData]       = useState<AnalyticsOverview | null>(null);
   const [error, setError]     = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("visao-geral");
 
   const [agentData,    setAgentData]    = useState<AgentReport | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
@@ -692,8 +1200,6 @@ export function AnalyticsClient() {
       setTo(r.to);
     }
   }
-
-  const kpi = data?.kpi;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
@@ -742,263 +1248,49 @@ export function AnalyticsClient() {
         </div>
       )}
 
-      {/* ── KPI overview (real Foocci orders — period-filtered) ── */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <KpiCard label="Receita"        value={kpi ? fmtBRL(kpi.revenue)         : "—"} />
-        <KpiCard label="Pedidos"        value={kpi ? fmtNum(kpi.orders)          : "—"} />
-        <KpiCard label="Ticket médio"   value={kpi ? fmtBRL(kpi.avgTicket)       : "—"} />
-        <KpiCard label="Novos clientes" value={kpi ? fmtNum(kpi.newCustomers)    : "—"} />
-        <KpiCard label="Cancelamentos"  value={kpi ? fmtNum(kpi.cancelledOrders) : "—"}
-                 sub={kpi ? fmtPct(kpi.cancellationRate) + " do total" : undefined} />
-        <KpiCard label="Cancelamento %" value={kpi ? fmtPct(kpi.cancellationRate) : "—"} />
-      </div>
-
-      {/* ── Imported historical baseline — shown prominently when it exists ── */}
-      {data?.importedBaseline && (
-        <ImportedBaselineSection baseline={data.importedBaseline} />
-      )}
-
-      {/* ── Analytics Agent Panel ── */}
-      <AgentPanel data={agentData} loading={agentLoading} />
-
-      {/* ── Insights (from AnalyticsService, kept for context) ── */}
-      {data && data.insights.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {data.insights.map((ins, i) => <InsightCard key={i} insight={ins} />)}
-        </div>
-      )}
-
-      {/* ── Sales over time ── */}
-      <Card title="Receita por dia">
-        {loading ? <Skeleton /> : data && data.salesByDay.length > 0 ? (
-          <div className="space-y-3">
-            <Sparkline points={data.salesByDay} height={80} />
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b text-left text-gray-400">
-                    <th className="pb-1.5 pr-4 font-medium">Data</th>
-                    <th className="pb-1.5 pr-4 font-medium text-right">Receita</th>
-                    <th className="pb-1.5 font-medium text-right">Pedidos</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {[...data.salesByDay].reverse().slice(0, 14).map((pt) => (
-                    <tr key={pt.date}>
-                      <td className="py-1 pr-4 text-gray-600">{pt.date}</td>
-                      <td className="py-1 pr-4 text-right font-medium">{fmtBRL(pt.revenue)}</td>
-                      <td className="py-1 text-right text-gray-600">{fmtNum(pt.orders)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : !loading && <Empty />}
-      </Card>
-
-      {/* ── Products + Categories ── */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card title="Produtos mais vendidos">
-          {loading ? <Skeleton /> : data && data.topProducts.length > 0 ? (
-            <BarChart
-              data={data.topProducts as unknown as Record<string, number | string>[]}
-              valueKey="revenue"
-              labelKey="name"
-              color="bg-indigo-500"
-            />
-          ) : !loading && <Empty />}
-        </Card>
-
-        <Card title="Desempenho por categoria">
-          {loading ? <Skeleton /> : data && data.categories.length > 0 ? (
-            <div className="space-y-2">
-              {data.categories.map((cat) => (
-                <div key={cat.name} className="flex items-center gap-3 text-xs">
-                  <span className="w-28 shrink-0 truncate text-right text-gray-600">{cat.name}</span>
-                  <div className="flex-1 rounded-full bg-gray-100 h-2.5">
-                    <div className="bg-violet-500 h-2.5 rounded-full" style={{ width: `${cat.share}%` }} />
-                  </div>
-                  <span className="w-20 shrink-0 text-right font-medium">{fmtBRL(cat.revenue)}</span>
-                  <span className="w-12 shrink-0 text-right text-gray-400">{fmtPct(cat.share)}</span>
-                </div>
-              ))}
-            </div>
-          ) : !loading && <Empty />}
-        </Card>
-      </div>
-
-      {/* ── Attach rates ── */}
-      <Card title="Taxa de attach (complementos)">
-        {loading ? <Skeleton /> : data && data.attachRates.length > 0 ? (
-          <div className="grid gap-6 sm:grid-cols-2">
-            {data.attachRates.map((ar) => (
-              <div key={ar.label} className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-gray-700">{ar.label}</span>
-                  <span className="text-lg font-bold text-gray-900">{fmtPct(ar.rate)}</span>
-                </div>
-                <div className="h-2.5 w-full rounded-full bg-gray-100">
-                  <div
-                    className={`h-2.5 rounded-full transition-all ${ar.rate >= 40 ? "bg-green-500" : ar.rate >= 20 ? "bg-amber-400" : "bg-rose-400"}`}
-                    style={{ width: `${Math.min(ar.rate, 100)}%` }}
-                  />
-                </div>
-                <p className="text-xs text-gray-400">
-                  {fmtNum(ar.withCount)} de {fmtNum(ar.total)} pedidos · {fmtBRL(ar.addedRevenue)} em receita
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : !loading && <Empty />}
-      </Card>
-
-      {/* ── Channels ── */}
-      <Card title="Canais de origem">
-        {loading ? <Skeleton /> : data && data.channels.length > 0 ? (
-          <div className="space-y-2">
-            {data.channels.map((ch) => (
-              <div key={ch.source} className="flex items-center gap-3 text-xs">
-                <span className="w-24 shrink-0 truncate text-right capitalize text-gray-600">{ch.source}</span>
-                <div className="flex-1 rounded-full bg-gray-100 h-2.5">
-                  <div className="bg-teal-500 h-2.5 rounded-full" style={{ width: `${ch.share}%` }} />
-                </div>
-                <span className="w-10 shrink-0 text-right text-gray-500">{fmtNum(ch.orders)}</span>
-                <span className="w-20 shrink-0 text-right font-medium">{fmtBRL(ch.revenue)}</span>
-                <span className="w-12 shrink-0 text-right text-gray-400">{fmtPct(ch.share)}</span>
-              </div>
-            ))}
-          </div>
-        ) : !loading && <Empty />}
-      </Card>
-
-      {/* ── Customer performance ── */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card title="Top clientes no período">
-          {loading ? <Skeleton /> : data && data.topCustomers.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b text-left text-gray-400">
-                    <th className="pb-1.5 pr-3 font-medium">Nome</th>
-                    <th className="pb-1.5 pr-3 font-medium text-right">Gasto</th>
-                    <th className="pb-1.5 pr-3 font-medium text-right">Pedidos</th>
-                    <th className="pb-1.5 font-medium">Tier</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {data.topCustomers.map((c) => (
-                    <tr key={c.id}>
-                      <td className="py-1.5 pr-3 font-medium text-gray-800">{c.name}</td>
-                      <td className="py-1.5 pr-3 text-right">{fmtBRL(c.totalSpend)}</td>
-                      <td className="py-1.5 pr-3 text-right text-gray-500">{c.totalOrders}</td>
-                      <td className="py-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-gray-300"}`}>
-                          {TIER_LABEL[c.tier] ?? c.tier}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : !loading && <Empty />}
-        </Card>
-
-        <div className="space-y-6">
-          <Card title="Segmentos CRM (base total)">
-            {loading ? <Skeleton /> : data ? (
-              <StackedBar
-                segments={data.segments.map((s) => ({ key: s.segment, count: s.count, share: s.share }))}
-                colorMap={SEGMENT_COLOR}
-                labelMap={SEGMENT_LABEL}
-              />
-            ) : <Empty />}
-          </Card>
-
-          <Card title="Tiers de clientes (base total)">
-            {loading ? <Skeleton /> : data ? (
-              <StackedBar
-                segments={data.tiers.map((t) => ({ key: t.tier, count: t.count, share: t.share }))}
-                colorMap={TIER_COLOR}
-                labelMap={TIER_LABEL}
-              />
-            ) : <Empty />}
-          </Card>
+      {/* ── Tab navigation ── */}
+      <div className="overflow-x-auto">
+        <div className="flex min-w-max gap-1 border-b border-gray-200 pb-0">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? "border-b-2 border-indigo-600 text-indigo-600"
+                  : "text-gray-500 hover:text-gray-800"
+              }`}
+            >
+              {tab.label}
+              {tab.id === "historico" && (data?.importedBaseline?.rowCount ?? 0) > 0 && (
+                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-100 px-1 text-[9px] font-bold text-indigo-600">
+                  {fmtNum(data!.importedBaseline!.rowCount)}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* ── Product table (full list) ── */}
-      {data && data.topProducts.length > 0 && (
-        <Card title="Tabela completa — produtos">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b text-left text-gray-400">
-                  <th className="pb-2 pr-4 font-medium">#</th>
-                  <th className="pb-2 pr-4 font-medium">Produto</th>
-                  <th className="pb-2 pr-4 font-medium">Categoria</th>
-                  <th className="pb-2 pr-4 font-medium text-right">Receita</th>
-                  <th className="pb-2 pr-4 font-medium text-right">Qtd</th>
-                  <th className="pb-2 font-medium text-right">Pedidos</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {data.topProducts.map((p, i) => (
-                  <tr key={i}>
-                    <td className="py-2 pr-4 text-gray-400">{i + 1}</td>
-                    <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
-                    <td className="py-2 pr-4 text-gray-500">{p.category ?? "—"}</td>
-                    <td className="py-2 pr-4 text-right font-medium">{fmtBRL(p.revenue)}</td>
-                    <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
-                    <td className="py-2 text-right text-gray-500">{fmtNum(p.orderCount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+      {/* ── Tab content ── */}
+      {activeTab === "visao-geral" && (
+        <TabVisaoGeral data={data} loading={loading} agentData={agentData} agentLoading={agentLoading} />
       )}
-
-      {/* ── Slow / low-selling products ── */}
-      {data && data.topProducts.length > 5 && (() => {
-        const sorted = [...data.topProducts].sort((a, b) => a.revenue - b.revenue);
-        const slow = sorted.slice(0, Math.min(10, Math.floor(data.topProducts.length / 2)));
-        return (
-          <Card title="Produtos com baixo desempenho no período">
-            <p className="mb-3 text-xs text-gray-400">
-              Itens com menor receita no período selecionado. Considere ações de destaque, promoção ou revisão de preço.
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b text-left text-gray-400">
-                    <th className="pb-2 pr-4 font-medium">Produto</th>
-                    <th className="pb-2 pr-4 font-medium">Categoria</th>
-                    <th className="pb-2 pr-4 font-medium text-right">Receita</th>
-                    <th className="pb-2 pr-4 font-medium text-right">Qtd vendida</th>
-                    <th className="pb-2 font-medium text-right">Pedidos</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {slow.map((p, i) => (
-                    <tr key={i}>
-                      <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
-                      <td className="py-2 pr-4 text-gray-500">{p.category ?? "—"}</td>
-                      <td className="py-2 pr-4 text-right text-amber-600 font-medium">{fmtBRL(p.revenue)}</td>
-                      <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
-                      <td className="py-2 text-right text-gray-500">{fmtNum(p.orderCount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-[11px] text-gray-400 italic">
-              Produtos sem nenhuma venda no período não aparecem aqui — eles não geram registros de pedido.
-            </p>
-          </Card>
-        );
-      })()}
+      {activeTab === "produtos" && (
+        <TabProdutos data={data} loading={loading} />
+      )}
+      {activeTab === "categorias" && (
+        <TabCategorias data={data} loading={loading} />
+      )}
+      {activeTab === "clientes" && (
+        <TabClientes data={data} loading={loading} />
+      )}
+      {activeTab === "canais" && (
+        <TabCanais data={data} loading={loading} />
+      )}
+      {activeTab === "historico" && (
+        <TabHistorico data={data} loading={loading} />
+      )}
     </div>
   );
 }
