@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ImportType = "customers" | "orders" | "customers_orders";
+type ImportType = "customers" | "orders" | "customers_orders" | "saipos_nemo_compiled";
 type Step = "type" | "upload" | "map" | "preview" | "importing" | "done";
 
 interface ParsedFile {
@@ -101,6 +101,37 @@ type ImportResult = CustomerResult | OrderResult;
 function isOrderPreview(p: Preview): p is OrderPreview { return "uniqueOrders" in p; }
 function isOrderResult(r: ImportResult): r is OrderResult { return "createdOrders" in r; }
 
+// ── Saipos + Nemo types ──────────────────────────────────────────────────────
+
+interface SaiposNemoPreviewData {
+  stats: {
+    readyCount:              number;
+    needsReviewCount:        number;
+    noPhoneImportableCount:  number;
+    noPhoneSkippedCount:     number;
+    noPhoneNeedsReviewCount: number;
+  };
+  productCount:   number;
+  categoryCount:  number;
+  totalQuantity:  number;
+  totalRevenue:   number;
+  periodStart:    string | null;
+  periodEnd:      string | null;
+  noPhoneWarning: string;
+  importMode:     string;
+}
+
+interface SaiposNemoExecuteResult {
+  contactableCustomersCreated:    number;
+  contactableCustomersUpdated:    number;
+  nonContactableCustomersCreated: number;
+  nonContactableCustomersUpdated: number;
+  noPhoneSkippedInsufficientData: number;
+  addressesCreated:               number;
+  productAggregatesCreated:       number;
+  productAggregatesSkipped:       number;
+}
+
 // ── Auto-detection ───────────────────────────────────────────────────────────
 
 const HINTS = {
@@ -182,8 +213,10 @@ function autoDetectOrder(columns: string[]): OrderMapping {
 
 // ── UI sub-components ────────────────────────────────────────────────────────
 
-function StepDots({ step }: { step: Step }) {
-  const order: Step[] = ["type","upload","map","preview","done"];
+function StepDots({ step, importType }: { step: Step; importType?: ImportType }) {
+  const order: Step[] = importType === "saipos_nemo_compiled"
+    ? ["type","upload","preview","done"]
+    : ["type","upload","map","preview","done"];
   const idx = order.indexOf(step === "importing" ? "preview" : step);
   return (
     <div className="flex items-center justify-center gap-2 mb-5">
@@ -198,9 +231,10 @@ function StepDots({ step }: { step: Step }) {
 
 function TypeStep({ onSelect }: { onSelect: (t: ImportType) => void }) {
   const options: Array<{ value: ImportType; label: string; desc: string; icon: string }> = [
-    { value: "customers",         label: "Clientes",                  desc: "Apenas cadastro de clientes (telefone, nome, e-mail, aniversário).", icon: "👥" },
-    { value: "orders",            label: "Pedidos com itens",         desc: "Histórico de pedidos com produtos. Os clientes serão criados automaticamente.", icon: "📦" },
-    { value: "customers_orders",  label: "Clientes + Pedidos",        desc: "Importa clientes e pedidos a partir do mesmo arquivo.", icon: "🧾" },
+    { value: "customers",              label: "Clientes",            desc: "Apenas cadastro de clientes (telefone, nome, e-mail, aniversário).", icon: "👥" },
+    { value: "orders",                 label: "Pedidos com itens",   desc: "Histórico de pedidos com produtos. Os clientes serão criados automaticamente.", icon: "📦" },
+    { value: "customers_orders",       label: "Clientes + Pedidos",  desc: "Importa clientes e pedidos a partir do mesmo arquivo.", icon: "🧾" },
+    { value: "saipos_nemo_compiled",   label: "Saipos + Nemo",       desc: "Importar planilha compilada com clientes, endereços e produtos agregados.", icon: "🏭" },
   ];
 
   return (
@@ -704,6 +738,224 @@ function DoneStep({ result, onClose }: { result: ImportResult; onClose: () => vo
   );
 }
 
+// ── Saipos + Nemo: Upload ────────────────────────────────────────────────────
+
+function SaiposNemoUploadStep({
+  onPreview,
+}: {
+  onPreview: (jobId: string, preview: SaiposNemoPreviewData) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
+
+  async function handleFile(file: File) {
+    setError(null);
+    setLoading(true);
+    const formData = new FormData();
+    formData.append("compiledFile", file);
+    const res  = await fetch("/api/crm/saipos-nemo/preview-compiled", { method: "POST", body: formData });
+    const json = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(json.error ?? "Falha ao processar arquivo"); return; }
+    onPreview(json.jobId as string, json.preview as SaiposNemoPreviewData);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm font-semibold text-gray-800">Envie a planilha compilada</p>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Arquivo <strong>Foocci_Base_Compilada_Saipos_Nemo.xlsx</strong> com as abas Clientes_Master, Sem_Telefone e Produtos_Agregados.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+        disabled={loading}
+        className={`w-full rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+          dragging ? "border-brand-400 bg-brand-50" : "border-gray-200 bg-gray-50 hover:border-brand-300 hover:bg-brand-50/50"
+        } disabled:opacity-60`}
+      >
+        <div className="flex flex-col items-center gap-3">
+          <span className="text-4xl">🏭</span>
+          {loading
+            ? <span className="text-sm text-gray-500">Processando planilha…</span>
+            : <>
+                <span className="text-sm font-semibold text-gray-700">Arraste o arquivo aqui ou clique para selecionar</span>
+                <span className="text-xs text-gray-400">XLSX · planilha compilada Saipos + Nemo</span>
+              </>
+          }
+        </div>
+      </button>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+      />
+
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
+        💡 A planilha deve conter as abas: <strong>Clientes_Master</strong>, <strong>Sem_Telefone</strong> e (opcional) <strong>Produtos_Agregados</strong>.
+      </div>
+
+      {error && (
+        <p className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{error}</p>
+      )}
+    </div>
+  );
+}
+
+// ── Saipos + Nemo: Preview ───────────────────────────────────────────────────
+
+function SaiposNemoPreviewStep({
+  preview, jobId, onConfirm, onBack, loading,
+}: {
+  preview:   SaiposNemoPreviewData;
+  jobId:     string;
+  onConfirm: (jId: string) => void;
+  onBack:    () => void;
+  loading:   boolean;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const contactableCount    = preview.stats.readyCount + preview.stats.needsReviewCount;
+  const nonContactableCount = preview.stats.noPhoneImportableCount;
+  const skippedCount        = preview.stats.noPhoneSkippedCount;
+  const needsReviewCount    = preview.stats.noPhoneNeedsReviewCount;
+
+  const stats = [
+    { label: "Clientes contatáveis",              value: contactableCount,     color: "text-green-700" },
+    { label: "Clientes não contatáveis",           value: nonContactableCount,  color: "text-amber-600" },
+    { label: "Sem dados suficientes (ignorados)",  value: skippedCount,         color: "text-gray-500"  },
+    { label: "Requer revisão (sem telefone)",      value: needsReviewCount,     color: "text-orange-600" },
+    { label: "Produtos agregados",                 value: preview.productCount, color: "text-blue-700"  },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="text-sm font-semibold text-gray-800">Prévia da importação</p>
+        <p className="text-xs text-gray-500 mt-0.5">Revise antes de executar. A importação não pode ser desfeita.</p>
+      </div>
+
+      <div className="rounded-2xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+        {stats.map((s) => (
+          <div key={s.label} className="flex items-center justify-between px-4 py-2.5">
+            <span className="text-sm text-gray-600">{s.label}</span>
+            <span className={`text-sm font-bold ${s.color}`}>{s.value}</span>
+          </div>
+        ))}
+        {preview.periodStart && (
+          <div className="flex items-center justify-between px-4 py-2.5">
+            <span className="text-sm text-gray-600">Período dos produtos</span>
+            <span className="text-sm font-semibold text-gray-700">{preview.periodStart} → {preview.periodEnd ?? "?"}</span>
+          </div>
+        )}
+      </div>
+
+      {nonContactableCount > 0 && (
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+          ⚠️ {preview.noPhoneWarning}
+        </div>
+      )}
+
+      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-1.5">
+        <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">Garantias de segurança</p>
+        <p className="text-xs text-gray-600">• Clientes sem telefone entram como não contatáveis para enriquecimento.</p>
+        <p className="text-xs text-gray-600">• Produtos agregados não criam pedidos nem itens de pedido.</p>
+        <p className="text-xs text-gray-600">• Nenhuma campanha WhatsApp será enviada automaticamente.</p>
+      </div>
+
+      <div className="flex gap-2">
+        <button onClick={onBack} disabled={loading} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">Voltar</button>
+        <button
+          onClick={() => setConfirmOpen(true)}
+          disabled={loading || (contactableCount + nonContactableCount) === 0}
+          className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
+        >
+          {loading ? "Importando…" : "Executar importação"}
+        </button>
+      </div>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => { if (!loading) setConfirmOpen(false); }} />
+          <div className="relative z-10 w-full max-w-sm mx-4 bg-white rounded-3xl shadow-2xl p-6 space-y-4">
+            <p className="text-base font-bold text-gray-900">Confirmar importação</p>
+            <p className="text-sm text-gray-600">
+              Essa ação vai criar/atualizar clientes e importar agregados de produtos. Não cria pedidos nem itens de pedido.
+            </p>
+            <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 space-y-1">
+              <p className="text-xs text-amber-700">• Clientes sem telefone entram como não contatáveis para enriquecimento.</p>
+              <p className="text-xs text-amber-700">• Produtos agregados não criam pedidos.</p>
+              <p className="text-xs text-amber-700">• Nenhuma campanha WhatsApp será enviada.</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmOpen(false)} disabled={loading} className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button
+                onClick={() => { setConfirmOpen(false); onConfirm(jobId); }}
+                disabled={loading}
+                className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                Confirmar e executar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Saipos + Nemo: Done ──────────────────────────────────────────────────────
+
+function SaiposNemoDoneStep({ result, onClose }: { result: SaiposNemoExecuteResult; onClose: () => void }) {
+  const rows = [
+    { label: "Clientes contatáveis criados",       value: result.contactableCustomersCreated,    color: "text-green-700" },
+    { label: "Clientes contatáveis atualizados",   value: result.contactableCustomersUpdated,    color: "text-blue-700"  },
+    { label: "Não contatáveis criados",             value: result.nonContactableCustomersCreated, color: "text-amber-600" },
+    { label: "Não contatáveis atualizados",         value: result.nonContactableCustomersUpdated, color: "text-amber-600" },
+    { label: "Endereços salvos",                    value: result.addressesCreated,               color: "text-gray-700"  },
+    { label: "Produtos agregados importados",       value: result.productAggregatesCreated,       color: "text-blue-700"  },
+    { label: "Produtos agregados ignorados (dup.)", value: result.productAggregatesSkipped,       color: "text-orange-600" },
+    { label: "Sem dados suficientes (ignorados)",   value: result.noPhoneSkippedInsufficientData, color: "text-gray-500"  },
+  ];
+
+  return (
+    <div className="flex flex-col items-center gap-5 py-2 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+        <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+        </svg>
+      </div>
+      <div>
+        <p className="text-base font-bold text-gray-900">Importação Saipos + Nemo concluída!</p>
+        <p className="mt-1 text-sm text-gray-500">Dados importados com sucesso.</p>
+      </div>
+      <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+        {rows.map((r) => (
+          <div key={r.label} className="flex justify-between px-4 py-2.5 text-sm">
+            <span className="text-gray-600">{r.label}</span>
+            <span className={`font-bold ${r.color}`}>{r.value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="w-full rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-700 text-left">
+        Clientes importados como não contatáveis precisam de enriquecimento de telefone antes de entrar em campanhas WhatsApp.
+      </div>
+      <button onClick={onClose} className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">Concluir</button>
+    </div>
+  );
+}
+
 // ── Recent imports list (footer of upload step) ──────────────────────────────
 
 interface ImportJob {
@@ -775,6 +1027,10 @@ export function ImportModal({
   const [result,       setResult]       = useState<ImportResult | null>(null);
   const [error,        setError]        = useState<string | null>(null);
   const [importing,    setImporting]    = useState(false);
+  // Saipos + Nemo state
+  const [snJobId,      setSnJobId]      = useState<string | null>(null);
+  const [snPreview,    setSnPreview]    = useState<SaiposNemoPreviewData | null>(null);
+  const [snResult,     setSnResult]     = useState<SaiposNemoExecuteResult | null>(null);
 
   function reset() {
     setStep("type");
@@ -786,6 +1042,9 @@ export function ImportModal({
     setResult(null);
     setError(null);
     setImporting(false);
+    setSnJobId(null);
+    setSnPreview(null);
+    setSnResult(null);
   }
 
   function handleClose() { reset(); onClose(); }
@@ -841,6 +1100,27 @@ export function ImportModal({
     setStep("done");
   }
 
+  function handleSnPreview(jobId: string, preview: SaiposNemoPreviewData) {
+    setSnJobId(jobId);
+    setSnPreview(preview);
+    setStep("preview");
+  }
+
+  async function handleSnExecute(jobId: string) {
+    setImporting(true);
+    setError(null);
+    const res  = await fetch("/api/crm/saipos-nemo/execute", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ jobId }),
+    });
+    const json = await res.json();
+    setImporting(false);
+    if (!res.ok) { setError(json.error ?? "Falha na importação"); return; }
+    setSnResult(json.result as SaiposNemoExecuteResult);
+    setStep("done");
+  }
+
   function handleDoneClose() { reset(); onClose(); onComplete(); }
 
   if (!open) return null;
@@ -874,7 +1154,7 @@ export function ImportModal({
         </div>
 
         <div className="px-5 pb-6">
-          <StepDots step={step} />
+          <StepDots step={step} importType={importType} />
 
           {error && (
             <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{error}</div>
@@ -884,22 +1164,42 @@ export function ImportModal({
             <TypeStep onSelect={(t) => { setImportType(t); setStep("upload"); }} />
           )}
 
-          {step === "upload" && (
+          {/* Saipos + Nemo flow */}
+          {importType === "saipos_nemo_compiled" && step === "upload" && (
+            <SaiposNemoUploadStep onPreview={handleSnPreview} />
+          )}
+
+          {importType === "saipos_nemo_compiled" && (step === "preview" || step === "importing") && snPreview && snJobId && (
+            <SaiposNemoPreviewStep
+              preview={snPreview}
+              jobId={snJobId}
+              onConfirm={handleSnExecute}
+              onBack={() => setStep("upload")}
+              loading={importing}
+            />
+          )}
+
+          {importType === "saipos_nemo_compiled" && step === "done" && snResult && (
+            <SaiposNemoDoneStep result={snResult} onClose={handleDoneClose} />
+          )}
+
+          {/* Generic import flow */}
+          {importType !== "saipos_nemo_compiled" && step === "upload" && (
             <>
               <UploadStep importType={importType} onParsed={(p) => { setParsed(p); setStep("map"); }} />
               <RecentJobs />
             </>
           )}
 
-          {step === "map" && parsed && (
+          {importType !== "saipos_nemo_compiled" && step === "map" && parsed && (
             <MapStep parsed={parsed} importType={importType} onConfirm={handleMappingConfirm} onBack={() => setStep("upload")} />
           )}
 
-          {(step === "preview" || step === "importing") && preview && (
+          {importType !== "saipos_nemo_compiled" && (step === "preview" || step === "importing") && preview && (
             <PreviewStep preview={preview} onConfirm={handleImportConfirm} onBack={() => setStep("map")} loading={importing} duplicateHeaders={parsed?.duplicateHeaders ?? []} />
           )}
 
-          {step === "done" && result && (
+          {importType !== "saipos_nemo_compiled" && step === "done" && result && (
             <DoneStep result={result} onClose={handleDoneClose} />
           )}
         </div>
