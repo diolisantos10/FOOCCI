@@ -131,9 +131,12 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   //      RECEPTIONIST_ONLY       (default) — WhatsAppReceptionistService
   //      HUMAN_ASSISTED          — same receptionist path, escalates faster
   //      AI_ORDERING_EXPERIMENTAL — full AIOrderService sales agent (opt-in)
+  // Do not auto-respond if AI has been disabled for this conversation
+  // (human operator took over) or if status is already HUMAN/RESOLVED.
   const shouldRespond =
-    conversation.status === ConversationStatus.OPEN ||
-    conversation.status === ConversationStatus.BOT;
+    conversation.aiEnabled &&
+    (conversation.status === ConversationStatus.OPEN ||
+     conversation.status === ConversationStatus.BOT);
 
   if (shouldRespond) {
     // Read agent mode; default to RECEPTIONIST_ONLY if no config row exists.
