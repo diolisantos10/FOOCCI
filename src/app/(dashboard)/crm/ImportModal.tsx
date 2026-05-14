@@ -824,7 +824,37 @@ function SaiposNemoPreviewStep({
   onBack:    () => void;
   loading:   boolean;
 }) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmOpen,   setConfirmOpen]   = useState(false);
+  const [v2Loading,     setV2Loading]     = useState(false);
+  const [v2Error,       setV2Error]       = useState<string | null>(null);
+
+  async function handleDownloadV2() {
+    setV2Error(null);
+    setV2Loading(true);
+    try {
+      const res = await fetch("/api/crm/saipos-nemo/generate-v2", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ jobId }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setV2Error((json as { error?: string }).error ?? "Falha ao gerar dataset");
+        return;
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = "Foocci_Master_Dataset_V2.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setV2Error("Erro de rede ao gerar dataset");
+    } finally {
+      setV2Loading(false);
+    }
+  }
 
   const contactableCount    = preview.stats.readyCount + preview.stats.needsReviewCount;
   const nonContactableCount = preview.stats.noPhoneImportableCount;
@@ -872,6 +902,22 @@ function SaiposNemoPreviewStep({
         <p className="text-xs text-gray-600">• Clientes sem telefone entram como não contatáveis para enriquecimento.</p>
         <p className="text-xs text-gray-600">• Produtos agregados não criam pedidos nem itens de pedido.</p>
         <p className="text-xs text-gray-600">• Nenhuma campanha WhatsApp será enviada automaticamente.</p>
+      </div>
+
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+        <p className="text-xs font-bold text-blue-700 mb-1">Dataset V2 refinado</p>
+        <p className="text-xs text-blue-600 mb-2">
+          Gere uma planilha limpa com clientes por tier de qualidade, endereços normalizados, produtos categorizados e lista de itens para revisão.
+        </p>
+        <button
+          type="button"
+          onClick={handleDownloadV2}
+          disabled={v2Loading || loading}
+          className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+        >
+          {v2Loading ? "Gerando…" : "⬇ Gerar Dataset V2"}
+        </button>
+        {v2Error && <p className="mt-1.5 text-xs text-red-600">{v2Error}</p>}
       </div>
 
       <div className="flex gap-2">
