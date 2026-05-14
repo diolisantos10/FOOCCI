@@ -66,6 +66,18 @@ export interface TopCustomer {
   segment:    string;
 }
 
+export interface ImportedCustomerRow {
+  id:                  string;
+  name:                string;
+  phone:               string;
+  tier:                string;
+  segment:             string;
+  importedTotalSpent:  number;
+  importedOrderCount:  number;
+  importedLastOrderAt: string | null; // YYYY-MM-DD
+  averageTicket:       number;
+}
+
 export interface SegmentCount {
   segment: string;
   count:   number;
@@ -112,18 +124,19 @@ export interface ImportedBaseline {
 }
 
 export interface AnalyticsOverview {
-  range:       DateRange;
-  kpi:         KpiOverview;
-  salesByDay:  DailyPoint[];
-  topProducts: ProductRow[];
-  categories:  CategoryRow[];
-  attachRates: AttachRate[];
-  topCustomers: TopCustomer[];
-  segments:    SegmentCount[];
-  tiers:       TierCount[];
-  channels:    ChannelRow[];
-  insights:    Insight[];
-  importedBaseline: ImportedBaseline | null;
+  range:                DateRange;
+  kpi:                  KpiOverview;
+  salesByDay:           DailyPoint[];
+  topProducts:          ProductRow[];
+  categories:           CategoryRow[];
+  attachRates:          AttachRate[];
+  topCustomers:         TopCustomer[];
+  segments:             SegmentCount[];
+  tiers:                TierCount[];
+  channels:             ChannelRow[];
+  insights:             Insight[];
+  importedBaseline:     ImportedBaseline | null;
+  importedTopCustomers: ImportedCustomerRow[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -158,6 +171,7 @@ export class AnalyticsService {
       tiers,
       channels,
       importedBaseline,
+      importedTopCustomers,
     ] = await Promise.all([
       this.getKpis(restaurantId, from, to),
       this.getSalesByDay(restaurantId, from, to),
@@ -169,11 +183,12 @@ export class AnalyticsService {
       this.getTiers(restaurantId),
       this.getChannels(restaurantId, from, to),
       this.getImportedBaseline(restaurantId),
+      this.getImportedTopCustomers(restaurantId),
     ]);
 
     const insights = this.buildInsights({ kpi, topProducts, categories, attachRates, channels });
 
-    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, importedBaseline };
+    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, importedBaseline, importedTopCustomers };
   }
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
@@ -597,6 +612,54 @@ export class AnalyticsService {
     return insights;
   }
 
+  // ── Imported top customers (by importedTotalSpent) ────────────────────────
+
+  private static async getImportedTopCustomers(
+    restaurantId: string,
+    limit = 20,
+  ): Promise<ImportedCustomerRow[]> {
+    const rows = await prisma.$queryRaw<Array<{
+      id:          string;
+      name:        string;
+      phone:       string;
+      tier:        string;
+      segment:     string;
+      total_spent: string;
+      order_count: RawBigint;
+      last_order:  Date | null;
+      avg_ticket:  string;
+    }>>`
+      SELECT
+        id,
+        name,
+        COALESCE(phone, '')                      AS phone,
+        COALESCE(tier, 'BRONZE')                 AS tier,
+        COALESCE(segment, 'SEM_PEDIDOS')         AS segment,
+        COALESCE("importedTotalSpent", 0)::text  AS total_spent,
+        COALESCE("importedOrderCount", 0)        AS order_count,
+        "importedLastOrderAt"                    AS last_order,
+        COALESCE("averageTicket", 0)::text       AS avg_ticket
+      FROM customers
+      WHERE "restaurantId" = ${restaurantId}
+        AND "isGuest" = false
+        AND "importedTotalSpent" > 0
+      ORDER BY "importedTotalSpent" DESC NULLS LAST
+      LIMIT ${limit}
+    `;
+
+    return rows.map((r) => ({
+      id:                  r.id,
+      name:                r.name,
+      phone:               r.phone,
+      tier:                r.tier,
+      segment:             r.segment,
+      importedTotalSpent:  toNum(r.total_spent),
+      importedOrderCount:  toNum(r.order_count),
+      importedLastOrderAt: r.last_order ? r.last_order.toISOString().slice(0, 10) : null,
+      averageTicket:       toNum(r.avg_ticket),
+    }));
+  }
+
   // ── Imported aggregate baseline ────────────────────────────────────────────
   // Reads ProductSalesAggregate (Saipos/Nemo import). Never mixed with real orders.
 
@@ -654,7 +717,7 @@ export class AnalyticsService {
              cat.includes("sem classif") || cat.includes("sem categoria");
     }).length;
 
-    const topProducts: ImportedAggregateRow[] = productRows.slice(0, 20).map(r => ({
+    const topProducts: ImportedAggregateRow[] = productRows.slice(0, 150).map(r => ({
       name:     r.product_name!,
       category: r.category_name,
       revenue:  toNum(r.revenue),
@@ -662,7 +725,7 @@ export class AnalyticsService {
       rowType:  r.row_type ?? "PRODUCT",
     }));
 
-    const topCategories: ImportedAggregateRow[] = categoryRows.slice(0, 10).map(r => ({
+    const topCategories: ImportedAggregateRow[] = categoryRows.slice(0, 30).map(r => ({
       name:     r.category_name,
       category: r.category_name,
       revenue:  toNum(r.revenue),
