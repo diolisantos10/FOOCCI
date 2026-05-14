@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ jobId: job.id, preview });
+    return NextResponse.json({ jobId: job.id, preview, debug: parsed.debug });
   } catch (err) {
     console.error("[saipos-nemo/preview-compiled]", err);
     return NextResponse.json({ error: "Falha ao processar arquivo compilado" }, { status: 500 });
