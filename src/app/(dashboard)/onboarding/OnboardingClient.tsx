@@ -348,7 +348,7 @@ export default function OnboardingClient() {
             </span>
           </div>
           <div className="mt-2 flex gap-2">
-            <Link href="/settings/whatsapp" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+            <Link href="/integracoes/whatsapp" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
               Configurar WhatsApp →
             </Link>
           </div>

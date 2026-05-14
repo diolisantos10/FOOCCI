@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,18 +27,20 @@ type Provider = "whatsapp" | "stone" | "mercadopago" | "tipos" | "openai" | "sai
 // ── Integration metadata (display config) ─────────────────────────────────────
 
 const INTEGRATIONS: {
-  provider:    Provider;
-  name:        string;
-  description: string;
-  icon:        string;
-  color:       string;
+  provider:      Provider;
+  name:          string;
+  description:   string;
+  icon:          string;
+  color:         string;
+  configureHref?: string;
 }[] = [
   {
-    provider:    "whatsapp",
-    name:        "WhatsApp",
-    description: "Atendimento automático e manual via WhatsApp Business com Evolution API.",
-    icon:        "💬",
-    color:       "bg-green-500",
+    provider:      "whatsapp",
+    name:          "WhatsApp",
+    description:   "Atendimento automático e manual via WhatsApp Business com Evolution API.",
+    icon:          "💬",
+    color:         "bg-green-500",
+    configureHref: "/integracoes/whatsapp",
   },
   {
     provider:    "stone",
@@ -145,38 +148,51 @@ function IntegrationCard({
   const lastTested = formatDate(view?.lastTestedAt ?? null);
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full text-left rounded-2xl border bg-white p-5 shadow-sm transition-all hover:shadow-md ${
-        selected ? "border-indigo-400 ring-2 ring-indigo-100" : "border-gray-100"
-      }`}
-    >
-      <div className="flex items-start gap-4">
-        {/* Icon */}
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl text-white shadow-sm ${meta.color}`}>
-          {meta.icon}
-        </div>
-
-        {/* Info */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-900">{meta.name}</span>
-            <StatusBadge status={status} />
+    <div className={`rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md ${
+      selected ? "border-indigo-400 ring-2 ring-indigo-100" : "border-gray-100"
+    }`}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full text-left p-5"
+      >
+        <div className="flex items-start gap-4">
+          {/* Icon */}
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl text-white shadow-sm ${meta.color}`}>
+            {meta.icon}
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-gray-500">{meta.description}</p>
-          {lastTested && (
-            <p className="mt-1.5 text-[10px] text-gray-400">Testado em {lastTested}</p>
-          )}
-          {view?.lastError && status === "error" && (
-            <p className="mt-1 truncate text-[10px] text-red-500">{view.lastError}</p>
-          )}
-        </div>
 
-        {/* Arrow */}
-        <span className="shrink-0 text-gray-300">›</span>
-      </div>
-    </button>
+          {/* Info */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-900">{meta.name}</span>
+              <StatusBadge status={status} />
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-gray-500">{meta.description}</p>
+            {lastTested && (
+              <p className="mt-1.5 text-[10px] text-gray-400">Testado em {lastTested}</p>
+            )}
+            {view?.lastError && status === "error" && (
+              <p className="mt-1 truncate text-[10px] text-red-500">{view.lastError}</p>
+            )}
+          </div>
+
+          {/* Arrow */}
+          <span className="shrink-0 text-gray-300">›</span>
+        </div>
+      </button>
+
+      {meta.configureHref && (
+        <div className="border-t border-gray-50 px-5 py-2.5">
+          <Link
+            href={meta.configureHref}
+            className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+          >
+            Configurar →
+          </Link>
+        </div>
+      )}
+    </div>
   );
 }
 
