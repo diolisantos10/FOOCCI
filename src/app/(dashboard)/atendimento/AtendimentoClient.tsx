@@ -12,9 +12,18 @@ import { isGuestIdentifier } from "@/lib/guest";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ConvStatus = "OPEN" | "BOT" | "HUMAN" | "RESOLVED";
-type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT";
-type StatusFilter = "ALL" | "OPEN" | "HUMAN" | "RESOLVED";
+type ConvStatus =
+  | "OPEN"
+  | "BOT"
+  | "HUMAN"
+  | "RESOLVED"
+  | "AI_ATENDENDO"
+  | "HUMANO_ASSUMIU";
+
+type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL";
+
+type StatusFilter = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED";
+type ChannelFilter = "ALL" | "WHATSAPP" | "MENU" | "MANUAL" | "EMAIL" | "SMS";
 
 interface ActiveOrderItem {
   name:     string;
@@ -46,33 +55,34 @@ interface ActiveDraft {
 }
 
 interface ConvSummary {
-  id: string;
-  status: ConvStatus;
-  channel: Channel;
-  assignedTo: string | null;
-  unreadCount: number;
+  id:            string;
+  status:        ConvStatus;
+  channel:       Channel;
+  aiEnabled:     boolean;
+  assignedTo:    string | null;
+  unreadCount:   number;
   lastMessageAt: string | null;
-  createdAt: string;
-  customer: { name: string; phone: string };
-  messages: { content: string; direction: string; type: string }[];
+  createdAt:     string;
+  customer:      { name: string; phone: string };
+  messages:      { content: string; direction: string; senderType: string | null; type: string }[];
 }
 
 interface Message {
-  id: string;
-  direction: "INBOUND" | "OUTBOUND";
-  senderType: string | null;
-  content: string;
-  type: string;
-  mediaUrl: string | null;
-  sentAt: string;
+  id:             string;
+  direction:      "INBOUND" | "OUTBOUND";
+  senderType:     string | null;
+  content:        string;
+  type:           string;
+  mediaUrl:       string | null;
+  sentAt:         string;
   externalStatus: string | null;
 }
 
 interface ConvDetail extends ConvSummary {
   messages: Message[];
   customer: {
-    id: string;
-    name: string;
+    id:    string;
+    name:  string;
     phone: string;
     email: string | null;
   };
@@ -82,17 +92,28 @@ interface ConvDetail extends ConvSummary {
 
 const CHANNEL_META: Record<Channel, { label: string; icon: string }> = {
   WHATSAPP:  { label: "WhatsApp", icon: "📱" },
-  EMAIL:     { label: "Email",    icon: "✉️"  },
+  EMAIL:     { label: "E-mail",   icon: "✉️"  },
   SMS:       { label: "SMS",      icon: "💬"  },
   QR_AGENT:  { label: "Cardápio", icon: "📋"  },
   WEB_AGENT: { label: "Web",      icon: "🌐"  },
+  MANUAL:    { label: "Manual",   icon: "✍️"  },
 };
 
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
-  { id: "ALL",      label: "Todas"        },
-  { id: "OPEN",     label: "Abertas"      },
-  { id: "HUMAN",    label: "Atendimento"  },
-  { id: "RESOLVED", label: "Resolvidas"   },
+  { id: "ALL",      label: "Todas"      },
+  { id: "AI_ON",    label: "IA ativa"   },
+  { id: "AI_OFF",   label: "Humano"     },
+  { id: "WAITING",  label: "Aguardando" },
+  { id: "RESOLVED", label: "Resolvidas" },
+];
+
+const CHANNEL_FILTERS: { id: ChannelFilter; label: string; icon: string }[] = [
+  { id: "ALL",      label: "Todos",             icon: ""    },
+  { id: "WHATSAPP", label: "WhatsApp",          icon: "📱"  },
+  { id: "MENU",     label: "Cardápio / Pedido", icon: "📋"  },
+  { id: "MANUAL",   label: "Manual",            icon: "✍️"  },
+  { id: "EMAIL",    label: "E-mail",            icon: "✉️"  },
+  { id: "SMS",      label: "SMS",               icon: "💬"  },
 ];
 
 // ── Priority helpers ──────────────────────────────────────────────────────────
@@ -100,45 +121,42 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
 type PriorityLevel = "critical" | "attention" | "ok";
 
 function handlerPriority(c: ConvSummary): number {
-  if (c.status === "OPEN" && c.unreadCount > 0) return 0; // Aguardando humano
-  if (c.status === "HUMAN")                     return 1; // Em atendimento
-  if (c.status === "OPEN")                      return 2; // Aberta
-  if (c.status === "BOT")                       return 3; // IA
+  if (c.status === "OPEN" && c.unreadCount > 0)                    return 0;
+  if (c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU")       return 1;
+  if (c.status === "OPEN")                                          return 2;
+  if (c.status === "BOT"  || c.status === "AI_ATENDENDO")          return 3;
   return 4; // RESOLVED
 }
 
 function convPriorityLevel(c: ConvSummary): PriorityLevel {
-  if (c.status === "OPEN" && c.unreadCount > 0) return "critical";
-  if (c.status === "OPEN" || c.status === "HUMAN") return "attention";
+  if (c.status === "OPEN" && c.unreadCount > 0)                         return "critical";
+  if (["OPEN", "HUMAN", "HUMANO_ASSUMIU"].includes(c.status))           return "attention";
   return "ok";
 }
 
 type HandlerBadge = { label: string; cls: string };
 
 function getHandlerBadge(c: ConvSummary): HandlerBadge {
+  if (c.status === "RESOLVED")
+    return { label: "Resolvida",  cls: "bg-gray-100   text-gray-500  border-gray-200"  };
   if (c.status === "OPEN" && c.unreadCount > 0)
-    return { label: "Aguardando humano", cls: "bg-red-100 text-red-700 border-red-200" };
-  if (c.status === "HUMAN")
-    return { label: "Humano",   cls: "bg-green-100 text-green-700 border-green-200" };
-  if (c.status === "BOT")
-    return { label: "IA",       cls: "bg-purple-100 text-purple-700 border-purple-200" };
-  if (c.status === "OPEN")
-    return { label: "Aberta",   cls: "bg-blue-100 text-blue-700 border-blue-200" };
-  return { label: "Resolvida",  cls: "bg-gray-100 text-gray-500 border-gray-200" };
+    return { label: "Aguardando", cls: "bg-red-100    text-red-700   border-red-200"   };
+  if (!c.aiEnabled || c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU")
+    return { label: "Humano",     cls: "bg-green-100  text-green-700 border-green-200" };
+  return   { label: "IA ativa",   cls: "bg-purple-100 text-purple-700 border-purple-200" };
 }
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
+  const d   = new Date(iso);
   const now = new Date();
   const sameDay =
     d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  if (sameDay) {
-    return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  }
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    d.getMonth()    === now.getMonth()    &&
+    d.getDate()     === now.getDate();
+  return sameDay
+    ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
 function initials(name: string): string {
@@ -156,52 +174,60 @@ export function AtendimentoClient({
   userId,
   initialConvId,
 }: {
-  userId:        string;
+  userId:         string;
   initialConvId?: string;
 }) {
   // ── State ──────────────────────────────────────────────────────────────────
   const [conversations, setConversations] = useState<ConvSummary[]>([]);
-  const [loadingList, setLoadingList] = useState(true);
+  const [loadingList,   setLoadingList]   = useState(true);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [thread, setThread] = useState<ConvDetail | null>(null);
+  const [selectedId,    setSelectedId]    = useState<string | null>(null);
+  const [thread,        setThread]        = useState<ConvDetail | null>(null);
   const [loadingThread, setLoadingThread] = useState(false);
 
-  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
-  const [activeDraft, setActiveDraft] = useState<ActiveDraft | null>(null);
+  const [activeOrder,   setActiveOrder]   = useState<ActiveOrder | null>(null);
+  const [activeDraft,   setActiveDraft]   = useState<ActiveDraft | null>(null);
 
-  // Mobile navigation: "list" shows the conversation list, "thread" shows the active thread
-  const [mobileView, setMobileView] = useState<"list" | "thread">("list");
+  const [mobileView,    setMobileView]    = useState<"list" | "thread">("list");
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const [statusFilter,  setStatusFilter]  = useState<StatusFilter>("ALL");
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("ALL");
+  const [search,        setSearch]        = useState("");
+  const [searchInput,   setSearchInput]   = useState("");
 
   const [actionLoading, setActionLoading] = useState(false);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
+  const [text,          setText]          = useState("");
+  const [sending,       setSending]       = useState(false);
+  const [sendError,     setSendError]     = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // ── Fetch conversation list ────────────────────────────────────────────────
   const fetchList = useCallback(async () => {
-    const params = new URLSearchParams({ limit: "50" });
-    if (statusFilter !== "ALL") params.set("status", statusFilter);
+    const params = new URLSearchParams({ limit: "100" });
+    // Server-side status filter only for RESOLVED (reduces payload)
+    if (statusFilter === "RESOLVED") params.set("status", "RESOLVED");
+    // Single-value channel filters handled server-side
+    if (channelFilter === "WHATSAPP") params.set("channel", "WHATSAPP");
+    if (channelFilter === "MANUAL")   params.set("channel", "MANUAL");
+    if (channelFilter === "EMAIL")    params.set("channel", "EMAIL");
+    if (channelFilter === "SMS")      params.set("channel", "SMS");
+    // MENU (WEB_AGENT + QR_AGENT) requires client-side OR — no server param
     if (search.trim()) params.set("search", search.trim());
 
     try {
-      const res = await fetch(`/api/conversations?${params}`);
+      // Use /api/chat/conversations: supports channel, all status values, aiEnabled
+      const res = await fetch(`/api/chat/conversations?${params}`);
       if (!res.ok) return;
       const json = await res.json();
-      const items: ConvSummary[] = json.data?.items ?? json.data ?? [];
+      const items: ConvSummary[] = json.data?.data ?? json.data ?? [];
       setConversations(Array.isArray(items) ? items : []);
     } catch {
       // network error — keep current state
     } finally {
       setLoadingList(false);
     }
-  }, [statusFilter, search]);
+  }, [statusFilter, channelFilter, search]);
 
   // Immediate refetch when filter/search changes
   useEffect(() => {
@@ -209,7 +235,7 @@ export function AtendimentoClient({
     fetchList();
   }, [fetchList]);
 
-  // Polling — re-subscribe whenever fetchList identity changes
+  // Polling
   useEffect(() => {
     const id = setInterval(fetchList, 7000);
     return () => clearInterval(id);
@@ -218,7 +244,7 @@ export function AtendimentoClient({
   // ── Fetch conversation thread ──────────────────────────────────────────────
   const fetchThread = useCallback(async (id: string) => {
     try {
-      const res = await fetch(`/api/conversations/${id}`);
+      const res  = await fetch(`/api/conversations/${id}`);
       if (!res.ok) return;
       const json = await res.json();
       setThread(json.data ?? null);
@@ -227,7 +253,6 @@ export function AtendimentoClient({
     }
   }, []);
 
-  // Deep-link: auto-select conversation from URL param on mount
   useEffect(() => {
     if (initialConvId) {
       setSelectedId(initialConvId);
@@ -244,9 +269,7 @@ export function AtendimentoClient({
     }
     setLoadingThread(true);
     fetchThread(selectedId).finally(() => setLoadingThread(false));
-    // mark as read
     fetch(`/api/conversations/${selectedId}/read`, { method: "POST" }).catch(() => {});
-    // fetch active order / draft for this conversation
     fetch(`/api/conversations/${selectedId}/order`)
       .then((r) => r.json())
       .then((res: { success: boolean; data: { order: ActiveOrder | null; draft: ActiveDraft | null } | null }) => {
@@ -254,26 +277,45 @@ export function AtendimentoClient({
         setActiveDraft(res.success ? (res.data?.draft ?? null) : null);
       })
       .catch(() => { setActiveOrder(null); setActiveDraft(null); });
-    // poll thread
     const id = setInterval(() => fetchThread(selectedId), 4000);
     return () => clearInterval(id);
   }, [selectedId, fetchThread]);
 
-  // Scroll to bottom when thread messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [thread?.messages?.length]);
 
-  // ── Derived list ──────────────────────────────────────────────────────────
+  // ── Derived list — client-side filter + sort ──────────────────────────────
   const displayed = useMemo(() => {
-    return [...conversations].sort((a, b) => {
+    let items = [...conversations];
+
+    // Status filter (client-side for non-RESOLVED)
+    if (statusFilter !== "ALL" && statusFilter !== "RESOLVED") {
+      items = items.filter((c) => {
+        switch (statusFilter) {
+          case "AI_ON":   return c.aiEnabled && c.status !== "RESOLVED";
+          case "AI_OFF":  return !c.aiEnabled && c.status !== "RESOLVED";
+          case "WAITING": return c.unreadCount > 0 && c.status !== "RESOLVED";
+          default:        return true;
+        }
+      });
+    }
+
+    // Channel filter (client-side for MENU, otherwise already server-filtered)
+    if (channelFilter === "MENU") {
+      items = items.filter(
+        (c) => c.channel === "WEB_AGENT" || c.channel === "QR_AGENT",
+      );
+    }
+
+    return items.sort((a, b) => {
       const pd = handlerPriority(a) - handlerPriority(b);
       if (pd !== 0) return pd;
       const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
       const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
       return tb - ta;
     });
-  }, [conversations]);
+  }, [conversations, statusFilter, channelFilter]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   async function handleAction(action: string) {
@@ -281,12 +323,25 @@ export function AtendimentoClient({
     setActionLoading(true);
     try {
       await fetch(`/api/conversations/${selectedId}`, {
-        method: "PATCH",
+        method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body:    JSON.stringify({
           action,
           ...(action === "assign" ? { userId } : {}),
         }),
+      });
+      await Promise.all([fetchThread(selectedId), fetchList()]);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleAIAction(action: "takeover" | "release") {
+    if (!selectedId) return;
+    setActionLoading(true);
+    try {
+      await fetch(`/api/chat/conversations/${selectedId}/${action}`, {
+        method: "POST",
       });
       await Promise.all([fetchThread(selectedId), fetchList()]);
     } finally {
@@ -301,9 +356,9 @@ export function AtendimentoClient({
     setSendError(null);
     try {
       const res = await fetch(`/api/conversations/${selectedId}/messages`, {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: text.trim(), type: "TEXT" }),
+        body:    JSON.stringify({ content: text.trim(), type: "TEXT" }),
       });
       if (!res.ok) {
         const json = await res.json();
@@ -339,9 +394,7 @@ export function AtendimentoClient({
       className="flex overflow-hidden"
       style={{ height: "calc(100vh - 56px)" }}
     >
-      {/* ── LEFT PANEL: conversation list
-            Mobile: full width, shown when mobileView === "list"
-            Desktop: fixed 320px side panel, always visible ─────────────── */}
+      {/* ── LEFT PANEL ───────────────────────────────────────────────────── */}
       <aside className={`
         flex-col border-r border-gray-200 bg-white
         ${mobileView === "list" ? "flex w-full" : "hidden"}
@@ -384,6 +437,24 @@ export function AtendimentoClient({
           ))}
         </div>
 
+        {/* Channel filter chips */}
+        <div className="flex gap-1.5 overflow-x-auto border-b border-gray-100 px-3 py-1.5 scrollbar-hide">
+          {CHANNEL_FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setChannelFilter(f.id)}
+              className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                channelFilter === f.id
+                  ? "bg-gray-700 text-white"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              {f.icon ? `${f.icon} ` : ""}{f.label}
+            </button>
+          ))}
+        </div>
+
         {/* List */}
         <div className="flex-1 overflow-y-auto">
           {loadingList ? (
@@ -398,17 +469,17 @@ export function AtendimentoClient({
           ) : (
             <ul className="divide-y divide-gray-100">
               {displayed.map((conv) => {
-                const lastMsg = conv.messages[0];
-                const preview = lastMsg
+                const lastMsg  = conv.messages[0];
+                const preview  = lastMsg
                   ? lastMsg.type !== "TEXT"
                     ? `[${lastMsg.type.toLowerCase()}]`
                     : lastMsg.content.slice(0, 60)
                   : "Sem mensagens";
-                const badge = getHandlerBadge(conv);
+                const badge      = getHandlerBadge(conv);
                 const isSelected = conv.id === selectedId;
-                const isWaiting =
-                  conv.status === "OPEN" && conv.unreadCount > 0;
-                const priority = convPriorityLevel(conv);
+                const isWaiting  = conv.status === "OPEN" && conv.unreadCount > 0;
+                const priority   = convPriorityLevel(conv);
+                const chanMeta   = CHANNEL_META[conv.channel] ?? { label: conv.channel, icon: "💬" };
 
                 return (
                   <li key={conv.id}>
@@ -455,9 +526,9 @@ export function AtendimentoClient({
                               priority === "attention" ? "bg-amber-400" :
                               "bg-green-400"
                             }`} />
-                            {/* Channel */}
-                            <span className="text-[10px] text-gray-400">
-                              {CHANNEL_META[conv.channel]?.icon ?? "💬"}
+                            {/* Channel badge */}
+                            <span className="text-[10px] text-gray-400" title={chanMeta.label}>
+                              {chanMeta.icon}
                             </span>
                             {/* Unread badge */}
                             {conv.unreadCount > 0 && (
@@ -466,9 +537,7 @@ export function AtendimentoClient({
                               </span>
                             )}
                             {/* Handler badge */}
-                            <span
-                              className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${badge.cls}`}
-                            >
+                            <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${badge.cls}`}>
                               {badge.label}
                             </span>
                           </div>
@@ -492,16 +561,13 @@ export function AtendimentoClient({
         </div>
       </aside>
 
-      {/* ── RIGHT PANEL: conversation thread
-            Mobile: full width, shown when mobileView === "thread"
-            Desktop: flex-1 always visible ──────────────────────────────── */}
+      {/* ── RIGHT PANEL ──────────────────────────────────────────────────── */}
       <section className={`
         flex-col overflow-hidden
         ${mobileView === "thread" ? "flex w-full" : "hidden"}
         lg:flex lg:flex-1
       `}>
         {!selectedId ? (
-          // Empty state
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-gray-400">
             <span className="text-5xl">💬</span>
             <p className="text-sm font-medium text-gray-500">
@@ -521,6 +587,7 @@ export function AtendimentoClient({
             userId={userId}
             actionLoading={actionLoading}
             onAction={handleAction}
+            onAIAction={handleAIAction}
             text={text}
             setText={setText}
             sending={sending}
@@ -540,19 +607,20 @@ export function AtendimentoClient({
 // ── Thread Panel ──────────────────────────────────────────────────────────────
 
 interface ThreadPanelProps {
-  thread: ConvDetail;
-  userId: string;
+  thread:        ConvDetail;
+  userId:        string;
   actionLoading: boolean;
-  onAction: (action: string) => void;
-  text: string;
-  setText: (v: string) => void;
-  sending: boolean;
-  sendError: string | null;
-  onSend: (e: FormEvent) => void;
-  bottomRef: React.RefObject<HTMLDivElement>;
-  onBack?: () => void;
-  activeOrder?: ActiveOrder | null;
-  activeDraft?: ActiveDraft | null;
+  onAction:      (action: string) => void;
+  onAIAction:    (action: "takeover" | "release") => void;
+  text:          string;
+  setText:       (v: string) => void;
+  sending:       boolean;
+  sendError:     string | null;
+  onSend:        (e: FormEvent) => void;
+  bottomRef:     React.RefObject<HTMLDivElement>;
+  onBack?:       () => void;
+  activeOrder?:  ActiveOrder | null;
+  activeDraft?:  ActiveDraft | null;
 }
 
 // ── ActiveDraftPanel ──────────────────────────────────────────
@@ -564,10 +632,10 @@ const FULFILLMENT_LABEL: Record<string, string> = {
 };
 
 function ActiveDraftPanel({ draft }: { draft: ActiveDraft }) {
-  const items   = draft.items.slice(0, 4);
-  const more    = draft.items.length - items.length;
-  const total   = parseFloat(draft.totalAmount);
-  const label   = FULFILLMENT_LABEL[draft.fulfillmentType] ?? draft.fulfillmentType;
+  const items = draft.items.slice(0, 4);
+  const more  = draft.items.length - items.length;
+  const total = parseFloat(draft.totalAmount);
+  const label = FULFILLMENT_LABEL[draft.fulfillmentType] ?? draft.fulfillmentType;
 
   return (
     <div className="mt-2 rounded-xl border-2 border-blue-300 bg-blue-50/40 overflow-hidden shadow-sm">
@@ -605,8 +673,8 @@ const DELAY_MINUTES = 20;
 
 interface StatusMeta {
   label: string;
-  badge: string; // tailwind classes for the badge
-  dot?:  string; // optional animated dot color
+  badge: string;
+  dot?:  string;
 }
 
 const STATUS_META: Record<string, StatusMeta> = {
@@ -631,15 +699,15 @@ function isDelayed(createdAt: string, status: string): boolean {
 }
 
 function orderPriorityLevel(status: string, createdAt: string): PriorityLevel {
-  if (isDelayed(createdAt, status)) return "critical";
-  if (["PENDING", "AWAITING_PAYMENT"].includes(status)) return "attention";
+  if (isDelayed(createdAt, status))                              return "critical";
+  if (["PENDING", "AWAITING_PAYMENT"].includes(status))         return "attention";
   return "ok";
 }
 
 function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
-  const [status,     setStatus]     = useState(order.status);
-  const [updating,   setUpdating]   = useState<string | null>(null); // which action is loading
-  const [errorMsg,   setErrorMsg]   = useState<string | null>(null);
+  const [status,   setStatus]   = useState(order.status);
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const total    = parseFloat(order.total);
   const items    = order.items.slice(0, 3);
@@ -683,8 +751,6 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
         ? "border-amber-400 bg-white"
         : "border-gray-200 bg-white"
     }`}>
-
-      {/* Priority banner */}
       <div className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold border-b ${
         priority === "critical"
           ? "bg-red-100 text-red-700 border-red-200"
@@ -702,15 +768,12 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
         </span>
       </div>
 
-      {/* Header row */}
       <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
           Pedido ativo
         </span>
         <span className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-px text-[10px] font-semibold ${meta.badge}`}>
-          {delayed && (
-            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-          )}
+          {delayed && <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />}
           {meta.label}
         </span>
         <span className="ml-auto text-[10px] text-gray-400 tabular-nums">
@@ -724,7 +787,6 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
         </a>
       </div>
 
-      {/* Items + total */}
       <div className="px-3 py-2">
         <p className="truncate text-xs text-gray-600">
           {items.map((i) => `${i.quantity}× ${i.name}`).join(" · ")}
@@ -735,7 +797,6 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
         </p>
       </div>
 
-      {/* Quick actions */}
       {!isTerminal && (
         <div className="flex gap-1.5 flex-wrap border-t border-gray-100 bg-gray-50 px-3 py-2">
           {canConfirm && (
@@ -768,7 +829,6 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
         </div>
       )}
 
-      {/* Error */}
       {errorMsg && (
         <p className="border-t border-red-100 bg-red-50 px-3 py-1.5 text-[11px] text-red-600">
           {errorMsg}
@@ -778,10 +838,13 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
   );
 }
 
+// ── ThreadPanel component ─────────────────────────────────────────────────────
+
 function ThreadPanel({
   thread,
   actionLoading,
   onAction,
+  onAIAction,
   text,
   setText,
   sending,
@@ -792,20 +855,19 @@ function ThreadPanel({
   activeOrder,
   activeDraft,
 }: ThreadPanelProps) {
-  const badge = getHandlerBadge(thread);
-  const channel = CHANNEL_META[thread.channel] ?? { label: thread.channel, icon: "💬" };
-  const isResolved = thread.status === "RESOLVED";
-  const isHuman = thread.status === "HUMAN";
-  const canTakeOver = thread.status === "OPEN" || thread.status === "BOT";
+  const badge          = getHandlerBadge(thread);
+  const channel        = CHANNEL_META[thread.channel] ?? { label: thread.channel, icon: "💬" };
+  const isResolved     = thread.status === "RESOLVED";
+  const isAIActive     = thread.aiEnabled && !isResolved;
+  const isHumanHandling = !thread.aiEnabled && !isResolved;
 
   return (
     <>
       {/* ── Thread header ─────────────────────────────────────────────── */}
       <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-3">
 
-        {/* Row 1: back button (mobile) + customer info + badges */}
+        {/* Row 1: back (mobile) + customer info + badges */}
         <div className="flex items-center gap-2">
-          {/* Back button — mobile only */}
           {onBack && (
             <button
               type="button"
@@ -817,7 +879,6 @@ function ThreadPanel({
             </button>
           )}
 
-          {/* Avatar + name */}
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
               {initials(thread.customer.name)}
@@ -827,12 +888,13 @@ function ThreadPanel({
                 {thread.customer.name}
               </p>
               <p className="text-xs text-gray-500">
-                {!thread.customer.phone || isGuestIdentifier(thread.customer.phone) ? "Telefone não informado" : thread.customer.phone}
+                {!thread.customer.phone || isGuestIdentifier(thread.customer.phone)
+                  ? "Telefone não informado"
+                  : thread.customer.phone}
               </p>
             </div>
           </div>
 
-          {/* Badges — hidden on very small screens, shown sm+ */}
           <div className="hidden items-center gap-1.5 sm:flex">
             <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
               <span>{channel.icon}</span>
@@ -844,26 +906,26 @@ function ThreadPanel({
           </div>
         </div>
 
-        {/* Row 2: action buttons — full-width row, scrollable on mobile */}
+        {/* Row 2: action buttons */}
         <div className="mt-2 flex gap-1.5 overflow-x-auto scrollbar-hide">
-          {canTakeOver && (
+          {isAIActive && (
             <button
               type="button"
-              onClick={() => onAction("assign")}
+              onClick={() => onAIAction("takeover")}
               disabled={actionLoading}
               className="shrink-0 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 transition-colors"
             >
               Assumir atendimento
             </button>
           )}
-          {isHuman && (
+          {isHumanHandling && (
             <button
               type="button"
-              onClick={() => onAction("unassign")}
+              onClick={() => onAIAction("release")}
               disabled={actionLoading}
-              className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="shrink-0 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 transition-colors"
             >
-              Devolver para fila
+              Devolver para IA
             </button>
           )}
           {!isResolved && (
@@ -888,7 +950,7 @@ function ThreadPanel({
           )}
         </div>
 
-        {/* Row 3: active order / draft panel */}
+        {/* Row 3: active order / draft */}
         {activeOrder && <ActiveOrderPanel order={activeOrder} />}
         {!activeOrder && activeDraft && <ActiveDraftPanel draft={activeDraft} />}
       </div>
@@ -914,8 +976,8 @@ function ThreadPanel({
         </div>
       )}
 
-      {/* ── Composer (only when human is handling) ────────────────────── */}
-      {isHuman && !isResolved ? (
+      {/* ── Composer ─────────────────────────────────────────────────── */}
+      {isHumanHandling ? (
         <form
           onSubmit={onSend}
           className="flex shrink-0 items-end gap-2 border-t border-gray-200 bg-white px-4 py-3"
@@ -967,22 +1029,18 @@ function MessageBubble({
   msg,
   customerName,
 }: {
-  msg: Message;
+  msg:          Message;
   customerName: string;
 }) {
-  const isOutbound = msg.direction === "OUTBOUND";
+  const isOutbound  = msg.direction === "OUTBOUND";
   const senderLabel = isOutbound
     ? (msg.senderType === "AI" ? "IA" : "Equipe")
     : customerName;
 
   return (
     <div className={`flex flex-col gap-1 ${isOutbound ? "items-end" : "items-start"}`}>
-      {/* Sender label */}
-      <span className="px-1 text-[10px] text-gray-400">
-        {senderLabel}
-      </span>
+      <span className="px-1 text-[10px] text-gray-400">{senderLabel}</span>
 
-      {/* Bubble */}
       <div
         className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
           isOutbound
@@ -998,14 +1056,11 @@ function MessageBubble({
         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
       </div>
 
-      {/* Time + delivery */}
       <div className="flex items-center gap-1 px-1 text-[10px] text-gray-400">
         <span>{fmtTime(msg.sentAt)}</span>
         {isOutbound && msg.externalStatus && (
           <span>
-            {msg.externalStatus === "read" || msg.externalStatus === "delivered"
-              ? "✓✓"
-              : "✓"}
+            {msg.externalStatus === "read" || msg.externalStatus === "delivered" ? "✓✓" : "✓"}
           </span>
         )}
       </div>
