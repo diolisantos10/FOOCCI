@@ -245,7 +245,7 @@ function FallbackPrompt({ preset }: { preset: Preset }) {
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
       <p className="text-xs text-gray-500">
         Sem dados Foocci neste período.{" "}
-        <span className="font-medium">Use "Todo histórico"</span> para ver a base importada Saipos/Nemo.
+        <span className="font-medium">Use &quot;Todo histórico&quot;</span> para ver a base importada Saipos/Nemo.
       </p>
     </div>
   );
