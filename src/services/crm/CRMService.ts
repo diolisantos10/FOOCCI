@@ -37,6 +37,13 @@ export type CRMCustomer = {
   crmContactable: boolean;          // false = no valid phone; excluded from campaigns
   contactStatus: string | null;     // CONTACTABLE | SEM_TELEFONE | OPT_OUT | NEEDS_REVIEW
   dataEnrichmentStatus: string | null; // COMPLETE | PARTIAL | NEEDS_ENRICHMENT | NEEDS_REVIEW
+  // Imported historical summary — present when customer was imported from Saipos/Nemo
+  importedOrderCount:   number | null;
+  importedTotalSpent:   number | null;
+  importedLastOrderAt:  string | null;
+  averageTicket:        number | null;
+  // True when display values derive from imported summary, not real Foocci orders
+  isUsingImportedData: boolean;
 };
 
 function serializeCustomer(c: {
@@ -51,23 +58,46 @@ function serializeCustomer(c: {
   crmContactable?: boolean;
   contactStatus?: string | null;
   dataEnrichmentStatus?: string | null;
+  importedOrderCount?:   number | null;
+  importedTotalSpent?:   Decimal | null;
+  importedLastOrderAt?:  Date | null;
+  averageTicket?:        Decimal | null;
 }): CRMCustomer {
-  const spend = Number(c.totalSpend);
-  const days = daysSince(c.lastOrderAt);
+  const realSpend  = Number(c.totalSpend);
+  const realOrders = c.totalOrders;
+  const realLast   = c.lastOrderAt ?? null;
+  const impSpend   = c.importedTotalSpent !== null && c.importedTotalSpent !== undefined
+    ? Number(c.importedTotalSpent) : null;
+  const impOrders  = c.importedOrderCount ?? null;
+  const impLast    = c.importedLastOrderAt ?? null;
+
+  // Use real Foocci data when available, otherwise fall back to imported summary
+  const isUsingImportedData = realOrders === 0 && (impOrders !== null || impSpend !== null || impLast !== null);
+  const displaySpend  = realOrders > 0 ? realSpend  : (impSpend  ?? 0);
+  const displayOrders = realOrders > 0 ? realOrders : (impOrders ?? 0);
+  const displayLast   = realLast?.toISOString() ?? impLast?.toISOString() ?? null;
+
+  const days = daysSince(displayLast ? new Date(displayLast) : null);
   return {
     id:                   c.id,
     name:                 c.name,
     phone:                c.phone ?? "",
-    totalSpend:           spend,
-    totalOrders:          c.totalOrders,
-    lastOrderAt:          c.lastOrderAt?.toISOString() ?? null,
+    totalSpend:           displaySpend,
+    totalOrders:          displayOrders,
+    lastOrderAt:          displayLast,
     daysSinceLastOrder:   days,
-    tier:                 getTier(spend),
+    tier:                 getTier(displaySpend),
     isActive:             c.isActive,
     birthDate:            c.birthDate?.toISOString() ?? null,
     crmContactable:       c.crmContactable ?? true,
     contactStatus:        c.contactStatus ?? null,
     dataEnrichmentStatus: c.dataEnrichmentStatus ?? null,
+    importedOrderCount:   impOrders,
+    importedTotalSpent:   impSpend,
+    importedLastOrderAt:  impLast?.toISOString() ?? null,
+    averageTicket:        c.averageTicket !== null && c.averageTicket !== undefined
+      ? Number(c.averageTicket) : null,
+    isUsingImportedData,
   };
 }
 
@@ -192,6 +222,9 @@ export class CRMService {
         id: true, name: true, phone: true,
         totalSpend: true, totalOrders: true,
         lastOrderAt: true, isActive: true, birthDate: true,
+        crmContactable: true, contactStatus: true, dataEnrichmentStatus: true,
+        importedOrderCount: true, importedTotalSpent: true,
+        importedLastOrderAt: true, averageTicket: true,
       },
     });
 
@@ -215,6 +248,9 @@ export class CRMService {
         id: true, name: true, phone: true,
         totalSpend: true, totalOrders: true,
         lastOrderAt: true, isActive: true, birthDate: true,
+        crmContactable: true, contactStatus: true, dataEnrichmentStatus: true,
+        importedOrderCount: true, importedTotalSpent: true,
+        importedLastOrderAt: true, averageTicket: true,
       },
     });
 
@@ -401,30 +437,69 @@ export class CRMService {
       ? { gte: dateRange.from, lte: dateRange.to }
       : { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
 
+    // Temperature segments use COALESCE(lastOrderAt, importedLastOrderAt) so imported
+    // customers with historical purchase dates are not all counted as "no orders".
+    // Tier segments use COALESCE(totalSpend, importedTotalSpent, 0) for the same reason.
     const [
       totalCustomers,
-      ativoCustomers,
-      mornoCustomers,
-      frioCustomers,
+      tempRows,
+      tierRows,
       newCustomers,
-      bronze, prata, ouro, diamante,
       channelData,
     ] = await Promise.all([
       prisma.customer.count({ where: { restaurantId, isGuest: false } }),
-      prisma.customer.count({ where: { restaurantId, isGuest: false, lastOrderAt: { gte: thirtyDaysAgo } } }),
-      prisma.customer.count({ where: { restaurantId, isGuest: false, lastOrderAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } } }),
-      prisma.customer.count({ where: { restaurantId, isGuest: false, lastOrderAt: { lt: sixtyDaysAgo } } }),
+      prisma.$queryRaw<Array<{ bucket: string; cnt: bigint }>>`
+        SELECT
+          CASE
+            WHEN COALESCE("lastOrderAt", "importedLastOrderAt") >= ${thirtyDaysAgo} THEN 'ativo'
+            WHEN COALESCE("lastOrderAt", "importedLastOrderAt") >= ${sixtyDaysAgo}  THEN 'morno'
+            WHEN COALESCE("lastOrderAt", "importedLastOrderAt") IS NOT NULL          THEN 'frio'
+            ELSE 'sem_pedidos'
+          END AS bucket,
+          COUNT(*)::bigint AS cnt
+        FROM customers
+        WHERE "restaurantId" = ${restaurantId}
+          AND "isGuest" = false
+        GROUP BY 1
+      `,
+      prisma.$queryRaw<Array<{ bucket: string; cnt: bigint }>>`
+        SELECT
+          CASE
+            WHEN COALESCE("totalSpend", "importedTotalSpent", 0) >= 2000 THEN 'diamante'
+            WHEN COALESCE("totalSpend", "importedTotalSpent", 0) >=  800 THEN 'ouro'
+            WHEN COALESCE("totalSpend", "importedTotalSpent", 0) >=  300 THEN 'prata'
+            ELSE 'bronze'
+          END AS bucket,
+          COUNT(*)::bigint AS cnt
+        FROM customers
+        WHERE "restaurantId" = ${restaurantId}
+          AND "isGuest" = false
+        GROUP BY 1
+      `,
       prisma.customer.count({ where: { restaurantId, isGuest: false, createdAt: newCustomersFilter } }),
-      prisma.customer.count({ where: { restaurantId, isGuest: false, totalSpend: { lt:  300 } } }),
-      prisma.customer.count({ where: { restaurantId, isGuest: false, totalSpend: { gte: 300, lt:  800 } } }),
-      prisma.customer.count({ where: { restaurantId, isGuest: false, totalSpend: { gte: 800, lt: 2000 } } }),
-      prisma.customer.count({ where: { restaurantId, isGuest: false, totalSpend: { gte: 2000 } } }),
       prisma.order.groupBy({
         by: ["customerId", "type"],
         where: { restaurantId },
         _count: { _all: true },
       }),
     ]);
+
+    const bucketNum = (bucket: string) => {
+      const found = tempRows.find(r => r.bucket === bucket);
+      return found ? Number(found.cnt) : 0;
+    };
+    const ativoCustomers = bucketNum("ativo");
+    const mornoCustomers = bucketNum("morno");
+    const frioCustomers  = bucketNum("frio");
+
+    const tierNum = (bucket: string) => {
+      const found = tierRows.find(r => r.bucket === bucket);
+      return found ? Number(found.cnt) : 0;
+    };
+    const bronze  = tierNum("bronze");
+    const prata   = tierNum("prata");
+    const ouro    = tierNum("ouro");
+    const diamante = tierNum("diamante");
 
     // Customer-based channel segmentation
     const customerChannelMap = new Map<string, Set<string>>();

@@ -90,6 +90,26 @@ export interface Insight {
   message: string;
 }
 
+// Imported aggregate baseline — from ProductSalesAggregate (Saipos/Nemo import).
+// Only present when there is imported data. Never mixed with real Foocci orders.
+export interface ImportedAggregateRow {
+  name:        string;
+  category:    string;
+  revenue:     number;
+  qty:         number;
+  rowType:     string; // "PRODUCT" | "CATEGORY"
+}
+
+export interface ImportedBaseline {
+  periodStart:   string; // ISO date
+  periodEnd:     string; // ISO date
+  totalRevenue:  number;
+  totalQuantity: number;
+  topCategories: ImportedAggregateRow[];
+  topProducts:   ImportedAggregateRow[];
+  rowCount:      number;
+}
+
 export interface AnalyticsOverview {
   range:       DateRange;
   kpi:         KpiOverview;
@@ -102,6 +122,7 @@ export interface AnalyticsOverview {
   tiers:       TierCount[];
   channels:    ChannelRow[];
   insights:    Insight[];
+  importedBaseline: ImportedBaseline | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -135,6 +156,7 @@ export class AnalyticsService {
       segments,
       tiers,
       channels,
+      importedBaseline,
     ] = await Promise.all([
       this.getKpis(restaurantId, from, to),
       this.getSalesByDay(restaurantId, from, to),
@@ -145,11 +167,12 @@ export class AnalyticsService {
       this.getSegments(restaurantId),
       this.getTiers(restaurantId),
       this.getChannels(restaurantId, from, to),
+      this.getImportedBaseline(restaurantId),
     ]);
 
     const insights = this.buildInsights({ kpi, topProducts, categories, attachRates, channels });
 
-    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights };
+    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, importedBaseline };
   }
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
@@ -571,5 +594,75 @@ export class AnalyticsService {
     }
 
     return insights;
+  }
+
+  // ── Imported aggregate baseline ────────────────────────────────────────────
+  // Reads ProductSalesAggregate (Saipos/Nemo import). Never mixed with real orders.
+
+  static async getImportedBaseline(restaurantId: string): Promise<ImportedBaseline | null> {
+    const rows = await prisma.$queryRaw<Array<{
+      category_name: string;
+      product_name:  string | null;
+      row_type:      string;
+      qty:           string;
+      revenue:       string;
+      period_start:  Date;
+      period_end:    Date;
+    }>>`
+      SELECT
+        "categoryName"  AS category_name,
+        "productName"   AS product_name,
+        "rowType"       AS row_type,
+        "quantitySold"::text AS qty,
+        "grossRevenue"::text AS revenue,
+        "periodStart"   AS period_start,
+        "periodEnd"     AS period_end
+      FROM product_sales_aggregates
+      WHERE "restaurantId" = ${restaurantId}
+      ORDER BY "grossRevenue" DESC
+    `;
+
+    if (rows.length === 0) return null;
+
+    const periodStart = rows.reduce(
+      (min, r) => r.period_start < min ? r.period_start : min,
+      rows[0]!.period_start,
+    );
+    const periodEnd = rows.reduce(
+      (max, r) => r.period_end > max ? r.period_end : max,
+      rows[0]!.period_end,
+    );
+
+    const productRows = rows.filter(r => r.row_type === "PRODUCT");
+    const categoryRows = rows.filter(r => r.row_type === "CATEGORY");
+
+    const totalRevenue  = productRows.reduce((s, r) => s + toNum(r.revenue), 0);
+    const totalQuantity = productRows.reduce((s, r) => s + toNum(r.qty), 0);
+
+    const topProducts: ImportedAggregateRow[] = productRows.slice(0, 20).map(r => ({
+      name:     r.product_name ?? r.category_name,
+      category: r.category_name,
+      revenue:  toNum(r.revenue),
+      qty:      toNum(r.qty),
+      rowType:  "PRODUCT",
+    }));
+
+    const topCategories: ImportedAggregateRow[] = categoryRows.slice(0, 10).map(r => ({
+      name:     r.category_name,
+      category: r.category_name,
+      revenue:  toNum(r.revenue),
+      qty:      toNum(r.qty),
+      rowType:  "CATEGORY",
+    }));
+
+    return {
+      periodStart:   periodStart.toISOString(),
+      periodEnd:     periodEnd.toISOString(),
+      totalRevenue,
+      totalQuantity,
+      topCategories,
+      topProducts,
+      rowCount:      rows.length,
+    };
   }
 }

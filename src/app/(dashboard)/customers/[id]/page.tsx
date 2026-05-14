@@ -436,6 +436,9 @@ export default async function CustomerDetailPage({
   }
 
   const totalSpend = Number(customer.totalSpend);
+  // When a customer has no real Foocci orders, use imported historical spend for classification
+  const importedSpend = customer.importedTotalSpent !== null ? Number(customer.importedTotalSpent) : null;
+  const classifySpend = customer.totalOrders > 0 ? totalSpend : (importedSpend ?? totalSpend);
   const addresses: AddressItem[] = customer.addresses.map((a) => ({
     id:           a.id,
     label:        a.label,
@@ -448,7 +451,7 @@ export default async function CustomerDetailPage({
     zipCode:      a.zipCode,
     isDefault:    a.isDefault,
   }));
-  const classification = classify(totalSpend);
+  const classification = classify(classifySpend);
   const serializedOrders: OrderHistoryItem[] = [...customer.orders]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .map((o) => ({

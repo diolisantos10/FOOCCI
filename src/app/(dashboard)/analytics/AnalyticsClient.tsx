@@ -13,6 +13,7 @@ import type {
   TierCount,
   ChannelRow,
   Insight,
+  ImportedBaseline,
 } from "@/services/analytics/AnalyticsService";
 
 // ─── Analytics Agent types ────────────────────────────────────────────────────
@@ -279,6 +280,93 @@ const INSIGHT_STYLE: Record<string, { bg: string; text: string; icon: string }> 
   success: { bg: "bg-green-50 border-green-200",  text: "text-green-800",  icon: "✅" },
   info:    { bg: "bg-blue-50  border-blue-200",   text: "text-blue-800",   icon: "💡" },
 };
+
+function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
+  const periodFrom = new Date(baseline.periodStart).toLocaleDateString("pt-BR");
+  const periodTo   = new Date(baseline.periodEnd).toLocaleDateString("pt-BR");
+
+  return (
+    <Card title="Histórico importado — Saipos/Nemo">
+      <div className="mb-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+        📦 Dados históricos anteriores ao Foocci ({periodFrom} → {periodTo}).
+        Não representa pedidos individuais — são agregados importados de Saipos/Nemo.
+      </div>
+
+      {/* Summary KPIs */}
+      <div className="mb-5 grid grid-cols-3 gap-3">
+        <div className="rounded-xl bg-gray-50 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Receita total</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">{fmtBRL(baseline.totalRevenue)}</p>
+        </div>
+        <div className="rounded-xl bg-gray-50 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Qtd vendida</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.totalQuantity)}</p>
+        </div>
+        <div className="rounded-xl bg-gray-50 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Linhas importadas</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.rowCount)}</p>
+        </div>
+      </div>
+
+      {/* Top categories */}
+      {baseline.topCategories.length > 0 && (
+        <div className="mb-5">
+          <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Top categorias (receita)</p>
+          <div className="space-y-1.5">
+            {baseline.topCategories.slice(0, 8).map((cat, i) => {
+              const share = baseline.totalRevenue > 0 ? (cat.revenue / baseline.totalRevenue) * 100 : 0;
+              return (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="w-4 text-right font-semibold text-gray-400">{i + 1}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="font-medium text-gray-800">{cat.name}</span>
+                      <span className="text-gray-500">{fmtBRL(cat.revenue)} · {fmtNum(cat.qty)} un</span>
+                    </div>
+                    <div className="h-1 w-full rounded bg-gray-100">
+                      <div className="h-1 rounded bg-indigo-400" style={{ width: `${share.toFixed(1)}%` }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Top products */}
+      {baseline.topProducts.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Top produtos (receita)</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b text-left text-gray-400">
+                  <th className="pb-1.5 pr-3 font-medium">#</th>
+                  <th className="pb-1.5 pr-3 font-medium">Produto</th>
+                  <th className="pb-1.5 pr-3 font-medium">Categoria</th>
+                  <th className="pb-1.5 pr-3 font-medium text-right">Receita</th>
+                  <th className="pb-1.5 font-medium text-right">Qtd</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {baseline.topProducts.slice(0, 15).map((p, i) => (
+                  <tr key={i}>
+                    <td className="py-1.5 pr-3 text-gray-400">{i + 1}</td>
+                    <td className="py-1.5 pr-3 font-medium text-gray-800">{p.name}</td>
+                    <td className="py-1.5 pr-3 text-gray-500">{p.category}</td>
+                    <td className="py-1.5 pr-3 text-right text-gray-700">{fmtBRL(p.revenue)}</td>
+                    <td className="py-1.5 text-right text-gray-500">{fmtNum(p.qty)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function InsightCard({ insight }: { insight: Insight }) {
   const s = INSIGHT_STYLE[insight.type] ?? INSIGHT_STYLE.info!;
@@ -839,6 +927,9 @@ export function AnalyticsClient() {
           </div>
         </Card>
       )}
+
+      {/* ── Imported historical baseline (Saipos/Nemo) ── */}
+      {data && data.importedBaseline && <ImportedBaselineSection baseline={data.importedBaseline} />}
 
       {/* ── Slow / low-selling products ── */}
       {data && data.topProducts.length > 5 && (() => {

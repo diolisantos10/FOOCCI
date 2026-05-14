@@ -463,6 +463,7 @@ type HeaderProps = Pick<
   Props,
   | "name" | "phone" | "email" | "isActive" | "createdAt"
   | "totalOrders" | "totalSpend" | "lastOrderAt"
+  | "importedOrderCount" | "importedTotalSpent" | "importedLastOrderAt" | "averageTicket"
   | "classification" | "purchaseFrequencyDays" | "favoriteProduct" | "segment"
 > & {
   onEdit: () => void;
@@ -472,35 +473,57 @@ type HeaderProps = Pick<
 function HeaderSection({
   name, phone, email, isActive, createdAt,
   totalOrders, totalSpend, lastOrderAt,
+  importedOrderCount, importedTotalSpent, importedLastOrderAt, averageTicket,
   classification, purchaseFrequencyDays, favoriteProduct, segment,
   onEdit, onDelete,
 }: HeaderProps) {
   const ts = TIER_STYLES[classification.tier];
-  const segCfg = SEGMENT_CONFIG[segment] ?? SEGMENT_CONFIG["SEM_PEDIDOS"]!;
-  const ticketMedio = totalOrders > 0 ? totalSpend / totalOrders : 0;
+
+  // Use real Foocci orders when available; fall back to imported historical summary
+  const usingImported = totalOrders === 0 && (importedOrderCount !== null || importedTotalSpent !== null || importedLastOrderAt !== null);
+  const displayOrders  = totalOrders > 0 ? totalOrders  : (importedOrderCount ?? 0);
+  const displaySpend   = totalOrders > 0 ? totalSpend   : (importedTotalSpent  ?? 0);
+  const displayLast    = lastOrderAt ?? importedLastOrderAt;
+  const displayTicket  = totalOrders > 0
+    ? (totalOrders > 0 ? displaySpend / displayOrders : 0)
+    : (averageTicket ?? (displayOrders > 0 ? displaySpend / displayOrders : 0));
+
+  // When using imported data, show the segment derived from importedLastOrderAt
+  const effectiveSegment = (segment === "SEM_PEDIDOS" && importedLastOrderAt)
+    ? (() => {
+        const days = Math.floor((Date.now() - new Date(importedLastOrderAt).getTime()) / 86_400_000);
+        if (days <= 30) return "QUENTE";
+        if (days <= 60) return "MORNO";
+        return "FRIO";
+      })()
+    : segment;
+  const segCfg = SEGMENT_CONFIG[effectiveSegment] ?? SEGMENT_CONFIG["SEM_PEDIDOS"]!;
+  const importedSub = usingImported ? " (importado)" : "";
 
   const stats = [
     {
       label: "Pedidos",
-      value: String(totalOrders),
-      sub:   totalOrders === 1 ? "pedido realizado" : "pedidos realizados",
+      value: String(displayOrders),
+      sub:   usingImported
+        ? "histórico Saipos/Nemo"
+        : (displayOrders === 1 ? "pedido realizado" : "pedidos realizados"),
     },
     {
       label: "Total gasto",
-      value: fmtCurrency(totalSpend),
-      sub:   "acumulado",
+      value: fmtCurrency(displaySpend),
+      sub:   usingImported ? "histórico importado" : "acumulado",
     },
     {
       label: "Último pedido",
-      value: lastOrderAt ? fmtRelative(lastOrderAt) : "—",
-      sub:   lastOrderAt
-        ? new Date(lastOrderAt).toLocaleDateString("pt-BR")
+      value: displayLast ? fmtRelative(displayLast) : "—",
+      sub:   displayLast
+        ? new Date(displayLast).toLocaleDateString("pt-BR") + importedSub
         : "sem pedidos",
     },
     {
       label: "Ticket médio",
-      value: totalOrders > 0 ? fmtCurrency(ticketMedio) : "—",
-      sub:   totalOrders > 0 ? "por pedido" : "sem pedidos",
+      value: displayOrders > 0 ? fmtCurrency(displayTicket) : "—",
+      sub:   displayOrders > 0 ? (usingImported ? "histórico importado" : "por pedido") : "sem pedidos",
     },
     {
       label: "Produto favorito",
@@ -595,6 +618,14 @@ function HeaderSection({
           </div>
         ))}
       </div>
+
+      {/* Imported data notice */}
+      {usingImported && (
+        <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700">
+          <span>📦</span>
+          <span>Métricas baseadas em histórico importado (Saipos/Nemo) — não representa pedidos individuais no Foocci</span>
+        </div>
+      )}
 
       {/* Tier progress bar */}
       {classification.nextTier && classification.nextThreshold && (
@@ -1493,6 +1524,10 @@ export default function CustomerProfileClient({
         totalOrders={totalOrders}
         totalSpend={totalSpend}
         lastOrderAt={lastOrderAt}
+        importedOrderCount={importedOrderCount}
+        importedTotalSpent={importedTotalSpent}
+        importedLastOrderAt={importedLastOrderAt}
+        averageTicket={averageTicket}
         segment={segment}
         classification={classification}
         purchaseFrequencyDays={purchaseFrequencyDays}

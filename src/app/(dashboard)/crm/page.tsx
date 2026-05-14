@@ -33,6 +33,8 @@ export default async function CRMPage() {
           totalSpend: true, totalOrders: true,
           lastOrderAt: true, isActive: true, birthDate: true,
           crmContactable: true, contactStatus: true, dataEnrichmentStatus: true,
+          importedOrderCount: true, importedTotalSpent: true,
+          importedLastOrderAt: true, averageTicket: true,
         },
       }),
       CRMService.getOpportunities(restaurantId, restaurantName),
@@ -47,24 +49,38 @@ export default async function CRMPage() {
 
     const now = new Date();
     customers = rows.map((c) => {
-      const spend = Number(c.totalSpend);
-      const days = c.lastOrderAt
-        ? Math.floor((now.getTime() - c.lastOrderAt.getTime()) / 86_400_000)
+      const realSpend  = Number(c.totalSpend);
+      const realOrders = c.totalOrders;
+      const realLast   = c.lastOrderAt ?? null;
+      const impSpend   = c.importedTotalSpent !== null ? Number(c.importedTotalSpent) : null;
+      const impOrders  = c.importedOrderCount ?? null;
+      const impLast    = c.importedLastOrderAt ?? null;
+      const isUsingImportedData = realOrders === 0 && (impOrders !== null || impSpend !== null || impLast !== null);
+      const displaySpend  = realOrders > 0 ? realSpend  : (impSpend  ?? 0);
+      const displayOrders = realOrders > 0 ? realOrders : (impOrders ?? 0);
+      const displayLast   = realLast ?? impLast;
+      const days = displayLast
+        ? Math.floor((now.getTime() - displayLast.getTime()) / 86_400_000)
         : null;
       return {
-        id:                 c.id,
-        name:               c.name,
-        phone:              c.phone ?? "",
-        totalSpend:         spend,
-        totalOrders:        c.totalOrders,
-        lastOrderAt:        c.lastOrderAt?.toISOString() ?? null,
-        daysSinceLastOrder: days,
-        tier:               getTier(spend),
-        isActive:           c.isActive,
-        birthDate:          c.birthDate?.toISOString() ?? null,
+        id:                   c.id,
+        name:                 c.name,
+        phone:                c.phone ?? "",
+        totalSpend:           displaySpend,
+        totalOrders:          displayOrders,
+        lastOrderAt:          displayLast instanceof Date ? displayLast.toISOString() : (displayLast ?? null),
+        daysSinceLastOrder:   days,
+        tier:                 getTier(displaySpend),
+        isActive:             c.isActive,
+        birthDate:            c.birthDate?.toISOString() ?? null,
         crmContactable:       c.crmContactable,
         contactStatus:        c.contactStatus ?? null,
         dataEnrichmentStatus: c.dataEnrichmentStatus ?? null,
+        importedOrderCount:   impOrders,
+        importedTotalSpent:   impSpend,
+        importedLastOrderAt:  impLast?.toISOString() ?? null,
+        averageTicket:        c.averageTicket !== null ? Number(c.averageTicket) : null,
+        isUsingImportedData,
       };
     });
 
