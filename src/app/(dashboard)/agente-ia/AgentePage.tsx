@@ -161,6 +161,26 @@ const PRESETS_AGENT: Array<{ label: string; flow: FlowType; message?: string }> 
   { label: "Informações",         flow: "custom",    message: "Horário: ...\nEndereço: ..." },
 ];
 
+const SAFETY_CASES = [
+  "Cliente pede explicitamente para falar com humano",
+  "Reclamação ou insatisfação com o serviço",
+  "Problema com pagamento ou cobrança",
+  "Solicitação de cancelamento ou reembolso",
+  "Atraso grave na entrega",
+  "Restrição alimentar ou risco de alergia",
+  "IA com baixa confiança na resposta",
+  "Informação ausente no sistema",
+];
+
+const PLACEHOLDER_FLOWS: Array<{ icon: string; label: string; desc: string }> = [
+  { icon: "🕐", label: "Horário de funcionamento", desc: "Responde se o restaurante está aberto ou fechado"   },
+  { icon: "📍", label: "Endereço e localização",   desc: "Informa o endereço do restaurante"                 },
+  { icon: "🛵", label: "Entrega",                  desc: "Informações sobre área, taxa e prazo de entrega"   },
+  { icon: "💳", label: "Pagamento",                desc: "Formas de pagamento aceitas"                       },
+  { icon: "📦", label: "Status do pedido",         desc: "Acompanhamento de pedido em andamento"             },
+  { icon: "😤", label: "Reclamação",               desc: "Encaminha para atendente humano imediatamente"     },
+];
+
 // ── Agent form helpers ────────────────────────────────────────────────────────
 
 function newId() {
@@ -503,6 +523,12 @@ export function AgentePage() {
   const [agentOk, setAgentOk]           = useState(false);
   const [agentErr, setAgentErr]         = useState<string | null>(null);
 
+  // Local-only state (no backend storage yet)
+  const [oohEnabled, setOohEnabled]           = useState(false);
+  const [oohMessage, setOohMessage]           = useState("No momento estamos fechados. Você pode ver o cardápio e pedir quando abrirmos 😊");
+  const [fallbackMessage, setFallbackMessage] = useState("Não entendi certinho. Você quer fazer pedido, ver cardápio ou falar com alguém?");
+  const [previewOptId, setPreviewOptId]       = useState<string | null>(null);
+
   useEffect(() => {
     fetch("/api/whatsapp-agent")
       .then((r) => (r.ok ? r.json() : null))
@@ -589,6 +615,14 @@ export function AgentePage() {
 
   const activeAgent = AGENT_TABS.find((a) => a.id === activeTab)!;
 
+  const previewOpt      = menuOptions.find((o) => o.id === previewOptId) ?? null;
+  const previewResponse = previewOpt == null ? "" :
+    previewOpt.flow === "order"      ? [agentForm.orderPreMessage, agentForm.menuUrl].filter(Boolean).join("\n") :
+    previewOpt.flow === "handoff"    ? agentForm.handoffMessage :
+    previewOpt.flow === "menu"       ? (agentForm.menuUrl ? `Aqui está nosso cardápio:\n${agentForm.menuUrl}` : "Cardápio em configuração…") :
+    previewOpt.flow === "promotions" ? "Aqui estão nossas promoções ativas! 🎁" :
+    (previewOpt.message ?? "(mensagem personalizada)");;
+
   return (
     <div className="mx-auto max-w-2xl p-6">
 
@@ -647,7 +681,8 @@ export function AgentePage() {
             </div>
           )}
 
-          <Section title="Identidade do agente" subtitle="Como o agente se apresenta e interage no WhatsApp.">
+          {/* 1 — Status do agente */}
+          <Section title="Status do agente" subtitle="Identidade e modo de operação do WhatsApp Host.">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Nome do agente</label>
               <input
@@ -687,13 +722,14 @@ export function AgentePage() {
               </div>
             </div>
 
-            <RadioRow label="Tom de voz"          options={TONE_OPTIONS}  value={agentForm.tone}  onChange={patchAgent("tone")}  />
+            <RadioRow label="Tom de voz"            options={TONE_OPTIONS}  value={agentForm.tone}  onChange={patchAgent("tone")}  />
             <RadioRow label="Estilo de atendimento" options={STYLE_OPTIONS} value={agentForm.style} onChange={patchAgent("style")} />
           </Section>
 
-          <Section title="Mensagem de boas-vindas">
+          {/* 2 — Menu inicial */}
+          <Section title="Menu inicial" subtitle="Primeira mensagem enviada ao cliente e as opções do menu.">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Mensagem inicial</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Mensagem de boas-vindas</label>
               <textarea
                 value={agentForm.welcomeMessage}
                 onChange={(e) => patchAgent("welcomeMessage")(e.target.value)}
@@ -704,116 +740,120 @@ export function AgentePage() {
               />
               <CharCount current={agentForm.welcomeMessage.length} max={1000} />
             </div>
-            <div className="rounded-xl bg-[#dcf8c6] px-4 py-3 text-sm text-gray-800 shadow-inner max-w-xs">
-              <p className="text-[11px] font-semibold text-gray-500 mb-1">Pré-visualização</p>
-              <p className="whitespace-pre-wrap leading-relaxed">{agentForm.welcomeMessage || "…"}</p>
-              {menuOptions.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {menuOptions.map((o, i) => (
-                    <div key={o.id} className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-gray-700">
-                      {i + 1}. {o.label || <span className="text-gray-400 italic">sem rótulo</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Section>
 
-          <Section title="Opções de entrada">
-            <p className="text-xs text-gray-500">
-              Botões exibidos após a mensagem de boas-vindas. Cada opção aciona um fluxo.
-            </p>
-            <div className="space-y-2">
-              {menuOptions.length === 0 && (
-                <p className="rounded-lg border border-dashed border-gray-300 py-4 text-center text-xs text-gray-400">
-                  Nenhuma opção configurada. Adicione abaixo.
-                </p>
-              )}
-              {menuOptions.map((opt, idx) => (
-                <OptionCard
-                  key={opt.id}
-                  option={opt}
-                  index={idx}
-                  total={menuOptions.length}
-                  onChange={(p) => updateOption(opt.id, p)}
-                  onRemove={() => removeOption(opt.id)}
-                  onMoveUp={() => moveOption(opt.id, -1)}
-                  onMoveDown={() => moveOption(opt.id, 1)}
-                />
-              ))}
-            </div>
-            <div className="pt-1 space-y-3">
-              <button
-                type="button"
-                onClick={() => addOption()}
-                className="rounded-lg border border-dashed border-brand-300 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-600 hover:bg-brand-100 transition-colors"
-              >
-                + Nova opção em branco
-              </button>
-              <div>
-                <p className="mb-2 text-xs font-medium text-gray-500">Adicionar predefinição:</p>
-                <div className="flex flex-wrap gap-2">
-                  {PRESETS_AGENT.map((p) => (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => addOption(p)}
-                      className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:border-brand-300 hover:text-brand-600 transition-colors"
-                    >
-                      {FLOW_CONFIG[p.flow].icon} {p.label}
-                    </button>
-                  ))}
-                </div>
+            <div className="border-t border-gray-100 pt-4">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Opções do menu</p>
+              <p className="mb-3 text-xs text-gray-500">Botões exibidos após a mensagem. Cada opção aciona um fluxo.</p>
+              <div className="space-y-2">
+                {menuOptions.length === 0 && (
+                  <p className="rounded-lg border border-dashed border-gray-300 py-4 text-center text-xs text-gray-400">
+                    Nenhuma opção configurada. Adicione abaixo.
+                  </p>
+                )}
+                {menuOptions.map((opt, idx) => (
+                  <OptionCard
+                    key={opt.id}
+                    option={opt}
+                    index={idx}
+                    total={menuOptions.length}
+                    onChange={(p) => updateOption(opt.id, p)}
+                    onRemove={() => removeOption(opt.id)}
+                    onMoveUp={() => moveOption(opt.id, -1)}
+                    onMoveDown={() => moveOption(opt.id, 1)}
+                  />
+                ))}
               </div>
-              {menuOptions.length > 0 && (
+              <div className="pt-2 space-y-3">
                 <button
                   type="button"
-                  onClick={() => setMenuOptions(DEFAULT_MENU_OPTIONS.map((o) => ({ ...o, id: newId() })))}
-                  className="text-xs text-gray-400 underline hover:text-gray-600"
+                  onClick={() => addOption()}
+                  className="rounded-lg border border-dashed border-brand-300 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-600 hover:bg-brand-100 transition-colors"
                 >
-                  Restaurar padrões
+                  + Nova opção em branco
                 </button>
-              )}
+                <div>
+                  <p className="mb-2 text-xs font-medium text-gray-500">Adicionar predefinição:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {PRESETS_AGENT.map((p) => (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => addOption(p)}
+                        className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:border-brand-300 hover:text-brand-600 transition-colors"
+                      >
+                        {FLOW_CONFIG[p.flow].icon} {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {menuOptions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setMenuOptions(DEFAULT_MENU_OPTIONS.map((o) => ({ ...o, id: newId() })))}
+                    className="text-xs text-gray-400 underline hover:text-gray-600"
+                  >
+                    Restaurar padrões
+                  </button>
+                )}
+              </div>
             </div>
           </Section>
 
-          <Section title='Fluxo — "Fazer pedido"'>
-            <p className="text-xs text-gray-500">
-              Ativado quando o cliente escolhe uma opção com fluxo{" "}
-              <span className="font-semibold text-gray-700">Fazer pedido</span>.
-            </p>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Mensagem ao iniciar pedido</label>
-              <textarea
-                value={agentForm.orderPreMessage}
-                onChange={(e) => patchAgent("orderPreMessage")(e.target.value)}
-                rows={2}
-                maxLength={500}
-                placeholder="Ex: Ótimo! Aqui está nosso cardápio 👇"
-                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
+          {/* 3 — Fluxos de atendimento */}
+          <Section title="Fluxos de atendimento" subtitle="O que acontece quando o cliente seleciona cada opção do menu.">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🛒</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Fazer pedido</p>
+                  <p className="text-xs text-gray-500">Ativado pelas opções com fluxo &ldquo;Fazer pedido&rdquo;</p>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Mensagem ao iniciar pedido</label>
+                <textarea
+                  value={agentForm.orderPreMessage}
+                  onChange={(e) => patchAgent("orderPreMessage")(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Ex: Ótimo! Aqui está nosso cardápio 👇"
+                  className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">
+                  URL do cardápio{" "}
+                  <span className="font-normal text-gray-400">(opcional)</span>
+                </label>
+                <input
+                  type="url"
+                  value={agentForm.menuUrl}
+                  onChange={(e) => patchAgent("menuUrl")(e.target.value)}
+                  placeholder="https://seudominio.com/qr/slug"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <p className="mt-1 text-xs text-gray-400">Enviado junto com a mensagem acima.</p>
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                URL do cardápio{" "}
-                <span className="font-normal text-gray-400">(opcional)</span>
-              </label>
-              <input
-                type="url"
-                value={agentForm.menuUrl}
-                onChange={(e) => patchAgent("menuUrl")(e.target.value)}
-                placeholder="https://seudominio.com/qr/slug"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
-              <p className="mt-1 text-xs text-gray-400">Enviado junto com a mensagem acima.</p>
+
+            <div className="space-y-2">
+              {PLACEHOLDER_FLOWS.map((flow) => (
+                <div key={flow.label} className="flex items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 opacity-70">
+                  <span className="text-base leading-none">{flow.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-600">{flow.label}</p>
+                    <p className="text-xs text-gray-400">{flow.desc}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                    Em breve
+                  </span>
+                </div>
+              ))}
             </div>
           </Section>
 
-          <Section title='Fluxo — "Falar com atendente"'>
-            <p className="text-xs text-gray-500">
-              Ativado quando o cliente escolhe uma opção com fluxo{" "}
-              <span className="font-semibold text-gray-700">Falar com atendente</span>.
-            </p>
+          {/* 4 — Encaminhamento humano */}
+          <Section title="Encaminhamento humano" subtitle="Ativado quando o cliente pede para falar com um atendente.">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
                 Telefone do atendente{" "}
@@ -841,16 +881,141 @@ export function AgentePage() {
             </div>
           </Section>
 
-          <ComingSoon
-            title="Recursos avançados em desenvolvimento"
-            items={[
-              "Autonomia máxima — quantas perguntas o agente responde sozinho",
-              "Regras de segurança — tópicos que o agente não deve abordar",
-              "Respostas fora do horário — mensagens automáticas quando fechado",
-              "Quando chamar humano — gatilhos automáticos de transferência",
-              "Fluxos personalizados — jornadas configuráveis por objetivo",
-            ]}
-          />
+          {/* 5 — Regras de segurança */}
+          <Section
+            title="Regras de segurança"
+            subtitle="Situações em que o agente transfere automaticamente para um atendente — sempre ativo."
+          >
+            <div className="space-y-2">
+              {SAFETY_CASES.map((rule) => (
+                <div key={rule} className="flex items-center gap-2.5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100">
+                    <span className="block h-1.5 w-1.5 rounded-full bg-green-500" />
+                  </span>
+                  <p className="text-sm text-gray-700">{rule}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400">
+              Estas regras são fixas e não podem ser desativadas para garantir a segurança do atendimento.
+            </p>
+          </Section>
+
+          {/* 6 — Fora do horário */}
+          <Section title="Fora do horário">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-gray-800">Mensagem automática fora do horário</p>
+                <p className="mt-0.5 text-xs text-gray-500">Enviada quando o cliente contata fora do horário de funcionamento.</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600">
+                  Em breve
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={oohEnabled}
+                  onClick={() => setOohEnabled((v) => !v)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-colors ${
+                    oohEnabled ? "border-brand-500 bg-brand-500" : "border-gray-300 bg-gray-200"
+                  }`}
+                >
+                  <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                    oohEnabled ? "translate-x-[17px]" : "translate-x-0.5"
+                  }`} />
+                </button>
+              </div>
+            </div>
+            {oohEnabled && (
+              <div>
+                <textarea
+                  value={oohMessage}
+                  onChange={(e) => setOohMessage(e.target.value)}
+                  rows={3}
+                  maxLength={500}
+                  className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <p className="mt-1 text-xs text-amber-500">Esta mensagem ainda não é persistida — configuração em desenvolvimento.</p>
+              </div>
+            )}
+          </Section>
+
+          {/* 7 — Mensagens de fallback */}
+          <Section title="Mensagens de fallback">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-gray-800">Quando o agente não entende a mensagem</p>
+                <p className="mt-0.5 text-xs text-gray-500">Enviada quando nenhuma intenção é reconhecida.</p>
+              </div>
+              <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600">
+                Em breve
+              </span>
+            </div>
+            <div>
+              <textarea
+                value={fallbackMessage}
+                onChange={(e) => setFallbackMessage(e.target.value)}
+                rows={2}
+                maxLength={500}
+                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <p className="mt-1 text-xs text-amber-500">Esta mensagem ainda não é persistida — configuração em desenvolvimento.</p>
+            </div>
+          </Section>
+
+          {/* 8 — Prévia / Teste simples */}
+          <Section title="Prévia — como o cliente vê" subtitle="Simulação da primeira interação com o WhatsApp Host.">
+            <div className="mx-auto max-w-xs rounded-2xl bg-[#e5ddd5] p-3 shadow-inner space-y-2">
+              {/* Agent welcome bubble */}
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl rounded-tl-none bg-white px-3 py-2 shadow-sm">
+                  <p className="mb-0.5 text-[11px] font-semibold text-[#075e54]">{agentForm.agentName || "Agente"}</p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{agentForm.welcomeMessage || "…"}</p>
+                  {menuOptions.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {menuOptions.map((o, i) => (
+                        <button
+                          key={o.id}
+                          type="button"
+                          onClick={() => setPreviewOptId(previewOptId === o.id ? null : o.id)}
+                          className={`w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
+                            previewOptId === o.id
+                              ? "bg-[#075e54] text-white"
+                              : "bg-[#dcf8c6] text-[#075e54] hover:bg-[#c5e8b0]"
+                          }`}
+                        >
+                          {i + 1}. {o.label || "(sem rótulo)"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected option + agent response */}
+              {previewOpt != null && (
+                <>
+                  <div className="flex justify-end">
+                    <div className="max-w-[85%] rounded-2xl rounded-tr-none bg-[#dcf8c6] px-3 py-2 shadow-sm">
+                      <p className="text-xs text-gray-700">{previewOpt.label}</p>
+                    </div>
+                  </div>
+                  {previewResponse.trim() !== "" && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-none bg-white px-3 py-2 shadow-sm">
+                        <p className="mb-0.5 text-[11px] font-semibold text-[#075e54]">{agentForm.agentName || "Agente"}</p>
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{previewResponse}</p>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <p className="text-center text-xs text-gray-400">
+              Clique em uma opção para simular a resposta do agente.
+            </p>
+          </Section>
 
           <SaveRow saving={agentSaving} label="Salvar WhatsApp Host" />
         </form>
