@@ -824,9 +824,39 @@ function SaiposNemoPreviewStep({
   onBack:    () => void;
   loading:   boolean;
 }) {
-  const [confirmOpen,   setConfirmOpen]   = useState(false);
-  const [v2Loading,     setV2Loading]     = useState(false);
-  const [v2Error,       setV2Error]       = useState<string | null>(null);
+  const [confirmOpen,        setConfirmOpen]        = useState(false);
+  const [v2Loading,          setV2Loading]          = useState(false);
+  const [v2Error,            setV2Error]            = useState<string | null>(null);
+  const [v2ImportavelLoading, setV2ImportavelLoading] = useState(false);
+  const [v2ImportavelError,   setV2ImportavelError]   = useState<string | null>(null);
+
+  async function handleDownloadV2Importavel() {
+    setV2ImportavelError(null);
+    setV2ImportavelLoading(true);
+    try {
+      const res = await fetch("/api/crm/saipos-nemo/generate-v2-importavel", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ jobId }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setV2ImportavelError((json as { error?: string }).error ?? "Falha ao gerar dataset importável");
+        return;
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = "Foocci_Master_Dataset_V2_IMPORTAVEL.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setV2ImportavelError("Erro de rede ao gerar dataset importável");
+    } finally {
+      setV2ImportavelLoading(false);
+    }
+  }
 
   async function handleDownloadV2() {
     setV2Error(null);
@@ -918,6 +948,22 @@ function SaiposNemoPreviewStep({
           {v2Loading ? "Gerando…" : "⬇ Gerar Dataset V2"}
         </button>
         {v2Error && <p className="mt-1.5 text-xs text-red-600">{v2Error}</p>}
+      </div>
+
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+        <p className="text-xs font-bold text-indigo-700 mb-1">Dataset V2 Importável</p>
+        <p className="text-xs text-indigo-600 mb-2">
+          Gere uma planilha compatível com o parser (Clientes_Master, Sem_Telefone, Produtos_Agregados, Endereços) com categorias V2 normalizadas. Pode ser enviada ao preview-compiled para segunda revisão.
+        </p>
+        <button
+          type="button"
+          onClick={handleDownloadV2Importavel}
+          disabled={v2ImportavelLoading || loading}
+          className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+        >
+          {v2ImportavelLoading ? "Gerando…" : "⬇ Gerar V2 Importável"}
+        </button>
+        {v2ImportavelError && <p className="mt-1.5 text-xs text-red-600">{v2ImportavelError}</p>}
       </div>
 
       <div className="flex gap-2">
