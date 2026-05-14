@@ -39,13 +39,14 @@ const HOME_ITEM: NavItem = {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Atendimento",
+    label: "Vendas",
     items: [
       { href: "/orders",      label: "Pedidos",   icon: "📋" },
       { href: "/atendimento", label: "Chat",       icon: "🎧" },
       { href: "/chat",        label: "Chat IA",    icon: "🤖" },
       { href: "/menu",        label: "Cardápio",   icon: "🍽️" },
       { href: "/agente-ia",   label: "Agentes IA", icon: "✨" },
+      { href: "/analytics",   label: "Analytics",  icon: "📈" },
     ],
   },
   {
@@ -53,7 +54,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/promotions", label: "Promoções", icon: "🎁" },
       { href: "/crm",        label: "CRM",       icon: "📊" },
-      { href: "/analytics",  label: "Analytics", icon: "📈" },
       { href: "/canais",     label: "Canais",    icon: "🔗" },
       { href: "/marca",      label: "Marca",     icon: "🎨" },
     ],

@@ -286,16 +286,33 @@ function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
   const periodTo   = new Date(baseline.periodEnd).toLocaleDateString("pt-BR");
 
   return (
-    <Card title="Histórico importado — Saipos/Nemo">
-      <div className="mb-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
-        📦 Dados históricos anteriores ao Foocci ({periodFrom} → {periodTo}).
-        Não representa pedidos individuais — são agregados importados de Saipos/Nemo.
+    <div className="rounded-xl border-2 border-indigo-200 bg-white p-5">
+      {/* Header */}
+      <div className="mb-4 flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-lg">
+          📦
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-indigo-900">Histórico importado — Saipos/Nemo</h2>
+          <p className="mt-0.5 text-xs text-indigo-600">
+            Dados anteriores ao Foocci, importados de bases externas. Não representam pedidos detalhados — são agregados históricos.
+          </p>
+        </div>
+        <span className="ml-auto shrink-0 rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+          Histórico
+        </span>
+      </div>
+
+      {/* Period banner */}
+      <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+        Período importado: <strong>{periodFrom}</strong> a <strong>{periodTo}</strong>
+        {" · "}esse período é independente do filtro de datas acima.
       </div>
 
       {/* Summary KPIs */}
-      <div className="mb-5 grid grid-cols-3 gap-3">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-xl bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Receita total</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Receita histórica</p>
           <p className="mt-1 text-lg font-bold text-gray-900">{fmtBRL(baseline.totalRevenue)}</p>
         </div>
         <div className="rounded-xl bg-gray-50 px-4 py-3">
@@ -303,8 +320,12 @@ function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
           <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.totalQuantity)}</p>
         </div>
         <div className="rounded-xl bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Linhas importadas</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Prod./Categorias</p>
           <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.rowCount)}</p>
+        </div>
+        <div className="rounded-xl bg-gray-50 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Sem classificação</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">{fmtNum(baseline.semClassificacaoCount)}</p>
         </div>
       </div>
 
@@ -364,7 +385,13 @@ function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
           </div>
         </div>
       )}
-    </Card>
+
+      {baseline.semClassificacaoCount > 0 && (
+        <p className="mt-3 text-[11px] text-amber-600">
+          ⚠ {baseline.semClassificacaoCount} produto{baseline.semClassificacaoCount !== 1 ? "s" : ""} sem classificação de categoria — podem precisar de revisão no cardápio.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -715,7 +742,7 @@ export function AnalyticsClient() {
         </div>
       )}
 
-      {/* ── KPI overview ── */}
+      {/* ── KPI overview (real Foocci orders — period-filtered) ── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard label="Receita"        value={kpi ? fmtBRL(kpi.revenue)         : "—"} />
         <KpiCard label="Pedidos"        value={kpi ? fmtNum(kpi.orders)          : "—"} />
@@ -725,6 +752,11 @@ export function AnalyticsClient() {
                  sub={kpi ? fmtPct(kpi.cancellationRate) + " do total" : undefined} />
         <KpiCard label="Cancelamento %" value={kpi ? fmtPct(kpi.cancellationRate) : "—"} />
       </div>
+
+      {/* ── Imported historical baseline — shown prominently when it exists ── */}
+      {data?.importedBaseline && (
+        <ImportedBaselineSection baseline={data.importedBaseline} />
+      )}
 
       {/* ── Analytics Agent Panel ── */}
       <AgentPanel data={agentData} loading={agentLoading} />
@@ -927,9 +959,6 @@ export function AnalyticsClient() {
           </div>
         </Card>
       )}
-
-      {/* ── Imported historical baseline (Saipos/Nemo) ── */}
-      {data && data.importedBaseline && <ImportedBaselineSection baseline={data.importedBaseline} />}
 
       {/* ── Slow / low-selling products ── */}
       {data && data.topProducts.length > 5 && (() => {

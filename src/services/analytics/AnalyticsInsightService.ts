@@ -66,7 +66,9 @@ export class AnalyticsInsightService {
       kpi.orders  <  6 ? "LOW"  :
       "SUFFICIENT";
 
-    const hasData   = kpi.orders > 0;
+    const hasImportedBaseline = (overview.importedBaseline?.rowCount ?? 0) > 0;
+    // hasData = true when there are real orders OR when imported baseline exists
+    const hasData   = kpi.orders > 0 || hasImportedBaseline;
     const insights  = this.buildInsights(overview);
     const comparison = this.buildComparison(kpi, prevKpi);
     const summary   = this.buildSummary(overview, insights, periodLabel, dataQuality);
@@ -77,8 +79,26 @@ export class AnalyticsInsightService {
   // ─── Insight engine ──────────────────────────────────────────────────────────
 
   private static buildInsights(overview: AnalyticsOverview): AgentInsight[] {
-    const { kpi, attachRates, topProducts, segments, tiers } = overview;
+    const { kpi, attachRates, topProducts, segments, tiers, importedBaseline } = overview;
     const insights: AgentInsight[] = [];
+
+    // ── Imported baseline (when real Foocci orders are absent) ─────────────
+    if (kpi.orders === 0 && importedBaseline && importedBaseline.rowCount > 0) {
+      const fmtBRL = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      const fromYear = new Date(importedBaseline.periodStart).getFullYear();
+      const toYear   = new Date(importedBaseline.periodEnd).getFullYear();
+      insights.push({
+        id:             "imported_baseline_available",
+        type:           "IMPORTED_BASELINE",
+        severity:       "INFO",
+        title:          "Histórico importado disponível para análise",
+        explanation:    `Há ${importedBaseline.rowCount} registros de produtos/categorias importados do Saipos/Nemo — receita histórica de ${fmtBRL(importedBaseline.totalRevenue)}, cobrindo ${fromYear}–${toYear}.`,
+        metric:         `${importedBaseline.rowCount} itens · ${fmtBRL(importedBaseline.totalRevenue)}`,
+        recommendation: "Consulte o histórico importado para identificar produtos campeões e ajustar seu cardápio.",
+      });
+      // return early: other real-order insights are meaningless without orders
+      return insights;
+    }
 
     const drinks   = attachRates.find((a) => a.label === "Bebidas");
     const desserts = attachRates.find((a) => a.label === "Sobremesas");
@@ -276,9 +296,21 @@ export class AnalyticsInsightService {
     quality:     DataQuality,
   ): string {
     if (quality === "NONE") {
+      const baseline = overview.importedBaseline;
+      if (baseline && baseline.rowCount > 0) {
+        const fmtBRL   = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const fromYear = new Date(baseline.periodStart).getFullYear();
+        const toYear   = new Date(baseline.periodEnd).getFullYear();
+        return `Não há pedidos registrados no Foocci no período selecionado. Porém, existe histórico importado Saipos/Nemo com ${baseline.rowCount} linhas de produtos — receita histórica de ${fmtBRL(baseline.totalRevenue)}, cobrindo ${fromYear}–${toYear}. Consulte a seção "Histórico importado" abaixo para análise de produtos e categorias.`;
+      }
       return "Seu Gerente Comercial IA será ativado assim que houver pedidos ou importação de histórico.";
     }
     if (quality === "LOW") {
+      const baseline = overview.importedBaseline;
+      if (baseline && baseline.rowCount > 0) {
+        const { kpi: k } = overview;
+        return `Apenas ${k.orders} pedido${k.orders !== 1 ? "s" : ""} registrado${k.orders !== 1 ? "s" : ""} no Foocci no período — insuficiente para análise completa. Mas há histórico importado Saipos/Nemo com ${baseline.rowCount} linhas de produtos disponíveis. Consulte o histórico importado abaixo para análise de catálogo e tendências históricas.`;
+      }
       return "Ainda temos poucos dados, mas já dá para acompanhar os primeiros sinais. Continue operando para obter análises mais completas.";
     }
 

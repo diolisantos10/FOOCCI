@@ -101,13 +101,14 @@ export interface ImportedAggregateRow {
 }
 
 export interface ImportedBaseline {
-  periodStart:   string; // ISO date
-  periodEnd:     string; // ISO date
-  totalRevenue:  number;
-  totalQuantity: number;
-  topCategories: ImportedAggregateRow[];
-  topProducts:   ImportedAggregateRow[];
-  rowCount:      number;
+  periodStart:           string; // ISO date
+  periodEnd:             string; // ISO date
+  totalRevenue:          number;
+  totalQuantity:         number;
+  topCategories:         ImportedAggregateRow[];
+  topProducts:           ImportedAggregateRow[];
+  rowCount:              number;
+  semClassificacaoCount: number; // rows without a standard category classification
 }
 
 export interface AnalyticsOverview {
@@ -603,7 +604,7 @@ export class AnalyticsService {
     const rows = await prisma.$queryRaw<Array<{
       category_name: string;
       product_name:  string | null;
-      row_type:      string;
+      row_type:      string | null;
       qty:           string;
       revenue:       string;
       period_start:  Date;
@@ -613,13 +614,13 @@ export class AnalyticsService {
         "categoryName"  AS category_name,
         "productName"   AS product_name,
         "rowType"       AS row_type,
-        "quantitySold"::text AS qty,
-        "grossRevenue"::text AS revenue,
+        COALESCE("quantitySold", 0)::text AS qty,
+        COALESCE("grossRevenue", 0)::text AS revenue,
         "periodStart"   AS period_start,
         "periodEnd"     AS period_end
       FROM product_sales_aggregates
       WHERE "restaurantId" = ${restaurantId}
-      ORDER BY "grossRevenue" DESC
+      ORDER BY COALESCE("grossRevenue", 0) DESC
     `;
 
     if (rows.length === 0) return null;
@@ -633,18 +634,32 @@ export class AnalyticsService {
       rows[0]!.period_end,
     );
 
-    const productRows = rows.filter(r => r.row_type === "PRODUCT");
-    const categoryRows = rows.filter(r => r.row_type === "CATEGORY");
+    // Use product_name presence to distinguish product rows from category summary rows.
+    // row_type may be null or in different capitalisation/language depending on the import source,
+    // so we do NOT rely on it for the primary split.
+    const productRows  = rows.filter(r => r.product_name !== null && r.product_name.trim() !== "");
+    const categoryRows = rows.filter(r => !r.product_name || r.product_name.trim() === "");
 
-    const totalRevenue  = productRows.reduce((s, r) => s + toNum(r.revenue), 0);
-    const totalQuantity = productRows.reduce((s, r) => s + toNum(r.qty), 0);
+    // Use category-level rows for revenue/qty totals — they represent per-category aggregates
+    // and avoid double-counting (categories already sum their product lines).
+    // Fall back to product rows if the import has no category-level rows.
+    const summaryRows   = categoryRows.length > 0 ? categoryRows : productRows;
+    const totalRevenue  = summaryRows.reduce((s, r) => s + toNum(r.revenue), 0);
+    const totalQuantity = summaryRows.reduce((s, r) => s + toNum(r.qty), 0);
+
+    const semClassificacaoCount = rows.filter(r => {
+      const rt  = (r.row_type ?? "").toUpperCase();
+      const cat = (r.category_name ?? "").toLowerCase();
+      return rt.includes("SEM") || rt.includes("CLASSIF") ||
+             cat.includes("sem classif") || cat.includes("sem categoria");
+    }).length;
 
     const topProducts: ImportedAggregateRow[] = productRows.slice(0, 20).map(r => ({
-      name:     r.product_name ?? r.category_name,
+      name:     r.product_name!,
       category: r.category_name,
       revenue:  toNum(r.revenue),
       qty:      toNum(r.qty),
-      rowType:  "PRODUCT",
+      rowType:  r.row_type ?? "PRODUCT",
     }));
 
     const topCategories: ImportedAggregateRow[] = categoryRows.slice(0, 10).map(r => ({
@@ -652,17 +667,18 @@ export class AnalyticsService {
       category: r.category_name,
       revenue:  toNum(r.revenue),
       qty:      toNum(r.qty),
-      rowType:  "CATEGORY",
+      rowType:  r.row_type ?? "CATEGORY",
     }));
 
     return {
-      periodStart:   periodStart.toISOString(),
-      periodEnd:     periodEnd.toISOString(),
+      periodStart:           periodStart.toISOString(),
+      periodEnd:             periodEnd.toISOString(),
       totalRevenue,
       totalQuantity,
       topCategories,
       topProducts,
-      rowCount:      rows.length,
+      rowCount:              rows.length,
+      semClassificacaoCount,
     };
   }
 }
