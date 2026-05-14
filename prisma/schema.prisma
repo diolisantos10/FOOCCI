@@ -63,8 +63,9 @@ model Restaurant {
   autoSimulatorConfig AutoSimulatorConfig?
   simulationRuns      SimulationRun[]
   trackingLinks       TrackingLink[]
-  importJobs          ImportJob[]
-  tierSettings        TierSettings?
+  importJobs             ImportJob[]
+  importMappingTemplates ImportMappingTemplate[]
+  tierSettings           TierSettings?
   tierBenefits        TierBenefit[]
   onboardingStatus    RestaurantOnboardingStatus?
   productSalesAggregates ProductSalesAggregate[]
@@ -780,6 +781,22 @@ model ImportJob {
 
   @@index([restaurantId])
   @@map("import_jobs")
+}
+
+model ImportMappingTemplate {
+  id           String   @id @default(cuid())
+  restaurantId String
+  name         String
+  sourceSystem String   @default("GENERIC")
+  importType   String   @default("customers")
+  mappings     Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@map("import_mapping_templates")
 }
 
 enum MenuSource {

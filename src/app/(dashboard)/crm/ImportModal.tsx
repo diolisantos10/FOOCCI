@@ -1,11 +1,37 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { FieldMappingStep } from "@/components/crm/FieldMappingStep";
+import type { DetectedMapping, ColumnMapping } from "@/services/crm/UniversalFieldMapper";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ImportType = "customers" | "orders" | "customers_orders" | "saipos_nemo_compiled";
-type Step = "type" | "upload" | "map" | "preview" | "importing" | "done";
+type ImportType = "customers" | "orders" | "customers_orders" | "saipos_nemo_compiled" | "universal_mapper";
+type Step = "type" | "upload" | "map" | "universal_map" | "preview" | "importing" | "done";
+
+interface SavedTemplate {
+  id:           string;
+  name:         string;
+  sourceSystem: string;
+  importType:   string;
+  mappings:     unknown;
+}
+
+interface UniversalPreviewResult {
+  totalRows:          number;
+  mappedRows:         number;
+  contactable:        number;
+  nonContactable:     number;
+  skipped:            number;
+  conflicts:          number;
+  invalidPhones:      number;
+  duplicatesInFile:   number;
+  validationErrors:   string[];
+  validationWarnings: string[];
+  qualityScore:       number;
+  fieldCoverage:      Array<{ canonicalKey: string; label: string; nonEmptyCount: number; percent: number }>;
+  sampleMapped:       Array<Record<string, string>>;
+}
 
 interface ParsedFile {
   columns:          string[];
@@ -216,6 +242,8 @@ function autoDetectOrder(columns: string[]): OrderMapping {
 function StepDots({ step, importType }: { step: Step; importType?: ImportType }) {
   const order: Step[] = importType === "saipos_nemo_compiled"
     ? ["type","upload","preview","done"]
+    : importType === "universal_mapper"
+    ? ["type","upload","universal_map","preview","done"]
     : ["type","upload","map","preview","done"];
   const idx = order.indexOf(step === "importing" ? "preview" : step);
   return (
@@ -235,6 +263,7 @@ function TypeStep({ onSelect }: { onSelect: (t: ImportType) => void }) {
     { value: "orders",                 label: "Pedidos com itens",   desc: "Histórico de pedidos com produtos. Os clientes serão criados automaticamente.", icon: "📦" },
     { value: "customers_orders",       label: "Clientes + Pedidos",  desc: "Importa clientes e pedidos a partir do mesmo arquivo.", icon: "🧾" },
     { value: "saipos_nemo_compiled",   label: "Saipos + Nemo",       desc: "Importar planilha compilada com clientes, endereços e produtos agregados.", icon: "🏭" },
+    { value: "universal_mapper",       label: "Mapeamento universal","desc": "Detecta automaticamente as colunas de qualquer arquivo e permite revisar o mapeamento antes de importar.", icon: "🗺️" },
   ];
 
   return (
@@ -1048,6 +1077,101 @@ function SaiposNemoDoneStep({ result, onClose }: { result: SaiposNemoExecuteResu
   );
 }
 
+// ── Universal: Preview (read-only quality report) ────────────────────────────
+
+function UniversalPreviewStep({
+  result,
+  onBack,
+}: {
+  result: UniversalPreviewResult;
+  onBack: () => void;
+}) {
+  const scoreColor =
+    result.qualityScore >= 70 ? "text-green-700" :
+    result.qualityScore >= 40 ? "text-yellow-600" :
+    "text-red-600";
+
+  const stats = [
+    { label: "Total de linhas",           value: result.totalRows,        color: "text-gray-900" },
+    { label: "Linhas mapeadas",           value: result.mappedRows,       color: "text-gray-900" },
+    { label: "Com telefone válido",       value: result.contactable,      color: "text-green-700" },
+    { label: "Sem telefone (nome/e-mail)",value: result.nonContactable,   color: "text-amber-600" },
+    { label: "Linhas ignoradas",          value: result.skipped,          color: "text-gray-500" },
+    { label: "Telefones inválidos",       value: result.invalidPhones,    color: "text-red-600" },
+    { label: "Duplicatas no arquivo",     value: result.duplicatesInFile, color: "text-orange-600" },
+    { label: "Clientes já existentes",    value: result.conflicts,        color: "text-blue-700" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-gray-800">Análise do arquivo</p>
+          <p className="text-xs text-gray-500 mt-0.5">Nenhum dado foi importado — esta é apenas uma análise.</p>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className={`text-2xl font-bold ${scoreColor}`}>{result.qualityScore}</span>
+          <span className="text-[10px] text-gray-500">qualidade</span>
+        </div>
+      </div>
+
+      {result.validationErrors.length > 0 && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-1">
+          {result.validationErrors.map((e, i) => <p key={i}>{e}</p>)}
+        </div>
+      )}
+      {result.validationWarnings.length > 0 && (
+        <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700 space-y-1">
+          {result.validationWarnings.map((w, i) => <p key={i}>⚠ {w}</p>)}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+        {stats.map((s) => (
+          <div key={s.label} className="flex items-center justify-between px-4 py-2.5">
+            <span className="text-sm text-gray-600">{s.label}</span>
+            <span className={`text-sm font-bold ${s.color}`}>{s.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {result.fieldCoverage.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-600 mb-2">Cobertura de campos</p>
+          <div className="space-y-1.5">
+            {result.fieldCoverage
+              .filter((f) => f.nonEmptyCount > 0)
+              .sort((a, b) => b.percent - a.percent)
+              .map((f) => (
+                <div key={f.canonicalKey} className="flex items-center gap-2">
+                  <span className="w-36 shrink-0 text-xs text-gray-600 truncate">{f.label}</span>
+                  <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-indigo-500"
+                      style={{ width: `${f.percent}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 w-8 text-right">{f.percent}%</span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
+        A importação universal será disponibilizada em breve. Por ora, use este mapeamento para verificar a qualidade dos dados.
+      </div>
+
+      <button
+        onClick={onBack}
+        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+      >
+        ← Ajustar mapeamento
+      </button>
+    </div>
+  );
+}
+
 // ── Recent imports list (footer of upload step) ──────────────────────────────
 
 interface ImportJob {
@@ -1123,6 +1247,11 @@ export function ImportModal({
   const [snJobId,      setSnJobId]      = useState<string | null>(null);
   const [snPreview,    setSnPreview]    = useState<SaiposNemoPreviewData | null>(null);
   const [snResult,     setSnResult]     = useState<SaiposNemoExecuteResult | null>(null);
+  // Universal mapper state
+  const [uDetected,    setUDetected]    = useState<DetectedMapping[]>([]);
+  const [uSampleRows,  setUSampleRows]  = useState<Record<string, string>[]>([]);
+  const [uPreview,     setUPreview]     = useState<UniversalPreviewResult | null>(null);
+  const [uTemplates,   setUTemplates]   = useState<SavedTemplate[]>([]);
 
   function reset() {
     setStep("type");
@@ -1137,6 +1266,83 @@ export function ImportModal({
     setSnJobId(null);
     setSnPreview(null);
     setSnResult(null);
+    setUDetected([]);
+    setUSampleRows([]);
+    setUPreview(null);
+  }
+
+  async function fetchUTemplates() {
+    try {
+      const res = await fetch("/api/crm/import/mapping-templates");
+      if (res.ok) {
+        const json = await res.json() as { templates: SavedTemplate[] };
+        setUTemplates(json.templates);
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  async function handleUniversalParsed(p: ParsedFile) {
+    setParsed(p);
+    setError(null);
+    // Detect mapping from the already-parsed file — use detect-mapping endpoint via re-upload
+    // We already have headers from the parsed file; call autoDetect client-side via API
+    try {
+      const res = await fetch("/api/crm/import/detect-mapping", {
+        method: "POST",
+        body:   (() => {
+          // We don't have the raw file at this point; use the columns and a fake call
+          // Instead, use parse results: build a minimal FormData with file reconstructed
+          // Since we only need headers, we can post just headers as JSON to a different approach.
+          // Actually, detect-mapping needs the file. The upload already went through /parse.
+          // We can derive detected from the columns directly by calling the service client-side.
+          // But that would import the service into client bundle. Instead send a minimal CSV.
+          const csvContent = p.columns.join(",") + "\n";
+          const blob = new Blob([csvContent], { type: "text/csv" });
+          const fd = new FormData();
+          fd.append("file", blob, "headers.csv");
+          return fd;
+        })(),
+      });
+      if (res.ok) {
+        const json = await res.json() as { detected: DetectedMapping[]; sampleRows: Record<string, string>[] };
+        setUDetected(json.detected);
+        setUSampleRows(p.rows.slice(0, 5));
+      }
+    } catch { /* fallback: no detection */ }
+    await fetchUTemplates();
+    setStep("universal_map");
+  }
+
+  async function handleUniversalMappingConfirm(mappings: ColumnMapping[]) {
+    if (!parsed) return;
+    setError(null);
+    try {
+      const res = await fetch("/api/crm/import/preview-universal", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ rows: parsed.rows, columnMappings: mappings, importType: "customers" }),
+      });
+      const json = await res.json() as UniversalPreviewResult & { error?: string };
+      if (!res.ok) { setError(json.error ?? "Falha ao gerar análise"); return; }
+      setUPreview(json);
+      setStep("preview");
+    } catch {
+      setError("Erro de rede ao analisar arquivo");
+    }
+  }
+
+  async function handleSaveUTemplate(name: string, mappings: ColumnMapping[]) {
+    const res = await fetch("/api/crm/import/mapping-templates", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ name, sourceSystem: "GENERIC", importType: "customers", mappings }),
+    });
+    if (res.ok) await fetchUTemplates();
+  }
+
+  async function handleDeleteUTemplate(id: string) {
+    await fetch(`/api/crm/import/mapping-templates/${id}`, { method: "DELETE" });
+    await fetchUTemplates();
   }
 
   function handleClose() { reset(); onClose(); }
@@ -1222,12 +1428,13 @@ export function ImportModal({
   if (!open) return null;
 
   const titleByStep: Record<Step, string> = {
-    type:      "Importar dados",
-    upload:    "Enviar arquivo",
-    map:       "Mapear colunas",
-    preview:   "Prévia",
-    importing: "Importando…",
-    done:      "Concluído",
+    type:          "Importar dados",
+    upload:        "Enviar arquivo",
+    map:           "Mapear colunas",
+    universal_map: "Mapear colunas",
+    preview:       "Prévia",
+    importing:     "Importando…",
+    done:          "Concluído",
   };
 
   return (
@@ -1258,6 +1465,49 @@ export function ImportModal({
 
           {step === "type" && (
             <TypeStep onSelect={(t) => { setImportType(t); setStep("upload"); }} />
+          )}
+
+          {/* Universal mapper flow */}
+          {importType === "universal_mapper" && step === "upload" && (
+            <>
+              <UploadStep importType={importType} onParsed={handleUniversalParsed} />
+              <RecentJobs />
+            </>
+          )}
+
+          {importType === "universal_mapper" && step === "universal_map" && parsed && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Confirmar mapeamento de colunas</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Arquivo: <strong>{parsed.fileName}</strong> · {parsed.totalRows} linhas
+                </p>
+              </div>
+              <FieldMappingStep
+                sourceHeaders={parsed.columns}
+                detected={uDetected}
+                sampleRows={uSampleRows}
+                importType="customers"
+                onConfirm={handleUniversalMappingConfirm}
+                onSaveTemplate={handleSaveUTemplate}
+                savedTemplates={uTemplates}
+                onLoadTemplate={() => { /* templates applied inside FieldMappingStep */ }}
+                onDeleteTemplate={handleDeleteUTemplate}
+              />
+              <button
+                onClick={() => setStep("upload")}
+                className="text-xs text-gray-500 hover:underline"
+              >
+                ← Voltar
+              </button>
+            </div>
+          )}
+
+          {importType === "universal_mapper" && step === "preview" && uPreview && (
+            <UniversalPreviewStep
+              result={uPreview}
+              onBack={() => setStep("universal_map")}
+            />
           )}
 
           {/* Saipos + Nemo flow */}
