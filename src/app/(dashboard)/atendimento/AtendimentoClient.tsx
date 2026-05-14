@@ -471,11 +471,11 @@ export function AtendimentoClient({
           ) : (
             <ul className="divide-y divide-gray-100">
               {displayed.map((conv) => {
-                const lastMsg  = conv.messages[0];
+                const lastMsg  = (conv.messages ?? [])[0];
                 const preview  = lastMsg
-                  ? lastMsg.type !== "TEXT"
+                  ? (lastMsg.type && lastMsg.type !== "TEXT")
                     ? `[${lastMsg.type.toLowerCase()}]`
-                    : lastMsg.content.slice(0, 60)
+                    : (lastMsg.content?.slice(0, 60) ?? "")
                   : "Sem mensagens";
                 const badge      = getHandlerBadge(conv);
                 const isSelected = conv.id === selectedId;

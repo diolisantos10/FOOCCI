@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
           messages: {
             orderBy: { sentAt: "desc" },
             take: 1,
-            select: { content: true, senderType: true, direction: true, sentAt: true },
+            select: { content: true, senderType: true, direction: true, sentAt: true, type: true },
           },
         },
       }),
