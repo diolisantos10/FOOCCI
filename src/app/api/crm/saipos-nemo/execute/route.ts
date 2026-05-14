@@ -76,6 +76,15 @@ export async function POST(req: NextRequest) {
       where: { id: jobId },
       data:  { status: "FAILED" },
     }).catch(() => {});
-    return NextResponse.json({ error: "Falha durante importação" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Falha durante importação";
+    return NextResponse.json(
+      {
+        error:              message,
+        stage:              "execute",
+        partialDataCreated: true,
+        hint:               "Clientes podem ter sido criados parcialmente. Verifique os logs do servidor.",
+      },
+      { status: 500 },
+    );
   }
 }

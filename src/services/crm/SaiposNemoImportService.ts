@@ -1006,6 +1006,16 @@ export function buildPreview(
 
 // ── Execute ────────────────────────────────────────────────────────────────────
 
+// StoredReport is serialized via JSON.stringify before being persisted in importJob.reportJson.
+// All Date fields become ISO strings on the round-trip. This helper converts them back so
+// Date-dependent operations (toISOString, Prisma DateTime) work correctly.
+function toDate(d: Date | string | null | undefined): Date | null {
+  if (!d) return null;
+  if (d instanceof Date) return d;
+  const dt = new Date(d as string);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
 function makeImportKey(
   restaurantId: string,
   sourceSystem: string,
@@ -1286,10 +1296,14 @@ export async function executeImport(
   }
 
   // ── Insert product sales aggregates ───────────────────────────────────────
-  if (soldRows.length > 0 && soldMeta.periodStart && soldMeta.periodEnd) {
+  // Convert dates here: soldMeta dates are ISO strings after JSON round-trip from DB.
+  const periodStart = toDate(soldMeta.periodStart);
+  const periodEnd   = toDate(soldMeta.periodEnd);
+
+  if (soldRows.length > 0 && periodStart && periodEnd) {
     // Pre-flight: block if duplicate importKeys remain after consolidation
     const importKeys = soldRows.map(r =>
-      makeImportKey(restaurantId, "SAIPOS", soldMeta.periodStart!, soldMeta.periodEnd!, r.categoryName, r.productName, r.rowType)
+      makeImportKey(restaurantId, "SAIPOS", periodStart, periodEnd, r.categoryName, r.productName, r.rowType)
     );
     const uniqueKeys = new Set(importKeys);
     if (uniqueKeys.size !== importKeys.length) {
@@ -1300,8 +1314,8 @@ export async function executeImport(
       id:          `psa_${Math.random().toString(36).slice(2)}`,
       restaurantId,
       sourceSystem: "SAIPOS",
-      periodStart:  soldMeta.periodStart!,
-      periodEnd:    soldMeta.periodEnd!,
+      periodStart,
+      periodEnd,
       categoryName: r.categoryName,
       productName:  r.productName ?? undefined,
       quantitySold: Math.round(r.quantitySold),
@@ -1310,7 +1324,7 @@ export async function executeImport(
       rowType:      r.rowType,
       importKey:    makeImportKey(
         restaurantId, "SAIPOS",
-        soldMeta.periodStart!, soldMeta.periodEnd!,
+        periodStart, periodEnd,
         r.categoryName, r.productName, r.rowType
       ),
     }));

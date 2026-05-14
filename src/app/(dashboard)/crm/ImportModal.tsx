@@ -1206,9 +1206,13 @@ export function ImportModal({
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ jobId }),
     });
-    const json = await res.json();
+    const json = await res.json() as { error?: string; hint?: string; stage?: string; result?: SaiposNemoExecuteResult };
     setImporting(false);
-    if (!res.ok) { setError(json.error ?? "Falha na importação"); return; }
+    if (!res.ok) {
+      const detail = [json.error, json.hint].filter(Boolean).join(" — ");
+      setError(detail || "Falha na importação");
+      return;
+    }
     setSnResult(json.result as SaiposNemoExecuteResult);
     setStep("done");
   }
