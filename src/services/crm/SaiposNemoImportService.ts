@@ -271,9 +271,46 @@ function parseDateField(raw: string | undefined | null): Date | null {
 
 function parseDecimalField(raw: string | undefined | null): number | null {
   if (!raw?.trim()) return null;
-  const normalized = raw.trim().replace(/\./g, "").replace(",", ".");
-  const n = parseFloat(normalized);
+  // Strip currency prefix (e.g. "R$ ", "R$")
+  const s = raw.trim().replace(/^R\$\s*/i, "").trim();
+  if (!s) return null;
+  let n: number;
+  if (s.includes(",")) {
+    // Brazilian format: "1.234,56" — comma = decimal, dots = thousands separators
+    n = parseFloat(s.replace(/\./g, "").replace(",", "."));
+  } else {
+    const dotCount = (s.match(/\./g) ?? []).length;
+    if (dotCount > 1) {
+      // Multiple dots, no comma: dots are thousands separators (e.g. "1.234.567")
+      n = parseFloat(s.replace(/\./g, ""));
+    } else {
+      // 0 or 1 dot: treat as English/XLSX decimal (e.g. "1234.56" or "1234")
+      n = parseFloat(s);
+    }
+  }
   return isNaN(n) ? null : Math.round(n * 100) / 100;
+}
+
+// Decimal(10,2) max is 99_999_999.99. Values exceeding this overflow Postgres.
+// Returns { value: number|null, warning: string|null }.
+// If the parsed value is within range, warning is null.
+// If the value exceeds range, value is null and warning carries a message.
+const DECIMAL_10_2_MAX = 99_999_999.99;
+
+function sanitizeMoney(
+  value: number | null,
+  field: string,
+  customerKey: string,
+  warnings: string[],
+): number | null {
+  if (value === null) return null;
+  if (Math.abs(value) > DECIMAL_10_2_MAX) {
+    warnings.push(
+      `Valor monetário fora do limite em ${field} para cliente ${customerKey}: ${value} (definido como null)`,
+    );
+    return null;
+  }
+  return value;
 }
 
 function parseIntField(raw: string | undefined | null): number | null {
@@ -1070,66 +1107,98 @@ export async function executeImport(
   const toUpdate = merged.filter(r => existingMap.has(r.phone));
 
   // Create new customers (with addresses in nested write)
-  for (const batch of chunks(toCreate, 50)) {
-    await prisma.$transaction(
-      batch.map(r => prisma.customer.create({
-        data: {
-          restaurantId,
-          name:    r.name,
-          phone:   r.phone,
-          email:   r.email ?? undefined,
-          birthDate: r.birthDate ?? undefined,
-          document:  r.document ?? undefined,
-          importedOrderCount:   r.importedOrderCount   ?? undefined,
-          importedTotalSpent:   r.importedTotalSpent   ?? undefined,
-          averageTicket:        r.averageTicket         ?? undefined,
-          importedLastOrderAt:  r.importedLastOrderAt  ?? undefined,
-          financialBalance:     r.financialBalance      ?? undefined,
-          financialBalancePeriod: r.financialBalancePeriod ?? undefined,
-          notes:   r.notes ?? undefined,
-          isGuest: false,
-          addresses: r.addresses.length > 0 ? {
-            create: r.addresses
-              .filter(a => !!a.street)
-              .map((a, i) => ({
-                street:       a.street!,
-                number:       a.number ?? "",
-                neighborhood: a.neighborhood ?? "",
-                city:         a.city ?? "",
-                state:        a.state ?? "",
-                zipCode:      a.zipCode ?? "",
-                complement:   a.complement ?? undefined,
-                label:        a.reference ?? undefined,
-                isDefault:    i === 0,
-              })),
-          } : undefined,
-        },
-      }))
-    );
+  for (const batchIdx of Array.from({ length: Math.ceil(toCreate.length / 50) }, (_, i) => i)) {
+    const batch = toCreate.slice(batchIdx * 50, batchIdx * 50 + 50);
+    try {
+      await prisma.$transaction(
+        batch.map(r => {
+          const moneyWarnings: string[] = [];
+          const key = r.phone;
+          const importedTotalSpent    = sanitizeMoney(r.importedTotalSpent,    "importedTotalSpent",    key, moneyWarnings);
+          const averageTicket         = sanitizeMoney(r.averageTicket,         "averageTicket",         key, moneyWarnings);
+          const financialBalance      = sanitizeMoney(r.financialBalance,      "financialBalance",      key, moneyWarnings);
+          const financialBalancePeriod = sanitizeMoney(r.financialBalancePeriod, "financialBalancePeriod", key, moneyWarnings);
+          const extraNote = moneyWarnings.length > 0 ? moneyWarnings.join("; ") : null;
+          const notes = [r.notes, extraNote].filter(Boolean).join("\n") || undefined;
+          return prisma.customer.create({
+            data: {
+              restaurantId,
+              name:    r.name,
+              phone:   r.phone,
+              email:   r.email ?? undefined,
+              birthDate: r.birthDate ?? undefined,
+              document:  r.document ?? undefined,
+              importedOrderCount:   r.importedOrderCount   ?? undefined,
+              importedTotalSpent:   importedTotalSpent      ?? undefined,
+              averageTicket:        averageTicket            ?? undefined,
+              importedLastOrderAt:  r.importedLastOrderAt   ?? undefined,
+              financialBalance:     financialBalance         ?? undefined,
+              financialBalancePeriod: financialBalancePeriod ?? undefined,
+              notes,
+              isGuest: false,
+              addresses: r.addresses.length > 0 ? {
+                create: r.addresses
+                  .filter(a => !!a.street)
+                  .map((a, i) => ({
+                    street:       a.street!,
+                    number:       a.number ?? "",
+                    neighborhood: a.neighborhood ?? "",
+                    city:         a.city ?? "",
+                    state:        a.state ?? "",
+                    zipCode:      a.zipCode ?? "",
+                    complement:   a.complement ?? undefined,
+                    label:        a.reference ?? undefined,
+                    isDefault:    i === 0,
+                  })),
+              } : undefined,
+            },
+          });
+        })
+      );
+    } catch (err) {
+      const keys = batch.map(r => r.phone).join(", ");
+      console.error(`[executeImport] Falha no lote create ${batchIdx} (${batch.length} clientes). Phones: ${keys}`, err);
+      throw err;
+    }
     contactableCreated += batch.length;
     addressesCreated += batch.reduce((s, r) => s + r.addresses.filter(a => !!a.street).length, 0);
   }
 
   // Update existing customers (only overwrite with non-null values)
-  for (const batch of chunks(toUpdate, 50)) {
-    await prisma.$transaction(
-      batch.map(r => {
-        const ex = existingMap.get(r.phone)!;
-        const patch: Record<string, unknown> = {};
-        if (r.name && !ex.name) patch.name = r.name;
-        if (r.email && !ex.email) patch.email = r.email;
-        if (r.birthDate && !ex.birthDate) patch.birthDate = r.birthDate;
-        if (r.document && !ex.document) patch.document = r.document;
-        if (r.importedOrderCount !== null) patch.importedOrderCount = r.importedOrderCount;
-        if (r.importedTotalSpent !== null) patch.importedTotalSpent = r.importedTotalSpent;
-        if (r.averageTicket !== null) patch.averageTicket = r.averageTicket;
-        if (r.importedLastOrderAt !== null) patch.importedLastOrderAt = r.importedLastOrderAt;
-        if (r.financialBalance !== null) patch.financialBalance = r.financialBalance;
-        if (r.financialBalancePeriod !== null) patch.financialBalancePeriod = r.financialBalancePeriod;
-        if (r.notes) patch.notes = ex.notes ? `${ex.notes}\n${r.notes}` : r.notes;
-        return prisma.customer.update({ where: { id: ex.id }, data: patch });
-      })
-    );
+  for (const batchIdx of Array.from({ length: Math.ceil(toUpdate.length / 50) }, (_, i) => i)) {
+    const batch = toUpdate.slice(batchIdx * 50, batchIdx * 50 + 50);
+    try {
+      await prisma.$transaction(
+        batch.map(r => {
+          const ex = existingMap.get(r.phone)!;
+          const moneyWarnings: string[] = [];
+          const key = r.phone;
+          const importedTotalSpent    = sanitizeMoney(r.importedTotalSpent,    "importedTotalSpent",    key, moneyWarnings);
+          const averageTicket         = sanitizeMoney(r.averageTicket,         "averageTicket",         key, moneyWarnings);
+          const financialBalance      = sanitizeMoney(r.financialBalance,      "financialBalance",      key, moneyWarnings);
+          const financialBalancePeriod = sanitizeMoney(r.financialBalancePeriod, "financialBalancePeriod", key, moneyWarnings);
+          const patch: Record<string, unknown> = {};
+          if (r.name && !ex.name) patch.name = r.name;
+          if (r.email && !ex.email) patch.email = r.email;
+          if (r.birthDate && !ex.birthDate) patch.birthDate = r.birthDate;
+          if (r.document && !ex.document) patch.document = r.document;
+          if (r.importedOrderCount !== null) patch.importedOrderCount = r.importedOrderCount;
+          if (importedTotalSpent !== null) patch.importedTotalSpent = importedTotalSpent;
+          if (averageTicket !== null) patch.averageTicket = averageTicket;
+          if (r.importedLastOrderAt !== null) patch.importedLastOrderAt = r.importedLastOrderAt;
+          if (financialBalance !== null) patch.financialBalance = financialBalance;
+          if (financialBalancePeriod !== null) patch.financialBalancePeriod = financialBalancePeriod;
+          const extraNote = moneyWarnings.length > 0 ? moneyWarnings.join("; ") : null;
+          const combinedNotes = [ex.notes, r.notes, extraNote].filter(Boolean).join("\n") || undefined;
+          if (combinedNotes !== undefined) patch.notes = combinedNotes;
+          return prisma.customer.update({ where: { id: ex.id }, data: patch });
+        })
+      );
+    } catch (err) {
+      const keys = batch.map(r => r.phone).join(", ");
+      console.error(`[executeImport] Falha no lote update ${batchIdx} (${batch.length} clientes). Phones: ${keys}`, err);
+      throw err;
+    }
     contactableUpdated += batch.length;
 
     // Create new addresses for updated customers (skip if street already exists)
@@ -1207,7 +1276,16 @@ export async function executeImport(
       // if 0 or >1 matches → existingId stays null → create new (safe)
     }
 
+    const moneyWarnings: string[] = [];
+    const noPhoneKey = r.document ?? r.email ?? r.name;
+    const importedTotalSpent    = sanitizeMoney(r.importedTotalSpent,    "importedTotalSpent",    noPhoneKey, moneyWarnings);
+    const averageTicket         = sanitizeMoney(r.averageTicket,         "averageTicket",         noPhoneKey, moneyWarnings);
+    const financialBalance      = sanitizeMoney(r.financialBalance,      "financialBalance",      noPhoneKey, moneyWarnings);
+    const financialBalancePeriod = sanitizeMoney(r.financialBalancePeriod, "financialBalancePeriod", noPhoneKey, moneyWarnings);
+    const extraNote = moneyWarnings.length > 0 ? moneyWarnings.join("; ") : null;
+
     if (existingId) {
+      const noteValue = [r.notes, extraNote].filter(Boolean).join("\n") || undefined;
       await prisma.customer.update({
         where: { id: existingId },
         data: {
@@ -1218,12 +1296,12 @@ export async function executeImport(
           ...(r.email                  ? { email: r.email }                             : {}),
           ...(r.birthDate              ? { birthDate: r.birthDate }                     : {}),
           ...(r.importedOrderCount !== null ? { importedOrderCount: r.importedOrderCount } : {}),
-          ...(r.importedTotalSpent !== null ? { importedTotalSpent: r.importedTotalSpent } : {}),
-          ...(r.averageTicket !== null  ? { averageTicket: r.averageTicket }            : {}),
+          ...(importedTotalSpent !== null ? { importedTotalSpent }                       : {}),
+          ...(averageTicket !== null    ? { averageTicket }                              : {}),
           ...(r.importedLastOrderAt !== null ? { importedLastOrderAt: r.importedLastOrderAt } : {}),
-          ...(r.financialBalance !== null    ? { financialBalance: r.financialBalance }      : {}),
-          ...(r.financialBalancePeriod !== null ? { financialBalancePeriod: r.financialBalancePeriod } : {}),
-          ...(r.notes ? { notes: r.notes } : {}),
+          ...(financialBalance !== null ? { financialBalance }                           : {}),
+          ...(financialBalancePeriod !== null ? { financialBalancePeriod }               : {}),
+          ...(noteValue !== undefined  ? { notes: noteValue }                           : {}),
         },
       });
       nonContactableUpdated++;
@@ -1254,6 +1332,7 @@ export async function executeImport(
         }
       }
     } else {
+      const notes = [r.notes, extraNote].filter(Boolean).join("\n") || undefined;
       await prisma.customer.create({
         data: {
           restaurantId,
@@ -1267,12 +1346,12 @@ export async function executeImport(
           email:                r.email ?? undefined,
           birthDate:            r.birthDate ?? undefined,
           importedOrderCount:   r.importedOrderCount ?? undefined,
-          importedTotalSpent:   r.importedTotalSpent ?? undefined,
-          averageTicket:        r.averageTicket ?? undefined,
+          importedTotalSpent:   importedTotalSpent    ?? undefined,
+          averageTicket:        averageTicket          ?? undefined,
           importedLastOrderAt:  r.importedLastOrderAt ?? undefined,
-          financialBalance:     r.financialBalance ?? undefined,
-          financialBalancePeriod: r.financialBalancePeriod ?? undefined,
-          notes:                r.notes ?? undefined,
+          financialBalance:     financialBalance       ?? undefined,
+          financialBalancePeriod: financialBalancePeriod ?? undefined,
+          notes,
           addresses: r.addresses.length > 0 ? {
             create: r.addresses
               .filter(a => !!a.street)
