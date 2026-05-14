@@ -313,6 +313,22 @@ function sanitizeMoney(
   return value;
 }
 
+// Decimal(6,4) allows at most 2 integer digits — max absolute value is 99.9999.
+// Percent values of exactly 100.0 (valid for a single-category restaurant) overflow.
+// We null-clamp them to keep the import running; percent is informational only.
+const DECIMAL_6_4_MAX = 99.9999;
+
+function sanitizePercent(value: number | null, rowLabel: string): number | null {
+  if (value === null) return null;
+  if (Math.abs(value) > DECIMAL_6_4_MAX) {
+    console.warn(
+      `[executeImport] percent fora do limite Decimal(6,4) em "${rowLabel}": ${value} → null`,
+    );
+    return null;
+  }
+  return value;
+}
+
 function parseIntField(raw: string | undefined | null): number | null {
   if (!raw?.trim()) return null;
   const n = parseInt(raw.trim().replace(/\D/g, ""), 10);
@@ -1389,30 +1405,61 @@ export async function executeImport(
       throw new Error("Importação bloqueada: ainda existem chaves agregadas duplicadas.");
     }
 
-    const aggRows = soldRows.map(r => ({
-      id:          `psa_${Math.random().toString(36).slice(2)}`,
-      restaurantId,
-      sourceSystem: "SAIPOS",
-      periodStart,
-      periodEnd,
-      categoryName: r.categoryName,
-      productName:  r.productName ?? undefined,
-      quantitySold: Math.round(r.quantitySold),
-      grossRevenue: r.grossRevenue,
-      percent:      r.percent ?? undefined,
-      rowType:      r.rowType,
-      importKey:    makeImportKey(
-        restaurantId, "SAIPOS",
-        periodStart, periodEnd,
-        r.categoryName, r.productName, r.rowType
-      ),
-    }));
+    const aggRows = soldRows.map(r => {
+      const rowLabel = r.productName
+        ? `${r.categoryName} / ${r.productName}`
+        : r.categoryName;
+      const safePct = sanitizePercent(r.percent ?? null, rowLabel);
+      return {
+        id:          `psa_${Math.random().toString(36).slice(2)}`,
+        restaurantId,
+        sourceSystem: "SAIPOS",
+        periodStart,
+        periodEnd,
+        categoryName: r.categoryName,
+        productName:  r.productName ?? undefined,
+        quantitySold: Math.round(r.quantitySold),
+        grossRevenue: r.grossRevenue,
+        percent:      safePct ?? undefined,
+        rowType:      r.rowType,
+        importKey:    makeImportKey(
+          restaurantId, "SAIPOS",
+          periodStart, periodEnd,
+          r.categoryName, r.productName, r.rowType
+        ),
+      };
+    });
+
+    // Log rows whose percent was clamped so the admin can audit them
+    const clampedRows = soldRows.filter(r => {
+      const v = r.percent ?? null;
+      return v !== null && Math.abs(v) > DECIMAL_6_4_MAX;
+    });
+    if (clampedRows.length > 0) {
+      console.warn(
+        `[executeImport] ${clampedRows.length} linhas de produto com percent fora do limite Decimal(6,4) (definido como null):`,
+        clampedRows.map(r => ({
+          rowType:      r.rowType,
+          categoryName: r.categoryName,
+          productName:  r.productName,
+          percent:      r.percent,
+          grossRevenue: r.grossRevenue,
+        })),
+      );
+    }
 
     // Insert with skipDuplicates using importKey uniqueness
-    const result = await prisma.productSalesAggregate.createMany({
-      data: aggRows,
-      skipDuplicates: true,
-    });
+    let result: { count: number };
+    try {
+      result = await prisma.productSalesAggregate.createMany({
+        data: aggRows,
+        skipDuplicates: true,
+      });
+    } catch (err) {
+      // Log full row list so the offending value is visible in server logs
+      console.error("[executeImport] createMany ProductSalesAggregate falhou. Linhas enviadas:", aggRows);
+      throw err;
+    }
     productAggCreated  = result.count;
     productAggSkipped  = aggRows.length - result.count;
   }
