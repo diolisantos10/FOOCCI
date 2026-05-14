@@ -44,7 +44,7 @@ type Intent =
   | "UNKNOWN";
 
 const COMPLAINT_RE =
-  /veio errado|vei errado|reclamação|reclamacao|problema com|atrasou|não gostei|nao gostei|insatisfeito|cancelar pedido|reembolso|errou|está errado|ta errado|tá errado/i;
+  /veio errado|vei errado|reclamação|reclamacao|problema com|atrasou|não gostei|nao gostei|insatisfeito|cancel(a|ar)|reembolso|errou|está errado|ta errado|tá errado/i;
 const HUMAN_RE =
   /atendente|atendimento humano|falar com (alguém|alguem|pessoa|humano)|quero ser atendido|chamar (a )?equipe|responsável|responsavel|gerente|quero falar com/i;
 const GREETING_RE =
@@ -60,9 +60,9 @@ const ADDRESS_RE =
 const DELIVERY_RE =
   /entrega|delivery|entregam|faz entrega|vocês entregam|voces entregam|área de entrega|area de entrega/i;
 const PAYMENT_RE =
-  /pix|cartão|cartao|como pago|forma de pagamento|aceita.*pagamento|parcela/i;
+  /pix|cartão|cartao|como pago|formas? de pagamento|aceita.*pagamento|parcela/i;
 const ORDER_STATUS_RE =
-  /cadê (meu|o) pedido|cadê meu|status do pedido|acompanhar (meu )?pedido|onde está meu|quanto tempo (falta|demora)|previsão de entrega|previsao de entrega/i;
+  /cadê (meu|o) pedido|cadê meu|status (do|de) (meu |o )?pedido|acompanhar (meu )?pedido|onde está meu|quanto tempo (falta|demora)|previsão de entrega|previsao de entrega/i;
 
 function detectIntent(text: string): Intent {
   const t = text.toLowerCase().trim();
