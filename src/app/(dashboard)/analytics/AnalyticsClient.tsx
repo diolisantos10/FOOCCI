@@ -1192,6 +1192,19 @@ function TabCategorias({ data, loading, preset }: {
 
 // ─── Tab: Clientes ────────────────────────────────────────────────────────────
 
+function classifyImportedTemp(
+  lastOrderAt: string | null,
+  nowISO: string,
+): "quente" | "morno" | "frio" | "desconhecido" {
+  if (!lastOrderAt) return "desconhecido";
+  const days = Math.round(
+    (new Date(nowISO).getTime() - new Date(lastOrderAt).getTime()) / 86_400_000,
+  );
+  if (days <=  30) return "quente";
+  if (days <=  90) return "morno";
+  return "frio";
+}
+
 function TabClientes({ data, loading, preset }: {
   data: AnalyticsOverview | null;
   loading: boolean;
@@ -1199,11 +1212,27 @@ function TabClientes({ data, loading, preset }: {
 }) {
   const hasRealCustomers     = (data?.topCustomers.length ?? 0) > 0;
   const hasImportedCustomers = (data?.importedTopCustomers.length ?? 0) > 0;
+  const hasImportedByOrders  = (data?.importedTopByOrders.length ?? 0) > 0;
+  const semTelefone          = data?.importedSemTelefoneCount ?? 0;
   const showAllMode          = preset === "all";
+
+  // Derived temperature distribution from top-by-spend list
+  const nowISO = new Date().toISOString().slice(0, 10);
+  const tempCounts = showAllMode && hasImportedCustomers
+    ? data!.importedTopCustomers.reduce(
+        (acc, c) => {
+          const bucket = classifyImportedTemp(c.importedLastOrderAt, nowISO);
+          acc[bucket] = (acc[bucket] ?? 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      )
+    : {};
 
   return (
     <div className="space-y-6">
-      {/* Imported customers — show in "Todo histórico" when available */}
+
+      {/* ── Imported customers section (Todo histórico) ─────────────────── */}
       {!loading && showAllMode && hasImportedCustomers && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -1212,6 +1241,8 @@ function TabClientes({ data, loading, preset }: {
               Histórico de compras importado do Saipos/Nemo — não reflete pedidos Foocci
             </span>
           </div>
+
+          {/* Top clientes por gasto histórico */}
           <Card title="Top clientes por gasto histórico">
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -1252,10 +1283,102 @@ function TabClientes({ data, loading, preset }: {
               </table>
             </div>
           </Card>
+
+          {/* Top clientes por recorrência histórica */}
+          {hasImportedByOrders && (
+            <Card title="Clientes com maior recorrência histórica">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b text-left text-gray-400">
+                      <th className="pb-1.5 pr-3 font-medium">#</th>
+                      <th className="pb-1.5 pr-3 font-medium">Nome</th>
+                      <th className="pb-1.5 pr-3 font-medium text-right">Pedidos</th>
+                      <th className="pb-1.5 pr-3 font-medium text-right">Gasto total</th>
+                      <th className="pb-1.5 pr-3 font-medium text-right">Ticket médio</th>
+                      <th className="pb-1.5 font-medium">Tier</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {data!.importedTopByOrders.map((c, i) => (
+                      <tr key={c.id}>
+                        <td className="py-1.5 pr-3 text-gray-400">{i + 1}</td>
+                        <td className="py-1.5 pr-3 font-medium text-gray-800">{c.name}</td>
+                        <td className="py-1.5 pr-3 text-right font-bold text-indigo-700">
+                          {fmtNum(c.importedOrderCount)}
+                        </td>
+                        <td className="py-1.5 pr-3 text-right text-gray-700">
+                          {fmtBRL(c.importedTotalSpent)}
+                        </td>
+                        <td className="py-1.5 pr-3 text-right text-gray-500">
+                          {c.averageTicket > 0 ? fmtBRL(c.averageTicket) : "—"}
+                        </td>
+                        <td className="py-1.5">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${TIER_COLOR[c.tier] ?? "bg-gray-300"}`}>
+                            {TIER_LABEL[c.tier] ?? c.tier}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {/* Temperature distribution (based on importedLastOrderAt) */}
+          {Object.values(tempCounts).some((v) => v > 0) && (
+            <Card title="Temperatura dos clientes (baseado no histórico importado)">
+              <p className="mb-3 text-xs text-gray-400">
+                Classificação baseada na data da última compra importada. A maioria dos clientes
+                históricos aparece como frio por ser anterior a 90 dias.
+              </p>
+              <div className="space-y-2">
+                {(
+                  [
+                    { key: "quente",       label: "Quente (≤ 30 dias)",  color: "bg-rose-500" },
+                    { key: "morno",        label: "Morno (31–90 dias)",  color: "bg-amber-400" },
+                    { key: "frio",         label: "Frio (> 90 dias)",    color: "bg-sky-400"  },
+                    { key: "desconhecido", label: "Sem data",            color: "bg-gray-300" },
+                  ] as const
+                ).map(({ key, label, color }) => {
+                  const count = tempCounts[key] ?? 0;
+                  if (count === 0) return null;
+                  const total  = Object.values(tempCounts).reduce((s, v) => s + v, 0);
+                  const pct    = total > 0 ? (count / total) * 100 : 0;
+                  return (
+                    <div key={key} className="flex items-center gap-3 text-xs">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
+                      <span className="w-36 shrink-0 text-gray-600">{label}</span>
+                      <div className="flex-1 rounded-full bg-gray-100 h-2">
+                        <div className={`${color} h-2 rounded-full`} style={{ width: `${pct.toFixed(1)}%` }} />
+                      </div>
+                      <span className="w-8 shrink-0 text-right font-medium text-gray-800">{count}</span>
+                      <span className="w-10 shrink-0 text-right text-gray-400">{pct.toFixed(0)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* Sem telefone callout */}
+          {semTelefone > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="text-xs text-amber-800">
+                ⚠{" "}
+                <strong>
+                  {fmtNum(semTelefone)} cliente{semTelefone !== 1 ? "s" : ""} importado
+                  {semTelefone !== 1 ? "s" : ""}
+                </strong>{" "}
+                sem telefone cadastrado — enriquecimento de contato aumenta o alcance de campanhas WhatsApp.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Real Foocci top customers */}
+      {/* ── Real Foocci top customers ───────────────────────────────────────── */}
       <div className="space-y-2">
         {hasRealCustomers && (
           <div className="flex items-center gap-2">
@@ -1299,7 +1422,7 @@ function TabClientes({ data, loading, preset }: {
         </Card>
       </div>
 
-      {/* Segments + Tiers */}
+      {/* ── Segments + Tiers ────────────────────────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Segmentos CRM (base total)">
           {loading ? <Skeleton /> : data ? (
@@ -1322,7 +1445,7 @@ function TabClientes({ data, loading, preset }: {
         </Card>
       </div>
 
-      {/* Attach rates */}
+      {/* ── Attach rates ────────────────────────────────────────────────────── */}
       <Card title="Taxa de attach (complementos)">
         {loading ? <Skeleton /> : data && data.attachRates.length > 0 ? (
           <div className="grid gap-6 sm:grid-cols-2">

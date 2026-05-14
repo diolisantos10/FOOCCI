@@ -124,19 +124,21 @@ export interface ImportedBaseline {
 }
 
 export interface AnalyticsOverview {
-  range:                DateRange;
-  kpi:                  KpiOverview;
-  salesByDay:           DailyPoint[];
-  topProducts:          ProductRow[];
-  categories:           CategoryRow[];
-  attachRates:          AttachRate[];
-  topCustomers:         TopCustomer[];
-  segments:             SegmentCount[];
-  tiers:                TierCount[];
-  channels:             ChannelRow[];
-  insights:             Insight[];
-  importedBaseline:     ImportedBaseline | null;
-  importedTopCustomers: ImportedCustomerRow[];
+  range:                    DateRange;
+  kpi:                      KpiOverview;
+  salesByDay:               DailyPoint[];
+  topProducts:              ProductRow[];
+  categories:               CategoryRow[];
+  attachRates:              AttachRate[];
+  topCustomers:             TopCustomer[];
+  segments:                 SegmentCount[];
+  tiers:                    TierCount[];
+  channels:                 ChannelRow[];
+  insights:                 Insight[];
+  importedBaseline:         ImportedBaseline | null;
+  importedTopCustomers:     ImportedCustomerRow[]; // top 20 by importedTotalSpent
+  importedTopByOrders:      ImportedCustomerRow[]; // top 20 by importedOrderCount
+  importedSemTelefoneCount: number;               // customers with importedTotalSpent>0 but no phone
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -172,6 +174,8 @@ export class AnalyticsService {
       channels,
       importedBaseline,
       importedTopCustomers,
+      importedTopByOrders,
+      importedSemTelefoneCount,
     ] = await Promise.all([
       this.getKpis(restaurantId, from, to),
       this.getSalesByDay(restaurantId, from, to),
@@ -184,11 +188,13 @@ export class AnalyticsService {
       this.getChannels(restaurantId, from, to),
       this.getImportedBaseline(restaurantId),
       this.getImportedTopCustomers(restaurantId),
+      this.getImportedTopByOrders(restaurantId),
+      this.getImportedSemTelefoneCount(restaurantId),
     ]);
 
     const insights = this.buildInsights({ kpi, topProducts, categories, attachRates, channels });
 
-    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, importedBaseline, importedTopCustomers };
+    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, importedBaseline, importedTopCustomers, importedTopByOrders, importedSemTelefoneCount };
   }
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
@@ -658,6 +664,70 @@ export class AnalyticsService {
       importedLastOrderAt: r.last_order ? r.last_order.toISOString().slice(0, 10) : null,
       averageTicket:       toNum(r.avg_ticket),
     }));
+  }
+
+  // ── Imported customers sorted by order count ──────────────────────────────
+
+  private static async getImportedTopByOrders(
+    restaurantId: string,
+    limit = 20,
+  ): Promise<ImportedCustomerRow[]> {
+    const rows = await prisma.$queryRaw<Array<{
+      id:          string;
+      name:        string;
+      phone:       string;
+      tier:        string;
+      segment:     string;
+      total_spent: string;
+      order_count: RawBigint;
+      last_order:  Date | null;
+      avg_ticket:  string;
+    }>>`
+      SELECT
+        id,
+        name,
+        COALESCE(phone, '')                      AS phone,
+        COALESCE(tier, 'BRONZE')                 AS tier,
+        COALESCE(segment, 'SEM_PEDIDOS')         AS segment,
+        COALESCE("importedTotalSpent", 0)::text  AS total_spent,
+        COALESCE("importedOrderCount", 0)        AS order_count,
+        "importedLastOrderAt"                    AS last_order,
+        COALESCE("averageTicket", 0)::text       AS avg_ticket
+      FROM customers
+      WHERE "restaurantId" = ${restaurantId}
+        AND "isGuest" = false
+        AND "importedOrderCount" > 0
+      ORDER BY "importedOrderCount" DESC NULLS LAST
+      LIMIT ${limit}
+    `;
+
+    return rows.map((r) => ({
+      id:                  r.id,
+      name:                r.name,
+      phone:               r.phone,
+      tier:                r.tier,
+      segment:             r.segment,
+      importedTotalSpent:  toNum(r.total_spent),
+      importedOrderCount:  toNum(r.order_count),
+      importedLastOrderAt: r.last_order ? r.last_order.toISOString().slice(0, 10) : null,
+      averageTicket:       toNum(r.avg_ticket),
+    }));
+  }
+
+  // ── Count of imported customers missing a phone number ─────────────────────
+
+  private static async getImportedSemTelefoneCount(
+    restaurantId: string,
+  ): Promise<number> {
+    const rows = await prisma.$queryRaw<Array<{ cnt: RawBigint }>>`
+      SELECT COUNT(*) AS cnt
+      FROM customers
+      WHERE "restaurantId" = ${restaurantId}
+        AND "isGuest" = false
+        AND "importedTotalSpent" > 0
+        AND (phone IS NULL OR phone = '')
+    `;
+    return toNum(rows[0]?.cnt ?? 0);
   }
 
   // ── Imported aggregate baseline ────────────────────────────────────────────
