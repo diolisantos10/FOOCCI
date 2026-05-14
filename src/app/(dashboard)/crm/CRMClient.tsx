@@ -1823,7 +1823,7 @@ function AvaliacoesTab({
           ) : (
             <p className="text-xs text-gray-400">
               Link não configurado.{" "}
-              <Link href="/settings/marca" className="text-brand-600 underline">Adicionar →</Link>
+              <Link href="/marca" className="text-brand-600 underline">Adicionar →</Link>
             </p>
           )}
           <div className="space-y-2 pt-1">
@@ -1861,7 +1861,7 @@ function AvaliacoesTab({
           ) : (
             <p className="text-xs text-gray-400">
               Link não configurado.{" "}
-              <Link href="/settings/marca" className="text-brand-600 underline">Adicionar →</Link>
+              <Link href="/marca" className="text-brand-600 underline">Adicionar →</Link>
             </p>
           )}
           <div className="space-y-2 pt-1">
@@ -1886,7 +1886,7 @@ function AvaliacoesTab({
         <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 p-4 text-center">
           <p className="text-sm font-medium text-amber-800">Configure seus links de avaliação</p>
           <p className="mt-1 text-xs text-amber-600">
-            Acesse <Link href="/settings/marca" className="underline font-semibold">Configurações → Marca</Link>{" "}
+            Acesse <Link href="/marca" className="underline font-semibold">Marca</Link>{" "}
             e cole os links do Google e iFood.
           </p>
         </div>

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function ExperiencePage() {
-  redirect("/settings/marca");
+  redirect("/marca");
 }
