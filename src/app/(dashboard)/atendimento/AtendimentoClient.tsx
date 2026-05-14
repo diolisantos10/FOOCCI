@@ -63,7 +63,9 @@ interface ConvSummary {
   unreadCount:   number;
   lastMessageAt: string | null;
   createdAt:     string;
-  customer:      { name: string; phone: string };
+  customerName:  string | null;
+  customerPhone: string | null;
+  customer:      { name: string; phone: string } | null;
   messages:      { content: string; direction: string; senderType: string | null; type: string }[];
 }
 
@@ -85,7 +87,7 @@ interface ConvDetail extends ConvSummary {
     name:  string;
     phone: string;
     email: string | null;
-  };
+  } | null;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -505,14 +507,14 @@ export function AtendimentoClient({
                               : "bg-orange-100 text-orange-700"
                           }`}
                         >
-                          {initials(conv.customer.name)}
+                          {initials(conv.customer?.name ?? conv.customerName ?? "?")}
                         </div>
 
                         {/* Content */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">
                             <span className="truncate text-sm font-semibold text-gray-900">
-                              {conv.customer.name}
+                              {conv.customer?.name ?? conv.customerName ?? "Desconhecido"}
                             </span>
                             <span className="shrink-0 text-[10px] text-gray-400">
                               {fmtTime(conv.lastMessageAt)}
@@ -881,16 +883,17 @@ function ThreadPanel({
 
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
-              {initials(thread.customer.name)}
+              {initials(thread.customer?.name ?? thread.customerName ?? "?")}
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-gray-900">
-                {thread.customer.name}
+                {thread.customer?.name ?? thread.customerName ?? "Desconhecido"}
               </p>
               <p className="text-xs text-gray-500">
-                {!thread.customer.phone || isGuestIdentifier(thread.customer.phone)
-                  ? "Telefone não informado"
-                  : thread.customer.phone}
+                {(() => {
+                  const ph = thread.customer?.phone ?? thread.customerPhone ?? "";
+                  return !ph || isGuestIdentifier(ph) ? "Telefone não informado" : ph;
+                })()}
               </p>
             </div>
           </div>
@@ -962,7 +965,7 @@ function ThreadPanel({
         ) : (
           <div className="space-y-2">
             {thread.messages.map((msg) => (
-              <MessageBubble key={msg.id} msg={msg} customerName={thread.customer.name} />
+              <MessageBubble key={msg.id} msg={msg} customerName={thread.customer?.name ?? thread.customerName ?? "Cliente"} />
             ))}
             <div ref={bottomRef} />
           </div>
