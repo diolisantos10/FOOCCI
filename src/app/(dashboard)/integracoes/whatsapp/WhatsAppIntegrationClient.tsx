@@ -316,11 +316,23 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
 
   useEffect(() => { void loadView(); }, [loadView]);
 
+  // Auto-open advanced section when the saved config has an invalid URL,
+  // so support can fix it without hunting for the collapsed panel.
+  useEffect(() => {
+    if (!view || !isOwner) return;
+    const urlErr = view.fields.baseUrl ? validateBaseUrl(view.fields.baseUrl) : null;
+    if (urlErr) setIsAdvancedOpen(true);
+  }, [view, isOwner]);
+
   // ── Computed ───────────────────────────────────────────────────────────────
   const f             = view?.fields ?? {};
   const hasExistingKey = !!f.apiKeyPreview;
-  const isConfigured   = view?.status !== "unconfigured" && !!f.instanceName;
-  const simpleStatus   = viewToSimple(view?.status ?? "unconfigured");
+
+  // Validate the URL that is already saved in the database (not the form input).
+  // An invalid saved value (e.g. an email) means the config is not usable.
+  const loadedBaseUrlErr = f.baseUrl ? validateBaseUrl(f.baseUrl) : null;
+  const isConfigured     = view?.status !== "unconfigured" && !!f.instanceName && !loadedBaseUrlErr;
+  const simpleStatus     = viewToSimple(view?.status ?? "unconfigured");
 
   // Per-field errors — only shown after first Save attempt
   const instanceNameErr = submitAttempted ? validateInstanceName(instanceName) : null;
@@ -563,6 +575,16 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                         : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"
                     }`}
                   />
+                  {/* Persistent warning when the already-saved value is invalid */}
+                  {loadedBaseUrlErr && !baseUrlErr && (
+                    <div className="mt-1 flex items-start gap-1.5 rounded-lg border border-red-100 bg-red-50 px-2.5 py-2">
+                      <span className="shrink-0 text-xs text-red-500">⚠</span>
+                      <p className="text-xs text-red-700">
+                        A URL do servidor Evolution salva está inválida.
+                        Informe a URL pública da Evolution API.
+                      </p>
+                    </div>
+                  )}
                   <FieldError msg={baseUrlErr} />
                   <p className="mt-1 text-xs text-gray-400">
                     URL pública do serviço Evolution API hospedado separadamente.
