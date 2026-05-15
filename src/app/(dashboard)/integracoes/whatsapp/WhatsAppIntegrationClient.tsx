@@ -14,9 +14,9 @@ interface EvolutionView {
   lastTestedAt: string | null;
   lastError:    string | null;
   fields: {
-    instanceName?:        string | null;
-    baseUrl?:             string | null;
-    apiKeyPreview?:       string | null;
+    instanceName?:         string | null;
+    baseUrl?:              string | null;
+    apiKeyPreview?:        string | null;
     webhookSecretPreview?: string | null;
   };
 }
@@ -33,14 +33,44 @@ async function apiFetch(url: string, method = "GET", body?: object) {
   return { ok: res.ok, status: res.status, data: json?.data ?? json };
 }
 
+// ── Validation helpers ────────────────────────────────────────────────────────
+
+function validateInstanceName(v: string): string | null {
+  if (!v.trim()) return "Informe o nome da instância do WhatsApp.";
+  return null;
+}
+
+const URL_EXAMPLE = "Exemplo: https://sua-evolution-api.up.railway.app";
+
+function validateBaseUrl(v: string): string | null {
+  const t = v.trim();
+  if (!t)
+    return `Informe a URL do servidor Evolution. ${URL_EXAMPLE}`;
+  // Detect email typed instead of URL (has @ without an http/https prefix)
+  if (!t.startsWith("http") && t.includes("@"))
+    return `Este campo não aceita e-mail. Informe a URL do servidor. ${URL_EXAMPLE}`;
+  try {
+    const parsed = new URL(t);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+      return `A URL deve começar com http:// ou https://. ${URL_EXAMPLE}`;
+    return null;
+  } catch {
+    return `URL inválida. Informe a URL pública do servidor Evolution. ${URL_EXAMPLE}`;
+  }
+}
+
+function normalizeBaseUrl(v: string): string {
+  return v.trim().replace(/\/+$/, "");
+}
+
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: ConnStatus }) {
   const map: Record<ConnStatus, { label: string; cls: string; dot: string }> = {
-    active:              { label: "Ativo",                dot: "bg-green-500",  cls: "bg-green-100  text-green-700"  },
-    error:               { label: "Erro",                 dot: "bg-red-500",    cls: "bg-red-100    text-red-700"    },
-    pending_validation:  { label: "Validação pendente",   dot: "bg-amber-500",  cls: "bg-amber-100  text-amber-700"  },
-    unconfigured:        { label: "Não configurado",      dot: "bg-gray-400",   cls: "bg-gray-100   text-gray-600"   },
+    active:             { label: "Ativo",              dot: "bg-green-500", cls: "bg-green-100 text-green-700"   },
+    error:              { label: "Erro",               dot: "bg-red-500",   cls: "bg-red-100   text-red-700"     },
+    pending_validation: { label: "Validação pendente", dot: "bg-amber-500", cls: "bg-amber-100 text-amber-700"   },
+    unconfigured:       { label: "Não configurado",    dot: "bg-gray-400",  cls: "bg-gray-100  text-gray-600"    },
   };
   const { label, cls, dot } = map[status];
   return (
@@ -51,9 +81,22 @@ function StatusBadge({ status }: { status: ConnStatus }) {
   );
 }
 
+// ── Field error ───────────────────────────────────────────────────────────────
+
+function FieldError({ msg }: { msg: string | null }) {
+  if (!msg) return null;
+  return <p className="mt-1 text-xs font-medium text-red-600">{msg}</p>;
+}
+
 // ── QR Code panel ─────────────────────────────────────────────────────────────
 
-function QRPanel() {
+function QRPanel({
+  isConfigValid,
+  configErrors,
+}: {
+  isConfigValid: boolean;
+  configErrors:  string[];
+}) {
   const [qrBase64, setQrBase64] = useState<string | null>(null);
   const [qrState,  setQrState]  = useState<"idle" | "loading" | "shown" | "connected" | "error">("idle");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -90,11 +133,26 @@ function QRPanel() {
     <div className="rounded-xl border border-green-100 bg-green-50 p-4">
       <p className="mb-3 text-sm font-semibold text-green-800">Conectar WhatsApp via QR</p>
 
+      {/* Show config issues before the user attempts to connect */}
+      {!isConfigValid && configErrors.length > 0 && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-1">
+          <p className="text-xs font-semibold text-amber-800">
+            Salve as credenciais antes de conectar:
+          </p>
+          <ul className="list-disc list-inside space-y-0.5">
+            {configErrors.map((err, i) => (
+              <li key={i} className="text-xs text-amber-700">{err}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {qrState === "idle" && (
         <button
           type="button"
-          onClick={handleConnect}
-          className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition"
+          onClick={isConfigValid ? () => void handleConnect() : undefined}
+          disabled={!isConfigValid}
+          className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Gerar QR Code
         </button>
@@ -121,7 +179,7 @@ function QRPanel() {
           </p>
           <button
             type="button"
-            onClick={handleConnect}
+            onClick={() => void handleConnect()}
             className="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition"
           >
             Atualizar QR
@@ -137,9 +195,20 @@ function QRPanel() {
       )}
 
       {qrState === "error" && (
-        <p className="text-sm text-red-600">
-          Integração não configurada. Salve as credenciais abaixo primeiro.
-        </p>
+        <div className="space-y-1.5">
+          <p className="text-sm text-red-600">Não foi possível gerar o QR Code.</p>
+          {configErrors.length > 0 ? (
+            <ul className="list-disc list-inside space-y-0.5">
+              {configErrors.map((err, i) => (
+                <li key={i} className="text-xs text-red-600">{err}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-red-600">
+              Verifique as credenciais salvas e tente novamente.
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
@@ -156,11 +225,14 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const [testing, setTesting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
 
+  // Tracks whether the user has ever clicked "Salvar credenciais" — gates per-field errors
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
   // Form state — secrets always blank on load (never pre-filled)
-  const [instanceName,   setInstanceName]   = useState("");
-  const [baseUrl,        setBaseUrl]        = useState("");
-  const [apiKey,         setApiKey]         = useState("");
-  const [webhookSecret,  setWebhookSecret]  = useState("");
+  const [instanceName,  setInstanceName]  = useState("");
+  const [baseUrl,       setBaseUrl]       = useState("");
+  const [apiKey,        setApiKey]        = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
 
   const loadView = useCallback(async () => {
     setLoading(true);
@@ -178,21 +250,55 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
 
   useEffect(() => { void loadView(); }, [loadView]);
 
+  // ── Computed validation ────────────────────────────────────────────────────
+  const f             = view?.fields ?? {};
+  const hasExistingKey = !!f.apiKeyPreview;
+
+  // Per-field errors — only shown after the user clicks Save
+  const instanceNameErr = submitAttempted ? validateInstanceName(instanceName) : null;
+  const baseUrlErr      = submitAttempted ? validateBaseUrl(baseUrl) : null;
+  const apiKeyErr       = (submitAttempted && !apiKey.trim() && !hasExistingKey)
+    ? "Informe a API Key da Evolution API."
+    : null;
+
+  // Always-computed for QRPanel (independent of submitAttempted)
+  const _instErr    = validateInstanceName(instanceName);
+  const _urlErr     = validateBaseUrl(baseUrl);
+  const _keyMissing = !apiKey.trim() && !hasExistingKey;
+  const isConfigValid = !_instErr && !_urlErr && !_keyMissing;
+  const configErrors: string[] = [
+    _instErr    ? "Nome da instância ausente" : null,
+    _urlErr     ? "URL inválida"              : null,
+    _keyMissing ? "API Key ausente"           : null,
+  ].filter(Boolean) as string[];
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    setSubmitAttempted(true);
+
+    // Client-side guard before hitting the API
+    const instErr = validateInstanceName(instanceName);
+    const urlErr  = validateBaseUrl(baseUrl);
+    const keyErr  = !apiKey.trim() && !hasExistingKey;
+    if (instErr || urlErr || keyErr) return;
+
     setSaving(true);
     setFeedback(null);
     const { ok, data } = await apiFetch("/api/integrations/whatsapp", "PUT", {
-      instanceName,
-      baseUrl,
+      instanceName: instanceName.trim(),
+      baseUrl:      normalizeBaseUrl(baseUrl),
       apiKey,
       webhookSecret,
     });
     setSaving(false);
+
     if (ok) {
       setFeedback({ type: "ok", msg: "Configuração salva com sucesso." });
       setApiKey("");
       setWebhookSecret("");
+      setSubmitAttempted(false);
       void loadView();
     } else {
       const err = (data as { error?: string })?.error ?? "Erro ao salvar.";
@@ -229,7 +335,6 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     ? `${window.location.origin}/api/webhooks/evolution`
     : "/api/webhooks/evolution";
 
-  const f = view?.fields ?? {};
   const status: ConnStatus = view?.status ?? "unconfigured";
 
   const lastTested = view?.lastTestedAt
@@ -308,7 +413,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
       )}
 
       {/* QR Code panel */}
-      <QRPanel />
+      <QRPanel isConfigValid={isConfigValid} configErrors={configErrors} />
 
       {/* Config form */}
       {isOwner ? (
@@ -330,10 +435,17 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                 type="text"
                 value={instanceName}
                 onChange={(e) => setInstanceName(e.target.value)}
-                placeholder="meu-restaurante"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+                placeholder="sushicazza"
+                className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${
+                  instanceNameErr
+                    ? "border-red-400 focus:border-red-400 focus:ring-red-100"
+                    : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"
+                }`}
               />
-              <p className="mt-1 text-xs text-gray-400">Identificador único da sua instância no servidor Evolution.</p>
+              <FieldError msg={instanceNameErr} />
+              <p className="mt-1 text-xs text-gray-400">
+                Nome da instância criada na Evolution API. Exemplo: sushicazza
+              </p>
             </div>
 
             {/* Base URL */}
@@ -342,12 +454,20 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                 URL do servidor Evolution
               </label>
               <input
-                type="url"
+                type="text"
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
                 placeholder="https://evo.seuservidor.com"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+                className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${
+                  baseUrlErr
+                    ? "border-red-400 focus:border-red-400 focus:ring-red-100"
+                    : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"
+                }`}
               />
+              <FieldError msg={baseUrlErr} />
+              <p className="mt-1 text-xs text-gray-400">
+                URL pública onde sua Evolution API está rodando. Não use e-mail aqui.
+              </p>
             </div>
 
             {/* API Key */}
@@ -365,9 +485,21 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                 autoComplete="off"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={f.apiKeyPreview ? "Nova chave — deixe em branco para manter" : "Cole sua API Key"}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+                placeholder={
+                  f.apiKeyPreview
+                    ? "Nova chave — deixe em branco para manter"
+                    : "Cole sua API Key"
+                }
+                className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${
+                  apiKeyErr
+                    ? "border-red-400 focus:border-red-400 focus:ring-red-100"
+                    : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"
+                }`}
               />
+              <FieldError msg={apiKeyErr} />
+              <p className="mt-1 text-xs text-gray-400">
+                Chave de autenticação da Evolution API. Ela será salva de forma segura.
+              </p>
             </div>
 
             {/* Webhook Secret */}
@@ -385,10 +517,16 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                 autoComplete="off"
                 value={webhookSecret}
                 onChange={(e) => setWebhookSecret(e.target.value)}
-                placeholder={f.webhookSecretPreview ? "Novo secret — deixe em branco para manter" : "Cole o Webhook Secret"}
+                placeholder={
+                  f.webhookSecretPreview
+                    ? "Novo secret — deixe em branco para manter"
+                    : "Cole o Webhook Secret"
+                }
                 className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
               />
-              <p className="mt-1 text-xs text-gray-400">Usado para validar a autenticidade das mensagens recebidas.</p>
+              <p className="mt-1 text-xs text-gray-400">
+                Usado para validar a autenticidade das mensagens recebidas.
+              </p>
             </div>
 
             {/* Webhook URL (read-only) */}
