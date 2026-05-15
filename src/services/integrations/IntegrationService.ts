@@ -17,7 +17,7 @@
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt, maskSecret } from "@/lib/crypto";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
 import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
 import type {
@@ -396,8 +396,14 @@ export class IntegrationService {
         success: connected,
         message: connected ? "Instância conectada com sucesso." : "Instância não conectada (verifique o QR code).",
       });
-    } catch {
-      return serviceOk({ success: false, message: "Não foi possível alcançar o servidor Evolution." });
+    } catch (err) {
+      if (err instanceof EvolutionApiError && err.status === 404) {
+        return serviceOk({
+          success: false,
+          message: "Instância não encontrada no servidor Evolution. Verifique o campo 'Nome da instância' nas configurações avançadas.",
+        });
+      }
+      return serviceOk({ success: false, message: "Não foi possível alcançar o servidor Evolution. Verifique a URL e a API Key." });
     }
   }
 
