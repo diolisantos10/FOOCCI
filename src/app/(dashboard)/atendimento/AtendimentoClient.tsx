@@ -253,16 +253,19 @@ export function AtendimentoClient({
     setIsDesktop(mq.matches);
     const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
     mq.addEventListener("change", onChange);
-    const stored = localStorage.getItem("atendimento-left-width");
-    if (stored) {
-      const n = parseInt(stored, 10);
-      if (n >= 260 && n <= 480) setLeftWidth(n);
-    }
+    try {
+      const stored = localStorage.getItem("atendimento-left-width");
+      if (stored) {
+        const n = parseInt(stored, 10);
+        if (n >= 260 && n <= 480) setLeftWidth(n);
+      }
+    } catch { /* storage unavailable */ }
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
   useEffect(() => {
-    if (isDesktop) localStorage.setItem("atendimento-left-width", String(leftWidth));
+    if (!isDesktop) return;
+    try { localStorage.setItem("atendimento-left-width", String(leftWidth)); } catch { /* ignore */ }
   }, [leftWidth, isDesktop]);
 
   // ── Fetch conversation thread ──────────────────────────────────────────────
@@ -291,6 +294,8 @@ export function AtendimentoClient({
       setActiveDraft(null);
       return;
     }
+    setSendError(null);
+    setSendNote(null);
     setLoadingThread(true);
     fetchThread(selectedId).finally(() => setLoadingThread(false));
     fetch(`/api/conversations/${selectedId}/read`, { method: "POST" }).catch(() => {});
@@ -448,7 +453,7 @@ export function AtendimentoClient({
         className={`
           flex-col border-r border-gray-200 bg-white overflow-hidden
           ${mobileView === "list" ? "flex w-full" : "hidden"}
-          lg:flex lg:shrink-0
+          lg:flex lg:w-80 lg:shrink-0
         `}
         style={isDesktop ? { width: leftWidth } : undefined}
       >
