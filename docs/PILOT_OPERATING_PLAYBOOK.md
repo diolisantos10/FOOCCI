@@ -105,11 +105,22 @@ Nunca inclua valores reais de segredos em documentos, repositórios ou mensagens
 
 ### Necessárias somente para WhatsApp via Evolution API
 
-| Variável | Finalidade |
-|---|---|
-| `EVOLUTION_DEFAULT_URL` ou `EVOLUTION_BASE_URL` | URL base do servidor Evolution API |
+Estas variáveis pertencem ao **serviço Evolution API** no Railway, não ao serviço Foocci.
+Ver `docs/EVOLUTION_RAILWAY_DEPLOY.md` para o checklist completo.
 
-> A chave de API e o nome da instância são configurados por restaurante no painel, não como variáveis de ambiente globais.
+| Variável (no serviço Evolution) | Finalidade |
+|---|---|
+| `SERVER_URL` | URL pública do próprio serviço Evolution — ex: `https://evolution-api-xxxx.up.railway.app` |
+| `AUTHENTICATION_API_KEY` | API Key do Evolution — deve coincidir com o campo `apiKey` salvo em Foocci |
+| `WEBHOOK_GLOBAL_ENABLED` | Definir como `true` para ativar envio de webhooks |
+| `WEBHOOK_GLOBAL_URL` | `https://<foocci-url>/api/webhooks/evolution` — endpoint do Foocci que recebe os eventos |
+| `WEBHOOK_GLOBAL_SECRET` | **Deve ser idêntico ao campo `webhookSecret` salvo em Foocci** |
+| `WEBHOOK_EVENTS_MESSAGES_UPSERT` | `true` — necessário para receber mensagens recebidas |
+| `WEBHOOK_EVENTS_CONNECTION_UPDATE` | `true` — necessário para detectar conexão/desconexão |
+
+> ⚠️ **Regra crítica:** `WEBHOOK_GLOBAL_SECRET` no Railway deve ser **exatamente igual** ao `webhookSecret` salvo em Foocci em **Integrações → WhatsApp → Configurações Avançadas**. Se divergirem, Foocci retorna 200 mas descarta o evento silenciosamente — mensagens do WhatsApp não aparecerão em `/atendimento` sem nenhum erro visível.
+>
+> A chave de API e o nome da instância são configurados por restaurante no painel Foocci, não como variáveis de ambiente globais.
 
 ---
 
@@ -500,21 +511,34 @@ Acessar em **Configurações > WhatsApp** (`/settings/whatsapp`).
 
 ### Configuração da Evolution API (se testar WhatsApp no piloto)
 
-Acessar em **Configurações > Integrações > WhatsApp Business** (ou caminho equivalente).
+> Checklist completo de deploy do Evolution API no Railway: ver `docs/EVOLUTION_RAILWAY_DEPLOY.md`.
 
-- [ ] URL do servidor Evolution configurada
-- [ ] Chave de API inserida
-- [ ] Nome da instância correto
-- [ ] Instância conectada (QR Code escaneado pelo WhatsApp do restaurante)
-- [ ] Webhook configurado apontando para `[APP_URL]/api/webhooks/evolution`
+**Pré-requisito:** o serviço Evolution API deve estar rodando no Railway com as variáveis
+`WEBHOOK_GLOBAL_SECRET` e `WEBHOOK_GLOBAL_URL` configuradas antes de qualquer configuração no Foocci.
+
+Acessar em **Integrações → WhatsApp** (`/integracoes/whatsapp`) como OWNER. Expandir
+**Configurações Avançadas**.
+
+- [ ] URL do servidor Evolution configurada (ex: `https://evolution-api-xxxx.up.railway.app`)
+- [ ] API Key inserida — mesma que `AUTHENTICATION_API_KEY` no Railway
+- [ ] Nome da instância preenchido (ex: `restaurante-principal`)
+- [ ] Webhook Secret preenchido — **deve ser idêntico a `WEBHOOK_GLOBAL_SECRET` no Railway**
+- [ ] Configuração salva sem erros de validação
+- [ ] QR Code gerado com sucesso (botão **Conectar WhatsApp**)
+- [ ] QR escaneado pelo WhatsApp do restaurante — status muda para **Conectado**
 
 ### Teste de WhatsApp
 
-1. Enviar mensagem de texto para o número do restaurante pelo WhatsApp
-2. Confirmar que a mensagem aparece em **Atendimento** (`/atendimento`) no painel
+1. Enviar **"Oi"** de qualquer WhatsApp para o número do restaurante
+2. Confirmar que a conversa aparece em **Central de Conversas** (`/atendimento`) — **este é o passo que valida que `WEBHOOK_GLOBAL_SECRET` está correto**
 3. Confirmar que a resposta automática é enviada (se agente ativo)
-4. Testar transferência para atendente humano
-5. Confirmar que atendente humano consegue responder pela plataforma
+4. Responder manualmente pela plataforma e confirmar entrega no WhatsApp do remetente
+5. Testar transferência para atendente humano
+
+**Se o passo 2 falhar (mensagem não aparece em `/atendimento`):**
+- Verificar que `WEBHOOK_GLOBAL_SECRET` no Railway é idêntico ao `webhookSecret` salvo em Foocci
+- Verificar que `WEBHOOK_GLOBAL_URL` aponta para a URL correta de produção do Foocci
+- Consultar logs do Railway (Evolution) e logs do Foocci para `Signature mismatch`
 
 ### Se WhatsApp não for testado no piloto
 
