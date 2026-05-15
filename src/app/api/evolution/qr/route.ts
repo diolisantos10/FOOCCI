@@ -25,7 +25,32 @@ export async function GET(req: NextRequest) {
     const qr = await EvolutionClient.getQRCode(snapResult.data);
     // Activate the integration whenever QR is fetched — user is actively connecting.
     await EvolutionConfigService.activate(ctx.restaurantId);
-    return ok(qr);
+
+    // QR code available — return it
+    if (qr.base64) {
+      return ok({ base64: qr.base64, code: qr.code });
+    }
+
+    // Instance already connected
+    if (qr.instanceState === "open") {
+      return ok({ base64: null, code: null, connected: true });
+    }
+
+    // Instance disconnected (QR expired) — trigger restart so a new QR is generated
+    if (qr.instanceState === "close") {
+      try {
+        await EvolutionClient.restartInstance(snapResult.data);
+      } catch (restartErr) {
+        console.warn(
+          "[GET /api/evolution/qr] restart failed:",
+          restartErr instanceof Error ? restartErr.message : restartErr
+        );
+      }
+      return ok({ base64: null, code: null, restarting: true });
+    }
+
+    // No QR and no clear state — return null and let frontend poll
+    return ok({ base64: null, code: null });
   } catch (err) {
     if (err instanceof EvolutionApiError) {
       // 4xx from Evolution (e.g. instance already open) → return empty gracefully

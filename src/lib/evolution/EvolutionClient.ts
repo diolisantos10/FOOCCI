@@ -51,6 +51,7 @@ export interface InstanceStatus {
 export interface InstanceQRCode {
   base64: string | null;  // data:image/png;base64,... or null if already connected
   code:   string | null;
+  instanceState?: "open" | "close" | "connecting";
 }
 
 // ─── helpers ─────────────────────────────────────────────────
@@ -155,9 +156,20 @@ export const EvolutionClient = {
       instance?: { state?: string };
     }>(config, "GET", `/instance/connect/${config.instanceName}`);
 
+    const instanceState = raw.instance?.state as InstanceQRCode["instanceState"];
+
     return {
       base64: raw.qrcode?.base64 ?? null,
       code:   raw.qrcode?.code   ?? null,
+      instanceState,
     };
+  },
+
+  /**
+   * Restart the Evolution instance — moves it from "close" back to "connecting"
+   * so a new QR code is generated.
+   */
+  async restartInstance(config: EvolutionConfigSnapshot): Promise<void> {
+    await request<unknown>(config, "PUT", `/instance/restart/${config.instanceName}`);
   },
 };

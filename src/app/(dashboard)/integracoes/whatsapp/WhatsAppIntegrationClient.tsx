@@ -100,18 +100,20 @@ function ConnectionPill({ status }: { status: SimpleStatus }) {
 
 // ── Simple QR / connection panel ──────────────────────────────────────────────
 
-type QRState = "idle" | "loading" | "shown" | "connected" | "unconfigured" | "error";
+type QRState = "idle" | "loading" | "restarting" | "shown" | "connected" | "unconfigured" | "error";
 
 function SimpleQRPanel({
   isConfigured,
   isOwner,
   isActive,
   onDisconnect,
+  onStartConnect,
 }: {
-  isConfigured: boolean;
-  isOwner:      boolean;
-  isActive:     boolean;
-  onDisconnect: () => void;
+  isConfigured:   boolean;
+  isOwner:        boolean;
+  isActive:       boolean;
+  onDisconnect:   () => void;
+  onStartConnect: () => void;
 }) {
   const [qrBase64,      setQrBase64]      = useState<string | null>(null);
   const [qrState,       setQrState]       = useState<QRState>("idle");
@@ -125,7 +127,13 @@ function SimpleQRPanel({
   const fetchQR = async () => {
     const res  = await fetch("/api/evolution/qr");
     const data = await res.json().catch(() => ({}));
-    const qr   = (data?.data ?? data) as { base64?: string | null; error?: string };
+    const qr = (data?.data ?? data) as {
+      base64?:    string | null;
+      code?:      string | null;
+      error?:     string;
+      connected?: boolean;
+      restarting?: boolean;
+    };
 
     if (qr.base64) {
       setQrBase64(qr.base64);
@@ -134,20 +142,32 @@ function SimpleQRPanel({
       setQrBase64(null);
       setQrState("unconfigured");
       stopPolling();
-    } else if (!qr.base64 && !qr.error) {
-      // Instance is already connected
+    } else if (qr.connected) {
+      // Instance explicitly confirmed as open
       setQrBase64(null);
       setQrState("connected");
       stopPolling();
-    } else {
-      // evolution_error or other — likely already connected or transient
+    } else if (qr.restarting) {
+      // Instance was "close" — restart was triggered. Retry in 5 s for new QR.
+      setQrBase64(null);
+      setQrState("restarting");
+      stopPolling();
+      setTimeout(() => void fetchQR(), 5000);
+    } else if (qr.error) {
+      // Any other named error from Evolution
       setQrBase64(null);
       setQrState("error");
+      stopPolling();
+    } else {
+      // No base64, no explicit state — ambiguous; treat as connected for now
+      setQrBase64(null);
+      setQrState("connected");
       stopPolling();
     }
   };
 
   const handleGenerateQR = async () => {
+    onStartConnect();   // Clear stale feedback from the parent
     setQrState("loading");
     setQrBase64(null);
     await fetchQR();
@@ -199,6 +219,13 @@ function SimpleQRPanel({
         </div>
       )}
 
+      {qrState === "restarting" && (
+        <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4 text-sm text-amber-700">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+          Reconectando instância WhatsApp… aguarde.
+        </div>
+      )}
+
       {qrState === "shown" && qrBase64 && (
         <div className="rounded-2xl border border-green-100 bg-green-50 p-4 space-y-3">
           <p className="text-xs font-semibold text-green-800">
@@ -243,8 +270,8 @@ function SimpleQRPanel({
       {qrState === "error" && (
         <div className="space-y-2">
           <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-1">
-            <p className="font-semibold">Não conseguimos gerar o QR Code</p>
-            <p className="text-xs">Tente novamente. Se o problema persistir, fale com o suporte Foocci.</p>
+            <p className="font-semibold">QR Code não disponível</p>
+            <p className="text-xs">A Evolution API retornou um erro. Verifique se o servidor Evolution está online e se as credenciais estão corretas.</p>
           </div>
           <button
             type="button"
@@ -472,6 +499,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           isOwner={isOwner}
           isActive={view?.isActive ?? false}
           onDisconnect={handleDisconnect}
+          onStartConnect={() => setFeedback(null)}
         />
       </div>
 
