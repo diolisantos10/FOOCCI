@@ -23,6 +23,8 @@ export async function GET(req: NextRequest) {
     }
 
     const qr = await EvolutionClient.getQRCode(snapResult.data);
+    // Activate the integration whenever QR is fetched — user is actively connecting.
+    await EvolutionConfigService.activate(ctx.restaurantId);
     return ok(qr);
   } catch (err) {
     if (err instanceof EvolutionApiError) {

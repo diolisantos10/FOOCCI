@@ -36,6 +36,7 @@ export class EvolutionConfigService {
         baseUrl: input.baseUrl,
         apiKey: encryptedApiKey,
         webhookSecret: encryptedWebhookSecret,
+        isActive: true,
       },
       update: {
         instanceName: input.instanceName,
@@ -81,10 +82,6 @@ export class EvolutionConfigService {
       return serviceFail("Evolution config not configured for this restaurant", 404);
     }
 
-    if (!config.isActive) {
-      return serviceFail("Evolution integration is currently inactive", 400);
-    }
-
     return serviceOk({
       instanceName: config.instanceName,
       baseUrl: config.baseUrl,
@@ -112,6 +109,16 @@ export class EvolutionConfigService {
       restaurantId: config.restaurantId,
       webhookSecret: decrypt(config.webhookSecret),
     });
+  }
+
+  static async activate(
+    restaurantId: string
+  ): Promise<ServiceResult<void>> {
+    await prisma.evolutionConfig.updateMany({
+      where: { restaurantId },
+      data: { isActive: true },
+    });
+    return serviceOk(undefined);
   }
 
   static async deactivate(

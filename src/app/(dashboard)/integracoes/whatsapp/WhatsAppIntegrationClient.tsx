@@ -5,7 +5,7 @@ import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ConnStatus = "unconfigured" | "active" | "error" | "pending_validation";
+type ConnStatus = "unconfigured" | "configured" | "active" | "error" | "pending_validation";
 
 interface EvolutionView {
   provider:     string;
@@ -77,6 +77,7 @@ function viewToSimple(s: ConnStatus): SimpleStatus {
   if (s === "active")             return "connected";
   if (s === "error")              return "error";
   if (s === "pending_validation") return "connecting";
+  if (s === "configured")         return "unconfigured"; // credentials exist, not yet connected
   return "unconfigured";
 }
 
@@ -675,7 +676,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                   <button
                     type="button"
                     onClick={() => void handleTest()}
-                    disabled={testing || view?.status === "unconfigured"}
+                    disabled={testing || view?.status === "unconfigured" || !view}
                     className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
                   >
                     {testing ? "Testando…" : "Testar conexão"}

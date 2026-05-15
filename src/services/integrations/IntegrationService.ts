@@ -33,7 +33,7 @@ import type {
 
 export interface IntegrationView {
   provider: string;
-  status:   "unconfigured" | "active" | "error" | "pending_validation";
+  status:   "unconfigured" | "configured" | "active" | "error" | "pending_validation";
   isActive: boolean;
   lastTestedAt: string | null;
   lastError:    string | null;
@@ -200,9 +200,10 @@ export class IntegrationService {
         return serviceFail(result.error, result.status);
       }
       const v = result.data;
+      const hasMinimalConfig = !!v.instanceName && !!v.baseUrl;
       return serviceOk({
         provider:     "whatsapp",
-        status:       v.isActive ? "active" : "unconfigured",
+        status:       v.isActive ? "active" : hasMinimalConfig ? "configured" : "unconfigured",
         isActive:     v.isActive,
         lastTestedAt: null,
         lastError:    null,

@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type IntegrationStatus = "unconfigured" | "active" | "error" | "pending_validation";
+type IntegrationStatus = "unconfigured" | "configured" | "active" | "error" | "pending_validation";
 
 interface IntegrationView {
   provider:     string;
@@ -113,6 +114,13 @@ function StatusBadge({ status }: { status: IntegrationStatus }) {
       <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
         Validação pendente
+      </span>
+    );
+  if (status === "configured")
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-semibold text-yellow-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-yellow-400" />
+        Não conectado
       </span>
     );
   return (
@@ -1297,6 +1305,7 @@ function DetailPanel({
 // ── Main page component ───────────────────────────────────────────────────────
 
 export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
+  const router = useRouter();
   const [views, setViews]         = useState<Record<string, IntegrationView>>({});
   const [loading, setLoading]     = useState(true);
   const [selected, setSelected]   = useState<Provider | null>(null);
@@ -1366,7 +1375,11 @@ export function IntegrationsCenterClient({ userRole }: { userRole: string }) {
                   meta={meta}
                   view={views[meta.provider] ?? null}
                   selected={selected === meta.provider}
-                  onClick={() => setSelected(selected === meta.provider ? null : meta.provider)}
+                  onClick={() =>
+                    meta.configureHref
+                      ? router.push(meta.configureHref)
+                      : setSelected(selected === meta.provider ? null : meta.provider)
+                  }
                 />
               ))}
             </div>
