@@ -480,15 +480,28 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     steps: Array<{ label: string; ok: boolean; detail?: unknown; error?: string }>;
   } | null>(null);
 
-  // Hard-reset create QR info (for verifying QR was captured from create response)
-  const [resetCreateInfo, setResetCreateInfo] = useState<{
-    qr_found: boolean;
-    qr_candidate_field?: string | null;
-    qr_candidate_length?: number | null;
-    create_top_level_keys?: string[];
-    create_nested_keys?: Record<string, string[]>;
-    pairing_code_found?: boolean;
-    reason?: string | null;
+  // Deep probe state
+  const [deepProbing,  setDeepProbing]  = useState(false);
+  const [deepResult,   setDeepResult]   = useState<{
+    evolutionVersion: { httpStatus: number; info: Record<string, unknown> };
+    configuredInstance: Record<string, unknown> | null;
+    instanceSettings: Record<string, unknown>;
+    tempInstanceTest: {
+      tempName: string;
+      created: boolean;
+      createKeys: string[];
+      createShape: Record<string, string[]>;
+      qrcodeShape: string[];
+      qrcodeIsCountOnly: boolean;
+      createQRFound: boolean;
+      pollResults: Array<{ attempt: number; keys: string[]; isCountOnly: boolean; qrFound: boolean; httpStatus: number }>;
+      qrFound: boolean;
+      error: string | null;
+    };
+    verdict: string;
+    verdictCode: "instance_specific" | "server_wide" | "inconclusive";
+    recommendation: string;
+    railwayCheckList: string[];
   } | null>(null);
 
   // Form state — secrets always blank on load (never pre-filled)
@@ -607,9 +620,20 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     }
   }
 
+  async function handleDeepProbe() {
+    setDeepProbing(true);
+    setDeepResult(null);
+    const { ok, data } = await apiFetch("/api/evolution/deep-probe", "POST");
+    setDeepProbing(false);
+    if (ok) {
+      setDeepResult(data as typeof deepResult);
+    } else {
+      setFeedback({ type: "err", msg: "Falha ao executar diagnóstico profundo." });
+    }
+  }
+
   function handleHardReset() {
     setFeedback(null);
-    setResetCreateInfo(null);
     setResetConfirming(false);
     // Remount the QR panel with autoStart — SimpleQRPanel.handleCreateQR runs the full
     // hard-reset (logout → delete → create → QR capture) and shows the result inline.
@@ -952,33 +976,6 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                 )}
               </div>
 
-              {/* create_instance_qr — shown after hard-reset to verify QR capture from create */}
-              {resetCreateInfo && (
-                <div className={`rounded-xl border px-3 py-3 text-[11px] space-y-1 ${
-                  resetCreateInfo.qr_found
-                    ? "border-green-200 bg-green-50"
-                    : "border-amber-200 bg-amber-50"
-                }`}>
-                  <p className={`font-semibold ${resetCreateInfo.qr_found ? "text-green-700" : "text-amber-700"}`}>
-                    create_instance_qr — {resetCreateInfo.qr_found ? "QR capturado" : "QR não encontrado no create"}
-                  </p>
-                  <div className="font-mono text-gray-600 space-y-0.5">
-                    <p>qr_found: {String(resetCreateInfo.qr_found)}</p>
-                    <p>pairing_found: {String(resetCreateInfo.pairing_code_found ?? false)}</p>
-                    {resetCreateInfo.qr_candidate_field && (
-                      <p>campo: {resetCreateInfo.qr_candidate_field} ({resetCreateInfo.qr_candidate_length ?? "?"} chars)</p>
-                    )}
-                    <p>chaves: [{resetCreateInfo.create_top_level_keys?.join(", ") ?? "—"}]</p>
-                    {resetCreateInfo.create_nested_keys && Object.entries(resetCreateInfo.create_nested_keys).map(([k, v]) => (
-                      <p key={k}>&nbsp;&nbsp;{k}: [{v.join(", ")}]</p>
-                    ))}
-                    {resetCreateInfo.reason && (
-                      <p className="text-amber-600">{resetCreateInfo.reason}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Diagnostic tool */}
               <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-3">
                 <div>
@@ -1096,6 +1093,92 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                   </div>
                 )}
               </div>
+
+              {/* ── Deep probe — definitive infrastructure test ──────────── */}
+              <div className="rounded-xl border border-purple-100 bg-purple-50 px-4 py-4 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold text-purple-700">Diagnóstico Profundo (~35 s)</p>
+                  <p className="mt-0.5 text-xs text-purple-600">
+                    Cria uma instância temporária para determinar se o problema de QR é específico
+                    desta instância ou server-wide (Evolution não consegue alcançar WhatsApp).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleDeepProbe()}
+                  disabled={deepProbing || !isConfigured}
+                  className="rounded-xl border border-purple-200 bg-white px-4 py-2 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-40 transition"
+                >
+                  {deepProbing ? "Analisando… (~35 s)" : "Executar diagnóstico profundo"}
+                </button>
+
+                {deepResult && (
+                  <div className="space-y-3 pt-1">
+                    {/* Verdict banner */}
+                    <div className={`rounded-lg border px-3 py-2.5 text-xs font-semibold ${
+                      deepResult.verdictCode === "instance_specific" ? "border-amber-200 bg-amber-50 text-amber-800" :
+                      deepResult.verdictCode === "server_wide"       ? "border-red-200 bg-red-50 text-red-800" :
+                      "border-gray-200 bg-gray-50 text-gray-700"
+                    }`}>
+                      {deepResult.verdict}
+                    </div>
+
+                    {/* Recommendation */}
+                    <div className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-[11px] text-gray-700 whitespace-pre-wrap">
+                      <span className="font-semibold">Recomendação: </span>{deepResult.recommendation}
+                    </div>
+
+                    {/* Temp instance test summary */}
+                    <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] font-mono space-y-0.5 text-gray-600">
+                      <p className="font-semibold text-gray-700 mb-1">Instância temporária ({deepResult.tempInstanceTest.tempName})</p>
+                      <p>criada: {deepResult.tempInstanceTest.created ? "sim" : "não"}{deepResult.tempInstanceTest.error ? ` — ${deepResult.tempInstanceTest.error}` : ""}</p>
+                      {deepResult.tempInstanceTest.created && (
+                        <>
+                          <p>create_keys: [{deepResult.tempInstanceTest.createKeys.join(", ")}]</p>
+                          <p>qrcode: [{deepResult.tempInstanceTest.qrcodeShape.join(", ")}]{deepResult.tempInstanceTest.qrcodeIsCountOnly ? " ← count only" : ""}</p>
+                          <p>QR no create: {deepResult.tempInstanceTest.createQRFound ? "sim ✓" : "não"}</p>
+                          {deepResult.tempInstanceTest.pollResults.map((p) => (
+                            <p key={p.attempt}>poll {p.attempt}: HTTP {p.httpStatus} keys=[{p.keys.join(",")}] {p.isCountOnly ? "count-only" : ""} {p.qrFound ? "QR ✓" : ""}</p>
+                          ))}
+                          <p className={deepResult.tempInstanceTest.qrFound ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+                            resultado: {deepResult.tempInstanceTest.qrFound ? "QR GERADO ✓" : "QR NÃO GERADO ✗"}
+                          </p>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Configured instance state */}
+                    {deepResult.configuredInstance && (
+                      <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] font-mono space-y-0.5 text-gray-600">
+                        <p className="font-semibold text-gray-700 mb-1">Instância configurada</p>
+                        <p>status: {String(deepResult.configuredInstance.status ?? "—")}</p>
+                        <p>connectionStatus: {String(deepResult.configuredInstance.connectionStatus ?? "—")}</p>
+                        <p>integration: {String(deepResult.configuredInstance.integration ?? "—")}</p>
+                        <p>ownerJid (já autenticou?): {deepResult.configuredInstance.hasOwner ? "sim — teve sessão anterior" : "não"}</p>
+                        <p>profileName: {String(deepResult.configuredInstance.profileName ?? "null")}</p>
+                      </div>
+                    )}
+
+                    {/* Evolution version */}
+                    <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] font-mono space-y-0.5 text-gray-600">
+                      <p className="font-semibold text-gray-700 mb-1">Versão Evolution (GET /)</p>
+                      <p>HTTP: {deepResult.evolutionVersion.httpStatus}</p>
+                      {Object.entries(deepResult.evolutionVersion.info).map(([k, v]) => (
+                        <p key={k}>{k}: {typeof v === "object" ? JSON.stringify(v) : String(v)}</p>
+                      ))}
+                    </div>
+
+                    {/* Railway checklist */}
+                    <div className="rounded-lg border border-gray-100 bg-white px-3 py-2 text-[11px] space-y-1">
+                      <p className="font-semibold text-gray-700 mb-1">Checklist Railway / Evolution env</p>
+                      {deepResult.railwayCheckList.map((item, i) => (
+                        <p key={i} className="text-gray-500">• {item}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
         </div>
