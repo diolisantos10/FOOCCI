@@ -35,41 +35,41 @@ model Restaurant {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  users            User[]
-  customers        Customer[]
-  menuCategories   MenuCategory[]
-  orders           Order[]
-  orderDrafts      OrderDraft[]
-  campaigns        Campaign[]
-  conversations    Conversation[]
-  offers           Offer[]
-  customerSegments CustomerSegment[]
-  aiLogs           AIInteractionLog[]
-  evolutionConfig    EvolutionConfig?
-  brandConfig        RestaurantBrandConfig?
-  agentConfig        WhatsAppAgentConfig?
-  deliveryConfig     DeliveryConfig?
-  deliveryZones      DeliveryZone[]
-  businessHours      BusinessHours[]
-  paymentSettings    PaymentSettings?
-  storePolicies      StorePolicies?
-  storeProfile       StoreProfile?
-  integrationConfigs IntegrationConfig[]
-  promotions         Promotion[]
-  crmAutomations     CRMAutomation[]
-  crmCustomActions   CRMCustomAction[]
-  crmActionLogs      CRMActionLog[]
-  crmProfile         RestaurantCRMProfile?
-  autoSimulatorConfig AutoSimulatorConfig?
-  simulationRuns      SimulationRun[]
-  trackingLinks       TrackingLink[]
+  users                  User[]
+  customers              Customer[]
+  menuCategories         MenuCategory[]
+  orders                 Order[]
+  orderDrafts            OrderDraft[]
+  campaigns              Campaign[]
+  conversations          Conversation[]
+  offers                 Offer[]
+  customerSegments       CustomerSegment[]
+  aiLogs                 AIInteractionLog[]
+  evolutionConfig        EvolutionConfig?
+  brandConfig            RestaurantBrandConfig?
+  agentConfig            WhatsAppAgentConfig?
+  deliveryConfig         DeliveryConfig?
+  deliveryZones          DeliveryZone[]
+  businessHours          BusinessHours[]
+  paymentSettings        PaymentSettings?
+  storePolicies          StorePolicies?
+  storeProfile           StoreProfile?
+  integrationConfigs     IntegrationConfig[]
+  promotions             Promotion[]
+  crmAutomations         CRMAutomation[]
+  crmCustomActions       CRMCustomAction[]
+  crmActionLogs          CRMActionLog[]
+  crmProfile             RestaurantCRMProfile?
+  autoSimulatorConfig    AutoSimulatorConfig?
+  simulationRuns         SimulationRun[]
+  trackingLinks          TrackingLink[]
   importJobs             ImportJob[]
   importMappingTemplates ImportMappingTemplate[]
   tierSettings           TierSettings?
-  tierBenefits        TierBenefit[]
-  onboardingStatus    RestaurantOnboardingStatus?
+  tierBenefits           TierBenefit[]
+  onboardingStatus       RestaurantOnboardingStatus?
   productSalesAggregates ProductSalesAggregate[]
-  customerDataSignals CustomerDataSignal[]
+  customerDataSignals    CustomerDataSignal[]
 
   @@map("restaurants")
 }
@@ -113,39 +113,39 @@ enum Role {
 // ═══════════════════════════════════════════
 
 model Customer {
-  id           String    @id @default(cuid())
-  restaurantId String
-  name         String
-  phone        String?   // E.164 format – WhatsApp identifier, or GUEST-{uuid} for anon; null for no-phone imports
-  email        String?
-  birthDate    DateTime?
-  notes        String?
-  document             String?                         // CPF or CNPJ
-  financialBalance       Decimal?  @db.Decimal(10, 2)   // Saldo Financeiro Total
-  financialBalancePeriod Decimal?  @db.Decimal(10, 2)   // Saldo Financeiro do Período
-  importedOrderCount   Int?                            // Qtd. Pedidos — from external import
-  importedTotalSpent   Decimal?  @db.Decimal(10, 2)   // Valor Total — from external import
-  importedLastOrderAt  DateTime?                       // Última Compra — from external import
-  averageTicket        Decimal?  @db.Decimal(10, 2)   // Ticket Médio — from external import
-  totalOrders  Int       @default(0)
-  totalSpend   Decimal   @default(0) @db.Decimal(10, 2)
-  lastOrderAt  DateTime?
-  tier         String    @default("BRONZE")      // BRONZE | PRATA | OURO | DIAMANTE
-  segment      String    @default("SEM_PEDIDOS") // QUENTE | MORNO | FRIO | SEM_PEDIDOS
-  isActive     Boolean   @default(true)
-  isGuest      Boolean   @default(false) // true = anonymous session; excluded from CRM lists and metric sync
-  hasOptedOut  Boolean   @default(false) // LGPD: customer requested opt-out from marketing messages
-  optOutAt     DateTime?
-  crmContactable       Boolean   @default(true)  // false = no valid phone; excluded from WhatsApp campaigns
-  contactStatus        String?                   // CONTACTABLE | SEM_TELEFONE | TELEFONE_INVALIDO | OPT_OUT | NEEDS_REVIEW
-  importExternalId     String?                   // stable dedup key for re-imports
-  sourceSystem         String?                   // SAIPOS | NEMO | SAIPOS+NEMO | MANUAL
-  dataEnrichmentStatus String?                   // COMPLETE | PARTIAL | NEEDS_ENRICHMENT | NEEDS_REVIEW
-  dataCompletenessScore Int?                     // 0–100 computed by CustomerIntelligenceService
-  lastEnrichmentAt     DateTime?                 // last time enrichment data was updated
-  enrichmentNotes      String?                   // free-form notes from CRM agent / human
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                     String    @id @default(cuid())
+  restaurantId           String
+  name                   String
+  phone                  String? // E.164 format – WhatsApp identifier, or GUEST-{uuid} for anon; null for no-phone imports
+  email                  String?
+  birthDate              DateTime?
+  notes                  String?
+  document               String? // CPF or CNPJ
+  financialBalance       Decimal?  @db.Decimal(10, 2) // Saldo Financeiro Total
+  financialBalancePeriod Decimal?  @db.Decimal(10, 2) // Saldo Financeiro do Período
+  importedOrderCount     Int? // Qtd. Pedidos — from external import
+  importedTotalSpent     Decimal?  @db.Decimal(10, 2) // Valor Total — from external import
+  importedLastOrderAt    DateTime? // Última Compra — from external import
+  averageTicket          Decimal?  @db.Decimal(10, 2) // Ticket Médio — from external import
+  totalOrders            Int       @default(0)
+  totalSpend             Decimal   @default(0) @db.Decimal(10, 2)
+  lastOrderAt            DateTime?
+  tier                   String    @default("BRONZE") // BRONZE | PRATA | OURO | DIAMANTE
+  segment                String    @default("SEM_PEDIDOS") // QUENTE | MORNO | FRIO | SEM_PEDIDOS
+  isActive               Boolean   @default(true)
+  isGuest                Boolean   @default(false) // true = anonymous session; excluded from CRM lists and metric sync
+  hasOptedOut            Boolean   @default(false) // LGPD: customer requested opt-out from marketing messages
+  optOutAt               DateTime?
+  crmContactable         Boolean   @default(true) // false = no valid phone; excluded from WhatsApp campaigns
+  contactStatus          String? // CONTACTABLE | SEM_TELEFONE | TELEFONE_INVALIDO | OPT_OUT | NEEDS_REVIEW
+  importExternalId       String? // stable dedup key for re-imports
+  sourceSystem           String? // SAIPOS | NEMO | SAIPOS+NEMO | MANUAL
+  dataEnrichmentStatus   String? // COMPLETE | PARTIAL | NEEDS_ENRICHMENT | NEEDS_REVIEW
+  dataCompletenessScore  Int? // 0–100 computed by CustomerIntelligenceService
+  lastEnrichmentAt       DateTime? // last time enrichment data was updated
+  enrichmentNotes        String? // free-form notes from CRM agent / human
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   restaurant     Restaurant                  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   addresses      Address[]
@@ -179,7 +179,7 @@ model Address {
 
   customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
   orderDrafts OrderDraft[] // drafts referencing this address
-  orders      Order[]      // orders referencing this address
+  orders      Order[] // orders referencing this address
 
   @@index([customerId])
   @@map("addresses")
@@ -204,21 +204,21 @@ model CustomerPreference {
 // ═══════════════════════════════════════════
 
 model MenuCategory {
-  id           String     @id @default(cuid())
-  restaurantId String
-  name         String
-  description  String?
-  imageUrl     String?
+  id             String     @id @default(cuid())
+  restaurantId   String
+  name           String
+  description    String?
+  imageUrl       String?
   sortOrder      Int        @default(0)
   isActive       Boolean    @default(true)
-  isAvailable    Boolean    @default(true)   // false = category temporarily unavailable (does not modify item flags)
-  showInDelivery Boolean    @default(true)   // false = category hidden from delivery channel
-  showInDineIn   Boolean    @default(true)   // false = category hidden from QR dine-in menu
+  isAvailable    Boolean    @default(true) // false = category temporarily unavailable (does not modify item flags)
+  showInDelivery Boolean    @default(true) // false = category hidden from delivery channel
+  showInDineIn   Boolean    @default(true) // false = category hidden from QR dine-in menu
   source         MenuSource @default(MANUAL) // tracks whether created manually or via external integration
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   items      MenuItem[]
   placements MenuItemPlacement[]
 
@@ -227,35 +227,35 @@ model MenuCategory {
 }
 
 model MenuItem {
-  id          String   @id @default(cuid())
-  categoryId  String
-  name        String
-  description String?
-  ingredients String?  // composition for AI suggestions
-  price       Decimal  @db.Decimal(10, 2)
-  imageUrl    String?
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
+  id                    String   @id @default(cuid())
+  categoryId            String
+  name                  String
+  description           String?
+  ingredients           String? // composition for AI suggestions
+  price                 Decimal  @db.Decimal(10, 2)
+  imageUrl              String?
+  sortOrder             Int      @default(0)
+  isActive              Boolean  @default(true)
   // Availability + channel control
-  isAvailable    Boolean @default(true)  // false = temporarily sold out (shown as Indisponível)
-  showInDelivery Boolean @default(true)  // false = hidden from Foocci ordering channel
-  showInDineIn   Boolean @default(true)  // false = hidden from QR dine-in menu
-  hasVariants    Boolean @default(false) // true = must select a variant before add-to-cart
-  code        String?
-  servingSize Int?     // number of people (1, 2, 3, 4+)
-  portionInfo String?  // free-text weight/volume e.g. "300g", "500ml"
+  isAvailable           Boolean  @default(true) // false = temporarily sold out (shown as Indisponível)
+  showInDelivery        Boolean  @default(true) // false = hidden from Foocci ordering channel
+  showInDineIn          Boolean  @default(true) // false = hidden from QR dine-in menu
+  hasVariants           Boolean  @default(false) // true = must select a variant before add-to-cart
+  code                  String?
+  servingSize           Int? // number of people (1, 2, 3, 4+)
+  portionInfo           String? // free-text weight/volume e.g. "300g", "500ml"
   // ── AI enrichment fields ──────────────────────────────────────────
-  tagFunil             String?  // funnel stage: Entrada | Prato Principal | Bebida | Sobremesa
-  perfilPaladar        String?  // sensory profile for AI descriptions (umami, cítrico, cremoso…)
-  harmonizacaoSugerida String?  // item ID or name to suggest at checkout if category missing from cart
-  alergenosDetalhados  String?  // comma-separated allergen list (glúten, lactose, frutos do mar…)
-  storytellingIA       String?  // curated narrative to use when customer asks "what makes it special"
+  tagFunil              String? // funnel stage: Entrada | Prato Principal | Bebida | Sobremesa
+  perfilPaladar         String? // sensory profile for AI descriptions (umami, cítrico, cremoso…)
+  harmonizacaoSugerida  String? // item ID or name to suggest at checkout if category missing from cart
+  alergenosDetalhados   String? // comma-separated allergen list (glúten, lactose, frutos do mar…)
+  storytellingIA        String? // curated narrative to use when customer asks "what makes it special"
   // ── Saipos POS integration ────────────────────────────────────────────
   saiposIntegrationCode String? // codigo_saipos — PDV code sent as integration_code in Saipos orders
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  category        MenuCategory      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category        MenuCategory        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   orderItems      OrderItem[]
   orderDraftItems OrderDraftItem[]
   variants        MenuItemVariant[]
@@ -273,7 +273,7 @@ model MenuItemPlacement {
   categoryId String
   sortOrder  Int    @default(0)
 
-  item     MenuItem     @relation(fields: [itemId],     references: [id], onDelete: Cascade)
+  item     MenuItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   category MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([itemId, categoryId])
@@ -282,18 +282,18 @@ model MenuItemPlacement {
 }
 
 model MenuItemVariant {
-  id          String   @id @default(cuid())
-  menuItemId  String
-  name        String                     // e.g. "350ml", "600ml", "2L"
-  price       Decimal  @db.Decimal(10, 2)
-  portion     String?                    // e.g. "300g", "500ml"
-  isAvailable Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  saiposIntegrationCode String?          // PDV code for this variant
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  menuItemId            String
+  name                  String // e.g. "350ml", "600ml", "2L"
+  price                 Decimal  @db.Decimal(10, 2)
+  portion               String? // e.g. "300g", "500ml"
+  isAvailable           Boolean  @default(true)
+  sortOrder             Int      @default(0)
+  saiposIntegrationCode String? // PDV code for this variant
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
   @@index([menuItemId])
   @@map("menu_item_variants")
@@ -307,25 +307,25 @@ model OrderDraft {
   id                String           @id @default(cuid())
   restaurantId      String
   customerId        String
-  conversationId    String?          // nullable – set when draft originates from WhatsApp (Phase 3)
+  conversationId    String? // nullable – set when draft originates from WhatsApp (Phase 3)
   status            OrderDraftStatus @default(OPEN)
   fulfillmentType   FulfillmentType  @default(DELIVERY)
-  deliveryAddressId String?          // FK to Address; null for PICKUP/DINE_IN
+  deliveryAddressId String? // FK to Address; null for PICKUP/DINE_IN
   subtotal          Decimal          @default(0) @db.Decimal(10, 2)
   deliveryFee       Decimal          @default(0) @db.Decimal(10, 2)
   totalAmount       Decimal          @default(0) @db.Decimal(10, 2)
   notes             String?
-  aiSummary         String?          // Phase 3: AI-generated order summary
+  aiSummary         String? // Phase 3: AI-generated order summary
   confirmedAt       DateTime?
   abandonedAt       DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  restaurant      Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  customer        Customer        @relation(fields: [customerId], references: [id])
-  deliveryAddress Address?        @relation(fields: [deliveryAddressId], references: [id])
+  restaurant      Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  deliveryAddress Address?         @relation(fields: [deliveryAddressId], references: [id])
   items           OrderDraftItem[]
-  order           Order?          // populated after confirmation
+  order           Order? // populated after confirmation
 
   @@index([restaurantId])
   @@index([customerId])
@@ -339,7 +339,7 @@ model OrderDraftItem {
   menuItemId   String?
   quantity     Int
   unitPrice    Decimal  @db.Decimal(10, 2) // snapshot of price at time of add
-  isUpsell     Boolean  @default(false)    // true if suggested by AI upsell (Phase 3)
+  isUpsell     Boolean  @default(false) // true if suggested by AI upsell (Phase 3)
   notes        String?
   addedAt      DateTime @default(now())
 
@@ -367,45 +367,45 @@ enum FulfillmentType {
 // ═══════════════════════════════════════════
 
 model Order {
-  id                String      @id @default(cuid())
-  restaurantId      String
-  customerId        String
-  orderDraftId      String?     @unique // traceability back to originating draft
-  status            OrderStatus @default(PENDING)
-  type              OrderType   @default(DELIVERY)
-  subtotal          Decimal     @db.Decimal(10, 2)
-  deliveryFee       Decimal     @default(0) @db.Decimal(10, 2)
-  discount          Decimal     @default(0) @db.Decimal(10, 2)
-  total             Decimal     @db.Decimal(10, 2)
-  notes             String?
-  deliveryAddressId String?     // FK to Address snapshot at order time
-  estimatedAt       DateTime?
-  completedAt       DateTime?
-  cancelledAt       DateTime?
-  idempotencyKey    String?     @unique
-  crmSyncedAt       DateTime?   // set once customer metrics have been counted for this order
-  source            String?     // pedido | qr | whatsapp | manual | import — origin channel
-  importedAt        DateTime?   // set for historically imported orders; actual event date
+  id                  String      @id @default(cuid())
+  restaurantId        String
+  customerId          String
+  orderDraftId        String?     @unique // traceability back to originating draft
+  status              OrderStatus @default(PENDING)
+  type                OrderType   @default(DELIVERY)
+  subtotal            Decimal     @db.Decimal(10, 2)
+  deliveryFee         Decimal     @default(0) @db.Decimal(10, 2)
+  discount            Decimal     @default(0) @db.Decimal(10, 2)
+  total               Decimal     @db.Decimal(10, 2)
+  notes               String?
+  deliveryAddressId   String? // FK to Address snapshot at order time
+  estimatedAt         DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  idempotencyKey      String?     @unique
+  crmSyncedAt         DateTime? // set once customer metrics have been counted for this order
+  source              String? // pedido | qr | whatsapp | manual | import — origin channel
+  importedAt          DateTime? // set for historically imported orders; actual event date
   // ── Marketing / channel attribution ──────────────────────────────────────────
-  trackingLinkId    String?     // FK to TrackingLink if customer arrived via trackable link
-  trafficSource     String?     // utm_source / e.g. instagram, whatsapp, qr, google
-  trafficMedium     String?     // utm_medium / e.g. bio, direct, mesa, embalagem
-  trafficCampaign   String?     // utm_campaign
-  trafficContent    String?     // utm_content
+  trackingLinkId      String? // FK to TrackingLink if customer arrived via trackable link
+  trafficSource       String? // utm_source / e.g. instagram, whatsapp, qr, google
+  trafficMedium       String? // utm_medium / e.g. bio, direct, mesa, embalagem
+  trafficCampaign     String? // utm_campaign
+  trafficContent      String? // utm_content
   // ── Saipos POS integration fields ────────────────────────────────────
-  saiposSentAt         DateTime?   // when the order was successfully sent to Saipos
-  saiposOrderId        String?     // Saipos internal order reference (from their response)
-  saiposStatus         String?     // latest status received from Saipos webhook
-  saiposError          String?     // last error message if send failed
-  saiposLastErrorCode  String?     // error code from last failed attempt (e.g. "902")
-  saiposLastAttemptAt  DateTime?   // timestamp of last Saipos send attempt
-  createdAt            DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  saiposSentAt        DateTime? // when the order was successfully sent to Saipos
+  saiposOrderId       String? // Saipos internal order reference (from their response)
+  saiposStatus        String? // latest status received from Saipos webhook
+  saiposError         String? // last error message if send failed
+  saiposLastErrorCode String? // error code from last failed attempt (e.g. "902")
+  saiposLastAttemptAt DateTime? // timestamp of last Saipos send attempt
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
-  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  customer        Customer   @relation(fields: [customerId], references: [id])
+  restaurant      Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer        Customer    @relation(fields: [customerId], references: [id])
   orderDraft      OrderDraft? @relation(fields: [orderDraftId], references: [id])
-  deliveryAddress Address?   @relation(fields: [deliveryAddressId], references: [id])
+  deliveryAddress Address?    @relation(fields: [deliveryAddressId], references: [id])
   items           OrderItem[]
   payment         Payment?
 
@@ -419,7 +419,7 @@ model OrderItem {
   id           String  @id @default(cuid())
   orderId      String
   menuItemId   String?
-  name         String  // snapshot of name at order time
+  name         String // snapshot of name at order time
   price        Decimal @db.Decimal(10, 2)
   quantity     Int
   notes        String?
@@ -427,7 +427,7 @@ model OrderItem {
   categoryId   String? // FK snapshot — stays even if category is later deleted
   categoryName String? // name snapshot at order time — stays even if category is renamed
   variantName  String? // selected variant name snapshot if applicable
-  addonsJson   Json?   // JSON snapshot of selected add-ons / options / customizations
+  addonsJson   Json? // JSON snapshot of selected add-ons / options / customizations
 
   order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItem MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
@@ -439,7 +439,7 @@ model OrderItem {
 
 enum OrderStatus {
   PENDING
-  AWAITING_PAYMENT  // between PENDING and CONFIRMED for pay_now flows
+  AWAITING_PAYMENT // between PENDING and CONFIRMED for pay_now flows
   CONFIRMED
   PREPARING
   READY
@@ -467,10 +467,10 @@ model Payment {
   paidAt            DateTime?
   // Stone / hosted-link fields (all nullable — not used for cash/card-machine flows)
   paymentMode       PaymentMode   @default(PAY_NOW)
-  providerName      String?       // "stone" | null
-  providerReference String?       // Stone payment ID
-  paymentUrl        String?       // hosted checkout URL
-  expiresAt         DateTime?     // Stone link expiry
+  providerName      String? // "stone" | null
+  providerReference String? // Stone payment ID
+  paymentUrl        String? // hosted checkout URL
+  expiresAt         DateTime? // Stone link expiry
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -491,8 +491,8 @@ enum PaymentMethod {
   DEBIT_CARD
   PIX
   ONLINE
-  CARD_MACHINE    // physical terminal (pay on delivery/pickup)
-  PIX_IN_PERSON   // QR code shown at door/counter
+  CARD_MACHINE // physical terminal (pay on delivery/pickup)
+  PIX_IN_PERSON // QR code shown at door/counter
 }
 
 enum PaymentStatus {
@@ -500,10 +500,10 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
-  LINK_SENT       // Stone link sent, awaiting payment
+  LINK_SENT // Stone link sent, awaiting payment
   PAY_ON_DELIVERY // collected at delivery
-  PAY_ON_PICKUP   // collected at counter
-  EXPIRED         // Stone link expired
+  PAY_ON_PICKUP // collected at counter
+  EXPIRED // Stone link expired
 }
 
 // ═══════════════════════════════════════════
@@ -516,21 +516,21 @@ model Conversation {
   customerId    String?
   channel       Channel            @default(WHATSAPP)
   status        ConversationStatus @default(OPEN)
-  aiEnabled     Boolean            @default(true)   // false when human has taken over
-  sessionId     String?            // stable browser session ID for web agent tracking
-  customerName  String?            // denormalized — set for anonymous web sessions
-  customerPhone String?            // denormalized — set when customer identifies
+  aiEnabled     Boolean            @default(true) // false when human has taken over
+  sessionId     String? // stable browser session ID for web agent tracking
+  customerName  String? // denormalized — set for anonymous web sessions
+  customerPhone String? // denormalized — set when customer identifies
   orderId       String?
   orderDraftId  String?
   assignedTo    String?
   resolvedAt    DateTime?
-  lastMessageAt DateTime?          // updated on every new message; used for inbox sort
+  lastMessageAt DateTime? // updated on every new message; used for inbox sort
   unreadCount   Int                @default(0) // denormalized; reset when agent marks read
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  customer   Customer?   @relation(fields: [customerId], references: [id])
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer   Customer?  @relation(fields: [customerId], references: [id])
   messages   Message[]
 
   @@index([restaurantId])
@@ -547,7 +547,7 @@ model Message {
   id                String      @id @default(cuid())
   conversationId    String
   direction         Direction   @default(INBOUND)
-  senderType        String?     // CUSTOMER | AI | HUMAN | SYSTEM
+  senderType        String? // CUSTOMER | AI | HUMAN | SYSTEM
   content           String
   type              MessageType @default(TEXT)
   mediaUrl          String?
@@ -559,7 +559,7 @@ model Message {
   metadata          Json?
   // Phase 3: explicit external identifiers for idempotency and status tracking
   externalMessageId String?     @unique // Evolution API / WhatsApp message ID
-  externalStatus    String?             // sent | delivered | read | failed
+  externalStatus    String? // sent | delivered | read | failed
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -608,10 +608,10 @@ model Campaign {
   restaurantId   String
   name           String
   message        String
-  objective      String?        // RECUPERAR | RECOMPRA | TICKET | BEBIDA | SOBREMESA | AVALIACAO | VIP | OUTRO
+  objective      String? // RECUPERAR | RECOMPRA | TICKET | BEBIDA | SOBREMESA | AVALIACAO | VIP | OUTRO
   channel        String         @default("WHATSAPP")
-  targetSegment  String?        // FRIO | MORNO | QUENTE | VIP | PRIMEIRO_PEDIDO | RECENTE_AVALIACAO | RECORRENTE_SUMIDO | TODOS | etc.
-  templateId     String?        // links back to the action template id (e.g. "recuperar-frios")
+  targetSegment  String? // FRIO | MORNO | QUENTE | VIP | PRIMEIRO_PEDIDO | RECENTE_AVALIACAO | RECORRENTE_SUMIDO | TODOS | etc.
+  templateId     String? // links back to the action template id (e.g. "recuperar-frios")
   segmentId      String?
   scheduledAt    DateTime?
   sentAt         DateTime?
@@ -624,8 +624,8 @@ model Campaign {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  restaurant Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  segment    CustomerSegment?   @relation(fields: [segmentId], references: [id])
+  restaurant Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  segment    CustomerSegment?    @relation(fields: [segmentId], references: [id])
   executions CampaignExecution[]
 
   @@index([restaurantId])
@@ -636,11 +636,11 @@ model Campaign {
 model CampaignExecution {
   id            String          @id @default(cuid())
   campaignId    String
-  restaurantId  String?         // denormalized for fast tenant-scoped queries
+  restaurantId  String? // denormalized for fast tenant-scoped queries
   customerId    String
-  customerName  String?         // snapshot at campaign creation
-  customerPhone String?         // snapshot at campaign creation
-  messageText   String?         @db.Text  // personalized message for this recipient
+  customerName  String? // snapshot at campaign creation
+  customerPhone String? // snapshot at campaign creation
+  messageText   String?         @db.Text // personalized message for this recipient
   status        ExecutionStatus @default(PENDING)
   sentAt        DateTime?
   readAt        DateTime?
@@ -746,8 +746,8 @@ model ProductSalesAggregate {
   quantitySold Int      @default(0)
   grossRevenue Decimal  @default(0) @db.Decimal(12, 2)
   percent      Decimal? @db.Decimal(6, 4)
-  rowType      String   // CATEGORY | PRODUCT
-  importKey    String   // deduplication fingerprint (unique per restaurant+period+product)
+  rowType      String // CATEGORY | PRODUCT
+  importKey    String // deduplication fingerprint (unique per restaurant+period+product)
   createdAt    DateTime @default(now())
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -760,9 +760,9 @@ model ProductSalesAggregate {
 model ImportJob {
   id                String    @id @default(cuid())
   restaurantId      String
-  type              String    // "customers" | "orders" | "customers_orders"
+  type              String // "customers" | "orders" | "customers_orders"
   filename          String    @default("")
-  status            String    // "VALIDATING" | "IMPORTING" | "COMPLETED" | "FAILED"
+  status            String // "VALIDATING" | "IMPORTING" | "COMPLETED" | "FAILED"
   totalRows         Int       @default(0)
   validRows         Int       @default(0)
   errorRows         Int       @default(0)
@@ -800,8 +800,8 @@ model ImportMappingTemplate {
 }
 
 enum MenuSource {
-  MANUAL    // created by restaurant staff via the dashboard
-  EXTERNAL  // imported from a third-party POS or menu integration
+  MANUAL // created by restaurant staff via the dashboard
+  EXTERNAL // imported from a third-party POS or menu integration
 }
 
 enum OfferType {
@@ -826,8 +826,8 @@ model AIInteractionLog {
   success          Boolean  @default(true)
   errorMessage     String?
   // Phase 4 additions
-  turnNumber       Int      @default(0)    // which conversation turn (for multi-turn audit)
-  toolCalls        Json?                   // array of {name, args, result} for every tool executed
+  turnNumber       Int      @default(0) // which conversation turn (for multi-turn audit)
+  toolCalls        Json? // array of {name, args, result} for every tool executed
   estimatedCostUsd Decimal? @db.Decimal(10, 6) // calculated from model pricing at log time
   createdAt        DateTime @default(now())
 
@@ -852,10 +852,10 @@ model AIInteractionLog {
 model EvolutionConfig {
   id            String   @id @default(cuid())
   restaurantId  String   @unique
-  instanceName  String   // Evolution instance identifier (used to route inbound webhooks)
-  baseUrl       String   // e.g. https://evo.example.com
-  apiKey        String   // AES-256-GCM encrypted
-  webhookSecret String   // AES-256-GCM encrypted; used to verify inbound webhook signatures
+  instanceName  String // Evolution instance identifier (used to route inbound webhooks)
+  baseUrl       String // e.g. https://evo.example.com
+  apiKey        String // AES-256-GCM encrypted
+  webhookSecret String // AES-256-GCM encrypted; used to verify inbound webhook signatures
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -873,18 +873,18 @@ model EvolutionConfig {
 
 model EvolutionWebhookEventLog {
   id                  String   @id @default(cuid())
-  restaurantId        String?  // null when instanceName not found in DB
+  restaurantId        String? // null when instanceName not found in DB
   instanceName        String
-  eventName           String   // raw event field from Evolution payload
-  normalizedEventName String?  // normalized form used internally (may differ)
-  accepted            Boolean  @default(false)  // true = passed auth + processing started
-  ignored             Boolean  @default(false)  // true = auth passed but event was ignored
-  error               String?                   // first 200 chars of processing error if any
-  bodyKeys            String[]                  // top-level keys present in webhook body
-  dataKeys            String[]                  // keys present in body.data (if object)
-  messageId           String?                   // externalMessageId for messages.upsert
-  remoteJidMasked     String?                   // "551199***0000@s.whatsapp.net" — privacy safe
-  direction           String?                   // INBOUND | OUTBOUND (from fromMe field)
+  eventName           String // raw event field from Evolution payload
+  normalizedEventName String? // normalized form used internally (may differ)
+  accepted            Boolean  @default(false) // true = passed auth + processing started
+  ignored             Boolean  @default(false) // true = auth passed but event was ignored
+  error               String? // first 200 chars of processing error if any
+  bodyKeys            String[] // top-level keys present in webhook body
+  dataKeys            String[] // keys present in body.data (if object)
+  messageId           String? // externalMessageId for messages.upsert
+  remoteJidMasked     String? // "551199***0000@s.whatsapp.net" — privacy safe
+  direction           String? // INBOUND | OUTBOUND (from fromMe field)
   createdAt           DateTime @default(now())
 
   @@index([restaurantId, createdAt])
@@ -903,8 +903,8 @@ model EvolutionWebhookEventLog {
 model IntegrationConfig {
   id           String    @id @default(cuid())
   restaurantId String
-  provider     String    // "stone" | "mercadopago" | "tipos"
-  configBlob   String    // AES-256-GCM encrypted JSON
+  provider     String // "stone" | "mercadopago" | "tipos"
+  configBlob   String // AES-256-GCM encrypted JSON
   isActive     Boolean   @default(false)
   lastTestedAt DateTime?
   lastError    String?
@@ -926,23 +926,23 @@ model IntegrationConfig {
 // ═══════════════════════════════════════════
 
 model RestaurantBrandConfig {
-  id                   String   @id @default(cuid())
-  restaurantId         String   @unique
+  id           String @id @default(cuid())
+  restaurantId String @unique
 
   // ── Voice & tone ────────────────────────────────────────────
-  tone                 String   @default("friendly")
+  tone               String @default("friendly")
   // friendly | professional | casual | warm
-  formality            String   @default("informal")
+  formality          String @default("informal")
   // formal | informal | mixed
-  emojiUsage           String   @default("moderate")
+  emojiUsage         String @default("moderate")
   // none | minimal | moderate | expressive
-  communicationStyle   String   @default("conversational")
+  communicationStyle String @default("conversational")
   // conversational | concise | detailed
 
   // ── Ordering behaviour ──────────────────────────────────────
-  upsellStyle          String   @default("gentle")
+  upsellStyle      String  @default("gentle")
   // none | gentle | moderate | proactive
-  greetingTemplate     String?  // optional custom opening message
+  greetingTemplate String? // optional custom opening message
 
   // ── Advanced overrides ──────────────────────────────────────
   // When set, replaces the auto-generated system prompt entirely.
@@ -950,40 +950,40 @@ model RestaurantBrandConfig {
   systemPromptOverride String?
 
   // ── AI model settings ───────────────────────────────────────
-  aiModel              String   @default("gpt-4o-mini")
+  aiModel            String @default("gpt-4o-mini")
   // gpt-4o-mini | gpt-4o
-  maxHistoryMessages   Int      @default(20)
+  maxHistoryMessages Int    @default(20)
   // how many recent messages to include in the prompt
 
   // ── Experience / behavioral config (Phase 5) ─────────────────
-  personalityPreset    String   @default("traditional")
+  personalityPreset String @default("traditional")
   // traditional | fast | premium | young | aggressive
-  upsellIntensity      String   @default("medium")
+  upsellIntensity   String @default("medium")
   // low | medium | high
-  salesFocus           String   @default("balanced")
+  salesFocus        String @default("balanced")
   // balanced | ticket | volume
-  salesPriority        String   @default("bestsellers")
+  salesPriority     String @default("bestsellers")
   // bestsellers | high_margin | promotions
 
   // ── Visual identity ──────────────────────────────────────────
-  brandPrimaryColor    String?  // hex e.g. #6366f1
-  brandSecondaryColor  String?  // hex e.g. #8b5cf6
+  brandPrimaryColor   String? // hex e.g. #6366f1
+  brandSecondaryColor String? // hex e.g. #8b5cf6
 
   // ── Social links (shown in ordering header if filled) ──────
-  instagramUrl         String?
-  tiktokUrl            String?
+  instagramUrl String?
+  tiktokUrl    String?
 
   // ── Review links (shown in CRM Avaliações tab) ───────────────
-  googleReviewUrl      String?
-  ifoodReviewUrl       String?
+  googleReviewUrl String?
+  ifoodReviewUrl  String?
 
   // ── Analytics / Tag Manager ───────────────────────────────────
-  ga4MeasurementId     String?  // G-XXXXXXXXXX
-  gtmId                String?  // GTM-XXXXXXX
+  ga4MeasurementId String? // G-XXXXXXXXXX
+  gtmId            String? // GTM-XXXXXXX
 
   // ── Brand Persona (marketing strategy) ───────────────────────
   // Stored as JSON to allow flexible evolution without migrations.
-  brandPersona         Json?
+  brandPersona Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -998,37 +998,37 @@ model RestaurantBrandConfig {
 // ═══════════════════════════════════════════
 
 model WhatsAppAgentConfig {
-  id              String   @id @default(cuid())
-  restaurantId    String   @unique
+  id           String @id @default(cuid())
+  restaurantId String @unique
 
   // Behavior mode — controls whether WhatsApp uses full AI ordering or receptionist-only
   // RECEPTIONIST_ONLY       (default) — greet, answer basics, send menu link, hand off
   // HUMAN_ASSISTED          — same as receptionist but escalates to human sooner
   // AI_ORDERING_EXPERIMENTAL — full AIOrderService sales agent (opt-in only)
-  agentMode       String   @default("RECEPTIONIST_ONLY")
+  agentMode String @default("RECEPTIONIST_ONLY")
 
   // Personality
-  agentName       String   @default("Agente")
-  tone            String   @default("informal")      // informal | neutral | premium
-  style           String   @default("sales_driven")  // direct | consultive | sales_driven
+  agentName String @default("Agente")
+  tone      String @default("informal") // informal | neutral | premium
+  style     String @default("sales_driven") // direct | consultive | sales_driven
 
   // Welcome message
-  welcomeMessage  String   @default("Olá! Bem-vindo! 😊 O que você deseja?")
+  welcomeMessage String @default("Olá! Bem-vindo! 😊 O que você deseja?")
 
   // Entry menu options — JSON array of { id, label, flow, message? }
   // flow: order | handoff | menu | promotions | custom
-  menuOptions     Json?
+  menuOptions Json?
 
   // Order action
-  orderPreMessage String   @default("Ótimo! Aqui está nosso cardápio 👇")
+  orderPreMessage String  @default("Ótimo! Aqui está nosso cardápio 👇")
   menuUrl         String?
 
   // Human handoff
-  handoffPhone    String?
-  handoffMessage  String   @default("Vou te conectar com um atendente. Um momento! 👋")
+  handoffPhone   String?
+  handoffMessage String  @default("Vou te conectar com um atendente. Um momento! 👋")
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -1036,18 +1036,18 @@ model WhatsAppAgentConfig {
 }
 
 model MenuItemExtra {
-  id          String   @id @default(cuid())
-  menuItemId  String
-  name        String
-  quantity    Int      @default(1)
-  price       Decimal  @db.Decimal(10, 2)
-  portion     String?                    // e.g. "100g", "50ml", "1 porção"
-  isAvailable Boolean  @default(true)
-  saiposIntegrationCode String?          // PDV code for this extra/add-on
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  menuItemId            String
+  name                  String
+  quantity              Int      @default(1)
+  price                 Decimal  @db.Decimal(10, 2)
+  portion               String? // e.g. "100g", "50ml", "1 porção"
+  isAvailable           Boolean  @default(true)
+  saiposIntegrationCode String? // PDV code for this extra/add-on
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
   @@index([menuItemId])
   @@map("menu_item_extras")
@@ -1060,34 +1060,34 @@ model MenuItemExtra {
 model OptionGroup {
   id         String   @id @default(cuid())
   menuItemId String
-  name       String                     // e.g. "Tipo do peixe", "Molho"
-  required   Boolean  @default(false)   // if true, customer must pick at least minSelect
-  minSelect  Int      @default(0)       // minimum selections required
-  maxSelect  Int      @default(1)       // maximum selections allowed
+  name       String // e.g. "Tipo do peixe", "Molho"
+  required   Boolean  @default(false) // if true, customer must pick at least minSelect
+  minSelect  Int      @default(0) // minimum selections required
+  maxSelect  Int      @default(1) // maximum selections allowed
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  menuItem   MenuItem          @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  options    OptionGroupItem[]
+  menuItem MenuItem          @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  options  OptionGroupItem[]
 
   @@index([menuItemId])
   @@map("option_groups")
 }
 
 model OptionGroupItem {
-  id          String   @id @default(cuid())
-  groupId     String
-  name        String                     // e.g. "Cru", "Flambado", "Shoyu"
-  price       Decimal  @db.Decimal(10, 2) @default(0)
-  portion     String?                    // e.g. "50g"
-  isAvailable Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  saiposIntegrationCode String?          // PDV code sent as choice_items[].integration_code
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  groupId               String
+  name                  String // e.g. "Cru", "Flambado", "Shoyu"
+  price                 Decimal  @default(0) @db.Decimal(10, 2)
+  portion               String? // e.g. "50g"
+  isAvailable           Boolean  @default(true)
+  sortOrder             Int      @default(0)
+  saiposIntegrationCode String? // PDV code sent as choice_items[].integration_code
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  group       OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([groupId])
   @@map("option_group_items")
@@ -1109,15 +1109,15 @@ model MediaUpload {
 // ═══════════════════════════════════════════
 
 model DeliveryConfig {
-  id               String   @id @default(cuid())
-  restaurantId     String   @unique
+  id           String @id @default(cuid())
+  restaurantId String @unique
 
   // Global toggles
-  enabled          Boolean  @default(true)
-  pickupEnabled    Boolean  @default(true)
+  enabled       Boolean @default(true)
+  pickupEnabled Boolean @default(true)
 
   // UI mode — "simple" | "advanced" | "distance"
-  mode             String   @default("simple")
+  mode String @default("simple")
 
   // Simple-mode fields
   fee              Decimal? @db.Decimal(10, 2)
@@ -1125,27 +1125,27 @@ model DeliveryConfig {
   areaDescription  String?
 
   // Commercial rules (apply in all modes)
-  minOrderValue    Decimal? @db.Decimal(10, 2)
+  minOrderValue     Decimal? @db.Decimal(10, 2)
   freeDeliveryAbove Decimal? @db.Decimal(10, 2) // free delivery above this order value
 
   // Distance-mode fields: fee = baseFee + (distanceKm * pricePerKm), clamped to [minFee, maxFee]
-  distanceBaseFee      Decimal? @db.Decimal(10, 2)
-  distancePricePerKm   Decimal? @db.Decimal(10, 2)
-  distanceMaxKm        Float?
-  distanceMinFee       Decimal? @db.Decimal(10, 2)
-  distanceMaxFee       Decimal? @db.Decimal(10, 2)
+  distanceBaseFee       Decimal? @db.Decimal(10, 2)
+  distancePricePerKm    Decimal? @db.Decimal(10, 2)
+  distanceMaxKm         Float?
+  distanceMinFee        Decimal? @db.Decimal(10, 2)
+  distanceMaxFee        Decimal? @db.Decimal(10, 2)
   distanceEstimatedBase Int?
 
   // Phase 3 — dynamic pricing hooks (not yet active)
-  peakHoursEnabled Boolean  @default(false)
-  peakHoursConfig  String?  // JSON blob: [{ days, startTime, endTime, surchargePercent }]
+  peakHoursEnabled Boolean @default(false)
+  peakHoursConfig  String? // JSON blob: [{ days, startTime, endTime, surchargePercent }]
 
   // Phase 5 — map-ready geographic anchor
-  geoCenter        String?  // JSON: { lat: number, lng: number }
-  geoRadiusKm      Float?   // max delivery radius in km
+  geoCenter   String? // JSON: { lat: number, lng: number }
+  geoRadiusKm Float? // max delivery radius in km
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -1158,25 +1158,25 @@ model DeliveryConfig {
 //  Phase 5: geoPolygon field for future map-drawn boundaries.
 
 model DeliveryZone {
-  id               String   @id @default(cuid())
-  restaurantId     String
+  id           String @id @default(cuid())
+  restaurantId String
 
-  name             String   // e.g. "Zona 1 — Centro", "Raio 5km"
+  name             String // e.g. "Zona 1 — Centro", "Raio 5km"
   sortOrder        Int      @default(0)
-  maxDistanceKm    Float    // upper bound for this tier (km)
+  maxDistanceKm    Float // upper bound for this tier (km)
   fee              Decimal  @db.Decimal(10, 2)
   estimatedMinutes Int
   minOrderValue    Decimal? @db.Decimal(10, 2) // zone-level minimum (overrides global)
   isActive         Boolean  @default(true)
 
   // Phase 3 — time-based pricing hook
-  peakFee          Decimal? @db.Decimal(10, 2) // future: surge fee during peak hours
+  peakFee Decimal? @db.Decimal(10, 2) // future: surge fee during peak hours
 
   // Phase 5 — map-ready boundary
-  geoPolygon       String?  // future: JSON polygon [[lat,lng], …]
+  geoPolygon String? // future: JSON polygon [[lat,lng], …]
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -1187,10 +1187,10 @@ model DeliveryZone {
 model BusinessHours {
   id           String   @id @default(cuid())
   restaurantId String
-  dayOfWeek    Int      // 0 = Sunday … 6 = Saturday
+  dayOfWeek    Int // 0 = Sunday … 6 = Saturday
   isOpen       Boolean  @default(true)
-  openTime     String   @default("09:00")   // "HH:MM"
-  closeTime    String   @default("22:00")   // "HH:MM"
+  openTime     String   @default("09:00") // "HH:MM"
+  closeTime    String   @default("22:00") // "HH:MM"
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -1202,14 +1202,14 @@ model BusinessHours {
 }
 
 model PaymentSettings {
-  id            String   @id @default(cuid())
-  restaurantId  String   @unique
-  acceptPix     Boolean  @default(true)
-  acceptCash    Boolean  @default(true)
-  acceptCard    Boolean  @default(true)
-  acceptLink    Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  restaurantId String   @unique
+  acceptPix    Boolean  @default(true)
+  acceptCash   Boolean  @default(true)
+  acceptCard   Boolean  @default(true)
+  acceptLink   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -1225,15 +1225,15 @@ model StoreProfile {
   restaurantId String @unique
 
   // ── Dados da loja ──────────────────────────────────────────
-  tradeName    String?  // Nome fantasia
-  legalName    String?  // Razão social
-  cuisineType  String?  // Tipo de cozinha / segmento
+  tradeName   String? // Nome fantasia
+  legalName   String? // Razão social
+  cuisineType String? // Tipo de cozinha / segmento
 
   // ── Dados fiscais ──────────────────────────────────────────
   cnpj                  String?
-  stateRegistration     String?  // Inscrição estadual
-  municipalRegistration String?  // Inscrição municipal
-  taxRegime             String?  // Regime tributário
+  stateRegistration     String? // Inscrição estadual
+  municipalRegistration String? // Inscrição municipal
+  taxRegime             String? // Regime tributário
   legalResponsibleName  String?
   legalResponsibleCpf   String?
 
@@ -1245,7 +1245,7 @@ model StoreProfile {
   neighborhood   String?
   city           String?
   state          String?
-  country        String?  @default("Brasil")
+  country        String? @default("Brasil")
   referencePoint String?
   latitude       Float?
   longitude      Float?
@@ -1304,12 +1304,12 @@ model StorePolicies {
 // ═══════════════════════════════════════════
 
 enum PromotionType {
-  PERCENTAGE    // e.g. 10% off
-  FIXED         // e.g. R$5 off
-  COMBO         // bundled offer (configured via description/rules)
+  PERCENTAGE // e.g. 10% off
+  FIXED // e.g. R$5 off
+  COMBO // bundled offer (configured via description/rules)
   FREE_DELIVERY // zeroes delivery fee
-  COUPON        // code-gated discount
-  BANNER        // visual banner displayed on all menus on scheduled day
+  COUPON // code-gated discount
+  BANNER // visual banner displayed on all menus on scheduled day
 }
 
 enum PromotionStatus {
@@ -1326,19 +1326,19 @@ enum PromotionChannel {
 }
 
 enum PromotionTarget {
-  PRODUCT   // applies to specific products
-  CATEGORY  // applies to a whole category
-  ORDER     // applies to the whole order
+  PRODUCT // applies to specific products
+  CATEGORY // applies to a whole category
+  ORDER // applies to the whole order
 }
 
 model Promotion {
-  id                String           @id @default(cuid())
-  restaurantId      String
-  name              String
-  description       String?
-  type              PromotionType
-  status            PromotionStatus  @default(DRAFT)
-  discountValue     Decimal          @default(0) @db.Decimal(10, 2)
+  id            String          @id @default(cuid())
+  restaurantId  String
+  name          String
+  description   String?
+  type          PromotionType
+  status        PromotionStatus @default(DRAFT)
+  discountValue Decimal         @default(0) @db.Decimal(10, 2)
 
   // Targeting
   target            PromotionTarget  @default(ORDER)
@@ -1347,28 +1347,28 @@ model Promotion {
   channel           PromotionChannel @default(ALL)
 
   // Coupon
-  couponCode        String?
+  couponCode String?
 
   // Banner (type=BANNER only)
-  bannerImageUrl    String?
+  bannerImageUrl String?
 
   // Validity window
-  startsAt          DateTime?
-  endsAt            DateTime?
-  daysOfWeek        Int[]            @default([]) // 0=Sun … 6=Sat; empty = every day
-  timeFrom          String?          // "HH:MM" (local restaurant time)
-  timeTo            String?          // "HH:MM"
+  startsAt   DateTime?
+  endsAt     DateTime?
+  daysOfWeek Int[]     @default([]) // 0=Sun … 6=Sat; empty = every day
+  timeFrom   String? // "HH:MM" (local restaurant time)
+  timeTo     String? // "HH:MM"
 
   // Eligibility rules
-  minOrderValue     Decimal?         @db.Decimal(10, 2)
-  minQuantity       Int?
-  maxUses           Int?
-  usedCount         Int              @default(0)
-  oneTimePerUser    Boolean          @default(false)
-  combinable        Boolean          @default(false)
+  minOrderValue  Decimal? @db.Decimal(10, 2)
+  minQuantity    Int?
+  maxUses        Int?
+  usedCount      Int      @default(0)
+  oneTimePerUser Boolean  @default(false)
+  combinable     Boolean  @default(false)
 
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -1382,8 +1382,8 @@ model Promotion {
 
 enum AutomationTrigger {
   REACTIVATION // fires after X days of customer inactivity
-  BIRTHDAY     // fires on customer birthday
-  POST_ORDER   // fires X days after a completed order
+  BIRTHDAY // fires on customer birthday
+  POST_ORDER // fires X days after a completed order
 }
 
 model CRMAutomation {
@@ -1393,7 +1393,7 @@ model CRMAutomation {
   isEnabled        Boolean           @default(false)
   messageTemplate  String            @default("")
   triggerAfterDays Int               @default(30)
-  discountType     String?           // "PERCENTAGE" | "FIXED" | null
+  discountType     String? // "PERCENTAGE" | "FIXED" | null
   discountValue    Decimal?          @db.Decimal(10, 2)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -1412,12 +1412,12 @@ model CRMCustomAction {
   id            String   @id @default(cuid())
   restaurantId  String
   name          String
-  objective     String   // RECUPERAR | RECOMPRA | TICKET | BEBIDA | SOBREMESA | AVALIACAO | VIP | ANIVERSARIO | OUTRO
-  targetSegment String   // TODOS | QUENTE | MORNO | FRIO | NOVOS | RECORRENTES | VIP | PRIMEIRO_PEDIDO | ...
-  channel       String   @default("WHATSAPP")   // WHATSAPP | MANUAL | CRM_AGENT
+  objective     String // RECUPERAR | RECOMPRA | TICKET | BEBIDA | SOBREMESA | AVALIACAO | VIP | ANIVERSARIO | OUTRO
+  targetSegment String // TODOS | QUENTE | MORNO | FRIO | NOVOS | RECORRENTES | VIP | PRIMEIRO_PEDIDO | ...
+  channel       String   @default("WHATSAPP") // WHATSAPP | MANUAL | CRM_AGENT
   message       String   @db.Text
   notes         String?  @db.Text
-  status        String   @default("DRAFT")       // DRAFT (only status for now)
+  status        String   @default("DRAFT") // DRAFT (only status for now)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -1442,9 +1442,9 @@ enum CRMMessageStyle {
 
 /// Tone personality of the restaurant — biases style selection.
 enum CRMToneProfile {
-  CASUAL        // boosts PLAYFUL + FRIENDLY
-  PREMIUM_FEEL  // boosts PREMIUM + EMOTIONAL
-  FRIENDLY      // boosts FRIENDLY + EMOTIONAL
+  CASUAL // boosts PLAYFUL + FRIENDLY
+  PREMIUM_FEEL // boosts PREMIUM + EMOTIONAL
+  FRIENDLY // boosts FRIENDLY + EMOTIONAL
   SALES_FORWARD // boosts DIRECT + PREMIUM
 }
 
@@ -1453,7 +1453,7 @@ model CRMActionLog {
   id           String          @id @default(cuid())
   restaurantId String
   customerId   String?
-  actionType   String          // maps to MessageIntent values
+  actionType   String // maps to MessageIntent values
   messageStyle CRMMessageStyle
   messageText  String
   responded    Boolean         @default(false)
@@ -1477,7 +1477,7 @@ model RestaurantCRMProfile {
   restaurantId   String         @unique
   toneProfile    CRMToneProfile @default(FRIENDLY)
   styleWeights   Json           @default("{}") // { FRIENDLY: 0.3, PLAYFUL: 0.2, ... }
-  profileVersion Int            @default(0)    // bumped each time weights are recomputed
+  profileVersion Int            @default(0) // bumped each time weights are recomputed
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -1534,24 +1534,24 @@ model SimulationRun {
 // ═══════════════════════════════════════════
 
 model TrackingLink {
-  id                      String   @id @default(cuid())
-  restaurantId            String
-  name                    String   // human label, e.g. "Instagram Bio"
-  slug                    String   // URL-safe slug, e.g. "instagram-bio"
-  destinationType         String   @default("PEDIDO") // PEDIDO | QR
-  source                  String   // utm_source — e.g. instagram, whatsapp, qr, google
-  medium                  String   // utm_medium — e.g. bio, direct, mesa, embalagem
-  campaign                String?  // utm_campaign (optional)
-  content                 String?  // utm_content  (optional)
-  term                    String?  // utm_term     (optional)
-  isActive                Boolean  @default(true)
+  id              String  @id @default(cuid())
+  restaurantId    String
+  name            String // human label, e.g. "Instagram Bio"
+  slug            String // URL-safe slug, e.g. "instagram-bio"
+  destinationType String  @default("PEDIDO") // PEDIDO | QR
+  source          String // utm_source — e.g. instagram, whatsapp, qr, google
+  medium          String // utm_medium — e.g. bio, direct, mesa, embalagem
+  campaign        String? // utm_campaign (optional)
+  content         String? // utm_content  (optional)
+  term            String? // utm_term     (optional)
+  isActive        Boolean @default(true)
 
   // ── Aggregated metrics (incremented atomically) ────────────────
-  clickCount              Int      @default(0)
-  identifiedCustomerCount Int      @default(0)
-  orderStartedCount       Int      @default(0)
-  orderCompletedCount     Int      @default(0)
-  revenue                 Decimal  @default(0) @db.Decimal(12, 2)
+  clickCount              Int     @default(0)
+  identifiedCustomerCount Int     @default(0)
+  orderStartedCount       Int     @default(0)
+  orderCompletedCount     Int     @default(0)
+  revenue                 Decimal @default(0) @db.Decimal(12, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1569,23 +1569,23 @@ model TrackingLink {
 
 /// Per-restaurant tier thresholds. If absent, defaults from crm-helpers are used.
 model TierSettings {
-  id               String   @id @default(cuid())
-  restaurantId     String   @unique
+  id           String @id @default(cuid())
+  restaurantId String @unique
 
   /// PRATA thresholds (OR logic — either is enough to qualify)
-  silverMinSpend   Decimal  @default(300)  @db.Decimal(10, 2)
-  silverMinOrders  Int      @default(0)    // 0 = spend-only
+  silverMinSpend  Decimal @default(300) @db.Decimal(10, 2)
+  silverMinOrders Int     @default(0) // 0 = spend-only
 
   /// OURO thresholds
-  goldMinSpend     Decimal  @default(800)  @db.Decimal(10, 2)
-  goldMinOrders    Int      @default(0)
+  goldMinSpend  Decimal @default(800) @db.Decimal(10, 2)
+  goldMinOrders Int     @default(0)
 
   /// DIAMANTE thresholds
-  diamondMinSpend  Decimal  @default(2000) @db.Decimal(10, 2)
-  diamondMinOrders Int      @default(0)
+  diamondMinSpend  Decimal @default(2000) @db.Decimal(10, 2)
+  diamondMinOrders Int     @default(0)
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -1596,7 +1596,7 @@ model TierSettings {
 model TierBenefit {
   id           String   @id @default(cuid())
   restaurantId String
-  tier         String   // BRONZE | PRATA | OURO | DIAMANTE
+  tier         String // BRONZE | PRATA | OURO | DIAMANTE
   title        String
   description  String?
   isActive     Boolean  @default(true)
@@ -1633,34 +1633,34 @@ model RestaurantOnboardingStatus {
 /// Inferred or collected data signals about a customer.
 /// Confirmed signals must not auto-overwrite confirmed Customer fields.
 model CustomerDataSignal {
-  id           String    @id @default(cuid())
+  id           String @id @default(cuid())
   restaurantId String
   customerId   String
 
   /// PREFERENCE | POSSIBLE_FAVORITE_PRODUCT | MISSING_FIELD | ADDRESS_CLUE | BIRTHDAY_REQUESTED | NAME_CLUE
-  type         String
+  type String
 
   /// Which customer field this signal pertains to (e.g. "birthDate", "address", "preferences.dietary")
-  field        String?
+  field String?
 
   /// The inferred or collected value (stringified)
-  value        String?
+  value String?
 
   /// 0–1 confidence score (1 = confirmed)
-  confidence   Float?
+  confidence Float?
 
   /// IMPORT | ORDER_HISTORY | WHATSAPP_CONVERSATION | HUMAN_NOTE | CRM_CAMPAIGN | ANALYTICS
-  source       String
+  source String
 
   /// INFERRED | CONFIRMED | REJECTED | NEEDS_REVIEW
-  status       String    @default("INFERRED")
+  status String @default("INFERRED")
 
-  notes        String?
-  createdAt    DateTime  @default(now())
-  reviewedAt   DateTime?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  customer   Customer   @relation(fields: [customerId],   references: [id], onDelete: Cascade)
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId])
   @@index([restaurantId, status])
