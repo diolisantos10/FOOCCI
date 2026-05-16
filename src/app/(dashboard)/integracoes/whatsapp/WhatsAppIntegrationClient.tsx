@@ -504,6 +504,16 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     railwayCheckList: string[];
   } | null>(null);
 
+  // Env audit state
+  const [auditing,   setAuditing]   = useState(false);
+  const [auditResult, setAuditResult] = useState<{
+    evolutionVersion: { detected: string; httpStatus: number };
+    prioritisedFixes: Array<{ priority: number; variable: string; action: string; value?: string; reason: string; railwayHow: string }>;
+    upgradeRecommendation: { needed: boolean; currentVersion: string; recommendedVersion: string; railwayUpgradePath: string[]; riskLevel: string; riskNote: string; reason: string };
+    logPatterns: { command: string; patterns: Array<{ grep: string; meaning: string }>; railwayCLI: string[] };
+    summary: { step1: string; step2: string; step3: string; step4: string; scriptToRun: string };
+  } | null>(null);
+
   // Form state — secrets always blank on load (never pre-filled)
   const [instanceName,  setInstanceName]  = useState("");
   const [baseUrl,       setBaseUrl]       = useState("");
@@ -629,6 +639,18 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
       setDeepResult(data as typeof deepResult);
     } else {
       setFeedback({ type: "err", msg: "Falha ao executar diagnóstico profundo." });
+    }
+  }
+
+  async function handleAudit() {
+    setAuditing(true);
+    setAuditResult(null);
+    const { ok, data } = await apiFetch("/api/evolution/env-audit", "POST");
+    setAuditing(false);
+    if (ok) {
+      setAuditResult(data as typeof auditResult);
+    } else {
+      setFeedback({ type: "err", msg: "Falha ao executar auditoria de env vars." });
     }
   }
 
@@ -1090,6 +1112,95 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                         );
                       })}
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Env-var audit — Railway config recommendations ──────── */}
+              <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-4 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold text-orange-700">Auditoria de Env Vars (Railway)</p>
+                  <p className="mt-0.5 text-xs text-orange-600">
+                    Retorna as variáveis de ambiente necessárias para Evolution v2.2.3 com valores recomendados,
+                    prioridade e instruções Railway. Use quando QR retorna apenas &#123; count &#125;.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleAudit()}
+                  disabled={auditing || !isConfigured}
+                  className="rounded-xl border border-orange-200 bg-white px-4 py-2 text-xs font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-40 transition"
+                >
+                  {auditing ? "Auditando…" : "Ver env vars necessárias"}
+                </button>
+
+                {auditResult && (
+                  <div className="space-y-3 pt-1">
+                    {/* Summary */}
+                    <div className="rounded-lg border border-orange-200 bg-white px-3 py-2 text-[11px] space-y-1 text-gray-700">
+                      <p className="font-semibold text-orange-700 mb-1">Plano de ação — em ordem:</p>
+                      <p>1. {auditResult.summary.step1}</p>
+                      <p>2. {auditResult.summary.step2}</p>
+                      <p>3. {auditResult.summary.step3}</p>
+                      <p>4. {auditResult.summary.step4}</p>
+                      <p className="font-mono text-gray-500 mt-1">Script: {auditResult.summary.scriptToRun}</p>
+                    </div>
+
+                    {/* Prioritised fixes */}
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold text-gray-700">Correções prioritárias (adicione ao Railway):</p>
+                      {auditResult.prioritisedFixes.slice(0, 8).map((fix) => (
+                        <div key={fix.variable} className={`rounded-lg border px-3 py-2 text-[11px] ${
+                          fix.priority <= 3 ? "border-red-200 bg-red-50" :
+                          fix.priority <= 6 ? "border-amber-100 bg-amber-50" :
+                          "border-gray-100 bg-gray-50"
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-mono font-semibold ${fix.priority <= 3 ? "text-red-700" : fix.priority <= 6 ? "text-amber-700" : "text-gray-700"}`}>
+                              {fix.priority}. {fix.variable}
+                            </span>
+                            {fix.value && (
+                              <span className="font-mono text-green-700 bg-green-50 border border-green-100 px-1.5 py-0.5 rounded">
+                                = {fix.value}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-gray-600">{fix.reason}</p>
+                          <p className="mt-0.5 font-mono text-gray-500">{fix.railwayHow}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Log patterns */}
+                    <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] space-y-1">
+                      <p className="font-semibold text-gray-700 mb-1">Após LOG_BAILEYS=debug — o que procurar nos logs Railway:</p>
+                      {auditResult.logPatterns.railwayCLI.map((line, i) => (
+                        <p key={i} className="font-mono text-gray-500">{line}</p>
+                      ))}
+                      <div className="mt-2 space-y-0.5">
+                        {auditResult.logPatterns.patterns.map((p) => (
+                          <p key={p.grep} className="text-gray-600">
+                            <span className="font-mono text-amber-600">&quot;{p.grep}&quot;</span> → {p.meaning}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Upgrade recommendation */}
+                    {auditResult.upgradeRecommendation.needed && (
+                      <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] space-y-1">
+                        <p className="font-semibold text-blue-700">Recomendação: Atualizar Evolution</p>
+                        <p className="text-gray-600">{auditResult.upgradeRecommendation.reason}</p>
+                        <p className="text-gray-600">Versão atual: <span className="font-mono">{auditResult.upgradeRecommendation.currentVersion}</span></p>
+                        <p className="text-gray-600">Recomendado: <span className="font-mono">{auditResult.upgradeRecommendation.recommendedVersion}</span></p>
+                        <p className="text-blue-500">Risco: {auditResult.upgradeRecommendation.riskLevel} — {auditResult.upgradeRecommendation.riskNote}</p>
+                        <div className="mt-1 space-y-0.5">
+                          {auditResult.upgradeRecommendation.railwayUpgradePath.map((step, i) => (
+                            <p key={i} className="font-mono text-gray-500">{step}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
