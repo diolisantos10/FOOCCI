@@ -123,6 +123,16 @@ function SimpleQRPanel({
   const [qrPairingCode, setQrPairingCode] = useState<string | null>(null);
   const [qrState,       setQrState]       = useState<QRState>("idle");
   const [qrErrorMsg,    setQrErrorMsg]    = useState<string | null>(null);
+  const [qrDiagnostic,  setQrDiagnostic]  = useState<{
+    stage?: string;
+    create_response_keys?: string[];
+    create_response_shape?: Record<string, string[]>;
+    poll_attempts?: Array<{
+      attempt: number; endpoint: string; httpStatus: number;
+      keys: string[]; qrFound: boolean; isCountOnly: boolean;
+    }>;
+    message?: string;
+  } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -158,11 +168,13 @@ function SimpleQRPanel({
     setQrBase64(null);
     setQrPairingCode(null);
     setQrErrorMsg(null);
+    setQrDiagnostic(null);
     stopPolling();
 
     const res  = await fetch("/api/evolution/hard-reset", { method: "POST" });
     const json = await res.json().catch(() => ({}));
     const d    = (json?.data ?? json) as {
+      ok?: boolean;
       success?: boolean;
       qr_found?: boolean;
       qr_base64?: string | null;
@@ -170,6 +182,11 @@ function SimpleQRPanel({
       qr_source?: string | null;
       create_response_keys?: string[];
       create_response_shape?: Record<string, string[]>;
+      stage?: string;
+      poll_attempts?: Array<{
+        attempt: number; endpoint: string; httpStatus: number;
+        keys: string[]; qrFound: boolean; isCountOnly: boolean;
+      }>;
       message?: string;
       error?: string;
     };
@@ -190,14 +207,16 @@ function SimpleQRPanel({
     } else {
       setQrBase64(null);
       setQrState("error");
-      const keys    = d.create_response_keys?.join(", ") ?? "desconhecidas";
-      const shape   = d.create_response_shape
-        ? " — " + Object.entries(d.create_response_shape)
-            .map(([k, v]) => `${k}: [${v.join(", ")}]`).join("; ")
-        : "";
+      setQrDiagnostic({
+        stage:                d.stage,
+        create_response_keys: d.create_response_keys,
+        create_response_shape: d.create_response_shape,
+        poll_attempts:        d.poll_attempts,
+        message:              d.message,
+      });
       setQrErrorMsg(
-        `A instância foi recriada, mas a Evolution não retornou QR no create response. ` +
-        `Chaves: [${keys}]${shape}`
+        d.message ??
+        "A instância foi recriada, mas a Evolution não retornou QR Code. Veja o diagnóstico abaixo."
       );
     }
   };
@@ -351,11 +370,34 @@ function SimpleQRPanel({
 
       {qrState === "error" && (
         <div className="space-y-2">
-          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-1">
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-2">
             <p className="font-semibold">QR Code não disponível</p>
-            <p className="text-xs whitespace-pre-wrap break-words">
+            <p className="text-xs">
               {qrErrorMsg ?? "A instância Evolution não respondeu. Tente novamente."}
             </p>
+            {qrDiagnostic && (
+              <div className="rounded-lg border border-red-200 bg-white px-3 py-2 text-[11px] font-mono space-y-0.5 text-gray-600">
+                {qrDiagnostic.stage && (
+                  <p>stage: <span className="text-red-600">{qrDiagnostic.stage}</span></p>
+                )}
+                {qrDiagnostic.create_response_keys && (
+                  <p>create_keys: [{qrDiagnostic.create_response_keys.join(", ")}]</p>
+                )}
+                {qrDiagnostic.create_response_shape &&
+                  Object.entries(qrDiagnostic.create_response_shape).map(([k, v]) => (
+                    <p key={k}>&nbsp;&nbsp;{k}: [{v.join(", ")}]</p>
+                  ))
+                }
+                {qrDiagnostic.poll_attempts && qrDiagnostic.poll_attempts.length > 0 && (
+                  <p>
+                    polls: {qrDiagnostic.poll_attempts.length} tentativa(s)
+                    {qrDiagnostic.poll_attempts.every((a) => a.isCountOnly)
+                      ? " — todas retornaram \{count\}"
+                      : " — sem QR encontrado"}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -407,7 +449,6 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const [isAdvancedOpen,  setIsAdvancedOpen]  = useState(false);
 
   // Hard-reset state
-  const [resetting,       setResetting]       = useState(false);
   const [resetConfirming, setResetConfirming] = useState(false);
   const [qrPanelKey,      setQrPanelKey]      = useState(0);
   const [autoStartQR,     setAutoStartQR]     = useState(false);
@@ -552,48 +593,14 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     }
   }
 
-  async function handleHardReset() {
-    setResetting(true);
+  function handleHardReset() {
     setFeedback(null);
     setResetCreateInfo(null);
     setResetConfirming(false);
-    const { ok, data } = await apiFetch("/api/evolution/hard-reset", "POST");
-    setResetting(false);
-
-    if (ok) {
-      const result = data as {
-        hasQR?: boolean;
-        instanceState?: string;
-        qrFlowVersion?: string;
-        create_instance_qr?: {
-          qr_found: boolean;
-          qr_candidate_field?: string | null;
-          qr_candidate_length?: number | null;
-          create_top_level_keys?: string[];
-          create_nested_keys?: Record<string, string[]>;
-          pairing_code_found?: boolean;
-          reason?: string | null;
-        };
-      };
-
-      const cqr = result.create_instance_qr;
-      if (cqr) setResetCreateInfo(cqr);
-
-      const qrMsg = cqr?.qr_found
-        ? `QR capturado do create (campo: ${cqr.qr_candidate_field ?? "?"}, ${cqr.qr_candidate_length ?? "?"} chars)`
-        : cqr
-          ? `QR não encontrado no create. Chaves: [${cqr.create_top_level_keys?.join(", ") ?? "?"}]. Aguardando geração…`
-          : (result.hasQR ? "QR Code sendo gerado…" : "Aguardando geração do QR…");
-
-      setFeedback({ type: "ok", msg: `Instância resetada. ${qrMsg}` });
-      // Remount the QR panel with autoStart so it immediately polls for the QR
-      setAutoStartQR(true);
-      setQrPanelKey((k) => k + 1);
-      void loadView();
-    } else {
-      const err = (data as { error?: string })?.error ?? "Erro ao resetar instância.";
-      setFeedback({ type: "err", msg: `Reset falhou: ${err}` });
-    }
+    // Remount the QR panel with autoStart — SimpleQRPanel.handleCreateQR runs the full
+    // hard-reset (logout → delete → create → QR capture) and shows the result inline.
+    setAutoStartQR(true);
+    setQrPanelKey((k) => k + 1);
   }
 
   const webhookUrl = typeof window !== "undefined"
@@ -899,7 +906,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                   <button
                     type="button"
                     onClick={() => setResetConfirming(true)}
-                    disabled={resetting || !isConfigured}
+                    disabled={!isConfigured}
                     className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40 transition"
                   >
                     Resetar instância WhatsApp
@@ -914,17 +921,15 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => void handleHardReset()}
-                        disabled={resetting}
-                        className="rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition"
+                        onClick={() => handleHardReset()}
+                        className="rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 transition"
                       >
-                        {resetting ? "Resetando…" : "Sim, resetar"}
+                        Sim, resetar
                       </button>
                       <button
                         type="button"
                         onClick={() => setResetConfirming(false)}
-                        disabled={resetting}
-                        className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                        className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
                       >
                         Cancelar
                       </button>
