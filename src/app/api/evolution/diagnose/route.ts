@@ -1,16 +1,17 @@
 /**
  * POST /api/evolution/diagnose
  *
- * OWNER-only. Runs a sequence of connectivity and state checks against the
- * configured Evolution instance and returns a sanitized diagnostic report.
+ * OWNER-only. Runs connectivity and state checks against the configured
+ * Evolution instance. Returns a sanitized diagnostic report.
  *
- * Never exposes API keys, webhook secrets, or raw tokens.
+ * Never exposes API keys, webhook secrets, or full base64 QR images.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
+import { qrDiagnosticMeta } from "@/lib/evolution/extractQr";
 import { unauthorized, forbidden, serverError } from "@/lib/api-response";
 
 function maskUrl(url: string): string {
@@ -23,10 +24,10 @@ function maskUrl(url: string): string {
 }
 
 interface DiagStep {
-  label:    string;
-  ok:       boolean;
-  detail?:  unknown;
-  error?:   string;
+  label:   string;
+  ok:      boolean;
+  detail?: unknown;
+  error?:  string;
 }
 
 async function diagStep(label: string, fn: () => Promise<unknown>): Promise<DiagStep> {
@@ -59,25 +60,24 @@ export async function POST(req: NextRequest) {
     const baseUrlMasked = maskUrl(cfg.baseUrl);
     const steps: DiagStep[] = [];
 
-    // ── 1. HTTP reachability (root) ───────────────────────────
+    // ── 1. HTTP reachability ──────────────────────────────────
     steps.push(await diagStep("server_reachable", async () => {
       const res = await fetch(cfg.baseUrl, { method: "GET" });
       return { httpStatus: res.status };
     }));
 
-    // ── 2. Auth + fetchInstances ──────────────────────────────
-    const instancesStep = await diagStep("auth_fetchInstances", () =>
-      EvolutionClient.fetchInstances(cfg)
-    );
-    // Strip sensitive data from instance list before returning
-    const instancesRaw = instancesStep.ok
-      ? (instancesStep.detail as unknown[]).map((i: unknown) => {
-          if (typeof i !== "object" || !i) return i;
-          const { instanceName, state, status } = i as Record<string, unknown>;
-          return { instanceName, state, status };
-        })
-      : null;
-    steps.push({ ...instancesStep, detail: instancesRaw });
+    // ── 2. Auth + instance list ───────────────────────────────
+    const instancesStep = await diagStep("auth_fetchInstances", async () => {
+      const list = await EvolutionClient.fetchInstances(cfg);
+      return Array.isArray(list)
+        ? list.map((i: unknown) => {
+            if (typeof i !== "object" || !i) return i;
+            const { instanceName, state, status } = i as Record<string, unknown>;
+            return { instanceName, state, status };
+          })
+        : list;
+    });
+    steps.push(instancesStep);
 
     // ── 3. Connection state ───────────────────────────────────
     const stateStep = await diagStep("connectionState", async () => {
@@ -86,24 +86,49 @@ export async function POST(req: NextRequest) {
     });
     steps.push(stateStep);
 
-    // ── 4. QR endpoint (raw — mask base64) ───────────────────
-    const qrStep = await diagStep("qr_connect", async () => {
-      const qr = await EvolutionClient.getQRCode(cfg);
-      return {
-        hasBase64:     !!qr.base64,
-        base64Prefix:  qr.base64 ? qr.base64.slice(0, 30) + "…" : null,
-        hasCode:       !!qr.code,
-        instanceState: qr.instanceState,
-      };
-    });
-    steps.push(qrStep);
-
     const state = stateStep.ok
       ? (stateStep.detail as { state?: string })?.state ?? "unknown"
       : "error";
 
+    // ── 4. QR connect — raw key inspection ───────────────────
+    const qrStep = await diagStep("qr_connect_endpoint", async () => {
+      // Use raw request to capture the actual response shape
+      const raw = await EvolutionClient.getQRCode(cfg);
+      return {
+        instanceState:        raw.instanceState,
+        qrExtracted:          !!raw.base64,
+        pairingCodeExtracted: !!raw.pairingCode,
+        textCodeExtracted:    !!raw.code,
+        base64Prefix:         raw.base64 ? raw.base64.slice(0, 40) + "…" : null,
+        foundIn:              raw.foundIn,
+      };
+    });
+    steps.push(qrStep);
+
+    // ── 5. Raw QR response shape (for debugging) ──────────────
+    // Call the connect endpoint again and inspect raw keys
+    const rawInspectStep = await diagStep("qr_response_shape", async () => {
+      const rawRes = await fetch(
+        `${cfg.baseUrl.replace(/\/$/, "")}/instance/connect/${cfg.instanceName}`,
+        { method: "GET", headers: { "Content-Type": "application/json", apikey: cfg.apiKey } }
+      );
+      const rawBody = await rawRes.json().catch(() => ({}));
+      const meta = qrDiagnosticMeta(rawBody);
+      return {
+        httpStatus:            rawRes.status,
+        availableKeys:         meta.availableKeys,
+        keyMeta:               meta.keyMeta,
+        qrExtracted:           meta.qrExtracted,
+        pairingCodeExtracted:  meta.pairingCodeExtracted,
+        textCodeExtracted:     meta.textCodeExtracted,
+        foundIn:               meta.foundIn,
+        reason:                meta.reason,
+      };
+    });
+    steps.push(rawInspectStep);
+
     const qrAvailable = qrStep.ok
-      ? !!(qrStep.detail as { hasBase64?: boolean })?.hasBase64
+      ? !!(qrStep.detail as { qrExtracted?: boolean })?.qrExtracted
       : false;
 
     return NextResponse.json({

@@ -11,6 +11,8 @@
  * brand-agnostic.
  */
 
+import { extractEvolutionQr } from "./extractQr";
+
 export interface EvolutionConfigSnapshot {
   instanceName: string;
   baseUrl: string;         // decrypted
@@ -50,8 +52,10 @@ export interface InstanceStatus {
 }
 
 export interface InstanceQRCode {
-  base64: string | null;  // data:image/png;base64,... or null if already connected
-  code:   string | null;
+  base64:      string | null;
+  code:        string | null;
+  pairingCode: string | null;  // 8-digit pairing code (alternative to QR image)
+  foundIn:     string | null;  // field path where base64 was found
   instanceState?: "open" | "close" | "connecting";
 }
 
@@ -175,32 +179,27 @@ export const EvolutionClient = {
   /**
    * Fetch the QR code for the instance.
    *
-   * Evolution v2 returns a FLAT response when QR is ready:
-   *   { base64: "data:image/png;base64,...", code: "2@...", pairingCode: null, count: 1 }
-   * When connected it returns:
-   *   { instance: { instanceName, state: "open" } }
-   *
-   * Evolution v1 used a nested qrcode field — we support both.
+   * Uses extractEvolutionQr() to handle all known Evolution response shapes.
+   * When connected: { instance: { state: "open" } }
+   * When QR ready:  various field layouts depending on version.
    */
   async getQRCode(config: EvolutionConfigSnapshot): Promise<InstanceQRCode> {
-    const raw = await request<{
-      // Evolution v2 — flat
-      base64?:      string;
-      code?:        string;
-      pairingCode?: string | null;
-      count?:       number;
-      // Evolution v1 — nested
-      qrcode?: { base64?: string; code?: string };
-      // Connected state
-      instance?: { state?: string; instanceName?: string } | string;
-    }>(config, "GET", `/instance/connect/${config.instanceName}`);
+    const raw = await request<Record<string, unknown>>(
+      config, "GET", `/instance/connect/${config.instanceName}`
+    );
 
-    const nested       = typeof raw.instance === "object" ? raw.instance : null;
-    const instanceState = (nested?.state) as InstanceQRCode["instanceState"];
+    const nested = typeof raw.instance === "object" && raw.instance !== null
+      ? (raw.instance as Record<string, unknown>)
+      : null;
+    const instanceState = (nested?.["state"]) as InstanceQRCode["instanceState"];
+
+    const extracted = extractEvolutionQr(raw);
 
     return {
-      base64: raw.base64 ?? raw.qrcode?.base64 ?? null,
-      code:   raw.code   ?? raw.qrcode?.code   ?? null,
+      base64:      extracted.base64,
+      code:        extracted.code,
+      pairingCode: extracted.pairingCode,
+      foundIn:     extracted.foundIn,
       instanceState,
     };
   },

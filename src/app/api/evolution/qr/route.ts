@@ -6,12 +6,14 @@
  * GET /instance/connect.
  *
  * Response shapes:
- *   { base64: "data:image/png;base64,…", code: "…" }  — QR ready
- *   { connected: true }                                 — already open
- *   { restarting: true }                                — was close/connecting, restart triggered
- *   { error: "not_configured" }                         — no credentials in DB
- *   { error: "instance_not_found" }                     — instance deleted on Evolution side
- *   { error: "evolution_error", status: N }             — unexpected Evolution error
+ *   { base64: "data:image/png;…", code: "…" }           — QR image ready
+ *   { pairingCode: "ABCD-EFGH", code: "…" }             — pairing code (no image)
+ *   { connected: true }                                   — already open
+ *   { restarting: true }                                  — restart triggered, retry
+ *   { error: "not_configured" }                           — no credentials in DB
+ *   { error: "instance_not_found" }                       — instance deleted on Evolution
+ *   { error: "qr_shape_unknown", availableKeys: [...] }  — responded but no QR field found
+ *   { error: "evolution_error", status: N }               — unexpected Evolution error
  */
 
 import { NextRequest } from "next/server";
@@ -19,6 +21,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
+import { qrDiagnosticMeta } from "@/lib/evolution/extractQr";
 
 export async function GET(req: NextRequest) {
   try {
@@ -52,7 +55,6 @@ export async function GET(req: NextRequest) {
     }
 
     if (state === "close") {
-      // Not connecting yet — trigger restart so Evolution generates a QR
       try {
         await EvolutionClient.restartInstance(cfg);
       } catch (restartErr) {
@@ -68,17 +70,30 @@ export async function GET(req: NextRequest) {
     const qr = await EvolutionClient.getQRCode(cfg);
 
     if (qr.base64) {
-      // Activate in DB whenever QR is successfully retrieved
       await EvolutionConfigService.activate(ctx.restaurantId);
       return ok({ base64: qr.base64, code: qr.code });
     }
 
-    // "connecting" but QR not ready yet — tell frontend to retry
+    if (qr.pairingCode) {
+      // Evolution returned a pairing code instead of QR image
+      return ok({ pairingCode: qr.pairingCode, code: qr.code });
+    }
+
+    // "connecting" but QR not ready — log what we got and retry
+    console.warn(
+      "[GET /api/evolution/qr] connecting but no QR extracted. foundIn:",
+      qr.foundIn ?? "none"
+    );
     return ok({ base64: null, code: null, restarting: true });
 
   } catch (err) {
     if (err instanceof EvolutionApiError) {
       console.error("[GET /api/evolution/qr] Evolution error:", err.status, err.body);
+      // Log response shape for debugging (server-side only)
+      if (err.body && typeof err.body === "object") {
+        const meta = qrDiagnosticMeta(err.body);
+        console.error("[GET /api/evolution/qr] response keys:", meta.availableKeys);
+      }
       return ok({ base64: null, code: null, error: "evolution_error", status: err.status });
     }
     console.error("[GET /api/evolution/qr]", err);

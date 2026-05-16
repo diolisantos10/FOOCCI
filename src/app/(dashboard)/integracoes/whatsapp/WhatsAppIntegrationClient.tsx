@@ -100,7 +100,7 @@ function ConnectionPill({ status }: { status: SimpleStatus }) {
 
 // ── Simple QR / connection panel ──────────────────────────────────────────────
 
-type QRState = "idle" | "loading" | "restarting" | "shown" | "connected" | "unconfigured" | "error";
+type QRState = "idle" | "loading" | "restarting" | "shown" | "pairing" | "connected" | "unconfigured" | "error";
 
 function SimpleQRPanel({
   isConfigured,
@@ -120,11 +120,12 @@ function SimpleQRPanel({
   autoStart?:     boolean;
 }) {
   const [qrBase64,      setQrBase64]      = useState<string | null>(null);
+  const [qrPairingCode, setQrPairingCode] = useState<string | null>(null);
   const [qrState,       setQrState]       = useState<QRState>("idle");
   const [disconnecting, setDisconnecting] = useState(false);
   const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryCountRef  = useRef(0);
-  const MAX_QR_RETRIES = 4;
+  const MAX_QR_RETRIES = 6;   // 6 × 5 s = 30 s max wait for QR after reset
 
   // Auto-start QR generation when parent signals a fresh instance (post-reset)
   useEffect(() => {
@@ -152,17 +153,24 @@ function SimpleQRPanel({
     const res  = await fetch("/api/evolution/qr");
     const data = await res.json().catch(() => ({}));
     const qr = (data?.data ?? data) as {
-      base64?:    string | null;
-      code?:      string | null;
-      error?:     string;
-      connected?: boolean;
-      restarting?: boolean;
+      base64?:      string | null;
+      code?:        string | null;
+      pairingCode?: string | null;
+      error?:       string;
+      connected?:   boolean;
+      restarting?:  boolean;
     };
 
     if (qr.base64) {
       retryCountRef.current = 0;
       setQrBase64(qr.base64);
+      setQrPairingCode(null);
       setQrState("shown");
+    } else if (qr.pairingCode) {
+      retryCountRef.current = 0;
+      setQrBase64(null);
+      setQrPairingCode(qr.pairingCode);
+      setQrState("pairing");
     } else if (qr.error === "not_configured" || qr.error === "instance_not_found") {
       setQrBase64(null);
       setQrState("unconfigured");
@@ -205,6 +213,7 @@ function SimpleQRPanel({
     onStartConnect();
     setQrState("loading");
     setQrBase64(null);
+    setQrPairingCode(null);
     await fetchQR();
     stopPolling();
     intervalRef.current = setInterval(fetchQR, 30_000);
@@ -289,6 +298,32 @@ function SimpleQRPanel({
             className="w-full rounded-xl border border-green-200 bg-white px-3 py-2 text-xs font-medium text-green-700 hover:bg-green-50 transition"
           >
             Atualizar QR Code
+          </button>
+        </div>
+      )}
+
+      {qrState === "pairing" && qrPairingCode && (
+        <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 space-y-3">
+          <p className="text-xs font-semibold text-indigo-800">
+            Use o código de pareamento no WhatsApp do restaurante:
+          </p>
+          <div className="rounded-xl border border-indigo-200 bg-white px-4 py-3 text-center">
+            <span className="font-mono text-2xl font-bold tracking-widest text-indigo-700">
+              {qrPairingCode}
+            </span>
+          </div>
+          <ol className="space-y-0.5 text-[11px] text-indigo-700 list-decimal list-inside">
+            <li>Abra o WhatsApp no celular</li>
+            <li>Toque em Configurações → Aparelhos conectados</li>
+            <li>Toque em "Conectar com número de telefone"</li>
+            <li>Digite o código acima</li>
+          </ol>
+          <button
+            type="button"
+            onClick={() => void handleGenerateQR()}
+            className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-50 transition"
+          >
+            Gerar novo código
           </button>
         </div>
       )}
@@ -877,7 +912,8 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                 </button>
 
                 {diagResult && (
-                  <div className="space-y-2 pt-1">
+                  <div className="space-y-3 pt-1">
+                    {/* Summary row */}
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                       <span className="text-gray-500">Servidor</span>
                       <span className="font-mono text-gray-700 truncate">{diagResult.baseUrlMasked}</span>
@@ -889,21 +925,61 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                         diagResult.instanceState === "connecting" ? "text-amber-600" :
                         "text-red-600"
                       }`}>{diagResult.instanceState}</span>
-                      <span className="text-gray-500">QR disponível</span>
+                      <span className="text-gray-500">QR extraído</span>
                       <span className={diagResult.qrAvailable ? "text-green-600 font-semibold" : "text-red-600"}>
                         {diagResult.qrAvailable ? "sim" : "não"}
                       </span>
                     </div>
-                    <div className="space-y-1 pt-1">
-                      {diagResult.steps.map((s) => (
-                        <div key={s.label} className="flex items-start gap-2 text-[11px]">
-                          <span className={s.ok ? "text-green-500" : "text-red-500"}>{s.ok ? "✓" : "✗"}</span>
-                          <span className="font-mono text-gray-500">{s.label}</span>
-                          {!s.ok && s.error && (
-                            <span className="text-red-600 break-all">{s.error}</span>
-                          )}
-                        </div>
-                      ))}
+
+                    {/* Step results */}
+                    <div className="space-y-2">
+                      {diagResult.steps.map((s) => {
+                        const shapeStep = s.label === "qr_response_shape" && s.ok && s.detail;
+                        const shape = shapeStep
+                          ? (s.detail as {
+                              availableKeys?: string[];
+                              keyMeta?: Record<string, { type: string; length?: number }>;
+                              qrExtracted?: boolean;
+                              pairingCodeExtracted?: boolean;
+                              reason?: string | null;
+                              foundIn?: string | null;
+                            })
+                          : null;
+
+                        return (
+                          <div key={s.label} className="text-[11px]">
+                            <div className="flex items-center gap-1.5">
+                              <span className={s.ok ? "text-green-500" : "text-red-500"}>{s.ok ? "✓" : "✗"}</span>
+                              <span className="font-mono text-gray-600">{s.label}</span>
+                              {s.label === "qr_connect_endpoint" && s.ok && (
+                                <span className={
+                                  (s.detail as { qrExtracted?: boolean })?.qrExtracted
+                                    ? "text-green-600"
+                                    : "text-amber-600"
+                                }>
+                                  {(s.detail as { qrExtracted?: boolean })?.qrExtracted
+                                    ? "→ QR encontrado"
+                                    : "→ respondeu, QR não encontrado"}
+                                </span>
+                              )}
+                              {!s.ok && s.error && (
+                                <span className="text-red-600 break-all">{s.error}</span>
+                              )}
+                            </div>
+                            {shape && (
+                              <div className="ml-4 mt-1 space-y-0.5 text-gray-500">
+                                <p>Chaves: [{shape.availableKeys?.join(", ") ?? "—"}]</p>
+                                {shape.keyMeta && Object.entries(shape.keyMeta).map(([k, v]) => (
+                                  <p key={k} className="font-mono">
+                                    {k}: {v.type}{v.length !== undefined ? ` (${v.length} chars)` : ""}
+                                  </p>
+                                ))}
+                                {shape.reason && <p className="text-amber-600">{shape.reason}</p>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
