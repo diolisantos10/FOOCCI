@@ -449,6 +449,143 @@ function SimpleQRPanel({
   );
 }
 
+// ── Webhook health card ────────────────────────────────────────────────────────
+
+interface WebhookLogSummary {
+  totalEvents:    number;
+  inboundToday:   number;
+  lastEventAt:    string | null;
+  lastAcceptedAt: string | null;
+  lastError:      string | null;
+}
+
+interface WebhookLogEvent {
+  id:              string;
+  instanceName:    string;
+  eventName:       string;
+  accepted:        boolean;
+  ignored:         boolean;
+  error:           string | null;
+  bodyKeys:        string[];
+  direction:       string | null;
+  createdAt:       string;
+}
+
+function WebhookHealthCard({
+  summary,
+  events,
+  loading,
+}: {
+  summary:  WebhookLogSummary | null;
+  events:   WebhookLogEvent[];
+  loading:  boolean;
+}) {
+  const now = Date.now();
+
+  function healthStatus(): { label: string; color: string; dot: string } {
+    if (!summary) return { label: "Sem dados", color: "text-gray-500", dot: "bg-gray-400" };
+    if (!summary.lastEventAt) return { label: "Nenhum evento recebido", color: "text-amber-600", dot: "bg-amber-400" };
+    const age = now - new Date(summary.lastEventAt).getTime();
+    if (age < 5 * 60 * 1000) return { label: "Recebendo", color: "text-green-700", dot: "bg-green-500" };
+    if (age < 60 * 60 * 1000) return { label: `Último: ${fmtAge(summary.lastEventAt)}`, color: "text-green-600", dot: "bg-green-400" };
+    return { label: `Sem eventos há ${fmtAge(summary.lastEventAt)}`, color: "text-amber-600", dot: "bg-amber-400 animate-pulse" };
+  }
+
+  function fmtAge(iso: string): string {
+    const ms = now - new Date(iso).getTime();
+    const m  = Math.floor(ms / 60000);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    return `${Math.floor(h / 24)}d`;
+  }
+
+  const hs = healthStatus();
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-3">
+      <p className="text-sm font-semibold text-gray-800">Saúde da integração</p>
+
+      {loading ? (
+        <div className="h-16 animate-pulse rounded-xl bg-gray-100" />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+            <span className="text-gray-500">Webhook</span>
+            <span className={`flex items-center gap-1.5 font-semibold ${hs.color}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${hs.dot}`} />
+              {hs.label}
+            </span>
+
+            <span className="text-gray-500">Mensagens hoje</span>
+            <span className="font-semibold text-gray-800">{summary?.inboundToday ?? 0} recebidas</span>
+
+            {summary?.lastAcceptedAt && (
+              <>
+                <span className="text-gray-500">Último aceito</span>
+                <span className="text-gray-700">{fmtAge(summary.lastAcceptedAt)} atrás</span>
+              </>
+            )}
+          </div>
+
+          {summary?.lastError && (
+            <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+              Último erro: {summary.lastError}
+            </div>
+          )}
+
+          {events.length === 0 && !loading && (
+            <p className="text-xs text-gray-400 italic">
+              Nenhum evento registrado ainda. Envie uma mensagem WhatsApp para testar.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Webhook log table ──────────────────────────────────────────────────────────
+
+function WebhookLogTable({ events }: { events: WebhookLogEvent[] }) {
+  if (events.length === 0) {
+    return (
+      <p className="text-xs text-gray-400 italic py-2">
+        Nenhum evento registrado. Envie uma mensagem WhatsApp para o número conectado.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-1.5 max-h-72 overflow-y-auto">
+      {events.map((ev) => (
+        <div key={ev.id} className={`rounded-lg border px-2.5 py-2 text-[11px] font-mono ${
+          !ev.accepted ? "border-red-100 bg-red-50" :
+          ev.ignored   ? "border-gray-100 bg-gray-50" :
+          "border-green-100 bg-green-50"
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className={ev.accepted ? (ev.ignored ? "text-gray-400" : "text-green-600") : "text-red-500"}>
+              {ev.accepted ? (ev.ignored ? "·" : "✓") : "✗"}
+            </span>
+            <span className="text-gray-700 font-semibold">{ev.eventName}</span>
+            {ev.direction && (
+              <span className={`rounded px-1 py-px text-[9px] ${ev.direction === "INBOUND" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                {ev.direction}
+              </span>
+            )}
+            <span className="ml-auto text-gray-400 text-[10px]">
+              {new Date(ev.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
+          </div>
+          {ev.error && (
+            <p className="mt-0.5 text-red-600 break-all">{ev.error}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
@@ -461,6 +598,11 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const [feedback, setFeedback] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [isAdvancedOpen,  setIsAdvancedOpen]  = useState(false);
+
+  // Webhook health state
+  const [webhookLogLoading, setWebhookLogLoading] = useState(false);
+  const [webhookLogSummary, setWebhookLogSummary] = useState<WebhookLogSummary | null>(null);
+  const [webhookLogEvents,  setWebhookLogEvents]  = useState<WebhookLogEvent[]>([]);
 
   // Hard-reset state
   const [resetConfirming, setResetConfirming] = useState(false);
@@ -534,7 +676,26 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     setLoading(false);
   }, []);
 
+  const loadWebhookLog = useCallback(async () => {
+    if (!isOwner) return;
+    setWebhookLogLoading(true);
+    const { ok, data } = await apiFetch("/api/evolution/webhook-log");
+    if (ok && data) {
+      const d = data as { summary: WebhookLogSummary; events: WebhookLogEvent[] };
+      setWebhookLogSummary(d.summary ?? null);
+      setWebhookLogEvents(d.events ?? []);
+    }
+    setWebhookLogLoading(false);
+  }, [isOwner]);
+
   useEffect(() => { void loadView(); }, [loadView]);
+
+  // Poll webhook health every 30s when configured
+  useEffect(() => {
+    void loadWebhookLog();
+    const id = setInterval(() => void loadWebhookLog(), 30_000);
+    return () => clearInterval(id);
+  }, [loadWebhookLog]);
 
   // Auto-open advanced section when the saved config has an invalid URL,
   // so support can fix it without hunting for the collapsed panel.
@@ -742,6 +903,26 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           autoStart={autoStartQR}
         />
       </div>
+
+      {/* Central de Mensagens link — only when connected */}
+      {simpleStatus === "connected" && (
+        <Link
+          href="/atendimento"
+          className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700 hover:bg-green-100 transition-colors"
+        >
+          <span>Central de Mensagens</span>
+          <span>→</span>
+        </Link>
+      )}
+
+      {/* Webhook health card — owner only */}
+      {isOwner && isConfigured && (
+        <WebhookHealthCard
+          summary={webhookLogSummary}
+          events={webhookLogEvents}
+          loading={webhookLogLoading}
+        />
+      )}
 
       {/* Agent behavior link */}
       <div className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3">
@@ -1203,6 +1384,27 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* ── Webhook event log ────────────────────────────────────── */}
+              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-700">Log de eventos webhook</p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Últimos 20 eventos recebidos. Prova se a Evolution está enviando webhooks ao Foocci.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void loadWebhookLog()}
+                    disabled={webhookLogLoading}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                  >
+                    {webhookLogLoading ? "…" : "Atualizar"}
+                  </button>
+                </div>
+                <WebhookLogTable events={webhookLogEvents} />
               </div>
 
               {/* ── Deep probe — definitive infrastructure test ──────────── */}

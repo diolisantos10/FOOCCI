@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { WebhookParserService } from "@/services/evolution/WebhookParserService";
 import { WebhookProcessorService } from "@/services/evolution/WebhookProcessorService";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { prisma } from "@/lib/prisma";
 import { createHmac, timingSafeEqual } from "crypto";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -55,25 +56,58 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  const { webhookSecret } = configResult.data;
+  const { webhookSecret, isActive, restaurantId } = configResult.data;
   if (!verifySignature(req, rawBody, webhookSecret)) {
     console.warn(`[webhook/evolution] Signature mismatch for instance: ${instanceName}`);
     // Return 200 to not leak whether the instance exists.
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  // Config was inactive but received a valid (authenticated) webhook.
+  if (!isActive) {
+    console.log(`[webhook/evolution] Accepting event from inactive instance — will reactivate on connection.update open: ${instanceName}`);
+  }
+
+  // Extract sanitized log metadata (no content, no secrets)
+  const logMeta = extractLogMeta(body);
+
   // Parse and process
+  let accepted = false;
+  let ignored  = false;
+  let processingError: string | null = null;
+
   try {
     const event = WebhookParserService.parse(body);
     const result = await WebhookProcessorService.process(event);
+
+    accepted = true;
+    ignored  = !result.handled;
 
     if (!result.handled) {
       console.debug("[webhook/evolution] Event not handled:", result.detail);
     }
   } catch (err) {
     // Log but do not propagate — Evolution must receive 200 to stop retrying.
-    console.error("[webhook/evolution] Processing error:", err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("[webhook/evolution] Processing error:", errMsg);
+    processingError = errMsg.slice(0, 200);
+    accepted = true; // reached processing stage — auth passed
   }
+
+  // Async diagnostic log — fire and forget, never blocks the 200 response
+  void logWebhookEvent({
+    restaurantId,
+    instanceName,
+    eventName: logMeta.eventName,
+    bodyKeys:  logMeta.bodyKeys,
+    dataKeys:  logMeta.dataKeys,
+    messageId: logMeta.messageId,
+    remoteJidMasked: logMeta.remoteJidMasked,
+    direction: logMeta.direction,
+    accepted,
+    ignored,
+    error: processingError,
+  });
 
   return NextResponse.json({ received: true }, { status: 200 });
 }
@@ -92,12 +126,13 @@ function extractInstanceName(body: unknown): string | null {
  * Strategy 1 (preferred): HMAC-SHA256 of raw body, compared against
  *   the `x-evolution-hmac-sha256` header.
  * Strategy 2 (fallback): plain token comparison via `x-evolution-webhook-secret`.
+ * Strategy 3 (additional): Authorization: Bearer <secret>
  *
  * Uses timing-safe comparison to prevent timing attacks.
  */
 function verifySignature(req: NextRequest, rawBody: string, secret: string): boolean {
+  // Strategy 1: HMAC
   const hmacHeader = req.headers.get("x-evolution-hmac-sha256");
-
   if (hmacHeader) {
     const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
     try {
@@ -107,14 +142,126 @@ function verifySignature(req: NextRequest, rawBody: string, secret: string): boo
     }
   }
 
-  // Fallback: plain token
-  const tokenHeader = req.headers.get("x-evolution-webhook-secret") ?? "";
+  // Strategy 2: plain token header (Evolution v2.x default)
+  const tokenHeader = req.headers.get("x-evolution-webhook-secret");
+  if (tokenHeader !== null) {
+    try {
+      return timingSafeEqual(
+        Buffer.from(tokenHeader, "utf8"),
+        Buffer.from(secret, "utf8")
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  // Strategy 3: Authorization: Bearer <secret>
+  const authHeader = req.headers.get("authorization") ?? "";
+  if (authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    try {
+      return timingSafeEqual(
+        Buffer.from(token, "utf8"),
+        Buffer.from(secret, "utf8")
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  // No recognized auth header — reject
+  return false;
+}
+
+interface LogMeta {
+  eventName:       string;
+  bodyKeys:        string[];
+  dataKeys:        string[];
+  messageId:       string | null;
+  remoteJidMasked: string | null;
+  direction:       string | null;
+}
+
+function extractLogMeta(body: unknown): LogMeta {
+  const raw      = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const eventName = (raw.event as string | undefined) ?? "unknown";
+  const bodyKeys  = Object.keys(raw);
+  const data      = raw.data;
+  const dataObj   = (data && typeof data === "object" && !Array.isArray(data))
+    ? data as Record<string, unknown>
+    : null;
+  const dataKeys  = dataObj ? Object.keys(dataObj) : [];
+
+  let messageId:       string | null = null;
+  let remoteJidMasked: string | null = null;
+  let direction:       string | null = null;
+
+  if (dataObj) {
+    const key = dataObj.key as Record<string, unknown> | undefined;
+    if (key) {
+      messageId = (key.id as string | undefined) ?? null;
+      const fromMe = key.fromMe as boolean | undefined;
+      direction = fromMe === true ? "OUTBOUND" : fromMe === false ? "INBOUND" : null;
+      const jid = key.remoteJid as string | undefined;
+      if (jid) remoteJidMasked = maskJid(jid);
+    }
+  }
+
+  return { eventName, bodyKeys, dataKeys, messageId, remoteJidMasked, direction };
+}
+
+function maskJid(jid: string): string {
+  const [number, domain] = jid.split("@");
+  if (!number) return jid;
+  const visible = number.slice(0, 4);
+  const suffix  = number.length > 8 ? number.slice(-4) : "";
+  const masked  = `${visible}${"*".repeat(Math.max(0, number.length - (visible.length + suffix.length)))}${suffix}`;
+  return domain ? `${masked}@${domain}` : masked;
+}
+
+async function logWebhookEvent(params: {
+  restaurantId:    string;
+  instanceName:    string;
+  eventName:       string;
+  bodyKeys:        string[];
+  dataKeys:        string[];
+  messageId:       string | null;
+  remoteJidMasked: string | null;
+  direction:       string | null;
+  accepted:        boolean;
+  ignored:         boolean;
+  error:           string | null;
+}): Promise<void> {
   try {
-    return timingSafeEqual(
-      Buffer.from(tokenHeader, "utf8"),
-      Buffer.from(secret, "utf8")
-    );
+    await prisma.evolutionWebhookEventLog.create({
+      data: {
+        restaurantId:    params.restaurantId,
+        instanceName:    params.instanceName,
+        eventName:       params.eventName,
+        accepted:        params.accepted,
+        ignored:         params.ignored,
+        error:           params.error,
+        bodyKeys:        params.bodyKeys,
+        dataKeys:        params.dataKeys,
+        messageId:       params.messageId,
+        remoteJidMasked: params.remoteJidMasked,
+        direction:       params.direction,
+      },
+    });
+
+    // Keep only last 200 rows per restaurant to avoid unbounded growth
+    const oldRows = await prisma.evolutionWebhookEventLog.findMany({
+      where:   { restaurantId: params.restaurantId },
+      orderBy: { createdAt: "desc" },
+      skip:    200,
+      select:  { id: true },
+    });
+    if (oldRows.length > 0) {
+      await prisma.evolutionWebhookEventLog.deleteMany({
+        where: { id: { in: oldRows.map((r) => r.id) } },
+      });
+    }
   } catch {
-    return false;
+    // Never let logging failures affect webhook processing
   }
 }

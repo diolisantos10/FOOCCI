@@ -866,6 +866,33 @@ model EvolutionConfig {
 }
 
 // ═══════════════════════════════════════════
+//  EVOLUTION WEBHOOK EVENT LOG
+//  Diagnostic-only ring buffer for the last webhook events received.
+//  Stores no message content — only metadata useful for debugging.
+// ═══════════════════════════════════════════
+
+model EvolutionWebhookEventLog {
+  id                  String   @id @default(cuid())
+  restaurantId        String?  // null when instanceName not found in DB
+  instanceName        String
+  eventName           String   // raw event field from Evolution payload
+  normalizedEventName String?  // normalized form used internally (may differ)
+  accepted            Boolean  @default(false)  // true = passed auth + processing started
+  ignored             Boolean  @default(false)  // true = auth passed but event was ignored
+  error               String?                   // first 200 chars of processing error if any
+  bodyKeys            String[]                  // top-level keys present in webhook body
+  dataKeys            String[]                  // keys present in body.data (if object)
+  messageId           String?                   // externalMessageId for messages.upsert
+  remoteJidMasked     String?                   // "551199***0000@s.whatsapp.net" — privacy safe
+  direction           String?                   // INBOUND | OUTBOUND (from fromMe field)
+  createdAt           DateTime @default(now())
+
+  @@index([restaurantId, createdAt])
+  @@index([instanceName, createdAt])
+  @@map("evolution_webhook_event_logs")
+}
+
+// ═══════════════════════════════════════════
 //  GENERIC INTEGRATION CONFIG
 //  Stores per-restaurant credentials for external integrations
 //  (Stone, Mercado Pago, Tipos, etc.).

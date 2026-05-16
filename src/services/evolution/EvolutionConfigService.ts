@@ -95,22 +95,29 @@ export class EvolutionConfigService {
   /**
    * Find a restaurant by their Evolution instanceName.
    * Used by the webhook receiver to route inbound events to the right tenant.
+   *
+   * isActive is intentionally NOT filtered here: deactivate() is called during
+   * every hard-reset. Filtering to isActive=true means all webhook events —
+   * including connection.update with state "open" that would reactivate the config —
+   * are silently discarded, creating a deadlock. Security is preserved by the
+   * webhookSecret comparison that follows this lookup in the webhook handler.
    */
   static async findRestaurantByInstance(
     instanceName: string
-  ): Promise<ServiceResult<{ restaurantId: string; webhookSecret: string }>> {
+  ): Promise<ServiceResult<{ restaurantId: string; webhookSecret: string; isActive: boolean }>> {
     const config = await prisma.evolutionConfig.findFirst({
-      where: { instanceName, isActive: true },
-      select: { restaurantId: true, webhookSecret: true },
+      where: { instanceName },
+      select: { restaurantId: true, webhookSecret: true, isActive: true },
     });
 
     if (!config) {
-      return serviceFail(`No active Evolution config for instance "${instanceName}"`, 404);
+      return serviceFail(`No Evolution config for instance "${instanceName}"`, 404);
     }
 
     return serviceOk({
-      restaurantId: config.restaurantId,
+      restaurantId:  config.restaurantId,
       webhookSecret: decrypt(config.webhookSecret),
+      isActive:      config.isActive,
     });
   }
 
