@@ -2,11 +2,12 @@
  * POST /api/evolution/sync-webhook
  *
  * OWNER-only. Configures the webhook URL on the existing connected Evolution
- * instance without touching the WhatsApp session. After setting, reads back
- * the actual config from Evolution to confirm what was applied.
+ * instance without touching the WhatsApp session. After each attempt, reads
+ * back the actual config from Evolution to confirm it was applied.
  *
- * Key: webhookByEvents=false → Evolution sends ALL events to a single URL.
- * webhookByEvents=true would send to {url}/{EVENT_NAME} (404 in Next.js).
+ * success=true ONLY when getWebhook confirms webhookByEvents===false.
+ * Probes four body shapes (flat/wrapped × webhookByEvents/byEvents) and stops
+ * at the first shape Evolution accepts AND confirms.
  *
  * Never exposes: apiKey, webhookSecret, raw credentials.
  */
@@ -14,10 +15,83 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
+import {
+  EvolutionClient,
+  EvolutionApiError,
+  EvolutionConfigSnapshot,
+} from "@/lib/evolution/EvolutionClient";
 import { unauthorized, forbidden, serverError } from "@/lib/api-response";
 
 const WEBHOOK_EVENTS = ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"];
+
+// ─── types ───────────────────────────────────────────────────
+
+interface NormalizedWebhookConfig {
+  url:                              string | null;
+  webhookByEvents:                  boolean | null; // normalised from webhookByEvents or byEvents
+  byEvents:                         boolean | null; // raw "byEvents" field
+  events:                           string[];
+  enabled:                          boolean | null;
+  rawKeys:                          string[];
+  webhookByEventsIsExplicitlyFalse: boolean;
+}
+
+// ─── helpers ─────────────────────────────────────────────────
+
+async function readNormalizedWebhookConfig(
+  snapshot: EvolutionConfigSnapshot
+): Promise<NormalizedWebhookConfig> {
+  try {
+    const raw = await EvolutionClient.getWebhook(snapshot);
+    // Evolution v2 wraps in { webhook: {...} }; v1 returns flat
+    const wh: Record<string, unknown> =
+      raw.webhook && typeof raw.webhook === "object"
+        ? (raw.webhook as Record<string, unknown>)
+        : raw;
+
+    const url     = (wh.url     as string  | undefined) ?? null;
+    const events  = Array.isArray(wh.events) ? (wh.events as string[]) : [];
+    const enabled = (wh.enabled as boolean | undefined) ?? null;
+    const rawKeys = Object.keys(wh);
+
+    // Normalise: Evolution uses "webhookByEvents" in some versions, "byEvents" in others
+    const webhookByEventsRaw = wh.webhookByEvents as boolean | undefined;
+    const byEventsRaw        = wh.byEvents        as boolean | undefined;
+    const webhookByEvents    = webhookByEventsRaw ?? byEventsRaw ?? null;
+
+    return {
+      url,
+      webhookByEvents,
+      byEvents: byEventsRaw ?? null,
+      events,
+      enabled,
+      rawKeys,
+      webhookByEventsIsExplicitlyFalse:
+        webhookByEventsRaw === false || byEventsRaw === false,
+    };
+  } catch {
+    return {
+      url:                              null,
+      webhookByEvents:                  null,
+      byEvents:                         null,
+      events:                           [],
+      enabled:                          null,
+      rawKeys:                          [],
+      webhookByEventsIsExplicitlyFalse: false,
+    };
+  }
+}
+
+function maskJid(jid: string): string {
+  const [number, domain] = jid.split("@");
+  if (!number) return jid;
+  const visible = number.slice(0, 4);
+  const suffix  = number.length > 8 ? number.slice(-4) : "";
+  const masked  = `${visible}${"*".repeat(Math.max(0, number.length - (visible.length + suffix.length)))}${suffix}`;
+  return domain ? `${masked}@${domain}` : masked;
+}
+
+// ─── route ───────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,10 +99,10 @@ export async function POST(req: NextRequest) {
     if (!ctx) return unauthorized();
     if (ctx.role !== "OWNER") return forbidden("Restrito ao proprietário.");
 
-    let body: Record<string, unknown> = {};
-    try { body = await req.json(); } catch { /* no body — ok */ }
+    let reqBody: Record<string, unknown> = {};
+    try { reqBody = await req.json(); } catch { /* no body — ok */ }
 
-    const clientUrl = body.webhookUrl ? String(body.webhookUrl) : null;
+    const clientUrl = reqBody.webhookUrl ? String(reqBody.webhookUrl) : null;
     const host  = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
     const proto = (req.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() ?? "https";
     const origin = clientUrl
@@ -49,51 +123,74 @@ export async function POST(req: NextRequest) {
 
     const snapshot = snapshotResult.data;
 
-    // Set webhook — webhookByEvents=false sends ALL events to the single URL
-    let rawSetResult: unknown = null;
-    let setError: string | null = null;
-    try {
-      rawSetResult = await EvolutionClient.setWebhook(
-        snapshot,
-        webhookUrl,
-        WEBHOOK_EVENTS,
-        snapshot.webhookSecret
-      );
-    } catch (err) {
-      setError = err instanceof EvolutionApiError
-        ? `Evolution HTTP ${err.status}: ${err.message}`
-        : (err instanceof Error ? err.message : String(err));
-      setError = setError.slice(0, 300);
+    // Shared fields for all body shapes
+    const sharedFields: Record<string, unknown> = {
+      enabled:       true,
+      url:           webhookUrl,
+      webhookBase64: false,
+      events:        WEBHOOK_EVENTS,
+    };
+    if (snapshot.webhookSecret) sharedFields.secret = snapshot.webhookSecret;
+
+    // Four body shapes: flat/wrapped × webhookByEvents/byEvents field name
+    // Evolution versions differ on which field name they honour internally.
+    const candidates: Array<{ label: string; body: Record<string, unknown> }> = [
+      { label: "flat+webhookByEvents",    body: { ...sharedFields, webhookByEvents: false } },
+      { label: "flat+byEvents",           body: { ...sharedFields, byEvents: false } },
+      { label: "wrapped+webhookByEvents", body: { webhook: { ...sharedFields, webhookByEvents: false } } },
+      { label: "wrapped+byEvents",        body: { webhook: { ...sharedFields, byEvents: false } } },
+    ];
+
+    const attemptedPayloads: string[] = [];
+    const setResponses: Array<{
+      label:  string;
+      ok:     boolean;
+      keys:   string[];
+      error?: string;
+    }> = [];
+
+    let finalLiveConfig: NormalizedWebhookConfig | null = null;
+    let succeeded = false;
+
+    for (const candidate of candidates) {
+      attemptedPayloads.push(candidate.label);
+
+      let setOk   = false;
+      let setKeys: string[] = [];
+      let setErr: string | undefined;
+
+      try {
+        const r = await EvolutionClient.setWebhookRaw(snapshot, candidate.body);
+        setOk   = true;
+        setKeys = r.responseKeys;
+      } catch (err) {
+        setErr = err instanceof EvolutionApiError
+          ? `HTTP ${err.status}: ${err.message}`
+          : (err instanceof Error ? err.message : String(err));
+        setErr = setErr.slice(0, 200);
+      }
+
+      setResponses.push({ label: candidate.label, ok: setOk, keys: setKeys, error: setErr });
+
+      if (!setOk) continue; // 4xx/5xx — try next shape
+
+      // Read back and verify — success only when explicitly false
+      const live = await readNormalizedWebhookConfig(snapshot);
+      finalLiveConfig = live;
+
+      if (live.webhookByEventsIsExplicitlyFalse) {
+        succeeded = true;
+        break;
+      }
+      // HTTP 200 but not confirmed — try next shape
     }
 
-    // Read back the actual webhook config to confirm what Evolution has stored
-    let webhookConfig: {
-      url:            string | null;
-      webhookByEvents: boolean | null;
-      events:         string[];
-      enabled:        boolean | null;
-      urlMatches:     boolean;
-    } | null = null;
-
-    try {
-      const raw = await EvolutionClient.getWebhook(snapshot);
-      // Evolution v2 returns { webhook: { ... } } or the flat object directly
-      const wh = (raw.webhook && typeof raw.webhook === "object")
-        ? raw.webhook as Record<string, unknown>
-        : raw;
-      const configuredUrl = (wh.url as string | undefined) ?? null;
-      webhookConfig = {
-        url:             configuredUrl,
-        webhookByEvents: (wh.webhookByEvents as boolean | undefined) ?? null,
-        events:          Array.isArray(wh.events) ? (wh.events as string[]) : [],
-        enabled:         (wh.enabled as boolean | undefined) ?? null,
-        urlMatches:      configuredUrl === webhookUrl,
-      };
-    } catch {
-      // best-effort
+    // Final readback when all attempts failed (all 4xx)
+    if (!finalLiveConfig) {
+      finalLiveConfig = await readNormalizedWebhookConfig(snapshot);
     }
 
-    // Fetch instance metadata for ownerJid and connection status
+    // Instance metadata (best-effort, non-blocking)
     let instanceInfo: {
       connectionStatus: string | null;
       profileName:      string | null;
@@ -105,7 +202,7 @@ export async function POST(req: NextRequest) {
       const match = (instances as unknown[]).find((inst) => {
         if (!inst || typeof inst !== "object") return false;
         const i = inst as Record<string, unknown>;
-        const inner = (i.instance && typeof i.instance === "object")
+        const inner = i.instance && typeof i.instance === "object"
           ? (i.instance as Record<string, unknown>)
           : i;
         return (
@@ -115,7 +212,7 @@ export async function POST(req: NextRequest) {
       });
       if (match) {
         const m     = match as Record<string, unknown>;
-        const inner = (m.instance && typeof m.instance === "object")
+        const inner = m.instance && typeof m.instance === "object"
           ? (m.instance as Record<string, unknown>)
           : m;
         const rawJid =
@@ -132,22 +229,23 @@ export async function POST(req: NextRequest) {
       // best-effort
     }
 
-    const rawWebhookShapeKeys =
-      rawSetResult && typeof rawSetResult === "object"
-        ? Object.keys(rawSetResult as Record<string, unknown>)
-        : [];
+    const success         = succeeded;
+    const firstSetError   = setResponses.find((r) => r.error)?.error ?? null;
+    const allAttemptsHttpOk = setResponses.some((r) => r.ok);
 
-    const success = !setError;
     let recommendation: string;
-    if (!success) {
+    if (success) {
+      recommendation =
+        "Webhook configurado e verificado na Evolution (webhookByEvents=false). " +
+        "Envie uma mensagem de teste e use 'Testar receiver Foocci' para confirmar.";
+    } else if (!allAttemptsHttpOk) {
       recommendation =
         "Falha ao configurar webhook na Evolution. Verifique URL da Evolution e API Key nas Configurações avançadas.";
-    } else if (webhookConfig && !webhookConfig.urlMatches) {
-      recommendation =
-        `Webhook configurado mas URL diverge. Configurada: ${webhookConfig.url ?? "?"} — esperada: ${webhookUrl}`;
     } else {
       recommendation =
-        "Webhook configurado (webhookByEvents=false). Envie uma mensagem de teste e use 'Testar receiver Foocci' para confirmar.";
+        "Evolution retornou HTTP 200 mas webhookByEvents não foi confirmado como false na verificação. " +
+        "Pode ser um bug da Evolution onde o campo não é persistido imediatamente. " +
+        "Clique em 'Verificar webhook na Evolution' após alguns segundos para checar novamente.";
     }
 
     return NextResponse.json({
@@ -155,23 +253,25 @@ export async function POST(req: NextRequest) {
       instanceName:         snapshot.instanceName,
       webhookUrlConfigured: webhookUrl,
       eventsConfigured:     WEBHOOK_EVENTS,
-      rawWebhookShapeKeys,
-      webhookConfig,
+      rawWebhookShapeKeys:  setResponses[0]?.keys ?? [],
+      webhookConfig: {
+        url:             finalLiveConfig.url,
+        webhookByEvents: finalLiveConfig.webhookByEvents,
+        events:          finalLiveConfig.events,
+        enabled:         finalLiveConfig.enabled,
+        urlMatches:      finalLiveConfig.url === webhookUrl,
+      },
       instanceInfo,
-      error:                setError,
+      error:          success ? null : (firstSetError ?? "webhookByEvents não confirmado como false"),
       recommendation,
+      debug: {
+        attemptedPayloads,
+        setResponses,
+        liveConfig: finalLiveConfig,
+      },
     });
   } catch (err) {
     console.error("[POST /api/evolution/sync-webhook]", err);
     return serverError();
   }
-}
-
-function maskJid(jid: string): string {
-  const [number, domain] = jid.split("@");
-  if (!number) return jid;
-  const visible = number.slice(0, 4);
-  const suffix  = number.length > 8 ? number.slice(-4) : "";
-  const masked  = `${visible}${"*".repeat(Math.max(0, number.length - (visible.length + suffix.length)))}${suffix}`;
-  return domain ? `${masked}@${domain}` : masked;
 }

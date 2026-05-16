@@ -53,16 +53,20 @@ export async function GET(req: NextRequest) {
         ? (raw.webhook as Record<string, unknown>)
         : raw;
 
-    const url             = (wh.url             as string  | undefined) ?? null;
-    const webhookByEvents = (wh.webhookByEvents  as boolean | undefined) ?? null;
-    const enabled         = (wh.enabled          as boolean | undefined) ?? null;
-    const events          = Array.isArray(wh.events) ? (wh.events as string[]) : [];
+    const url     = (wh.url     as string  | undefined) ?? null;
+    const enabled = (wh.enabled as boolean | undefined) ?? null;
+    const events  = Array.isArray(wh.events) ? (wh.events as string[]) : [];
     // Only reveal presence of secret, never its value
-    const secretPresent   = "secret" in wh && wh.secret !== null && wh.secret !== undefined && wh.secret !== "";
+    const secretPresent = "secret" in wh && wh.secret !== null && wh.secret !== undefined && wh.secret !== "";
+
+    // Normalise: Evolution uses "webhookByEvents" in some builds, "byEvents" in others
+    const webhookByEventsRaw = wh.webhookByEvents as boolean | undefined;
+    const byEventsRaw        = wh.byEvents        as boolean | undefined;
+    const webhookByEvents    = webhookByEventsRaw ?? byEventsRaw ?? null;
 
     // Diagnostic checks
     const urlMatches        = !!url && url.trim() === expectedUrl;
-    const byEventsIsFalse   = webhookByEvents === false;
+    const byEventsIsFalse   = webhookByEventsRaw === false || byEventsRaw === false;
     const hasMessagesUpsert = events.some((e) => e === "MESSAGES_UPSERT");
     const isEnabled         = enabled === true;
 

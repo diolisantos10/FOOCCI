@@ -251,8 +251,7 @@ export const EvolutionClient = {
    * Configure (or update) the webhook on an existing instance.
    * Does NOT touch the WhatsApp session — only updates webhook routing.
    *
-   * Tries the nested { webhook: {...} } shape (Evolution v2.x standard) first.
-   * Falls back to flat body if the server returns HTTP 400.
+   * Tries flat body first (Evolution v2.3.x preferred), then wrapped.
    */
   async setWebhook(
     config: EvolutionConfigSnapshot,
@@ -263,20 +262,21 @@ export const EvolutionClient = {
     const fields: Record<string, unknown> = {
       enabled:         true,
       url:             webhookUrl,
-      webhookByEvents: false,   // false = single URL; true would append /{EVENT_NAME} suffix
+      webhookByEvents: false,
       webhookBase64:   false,
       events,
     };
     if (secret) fields.secret = secret;
 
+    // Flat body first (recommended for Evolution v2.3.x)
     try {
       return await request<unknown>(
-        config, "POST", `/webhook/set/${config.instanceName}`, { webhook: fields }
+        config, "POST", `/webhook/set/${config.instanceName}`, fields
       );
     } catch (err) {
-      if (err instanceof EvolutionApiError && err.status === 400) {
+      if (err instanceof EvolutionApiError && (err.status === 400 || err.status === 422 || err.status === 405)) {
         return await request<unknown>(
-          config, "POST", `/webhook/set/${config.instanceName}`, fields
+          config, "POST", `/webhook/set/${config.instanceName}`, { webhook: fields }
         );
       }
       throw err;
@@ -284,8 +284,23 @@ export const EvolutionClient = {
   },
 
   /**
+   * Send an arbitrary body to POST /webhook/set/{instanceName}.
+   * Used by sync-webhook to probe multiple body shapes when setWebhook
+   * returns 200 but the live config is still wrong.
+   */
+  async setWebhookRaw(
+    config: EvolutionConfigSnapshot,
+    body: Record<string, unknown>
+  ): Promise<{ responseKeys: string[] }> {
+    const raw = await request<unknown>(
+      config, "POST", `/webhook/set/${config.instanceName}`, body
+    );
+    return { responseKeys: raw && typeof raw === "object" ? Object.keys(raw as object) : [] };
+  },
+
+  /**
    * Fetch the current webhook configuration for an instance.
-   * Used after setWebhook to confirm what was actually applied.
+   * Normalises both camelCase and snake_case field variants.
    */
   async getWebhook(config: EvolutionConfigSnapshot): Promise<Record<string, unknown>> {
     try {

@@ -491,6 +491,11 @@ interface SyncWebhookResult {
   } | null;
   error:          string | null;
   recommendation: string;
+  debug?: {
+    attemptedPayloads: string[];
+    setResponses:      Array<{ label: string; ok: boolean; keys: string[]; error?: string }>;
+    liveConfig:        Record<string, unknown> | null;
+  };
 }
 
 interface SelfTestResult {
