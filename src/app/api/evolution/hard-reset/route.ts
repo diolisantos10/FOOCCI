@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
+import { extractEvolutionQr } from "@/lib/evolution/extractQr";
 import { unauthorized, forbidden, serverError } from "@/lib/api-response";
 
 interface StepResult {
@@ -99,30 +100,58 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Give Evolution time to initialise the new instance
-    await sleep(3000);
+    // ── 4. Try to capture QR from the create response first ──────────────────
+    // Evolution v2.2.3 includes the QR in the POST /instance/create response when
+    // qrcode:true. If we call PUT /instance/restart afterward, this QR is invalidated
+    // and GET /instance/connect starts returning { count: N } while regenerating.
+    const createData = createStep.data as Record<string, unknown> | null;
+    const createQR   = createData ? extractEvolutionQr(createData) : null;
+    const qrFoundInCreate = !!(createQR?.base64);
 
-    // 4. Restart — moves "close" → "connecting" so QR is generated
-    const restartStep = await safeStep("restart", () => EvolutionClient.restartInstance(cfg));
-    steps.push(restartStep);
+    if (qrFoundInCreate) {
+      steps.push({ step: "qr_source", ok: true, data: { source: "create_response", foundIn: createQR?.foundIn } });
+      // DO NOT restart — restarting would invalidate the QR that's now valid
+    } else {
+      // QR not in create response — check state and restart only if needed
+      await sleep(3000);
 
-    // Wait for QR to be ready
-    await sleep(2000);
+      const stateCheck = await safeStep("check_state", () => EvolutionClient.getInstanceStatus(cfg));
+      steps.push(stateCheck);
 
-    // 5. Try to fetch QR (best-effort — may still be initialising)
-    const qrStep = await safeStep("getQR", () => EvolutionClient.getQRCode(cfg));
-    steps.push(qrStep);
+      const currentState = stateCheck.ok
+        ? (stateCheck.data as { state?: string })?.state ?? "unknown"
+        : "unknown";
 
-    // 6. Deactivate in DB so UI reflects "Não conectado" until user actually scans QR
+      if (currentState !== "connecting") {
+        // Restart to move instance to "connecting" state so a fresh QR is generated
+        const restartStep = await safeStep("restart", () => EvolutionClient.restartInstance(cfg));
+        steps.push(restartStep);
+        // Give Evolution more time to generate a new QR after restart
+        await sleep(5000);
+      }
+    }
+
+    // ── 5. Poll for QR (up to 3 attempts, 3 s apart) ─────────────────────────
+    let hasQR = qrFoundInCreate;
+    let instanceState = "connecting";
+
+    if (!hasQR) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const qrAttempt = await safeStep(`getQR_${attempt}`, () => EvolutionClient.getQRCode(cfg));
+        steps.push(qrAttempt);
+        if (qrAttempt.ok) {
+          const qrData = qrAttempt.data as { base64?: string | null; instanceState?: string; countOnly?: boolean };
+          instanceState = qrData.instanceState ?? "connecting";
+          if (qrData.base64) { hasQR = true; break; }
+        }
+        if (attempt < 3) await sleep(3000);
+      }
+    }
+
+    // ── 6. Deactivate in DB ───────────────────────────────────────────────────
     await EvolutionConfigService.deactivate(ctx.restaurantId);
 
-    const qrResult = qrStep.ok
-      ? (qrStep.data as { base64?: string | null; instanceState?: string })
-      : null;
-
-    const hasQR         = !!(qrResult?.base64);
-    const instanceState = qrResult?.instanceState ?? (restartStep.ok ? "connecting" : "unknown");
-    const failedSteps   = steps.filter((s) => !s.ok).map((s) => `${s.step}: ${s.error ?? ""}`);
+    const failedSteps = steps.filter((s) => !s.ok).map((s) => `${s.step}: ${s.error ?? ""}`);
 
     return NextResponse.json({
       success:       true,

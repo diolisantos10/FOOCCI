@@ -11,7 +11,7 @@
  * brand-agnostic.
  */
 
-import { extractEvolutionQr } from "./extractQr";
+import { extractEvolutionQr, isCountOnlyResponse } from "./extractQr";
 
 export interface EvolutionConfigSnapshot {
   instanceName: string;
@@ -57,6 +57,7 @@ export interface InstanceQRCode {
   pairingCode: string | null;  // 8-digit pairing code (alternative to QR image)
   foundIn:     string | null;  // field path where base64 was found
   instanceState?: "open" | "close" | "connecting";
+  countOnly?:  boolean;        // true when Evolution returns { count: N } — QR still generating
 }
 
 export interface CreateInstanceInput {
@@ -179,9 +180,9 @@ export const EvolutionClient = {
   /**
    * Fetch the QR code for the instance.
    *
-   * Uses extractEvolutionQr() to handle all known Evolution response shapes.
-   * When connected: { instance: { state: "open" } }
-   * When QR ready:  various field layouts depending on version.
+   * Tries GET /instance/connect first (primary endpoint), then falls back to
+   * GET /instance/qrcode and GET /qrcode/base64 for Evolution versions where
+   * the connect endpoint returns only { count: N } while generating a new QR.
    */
   async getQRCode(config: EvolutionConfigSnapshot): Promise<InstanceQRCode> {
     const raw = await request<Record<string, unknown>>(
@@ -195,13 +196,32 @@ export const EvolutionClient = {
 
     const extracted = extractEvolutionQr(raw);
 
-    return {
-      base64:      extracted.base64,
-      code:        extracted.code,
-      pairingCode: extracted.pairingCode,
-      foundIn:     extracted.foundIn,
-      instanceState,
-    };
+    if (extracted.base64 || extracted.pairingCode) {
+      return { base64: extracted.base64, code: extracted.code, pairingCode: extracted.pairingCode, foundIn: extracted.foundIn, instanceState };
+    }
+
+    // { count: N } — Evolution is generating a new QR; flag it explicitly
+    if (isCountOnlyResponse(raw)) {
+      return { base64: null, code: null, pairingCode: null, foundIn: null, instanceState, countOnly: true };
+    }
+
+    // Fallback: try alternative endpoints used by some Evolution versions
+    for (const altPath of [
+      `/instance/qrcode/${config.instanceName}`,
+      `/qrcode/base64/${config.instanceName}`,
+    ]) {
+      try {
+        const altRaw = await request<Record<string, unknown>>(config, "GET", altPath);
+        const altEx  = extractEvolutionQr(altRaw);
+        if (altEx.base64 || altEx.pairingCode) {
+          return { base64: altEx.base64, code: altEx.code, pairingCode: altEx.pairingCode, foundIn: `${altPath}:${altEx.foundIn}`, instanceState };
+        }
+      } catch {
+        // endpoint not supported by this Evolution version — continue
+      }
+    }
+
+    return { base64: null, code: null, pairingCode: null, foundIn: null, instanceState };
   },
 
   /**

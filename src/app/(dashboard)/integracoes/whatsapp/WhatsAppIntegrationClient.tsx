@@ -100,7 +100,7 @@ function ConnectionPill({ status }: { status: SimpleStatus }) {
 
 // ── Simple QR / connection panel ──────────────────────────────────────────────
 
-type QRState = "idle" | "loading" | "restarting" | "shown" | "pairing" | "connected" | "unconfigured" | "error";
+type QRState = "idle" | "loading" | "restarting" | "generating" | "shown" | "pairing" | "connected" | "unconfigured" | "error";
 
 function SimpleQRPanel({
   isConfigured,
@@ -125,7 +125,7 @@ function SimpleQRPanel({
   const [disconnecting, setDisconnecting] = useState(false);
   const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryCountRef  = useRef(0);
-  const MAX_QR_RETRIES = 6;   // 6 × 5 s = 30 s max wait for QR after reset
+  const MAX_QR_RETRIES = 12;  // 12 × 5 s = 60 s — enough for { count } generation cycle
 
   // Auto-start QR generation when parent signals a fresh instance (post-reset)
   useEffect(() => {
@@ -159,6 +159,7 @@ function SimpleQRPanel({
       error?:       string;
       connected?:   boolean;
       restarting?:  boolean;
+      generating?:  boolean;
     };
 
     if (qr.base64) {
@@ -181,6 +182,12 @@ function SimpleQRPanel({
       setQrState("connected");
       stopPolling();
       onConnected();
+    } else if (qr.generating) {
+      // Evolution returning { count: N } — QR is being generated, not yet ready
+      setQrBase64(null);
+      setQrState("generating");
+      stopPolling();
+      scheduleRetry(fetchQR);
     } else if (qr.restarting) {
       // Instance restarting — retry with backoff (max MAX_QR_RETRIES times)
       setQrBase64(null);
@@ -271,6 +278,18 @@ function SimpleQRPanel({
           </div>
           <p className="text-center text-[11px] text-gray-400">
             QR Code sendo gerado automaticamente. Pode levar até 15s.
+          </p>
+        </div>
+      )}
+
+      {qrState === "generating" && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4 text-sm text-blue-700">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+            Evolution está gerando o QR Code…
+          </div>
+          <p className="text-center text-[11px] text-gray-400">
+            Aguarde enquanto o servidor prepara um novo código. Pode levar até 30s.
           </p>
         </div>
       )}
@@ -946,6 +965,11 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                             })
                           : null;
 
+                        const isVariants = s.label === "qr_endpoint_variants" && s.ok && Array.isArray(s.detail);
+                        const variants = isVariants
+                          ? (s.detail as Array<{ path: string; method: string; httpStatus?: number; qrExtracted?: boolean; reason?: string | null; error?: string }>)
+                          : null;
+
                         return (
                           <div key={s.label} className="text-[11px]">
                             <div className="flex items-center gap-1.5">
@@ -975,6 +999,21 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                                   </p>
                                 ))}
                                 {shape.reason && <p className="text-amber-600">{shape.reason}</p>}
+                              </div>
+                            )}
+                            {variants && (
+                              <div className="ml-4 mt-1 space-y-1 text-gray-500">
+                                {variants.map((v) => (
+                                  <div key={`${v.method}:${v.path}`} className="flex items-center gap-1.5">
+                                    <span className={v.qrExtracted ? "text-green-500" : v.error ? "text-red-400" : "text-gray-400"}>
+                                      {v.qrExtracted ? "✓" : "·"}
+                                    </span>
+                                    <span className="font-mono">{v.method} {v.path}</span>
+                                    {v.httpStatus && <span className="text-gray-400">HTTP {v.httpStatus}</span>}
+                                    {v.qrExtracted && <span className="text-green-600 font-semibold">QR encontrado aqui!</span>}
+                                    {v.error && <span className="text-red-500">{v.error}</span>}
+                                  </div>
+                                ))}
                               </div>
                             )}
                           </div>

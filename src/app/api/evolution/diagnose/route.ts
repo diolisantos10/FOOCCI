@@ -127,9 +127,37 @@ export async function POST(req: NextRequest) {
     });
     steps.push(rawInspectStep);
 
+    // ── 6. Alternative QR endpoint variants ──────────────────────
+    const variantStep = await diagStep("qr_endpoint_variants", async () => {
+      const variants = [
+        { path: `/instance/qrcode/${cfg.instanceName}`,  method: "GET"  },
+        { path: `/qrcode/base64/${cfg.instanceName}`,    method: "GET"  },
+        { path: `/instance/connect/${cfg.instanceName}`, method: "POST" },
+      ];
+      const results = await Promise.allSettled(
+        variants.map(async ({ path, method }) => {
+          const res = await fetch(
+            `${cfg.baseUrl.replace(/\/$/, "")}${path}`,
+            { method, headers: { "Content-Type": "application/json", apikey: cfg.apiKey } }
+          );
+          const body = await res.json().catch(() => ({}));
+          const meta = qrDiagnosticMeta(body);
+          return { path, method, httpStatus: res.status, availableKeys: meta.availableKeys, qrExtracted: meta.qrExtracted, reason: meta.reason };
+        })
+      );
+      return results.map((r, i) =>
+        r.status === "fulfilled"
+          ? r.value
+          : { ...variants[i], error: String((r as PromiseRejectedResult).reason) }
+      );
+    });
+    steps.push(variantStep);
+
     const qrAvailable = qrStep.ok
       ? !!(qrStep.detail as { qrExtracted?: boolean })?.qrExtracted
-      : false;
+      : variantStep.ok
+        ? (variantStep.detail as Array<{ qrExtracted?: boolean }>).some((v) => v.qrExtracted)
+        : false;
 
     return NextResponse.json({
       success:       true,

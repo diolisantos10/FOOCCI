@@ -107,6 +107,13 @@ export function extractEvolutionQr(raw: unknown): ExtractedQR {
   return { base64, code, pairingCode, foundIn, availableKeys };
 }
 
+/** True when Evolution responds with only `{ count: N }` — QR is being generated. */
+export function isCountOnlyResponse(raw: unknown): boolean {
+  if (typeof raw !== "object" || raw === null) return false;
+  const keys = Object.keys(raw as Record<string, unknown>);
+  return keys.length === 1 && keys[0] === "count";
+}
+
 /** Return sanitized metadata for diagnostic output — never exposes the QR image. */
 export function qrDiagnosticMeta(raw: unknown) {
   const result = extractEvolutionQr(raw);

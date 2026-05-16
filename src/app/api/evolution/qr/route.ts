@@ -79,6 +79,11 @@ export async function GET(req: NextRequest) {
       return ok({ pairingCode: qr.pairingCode, code: qr.code });
     }
 
+    // { count: N } — Evolution is actively generating a new QR, not yet ready
+    if (qr.countOnly) {
+      return ok({ base64: null, code: null, generating: true });
+    }
+
     // "connecting" but QR not ready — log what we got and retry
     console.warn(
       "[GET /api/evolution/qr] connecting but no QR extracted. foundIn:",
