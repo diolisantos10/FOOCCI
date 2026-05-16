@@ -122,7 +122,9 @@ function SimpleQRPanel({
   const [qrBase64,      setQrBase64]      = useState<string | null>(null);
   const [qrState,       setQrState]       = useState<QRState>("idle");
   const [disconnecting, setDisconnecting] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const retryCountRef  = useRef(0);
+  const MAX_QR_RETRIES = 4;
 
   // Auto-start QR generation when parent signals a fresh instance (post-reset)
   useEffect(() => {
@@ -134,6 +136,16 @@ function SimpleQRPanel({
 
   const stopPolling = () => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+  };
+
+  const scheduleRetry = (fn: () => Promise<void>) => {
+    retryCountRef.current += 1;
+    if (retryCountRef.current <= MAX_QR_RETRIES) {
+      setTimeout(() => void fn(), 5000);
+    } else {
+      retryCountRef.current = 0;
+      setQrState("error");
+    }
   };
 
   const fetchQR = async () => {
@@ -148,39 +160,49 @@ function SimpleQRPanel({
     };
 
     if (qr.base64) {
+      retryCountRef.current = 0;
       setQrBase64(qr.base64);
       setQrState("shown");
-    } else if (qr.error === "not_configured") {
+    } else if (qr.error === "not_configured" || qr.error === "instance_not_found") {
       setQrBase64(null);
       setQrState("unconfigured");
       stopPolling();
     } else if (qr.connected) {
-      // Instance explicitly confirmed as open — refresh parent view so header pill updates
+      retryCountRef.current = 0;
       setQrBase64(null);
       setQrState("connected");
       stopPolling();
       onConnected();
     } else if (qr.restarting) {
-      // Instance was "close" — restart was triggered. Retry in 5 s for new QR.
+      // Instance restarting — retry with backoff (max MAX_QR_RETRIES times)
       setQrBase64(null);
       setQrState("restarting");
       stopPolling();
-      setTimeout(() => void fetchQR(), 5000);
+      scheduleRetry(fetchQR);
     } else if (qr.error) {
-      // Any other named error from Evolution
-      setQrBase64(null);
-      setQrState("error");
-      stopPolling();
+      // Named error from Evolution — treat as retriable only for evolution_error
+      if (qr.error === "evolution_error") {
+        setQrBase64(null);
+        setQrState("restarting");
+        stopPolling();
+        scheduleRetry(fetchQR);
+      } else {
+        setQrBase64(null);
+        setQrState("error");
+        stopPolling();
+      }
     } else {
-      // No base64, no explicit state — ambiguous; treat as connected for now
+      // No clear state — retry rather than falsely showing "connected"
       setQrBase64(null);
-      setQrState("connected");
+      setQrState("restarting");
       stopPolling();
+      scheduleRetry(fetchQR);
     }
   };
 
   const handleGenerateQR = async () => {
-    onStartConnect();   // Clear stale feedback from the parent
+    retryCountRef.current = 0;
+    onStartConnect();
     setQrState("loading");
     setQrBase64(null);
     await fetchQR();
@@ -233,9 +255,14 @@ function SimpleQRPanel({
       )}
 
       {qrState === "restarting" && (
-        <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4 text-sm text-amber-700">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
-          Reconectando instância WhatsApp… aguarde.
+        <div className="space-y-2">
+          <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4 text-sm text-amber-700">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+            Preparando instância WhatsApp… aguarde.
+          </div>
+          <p className="text-center text-[11px] text-gray-400">
+            QR Code sendo gerado automaticamente. Pode levar até 15s.
+          </p>
         </div>
       )}
 
@@ -284,14 +311,17 @@ function SimpleQRPanel({
         <div className="space-y-2">
           <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-1">
             <p className="font-semibold">QR Code não disponível</p>
-            <p className="text-xs">A Evolution API retornou um erro. Verifique se o servidor Evolution está online e se as credenciais estão corretas.</p>
+            <p className="text-xs">
+              A instância Evolution não respondeu após múltiplas tentativas.
+              Verifique se o servidor Evolution está online e tente novamente.
+            </p>
           </div>
           <button
             type="button"
             onClick={() => void handleGenerateQR()}
             className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
           >
-            Tentar novamente
+            Gerar novo QR Code
           </button>
         </div>
       )}

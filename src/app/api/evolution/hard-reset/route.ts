@@ -1,18 +1,16 @@
 /**
  * POST /api/evolution/hard-reset
  *
- * OWNER-only. Performs a full hard reset of the Evolution instance:
- *   1. Fetch current connection state
- *   2. Logout existing WhatsApp session (best-effort)
- *   3. Delete the instance entirely
- *   4. Recreate it with the correct webhook config
- *   5. Trigger QR generation and return state
+ * OWNER-only. Full hard reset of the Evolution instance:
+ *   1. Logout existing WhatsApp session (best-effort)
+ *   2. Delete the instance
+ *   3. Recreate with correct webhook config
+ *   4. Restart to move to "connecting" state
+ *   5. Fetch QR (best-effort)
+ *   6. Deactivate in DB — status stays "Não conectado" until user scans QR
  *
- * Returns a detailed step-by-step report so the caller knows exactly
- * what happened at each stage. Never exposes raw API keys.
- *
- * This endpoint exists for break-glass / support scenarios.
- * It is idempotent: calling it on a clean instance is safe.
+ * Never exposes API keys or secrets in the response.
+ * Idempotent: safe to call on a clean instance.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -22,16 +20,13 @@ import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionCli
 import { unauthorized, forbidden, serverError } from "@/lib/api-response";
 
 interface StepResult {
-  step: string;
-  ok: boolean;
-  data?: unknown;
+  step:   string;
+  ok:     boolean;
+  data?:  unknown;
   error?: string;
 }
 
-async function safeStep(
-  label: string,
-  fn: () => Promise<unknown>
-): Promise<StepResult> {
+async function safeStep(label: string, fn: () => Promise<unknown>): Promise<StepResult> {
   try {
     const data = await fn();
     return { step: label, ok: true, data };
@@ -43,94 +38,102 @@ async function safeStep(
   }
 }
 
+function sleep(ms: number) {
+  return new Promise<void>((r) => setTimeout(r, ms));
+}
+
 export async function POST(req: NextRequest) {
   try {
     const ctx = getTenantContext(req);
     if (!ctx) return unauthorized();
     if (ctx.role !== "OWNER") return forbidden("Apenas o proprietário pode executar reset.");
 
-    const snapResult = await EvolutionConfigService.getSnapshot(
-      ctx.restaurantId,
-      true  // include webhookSecret for instance recreation
-    );
+    const snapResult = await EvolutionConfigService.getSnapshot(ctx.restaurantId, true);
     if (!snapResult.ok) {
       return NextResponse.json(
-        { success: false, error: "Evolution config não encontrado.", steps: [] },
+        { success: false, error: "Evolution config não encontrado." },
         { status: 400 }
       );
     }
 
     const cfg = snapResult.data;
     const webhookUrl = `${
-      process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://foocci.com.br"
+      process.env.NEXTAUTH_URL ??
+      process.env.NEXT_PUBLIC_APP_URL ??
+      "https://foocci.com.br"
     }/api/webhooks/evolution`;
 
     const steps: StepResult[] = [];
 
-    // ── Step 1: Current state ────────────────────────────────
-    const stateStep = await safeStep("1. GET connectionState", () =>
-      EvolutionClient.getInstanceStatus(cfg)
-    );
-    steps.push(stateStep);
+    // 1. Logout — best-effort (may fail if already disconnected)
+    steps.push(await safeStep("logout", () => EvolutionClient.logoutInstance(cfg)));
 
-    // ── Step 2: Logout (best-effort) ─────────────────────────
-    steps.push(await safeStep("2. DELETE logout", () =>
-      EvolutionClient.logoutInstance(cfg)
-    ));
-
-    // ── Step 3: Delete instance ──────────────────────────────
-    const deleteStep = await safeStep("3. DELETE instance", () =>
-      EvolutionClient.deleteInstance(cfg)
-    );
+    // 2. Delete instance
+    const deleteStep = await safeStep("delete", () => EvolutionClient.deleteInstance(cfg));
     steps.push(deleteStep);
 
-    // ── Step 4: Verify instance gone ─────────────────────────
-    steps.push(await safeStep("4. GET fetchInstances", () =>
-      EvolutionClient.fetchInstances(cfg)
-    ));
+    // Short pause — let Evolution finish cleanup
+    await sleep(1500);
 
-    // ── Step 5: Recreate instance ────────────────────────────
-    const createStep = await safeStep("5. POST createInstance", () =>
+    // 3. Recreate instance
+    const createStep = await safeStep("create", () =>
       EvolutionClient.createInstance(cfg, {
-        instanceName:   cfg.instanceName,
-        integration:    "WHATSAPP-BAILEYS",
+        instanceName:    cfg.instanceName,
+        integration:     "WHATSAPP-BAILEYS",
         webhookUrl,
         webhookByEvents: true,
-        webhookEvents:  ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"],
-        webhookSecret:  cfg.webhookSecret,
+        webhookEvents:   ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"],
+        webhookSecret:   cfg.webhookSecret,
       })
     );
     steps.push(createStep);
 
-    // Short pause — Evolution needs a moment to initialise the new instance
-    await new Promise((r) => setTimeout(r, 2000));
+    if (!createStep.ok) {
+      // Can't continue without a valid instance
+      return NextResponse.json({
+        success:      false,
+        error:        "Falha ao recriar instância Evolution.",
+        failedStep:   "create",
+        stepDetail:   createStep.error,
+        steps,
+      });
+    }
 
-    // ── Step 6: Get QR ───────────────────────────────────────
-    const qrStep = await safeStep("6. GET connect (QR)", () =>
-      EvolutionClient.getQRCode(cfg)
-    );
+    // Give Evolution time to initialise the new instance
+    await sleep(3000);
+
+    // 4. Restart — moves "close" → "connecting" so QR is generated
+    const restartStep = await safeStep("restart", () => EvolutionClient.restartInstance(cfg));
+    steps.push(restartStep);
+
+    // Wait for QR to be ready
+    await sleep(2000);
+
+    // 5. Try to fetch QR (best-effort — may still be initialising)
+    const qrStep = await safeStep("getQR", () => EvolutionClient.getQRCode(cfg));
     steps.push(qrStep);
 
-    // Activate in DB so the Foocci UI unlocks
-    await EvolutionConfigService.activate(ctx.restaurantId);
+    // 6. Deactivate in DB so UI reflects "Não conectado" until user actually scans QR
+    await EvolutionConfigService.deactivate(ctx.restaurantId);
 
-    // ── Summary ──────────────────────────────────────────────
     const qrResult = qrStep.ok
       ? (qrStep.data as { base64?: string | null; instanceState?: string })
       : null;
 
-    const hasQR          = !!(qrResult?.base64);
-    const instanceState  = qrResult?.instanceState ?? "unknown";
+    const hasQR         = !!(qrResult?.base64);
+    const instanceState = qrResult?.instanceState ?? (restartStep.ok ? "connecting" : "unknown");
+    const failedSteps   = steps.filter((s) => !s.ok).map((s) => `${s.step}: ${s.error ?? ""}`);
 
     return NextResponse.json({
       success:       true,
+      resetDone:     deleteStep.ok && createStep.ok,
       instanceName:  cfg.instanceName,
       webhookUrl,
       instanceState,
       hasQR,
-      qrFieldPath:   hasQR ? "steps[5].data.base64" : null,
-      steps,
+      failedSteps,   // sanitized — no secrets
     });
+
   } catch (err) {
     console.error("[POST /api/evolution/hard-reset]", err);
     return serverError();
