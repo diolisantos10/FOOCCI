@@ -13,8 +13,9 @@
 
 export interface EvolutionConfigSnapshot {
   instanceName: string;
-  baseUrl: string;       // decrypted
-  apiKey: string;        // decrypted
+  baseUrl: string;         // decrypted
+  apiKey: string;          // decrypted
+  webhookSecret?: string;  // decrypted — only provided when needed
 }
 
 export class EvolutionApiError extends Error {
@@ -52,6 +53,15 @@ export interface InstanceQRCode {
   base64: string | null;  // data:image/png;base64,... or null if already connected
   code:   string | null;
   instanceState?: "open" | "close" | "connecting";
+}
+
+export interface CreateInstanceInput {
+  instanceName: string;
+  integration?: string;
+  webhookUrl?: string;
+  webhookByEvents?: boolean;
+  webhookEvents?: string[];
+  webhookSecret?: string;
 }
 
 // ─── helpers ─────────────────────────────────────────────────
@@ -145,10 +155,18 @@ export const EvolutionClient = {
   },
 
   /**
+   * List all instances on the Evolution server.
+   */
+  async fetchInstances(config: EvolutionConfigSnapshot): Promise<unknown[]> {
+    const raw = await request<unknown[] | { instances?: unknown[] }>(
+      config, "GET", "/instance/fetchInstances"
+    );
+    return Array.isArray(raw) ? raw : (raw as { instances?: unknown[] }).instances ?? [];
+  },
+
+  /**
    * Fetch the QR code for the instance.
-   * The Evolution API returns `{ qrcode: { base64, code } }` when the instance
-   * is in "connecting" / "close" state, or `{ instance: { state: "open" } }`
-   * when already connected.
+   * Returns { base64, code, instanceState }.
    */
   async getQRCode(config: EvolutionConfigSnapshot): Promise<InstanceQRCode> {
     const raw = await request<{
@@ -175,10 +193,43 @@ export const EvolutionClient = {
 
   /**
    * Logout the WhatsApp account from the instance — disconnects the linked
-   * phone number and moves the instance to "close" state, enabling a fresh
-   * QR code scan.
+   * phone number and moves the instance to "close" state.
    */
   async logoutInstance(config: EvolutionConfigSnapshot): Promise<void> {
     await request<unknown>(config, "DELETE", `/instance/logout/${config.instanceName}`);
+  },
+
+  /**
+   * Permanently delete an Evolution instance and all its data.
+   */
+  async deleteInstance(config: EvolutionConfigSnapshot): Promise<unknown> {
+    return request<unknown>(config, "DELETE", `/instance/delete/${config.instanceName}`);
+  },
+
+  /**
+   * Create a new Evolution instance with webhook configuration.
+   */
+  async createInstance(
+    config: EvolutionConfigSnapshot,
+    input: CreateInstanceInput
+  ): Promise<unknown> {
+    const body: Record<string, unknown> = {
+      instanceName: input.instanceName,
+      integration:  input.integration ?? "WHATSAPP-BAILEYS",
+    };
+
+    if (input.webhookUrl) {
+      body.webhook = {
+        url:        input.webhookUrl,
+        byEvents:   input.webhookByEvents ?? true,
+        base64:     false,
+        events:     input.webhookEvents ?? ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"],
+      };
+      if (input.webhookSecret) {
+        body.webhook = { ...body.webhook as object, secret: input.webhookSecret };
+      }
+    }
+
+    return request<unknown>(config, "POST", "/instance/create", body);
   },
 };

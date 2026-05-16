@@ -70,9 +70,11 @@ export class EvolutionConfigService {
   /**
    * Return a decrypted config snapshot for internal service use only.
    * NEVER expose this object via API responses.
+   * Pass includeWebhookSecret=true only for hard-reset / admin flows.
    */
   static async getSnapshot(
-    restaurantId: string
+    restaurantId: string,
+    includeWebhookSecret = false
   ): Promise<ServiceResult<EvolutionConfigSnapshot>> {
     const config = await prisma.evolutionConfig.findUnique({
       where: { restaurantId },
@@ -83,9 +85,10 @@ export class EvolutionConfigService {
     }
 
     return serviceOk({
-      instanceName: config.instanceName,
-      baseUrl: config.baseUrl,
-      apiKey: decrypt(config.apiKey),
+      instanceName:  config.instanceName,
+      baseUrl:       config.baseUrl,
+      apiKey:        decrypt(config.apiKey),
+      ...(includeWebhookSecret ? { webhookSecret: decrypt(config.webhookSecret) } : {}),
     });
   }
 
