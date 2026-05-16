@@ -315,7 +315,7 @@ function SimpleQRPanel({
           <ol className="space-y-0.5 text-[11px] text-indigo-700 list-decimal list-inside">
             <li>Abra o WhatsApp no celular</li>
             <li>Toque em Configurações → Aparelhos conectados</li>
-            <li>Toque em "Conectar com número de telefone"</li>
+            <li>Toque em &ldquo;Conectar com número de telefone&rdquo;</li>
             <li>Digite o código acima</li>
           </ol>
           <button
