@@ -122,10 +122,12 @@ function SimpleQRPanel({
   const [qrBase64,      setQrBase64]      = useState<string | null>(null);
   const [qrPairingCode, setQrPairingCode] = useState<string | null>(null);
   const [qrState,       setQrState]       = useState<QRState>("idle");
+  const [qrErrorMsg,    setQrErrorMsg]    = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
-  const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const retryCountRef  = useRef(0);
-  const MAX_QR_RETRIES = 12;  // 12 × 5 s = 60 s — enough for { count } generation cycle
+  const intervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const retryCountRef     = useRef(0);
+  const lastWasCountRef   = useRef(false);   // tracks if last failed attempt was { count }
+  const MAX_QR_RETRIES    = 12;  // 12 × 5 s = 60 s — enough for { count } generation cycle
 
   // Auto-start QR generation when parent signals a fresh instance (post-reset)
   useEffect(() => {
@@ -146,6 +148,11 @@ function SimpleQRPanel({
     } else {
       retryCountRef.current = 0;
       setQrState("error");
+      setQrErrorMsg(
+        lastWasCountRef.current
+          ? "Evolution respondeu, mas este endpoint não trouxe QR. Use reset para recriar a instância e capturar o QR no create."
+          : "A instância Evolution não respondeu após múltiplas tentativas. Verifique se o servidor Evolution está online e tente novamente."
+      );
     }
   };
 
@@ -184,11 +191,13 @@ function SimpleQRPanel({
       onConnected();
     } else if (qr.generating) {
       // Evolution returning { count: N } — QR is being generated, not yet ready
+      lastWasCountRef.current = true;
       setQrBase64(null);
       setQrState("generating");
       stopPolling();
       scheduleRetry(fetchQR);
     } else if (qr.restarting) {
+      lastWasCountRef.current = false;
       // Instance restarting — retry with backoff (max MAX_QR_RETRIES times)
       setQrBase64(null);
       setQrState("restarting");
@@ -216,11 +225,13 @@ function SimpleQRPanel({
   };
 
   const handleGenerateQR = async () => {
-    retryCountRef.current = 0;
+    retryCountRef.current    = 0;
+    lastWasCountRef.current  = false;
     onStartConnect();
     setQrState("loading");
     setQrBase64(null);
     setQrPairingCode(null);
+    setQrErrorMsg(null);
     await fetchQR();
     stopPolling();
     intervalRef.current = setInterval(fetchQR, 30_000);
@@ -366,8 +377,7 @@ function SimpleQRPanel({
           <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-1">
             <p className="font-semibold">QR Code não disponível</p>
             <p className="text-xs">
-              A instância Evolution não respondeu após múltiplas tentativas.
-              Verifique se o servidor Evolution está online e tente novamente.
+              {qrErrorMsg ?? "A instância Evolution não respondeu após múltiplas tentativas. Verifique se o servidor Evolution está online e tente novamente."}
             </p>
           </div>
           <button
@@ -428,11 +438,25 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   // Diagnostic state
   const [diagnosing,  setDiagnosing]  = useState(false);
   const [diagResult,  setDiagResult]  = useState<{
+    qrFlowVersion?:        string;
+    hardResetUsesCreateQr?: boolean;
+    diagnoseTestsCreateQr?: boolean;
     instanceName:  string;
     baseUrlMasked: string;
     instanceState: string;
     qrAvailable:   boolean;
     steps: Array<{ label: string; ok: boolean; detail?: unknown; error?: string }>;
+  } | null>(null);
+
+  // Hard-reset create QR info (for verifying QR was captured from create response)
+  const [resetCreateInfo, setResetCreateInfo] = useState<{
+    qr_found: boolean;
+    qr_candidate_field?: string | null;
+    qr_candidate_length?: number | null;
+    create_top_level_keys?: string[];
+    create_nested_keys?: Record<string, string[]>;
+    pairing_code_found?: boolean;
+    reason?: string | null;
   } | null>(null);
 
   // Form state — secrets always blank on load (never pre-filled)
@@ -554,19 +578,38 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   async function handleHardReset() {
     setResetting(true);
     setFeedback(null);
+    setResetCreateInfo(null);
     setResetConfirming(false);
     const { ok, data } = await apiFetch("/api/evolution/hard-reset", "POST");
     setResetting(false);
 
     if (ok) {
-      const result = data as { hasQR?: boolean; instanceState?: string };
-      setFeedback({
-        type: "ok",
-        msg: result.hasQR
-          ? "Instância resetada! QR Code sendo gerado…"
-          : `Instância resetada (estado: ${result.instanceState ?? "connecting"}). Gerando QR…`,
-      });
-      // Remount the QR panel with autoStart so it immediately fetches a new QR
+      const result = data as {
+        hasQR?: boolean;
+        instanceState?: string;
+        qrFlowVersion?: string;
+        create_instance_qr?: {
+          qr_found: boolean;
+          qr_candidate_field?: string | null;
+          qr_candidate_length?: number | null;
+          create_top_level_keys?: string[];
+          create_nested_keys?: Record<string, string[]>;
+          pairing_code_found?: boolean;
+          reason?: string | null;
+        };
+      };
+
+      const cqr = result.create_instance_qr;
+      if (cqr) setResetCreateInfo(cqr);
+
+      const qrMsg = cqr?.qr_found
+        ? `QR capturado do create (campo: ${cqr.qr_candidate_field ?? "?"}, ${cqr.qr_candidate_length ?? "?"} chars)`
+        : cqr
+          ? `QR não encontrado no create. Chaves: [${cqr.create_top_level_keys?.join(", ") ?? "?"}]. Aguardando geração…`
+          : (result.hasQR ? "QR Code sendo gerado…" : "Aguardando geração do QR…");
+
+      setFeedback({ type: "ok", msg: `Instância resetada. ${qrMsg}` });
+      // Remount the QR panel with autoStart so it immediately polls for the QR
       setAutoStartQR(true);
       setQrPanelKey((k) => k + 1);
       void loadView();
@@ -913,6 +956,33 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                 )}
               </div>
 
+              {/* create_instance_qr — shown after hard-reset to verify QR capture from create */}
+              {resetCreateInfo && (
+                <div className={`rounded-xl border px-3 py-3 text-[11px] space-y-1 ${
+                  resetCreateInfo.qr_found
+                    ? "border-green-200 bg-green-50"
+                    : "border-amber-200 bg-amber-50"
+                }`}>
+                  <p className={`font-semibold ${resetCreateInfo.qr_found ? "text-green-700" : "text-amber-700"}`}>
+                    create_instance_qr — {resetCreateInfo.qr_found ? "QR capturado" : "QR não encontrado no create"}
+                  </p>
+                  <div className="font-mono text-gray-600 space-y-0.5">
+                    <p>qr_found: {String(resetCreateInfo.qr_found)}</p>
+                    <p>pairing_found: {String(resetCreateInfo.pairing_code_found ?? false)}</p>
+                    {resetCreateInfo.qr_candidate_field && (
+                      <p>campo: {resetCreateInfo.qr_candidate_field} ({resetCreateInfo.qr_candidate_length ?? "?"} chars)</p>
+                    )}
+                    <p>chaves: [{resetCreateInfo.create_top_level_keys?.join(", ") ?? "—"}]</p>
+                    {resetCreateInfo.create_nested_keys && Object.entries(resetCreateInfo.create_nested_keys).map(([k, v]) => (
+                      <p key={k}>&nbsp;&nbsp;{k}: [{v.join(", ")}]</p>
+                    ))}
+                    {resetCreateInfo.reason && (
+                      <p className="text-amber-600">{resetCreateInfo.reason}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Diagnostic tool */}
               <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-3">
                 <div>
@@ -932,6 +1002,13 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
 
                 {diagResult && (
                   <div className="space-y-3 pt-1">
+                    {/* Version marker — confirms production is running new code */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[10px]">
+                      <span className="font-mono font-semibold text-blue-700">{diagResult.qrFlowVersion ?? "versão desconhecida"}</span>
+                      <span className="text-blue-500">reset usa create: {diagResult.hardResetUsesCreateQr ? "✓ sim" : "✗ não"}</span>
+                      <span className="text-blue-500">diag cria instância: {diagResult.diagnoseTestsCreateQr ? "✓ sim" : "✗ não (seguro)"}</span>
+                    </div>
+
                     {/* Summary row */}
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                       <span className="text-gray-500">Servidor</span>

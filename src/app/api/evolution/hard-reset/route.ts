@@ -4,13 +4,13 @@
  * OWNER-only. Full hard reset of the Evolution instance:
  *   1. Logout existing WhatsApp session (best-effort)
  *   2. Delete the instance
- *   3. Recreate with correct webhook config
- *   4. Restart to move to "connecting" state
- *   5. Fetch QR (best-effort)
- *   6. Deactivate in DB — status stays "Não conectado" until user scans QR
+ *   3. Recreate with correct webhook config + qrcode:true
+ *   4. Capture QR from the create response (primary source in v2.2.3)
+ *   5. Only restart if QR was NOT in create response and state is not "connecting"
+ *   6. Never call GET /instance/connect here — that would consume the QR
+ *   7. Deactivate in DB
  *
- * Never exposes API keys or secrets in the response.
- * Idempotent: safe to call on a clean instance.
+ * Never exposes API keys, webhook secrets, or full base64 QR images.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -19,6 +19,8 @@ import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigServ
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { extractEvolutionQr } from "@/lib/evolution/extractQr";
 import { unauthorized, forbidden, serverError } from "@/lib/api-response";
+
+const QR_FLOW_VERSION = "CREATE_QR_PRIMARY_V2" as const;
 
 interface StepResult {
   step:   string;
@@ -66,17 +68,17 @@ export async function POST(req: NextRequest) {
 
     const steps: StepResult[] = [];
 
-    // 1. Logout — best-effort (may fail if already disconnected)
+    // ── 1. Logout — best-effort (may fail if already disconnected) ────────────
     steps.push(await safeStep("logout", () => EvolutionClient.logoutInstance(cfg)));
 
-    // 2. Delete instance
+    // ── 2. Delete instance ────────────────────────────────────────────────────
     const deleteStep = await safeStep("delete", () => EvolutionClient.deleteInstance(cfg));
     steps.push(deleteStep);
 
-    // Short pause — let Evolution finish cleanup
+    // Let Evolution finish cleanup
     await sleep(1500);
 
-    // 3. Recreate instance
+    // ── 3. Recreate instance with qrcode:true ─────────────────────────────────
     const createStep = await safeStep("create", () =>
       EvolutionClient.createInstance(cfg, {
         instanceName:    cfg.instanceName,
@@ -90,29 +92,55 @@ export async function POST(req: NextRequest) {
     steps.push(createStep);
 
     if (!createStep.ok) {
-      // Can't continue without a valid instance
       return NextResponse.json({
-        success:      false,
-        error:        "Falha ao recriar instância Evolution.",
-        failedStep:   "create",
-        stepDetail:   createStep.error,
+        success:        false,
+        qrFlowVersion:  QR_FLOW_VERSION,
+        error:          "Falha ao recriar instância Evolution.",
+        failedStep:     "create",
+        stepDetail:     createStep.error,
         steps,
       });
     }
 
-    // ── 4. Try to capture QR from the create response first ──────────────────
-    // Evolution v2.2.3 includes the QR in the POST /instance/create response when
-    // qrcode:true. If we call PUT /instance/restart afterward, this QR is invalidated
-    // and GET /instance/connect starts returning { count: N } while regenerating.
+    // ── 4. Extract QR from create response (primary source in v2.2.3) ─────────
+    // IMPORTANT: Do NOT call GET /instance/connect here — that would "consume"
+    // the QR so the UI's subsequent poll would see { count } instead of the image.
     const createData = createStep.data as Record<string, unknown> | null;
     const createQR   = createData ? extractEvolutionQr(createData) : null;
-    const qrFoundInCreate = !!(createQR?.base64);
+    const qrFoundInCreate      = !!(createQR?.base64);
+    const pairingFoundInCreate = !!(createQR?.pairingCode);
+    const anyQRInCreate        = qrFoundInCreate || pairingFoundInCreate;
 
-    if (qrFoundInCreate) {
-      steps.push({ step: "qr_source", ok: true, data: { source: "create_response", foundIn: createQR?.foundIn } });
-      // DO NOT restart — restarting would invalidate the QR that's now valid
-    } else {
-      // QR not in create response — check state and restart only if needed
+    // Sanitized diagnostic — never returns the actual QR image
+    const createKeys       = createData ? Object.keys(createData) : [];
+    const createNestedKeys: Record<string, string[]> = {};
+    if (createData) {
+      for (const k of createKeys) {
+        const v = createData[k];
+        if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+          createNestedKeys[k] = Object.keys(v as Record<string, unknown>);
+        }
+      }
+    }
+
+    const create_instance_qr = {
+      create_status:         "success",
+      create_top_level_keys: createKeys,
+      create_nested_keys:    createNestedKeys,
+      qr_found:              qrFoundInCreate,
+      qr_candidate_field:    createQR?.foundIn ?? null,
+      qr_candidate_length:   createQR?.base64 ? createQR.base64.length : null,
+      pairing_code_found:    pairingFoundInCreate,
+      pairing_code_length:   createQR?.pairingCode ? createQR.pairingCode.length : null,
+      reason: !anyQRInCreate
+        ? `QR não encontrado no create response. Chaves: [${createKeys.join(", ")}]`
+        : null,
+    };
+
+    // ── 5. Only restart if QR was NOT in create and state is not "connecting" ──
+    // Calling restart when QR IS in create would invalidate it. We prefer the
+    // UI's polling to call GET /instance/connect as the FIRST consumer of the QR.
+    if (!anyQRInCreate) {
       await sleep(3000);
 
       const stateCheck = await safeStep("check_state", () => EvolutionClient.getInstanceStatus(cfg));
@@ -123,29 +151,12 @@ export async function POST(req: NextRequest) {
         : "unknown";
 
       if (currentState !== "connecting") {
-        // Restart to move instance to "connecting" state so a fresh QR is generated
         const restartStep = await safeStep("restart", () => EvolutionClient.restartInstance(cfg));
         steps.push(restartStep);
-        // Give Evolution more time to generate a new QR after restart
+        // Wait for Evolution to generate a new QR before the UI polls
         await sleep(5000);
       }
-    }
-
-    // ── 5. Poll for QR (up to 3 attempts, 3 s apart) ─────────────────────────
-    let hasQR = qrFoundInCreate;
-    let instanceState = "connecting";
-
-    if (!hasQR) {
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        const qrAttempt = await safeStep(`getQR_${attempt}`, () => EvolutionClient.getQRCode(cfg));
-        steps.push(qrAttempt);
-        if (qrAttempt.ok) {
-          const qrData = qrAttempt.data as { base64?: string | null; instanceState?: string; countOnly?: boolean };
-          instanceState = qrData.instanceState ?? "connecting";
-          if (qrData.base64) { hasQR = true; break; }
-        }
-        if (attempt < 3) await sleep(3000);
-      }
+      // DO NOT call getQRCode() here — let the UI's first poll consume it
     }
 
     // ── 6. Deactivate in DB ───────────────────────────────────────────────────
@@ -154,13 +165,16 @@ export async function POST(req: NextRequest) {
     const failedSteps = steps.filter((s) => !s.ok).map((s) => `${s.step}: ${s.error ?? ""}`);
 
     return NextResponse.json({
-      success:       true,
-      resetDone:     deleteStep.ok && createStep.ok,
-      instanceName:  cfg.instanceName,
+      success:            true,
+      qrFlowVersion:      QR_FLOW_VERSION,
+      hardResetUsesCreateQr: true,
+      resetDone:          deleteStep.ok && createStep.ok,
+      instanceName:       cfg.instanceName,
       webhookUrl,
-      instanceState,
-      hasQR,
-      failedSteps,   // sanitized — no secrets
+      instanceState:      "connecting",
+      hasQR:              anyQRInCreate,
+      create_instance_qr,
+      failedSteps,
     });
 
   } catch (err) {

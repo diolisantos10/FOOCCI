@@ -160,10 +160,13 @@ export async function POST(req: NextRequest) {
         : false;
 
     return NextResponse.json({
-      success:       true,
-      instanceName:  cfg.instanceName,
+      success:               true,
+      qrFlowVersion:         "CREATE_QR_PRIMARY_V2",
+      hardResetUsesCreateQr: true,
+      diagnoseTestsCreateQr: false,   // diagnostic never calls POST /instance/create (destructive)
+      instanceName:          cfg.instanceName,
       baseUrlMasked,
-      instanceState: state,
+      instanceState:         state,
       qrAvailable,
       steps,
     });
