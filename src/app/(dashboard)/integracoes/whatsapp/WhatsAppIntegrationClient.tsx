@@ -371,6 +371,16 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const [qrPanelKey,      setQrPanelKey]      = useState(0);
   const [autoStartQR,     setAutoStartQR]     = useState(false);
 
+  // Diagnostic state
+  const [diagnosing,  setDiagnosing]  = useState(false);
+  const [diagResult,  setDiagResult]  = useState<{
+    instanceName:  string;
+    baseUrlMasked: string;
+    instanceState: string;
+    qrAvailable:   boolean;
+    steps: Array<{ label: string; ok: boolean; detail?: unknown; error?: string }>;
+  } | null>(null);
+
   // Form state — secrets always blank on load (never pre-filled)
   const [instanceName,  setInstanceName]  = useState("");
   const [baseUrl,       setBaseUrl]       = useState("");
@@ -472,6 +482,18 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
       void loadView();
     } else {
       setFeedback({ type: "err", msg: "Erro ao desconectar. Tente novamente." });
+    }
+  }
+
+  async function handleDiagnose() {
+    setDiagnosing(true);
+    setDiagResult(null);
+    const { ok, data } = await apiFetch("/api/evolution/diagnose", "POST");
+    setDiagnosing(false);
+    if (ok) {
+      setDiagResult(data as typeof diagResult);
+    } else {
+      setFeedback({ type: "err", msg: "Falha ao executar diagnóstico Evolution." });
     }
   }
 
@@ -832,6 +854,56 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                       >
                         Cancelar
                       </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Diagnostic tool */}
+              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold text-gray-700">Diagnosticar Evolution</p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    Verifica conectividade, autenticação, estado da instância e disponibilidade de QR.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleDiagnose()}
+                  disabled={diagnosing || !isConfigured}
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                >
+                  {diagnosing ? "Diagnosticando…" : "Executar diagnóstico"}
+                </button>
+
+                {diagResult && (
+                  <div className="space-y-2 pt-1">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <span className="text-gray-500">Servidor</span>
+                      <span className="font-mono text-gray-700 truncate">{diagResult.baseUrlMasked}</span>
+                      <span className="text-gray-500">Instância</span>
+                      <span className="font-mono text-gray-700">{diagResult.instanceName}</span>
+                      <span className="text-gray-500">Estado</span>
+                      <span className={`font-semibold ${
+                        diagResult.instanceState === "open"       ? "text-green-600" :
+                        diagResult.instanceState === "connecting" ? "text-amber-600" :
+                        "text-red-600"
+                      }`}>{diagResult.instanceState}</span>
+                      <span className="text-gray-500">QR disponível</span>
+                      <span className={diagResult.qrAvailable ? "text-green-600 font-semibold" : "text-red-600"}>
+                        {diagResult.qrAvailable ? "sim" : "não"}
+                      </span>
+                    </div>
+                    <div className="space-y-1 pt-1">
+                      {diagResult.steps.map((s) => (
+                        <div key={s.label} className="flex items-start gap-2 text-[11px]">
+                          <span className={s.ok ? "text-green-500" : "text-red-500"}>{s.ok ? "✓" : "✗"}</span>
+                          <span className="font-mono text-gray-500">{s.label}</span>
+                          {!s.ok && s.error && (
+                            <span className="text-red-600 break-all">{s.error}</span>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

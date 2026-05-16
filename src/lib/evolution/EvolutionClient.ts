@@ -145,13 +145,21 @@ export const EvolutionClient = {
 
   /**
    * Fetch the current connection state of the Evolution instance.
+   *
+   * Evolution v2 returns: { instance: { instanceName, state } }
+   * Evolution v1 returns: { state, instance }
+   * We normalise both.
    */
   async getInstanceStatus(config: EvolutionConfigSnapshot): Promise<InstanceStatus> {
-    return request<InstanceStatus>(
-      config,
-      "GET",
-      `/instance/connectionState/${config.instanceName}`
-    );
+    const raw = await request<{
+      state?:    string;
+      instance?: { instanceName?: string; state?: string } | string;
+    }>(config, "GET", `/instance/connectionState/${config.instanceName}`);
+
+    // v2: { instance: { state: "open" } }   v1: { state: "open", instance: "name" }
+    const nested = typeof raw.instance === "object" ? raw.instance : null;
+    const state  = (nested?.state ?? raw.state ?? "close") as InstanceStatus["state"];
+    return { state, instance: config.instanceName };
   },
 
   /**
@@ -166,19 +174,33 @@ export const EvolutionClient = {
 
   /**
    * Fetch the QR code for the instance.
-   * Returns { base64, code, instanceState }.
+   *
+   * Evolution v2 returns a FLAT response when QR is ready:
+   *   { base64: "data:image/png;base64,...", code: "2@...", pairingCode: null, count: 1 }
+   * When connected it returns:
+   *   { instance: { instanceName, state: "open" } }
+   *
+   * Evolution v1 used a nested qrcode field — we support both.
    */
   async getQRCode(config: EvolutionConfigSnapshot): Promise<InstanceQRCode> {
     const raw = await request<{
+      // Evolution v2 — flat
+      base64?:      string;
+      code?:        string;
+      pairingCode?: string | null;
+      count?:       number;
+      // Evolution v1 — nested
       qrcode?: { base64?: string; code?: string };
-      instance?: { state?: string };
+      // Connected state
+      instance?: { state?: string; instanceName?: string } | string;
     }>(config, "GET", `/instance/connect/${config.instanceName}`);
 
-    const instanceState = raw.instance?.state as InstanceQRCode["instanceState"];
+    const nested       = typeof raw.instance === "object" ? raw.instance : null;
+    const instanceState = (nested?.state) as InstanceQRCode["instanceState"];
 
     return {
-      base64: raw.qrcode?.base64 ?? null,
-      code:   raw.qrcode?.code   ?? null,
+      base64: raw.base64 ?? raw.qrcode?.base64 ?? null,
+      code:   raw.code   ?? raw.qrcode?.code   ?? null,
       instanceState,
     };
   },
@@ -216,6 +238,7 @@ export const EvolutionClient = {
     const body: Record<string, unknown> = {
       instanceName: input.instanceName,
       integration:  input.integration ?? "WHATSAPP-BAILEYS",
+      qrcode:       true,   // ensure QR is generated on connect
     };
 
     if (input.webhookUrl) {
