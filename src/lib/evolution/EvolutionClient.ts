@@ -248,6 +248,42 @@ export const EvolutionClient = {
   },
 
   /**
+   * Configure (or update) the webhook on an existing instance.
+   * Does NOT touch the WhatsApp session — only updates webhook routing.
+   *
+   * Tries the nested { webhook: {...} } shape (Evolution v2.x standard) first.
+   * Falls back to flat body if the server returns HTTP 400.
+   */
+  async setWebhook(
+    config: EvolutionConfigSnapshot,
+    webhookUrl: string,
+    events: string[],
+    secret?: string
+  ): Promise<unknown> {
+    const fields: Record<string, unknown> = {
+      enabled:         true,
+      url:             webhookUrl,
+      webhookByEvents: true,
+      webhookBase64:   false,
+      events,
+    };
+    if (secret) fields.secret = secret;
+
+    try {
+      return await request<unknown>(
+        config, "POST", `/webhook/set/${config.instanceName}`, { webhook: fields }
+      );
+    } catch (err) {
+      if (err instanceof EvolutionApiError && err.status === 400) {
+        return await request<unknown>(
+          config, "POST", `/webhook/set/${config.instanceName}`, fields
+        );
+      }
+      throw err;
+    }
+  },
+
+  /**
    * Create a new Evolution instance with webhook configuration.
    */
   async createInstance(

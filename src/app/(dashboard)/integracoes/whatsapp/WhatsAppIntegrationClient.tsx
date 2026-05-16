@@ -471,14 +471,37 @@ interface WebhookLogEvent {
   createdAt:       string;
 }
 
+interface SyncWebhookResult {
+  success:              boolean;
+  instanceName:         string;
+  webhookUrlConfigured: string;
+  eventsConfigured:     string[];
+  rawWebhookShapeKeys:  string[];
+  instanceInfo: {
+    connectionStatus: string | null;
+    profileName:      string | null;
+    ownerJidMasked:   string | null;
+  } | null;
+  error:          string | null;
+  recommendation: string;
+}
+
 function WebhookHealthCard({
   summary,
   events,
   loading,
+  simpleStatus,
+  onSync,
+  syncLoading,
+  syncResult,
 }: {
-  summary:  WebhookLogSummary | null;
-  events:   WebhookLogEvent[];
-  loading:  boolean;
+  summary:      WebhookLogSummary | null;
+  events:       WebhookLogEvent[];
+  loading:      boolean;
+  simpleStatus: SimpleStatus;
+  onSync:       () => void;
+  syncLoading:  boolean;
+  syncResult:   SyncWebhookResult | null;
 }) {
   const now = Date.now();
 
@@ -501,6 +524,10 @@ function WebhookHealthCard({
   }
 
   const hs = healthStatus();
+  const showSyncButton = simpleStatus === "connected" && !summary?.lastEventAt && !syncResult?.success;
+  const phone = syncResult?.instanceInfo?.ownerJidMasked
+    ? `+${syncResult.instanceInfo.ownerJidMasked.split("@")[0]}`
+    : null;
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-3">
@@ -511,21 +538,31 @@ function WebhookHealthCard({
       ) : (
         <>
           <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+            <span className="text-gray-500">Status</span>
+            <span className={`font-semibold ${simpleStatus === "connected" ? "text-green-700" : "text-gray-600"}`}>
+              {simpleStatus === "connected" ? "Conectado" : "Não conectado"}
+            </span>
+
+            {phone && (
+              <>
+                <span className="text-gray-500">Número</span>
+                <span className="font-mono font-semibold text-gray-800">{phone}</span>
+              </>
+            )}
+
             <span className="text-gray-500">Webhook</span>
             <span className={`flex items-center gap-1.5 font-semibold ${hs.color}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${hs.dot}`} />
               {hs.label}
             </span>
 
+            <span className="text-gray-500">Último evento</span>
+            <span className="text-gray-700">
+              {summary?.lastEventAt ? `${fmtAge(summary.lastEventAt)} atrás` : "nenhum"}
+            </span>
+
             <span className="text-gray-500">Mensagens hoje</span>
             <span className="font-semibold text-gray-800">{summary?.inboundToday ?? 0} recebidas</span>
-
-            {summary?.lastAcceptedAt && (
-              <>
-                <span className="text-gray-500">Último aceito</span>
-                <span className="text-gray-700">{fmtAge(summary.lastAcceptedAt)} atrás</span>
-              </>
-            )}
           </div>
 
           {summary?.lastError && (
@@ -534,7 +571,36 @@ function WebhookHealthCard({
             </div>
           )}
 
-          {events.length === 0 && !loading && (
+          {/* Sync result feedback */}
+          {syncResult && (
+            <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-1 ${
+              syncResult.success
+                ? "border-green-200 bg-green-50 text-green-800"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}>
+              <p className="font-semibold">
+                {syncResult.success ? "✓ Webhook sincronizado" : "✗ Falha na sincronização"}
+              </p>
+              <p>{syncResult.recommendation}</p>
+              {syncResult.error && (
+                <p className="font-mono text-[10px] text-red-600 break-all">{syncResult.error}</p>
+              )}
+            </div>
+          )}
+
+          {/* Sync button — only when connected but no events yet */}
+          {showSyncButton && (
+            <button
+              type="button"
+              onClick={onSync}
+              disabled={syncLoading}
+              className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition"
+            >
+              {syncLoading ? "Sincronizando webhook…" : "Sincronizar webhook"}
+            </button>
+          )}
+
+          {events.length === 0 && !loading && !showSyncButton && !syncResult && (
             <p className="text-xs text-gray-400 italic">
               Nenhum evento registrado ainda. Envie uma mensagem WhatsApp para testar.
             </p>
@@ -603,6 +669,10 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const [webhookLogLoading, setWebhookLogLoading] = useState(false);
   const [webhookLogSummary, setWebhookLogSummary] = useState<WebhookLogSummary | null>(null);
   const [webhookLogEvents,  setWebhookLogEvents]  = useState<WebhookLogEvent[]>([]);
+
+  // Sync webhook state
+  const [syncingWebhook, setSyncingWebhook] = useState(false);
+  const [syncResult,     setSyncResult]     = useState<SyncWebhookResult | null>(null);
 
   // Hard-reset state
   const [resetConfirming, setResetConfirming] = useState(false);
@@ -687,6 +757,23 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     }
     setWebhookLogLoading(false);
   }, [isOwner]);
+
+  async function handleSyncWebhook() {
+    setSyncingWebhook(true);
+    setSyncResult(null);
+    const webhookUrl = typeof window !== "undefined"
+      ? `${window.location.origin}/api/webhooks/evolution`
+      : "/api/webhooks/evolution";
+    const { ok, data } = await apiFetch("/api/evolution/sync-webhook", "POST", { webhookUrl });
+    setSyncingWebhook(false);
+    if (ok) {
+      setSyncResult(data as SyncWebhookResult);
+      // Reload webhook log after short delay to capture any immediate events
+      setTimeout(() => void loadWebhookLog(), 5000);
+    } else {
+      setFeedback({ type: "err", msg: "Falha ao sincronizar webhook. Tente novamente." });
+    }
+  }
 
   useEffect(() => { void loadView(); }, [loadView]);
 
@@ -921,6 +1008,10 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           summary={webhookLogSummary}
           events={webhookLogEvents}
           loading={webhookLogLoading}
+          simpleStatus={simpleStatus}
+          onSync={() => void handleSyncWebhook()}
+          syncLoading={syncingWebhook}
+          syncResult={syncResult}
         />
       )}
 
