@@ -263,7 +263,7 @@ export const EvolutionClient = {
     const fields: Record<string, unknown> = {
       enabled:         true,
       url:             webhookUrl,
-      webhookByEvents: true,
+      webhookByEvents: false,   // false = single URL; true would append /{EVENT_NAME} suffix
       webhookBase64:   false,
       events,
     };
@@ -280,6 +280,20 @@ export const EvolutionClient = {
         );
       }
       throw err;
+    }
+  },
+
+  /**
+   * Fetch the current webhook configuration for an instance.
+   * Used after setWebhook to confirm what was actually applied.
+   */
+  async getWebhook(config: EvolutionConfigSnapshot): Promise<Record<string, unknown>> {
+    try {
+      return await request<Record<string, unknown>>(
+        config, "GET", `/webhook/find/${config.instanceName}`
+      );
+    } catch {
+      return {};
     }
   },
 

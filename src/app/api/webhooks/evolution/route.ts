@@ -2,15 +2,14 @@
  * POST /api/webhooks/evolution
  *
  * Single public endpoint that receives all Evolution API webhook events.
- * This route is intentionally NOT authenticated (no JWT required) — it is
- * protected instead by HMAC-SHA256 signature verification on the request body.
+ * NOT authenticated via JWT — protected by HMAC-SHA256 or plain-token
+ * signature verification on the request body.
  *
- * Evolution sends:
- *   Header: x-evolution-webhook-secret (plain token) or can use HMAC.
- *   We verify against the per-restaurant webhookSecret stored encrypted in DB.
+ * DIAGNOSTIC CONTRACT: every incoming request is logged to
+ * EvolutionWebhookEventLog BEFORE any rejection, even if auth fails.
+ * This proves whether Evolution is sending webhooks at all.
  *
- * Response: always 200 OK within ~3s (Evolution retries on non-200).
- * Processing is synchronous in Phase 3; Phase 4 can move to a queue.
+ * Response: always 200 OK (Evolution retries on non-200).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -21,55 +20,58 @@ import { prisma } from "@/lib/prisma";
 import { createHmac, timingSafeEqual } from "crypto";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  let body: unknown;
   let rawBody: string;
+  let body: unknown;
 
   try {
     rawBody = await req.text();
     body = JSON.parse(rawBody);
   } catch {
-    // Always return 200 to prevent Evolution from retrying malformed payloads.
     console.warn("[webhook/evolution] Invalid JSON body");
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Extract instanceName from the payload to look up per-restaurant webhookSecret
+  // Extract metadata immediately — used for logging at every exit point
   const instanceName = extractInstanceName(body);
+  const logMeta      = extractLogMeta(body);
+
   if (!instanceName) {
     console.warn("[webhook/evolution] Missing instance name in payload");
+    void persistLog(null, "unknown", logMeta, false, false, "missing_instance_name");
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Verify webhook authenticity
-  let configResult: Awaited<ReturnType<typeof EvolutionConfigService.findRestaurantByInstance>>;
+  // Config lookup
+  let restaurantId: string | null = null;
+  let webhookSecret = "";
+  let isActive = false;
+
   try {
-    configResult = await EvolutionConfigService.findRestaurantByInstance(instanceName);
+    const configResult = await EvolutionConfigService.findRestaurantByInstance(instanceName);
+    if (!configResult.ok) {
+      console.warn(`[webhook/evolution] Unknown instance: ${instanceName}`);
+      void persistLog(null, instanceName, logMeta, false, false, "unknown_instance");
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+    restaurantId  = configResult.data.restaurantId;
+    webhookSecret = configResult.data.webhookSecret;
+    isActive      = configResult.data.isActive;
   } catch (err) {
-    // decrypt() throws if ENCRYPTION_KEY is missing/wrong — log and absorb.
     console.error("[webhook/evolution] Config lookup failed (check ENCRYPTION_KEY):", err);
+    void persistLog(null, instanceName, logMeta, false, false, "config_lookup_error");
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  if (!configResult.ok) {
-    // Unknown instance — respond 200 to avoid error loops but do not process.
-    console.warn(`[webhook/evolution] Unknown instance: ${instanceName}`);
-    return NextResponse.json({ received: true }, { status: 200 });
-  }
-
-  const { webhookSecret, isActive, restaurantId } = configResult.data;
+  // Signature verification
   if (!verifySignature(req, rawBody, webhookSecret)) {
     console.warn(`[webhook/evolution] Signature mismatch for instance: ${instanceName}`);
-    // Return 200 to not leak whether the instance exists.
+    void persistLog(restaurantId, instanceName, logMeta, false, false, "signature_mismatch");
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Config was inactive but received a valid (authenticated) webhook.
   if (!isActive) {
-    console.log(`[webhook/evolution] Accepting event from inactive instance — will reactivate on connection.update open: ${instanceName}`);
+    console.log(`[webhook/evolution] Inactive instance, accepting: ${instanceName}`);
   }
-
-  // Extract sanitized log metadata (no content, no secrets)
-  const logMeta = extractLogMeta(body);
 
   // Parse and process
   let accepted = false;
@@ -77,58 +79,61 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let processingError: string | null = null;
 
   try {
-    const event = WebhookParserService.parse(body);
+    const event  = WebhookParserService.parse(body);
     const result = await WebhookProcessorService.process(event);
-
     accepted = true;
     ignored  = !result.handled;
-
     if (!result.handled) {
       console.debug("[webhook/evolution] Event not handled:", result.detail);
     }
   } catch (err) {
-    // Log but do not propagate — Evolution must receive 200 to stop retrying.
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error("[webhook/evolution] Processing error:", errMsg);
     processingError = errMsg.slice(0, 200);
-    accepted = true; // reached processing stage — auth passed
+    accepted = true;
   }
 
-  // Async diagnostic log — fire and forget, never blocks the 200 response
-  void logWebhookEvent({
-    restaurantId,
-    instanceName,
-    eventName: logMeta.eventName,
-    bodyKeys:  logMeta.bodyKeys,
-    dataKeys:  logMeta.dataKeys,
-    messageId: logMeta.messageId,
-    remoteJidMasked: logMeta.remoteJidMasked,
-    direction: logMeta.direction,
-    accepted,
-    ignored,
-    error: processingError,
-  });
+  void persistLog(restaurantId, instanceName, logMeta, accepted, ignored, processingError);
 
   return NextResponse.json({ received: true }, { status: 200 });
 }
 
 // ─── helpers ─────────────────────────────────────────────────
 
+/**
+ * Extract the instance name from the payload.
+ *
+ * Evolution v2.3.7 with webhookByEvents=false sends:
+ *   { event: "messages.upsert", instance: "sushicazza", data: {...} }
+ *
+ * Some configurations may nest: { instance: { instanceName: "..." } }
+ * or use a top-level instanceName field.
+ */
 function extractInstanceName(body: unknown): string | null {
   if (!body || typeof body !== "object") return null;
   const raw = body as Record<string, unknown>;
-  return (raw.instance as string) ?? null;
+
+  if (typeof raw.instance === "string" && raw.instance) return raw.instance;
+
+  if (raw.instance && typeof raw.instance === "object") {
+    const inst = raw.instance as Record<string, unknown>;
+    if (typeof inst.instanceName === "string" && inst.instanceName) return inst.instanceName;
+  }
+
+  if (typeof raw.instanceName === "string" && raw.instanceName) return raw.instanceName;
+
+  return null;
 }
 
 /**
  * Verify the incoming request signature.
  *
- * Strategy 1 (preferred): HMAC-SHA256 of raw body, compared against
- *   the `x-evolution-hmac-sha256` header.
- * Strategy 2 (fallback): plain token comparison via `x-evolution-webhook-secret`.
- * Strategy 3 (additional): Authorization: Bearer <secret>
+ * Strategy 1: HMAC-SHA256 via x-evolution-hmac-sha256 header.
+ * Strategy 2: plain token via x-evolution-webhook-secret header.
+ * Strategy 3: plain token via x-evolution-secret header (alternate name).
+ * Strategy 4: Authorization: Bearer <secret>.
  *
- * Uses timing-safe comparison to prevent timing attacks.
+ * Timing-safe comparison to prevent timing attacks.
  */
 function verifySignature(req: NextRequest, rawBody: string, secret: string): boolean {
   // Strategy 1: HMAC
@@ -142,34 +147,37 @@ function verifySignature(req: NextRequest, rawBody: string, secret: string): boo
     }
   }
 
-  // Strategy 2: plain token header (Evolution v2.x default)
+  // Strategy 2: plain token (Evolution v2.x default header name)
   const tokenHeader = req.headers.get("x-evolution-webhook-secret");
   if (tokenHeader !== null) {
     try {
-      return timingSafeEqual(
-        Buffer.from(tokenHeader, "utf8"),
-        Buffer.from(secret, "utf8")
-      );
+      return timingSafeEqual(Buffer.from(tokenHeader, "utf8"), Buffer.from(secret, "utf8"));
     } catch {
       return false;
     }
   }
 
-  // Strategy 3: Authorization: Bearer <secret>
+  // Strategy 3: alternate plain-token header used by some Evolution builds
+  const altHeader = req.headers.get("x-evolution-secret");
+  if (altHeader !== null) {
+    try {
+      return timingSafeEqual(Buffer.from(altHeader, "utf8"), Buffer.from(secret, "utf8"));
+    } catch {
+      return false;
+    }
+  }
+
+  // Strategy 4: Authorization: Bearer <secret>
   const authHeader = req.headers.get("authorization") ?? "";
   if (authHeader.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
     try {
-      return timingSafeEqual(
-        Buffer.from(token, "utf8"),
-        Buffer.from(secret, "utf8")
-      );
+      return timingSafeEqual(Buffer.from(token, "utf8"), Buffer.from(secret, "utf8"));
     } catch {
       return false;
     }
   }
 
-  // No recognized auth header — reject
   return false;
 }
 
@@ -183,7 +191,7 @@ interface LogMeta {
 }
 
 function extractLogMeta(body: unknown): LogMeta {
-  const raw      = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const raw       = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
   const eventName = (raw.event as string | undefined) ?? "unknown";
   const bodyKeys  = Object.keys(raw);
   const data      = raw.data;
@@ -219,8 +227,31 @@ function maskJid(jid: string): string {
   return domain ? `${masked}@${domain}` : masked;
 }
 
+function persistLog(
+  restaurantId:    string | null,
+  instanceName:    string,
+  logMeta:         LogMeta,
+  accepted:        boolean,
+  ignored:         boolean,
+  error:           string | null
+): Promise<void> {
+  return logWebhookEvent({
+    restaurantId,
+    instanceName,
+    eventName:       logMeta.eventName,
+    bodyKeys:        logMeta.bodyKeys,
+    dataKeys:        logMeta.dataKeys,
+    messageId:       logMeta.messageId,
+    remoteJidMasked: logMeta.remoteJidMasked,
+    direction:       logMeta.direction,
+    accepted,
+    ignored,
+    error,
+  });
+}
+
 async function logWebhookEvent(params: {
-  restaurantId:    string;
+  restaurantId:    string | null;
   instanceName:    string;
   eventName:       string;
   bodyKeys:        string[];
@@ -249,17 +280,19 @@ async function logWebhookEvent(params: {
       },
     });
 
-    // Keep only last 200 rows per restaurant to avoid unbounded growth
-    const oldRows = await prisma.evolutionWebhookEventLog.findMany({
-      where:   { restaurantId: params.restaurantId },
-      orderBy: { createdAt: "desc" },
-      skip:    200,
-      select:  { id: true },
-    });
-    if (oldRows.length > 0) {
-      await prisma.evolutionWebhookEventLog.deleteMany({
-        where: { id: { in: oldRows.map((r) => r.id) } },
+    // Keep only last 200 rows per restaurant (or per instance if restaurantId null)
+    if (params.restaurantId) {
+      const oldRows = await prisma.evolutionWebhookEventLog.findMany({
+        where:   { restaurantId: params.restaurantId },
+        orderBy: { createdAt: "desc" },
+        skip:    200,
+        select:  { id: true },
       });
+      if (oldRows.length > 0) {
+        await prisma.evolutionWebhookEventLog.deleteMany({
+          where: { id: { in: oldRows.map((r) => r.id) } },
+        });
+      }
     }
   } catch {
     // Never let logging failures affect webhook processing

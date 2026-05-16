@@ -477,6 +477,13 @@ interface SyncWebhookResult {
   webhookUrlConfigured: string;
   eventsConfigured:     string[];
   rawWebhookShapeKeys:  string[];
+  webhookConfig: {
+    url:             string | null;
+    webhookByEvents: boolean | null;
+    events:          string[];
+    enabled:         boolean | null;
+    urlMatches:      boolean;
+  } | null;
   instanceInfo: {
     connectionStatus: string | null;
     profileName:      string | null;
@@ -484,6 +491,14 @@ interface SyncWebhookResult {
   } | null;
   error:          string | null;
   recommendation: string;
+}
+
+interface SelfTestResult {
+  success:      boolean;
+  instanceName: string;
+  dbWrite:  { ok: boolean; rowId: string | null; error: string | null };
+  parse:    { ok: boolean; event: Record<string, unknown> | null; error: string | null };
+  diagnosis:    string;
 }
 
 function WebhookHealthCard({
@@ -494,14 +509,20 @@ function WebhookHealthCard({
   onSync,
   syncLoading,
   syncResult,
+  onSelfTest,
+  selfTestLoading,
+  selfTestResult,
 }: {
-  summary:      WebhookLogSummary | null;
-  events:       WebhookLogEvent[];
-  loading:      boolean;
-  simpleStatus: SimpleStatus;
-  onSync:       () => void;
-  syncLoading:  boolean;
-  syncResult:   SyncWebhookResult | null;
+  summary:         WebhookLogSummary | null;
+  events:          WebhookLogEvent[];
+  loading:         boolean;
+  simpleStatus:    SimpleStatus;
+  onSync:          () => void;
+  syncLoading:     boolean;
+  syncResult:      SyncWebhookResult | null;
+  onSelfTest:      () => void;
+  selfTestLoading: boolean;
+  selfTestResult:  SelfTestResult | null;
 }) {
   const now = Date.now();
 
@@ -573,7 +594,7 @@ function WebhookHealthCard({
 
           {/* Sync result feedback */}
           {syncResult && (
-            <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-1 ${
+            <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-2 ${
               syncResult.success
                 ? "border-green-200 bg-green-50 text-green-800"
                 : "border-red-200 bg-red-50 text-red-700"
@@ -584,6 +605,26 @@ function WebhookHealthCard({
               <p>{syncResult.recommendation}</p>
               {syncResult.error && (
                 <p className="font-mono text-[10px] text-red-600 break-all">{syncResult.error}</p>
+              )}
+              {/* Show actual webhook config read back from Evolution */}
+              {syncResult.webhookConfig && (
+                <div className="rounded border border-current/20 bg-white/60 px-2 py-1.5 font-mono text-[10px] space-y-0.5">
+                  <p>url: <span className="break-all">{syncResult.webhookConfig.url ?? "?"}</span>
+                    {" "}{syncResult.webhookConfig.urlMatches
+                      ? <span className="text-green-600">✓ bate</span>
+                      : <span className="text-red-600">✗ diverge</span>
+                    }
+                  </p>
+                  <p>webhookByEvents: <span className={syncResult.webhookConfig.webhookByEvents === false ? "text-green-700 font-bold" : "text-red-600 font-bold"}>
+                    {String(syncResult.webhookConfig.webhookByEvents ?? "?")}
+                  </span>
+                  {syncResult.webhookConfig.webhookByEvents === true && (
+                    <span className="text-red-600"> ← deve ser false</span>
+                  )}
+                  </p>
+                  <p>enabled: {String(syncResult.webhookConfig.enabled ?? "?")}</p>
+                  <p>events: [{syncResult.webhookConfig.events.join(", ")}]</p>
+                </div>
               )}
             </div>
           )}
@@ -598,6 +639,36 @@ function WebhookHealthCard({
             >
               {syncLoading ? "Sincronizando webhook…" : "Sincronizar webhook"}
             </button>
+          )}
+
+          {/* Self-test button — show after sync succeeds */}
+          {syncResult?.success && (
+            <button
+              type="button"
+              onClick={onSelfTest}
+              disabled={selfTestLoading}
+              className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50 transition"
+            >
+              {selfTestLoading ? "Testando receiver…" : "Testar receiver Foocci"}
+            </button>
+          )}
+
+          {/* Self-test result */}
+          {selfTestResult && (
+            <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-1 ${
+              selfTestResult.success
+                ? "border-blue-200 bg-blue-50 text-blue-800"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}>
+              <p className="font-semibold">
+                {selfTestResult.success ? "✓ Receiver OK" : "✗ Receiver com problema"}
+              </p>
+              <p>{selfTestResult.diagnosis}</p>
+              <div className="font-mono text-[10px] space-y-0.5 mt-1">
+                <p>DB: {selfTestResult.dbWrite.ok ? "✓" : "✗"}{selfTestResult.dbWrite.error ? ` — ${selfTestResult.dbWrite.error}` : ""}</p>
+                <p>Parser: {selfTestResult.parse.ok ? "✓" : "✗"}{selfTestResult.parse.error ? ` — ${selfTestResult.parse.error}` : ""}</p>
+              </div>
+            </div>
           )}
 
           {events.length === 0 && !loading && !showSyncButton && !syncResult && (
@@ -673,6 +744,10 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   // Sync webhook state
   const [syncingWebhook, setSyncingWebhook] = useState(false);
   const [syncResult,     setSyncResult]     = useState<SyncWebhookResult | null>(null);
+
+  // Self-test state
+  const [selfTesting,   setSelfTesting]   = useState(false);
+  const [selfTestResult, setSelfTestResult] = useState<SelfTestResult | null>(null);
 
   // Hard-reset state
   const [resetConfirming, setResetConfirming] = useState(false);
@@ -761,6 +836,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   async function handleSyncWebhook() {
     setSyncingWebhook(true);
     setSyncResult(null);
+    setSelfTestResult(null);
     const webhookUrl = typeof window !== "undefined"
       ? `${window.location.origin}/api/webhooks/evolution`
       : "/api/webhooks/evolution";
@@ -768,10 +844,23 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     setSyncingWebhook(false);
     if (ok) {
       setSyncResult(data as SyncWebhookResult);
-      // Reload webhook log after short delay to capture any immediate events
       setTimeout(() => void loadWebhookLog(), 5000);
     } else {
       setFeedback({ type: "err", msg: "Falha ao sincronizar webhook. Tente novamente." });
+    }
+  }
+
+  async function handleSelfTest() {
+    setSelfTesting(true);
+    setSelfTestResult(null);
+    const { ok, data } = await apiFetch("/api/evolution/webhook-self-test", "POST");
+    setSelfTesting(false);
+    if (ok) {
+      setSelfTestResult(data as SelfTestResult);
+      // Refresh log so the self-test row appears
+      setTimeout(() => void loadWebhookLog(), 1500);
+    } else {
+      setFeedback({ type: "err", msg: "Falha ao executar self-test." });
     }
   }
 
@@ -1012,6 +1101,9 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           onSync={() => void handleSyncWebhook()}
           syncLoading={syncingWebhook}
           syncResult={syncResult}
+          onSelfTest={() => void handleSelfTest()}
+          selfTestLoading={selfTesting}
+          selfTestResult={selfTestResult}
         />
       )}
 

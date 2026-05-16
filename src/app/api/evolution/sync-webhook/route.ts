@@ -2,8 +2,11 @@
  * POST /api/evolution/sync-webhook
  *
  * OWNER-only. Configures the webhook URL on the existing connected Evolution
- * instance without touching the WhatsApp session. Called when Evolution is
- * connected but not delivering webhooks to Foocci.
+ * instance without touching the WhatsApp session. After setting, reads back
+ * the actual config from Evolution to confirm what was applied.
+ *
+ * Key: webhookByEvents=false → Evolution sends ALL events to a single URL.
+ * webhookByEvents=true would send to {url}/{EVENT_NAME} (404 in Next.js).
  *
  * Never exposes: apiKey, webhookSecret, raw credentials.
  */
@@ -14,11 +17,7 @@ import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigServ
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { unauthorized, forbidden, serverError } from "@/lib/api-response";
 
-const WEBHOOK_EVENTS = [
-  "MESSAGES_UPSERT",
-  "MESSAGES_UPDATE",
-  "CONNECTION_UPDATE",
-];
+const WEBHOOK_EVENTS = ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"];
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,8 +28,6 @@ export async function POST(req: NextRequest) {
     let body: Record<string, unknown> = {};
     try { body = await req.json(); } catch { /* no body — ok */ }
 
-    // Derive webhook URL: client sends window.location.origin as webhookUrl,
-    // fallback to request headers for server-side derivation.
     const clientUrl = body.webhookUrl ? String(body.webhookUrl) : null;
     const host  = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
     const proto = (req.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() ?? "https";
@@ -41,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     const snapshotResult = await EvolutionConfigService.getSnapshot(
       ctx.restaurantId,
-      true // includeWebhookSecret — needed to tell Evolution what secret to send
+      true // includeWebhookSecret — needed to configure Evolution
     );
     if (!snapshotResult.ok) {
       return NextResponse.json(
@@ -52,11 +49,11 @@ export async function POST(req: NextRequest) {
 
     const snapshot = snapshotResult.data;
 
-    // Configure webhook on the live instance — does NOT reset QR / session
-    let rawResult: unknown = null;
+    // Set webhook — webhookByEvents=false sends ALL events to the single URL
+    let rawSetResult: unknown = null;
     let setError: string | null = null;
     try {
-      rawResult = await EvolutionClient.setWebhook(
+      rawSetResult = await EvolutionClient.setWebhook(
         snapshot,
         webhookUrl,
         WEBHOOK_EVENTS,
@@ -69,7 +66,34 @@ export async function POST(req: NextRequest) {
       setError = setError.slice(0, 300);
     }
 
-    // Fetch instance metadata — best-effort, never blocks response
+    // Read back the actual webhook config to confirm what Evolution has stored
+    let webhookConfig: {
+      url:            string | null;
+      webhookByEvents: boolean | null;
+      events:         string[];
+      enabled:        boolean | null;
+      urlMatches:     boolean;
+    } | null = null;
+
+    try {
+      const raw = await EvolutionClient.getWebhook(snapshot);
+      // Evolution v2 returns { webhook: { ... } } or the flat object directly
+      const wh = (raw.webhook && typeof raw.webhook === "object")
+        ? raw.webhook as Record<string, unknown>
+        : raw;
+      const configuredUrl = (wh.url as string | undefined) ?? null;
+      webhookConfig = {
+        url:             configuredUrl,
+        webhookByEvents: (wh.webhookByEvents as boolean | undefined) ?? null,
+        events:          Array.isArray(wh.events) ? (wh.events as string[]) : [],
+        enabled:         (wh.enabled as boolean | undefined) ?? null,
+        urlMatches:      configuredUrl === webhookUrl,
+      };
+    } catch {
+      // best-effort
+    }
+
+    // Fetch instance metadata for ownerJid and connection status
     let instanceInfo: {
       connectionStatus: string | null;
       profileName:      string | null;
@@ -105,25 +129,37 @@ export async function POST(req: NextRequest) {
         };
       }
     } catch {
-      // instance lookup is best-effort
+      // best-effort
     }
 
     const rawWebhookShapeKeys =
-      rawResult && typeof rawResult === "object"
-        ? Object.keys(rawResult as Record<string, unknown>)
+      rawSetResult && typeof rawSetResult === "object"
+        ? Object.keys(rawSetResult as Record<string, unknown>)
         : [];
 
+    const success = !setError;
+    let recommendation: string;
+    if (!success) {
+      recommendation =
+        "Falha ao configurar webhook na Evolution. Verifique URL da Evolution e API Key nas Configurações avançadas.";
+    } else if (webhookConfig && !webhookConfig.urlMatches) {
+      recommendation =
+        `Webhook configurado mas URL diverge. Configurada: ${webhookConfig.url ?? "?"} — esperada: ${webhookUrl}`;
+    } else {
+      recommendation =
+        "Webhook configurado (webhookByEvents=false). Envie uma mensagem de teste e use 'Testar receiver Foocci' para confirmar.";
+    }
+
     return NextResponse.json({
-      success:              !setError,
+      success,
       instanceName:         snapshot.instanceName,
       webhookUrlConfigured: webhookUrl,
       eventsConfigured:     WEBHOOK_EVENTS,
       rawWebhookShapeKeys,
+      webhookConfig,
       instanceInfo,
       error:                setError,
-      recommendation: setError
-        ? "Falha ao configurar webhook na Evolution. Verifique se a URL da Evolution e a API Key estão corretas nas Configurações avançadas."
-        : "Webhook configurado com sucesso. Envie uma mensagem de teste pelo WhatsApp e verifique o log de eventos em 30 segundos.",
+      recommendation,
     });
   } catch (err) {
     console.error("[POST /api/evolution/sync-webhook]", err);
