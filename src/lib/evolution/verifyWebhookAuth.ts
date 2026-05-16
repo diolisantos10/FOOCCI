@@ -23,6 +23,7 @@ export interface WebhookAuthCandidates {
   bodySecret:              string | null; // body.secret
   bodyWebhookSecret:       string | null; // body.webhookSecret
   bodyApikey:              string | null; // body.apikey
+  queryToken:              string | null; // ?token= query param in webhook URL
 }
 
 export interface WebhookAuthResult {
@@ -89,6 +90,7 @@ export function extractWebhookAuthCandidates(
     bodySecret:       (bodyObj && typeof bodyObj.secret       === "string" && bodyObj.secret)       ? bodyObj.secret       : null,
     bodyWebhookSecret:(bodyObj && typeof bodyObj.webhookSecret === "string" && bodyObj.webhookSecret) ? bodyObj.webhookSecret : null,
     bodyApikey:       (bodyObj && typeof bodyObj.apikey        === "string" && bodyObj.apikey)        ? bodyObj.apikey        : null,
+    queryToken:       null, // caller must inject from req.nextUrl.searchParams.get("token")
   };
 }
 
@@ -117,6 +119,7 @@ export function verifyWebhookAuth(
     hasBodySecret:              candidates.bodySecret              !== null,
     hasBodyWebhookSecret:       candidates.bodyWebhookSecret       !== null,
     hasBodyApikey:              candidates.bodyApikey              !== null,
+    hasQueryToken:              candidates.queryToken              !== null,
     expectedHashPreview:        secret ? sha256Preview(secret) : "00000000",
     candidateHashPreviews,
   };
@@ -153,6 +156,7 @@ export function verifyWebhookAuth(
     { name: "body.secret",                value: candidates.bodySecret               },
     { name: "body.webhookSecret",         value: candidates.bodyWebhookSecret        },
     { name: "body.apikey",                value: candidates.bodyApikey               },
+    { name: "query.token",                value: candidates.queryToken               },
   ];
 
   for (const { name, value } of plainCandidates) {

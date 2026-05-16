@@ -30,6 +30,7 @@ function emptyCandidates() {
     bodySecret:              null,
     bodyWebhookSecret:       null,
     bodyApikey:              null,
+    queryToken:              null,
   };
 }
 
@@ -74,8 +75,9 @@ export async function POST(req: NextRequest) {
     const r4 = verifyWebhookAuth(FAKE_BODY, { ...emptyCandidates(), authorizationBearer:     webhookSecret }, webhookSecret);
     const r5 = verifyWebhookAuth(FAKE_BODY, { ...emptyCandidates(), bodySecret:              webhookSecret }, webhookSecret);
     const r6 = verifyWebhookAuth(FAKE_BODY, { ...emptyCandidates(), bodyApikey:              webhookSecret }, webhookSecret);
+    const r7 = verifyWebhookAuth(FAKE_BODY, { ...emptyCandidates(), queryToken:              webhookSecret }, webhookSecret);
 
-    const allOk = r1.accepted && r2.accepted && r3.accepted && r4.accepted && r5.accepted && r6.accepted;
+    const allOk = r1.accepted && r2.accepted && r3.accepted && r4.accepted && r5.accepted && r6.accepted && r7.accepted;
 
     const diagnosis = allOk
       ? "Lógica de auth OK para todos os formatos testados. Se ainda há signature_mismatch, o problema é que a Evolution está enviando um secret diferente do armazenado no banco. Clique em 'Sincronizar webhook' para reenviar o secret correto."
@@ -92,6 +94,7 @@ export async function POST(req: NextRequest) {
         authorizationBearer:     { accepted: r4.accepted, strategy: r4.matchedStrategy },
         bodySecret:              { accepted: r5.accepted, strategy: r5.matchedStrategy },
         bodyApikey:              { accepted: r6.accepted, strategy: r6.matchedStrategy },
+        queryToken:              { accepted: r7.accepted, strategy: r7.matchedStrategy },
       },
       allWorkingCorrectly: allOk,
       diagnosis,

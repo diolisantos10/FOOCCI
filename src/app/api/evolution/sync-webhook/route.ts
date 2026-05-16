@@ -123,10 +123,19 @@ export async function POST(req: NextRequest) {
 
     const snapshot = snapshotResult.data;
 
+    // Append ?token= server-side so Evolution echoes it back on every webhook call.
+    // The browser only sends the base webhookUrl — token is never exposed to the client.
+    let finalWebhookUrl = webhookUrl;
+    if (snapshot.webhookSecret) {
+      const tokenUrl = new URL(webhookUrl);
+      tokenUrl.searchParams.set("token", snapshot.webhookSecret);
+      finalWebhookUrl = tokenUrl.toString();
+    }
+
     // Shared fields for all body shapes
     const sharedFields: Record<string, unknown> = {
       enabled:       true,
-      url:           webhookUrl,
+      url:           finalWebhookUrl,
       webhookBase64: false,
       events:        WEBHOOK_EVENTS,
     };
@@ -251,7 +260,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success,
       instanceName:         snapshot.instanceName,
-      webhookUrlConfigured: webhookUrl,
+      webhookUrlConfigured: webhookUrl,   // base URL only — no token
       eventsConfigured:     WEBHOOK_EVENTS,
       rawWebhookShapeKeys:  setResponses[0]?.keys ?? [],
       webhookConfig: {
@@ -259,13 +268,14 @@ export async function POST(req: NextRequest) {
         webhookByEvents: finalLiveConfig.webhookByEvents,
         events:          finalLiveConfig.events,
         enabled:         finalLiveConfig.enabled,
-        urlMatches:      finalLiveConfig.url === webhookUrl,
+        urlMatches:      finalLiveConfig.url === finalWebhookUrl,
       },
       // Secret status — never reveals the value
       secretInfo: {
         configuredSecretFromDb: true,                       // we always read from DB
         sentSecret:             !!snapshot.webhookSecret,   // was a non-empty secret sent?
         readBackSecretVisible:  false,                      // Evolution never returns secret in GET
+        tokenInUrl:             !!snapshot.webhookSecret,   // ?token= appended to URL sent to Evolution
       },
       instanceInfo,
       error:          success ? null : (firstSetError ?? "webhookByEvents não confirmado como false"),

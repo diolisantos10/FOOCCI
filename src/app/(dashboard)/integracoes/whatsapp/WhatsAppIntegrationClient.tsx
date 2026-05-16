@@ -493,6 +493,7 @@ interface SyncWebhookResult {
     configuredSecretFromDb: boolean;
     sentSecret:             boolean;
     readBackSecretVisible:  boolean;
+    tokenInUrl:             boolean;
   };
   instanceInfo: {
     connectionStatus: string | null;
@@ -521,6 +522,7 @@ interface AuthSelfTestResult {
     authorizationBearer:     { accepted: boolean; strategy: string | null };
     bodySecret:              { accepted: boolean; strategy: string | null };
     bodyApikey:              { accepted: boolean; strategy: string | null };
+    queryToken:              { accepted: boolean; strategy: string | null };
   } | null;
   error?: string;
 }
@@ -580,6 +582,9 @@ interface LiveConfigResult {
   secretPresent:    boolean;
   rawKeys:          string[];
   urlMatches:       boolean;
+  urlBaseMatches:   boolean;
+  tokenInUrl:       boolean;
+  authMode:         "query_token" | "header_secret" | "unknown";
   byEventsIsFalse:  boolean;
   hasMessagesUpsert: boolean;
   isEnabled:        boolean;
@@ -720,7 +725,10 @@ function WebhookHealthCard({
   }
 
   const hs = healthStatus();
-  const hasSignatureMismatch = summary?.lastError === "signature_mismatch";
+  // Suppress signature_mismatch alert once token auth is active (tokenInUrl covers auth)
+  const hasSignatureMismatch = summary?.lastError === "signature_mismatch"
+    && !liveConfigResult?.tokenInUrl
+    && !syncResult?.secretInfo?.tokenInUrl;
   const showSyncButton = simpleStatus === "connected" && (
     !summary?.lastRealEventAt || liveConfigResult?.isHealthy === false || hasSignatureMismatch
   );
@@ -767,7 +775,7 @@ function WebhookHealthCard({
             <span className="font-semibold text-gray-800">{summary?.inboundToday ?? 0} recebidas</span>
           </div>
 
-          {summary?.lastError && (
+          {summary?.lastError && (summary.acceptedRealEvents ?? 0) === 0 && (
             <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[11px] text-red-700">
               Último erro: {summary.lastError}
             </div>
@@ -781,7 +789,11 @@ function WebhookHealthCard({
                 : "border-red-200 bg-red-50 text-red-700"
             }`}>
               <p className="font-semibold">
-                {syncResult.success ? "✓ Webhook sincronizado" : "✗ Falha na sincronização"}
+                {syncResult.success
+                  ? syncResult.secretInfo?.tokenInUrl
+                    ? "✓ Webhook configurado com token seguro"
+                    : "✓ Webhook sincronizado"
+                  : "✗ Falha na sincronização"}
               </p>
               <p>{syncResult.recommendation}</p>
               {syncResult.error && (
@@ -847,10 +859,14 @@ function WebhookHealthCard({
                   </span>
                 </p>
                 <p>
-                  <span className="text-gray-500">secret: </span>
-                  <span className={liveConfigResult.secretPresent ? "text-green-700" : "text-amber-600"}>
-                    {liveConfigResult.secretPresent ? "presente" : "ausente"}
-                  </span>
+                  <span className="text-gray-500">auth: </span>
+                  {liveConfigResult.tokenInUrl ? (
+                    <span className="text-green-700">token na URL ✓</span>
+                  ) : liveConfigResult.secretPresent ? (
+                    <span className="text-green-700">secret presente ✓</span>
+                  ) : (
+                    <span className="text-amber-600">secret ausente</span>
+                  )}
                 </p>
                 <p>
                   <span className="text-gray-500">events: </span>

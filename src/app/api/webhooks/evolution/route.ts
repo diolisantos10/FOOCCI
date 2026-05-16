@@ -66,7 +66,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // Multi-strategy signature verification
-  const authCandidates = extractWebhookAuthCandidates(req, body);
+  // queryToken: Evolution preserves ?token= in the webhook URL it stored
+  const queryToken     = req.nextUrl.searchParams.get("token") || null;
+  const authCandidates = {
+    ...extractWebhookAuthCandidates(req, body),
+    queryToken,
+  };
   const authResult     = verifyWebhookAuth(rawBody, authCandidates, webhookSecret);
 
   if (!authResult.accepted) {
