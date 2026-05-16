@@ -1,19 +1,24 @@
 /**
  * POST /api/evolution/hard-reset
  *
- * OWNER-only. Full hard reset of the Evolution instance:
- *   1. Logout + delete (best-effort, 404 ignored)
+ * OWNER-only. Hard reset of the Evolution instance with multi-strategy QR capture:
+ *   1. Logout + delete (best-effort)
  *   2. Wait 1.5 s
- *   3. POST /instance/create (qrcode:true, WHATSAPP-BAILEYS)
- *   4. Inspect create response — extract base64 image OR text code → generate image
- *   5. If QR found → return qr_base64 immediately (no restart, no polling)
- *   6. If not found → poll GET /instance/connect every 3 s for up to 30 s (10 attempts)
- *      Each poll also tries text-code → image generation via qrcode library
- *   7. Return full diagnostic when still not found
- *   8. Deactivate in DB (status = "Não conectado" until user scans)
+ *   3. POST /instance/create (qrcode:true, WHATSAPP-BAILEYS, with webhook)
+ *   4. Extract QR from create response — base64 or text-code → PNG via qrcode lib
+ *   5. If QR found → return immediately
+ *   6. If create returns qrcode.count only (no image/code):
+ *      a. Delete (best-effort) + wait 1.5 s
+ *      b. POST /instance/create again WITHOUT webhook (minimal payload)
+ *      c. Extract QR from alt create response
+ *      d. If QR found → return immediately
+ *   7. Poll 12 × 5 s = 60 s, trying 4 endpoints per round:
+ *      GET /instance/connect, GET /instance/qrcode, GET /qrcode/base64, POST /instance/connect
+ *   8. Deactivate in DB
+ *   9. Return full diagnostic with qrcode_shape, endpoint_results, recommendation
  *
- * Returns qr_base64 (OWNER-only — the QR is meant for immediate display).
  * Never returns apiKey, webhookSecret, or auth tokens.
+ * OWNER-only endpoint — qr_base64 is safe to return directly.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -24,7 +29,7 @@ import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionCli
 import { extractEvolutionQr, isCountOnlyResponse } from "@/lib/evolution/extractQr";
 import { unauthorized, forbidden, serverError } from "@/lib/api-response";
 
-const QR_FLOW_VERSION = "CREATE_QR_PRIMARY_V2" as const;
+const QR_FLOW_VERSION = "MULTI_ENDPOINT_V3" as const;
 
 interface StepResult {
   step:   string;
@@ -33,13 +38,20 @@ interface StepResult {
   error?: string;
 }
 
-export interface PollAttempt {
-  attempt:     number;
-  endpoint:    string;
+export interface EndpointAttempt {
+  method:      string;
+  path:        string;
   httpStatus:  number;
   keys:        string[];
   qrFound:     boolean;
   isCountOnly: boolean;
+  error?:      string;
+}
+
+export interface PollRound {
+  round:     number;
+  endpoints: EndpointAttempt[];
+  qrFound:   boolean;
 }
 
 async function safeStep(label: string, fn: () => Promise<unknown>): Promise<StepResult> {
@@ -58,12 +70,6 @@ function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-/**
- * Try to extract a renderable QR image from a raw Evolution API response.
- * If the response has a base64 PNG → use it.
- * If the response has only a text code (2@...) → generate a QR PNG via qrcode lib.
- * Never throws — always returns nulls on failure.
- */
 async function tryGetQRImage(raw: unknown): Promise<{
   base64:  string | null;
   text:    string | null;
@@ -71,26 +77,58 @@ async function tryGetQRImage(raw: unknown): Promise<{
   source:  string | null;
 }> {
   const extracted = extractEvolutionQr(raw);
-
   let base64 = extracted.base64;
   let source = extracted.foundIn;
 
-  // If we have a text code but no image, generate the QR image
   if (!base64 && extracted.code) {
     try {
       base64 = await QRCode.toDataURL(extracted.code, { margin: 1, width: 256 });
       source = `generated_from_code(${extracted.foundIn ?? "code"})`;
-    } catch {
-      // ignore — keep base64 null
-    }
+    } catch { /* ignore */ }
   }
 
-  return {
-    base64,
-    text:    extracted.code,
-    pairing: extracted.pairingCode,
-    source,
+  return { base64, text: extracted.code, pairing: extracted.pairingCode, source };
+}
+
+/** Build a shape map for diagnostics: top-level keys → their nested keys. Never includes values. */
+function buildShape(data: Record<string, unknown>): Record<string, string[]> {
+  const shape: Record<string, string[]> = {};
+  for (const k of Object.keys(data)) {
+    const v = data[k];
+    if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+      shape[k] = Object.keys(v as Record<string, unknown>);
+    }
+  }
+  return shape;
+}
+
+/** Probe one raw endpoint. Never throws. Returns sanitized metadata. */
+async function probeEndpoint(
+  baseUrl: string,
+  apiKey: string,
+  method: string,
+  path: string,
+): Promise<EndpointAttempt & { qr: Awaited<ReturnType<typeof tryGetQRImage>> | null }> {
+  const ep: EndpointAttempt & { qr: Awaited<ReturnType<typeof tryGetQRImage>> | null } = {
+    method, path, httpStatus: 0, keys: [], qrFound: false, isCountOnly: false, qr: null,
   };
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json", apikey: apiKey },
+    });
+    ep.httpStatus = res.status;
+    if (res.ok) {
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+      ep.keys        = Object.keys(body);
+      ep.isCountOnly = isCountOnlyResponse(body);
+      ep.qr          = await tryGetQRImage(body);
+      ep.qrFound     = !!(ep.qr.base64 || ep.qr.pairing);
+    }
+  } catch (e) {
+    ep.error = e instanceof Error ? e.message : String(e);
+  }
+  return ep;
 }
 
 export async function POST(req: NextRequest) {
@@ -116,17 +154,14 @@ export async function POST(req: NextRequest) {
 
     const steps: StepResult[] = [];
 
-    // ── 1. Logout — best-effort ────────────────────────────────────────────────
+    // ── 1. Logout + Delete (best-effort) ──────────────────────────────────────
     steps.push(await safeStep("logout", () => EvolutionClient.logoutInstance(cfg)));
-
-    // ── 2. Delete — best-effort ────────────────────────────────────────────────
     const deleteStep = await safeStep("delete", () => EvolutionClient.deleteInstance(cfg));
     steps.push(deleteStep);
-
     await sleep(1500);
 
-    // ── 3. Create with qrcode:true ────────────────────────────────────────────
-    const createStep = await safeStep("create", () =>
+    // ── 2. Create PRIMARY (with webhook) ──────────────────────────────────────
+    const createPrimaryStep = await safeStep("create_primary", () =>
       EvolutionClient.createInstance(cfg, {
         instanceName:    cfg.instanceName,
         integration:     "WHATSAPP-BAILEYS",
@@ -136,139 +171,164 @@ export async function POST(req: NextRequest) {
         webhookSecret:   cfg.webhookSecret,
       })
     );
-    steps.push(createStep);
+    steps.push(createPrimaryStep);
 
-    if (!createStep.ok) {
+    if (!createPrimaryStep.ok) {
       return NextResponse.json({
         success:       false,
         qrFlowVersion: QR_FLOW_VERSION,
-        stage:         "create_failed",
+        stage:         "create_primary_failed",
         error:         "Falha ao recriar instância Evolution.",
-        detail:        createStep.error,
+        detail:        createPrimaryStep.error,
         failedSteps:   steps.filter((s) => !s.ok).map((s) => `${s.step}: ${s.error ?? ""}`),
       });
     }
 
-    // ── 4. Inspect create response ─────────────────────────────────────────────
-    const createData  = createStep.data as Record<string, unknown> | null;
-    const createKeys  = createData ? Object.keys(createData) : [];
+    // ── 3. Inspect primary create response ────────────────────────────────────
+    const primaryData = createPrimaryStep.data as Record<string, unknown> | null;
+    const createKeys  = primaryData ? Object.keys(primaryData) : [];
+    const createShape = primaryData ? buildShape(primaryData) : {};
 
-    // Two-level shape for diagnostics (never includes values — only key names)
-    const createShape: Record<string, string[]> = {};
-    if (createData) {
-      for (const k of createKeys) {
-        const v = createData[k];
-        if (typeof v === "object" && v !== null && !Array.isArray(v)) {
-          createShape[k] = Object.keys(v as Record<string, unknown>);
+    // Detailed qrcode field inspection
+    const qrcodeValue   = primaryData?.["qrcode"];
+    const qrcodeShape   = (typeof qrcodeValue === "object" && qrcodeValue !== null && !Array.isArray(qrcodeValue))
+      ? Object.keys(qrcodeValue as Record<string, unknown>)
+      : typeof qrcodeValue === "string" ? ["<string>"] : [];
+    const qrcodeIsCount = isCountOnlyResponse(qrcodeValue) ||
+      (qrcodeShape.length === 1 && qrcodeShape[0] === "count");
+
+    const primaryQR = primaryData ? await tryGetQRImage(primaryData) : null;
+
+    let finalBase64  = primaryQR?.base64  ?? null;
+    let finalText    = primaryQR?.text    ?? null;
+    let finalPairing = primaryQR?.pairing ?? null;
+    let finalSource  = primaryQR?.source  ?? null;
+    let qrFound      = !!(finalBase64 || finalPairing);
+    let stage        = qrFound ? "create_primary_qr" : "create_primary_count_only";
+
+    // ── 4. If primary is count-only → Alt Create (no webhook) ─────────────────
+    let altCreateKeys:  string[] = [];
+    let altCreateShape: Record<string, string[]> = {};
+
+    if (!qrFound && qrcodeIsCount) {
+      // Delete the count-only instance before retry
+      steps.push(await safeStep("delete_before_alt", () => EvolutionClient.deleteInstance(cfg)));
+      await sleep(1500);
+
+      const createAltStep = await safeStep("create_alt_no_webhook", () =>
+        EvolutionClient.createInstance(cfg, {
+          instanceName: cfg.instanceName,
+          integration:  "WHATSAPP-BAILEYS",
+          // No webhook — minimal payload to eliminate webhook validation as a failure cause
+        })
+      );
+      steps.push(createAltStep);
+
+      if (createAltStep.ok) {
+        const altData = createAltStep.data as Record<string, unknown> | null;
+        altCreateKeys  = altData ? Object.keys(altData) : [];
+        altCreateShape = altData ? buildShape(altData) : {};
+
+        const altQR = altData ? await tryGetQRImage(altData) : null;
+        if (altQR?.base64 || altQR?.pairing) {
+          finalBase64  = altQR.base64;
+          finalText    = altQR.text;
+          finalPairing = altQR.pairing;
+          finalSource  = `alt_create:${altQR.source ?? "unknown"}`;
+          qrFound      = true;
+          stage        = "create_alt_qr";
+        } else {
+          stage = "create_alt_count_only";
         }
       }
     }
 
-    const createQR = createData ? await tryGetQRImage(createData) : null;
-
-    let finalBase64  = createQR?.base64  ?? null;
-    let finalText    = createQR?.text    ?? null;
-    let finalPairing = createQR?.pairing ?? null;
-    let finalSource  = createQR?.source  ?? null;
-    let qrFound      = !!(finalBase64 || finalPairing);
-    let stage        = qrFound ? "create_response_qr" : "create_response_no_qr";
-
-    // ── 5. Poll if not found in create ─────────────────────────────────────────
-    const pollAttempts: PollAttempt[] = [];
+    // ── 5. Poll — 12 rounds × 5 s = 60 s, trying 4 endpoints per round ────────
+    const pollRounds: PollRound[] = [];
 
     if (!qrFound) {
-      // Check instance state — only restart if not already "connecting"
-      const stateCheck = await safeStep("check_state", () => EvolutionClient.getInstanceStatus(cfg));
-      steps.push(stateCheck);
+      const QR_PATHS: Array<{ method: string; path: string }> = [
+        { method: "GET",  path: `/instance/connect/${cfg.instanceName}` },
+        { method: "GET",  path: `/instance/qrcode/${cfg.instanceName}` },
+        { method: "GET",  path: `/qrcode/base64/${cfg.instanceName}` },
+        { method: "POST", path: `/instance/connect/${cfg.instanceName}` },
+      ];
 
-      const currentState = stateCheck.ok
-        ? (stateCheck.data as { state?: string })?.state ?? "unknown"
-        : "unknown";
+      for (let round = 1; round <= 12 && !qrFound; round++) {
+        await sleep(5000);
 
-      if (currentState !== "connecting") {
-        const restartStep = await safeStep("restart", () => EvolutionClient.restartInstance(cfg));
-        steps.push(restartStep);
-        await sleep(3000);  // give Evolution time to move to "connecting"
-      }
+        const roundEndpoints: EndpointAttempt[] = [];
+        let roundQRFound = false;
 
-      const connectUrl = `${cfg.baseUrl.replace(/\/$/, "")}/instance/connect/${cfg.instanceName}`;
+        for (const ep of QR_PATHS) {
+          const result = await probeEndpoint(cfg.baseUrl, cfg.apiKey, ep.method, ep.path);
 
-      for (let attempt = 1; attempt <= 10 && !qrFound; attempt++) {
-        await sleep(3000);  // 10 × 3 s = 30 s max polling window
-
-        let httpStatus   = 0;
-        let pollKeys: string[] = [];
-        let isCount      = false;
-        let pollQRFound  = false;
-
-        try {
-          const pollRes = await fetch(connectUrl, {
-            method:  "GET",
-            headers: { "Content-Type": "application/json", apikey: cfg.apiKey },
-          });
-
-          httpStatus = pollRes.status;
-
-          if (pollRes.ok) {
-            const rawBody = await pollRes.json().catch(() => ({})) as Record<string, unknown>;
-            pollKeys = Object.keys(rawBody);
-            isCount  = isCountOnlyResponse(rawBody);
-
-            const pollQR = await tryGetQRImage(rawBody);
-
-            if (pollQR.base64 || pollQR.pairing) {
-              finalBase64  = pollQR.base64;
-              finalText    = pollQR.text;
-              finalPairing = pollQR.pairing;
-              finalSource  = `poll_${attempt}:${pollQR.source ?? "connect"}`;
-              qrFound      = true;
-              stage        = "poll_qr_found";
-              pollQRFound  = true;
-            }
+          if (result.qrFound && result.qr && !qrFound) {
+            finalBase64  = result.qr.base64;
+            finalText    = result.qr.text;
+            finalPairing = result.qr.pairing;
+            finalSource  = `poll_r${round}:${ep.method}:${ep.path}:${result.qr.source ?? ""}`;
+            qrFound      = true;
+            stage        = "poll_qr_found";
+            roundQRFound = true;
           }
-        } catch {
-          // network error on individual poll — log and continue
+
+          // Strip qr from stored result to avoid storing base64 in memory
+          const { qr: _qr, ...epMeta } = result;
+          roundEndpoints.push(epMeta);
+
+          if (qrFound) break;
         }
 
-        pollAttempts.push({
-          attempt,
-          endpoint:   `/instance/connect/${cfg.instanceName}`,
-          httpStatus,
-          keys:       pollKeys,
-          qrFound:    pollQRFound,
-          isCountOnly: isCount,
-        });
+        pollRounds.push({ round, endpoints: roundEndpoints, qrFound: roundQRFound });
       }
 
-      if (!qrFound) stage = "polling_no_qr";
+      if (!qrFound) stage = "all_endpoints_count_only";
     }
 
     // ── 6. Deactivate in DB ────────────────────────────────────────────────────
     await EvolutionConfigService.deactivate(ctx.restaurantId);
+
+    // ── 7. Build recommendation ────────────────────────────────────────────────
+    const allCountOnly = pollRounds.length > 0 && pollRounds.every((r) =>
+      r.endpoints.every((e) => e.isCountOnly || e.httpStatus === 0 || e.httpStatus >= 400)
+    );
+
+    const recommendation = qrFound
+      ? null
+      : allCountOnly || qrcodeIsCount
+        ? "A Evolution API retornou apenas qrcode.count — sem base64/code. Isso indica que a instância está em 'connecting' mas sem QR disponível via HTTP. Causas comuns: (1) Evolution não consegue alcançar servidores WhatsApp (verifique firewall/Railway), (2) A instância precisa de mais tempo — aguarde e tente novamente, (3) Versão da Evolution não suporta QR via HTTP GET — consulte suporte Foocci."
+        : "Nenhum endpoint retornou QR. Verifique conectividade da Evolution e tente novamente.";
 
     const failedSteps = steps.filter((s) => !s.ok).map((s) => `${s.step}: ${s.error ?? ""}`);
 
     return NextResponse.json({
       ok:            true,
       success:       true,
-      action:        "hard_reset_create_qr",
+      action:        "hard_reset_multi_endpoint",
       qrFlowVersion: QR_FLOW_VERSION,
-      resetDone:     deleteStep.ok && createStep.ok,
       instanceName:  cfg.instanceName,
-      instanceState: "connecting",
       stage,
       // ── QR result ─────────────────────────────────────────────────────────
       qr_found:   qrFound,
-      qr_base64:  finalBase64,   // full PNG data URL — OWNER-only endpoint
-      qr_text:    finalText,     // text code (for reference only)
-      qr_source:  finalSource,   // which field/path the QR came from
-      // ── Diagnostic (always returned for visibility) ────────────────────────
+      qr_base64:  finalBase64,
+      qr_text:    finalText,
+      qr_source:  finalSource,
+      // ── Create response diagnostics ────────────────────────────────────────
       create_response_keys:  createKeys,
       create_response_shape: createShape,
-      poll_attempts:         pollAttempts,
+      qrcode_shape:          qrcodeShape,
+      qrcode_is_count_only:  qrcodeIsCount,
+      alt_create_keys:       altCreateKeys,
+      alt_create_shape:      altCreateShape,
+      // ── Poll diagnostics ───────────────────────────────────────────────────
+      poll_rounds:   pollRounds,
+      poll_rounds_count: pollRounds.length,
+      // ── Recommendation ────────────────────────────────────────────────────
+      recommendation,
       message: qrFound
-        ? `QR capturado (${finalSource})`
-        : `Evolution respondeu mas nenhum QR encontrado. ${pollAttempts.length} poll(s) realizados.`,
+        ? `QR capturado via ${finalSource}`
+        : `Evolution não retornou QR em ${pollRounds.length} rodada(s) × 4 endpoints. ${recommendation ?? ""}`,
       failedSteps,
     });
 

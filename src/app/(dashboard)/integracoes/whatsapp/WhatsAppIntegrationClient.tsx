@@ -127,10 +127,11 @@ function SimpleQRPanel({
     stage?: string;
     create_response_keys?: string[];
     create_response_shape?: Record<string, string[]>;
-    poll_attempts?: Array<{
-      attempt: number; endpoint: string; httpStatus: number;
-      keys: string[]; qrFound: boolean; isCountOnly: boolean;
-    }>;
+    qrcode_shape?: string[];
+    qrcode_is_count_only?: boolean;
+    poll_rounds_count?: number;
+    all_count_only?: boolean;
+    recommendation?: string;
     message?: string;
   } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -182,11 +183,18 @@ function SimpleQRPanel({
       qr_source?: string | null;
       create_response_keys?: string[];
       create_response_shape?: Record<string, string[]>;
+      qrcode_shape?: string[];
+      qrcode_is_count_only?: boolean;
+      alt_create_keys?: string[];
+      alt_create_shape?: Record<string, string[]>;
       stage?: string;
-      poll_attempts?: Array<{
-        attempt: number; endpoint: string; httpStatus: number;
-        keys: string[]; qrFound: boolean; isCountOnly: boolean;
+      poll_rounds?: Array<{
+        round: number;
+        endpoints: Array<{ method: string; path: string; httpStatus: number; keys: string[]; qrFound: boolean; isCountOnly: boolean; error?: string }>;
+        qrFound: boolean;
       }>;
+      poll_rounds_count?: number;
+      recommendation?: string;
       message?: string;
       error?: string;
     };
@@ -201,7 +209,6 @@ function SimpleQRPanel({
       setQrBase64(d.qr_base64);
       setQrPairingCode(null);
       setQrState("shown");
-      // Poll every 10 s to detect when the user scans (we already have the QR image)
       stopPolling();
       intervalRef.current = setInterval(() => void checkConnection(), 10_000);
     } else {
@@ -211,12 +218,18 @@ function SimpleQRPanel({
         stage:                d.stage,
         create_response_keys: d.create_response_keys,
         create_response_shape: d.create_response_shape,
-        poll_attempts:        d.poll_attempts,
-        message:              d.message,
+        qrcode_shape:          d.qrcode_shape,
+        qrcode_is_count_only:  d.qrcode_is_count_only,
+        poll_rounds_count:     d.poll_rounds_count,
+        all_count_only:        (d.poll_rounds ?? []).length > 0 &&
+          d.poll_rounds!.every((r) => r.endpoints.every((e) => e.isCountOnly || e.httpStatus !== 200)),
+        recommendation:        d.recommendation,
+        message:               d.message,
       });
       setQrErrorMsg(
-        d.message ??
-        "A instância foi recriada, mas a Evolution não retornou QR Code. Veja o diagnóstico abaixo."
+        d.qrcode_is_count_only
+          ? "A Evolution respondeu, mas retornou apenas um contador de QR ({ count }) — sem imagem ou código. Ver diagnóstico abaixo."
+          : d.message ?? "A instância foi recriada, mas nenhum QR foi encontrado. Ver diagnóstico abaixo."
       );
     }
   };
@@ -371,7 +384,9 @@ function SimpleQRPanel({
       {qrState === "error" && (
         <div className="space-y-2">
           <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-2">
-            <p className="font-semibold">QR Code não disponível</p>
+            <p className="font-semibold">
+              {qrDiagnostic?.qrcode_is_count_only ? "Evolution retornou apenas contador QR" : "QR Code não disponível"}
+            </p>
             <p className="text-xs">
               {qrErrorMsg ?? "A instância Evolution não respondeu. Tente novamente."}
             </p>
@@ -383,18 +398,17 @@ function SimpleQRPanel({
                 {qrDiagnostic.create_response_keys && (
                   <p>create_keys: [{qrDiagnostic.create_response_keys.join(", ")}]</p>
                 )}
-                {qrDiagnostic.create_response_shape &&
-                  Object.entries(qrDiagnostic.create_response_shape).map(([k, v]) => (
-                    <p key={k}>&nbsp;&nbsp;{k}: [{v.join(", ")}]</p>
-                  ))
-                }
-                {qrDiagnostic.poll_attempts && qrDiagnostic.poll_attempts.length > 0 && (
+                {qrDiagnostic.qrcode_shape && (
+                  <p>qrcode: [{qrDiagnostic.qrcode_shape.join(", ")}]{qrDiagnostic.qrcode_is_count_only ? " ← count only" : ""}</p>
+                )}
+                {qrDiagnostic.poll_rounds_count !== undefined && (
                   <p>
-                    polls: {qrDiagnostic.poll_attempts.length} tentativa(s)
-                    {qrDiagnostic.poll_attempts.every((a) => a.isCountOnly)
-                      ? " — todas retornaram \{count\}"
-                      : " — sem QR encontrado"}
+                    polls: {qrDiagnostic.poll_rounds_count} rodada(s) × 4 endpoints (60 s)
+                    {qrDiagnostic.all_count_only ? " — todas retornaram {count}" : ""}
                   </p>
+                )}
+                {qrDiagnostic.recommendation && (
+                  <p className="mt-1 text-amber-600 whitespace-pre-wrap">{qrDiagnostic.recommendation}</p>
                 )}
               </div>
             )}
