@@ -100,7 +100,7 @@ function ConnectionPill({ status }: { status: SimpleStatus }) {
 
 // ── Simple QR / connection panel ──────────────────────────────────────────────
 
-type QRState = "idle" | "loading" | "restarting" | "generating" | "shown" | "pairing" | "connected" | "unconfigured" | "error";
+type QRState = "idle" | "creating" | "loading" | "restarting" | "generating" | "shown" | "pairing" | "connected" | "unconfigured" | "error";
 
 function SimpleQRPanel({
   isConfigured,
@@ -124,15 +124,12 @@ function SimpleQRPanel({
   const [qrState,       setQrState]       = useState<QRState>("idle");
   const [qrErrorMsg,    setQrErrorMsg]    = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
-  const intervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
-  const retryCountRef     = useRef(0);
-  const lastWasCountRef   = useRef(false);   // tracks if last failed attempt was { count }
-  const MAX_QR_RETRIES    = 12;  // 12 × 5 s = 60 s — enough for { count } generation cycle
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Auto-start QR generation when parent signals a fresh instance (post-reset)
+  // Auto-start on fresh instance (post hard-reset from parent)
   useEffect(() => {
     if (autoStart && isConfigured) {
-      void handleGenerateQR();
+      void handleCreateQR();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -141,100 +138,68 @@ function SimpleQRPanel({
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
   };
 
-  const scheduleRetry = (fn: () => Promise<void>) => {
-    retryCountRef.current += 1;
-    if (retryCountRef.current <= MAX_QR_RETRIES) {
-      setTimeout(() => void fn(), 5000);
-    } else {
-      retryCountRef.current = 0;
-      setQrState("error");
-      setQrErrorMsg(
-        lastWasCountRef.current
-          ? "Evolution respondeu, mas este endpoint não trouxe QR. Use reset para recriar a instância e capturar o QR no create."
-          : "A instância Evolution não respondeu após múltiplas tentativas. Verifique se o servidor Evolution está online e tente novamente."
-      );
-    }
-  };
-
-  const fetchQR = async () => {
+  // Poll /api/evolution/qr only to detect when user scans (not to re-fetch QR image)
+  const checkConnection = async () => {
     const res  = await fetch("/api/evolution/qr");
-    const data = await res.json().catch(() => ({}));
-    const qr = (data?.data ?? data) as {
-      base64?:      string | null;
-      code?:        string | null;
-      pairingCode?: string | null;
-      error?:       string;
-      connected?:   boolean;
-      restarting?:  boolean;
-      generating?:  boolean;
-    };
-
-    if (qr.base64) {
-      retryCountRef.current = 0;
-      setQrBase64(qr.base64);
-      setQrPairingCode(null);
-      setQrState("shown");
-    } else if (qr.pairingCode) {
-      retryCountRef.current = 0;
-      setQrBase64(null);
-      setQrPairingCode(qr.pairingCode);
-      setQrState("pairing");
-    } else if (qr.error === "not_configured" || qr.error === "instance_not_found") {
-      setQrBase64(null);
-      setQrState("unconfigured");
-      stopPolling();
-    } else if (qr.connected) {
-      retryCountRef.current = 0;
-      setQrBase64(null);
+    const json = await res.json().catch(() => ({}));
+    const d    = (json?.data ?? json) as { connected?: boolean };
+    if (d.connected) {
       setQrState("connected");
       stopPolling();
       onConnected();
-    } else if (qr.generating) {
-      // Evolution returning { count: N } — QR is being generated, not yet ready
-      lastWasCountRef.current = true;
-      setQrBase64(null);
-      setQrState("generating");
-      stopPolling();
-      scheduleRetry(fetchQR);
-    } else if (qr.restarting) {
-      lastWasCountRef.current = false;
-      // Instance restarting — retry with backoff (max MAX_QR_RETRIES times)
-      setQrBase64(null);
-      setQrState("restarting");
-      stopPolling();
-      scheduleRetry(fetchQR);
-    } else if (qr.error) {
-      // Named error from Evolution — treat as retriable only for evolution_error
-      if (qr.error === "evolution_error") {
-        setQrBase64(null);
-        setQrState("restarting");
-        stopPolling();
-        scheduleRetry(fetchQR);
-      } else {
-        setQrBase64(null);
-        setQrState("error");
-        stopPolling();
-      }
-    } else {
-      // No clear state — retry rather than falsely showing "connected"
-      setQrBase64(null);
-      setQrState("restarting");
-      stopPolling();
-      scheduleRetry(fetchQR);
     }
   };
 
-  const handleGenerateQR = async () => {
-    retryCountRef.current    = 0;
-    lastWasCountRef.current  = false;
+  // Primary QR flow: logout/delete/create → capture QR from create response directly.
+  // Never relies on GET /instance/connect as QR source (returns { count } in v2.2.3).
+  const handleCreateQR = async () => {
     onStartConnect();
-    setQrState("loading");
+    setQrState("creating");
     setQrBase64(null);
     setQrPairingCode(null);
     setQrErrorMsg(null);
-    await fetchQR();
     stopPolling();
-    intervalRef.current = setInterval(fetchQR, 30_000);
+
+    const res  = await fetch("/api/evolution/hard-reset", { method: "POST" });
+    const json = await res.json().catch(() => ({}));
+    const d    = (json?.data ?? json) as {
+      success?: boolean;
+      qr_found?: boolean;
+      qr_base64?: string | null;
+      qr_text?: string | null;
+      qr_source?: string | null;
+      create_response_keys?: string[];
+      create_response_shape?: Record<string, string[]>;
+      message?: string;
+      error?: string;
+    };
+
+    if (!res.ok || !d.success) {
+      setQrState("error");
+      setQrErrorMsg(d.error ?? "Erro ao recriar instância WhatsApp. Tente novamente.");
+      return;
+    }
+
+    if (d.qr_found && d.qr_base64) {
+      setQrBase64(d.qr_base64);
+      setQrPairingCode(null);
+      setQrState("shown");
+      // Poll every 10 s to detect when the user scans (we already have the QR image)
+      stopPolling();
+      intervalRef.current = setInterval(() => void checkConnection(), 10_000);
+    } else {
+      setQrBase64(null);
+      setQrState("error");
+      const keys    = d.create_response_keys?.join(", ") ?? "desconhecidas";
+      const shape   = d.create_response_shape
+        ? " — " + Object.entries(d.create_response_shape)
+            .map(([k, v]) => `${k}: [${v.join(", ")}]`).join("; ")
+        : "";
+      setQrErrorMsg(
+        `A instância foi recriada, mas a Evolution não retornou QR no create response. ` +
+        `Chaves: [${keys}]${shape}`
+      );
+    }
   };
 
   const handleDisconnectClick = async () => {
@@ -267,7 +232,7 @@ function SimpleQRPanel({
       {qrState === "idle" && (
         <button
           type="button"
-          onClick={() => void handleGenerateQR()}
+          onClick={() => void handleCreateQR()}
           className="w-full rounded-2xl bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:scale-[0.99] transition"
         >
           {isActive ? "Reconectar WhatsApp" : "Conectar WhatsApp"}
@@ -278,6 +243,18 @@ function SimpleQRPanel({
         <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 text-sm text-gray-600">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
           Gerando QR Code…
+        </div>
+      )}
+
+      {qrState === "creating" && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-4 text-sm text-indigo-700">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+            Recriando instância e capturando QR…
+          </div>
+          <p className="text-center text-[11px] text-gray-400">
+            Isso leva cerca de 5–10 segundos. Não feche esta página.
+          </p>
         </div>
       )}
 
@@ -324,7 +301,7 @@ function SimpleQRPanel({
           </ol>
           <button
             type="button"
-            onClick={() => void handleGenerateQR()}
+            onClick={() => void handleCreateQR()}
             className="w-full rounded-xl border border-green-200 bg-white px-3 py-2 text-xs font-medium text-green-700 hover:bg-green-50 transition"
           >
             Atualizar QR Code
@@ -350,7 +327,7 @@ function SimpleQRPanel({
           </ol>
           <button
             type="button"
-            onClick={() => void handleGenerateQR()}
+            onClick={() => void handleCreateQR()}
             className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-50 transition"
           >
             Gerar novo código
@@ -376,13 +353,13 @@ function SimpleQRPanel({
         <div className="space-y-2">
           <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-1">
             <p className="font-semibold">QR Code não disponível</p>
-            <p className="text-xs">
-              {qrErrorMsg ?? "A instância Evolution não respondeu após múltiplas tentativas. Verifique se o servidor Evolution está online e tente novamente."}
+            <p className="text-xs whitespace-pre-wrap break-words">
+              {qrErrorMsg ?? "A instância Evolution não respondeu. Tente novamente."}
             </p>
           </div>
           <button
             type="button"
-            onClick={() => void handleGenerateQR()}
+            onClick={() => void handleCreateQR()}
             className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
           >
             Gerar novo QR Code
@@ -395,7 +372,7 @@ function SimpleQRPanel({
         <div className="flex gap-2 pt-1">
           <button
             type="button"
-            onClick={() => void handleGenerateQR()}
+            onClick={() => void handleCreateQR()}
             className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
           >
             Reconectar

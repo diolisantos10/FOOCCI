@@ -6,11 +6,14 @@
  *   2. Delete the instance
  *   3. Recreate with correct webhook config + qrcode:true
  *   4. Capture QR from the create response (primary source in v2.2.3)
- *   5. Only restart if QR was NOT in create response and state is not "connecting"
- *   6. Never call GET /instance/connect here — that would consume the QR
- *   7. Deactivate in DB
+ *   5. Return qr_base64 directly — UI renders it without polling /instance/connect
+ *   6. Only restart if QR NOT in create and state is not "connecting"
+ *   7. Never call GET /instance/connect here — that would consume the QR
+ *   8. Deactivate in DB
  *
- * Never exposes API keys, webhook secrets, or full base64 QR images.
+ * Returns qr_base64 (the actual QR image) because this is an OWNER-only endpoint
+ * and the QR is meant to be displayed immediately. API key and webhook secret
+ * are never returned.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -165,15 +168,25 @@ export async function POST(req: NextRequest) {
     const failedSteps = steps.filter((s) => !s.ok).map((s) => `${s.step}: ${s.error ?? ""}`);
 
     return NextResponse.json({
+      ok:                 true,
       success:            true,
+      action:             "hard_reset_create_qr",
       qrFlowVersion:      QR_FLOW_VERSION,
       hardResetUsesCreateQr: true,
       resetDone:          deleteStep.ok && createStep.ok,
       instanceName:       cfg.instanceName,
-      webhookUrl,
       instanceState:      "connecting",
-      hasQR:              anyQRInCreate,
+      // QR returned directly — OWNER-only endpoint, meant for immediate display
+      qr_found:           anyQRInCreate,
+      qr_base64:          createQR?.base64 ?? null,
+      qr_text:            createQR?.code ?? null,
+      qr_source:          createQR?.foundIn ?? null,
+      create_response_keys:  createKeys,
+      create_response_shape: createNestedKeys,
       create_instance_qr,
+      message: anyQRInCreate
+        ? `QR capturado do create response (campo: ${createQR?.foundIn ?? "?"})`
+        : `Instância recriada mas QR não encontrado no create. Chaves: [${createKeys.join(", ")}]`,
       failedSteps,
     });
 

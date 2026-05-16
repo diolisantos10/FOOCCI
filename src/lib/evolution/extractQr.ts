@@ -70,6 +70,17 @@ export function extractEvolutionQr(raw: unknown): ExtractedQR {
     ["data.qrcode",           dig(raw, "data", "qrcode")],
     ["qrcodeBase64",          dig(raw, "qrcodeBase64")],
     ["base64Image",           dig(raw, "base64Image")],
+    // Evolution v2 create response — QR nested under "instance"
+    ["instance.base64",          dig(raw, "instance", "base64")],
+    ["instance.qrcode.base64",   dig(raw, "instance", "qrcode", "base64")],
+    ["instance.qrcode",          dig(raw, "instance", "qrcode")],
+    ["instance.qr.base64",       dig(raw, "instance", "qr", "base64")],
+    ["instance.qr",              dig(raw, "instance", "qr")],
+    // Variants used by some Evolution builds
+    ["response.base64",          dig(raw, "response", "base64")],
+    ["response.qrcode.base64",   dig(raw, "response", "qrcode", "base64")],
+    ["response.qrcode",          dig(raw, "response", "qrcode")],
+    ["response.qr.base64",       dig(raw, "response", "qr", "base64")],
   ];
 
   for (const [path, val] of base64Candidates) {
@@ -82,10 +93,12 @@ export function extractEvolutionQr(raw: unknown): ExtractedQR {
 
   // ── text QR code candidates ───────────────────────────────
   const codeCandidates: Array<[string, unknown]> = [
-    ["code",          dig(raw, "code")],
-    ["qrcode.code",   dig(raw, "qrcode", "code")],
-    ["qr.code",       dig(raw, "qr", "code")],
-    ["data.code",     dig(raw, "data", "code")],
+    ["code",                 dig(raw, "code")],
+    ["qrcode.code",          dig(raw, "qrcode", "code")],
+    ["qr.code",              dig(raw, "qr", "code")],
+    ["data.code",            dig(raw, "data", "code")],
+    ["instance.code",        dig(raw, "instance", "code")],
+    ["instance.qrcode.code", dig(raw, "instance", "qrcode", "code")],
   ];
 
   for (const [, val] of codeCandidates) {
@@ -94,10 +107,12 @@ export function extractEvolutionQr(raw: unknown): ExtractedQR {
 
   // ── pairing code candidates ───────────────────────────────
   const pairingCandidates: Array<[string, unknown]> = [
-    ["pairingCode",       dig(raw, "pairingCode")],
-    ["pairing_code",      dig(raw, "pairing_code")],
-    ["qrcode.pairingCode",dig(raw, "qrcode", "pairingCode")],
-    ["data.pairingCode",  dig(raw, "data", "pairingCode")],
+    ["pairingCode",                dig(raw, "pairingCode")],
+    ["pairing_code",               dig(raw, "pairing_code")],
+    ["qrcode.pairingCode",         dig(raw, "qrcode", "pairingCode")],
+    ["data.pairingCode",           dig(raw, "data", "pairingCode")],
+    ["instance.pairingCode",       dig(raw, "instance", "pairingCode")],
+    ["instance.qrcode.pairingCode",dig(raw, "instance", "qrcode", "pairingCode")],
   ];
 
   for (const [, val] of pairingCandidates) {
