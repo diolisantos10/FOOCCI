@@ -109,6 +109,7 @@ function SimpleQRPanel({
   onDisconnect,
   onStartConnect,
   onConnected,
+  autoStart,
 }: {
   isConfigured:   boolean;
   isOwner:        boolean;
@@ -116,11 +117,20 @@ function SimpleQRPanel({
   onDisconnect:   () => void;
   onStartConnect: () => void;
   onConnected:    () => void;
+  autoStart?:     boolean;
 }) {
   const [qrBase64,      setQrBase64]      = useState<string | null>(null);
   const [qrState,       setQrState]       = useState<QRState>("idle");
   const [disconnecting, setDisconnecting] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Auto-start QR generation when parent signals a fresh instance (post-reset)
+  useEffect(() => {
+    if (autoStart && isConfigured) {
+      void handleGenerateQR();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const stopPolling = () => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
@@ -325,6 +335,12 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [isAdvancedOpen,  setIsAdvancedOpen]  = useState(false);
 
+  // Hard-reset state
+  const [resetting,       setResetting]       = useState(false);
+  const [resetConfirming, setResetConfirming] = useState(false);
+  const [qrPanelKey,      setQrPanelKey]      = useState(0);
+  const [autoStartQR,     setAutoStartQR]     = useState(false);
+
   // Form state — secrets always blank on load (never pre-filled)
   const [instanceName,  setInstanceName]  = useState("");
   const [baseUrl,       setBaseUrl]       = useState("");
@@ -429,6 +445,31 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     }
   }
 
+  async function handleHardReset() {
+    setResetting(true);
+    setFeedback(null);
+    setResetConfirming(false);
+    const { ok, data } = await apiFetch("/api/evolution/hard-reset", "POST");
+    setResetting(false);
+
+    if (ok) {
+      const result = data as { hasQR?: boolean; instanceState?: string };
+      setFeedback({
+        type: "ok",
+        msg: result.hasQR
+          ? "Instância resetada! QR Code sendo gerado…"
+          : `Instância resetada (estado: ${result.instanceState ?? "connecting"}). Gerando QR…`,
+      });
+      // Remount the QR panel with autoStart so it immediately fetches a new QR
+      setAutoStartQR(true);
+      setQrPanelKey((k) => k + 1);
+      void loadView();
+    } else {
+      const err = (data as { error?: string })?.error ?? "Erro ao resetar instância.";
+      setFeedback({ type: "err", msg: `Reset falhou: ${err}` });
+    }
+  }
+
   const webhookUrl = typeof window !== "undefined"
     ? `${window.location.origin}/api/webhooks/evolution`
     : "/api/webhooks/evolution";
@@ -498,12 +539,14 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
         </div>
 
         <SimpleQRPanel
+          key={qrPanelKey}
           isConfigured={isConfigured}
           isOwner={isOwner}
           isActive={view?.isActive ?? false}
           onDisconnect={handleDisconnect}
           onStartConnect={() => setFeedback(null)}
           onConnected={() => void loadView()}
+          autoStart={autoStartQR}
         />
       </div>
 
@@ -715,6 +758,54 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                   </button>
                 </div>
               </form>
+
+              {/* Hard reset — break-glass for stuck/unknown WhatsApp sessions */}
+              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-4 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold text-red-700">Resetar instância WhatsApp</p>
+                  <p className="mt-0.5 text-xs text-red-600">
+                    Remove a sessão WhatsApp atual da Evolution, recria a instância do zero e gera um novo QR Code.
+                    Use somente se o QR não aparecer após reconectar.
+                  </p>
+                </div>
+
+                {!resetConfirming && (
+                  <button
+                    type="button"
+                    onClick={() => setResetConfirming(true)}
+                    disabled={resetting || !isConfigured}
+                    className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40 transition"
+                  >
+                    Resetar instância WhatsApp
+                  </button>
+                )}
+
+                {resetConfirming && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-red-800">
+                      Isso vai desconectar a instância atual e gerar uma nova sessão WhatsApp. Continuar?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleHardReset()}
+                        disabled={resetting}
+                        className="rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition"
+                      >
+                        {resetting ? "Resetando…" : "Sim, resetar"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setResetConfirming(false)}
+                        disabled={resetting}
+                        className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
