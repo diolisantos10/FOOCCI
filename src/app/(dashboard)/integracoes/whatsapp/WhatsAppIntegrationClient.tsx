@@ -108,12 +108,14 @@ function SimpleQRPanel({
   isActive,
   onDisconnect,
   onStartConnect,
+  onConnected,
 }: {
   isConfigured:   boolean;
   isOwner:        boolean;
   isActive:       boolean;
   onDisconnect:   () => void;
   onStartConnect: () => void;
+  onConnected:    () => void;
 }) {
   const [qrBase64,      setQrBase64]      = useState<string | null>(null);
   const [qrState,       setQrState]       = useState<QRState>("idle");
@@ -143,10 +145,11 @@ function SimpleQRPanel({
       setQrState("unconfigured");
       stopPolling();
     } else if (qr.connected) {
-      // Instance explicitly confirmed as open
+      // Instance explicitly confirmed as open — refresh parent view so header pill updates
       setQrBase64(null);
       setQrState("connected");
       stopPolling();
+      onConnected();
     } else if (qr.restarting) {
       // Instance was "close" — restart was triggered. Retry in 5 s for new QR.
       setQrBase64(null);
@@ -500,6 +503,7 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           isActive={view?.isActive ?? false}
           onDisconnect={handleDisconnect}
           onStartConnect={() => setFeedback(null)}
+          onConnected={() => void loadView()}
         />
       </div>
 
