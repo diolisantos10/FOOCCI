@@ -31,6 +31,7 @@ import {
 } from "@/validators/integrations";
 import { IntegrationService } from "@/services/integrations/IntegrationService";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { upsertEvolutionConfigSchema } from "@/validators/evolution";
 import { auditLog } from "@/lib/audit";
 
@@ -112,6 +113,18 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     const { provider } = params;
 
     if (provider === "whatsapp") {
+      // Best-effort logout from Evolution so the phone number is freed and a
+      // fresh QR scan is possible. Failure is non-fatal — we still deactivate
+      // the config in the DB so the UI reflects "not connected".
+      const snapResult = await EvolutionConfigService.getSnapshot(ctx.restaurantId);
+      if (snapResult.ok) {
+        try {
+          await EvolutionClient.logoutInstance(snapResult.data);
+        } catch (logoutErr) {
+          console.warn("[DELETE /api/integrations/whatsapp] Evolution logout failed (non-fatal):", logoutErr instanceof Error ? logoutErr.message : logoutErr);
+        }
+      }
+
       const result = await EvolutionConfigService.deactivate(ctx.restaurantId);
       if (!result.ok) return serverError(result.error);
       auditLog({ action: "integration.update", restaurantId: ctx.restaurantId, userId: ctx.userId, meta: { integration: "whatsapp", action: "disconnect" } });

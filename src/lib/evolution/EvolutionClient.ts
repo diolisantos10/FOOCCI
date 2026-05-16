@@ -172,4 +172,13 @@ export const EvolutionClient = {
   async restartInstance(config: EvolutionConfigSnapshot): Promise<void> {
     await request<unknown>(config, "PUT", `/instance/restart/${config.instanceName}`);
   },
+
+  /**
+   * Logout the WhatsApp account from the instance — disconnects the linked
+   * phone number and moves the instance to "close" state, enabling a fresh
+   * QR code scan.
+   */
+  async logoutInstance(config: EvolutionConfigSnapshot): Promise<void> {
+    await request<unknown>(config, "DELETE", `/instance/logout/${config.instanceName}`);
+  },
 };
