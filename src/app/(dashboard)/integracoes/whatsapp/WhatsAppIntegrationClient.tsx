@@ -501,6 +501,25 @@ interface SelfTestResult {
   diagnosis:    string;
 }
 
+interface LiveConfigResult {
+  success:          boolean;
+  instanceName:     string;
+  expectedUrl:      string;
+  enabled:          boolean | null;
+  url:              string | null;
+  webhookByEvents:  boolean | null;
+  events:           string[];
+  secretPresent:    boolean;
+  rawKeys:          string[];
+  urlMatches:       boolean;
+  byEventsIsFalse:  boolean;
+  hasMessagesUpsert: boolean;
+  isEnabled:        boolean;
+  isHealthy:        boolean;
+  issues:           string[];
+  recommendation:   string;
+}
+
 function WebhookHealthCard({
   summary,
   events,
@@ -512,17 +531,23 @@ function WebhookHealthCard({
   onSelfTest,
   selfTestLoading,
   selfTestResult,
+  onVerify,
+  verifyLoading,
+  liveConfigResult,
 }: {
-  summary:         WebhookLogSummary | null;
-  events:          WebhookLogEvent[];
-  loading:         boolean;
-  simpleStatus:    SimpleStatus;
-  onSync:          () => void;
-  syncLoading:     boolean;
-  syncResult:      SyncWebhookResult | null;
-  onSelfTest:      () => void;
-  selfTestLoading: boolean;
-  selfTestResult:  SelfTestResult | null;
+  summary:          WebhookLogSummary | null;
+  events:           WebhookLogEvent[];
+  loading:          boolean;
+  simpleStatus:     SimpleStatus;
+  onSync:           () => void;
+  syncLoading:      boolean;
+  syncResult:       SyncWebhookResult | null;
+  onSelfTest:       () => void;
+  selfTestLoading:  boolean;
+  selfTestResult:   SelfTestResult | null;
+  onVerify:         () => void;
+  verifyLoading:    boolean;
+  liveConfigResult: LiveConfigResult | null;
 }) {
   const now = Date.now();
 
@@ -545,7 +570,10 @@ function WebhookHealthCard({
   }
 
   const hs = healthStatus();
-  const showSyncButton = simpleStatus === "connected" && !summary?.lastEventAt && !syncResult?.success;
+  const showSyncButton = simpleStatus === "connected" && (
+    !summary?.lastEventAt || liveConfigResult?.isHealthy === false
+  );
+  const showSelfTestButton = syncResult?.success || liveConfigResult?.isHealthy === true;
   const phone = syncResult?.instanceInfo?.ownerJidMasked
     ? `+${syncResult.instanceInfo.ownerJidMasked.split("@")[0]}`
     : null;
@@ -629,7 +657,81 @@ function WebhookHealthCard({
             </div>
           )}
 
-          {/* Sync button — only when connected but no events yet */}
+          {/* Live config result from Evolution */}
+          {liveConfigResult && (
+            <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-2 ${
+              liveConfigResult.isHealthy
+                ? "border-green-200 bg-green-50 text-green-800"
+                : "border-red-200 bg-red-50 text-red-800"
+            }`}>
+              <p className="font-semibold">
+                {liveConfigResult.isHealthy
+                  ? "✓ Webhook na Evolution: correto"
+                  : "✗ Webhook na Evolution: problemas detectados"}
+              </p>
+              <div className="font-mono text-[10px] space-y-0.5 bg-white/60 rounded border border-current/10 px-2 py-1.5">
+                <p>
+                  <span className="text-gray-500">url: </span>
+                  <span className="break-all">{liveConfigResult.url ?? "—"}</span>
+                  {" "}
+                  {liveConfigResult.urlMatches
+                    ? <span className="text-green-600">✓</span>
+                    : <span className="text-red-600">✗ diverge</span>}
+                </p>
+                <p>
+                  <span className="text-gray-500">webhookByEvents: </span>
+                  <span className={liveConfigResult.byEventsIsFalse ? "text-green-700 font-bold" : "text-red-600 font-bold"}>
+                    {String(liveConfigResult.webhookByEvents ?? "?")}
+                  </span>
+                  {!liveConfigResult.byEventsIsFalse && (
+                    <span className="text-red-600"> ← deve ser false</span>
+                  )}
+                </p>
+                <p>
+                  <span className="text-gray-500">enabled: </span>
+                  <span className={liveConfigResult.isEnabled ? "text-green-700" : "text-red-600"}>
+                    {String(liveConfigResult.enabled ?? "?")}
+                  </span>
+                </p>
+                <p>
+                  <span className="text-gray-500">secret: </span>
+                  <span className={liveConfigResult.secretPresent ? "text-green-700" : "text-amber-600"}>
+                    {liveConfigResult.secretPresent ? "presente" : "ausente"}
+                  </span>
+                </p>
+                <p>
+                  <span className="text-gray-500">events: </span>
+                  [{liveConfigResult.events.join(", ") || "—"}]
+                  {" "}
+                  {!liveConfigResult.hasMessagesUpsert && (
+                    <span className="text-red-600">← MESSAGES_UPSERT ausente</span>
+                  )}
+                </p>
+              </div>
+              {liveConfigResult.issues.length > 0 && (
+                <ul className="space-y-0.5 text-[10px]">
+                  {liveConfigResult.issues.map((issue, i) => (
+                    <li key={i} className="text-red-700">⚠ {issue}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-[10px]">{liveConfigResult.recommendation}</p>
+            </div>
+          )}
+
+          {/* Verify button — always visible when configured */}
+          {simpleStatus === "connected" && (
+            <button
+              type="button"
+              onClick={onVerify}
+              disabled={verifyLoading}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition"
+            >
+              {verifyLoading ? "Consultando Evolution…" : "Verificar webhook na Evolution"}
+            </button>
+          )}
+
+          {/* Sync button — when connected and no events or live config has issues */}
           {showSyncButton && (
             <button
               type="button"
@@ -641,8 +743,8 @@ function WebhookHealthCard({
             </button>
           )}
 
-          {/* Self-test button — show after sync succeeds */}
-          {syncResult?.success && (
+          {/* Self-test button — after sync or after verify confirms config OK */}
+          {showSelfTestButton && (
             <button
               type="button"
               onClick={onSelfTest}
@@ -748,6 +850,10 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   // Self-test state
   const [selfTesting,   setSelfTesting]   = useState(false);
   const [selfTestResult, setSelfTestResult] = useState<SelfTestResult | null>(null);
+
+  // Live config verification state
+  const [verifyingConfig,  setVerifyingConfig]  = useState(false);
+  const [liveConfigResult, setLiveConfigResult] = useState<LiveConfigResult | null>(null);
 
   // Hard-reset state
   const [resetConfirming, setResetConfirming] = useState(false);
@@ -857,10 +963,21 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     setSelfTesting(false);
     if (ok) {
       setSelfTestResult(data as SelfTestResult);
-      // Refresh log so the self-test row appears
       setTimeout(() => void loadWebhookLog(), 1500);
     } else {
       setFeedback({ type: "err", msg: "Falha ao executar self-test." });
+    }
+  }
+
+  async function handleVerifyConfig() {
+    setVerifyingConfig(true);
+    setLiveConfigResult(null);
+    const { ok, data } = await apiFetch("/api/evolution/webhook-config-live");
+    setVerifyingConfig(false);
+    if (ok) {
+      setLiveConfigResult(data as LiveConfigResult);
+    } else {
+      setFeedback({ type: "err", msg: "Falha ao consultar configuração da Evolution." });
     }
   }
 
@@ -1104,6 +1221,9 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           onSelfTest={() => void handleSelfTest()}
           selfTestLoading={selfTesting}
           selfTestResult={selfTestResult}
+          onVerify={() => void handleVerifyConfig()}
+          verifyLoading={verifyingConfig}
+          liveConfigResult={liveConfigResult}
         />
       )}
 
