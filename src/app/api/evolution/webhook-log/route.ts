@@ -5,6 +5,9 @@
  * the current restaurant's instance. Used to diagnose whether Evolution is
  * sending webhooks and whether they are accepted or rejected.
  *
+ * self_test events (written by the webhook-self-test endpoint) are tracked
+ * separately so they don't inflate "Mensagens hoje" or "último evento real".
+ *
  * Never exposes: message content, phone numbers (only masked), secrets.
  */
 
@@ -43,25 +46,41 @@ export async function GET(req: NextRequest) {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
+    // Real inbound today — exclude self_test synthetic writes
     const inboundToday = await prisma.evolutionWebhookEventLog.count({
       where: {
         restaurantId: ctx.restaurantId,
         direction:    "INBOUND",
         accepted:     true,
+        eventName:    { not: "self_test" },
         createdAt:    { gte: todayStart },
       },
     });
 
-    const lastAccepted = events.find((e) => e.accepted);
+    // Separate real vs self_test for summary fields
+    const realEvents     = events.filter((e) => e.eventName !== "self_test");
+    const selfTestEvents = events.filter((e) => e.eventName === "self_test");
+
+    const lastReal     = realEvents[0]     ?? null;
+    const lastSelfTest = selfTestEvents[0] ?? null;
+    const lastAccepted = realEvents.find((e) => e.accepted) ?? null;
+
+    // Count accepted real events in log window
+    const acceptedRealEvents = realEvents.filter((e) => e.accepted && !e.ignored).length;
 
     return NextResponse.json({
       success: true,
       summary: {
-        totalEvents:    events.length,
+        totalEvents:       events.length,
+        realEvents:        realEvents.length,
+        selfTestEvents:    selfTestEvents.length,
         inboundToday,
-        lastEventAt:    events[0]?.createdAt ?? null,
-        lastAcceptedAt: lastAccepted?.createdAt ?? null,
-        lastError:      events.find((e) => e.error)?.error ?? null,
+        acceptedRealEvents,
+        lastEventAt:       events[0]?.createdAt     ?? null,  // any event (backwards compat)
+        lastRealEventAt:   lastReal?.createdAt       ?? null,
+        lastSelfTestAt:    lastSelfTest?.createdAt   ?? null,
+        lastAcceptedAt:    lastAccepted?.createdAt   ?? null,
+        lastError:         realEvents.find((e) => e.error)?.error ?? null,
       },
       events,
     });

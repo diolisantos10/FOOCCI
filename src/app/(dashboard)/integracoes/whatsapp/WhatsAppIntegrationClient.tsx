@@ -452,11 +452,16 @@ function SimpleQRPanel({
 // ── Webhook health card ────────────────────────────────────────────────────────
 
 interface WebhookLogSummary {
-  totalEvents:    number;
-  inboundToday:   number;
-  lastEventAt:    string | null;
-  lastAcceptedAt: string | null;
-  lastError:      string | null;
+  totalEvents:       number;
+  realEvents:        number;
+  selfTestEvents:    number;
+  inboundToday:      number;
+  acceptedRealEvents: number;
+  lastEventAt:       string | null;
+  lastRealEventAt:   string | null;
+  lastSelfTestAt:    string | null;
+  lastAcceptedAt:    string | null;
+  lastError:         string | null;
 }
 
 interface WebhookLogEvent {
@@ -506,6 +511,42 @@ interface SelfTestResult {
   diagnosis:    string;
 }
 
+type EventDiagnosticsVerdict =
+  | "ok_waiting"
+  | "no_messages_upsert"
+  | "webhook_ok_not_emitting"
+  | "instance_not_connected";
+
+interface EventDiagnosticsResult {
+  success:          boolean;
+  instanceName:     string;
+  connectionStatus: string | null;
+  ownerJidMasked:   string | null;
+  integration:      string | null;
+  webhook: {
+    url:               string | null;
+    enabled:           boolean | null;
+    webhookByEvents:   boolean | null;
+    events:            string[];
+    hasMessagesUpsert: boolean;
+    hasMessagesUpdate: boolean;
+    urlMatches:        boolean;
+  };
+  settings: {
+    rejectCall:      boolean | null;
+    groupsIgnore:    boolean | null;
+    readMessages:    boolean | null;
+    readStatus:      boolean | null;
+    syncFullHistory: boolean | null;
+    alwaysOnline:    boolean | null;
+  };
+  rawInstanceKeys:  string[];
+  rawWebhookKeys:   string[];
+  rawSettingsKeys:  string[];
+  verdict:          EventDiagnosticsVerdict;
+  verdictMessage:   string;
+}
+
 interface LiveConfigResult {
   success:          boolean;
   instanceName:     string;
@@ -525,6 +566,74 @@ interface LiveConfigResult {
   recommendation:   string;
 }
 
+// ── Event diagnostics result card ────────────────────────────────────────────
+
+const VERDICT_META: Record<EventDiagnosticsVerdict, { icon: string; border: string; bg: string; text: string }> = {
+  ok_waiting:              { icon: "✓", border: "border-green-200", bg: "bg-green-50",  text: "text-green-800" },
+  no_messages_upsert:      { icon: "✗", border: "border-red-200",   bg: "bg-red-50",    text: "text-red-800"   },
+  webhook_ok_not_emitting: { icon: "⚠", border: "border-amber-200", bg: "bg-amber-50",  text: "text-amber-800" },
+  instance_not_connected:  { icon: "✗", border: "border-red-200",   bg: "bg-red-50",    text: "text-red-800"   },
+};
+
+function EventDiagCard({ result }: { result: EventDiagnosticsResult }) {
+  const meta = VERDICT_META[result.verdict];
+  return (
+    <div className={`rounded-lg border ${meta.border} ${meta.bg} px-3 py-2.5 text-xs space-y-2`}>
+      <p className={`font-semibold ${meta.text}`}>
+        {meta.icon} {result.verdictMessage}
+      </p>
+      <div className={`font-mono text-[10px] space-y-0.5 bg-white/60 rounded border border-current/10 px-2 py-1.5 ${meta.text}`}>
+        <p>
+          <span className="text-gray-500">estado: </span>
+          <span className={result.connectionStatus === "open" ? "text-green-700 font-bold" : "text-red-600 font-bold"}>
+            {result.connectionStatus ?? "—"}
+          </span>
+        </p>
+        {result.ownerJidMasked && (
+          <p><span className="text-gray-500">número: </span>+{result.ownerJidMasked.split("@")[0]}</p>
+        )}
+        {result.integration && (
+          <p><span className="text-gray-500">integration: </span>{result.integration}</p>
+        )}
+        <p>
+          <span className="text-gray-500">MESSAGES_UPSERT: </span>
+          <span className={result.webhook.hasMessagesUpsert ? "text-green-700" : "text-red-600 font-bold"}>
+            {result.webhook.hasMessagesUpsert ? "✓ presente" : "✗ ausente"}
+          </span>
+        </p>
+        <p>
+          <span className="text-gray-500">webhookByEvents: </span>
+          <span className={result.webhook.webhookByEvents === false ? "text-green-700" : "text-red-600"}>
+            {String(result.webhook.webhookByEvents ?? "?")}
+          </span>
+        </p>
+        <p>
+          <span className="text-gray-500">enabled: </span>
+          <span className={result.webhook.enabled ? "text-green-700" : "text-red-600"}>
+            {String(result.webhook.enabled ?? "?")}
+          </span>
+        </p>
+        {result.rawSettingsKeys.length > 0 && (
+          <>
+            {result.settings.groupsIgnore !== null && (
+              <p><span className="text-gray-500">groupsIgnore: </span>{String(result.settings.groupsIgnore)}</p>
+            )}
+            {result.settings.rejectCall !== null && (
+              <p><span className="text-gray-500">rejectCall: </span>{String(result.settings.rejectCall)}</p>
+            )}
+            {result.settings.syncFullHistory !== null && (
+              <p><span className="text-gray-500">syncFullHistory: </span>{String(result.settings.syncFullHistory)}</p>
+            )}
+          </>
+        )}
+        {result.rawSettingsKeys.length === 0 && (
+          <p className="text-gray-400">settings: endpoint não disponível nesta versão Evolution</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function WebhookHealthCard({
   summary,
   events,
@@ -539,30 +648,38 @@ function WebhookHealthCard({
   onVerify,
   verifyLoading,
   liveConfigResult,
+  onEventDiag,
+  eventDiagLoading,
+  eventDiagResult,
 }: {
-  summary:          WebhookLogSummary | null;
-  events:           WebhookLogEvent[];
-  loading:          boolean;
-  simpleStatus:     SimpleStatus;
-  onSync:           () => void;
-  syncLoading:      boolean;
-  syncResult:       SyncWebhookResult | null;
-  onSelfTest:       () => void;
-  selfTestLoading:  boolean;
-  selfTestResult:   SelfTestResult | null;
-  onVerify:         () => void;
-  verifyLoading:    boolean;
-  liveConfigResult: LiveConfigResult | null;
+  summary:           WebhookLogSummary | null;
+  events:            WebhookLogEvent[];
+  loading:           boolean;
+  simpleStatus:      SimpleStatus;
+  onSync:            () => void;
+  syncLoading:       boolean;
+  syncResult:        SyncWebhookResult | null;
+  onSelfTest:        () => void;
+  selfTestLoading:   boolean;
+  selfTestResult:    SelfTestResult | null;
+  onVerify:          () => void;
+  verifyLoading:     boolean;
+  liveConfigResult:  LiveConfigResult | null;
+  onEventDiag:       () => void;
+  eventDiagLoading:  boolean;
+  eventDiagResult:   EventDiagnosticsResult | null;
 }) {
   const now = Date.now();
 
   function healthStatus(): { label: string; color: string; dot: string } {
     if (!summary) return { label: "Sem dados", color: "text-gray-500", dot: "bg-gray-400" };
-    if (!summary.lastEventAt) return { label: "Nenhum evento recebido", color: "text-amber-600", dot: "bg-amber-400" };
-    const age = now - new Date(summary.lastEventAt).getTime();
+    // Use lastRealEventAt (ignores self_test synthetic writes)
+    const lastReal = summary.lastRealEventAt ?? summary.lastEventAt;
+    if (!lastReal) return { label: "Nenhum evento real recebido", color: "text-amber-600", dot: "bg-amber-400" };
+    const age = now - new Date(lastReal).getTime();
     if (age < 5 * 60 * 1000) return { label: "Recebendo", color: "text-green-700", dot: "bg-green-500" };
-    if (age < 60 * 60 * 1000) return { label: `Último: ${fmtAge(summary.lastEventAt)}`, color: "text-green-600", dot: "bg-green-400" };
-    return { label: `Sem eventos há ${fmtAge(summary.lastEventAt)}`, color: "text-amber-600", dot: "bg-amber-400 animate-pulse" };
+    if (age < 60 * 60 * 1000) return { label: `Último: ${fmtAge(lastReal)}`, color: "text-green-600", dot: "bg-green-400" };
+    return { label: `Sem eventos há ${fmtAge(lastReal)}`, color: "text-amber-600", dot: "bg-amber-400 animate-pulse" };
   }
 
   function fmtAge(iso: string): string {
@@ -610,9 +727,11 @@ function WebhookHealthCard({
               {hs.label}
             </span>
 
-            <span className="text-gray-500">Último evento</span>
+            <span className="text-gray-500">Último evento real</span>
             <span className="text-gray-700">
-              {summary?.lastEventAt ? `${fmtAge(summary.lastEventAt)} atrás` : "nenhum"}
+              {(summary?.lastRealEventAt ?? summary?.lastEventAt)
+                ? `${fmtAge(summary!.lastRealEventAt ?? summary!.lastEventAt!)} atrás`
+                : "nenhum"}
             </span>
 
             <span className="text-gray-500">Mensagens hoje</span>
@@ -778,6 +897,39 @@ function WebhookHealthCard({
             </div>
           )}
 
+          {/* Event diagnostics button */}
+          {simpleStatus === "connected" && (
+            <button
+              type="button"
+              onClick={onEventDiag}
+              disabled={eventDiagLoading}
+              className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50 transition"
+            >
+              {eventDiagLoading ? "Diagnosticando eventos…" : "Diagnóstico de eventos"}
+            </button>
+          )}
+
+          {/* Event diagnostics result */}
+          {eventDiagResult && (
+            <EventDiagCard result={eventDiagResult} />
+          )}
+
+          {/* Railway logging instructions — shown when config is OK but no real events */}
+          {(eventDiagResult?.verdict === "ok_waiting" || eventDiagResult?.verdict === "webhook_ok_not_emitting") && (
+            <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-3 text-xs space-y-2">
+              <p className="font-semibold text-amber-800">Como verificar os logs da Evolution no Railway:</p>
+              <ol className="list-decimal list-inside space-y-1 text-amber-700">
+                <li>Abra <span className="font-mono">railway.app</span> → seu projeto → serviço <span className="font-mono">evolution-api</span></li>
+                <li>Vá em <span className="font-semibold">Deployments</span> → clique no deploy ativo → <span className="font-semibold">View logs</span></li>
+                <li>Envie uma mensagem real pelo WhatsApp para o número conectado</li>
+                <li>Procure nos logs por: <span className="font-mono text-amber-900">MESSAGES_UPSERT</span>, <span className="font-mono text-amber-900">messages.upsert</span>, <span className="font-mono text-amber-900">webhook</span>, <span className="font-mono text-amber-900">error</span></li>
+              </ol>
+              <p className="text-amber-600 text-[10px]">
+                Se nenhuma linha aparecer após enviar a mensagem, a Evolution não está recebendo a mensagem do WhatsApp — problema de conectividade na infra Railway/Evolution, não no Foocci.
+              </p>
+            </div>
+          )}
+
           {events.length === 0 && !loading && !showSyncButton && !syncResult && (
             <p className="text-xs text-gray-400 italic">
               Nenhum evento registrado ainda. Envie uma mensagem WhatsApp para testar.
@@ -859,6 +1011,10 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   // Live config verification state
   const [verifyingConfig,  setVerifyingConfig]  = useState(false);
   const [liveConfigResult, setLiveConfigResult] = useState<LiveConfigResult | null>(null);
+
+  // Event diagnostics state
+  const [eventDiagLoading, setEventDiagLoading] = useState(false);
+  const [eventDiagResult,  setEventDiagResult]  = useState<EventDiagnosticsResult | null>(null);
 
   // Hard-reset state
   const [resetConfirming, setResetConfirming] = useState(false);
@@ -983,6 +1139,18 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
       setLiveConfigResult(data as LiveConfigResult);
     } else {
       setFeedback({ type: "err", msg: "Falha ao consultar configuração da Evolution." });
+    }
+  }
+
+  async function handleEventDiag() {
+    setEventDiagLoading(true);
+    setEventDiagResult(null);
+    const { ok, data } = await apiFetch("/api/evolution/message-event-diagnostics");
+    setEventDiagLoading(false);
+    if (ok) {
+      setEventDiagResult(data as EventDiagnosticsResult);
+    } else {
+      setFeedback({ type: "err", msg: "Falha ao executar diagnóstico de eventos." });
     }
   }
 
@@ -1229,6 +1397,9 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           onVerify={() => void handleVerifyConfig()}
           verifyLoading={verifyingConfig}
           liveConfigResult={liveConfigResult}
+          onEventDiag={() => void handleEventDiag()}
+          eventDiagLoading={eventDiagLoading}
+          eventDiagResult={eventDiagResult}
         />
       )}
 

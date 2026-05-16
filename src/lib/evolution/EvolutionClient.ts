@@ -313,6 +313,24 @@ export const EvolutionClient = {
   },
 
   /**
+   * Fetch instance settings (rejectCall, groupsIgnore, readMessages, etc.).
+   * Returns empty object when the endpoint is not supported by this Evolution build.
+   */
+  async getInstanceSettings(config: EvolutionConfigSnapshot): Promise<Record<string, unknown>> {
+    for (const path of [
+      `/settings/find/${config.instanceName}`,
+      `/instance/settings/${config.instanceName}`,
+    ]) {
+      try {
+        return await request<Record<string, unknown>>(config, "GET", path);
+      } catch {
+        // endpoint not available in this Evolution version — try next
+      }
+    }
+    return {};
+  },
+
+  /**
    * Create a new Evolution instance with webhook configuration.
    */
   async createInstance(
