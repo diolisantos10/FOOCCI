@@ -663,44 +663,12 @@ function EventDiagCard({ result }: { result: EventDiagnosticsResult }) {
 
 function WebhookHealthCard({
   summary,
-  events,
   loading,
   simpleStatus,
-  onSync,
-  syncLoading,
-  syncResult,
-  onSelfTest,
-  selfTestLoading,
-  selfTestResult,
-  onVerify,
-  verifyLoading,
-  liveConfigResult,
-  onEventDiag,
-  eventDiagLoading,
-  eventDiagResult,
-  onAuthTest,
-  authTestLoading,
-  authTestResult,
 }: {
-  summary:           WebhookLogSummary | null;
-  events:            WebhookLogEvent[];
-  loading:           boolean;
-  simpleStatus:      SimpleStatus;
-  onSync:            () => void;
-  syncLoading:       boolean;
-  syncResult:        SyncWebhookResult | null;
-  onSelfTest:        () => void;
-  selfTestLoading:   boolean;
-  selfTestResult:    SelfTestResult | null;
-  onVerify:          () => void;
-  verifyLoading:     boolean;
-  liveConfigResult:  LiveConfigResult | null;
-  onEventDiag:       () => void;
-  eventDiagLoading:  boolean;
-  eventDiagResult:   EventDiagnosticsResult | null;
-  onAuthTest:        () => void;
-  authTestLoading:   boolean;
-  authTestResult:    AuthSelfTestResult | null;
+  summary:      WebhookLogSummary | null;
+  loading:      boolean;
+  simpleStatus: SimpleStatus;
 }) {
   const now = Date.now();
 
@@ -725,17 +693,6 @@ function WebhookHealthCard({
   }
 
   const hs = healthStatus();
-  // Suppress signature_mismatch alert once token auth is active (tokenInUrl covers auth)
-  const hasSignatureMismatch = summary?.lastError === "signature_mismatch"
-    && !liveConfigResult?.tokenInUrl
-    && !syncResult?.secretInfo?.tokenInUrl;
-  const showSyncButton = simpleStatus === "connected" && (
-    !summary?.lastRealEventAt || liveConfigResult?.isHealthy === false || hasSignatureMismatch
-  );
-  const showSelfTestButton = syncResult?.success || liveConfigResult?.isHealthy === true;
-  const phone = syncResult?.instanceInfo?.ownerJidMasked
-    ? `+${syncResult.instanceInfo.ownerJidMasked.split("@")[0]}`
-    : null;
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-3">
@@ -750,13 +707,6 @@ function WebhookHealthCard({
             <span className={`font-semibold ${simpleStatus === "connected" ? "text-green-700" : "text-gray-600"}`}>
               {simpleStatus === "connected" ? "Conectado" : "Não conectado"}
             </span>
-
-            {phone && (
-              <>
-                <span className="text-gray-500">Número</span>
-                <span className="font-mono font-semibold text-gray-800">{phone}</span>
-              </>
-            )}
 
             <span className="text-gray-500">Webhook</span>
             <span className={`flex items-center gap-1.5 font-semibold ${hs.color}`}>
@@ -781,255 +731,6 @@ function WebhookHealthCard({
             </div>
           )}
 
-          {/* Sync result feedback */}
-          {syncResult && (
-            <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-2 ${
-              syncResult.success
-                ? "border-green-200 bg-green-50 text-green-800"
-                : "border-red-200 bg-red-50 text-red-700"
-            }`}>
-              <p className="font-semibold">
-                {syncResult.success
-                  ? syncResult.secretInfo?.tokenInUrl
-                    ? "✓ Webhook configurado com token seguro"
-                    : "✓ Webhook sincronizado"
-                  : "✗ Falha na sincronização"}
-              </p>
-              <p>{syncResult.recommendation}</p>
-              {syncResult.error && (
-                <p className="font-mono text-[10px] text-red-600 break-all">{syncResult.error}</p>
-              )}
-              {/* Show actual webhook config read back from Evolution */}
-              {syncResult.webhookConfig && (
-                <div className="rounded border border-current/20 bg-white/60 px-2 py-1.5 font-mono text-[10px] space-y-0.5">
-                  <p>url: <span className="break-all">{syncResult.webhookConfig.url ?? "?"}</span>
-                    {" "}{syncResult.webhookConfig.urlMatches
-                      ? <span className="text-green-600">✓ bate</span>
-                      : <span className="text-red-600">✗ diverge</span>
-                    }
-                  </p>
-                  <p>webhookByEvents: <span className={syncResult.webhookConfig.webhookByEvents === false ? "text-green-700 font-bold" : "text-red-600 font-bold"}>
-                    {String(syncResult.webhookConfig.webhookByEvents ?? "?")}
-                  </span>
-                  {syncResult.webhookConfig.webhookByEvents === true && (
-                    <span className="text-red-600"> ← deve ser false</span>
-                  )}
-                  </p>
-                  <p>enabled: {String(syncResult.webhookConfig.enabled ?? "?")}</p>
-                  <p>events: [{syncResult.webhookConfig.events.join(", ")}]</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Live config result from Evolution */}
-          {liveConfigResult && (
-            <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-2 ${
-              liveConfigResult.isHealthy
-                ? "border-green-200 bg-green-50 text-green-800"
-                : "border-red-200 bg-red-50 text-red-800"
-            }`}>
-              <p className="font-semibold">
-                {liveConfigResult.isHealthy
-                  ? "✓ Webhook na Evolution: correto"
-                  : "✗ Webhook na Evolution: problemas detectados"}
-              </p>
-              <div className="font-mono text-[10px] space-y-0.5 bg-white/60 rounded border border-current/10 px-2 py-1.5">
-                <p>
-                  <span className="text-gray-500">url: </span>
-                  <span className="break-all">{liveConfigResult.url ?? "—"}</span>
-                  {" "}
-                  {liveConfigResult.urlMatches
-                    ? <span className="text-green-600">✓</span>
-                    : <span className="text-red-600">✗ diverge</span>}
-                </p>
-                <p>
-                  <span className="text-gray-500">webhookByEvents: </span>
-                  <span className={liveConfigResult.byEventsIsFalse ? "text-green-700 font-bold" : "text-red-600 font-bold"}>
-                    {String(liveConfigResult.webhookByEvents ?? "?")}
-                  </span>
-                  {!liveConfigResult.byEventsIsFalse && (
-                    <span className="text-red-600"> ← deve ser false</span>
-                  )}
-                </p>
-                <p>
-                  <span className="text-gray-500">enabled: </span>
-                  <span className={liveConfigResult.isEnabled ? "text-green-700" : "text-red-600"}>
-                    {String(liveConfigResult.enabled ?? "?")}
-                  </span>
-                </p>
-                <p>
-                  <span className="text-gray-500">auth: </span>
-                  {liveConfigResult.tokenInUrl ? (
-                    <span className="text-green-700">token na URL ✓</span>
-                  ) : liveConfigResult.secretPresent ? (
-                    <span className="text-green-700">secret presente ✓</span>
-                  ) : (
-                    <span className="text-amber-600">secret ausente</span>
-                  )}
-                </p>
-                <p>
-                  <span className="text-gray-500">events: </span>
-                  [{liveConfigResult.events.join(", ") || "—"}]
-                  {" "}
-                  {!liveConfigResult.hasMessagesUpsert && (
-                    <span className="text-red-600">← MESSAGES_UPSERT ausente</span>
-                  )}
-                </p>
-              </div>
-              {liveConfigResult.issues.length > 0 && (
-                <ul className="space-y-0.5 text-[10px]">
-                  {liveConfigResult.issues.map((issue, i) => (
-                    <li key={i} className="text-red-700">⚠ {issue}</li>
-                  ))}
-                </ul>
-              )}
-              <p className="text-[10px]">{liveConfigResult.recommendation}</p>
-            </div>
-          )}
-
-          {/* Signature mismatch alert — shown when last error is signature_mismatch */}
-          {hasSignatureMismatch && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-xs space-y-2">
-              <p className="font-semibold text-red-800">
-                ✗ Webhook recebido, mas secret não confere
-              </p>
-              <p className="text-red-700">
-                A Evolution está enviando eventos, mas o secret no header não bate com o registrado no banco.
-                Clique em <strong>Sincronizar webhook</strong> para reenviar o secret correto para a Evolution.
-                Depois envie uma mensagem real pelo WhatsApp para testar.
-              </p>
-              <button
-                type="button"
-                onClick={onSync}
-                disabled={syncLoading}
-                className="w-full rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition"
-              >
-                {syncLoading ? "Sincronizando…" : "Corrigir secret do webhook"}
-              </button>
-              <button
-                type="button"
-                onClick={onAuthTest}
-                disabled={authTestLoading}
-                className="w-full rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 transition"
-              >
-                {authTestLoading ? "Testando…" : "Testar lógica de autenticação"}
-              </button>
-              {authTestResult && (
-                <div className={`rounded border px-2 py-1.5 text-[10px] font-mono space-y-0.5 ${
-                  authTestResult.allWorkingCorrectly
-                    ? "border-green-200 bg-green-50 text-green-800"
-                    : "border-red-200 bg-red-50 text-red-700"
-                }`}>
-                  <p className="font-semibold mb-1">{authTestResult.allWorkingCorrectly ? "✓ Lógica OK" : "✗ Lógica com falha"}</p>
-                  <p>{authTestResult.diagnosis}</p>
-                  {authTestResult.tests && (
-                    <div className="mt-1 space-y-0.5">
-                      {Object.entries(authTestResult.tests).map(([k, v]) => (
-                        <p key={k}>
-                          <span className={v.accepted ? "text-green-600" : "text-red-500"}>{v.accepted ? "✓" : "✗"}</span>
-                          {" "}{k}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Verify button — always visible when configured */}
-          {simpleStatus === "connected" && (
-            <button
-              type="button"
-              onClick={onVerify}
-              disabled={verifyLoading}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition"
-            >
-              {verifyLoading ? "Consultando Evolution…" : "Verificar webhook na Evolution"}
-            </button>
-          )}
-
-          {/* Sync button — when connected and no events or live config has issues */}
-          {showSyncButton && (
-            <button
-              type="button"
-              onClick={onSync}
-              disabled={syncLoading}
-              className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition"
-            >
-              {syncLoading ? "Sincronizando webhook…" : "Sincronizar webhook"}
-            </button>
-          )}
-
-          {/* Self-test button — after sync or after verify confirms config OK */}
-          {showSelfTestButton && (
-            <button
-              type="button"
-              onClick={onSelfTest}
-              disabled={selfTestLoading}
-              className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50 transition"
-            >
-              {selfTestLoading ? "Testando receiver…" : "Testar receiver Foocci"}
-            </button>
-          )}
-
-          {/* Self-test result */}
-          {selfTestResult && (
-            <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-1 ${
-              selfTestResult.success
-                ? "border-blue-200 bg-blue-50 text-blue-800"
-                : "border-red-200 bg-red-50 text-red-700"
-            }`}>
-              <p className="font-semibold">
-                {selfTestResult.success ? "✓ Receiver OK" : "✗ Receiver com problema"}
-              </p>
-              <p>{selfTestResult.diagnosis}</p>
-              <div className="font-mono text-[10px] space-y-0.5 mt-1">
-                <p>DB: {selfTestResult.dbWrite.ok ? "✓" : "✗"}{selfTestResult.dbWrite.error ? ` — ${selfTestResult.dbWrite.error}` : ""}</p>
-                <p>Parser: {selfTestResult.parse.ok ? "✓" : "✗"}{selfTestResult.parse.error ? ` — ${selfTestResult.parse.error}` : ""}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Event diagnostics button */}
-          {simpleStatus === "connected" && (
-            <button
-              type="button"
-              onClick={onEventDiag}
-              disabled={eventDiagLoading}
-              className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50 transition"
-            >
-              {eventDiagLoading ? "Diagnosticando eventos…" : "Diagnóstico de eventos"}
-            </button>
-          )}
-
-          {/* Event diagnostics result */}
-          {eventDiagResult && (
-            <EventDiagCard result={eventDiagResult} />
-          )}
-
-          {/* Railway logging instructions — shown when config is OK but no real events */}
-          {(eventDiagResult?.verdict === "ok_waiting" || eventDiagResult?.verdict === "webhook_ok_not_emitting") && (
-            <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-3 text-xs space-y-2">
-              <p className="font-semibold text-amber-800">Como verificar os logs da Evolution no Railway:</p>
-              <ol className="list-decimal list-inside space-y-1 text-amber-700">
-                <li>Abra <span className="font-mono">railway.app</span> → seu projeto → serviço <span className="font-mono">evolution-api</span></li>
-                <li>Vá em <span className="font-semibold">Deployments</span> → clique no deploy ativo → <span className="font-semibold">View logs</span></li>
-                <li>Envie uma mensagem real pelo WhatsApp para o número conectado</li>
-                <li>Procure nos logs por: <span className="font-mono text-amber-900">MESSAGES_UPSERT</span>, <span className="font-mono text-amber-900">messages.upsert</span>, <span className="font-mono text-amber-900">webhook</span>, <span className="font-mono text-amber-900">error</span></li>
-              </ol>
-              <p className="text-amber-600 text-[10px]">
-                Se nenhuma linha aparecer após enviar a mensagem, a Evolution não está recebendo a mensagem do WhatsApp — problema de conectividade na infra Railway/Evolution, não no Foocci.
-              </p>
-            </div>
-          )}
-
-          {events.length === 0 && !loading && !showSyncButton && !syncResult && (
-            <p className="text-xs text-gray-400 italic">
-              Nenhum evento registrado ainda. Envie uma mensagem WhatsApp para testar.
-            </p>
-          )}
         </>
       )}
     </div>
@@ -1114,6 +815,10 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   // Event diagnostics state
   const [eventDiagLoading, setEventDiagLoading] = useState(false);
   const [eventDiagResult,  setEventDiagResult]  = useState<EventDiagnosticsResult | null>(null);
+
+  // Secret rotation state
+  const [rotatingSecret, setRotatingSecret] = useState(false);
+  const [rotateResult,   setRotateResult]   = useState<{ success: boolean; message: string } | null>(null);
 
   // Hard-reset state
   const [resetConfirming, setResetConfirming] = useState(false);
@@ -1254,6 +959,22 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     }
   }
 
+  async function handleRotateSecret() {
+    setRotatingSecret(true);
+    setRotateResult(null);
+    const { ok, data } = await apiFetch("/api/evolution/rotate-webhook-secret", "POST");
+    setRotatingSecret(false);
+    if (ok) {
+      const d = data as { success: boolean; message?: string };
+      setRotateResult({ success: d.success, message: d.message ?? "Secret rotacionado com sucesso." });
+      setSyncResult(null);
+      setLiveConfigResult(null);
+      setTimeout(() => void loadWebhookLog(), 5000);
+    } else {
+      setRotateResult({ success: false, message: "Falha ao rotacionar secret. Tente novamente." });
+    }
+  }
+
   async function handleEventDiag() {
     setEventDiagLoading(true);
     setEventDiagResult(null);
@@ -1292,6 +1013,14 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const loadedBaseUrlErr = f.baseUrl ? validateBaseUrl(f.baseUrl) : null;
   const isConfigured     = view?.status !== "unconfigured" && !!f.instanceName && !loadedBaseUrlErr;
   const simpleStatus     = viewToSimple(view?.status ?? "unconfigured");
+
+  // Webhook diagnostic derived values
+  const hasSignatureMismatch = webhookLogSummary?.lastError === "signature_mismatch"
+    && !liveConfigResult?.tokenInUrl && !syncResult?.secretInfo?.tokenInUrl;
+  const showSyncButton = simpleStatus === "connected" && (
+    !webhookLogSummary?.lastRealEventAt || liveConfigResult?.isHealthy === false || hasSignatureMismatch
+  );
+  const showSelfTestButton = syncResult?.success || liveConfigResult?.isHealthy === true;
 
   // Per-field errors — only shown after first Save attempt
   const instanceNameErr = submitAttempted ? validateInstanceName(instanceName) : null;
@@ -1497,24 +1226,8 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
       {isOwner && isConfigured && (
         <WebhookHealthCard
           summary={webhookLogSummary}
-          events={webhookLogEvents}
           loading={webhookLogLoading}
           simpleStatus={simpleStatus}
-          onSync={() => void handleSyncWebhook()}
-          syncLoading={syncingWebhook}
-          syncResult={syncResult}
-          onSelfTest={() => void handleSelfTest()}
-          selfTestLoading={selfTesting}
-          selfTestResult={selfTestResult}
-          onVerify={() => void handleVerifyConfig()}
-          verifyLoading={verifyingConfig}
-          liveConfigResult={liveConfigResult}
-          onEventDiag={() => void handleEventDiag()}
-          eventDiagLoading={eventDiagLoading}
-          eventDiagResult={eventDiagResult}
-          onAuthTest={() => void handleAuthTest()}
-          authTestLoading={authTesting}
-          authTestResult={authTestResult}
         />
       )}
 
@@ -1769,6 +1482,230 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                         Cancelar
                       </button>
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Webhook diagnostics ────────────────────────────────── */}
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-4 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold text-blue-700">Diagnósticos do webhook</p>
+                  <p className="mt-0.5 text-xs text-blue-600">
+                    Ferramentas para diagnosticar e corrigir o pipeline de mensagens WhatsApp.
+                  </p>
+                </div>
+
+                {/* Signature mismatch alert */}
+                {hasSignatureMismatch && (
+                  <div className="rounded-lg border border-red-200 bg-white px-3 py-3 text-xs space-y-2">
+                    <p className="font-semibold text-red-800">✗ Webhook recebido mas secret não confere</p>
+                    <p className="text-red-700">
+                      A Evolution está enviando eventos mas o secret não bate com o banco.
+                      Clique em <strong>Sincronizar webhook</strong> para reenviar o secret correto com token na URL.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleSyncWebhook()}
+                      disabled={syncingWebhook}
+                      className="w-full rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition"
+                    >
+                      {syncingWebhook ? "Sincronizando…" : "Corrigir secret do webhook"}
+                    </button>
+                  </div>
+                )}
+
+                {/* Sync result */}
+                {syncResult && (
+                  <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-1.5 ${
+                    syncResult.success ? "border-green-200 bg-white text-green-800" : "border-red-200 bg-white text-red-700"
+                  }`}>
+                    <p className="font-semibold">
+                      {syncResult.success
+                        ? syncResult.secretInfo?.tokenInUrl
+                          ? "✓ Webhook configurado com token seguro"
+                          : "✓ Webhook sincronizado"
+                        : "✗ Falha na sincronização"}
+                    </p>
+                    <p className="text-[10px]">{syncResult.recommendation}</p>
+                    {syncResult.error && (
+                      <p className="font-mono text-[10px] break-all">{syncResult.error}</p>
+                    )}
+                    {syncResult.webhookConfig && (
+                      <div className="font-mono text-[10px] space-y-0.5 bg-gray-50 rounded px-2 py-1">
+                        <p>url: <span className="break-all">{syncResult.webhookConfig.url ?? "?"}</span>
+                          {" "}{syncResult.webhookConfig.urlMatches
+                            ? <span className="text-green-600">✓</span>
+                            : <span className="text-red-500">✗ diverge</span>}
+                        </p>
+                        <p>webhookByEvents: <span className={syncResult.webhookConfig.webhookByEvents === false ? "text-green-700 font-bold" : "text-red-600 font-bold"}>
+                          {String(syncResult.webhookConfig.webhookByEvents ?? "?")}
+                        </span></p>
+                        <p>enabled: {String(syncResult.webhookConfig.enabled ?? "?")}</p>
+                        <p>auth: {syncResult.secretInfo?.tokenInUrl ? <span className="text-green-700">token na URL ✓</span> : "—"}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Verify + Sync + Self-test buttons */}
+                {simpleStatus === "connected" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleVerifyConfig()}
+                    disabled={verifyingConfig}
+                    className="w-full rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition"
+                  >
+                    {verifyingConfig ? "Consultando Evolution…" : "Verificar webhook na Evolution"}
+                  </button>
+                )}
+
+                {/* Live config result */}
+                {liveConfigResult && (
+                  <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-1.5 ${
+                    liveConfigResult.isHealthy ? "border-green-200 bg-white text-green-800" : "border-red-200 bg-white text-red-800"
+                  }`}>
+                    <p className="font-semibold">
+                      {liveConfigResult.isHealthy ? "✓ Webhook na Evolution: correto" : "✗ Problemas detectados"}
+                    </p>
+                    <div className="font-mono text-[10px] space-y-0.5 bg-gray-50 rounded px-2 py-1">
+                      <p><span className="text-gray-500">url: </span>{liveConfigResult.url ?? "—"}
+                        {" "}{liveConfigResult.urlMatches
+                          ? <span className="text-green-600">✓</span>
+                          : <span className="text-red-500">✗ diverge</span>}
+                      </p>
+                      <p><span className="text-gray-500">webhookByEvents: </span>
+                        <span className={liveConfigResult.byEventsIsFalse ? "text-green-700 font-bold" : "text-red-600 font-bold"}>
+                          {String(liveConfigResult.webhookByEvents ?? "?")}
+                        </span>
+                      </p>
+                      <p><span className="text-gray-500">auth: </span>
+                        {liveConfigResult.tokenInUrl
+                          ? <span className="text-green-700">token na URL ✓</span>
+                          : liveConfigResult.secretPresent
+                            ? <span className="text-green-700">secret presente ✓</span>
+                            : <span className="text-amber-600">secret ausente</span>}
+                      </p>
+                      <p><span className="text-gray-500">events: </span>[{liveConfigResult.events.join(", ") || "—"}]
+                        {!liveConfigResult.hasMessagesUpsert && <span className="text-red-500"> ← MESSAGES_UPSERT ausente</span>}
+                      </p>
+                    </div>
+                    {liveConfigResult.issues.length > 0 && (
+                      <ul className="space-y-0.5 text-[10px]">
+                        {liveConfigResult.issues.map((issue, i) => (
+                          <li key={i} className="text-red-700">⚠ {issue}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="text-[10px] text-gray-600">{liveConfigResult.recommendation}</p>
+                  </div>
+                )}
+
+                {showSyncButton && (
+                  <button
+                    type="button"
+                    onClick={() => void handleSyncWebhook()}
+                    disabled={syncingWebhook}
+                    className="w-full rounded-xl border border-amber-200 bg-white px-4 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-50 transition"
+                  >
+                    {syncingWebhook ? "Sincronizando webhook…" : "Sincronizar webhook"}
+                  </button>
+                )}
+
+                {showSelfTestButton && (
+                  <button
+                    type="button"
+                    onClick={() => void handleSelfTest()}
+                    disabled={selfTesting}
+                    className="w-full rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition"
+                  >
+                    {selfTesting ? "Testando receiver…" : "Testar receiver Foocci"}
+                  </button>
+                )}
+
+                {selfTestResult && (
+                  <div className={`rounded-lg border px-3 py-2 text-xs space-y-1 ${
+                    selfTestResult.success ? "border-blue-200 bg-white text-blue-800" : "border-red-200 bg-white text-red-700"
+                  }`}>
+                    <p className="font-semibold">{selfTestResult.success ? "✓ Receiver OK" : "✗ Receiver com problema"}</p>
+                    <p className="text-[10px]">{selfTestResult.diagnosis}</p>
+                    <p className="font-mono text-[10px]">DB: {selfTestResult.dbWrite.ok ? "✓" : "✗"} · Parser: {selfTestResult.parse.ok ? "✓" : "✗"}</p>
+                  </div>
+                )}
+
+                {/* Auth self-test */}
+                <button
+                  type="button"
+                  onClick={() => void handleAuthTest()}
+                  disabled={authTesting}
+                  className="w-full rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition"
+                >
+                  {authTesting ? "Testando…" : "Testar lógica de autenticação"}
+                </button>
+                {authTestResult && (
+                  <div className={`rounded border px-2 py-1.5 text-[10px] font-mono space-y-0.5 ${
+                    authTestResult.allWorkingCorrectly ? "border-green-200 bg-white text-green-800" : "border-red-200 bg-white text-red-700"
+                  }`}>
+                    <p className="font-semibold">{authTestResult.allWorkingCorrectly ? "✓ Lógica OK" : "✗ Lógica com falha"}</p>
+                    <p className="text-gray-600">{authTestResult.diagnosis}</p>
+                    {authTestResult.tests && Object.entries(authTestResult.tests).map(([k, v]) => (
+                      <p key={k}>
+                        <span className={v.accepted ? "text-green-600" : "text-red-500"}>{v.accepted ? "✓" : "✗"}</span>
+                        {" "}{k}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                {/* Event diagnostics */}
+                {simpleStatus === "connected" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleEventDiag()}
+                    disabled={eventDiagLoading}
+                    className="w-full rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition"
+                  >
+                    {eventDiagLoading ? "Diagnosticando eventos…" : "Diagnóstico de eventos"}
+                  </button>
+                )}
+                {eventDiagResult && <EventDiagCard result={eventDiagResult} />}
+
+                {/* Railway logging instructions */}
+                {(eventDiagResult?.verdict === "ok_waiting" || eventDiagResult?.verdict === "webhook_ok_not_emitting") && (
+                  <div className="rounded-lg border border-amber-100 bg-white px-3 py-3 text-xs space-y-2">
+                    <p className="font-semibold text-amber-800">Como verificar os logs da Evolution no Railway:</p>
+                    <ol className="list-decimal list-inside space-y-1 text-amber-700 text-[10px]">
+                      <li>railway.app → seu projeto → serviço <span className="font-mono">evolution-api</span></li>
+                      <li>Deployments → deploy ativo → View logs</li>
+                      <li>Envie mensagem pelo WhatsApp ao número conectado</li>
+                      <li>Procure: <span className="font-mono">MESSAGES_UPSERT</span>, <span className="font-mono">webhook</span>, <span className="font-mono">error</span></li>
+                    </ol>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Secret rotation ──────────────────────────────────────── */}
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-4 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold text-amber-700">Rotacionar secret do webhook</p>
+                  <p className="mt-0.5 text-xs text-amber-600">
+                    Use apenas se o token foi exposto. Gera novo secret e atualiza a URL na Evolution.
+                    Não desconecta o WhatsApp.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleRotateSecret()}
+                  disabled={rotatingSecret || !isConfigured}
+                  className="rounded-xl border border-amber-200 bg-white px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40 transition"
+                >
+                  {rotatingSecret ? "Rotacionando…" : "Rotacionar secret do webhook"}
+                </button>
+                {rotateResult && (
+                  <div className={`rounded-lg border px-3 py-2 text-xs ${
+                    rotateResult.success ? "border-green-200 bg-white text-green-800" : "border-red-200 bg-white text-red-700"
+                  }`}>
+                    <p className="font-semibold">{rotateResult.success ? "✓ Secret rotacionado" : "✗ Falha na rotação"}</p>
+                    <p className="text-[10px] mt-1">{rotateResult.message}</p>
                   </div>
                 )}
               </div>

@@ -264,7 +264,8 @@ export async function POST(req: NextRequest) {
       eventsConfigured:     WEBHOOK_EVENTS,
       rawWebhookShapeKeys:  setResponses[0]?.keys ?? [],
       webhookConfig: {
-        url:             finalLiveConfig.url,
+        // Strip ?token= before returning — server-internal URL must not reach the client
+        url:             finalLiveConfig.url ? finalLiveConfig.url.split("?")[0] : null,
         webhookByEvents: finalLiveConfig.webhookByEvents,
         events:          finalLiveConfig.events,
         enabled:         finalLiveConfig.enabled,
@@ -283,7 +284,11 @@ export async function POST(req: NextRequest) {
       debug: {
         attemptedPayloads,
         setResponses,
-        liveConfig: finalLiveConfig,
+        // Strip URL from debug payload — ?token= must not reach the client
+        liveConfig: finalLiveConfig ? {
+          ...finalLiveConfig,
+          url: finalLiveConfig.url ? finalLiveConfig.url.split("?")[0] : null,
+        } : null,
       },
     });
   } catch (err) {
