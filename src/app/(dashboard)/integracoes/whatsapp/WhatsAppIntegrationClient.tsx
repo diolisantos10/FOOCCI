@@ -489,6 +489,11 @@ interface SyncWebhookResult {
     enabled:         boolean | null;
     urlMatches:      boolean;
   } | null;
+  secretInfo?: {
+    configuredSecretFromDb: boolean;
+    sentSecret:             boolean;
+    readBackSecretVisible:  boolean;
+  };
   instanceInfo: {
     connectionStatus: string | null;
     profileName:      string | null;
@@ -501,6 +506,23 @@ interface SyncWebhookResult {
     setResponses:      Array<{ label: string; ok: boolean; keys: string[]; error?: string }>;
     liveConfig:        Record<string, unknown> | null;
   };
+}
+
+interface AuthSelfTestResult {
+  success:             boolean;
+  instanceName:        string;
+  hasSecret:           boolean;
+  allWorkingCorrectly: boolean;
+  diagnosis:           string;
+  tests: {
+    xEvolutionSecret:        { accepted: boolean; strategy: string | null };
+    xEvolutionWebhookSecret: { accepted: boolean; strategy: string | null };
+    xWebhookSecret:          { accepted: boolean; strategy: string | null };
+    authorizationBearer:     { accepted: boolean; strategy: string | null };
+    bodySecret:              { accepted: boolean; strategy: string | null };
+    bodyApikey:              { accepted: boolean; strategy: string | null };
+  } | null;
+  error?: string;
 }
 
 interface SelfTestResult {
@@ -651,6 +673,9 @@ function WebhookHealthCard({
   onEventDiag,
   eventDiagLoading,
   eventDiagResult,
+  onAuthTest,
+  authTestLoading,
+  authTestResult,
 }: {
   summary:           WebhookLogSummary | null;
   events:            WebhookLogEvent[];
@@ -668,6 +693,9 @@ function WebhookHealthCard({
   onEventDiag:       () => void;
   eventDiagLoading:  boolean;
   eventDiagResult:   EventDiagnosticsResult | null;
+  onAuthTest:        () => void;
+  authTestLoading:   boolean;
+  authTestResult:    AuthSelfTestResult | null;
 }) {
   const now = Date.now();
 
@@ -692,8 +720,9 @@ function WebhookHealthCard({
   }
 
   const hs = healthStatus();
+  const hasSignatureMismatch = summary?.lastError === "signature_mismatch";
   const showSyncButton = simpleStatus === "connected" && (
-    !summary?.lastEventAt || liveConfigResult?.isHealthy === false
+    !summary?.lastRealEventAt || liveConfigResult?.isHealthy === false || hasSignatureMismatch
   );
   const showSelfTestButton = syncResult?.success || liveConfigResult?.isHealthy === true;
   const phone = syncResult?.instanceInfo?.ownerJidMasked
@@ -840,6 +869,56 @@ function WebhookHealthCard({
                 </ul>
               )}
               <p className="text-[10px]">{liveConfigResult.recommendation}</p>
+            </div>
+          )}
+
+          {/* Signature mismatch alert — shown when last error is signature_mismatch */}
+          {hasSignatureMismatch && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-xs space-y-2">
+              <p className="font-semibold text-red-800">
+                ✗ Webhook recebido, mas secret não confere
+              </p>
+              <p className="text-red-700">
+                A Evolution está enviando eventos, mas o secret no header não bate com o registrado no banco.
+                Clique em <strong>Sincronizar webhook</strong> para reenviar o secret correto para a Evolution.
+                Depois envie uma mensagem real pelo WhatsApp para testar.
+              </p>
+              <button
+                type="button"
+                onClick={onSync}
+                disabled={syncLoading}
+                className="w-full rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition"
+              >
+                {syncLoading ? "Sincronizando…" : "Corrigir secret do webhook"}
+              </button>
+              <button
+                type="button"
+                onClick={onAuthTest}
+                disabled={authTestLoading}
+                className="w-full rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 transition"
+              >
+                {authTestLoading ? "Testando…" : "Testar lógica de autenticação"}
+              </button>
+              {authTestResult && (
+                <div className={`rounded border px-2 py-1.5 text-[10px] font-mono space-y-0.5 ${
+                  authTestResult.allWorkingCorrectly
+                    ? "border-green-200 bg-green-50 text-green-800"
+                    : "border-red-200 bg-red-50 text-red-700"
+                }`}>
+                  <p className="font-semibold mb-1">{authTestResult.allWorkingCorrectly ? "✓ Lógica OK" : "✗ Lógica com falha"}</p>
+                  <p>{authTestResult.diagnosis}</p>
+                  {authTestResult.tests && (
+                    <div className="mt-1 space-y-0.5">
+                      {Object.entries(authTestResult.tests).map(([k, v]) => (
+                        <p key={k}>
+                          <span className={v.accepted ? "text-green-600" : "text-red-500"}>{v.accepted ? "✓" : "✗"}</span>
+                          {" "}{k}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1008,6 +1087,10 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const [selfTesting,   setSelfTesting]   = useState(false);
   const [selfTestResult, setSelfTestResult] = useState<SelfTestResult | null>(null);
 
+  // Auth self-test state
+  const [authTesting,    setAuthTesting]    = useState(false);
+  const [authTestResult, setAuthTestResult] = useState<AuthSelfTestResult | null>(null);
+
   // Live config verification state
   const [verifyingConfig,  setVerifyingConfig]  = useState(false);
   const [liveConfigResult, setLiveConfigResult] = useState<LiveConfigResult | null>(null);
@@ -1100,10 +1183,23 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
     setWebhookLogLoading(false);
   }, [isOwner]);
 
+  async function handleAuthTest() {
+    setAuthTesting(true);
+    setAuthTestResult(null);
+    const { ok, data } = await apiFetch("/api/evolution/webhook-auth-self-test", "POST");
+    setAuthTesting(false);
+    if (ok) {
+      setAuthTestResult(data as AuthSelfTestResult);
+    } else {
+      setFeedback({ type: "err", msg: "Falha ao executar teste de autenticação." });
+    }
+  }
+
   async function handleSyncWebhook() {
     setSyncingWebhook(true);
     setSyncResult(null);
     setSelfTestResult(null);
+    setAuthTestResult(null);
     const webhookUrl = typeof window !== "undefined"
       ? `${window.location.origin}/api/webhooks/evolution`
       : "/api/webhooks/evolution";
@@ -1400,6 +1496,9 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
           onEventDiag={() => void handleEventDiag()}
           eventDiagLoading={eventDiagLoading}
           eventDiagResult={eventDiagResult}
+          onAuthTest={() => void handleAuthTest()}
+          authTestLoading={authTesting}
+          authTestResult={authTestResult}
         />
       )}
 

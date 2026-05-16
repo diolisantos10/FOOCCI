@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { prisma } from "@/lib/prisma";
 import { unauthorized, forbidden, serverError } from "@/lib/api-response";
 
 export type EventDiagnosticsVerdict =
@@ -138,8 +139,31 @@ export async function GET(req: NextRequest) {
       // settings endpoint not available in this Evolution version
     }
 
-    // ── 4. Verdict ────────────────────────────────────────────
-    const isConnected       = connectionStatus === "open";
+    // ── 4. Recent event check (fallback for null connectionStatus) ──
+    // If fetchInstances returned an unparseable state but we're receiving
+    // real events, we know the instance is effectively connected.
+    let isReceivingEvents = false;
+    let lastRecentEventAt: Date | null = null;
+
+    try {
+      const recentEvent = await prisma.evolutionWebhookEventLog.findFirst({
+        where: {
+          instanceName: snapshot.instanceName,
+          eventName:    { not: "self_test" },
+          accepted:     true,
+          createdAt:    { gte: new Date(Date.now() - 5 * 60 * 1000) },
+        },
+        orderBy: { createdAt: "desc" },
+        select:  { createdAt: true },
+      });
+      isReceivingEvents = !!recentEvent;
+      lastRecentEventAt = recentEvent?.createdAt ?? null;
+    } catch {
+      // best-effort — DB might not be migrated
+    }
+
+    // ── 5. Verdict ────────────────────────────────────────────
+    const isConnected       = connectionStatus === "open" || isReceivingEvents;
     const hasMessagesUpsert = webhookEvents.some((e) => e === "MESSAGES_UPSERT");
     const hasMessagesUpdate = webhookEvents.some((e) => e === "MESSAGES_UPDATE");
     const urlMatches        = !!webhookUrl && webhookUrl.trim() === expectedUrl;
@@ -148,6 +172,10 @@ export async function GET(req: NextRequest) {
 
     let verdict: EventDiagnosticsVerdict;
     let verdictMessage: string;
+
+    const stateLabel = isReceivingEvents && connectionStatus !== "open"
+      ? "recebendo eventos"
+      : (connectionStatus ?? "desconhecido");
 
     if (!isConnected) {
       verdict        = "instance_not_connected";
@@ -164,13 +192,17 @@ export async function GET(req: NextRequest) {
       verdictMessage = `Webhook com problema: ${issues.join("; ")}. Clique em 'Sincronizar webhook'.`;
     } else {
       verdict        = "ok_waiting";
-      verdictMessage = "Foocci OK. Evolution configurada corretamente. Aguardando evento real de mensagem. Envie uma mensagem pelo WhatsApp para o número conectado e verifique os logs do Railway.";
+      verdictMessage = isReceivingEvents
+        ? "Foocci OK. Evolution recebida e aceita eventos reais recentemente. Pipeline funcionando."
+        : "Foocci OK. Evolution configurada corretamente. Aguardando evento real de mensagem. Envie uma mensagem pelo WhatsApp para o número conectado e verifique os logs do Railway.";
     }
 
     return NextResponse.json({
       success:      true,
       instanceName: snapshot.instanceName,
-      connectionStatus,
+      connectionStatus:  stateLabel,
+      isReceivingEvents,
+      lastRecentEventAt,
       ownerJidMasked,
       integration,
       webhook: {

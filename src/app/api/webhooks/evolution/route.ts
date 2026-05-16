@@ -2,8 +2,8 @@
  * POST /api/webhooks/evolution
  *
  * Single public endpoint that receives all Evolution API webhook events.
- * NOT authenticated via JWT — protected by HMAC-SHA256 or plain-token
- * signature verification on the request body.
+ * NOT authenticated via JWT — protected by multi-strategy secret verification
+ * (HMAC-SHA256, plain-token header variants, body fields).
  *
  * DIAGNOSTIC CONTRACT: every incoming request is logged to
  * EvolutionWebhookEventLog BEFORE any rejection, even if auth fails.
@@ -17,7 +17,10 @@ import { WebhookParserService } from "@/services/evolution/WebhookParserService"
 import { WebhookProcessorService } from "@/services/evolution/WebhookProcessorService";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { prisma } from "@/lib/prisma";
-import { createHmac, timingSafeEqual } from "crypto";
+import {
+  verifyWebhookAuth,
+  extractWebhookAuthCandidates,
+} from "@/lib/evolution/verifyWebhookAuth";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   let rawBody: string;
@@ -62,9 +65,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Signature verification
-  if (!verifySignature(req, rawBody, webhookSecret)) {
-    console.warn(`[webhook/evolution] Signature mismatch for instance: ${instanceName}`);
+  // Multi-strategy signature verification
+  const authCandidates = extractWebhookAuthCandidates(req, body);
+  const authResult     = verifyWebhookAuth(rawBody, authCandidates, webhookSecret);
+
+  if (!authResult.accepted) {
+    // Log diagnostic detail WITHOUT exposing raw secrets (hash previews only)
+    console.warn(
+      `[webhook/evolution] signature_mismatch instance=${instanceName} event=${logMeta.eventName}`,
+      JSON.stringify({
+        headers: authResult.diagnostics,
+        bodyKeys: logMeta.bodyKeys,
+        // candidateHashPreviews shows which headers had values and their sha256 prefix
+        // expectedHashPreview is the sha256 prefix of the stored secret
+        // If any candidate hash prefix matches expected, that's the right header to send
+      })
+    );
     void persistLog(restaurantId, instanceName, logMeta, false, false, "signature_mismatch");
     return NextResponse.json({ received: true }, { status: 200 });
   }
@@ -123,62 +139,6 @@ function extractInstanceName(body: unknown): string | null {
   if (typeof raw.instanceName === "string" && raw.instanceName) return raw.instanceName;
 
   return null;
-}
-
-/**
- * Verify the incoming request signature.
- *
- * Strategy 1: HMAC-SHA256 via x-evolution-hmac-sha256 header.
- * Strategy 2: plain token via x-evolution-webhook-secret header.
- * Strategy 3: plain token via x-evolution-secret header (alternate name).
- * Strategy 4: Authorization: Bearer <secret>.
- *
- * Timing-safe comparison to prevent timing attacks.
- */
-function verifySignature(req: NextRequest, rawBody: string, secret: string): boolean {
-  // Strategy 1: HMAC
-  const hmacHeader = req.headers.get("x-evolution-hmac-sha256");
-  if (hmacHeader) {
-    const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-    try {
-      return timingSafeEqual(Buffer.from(hmacHeader, "hex"), Buffer.from(expected, "hex"));
-    } catch {
-      return false;
-    }
-  }
-
-  // Strategy 2: plain token (Evolution v2.x default header name)
-  const tokenHeader = req.headers.get("x-evolution-webhook-secret");
-  if (tokenHeader !== null) {
-    try {
-      return timingSafeEqual(Buffer.from(tokenHeader, "utf8"), Buffer.from(secret, "utf8"));
-    } catch {
-      return false;
-    }
-  }
-
-  // Strategy 3: alternate plain-token header used by some Evolution builds
-  const altHeader = req.headers.get("x-evolution-secret");
-  if (altHeader !== null) {
-    try {
-      return timingSafeEqual(Buffer.from(altHeader, "utf8"), Buffer.from(secret, "utf8"));
-    } catch {
-      return false;
-    }
-  }
-
-  // Strategy 4: Authorization: Bearer <secret>
-  const authHeader = req.headers.get("authorization") ?? "";
-  if (authHeader.startsWith("Bearer ")) {
-    const token = authHeader.slice(7);
-    try {
-      return timingSafeEqual(Buffer.from(token, "utf8"), Buffer.from(secret, "utf8"));
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
 }
 
 interface LogMeta {

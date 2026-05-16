@@ -261,6 +261,12 @@ export async function POST(req: NextRequest) {
         enabled:         finalLiveConfig.enabled,
         urlMatches:      finalLiveConfig.url === webhookUrl,
       },
+      // Secret status — never reveals the value
+      secretInfo: {
+        configuredSecretFromDb: true,                       // we always read from DB
+        sentSecret:             !!snapshot.webhookSecret,   // was a non-empty secret sent?
+        readBackSecretVisible:  false,                      // Evolution never returns secret in GET
+      },
       instanceInfo,
       error:          success ? null : (firstSetError ?? "webhookByEvents não confirmado como false"),
       recommendation,
