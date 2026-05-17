@@ -853,7 +853,7 @@ function SaiposForm({
       {/* Secret do parceiro — input is ALWAYS empty on load; preview shown as a separate label */}
       <div>
         <p className="mb-1 text-sm font-medium text-gray-700">
-          Secret do parceiro / canal de venda Saipos
+          Secret do parceiro/canal Saipos
         </p>
         {existingSecretPreview && (
           <p className="mb-1.5 text-xs text-gray-500">
@@ -871,7 +871,7 @@ function SaiposForm({
           className={inputCls}
         />
         <p className="mt-1 text-xs text-gray-400">
-          Cole aqui o secret do parceiro/canal de venda informado pela equipe Saipos após o credenciamento. Não use a senha da loja nem a API Key pública, a menos que a Saipos confirme que ela é o secret do canal. Deixe em branco para manter o atual.
+          Cole aqui o secret do parceiro/canal informado pela Saipos após o credenciamento. Não confundir com senha da loja ou API Key pública, salvo se a Saipos confirmar que este é o secret do canal.
         </p>
         {errors.apiKey && <p className={errCls}>{errors.apiKey}</p>}
       </div>
