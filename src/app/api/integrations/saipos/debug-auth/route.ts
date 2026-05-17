@@ -29,6 +29,7 @@ const SAIPOS_AUTH_URL = "https://order-api.saipos.com/auth";
 
 interface AuthAttemptResult {
   bodyKeys:              string[];          // request body keys
+  requestHeaders:        string[];          // keys sent in request
   responseStatus:        number | null;
   responseStatusText:    string | null;
   responseContentType:   string | null;
@@ -39,6 +40,7 @@ interface AuthAttemptResult {
   responseCorrelationId: string | null;
   responseServerHeader:  string | null;
   responseDateHeader:    string | null;
+  responseCfRay:         string | null;     // Cloudflare Ray ID — present if blocked by CF WAF
   responseErrorCode:     string | number | null;
   responseErrorMessage:  string | null;
   responsePreview:       string;            // kept for backward compat
@@ -51,12 +53,16 @@ async function tryAuth(
 ): Promise<AuthAttemptResult> {
   const requestBodyKeys = Object.keys(body);
 
+  const requestHeaders = ["Content-Type", "Accept"];
   let res: Response;
   let responseText = "";
   try {
     res = await fetch(authUrl, {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Accept":       "application/json",
+      },
       body:    JSON.stringify(body),
       signal:  AbortSignal.timeout(10_000),
     });
@@ -64,6 +70,7 @@ async function tryAuth(
   } catch (err) {
     return {
       bodyKeys:              requestBodyKeys,
+      requestHeaders,
       responseStatus:        null,
       responseStatusText:    null,
       responseContentType:   null,
@@ -74,6 +81,7 @@ async function tryAuth(
       responseCorrelationId: null,
       responseServerHeader:  null,
       responseDateHeader:    null,
+      responseCfRay:         null,
       responseErrorCode:     null,
       responseErrorMessage:  err instanceof Error ? err.message : String(err),
       responsePreview:       "",
@@ -90,6 +98,7 @@ async function tryAuth(
     null;
   const responseServerHeader = res.headers.get("server");
   const responseDateHeader   = res.headers.get("date");
+  const responseCfRay        = res.headers.get("cf-ray");
   const responseBodyEmpty    = !responseText;
   const ct = responseContentType ?? "";
 
@@ -129,6 +138,7 @@ async function tryAuth(
 
   return {
     bodyKeys:              requestBodyKeys,
+    requestHeaders,
     responseStatus:        res.status,
     responseStatusText:    res.statusText ?? null,
     responseContentType,
@@ -139,6 +149,7 @@ async function tryAuth(
     responseCorrelationId,
     responseServerHeader,
     responseDateHeader,
+    responseCfRay,
     responseErrorCode:    errorCode,
     responseErrorMessage: errorMessage,
     responsePreview:      responseText.slice(0, 300),
@@ -205,6 +216,6 @@ export async function POST(req: NextRequest) {
     optionA: { label: '{ "idPartner", "secret" }', ...optionA },
     optionB: { label: '{ "partnerId", "secret" }', ...optionB },
     currentDefaultFormat: "optionA",
-    note: "Option A { idPartner, secret } is the current default. Each result includes: responseStatus, responseStatusText, responseContentType, responseBodyType, responseBodyEmpty, responseBodyPreviewSafe, responseBodyKeys, responseCorrelationId, responseServerHeader, responseDateHeader — safe to share with Saipos support.",
+    note: "Option A { idPartner, secret } is the current default. Each result includes: requestHeaders, responseStatus, responseStatusText, responseContentType, responseBodyType, responseBodyEmpty, responseBodyPreviewSafe, responseBodyKeys, responseCorrelationId, responseServerHeader, responseDateHeader, responseCfRay — safe to share with Saipos support.",
   });
 }

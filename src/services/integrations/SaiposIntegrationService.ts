@@ -264,7 +264,10 @@ export class SaiposIntegrationService {
     try {
       const res  = await fetch(authUrl, {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept":       "application/json",
+        },
         body:    JSON.stringify(body),
         signal:  AbortSignal.timeout(10_000),
       });
