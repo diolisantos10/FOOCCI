@@ -15,8 +15,9 @@
  * This keeps the code stateless and avoids token expiry issues.
  *
  * Saipos API base URLs:
- *   Homologation : https://homolog-order-api.saipos.com
- *   Production   : https://order-api.saipos.com
+ *   Auth (v2.5)  : https://order-api.saipos.com/auth  (always, env-independent)
+ *   Homologation : https://homolog-order-api.saipos.com  (non-auth endpoints)
+ *   Production   : https://order-api.saipos.com          (non-auth endpoints)
  */
 
 import { prisma } from "@/lib/prisma";
@@ -136,6 +137,10 @@ const SAIPOS_EVENT_TO_STATUS: Record<string, string> = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Auth endpoint is fixed to the v2.5 production host regardless of environment.
+// Non-auth endpoints (orders, catalog, etc.) still honour the environment field.
+const SAIPOS_AUTH_URL = "https://order-api.saipos.com/auth";
+
 function apiBase(environment: string): string {
   return environment === "PRODUCTION"
     ? "https://order-api.saipos.com"
@@ -208,7 +213,7 @@ export class SaiposIntegrationService {
   // ── Auth — internal attempt (returns token + safe diagnostics) ──────────────
 
   private static async _attemptAuth(raw: SaiposRaw): Promise<{ token: string | null; debug: SaiposAuthDebug }> {
-    const authUrl    = `${apiBase(raw.environment)}/auth`;
+    const authUrl    = SAIPOS_AUTH_URL;
     const body       = { idPartner: raw.idPartner, secret: raw.apiKey };
 
     const debug: SaiposAuthDebug = {

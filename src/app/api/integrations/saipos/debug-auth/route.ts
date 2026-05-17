@@ -24,11 +24,8 @@ import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import type { SaiposRaw } from "@/services/integrations/SaiposIntegrationService";
 
-function saiposApiBase(environment: string): string {
-  return environment === "PRODUCTION"
-    ? "https://order-api.saipos.com"
-    : "https://homolog-order-api.saipos.com";
-}
+// Auth endpoint fixed to v2.5 order-api host — env-independent per Saipos support.
+const SAIPOS_AUTH_URL = "https://order-api.saipos.com/auth";
 
 interface AuthAttemptResult {
   bodyKeys:            string[];
@@ -117,7 +114,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const authUrl = `${saiposApiBase(raw.environment)}/auth`;
+  const authUrl = SAIPOS_AUTH_URL;
 
   const credentials = {
     idPartnerExists:  Boolean(raw.idPartner),
