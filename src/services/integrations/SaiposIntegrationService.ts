@@ -27,6 +27,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
+import { isGuestIdentifier } from "@/lib/guest";
 import type { PaymentMethod, OrderStatus } from "@prisma/client";
 
 // ── Structured auth error that preserves Saipos error codes ──────────────────
@@ -44,6 +45,18 @@ export class SaiposAuthError extends Error {
 
 // ── Internal config shape (stored encrypted as configBlob) ────────────────────
 
+// ── Payment mapping value — supports legacy numeric codes and full v2.5 object mappings ──────────
+
+export interface SaiposPaymentMappingObject {
+  code:        string | number; // Saipos payment type code e.g. "DIN", "CRE", "PARTNER_PAYMENT"
+  complement?: string;          // e.g. "PIX", "VISA", "MASTER" for card/pix complement
+  type?:       "ONLINE" | "OFFLINE";
+  change_for?: number;          // cents; relevant for cash payments
+}
+
+// Accepts: numeric legacy code | string code | full object
+export type SaiposPaymentMappingValue = number | string | SaiposPaymentMappingObject;
+
 export interface SaiposRaw {
   environment:     string;   // "HOMOLOGATION" | "PRODUCTION"
   // apiKey stores the Saipos partner/channel secret (v2.5 field name: "secret").
@@ -58,7 +71,9 @@ export interface SaiposRaw {
   codStore:        string;
   autoSendOrders:  boolean;
   syncCatalog:     boolean;
-  paymentMappings: Record<string, number>; // PaymentMethod → Saipos payment code
+  // paymentMappings: maps Foocci PaymentMethod to Saipos payment type.
+  // Accepts numeric (legacy), string code, or full object with complement/type/change_for.
+  paymentMappings: Record<string, SaiposPaymentMappingValue>;
 }
 
 // ── Saipos API payload types ───────────────────────────────────────────────────
@@ -93,41 +108,96 @@ export interface SaiposAuthDebug {
   responseErrorMessage:    string | null;
 }
 
-interface SaiposOrderItem {
+// ── Saipos v2.5 payload types ─────────────────────────────────────────────────
+
+interface SaiposCustomer {
+  id:               string | number; // Foocci customerId or -1 for unidentified guest
   name:             string;
-  unit_price:       number; // cents
+  phone:            string;
+  email?:           string;
+  document_number?: string;          // CPF or CNPJ without punctuation
+  localizer?:       string;
+}
+
+// order_method is an object in v2.5 — NOT a plain string
+interface SaiposOrderMethodDelivery {
+  mode:                "DELIVERY";
+  delivery_by:         "PARTNER" | "RESTAURANT";
+  delivery_fee:        number;  // cents
+  scheduled:           boolean;
+  delivery_date_time?: string;  // ISO-8601; only when scheduled=true
+  pickupCode?:         string;
+}
+
+interface SaiposOrderMethodTakeout {
+  mode:                "TAKEOUT";
+  scheduled:           boolean;
+  // delivery_date_time: v2.5 docs list this as required for TAKEOUT.
+  // For unscheduled immediate pickups we fall back to created_at so Saipos
+  // always receives a value. If Saipos rejects this, omit and re-test.
+  delivery_date_time:  string;
+  pickupCode?:         string;
+}
+
+interface SaiposOrderMethodTicket {
+  mode: "TICKET";
+}
+
+type SaiposOrderMethod =
+  | SaiposOrderMethodDelivery
+  | SaiposOrderMethodTakeout
+  | SaiposOrderMethodTicket;
+
+interface SaiposOrderItem {
+  desc_item:        string;  // v2.5 field name — was "name"
+  unit_price:       number;  // cents
   quantity:         number;
-  total_price:      number; // cents
   integration_code: string;
+  notes?:           string;
   choice_items:     SaiposChoiceItem[];
 }
 
+// Note: Saipos spells "additional" as "aditional" in their schema
 interface SaiposChoiceItem {
-  name:             string;
-  unit_price:       number;
+  desc_item_choice: string;  // v2.5 field name — was "name"
+  aditional_price:  number;  // cents — price of this choice on top of base
   quantity:         number;
   integration_code: string;
+  notes?:           string;
+}
+
+interface SaiposPaymentType {
+  code:        string | number; // Saipos payment type code e.g. "DIN", "CRE", "PARTNER_PAYMENT"
+  amount:      number;          // cents
+  change_for:  number;          // cents; 0 when not a cash payment requiring change
+  complement?: string;          // e.g. "PIX", "VISA", "MASTER"
+  type?:       "ONLINE" | "OFFLINE";
+}
+
+interface SaiposDeliveryAddress {
+  street:       string;
+  number:       string;
+  complement:   string;
+  neighborhood: string;
+  city:         string;
+  state:        string;
+  zip_code:     string;
 }
 
 interface SaiposOrderPayload {
-  order_id:         string;
-  display_id:       string;
-  cod_store:        string;
-  created_at:       string;
-  total_amount:     number; // cents
-  customer:         { name: string; phone: string; document: string };
-  order_method:     "DELIVERY" | "TAKEOUT" | "TICKET";
-  delivery_address?: {
-    street:       string;
-    number:       string;
-    complement:   string;
-    neighborhood: string;
-    city:         string;
-    state:        string;
-    zip_code:     string;
-  };
-  items:            SaiposOrderItem[];
-  payment_types:    { name: string; code: number; amount: number }[];
+  order_id:        string;
+  display_id:      string;
+  cod_store:       string;
+  created_at:      string;
+  notes?:          string;
+  total_discount:  number;   // cents; required, 0 when no discount
+  total_increase?: number;   // cents; omit when 0
+  total_amount?:   number;   // cents
+  customer:        SaiposCustomer;
+  order_method:    SaiposOrderMethod;
+  delivery_address?: SaiposDeliveryAddress;
+  items:           SaiposOrderItem[];
+  payment_types:   SaiposPaymentType[];
 }
 
 // ── Default payment mappings ───────────────────────────────────────────────────
@@ -135,14 +205,14 @@ interface SaiposOrderPayload {
 // These defaults cover the most common Brazilian payment methods.
 // Restaurant admin can override via the paymentMappings config field.
 
-const DEFAULT_PAYMENT_MAPPINGS: Record<string, number> = {
-  CASH:          1,
-  PIX:           2,
-  CREDIT_CARD:   3,
-  DEBIT_CARD:    4,
-  CARD_MACHINE:  3,
-  PIX_IN_PERSON: 2,
-  ONLINE:        3,
+const DEFAULT_PAYMENT_MAPPINGS: Record<string, SaiposPaymentMappingValue> = {
+  CASH:          { code: "DIN",             type: "OFFLINE", change_for: 0 },
+  PIX:           { code: "PARTNER_PAYMENT", complement: "PIX",    type: "ONLINE",  change_for: 0 },
+  CREDIT_CARD:   { code: "CRE",             type: "OFFLINE", change_for: 0 },
+  DEBIT_CARD:    { code: "DEB",             type: "OFFLINE", change_for: 0 },
+  CARD_MACHINE:  { code: "CRE",             type: "OFFLINE", change_for: 0 },
+  PIX_IN_PERSON: { code: "PARTNER_PAYMENT", complement: "PIX",    type: "OFFLINE", change_for: 0 },
+  ONLINE:        { code: "PARTNER_PAYMENT", complement: "ONLINE",  type: "ONLINE",  change_for: 0 },
 };
 
 // ── Saipos webhook event → Foocci OrderStatus mapping ─────────────────────────
@@ -209,6 +279,26 @@ function extractSaiposError(body: Record<string, unknown>): {
 function shortDisplayId(orderId: string): string {
   // Use last 6 chars of CUID as a short display reference, e.g. "#a1b2c3"
   return `#${orderId.slice(-6).toUpperCase()}`;
+}
+
+function resolvePayment(
+  mappingValue: SaiposPaymentMappingValue,
+  amount: number,
+): SaiposPaymentType {
+  if (typeof mappingValue === "number") {
+    // Legacy numeric code — restaurants that configured mappings before v2.5 migration
+    return { code: mappingValue, amount, change_for: 0 };
+  }
+  if (typeof mappingValue === "string") {
+    return { code: mappingValue, amount, change_for: 0 };
+  }
+  return {
+    code:       mappingValue.code,
+    amount,
+    change_for: mappingValue.change_for ?? 0,
+    ...(mappingValue.complement !== undefined && { complement: mappingValue.complement }),
+    ...(mappingValue.type       !== undefined && { type:       mappingValue.type }),
+  };
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -476,22 +566,34 @@ export class SaiposIntegrationService {
 
   static mapOrderToPayload(
     order: {
-      id:           string;
-      type:         string;
-      total:        unknown;
-      createdAt:    Date;
-      notes:        string | null;
-      customer:     { name: string; phone: string | null };
+      id:          string;
+      customerId:  string;
+      type:        string;
+      total:       unknown;
+      subtotal:    unknown;
+      deliveryFee: unknown;
+      discount:    unknown;
+      createdAt:   Date;
+      notes:       string | null;
+      customer: {
+        name:      string;
+        phone:     string | null;
+        email?:    string | null;
+        document?: string | null;
+        isGuest?:  boolean;
+      };
       deliveryAddress: {
         street: string; number: string; complement: string | null;
         neighborhood: string; city: string; state: string; zipCode: string;
       } | null;
       items: Array<{
-        name:      string;
-        price:     unknown;
-        quantity:  number;
-        total:     unknown;
-        menuItem:  { saiposIntegrationCode: string | null } | null;
+        name:       string;
+        price:      unknown;
+        quantity:   number;
+        total:      unknown;
+        notes?:     string | null;
+        addonsJson: unknown;
+        menuItem:   { saiposIntegrationCode: string | null } | null;
       }>;
       payment: { method: PaymentMethod; amount: unknown } | null;
     },
@@ -500,56 +602,84 @@ export class SaiposIntegrationService {
     const warnings: string[] = [];
     const mappings = { ...DEFAULT_PAYMENT_MAPPINGS, ...raw.paymentMappings };
 
-    // Map FulfillmentType → Saipos order_method
-    const methodMap: Record<string, "DELIVERY" | "TAKEOUT" | "TICKET"> = {
-      DELIVERY: "DELIVERY",
-      PICKUP:   "TAKEOUT",
-      DINE_IN:  "TICKET",
-    };
-    const orderMethod = methodMap[order.type] ?? "DELIVERY";
+    // Build customer
+    const isGuest = order.customer.isGuest ?? isGuestIdentifier(order.customer.phone ?? "");
+    const customerId: string | number = isGuest ? -1 : order.customerId;
+    const customerPhone = (!order.customer.phone || isGuestIdentifier(order.customer.phone))
+      ? ""
+      : order.customer.phone;
+    if (!customerPhone) {
+      warnings.push("Cliente sem telefone — phone enviado como string vazia.");
+    }
+    const customer: SaiposCustomer = { id: customerId, name: order.customer.name, phone: customerPhone };
+    if (order.customer.email)    customer.email           = order.customer.email;
+    if (order.customer.document) customer.document_number = order.customer.document;
 
-    // Map items
+    // Build order_method as v2.5 object (not a plain string)
+    let orderMethod: SaiposOrderMethod;
+    if (order.type === "DELIVERY") {
+      orderMethod = {
+        mode:         "DELIVERY",
+        delivery_by:  "RESTAURANT",
+        delivery_fee: toCents(order.deliveryFee),
+        scheduled:    false,
+      };
+    } else if (order.type === "PICKUP") {
+      orderMethod = {
+        mode:               "TAKEOUT",
+        scheduled:          false,
+        delivery_date_time: order.createdAt.toISOString(),
+      };
+    } else {
+      // DINE_IN or any unknown type
+      orderMethod = { mode: "TICKET" };
+    }
+
+    // Map items using v2.5 field names
     const items: SaiposOrderItem[] = order.items.map((item) => {
       const integrationCode = item.menuItem?.saiposIntegrationCode ?? "";
       if (!integrationCode) {
-        warnings.push(`Item "${item.name}" não possui código de integração Saipos (saiposIntegrationCode). Enviado sem código PDV.`);
+        warnings.push(`Item "${item.name}" sem saiposIntegrationCode — enviado sem código PDV.`);
       }
-      return {
-        name:             item.name,
+      if (item.addonsJson != null) {
+        warnings.push(`Item "${item.name}" tem addonsJson mas choice_items não está implementado — complementos não enviados.`);
+      }
+      const mapped: SaiposOrderItem = {
+        desc_item:        item.name,
         unit_price:       toCents(item.price),
         quantity:         item.quantity,
-        total_price:      toCents(item.total),
         integration_code: integrationCode,
-        choice_items:     [], // extras/options not yet stored on OrderItem snapshot
+        choice_items:     [],
       };
+      if (item.notes) mapped.notes = item.notes;
+      return mapped;
     });
 
     // Map payment
     const paymentMethod = order.payment?.method ?? "CASH";
-    const paymentCode   = mappings[paymentMethod] ?? 1;
-    const paymentTypes  = [{
-      name:   paymentMethod,
-      code:   paymentCode,
-      amount: toCents(order.total),
-    }];
+    const mappingValue  = mappings[paymentMethod] ?? DEFAULT_PAYMENT_MAPPINGS["CASH"]!;
+    if (typeof mappingValue === "number") {
+      warnings.push(`Método "${paymentMethod}" usa código numérico legado (${mappingValue}) — considere migrar para string v2.5.`);
+    }
+    const paymentTypes: SaiposPaymentType[] = [
+      resolvePayment(mappingValue, toCents(order.total)),
+    ];
 
     const payload: SaiposOrderPayload = {
-      order_id:     order.id,
-      display_id:   shortDisplayId(order.id),
-      cod_store:    raw.codStore,
-      created_at:   order.createdAt.toISOString(),
-      total_amount: toCents(order.total),
-      customer: {
-        name:     order.customer.name,
-        phone:    order.customer.phone ?? "",
-        document: "",
-      },
-      order_method: orderMethod,
+      order_id:       order.id,
+      display_id:     shortDisplayId(order.id),
+      cod_store:      raw.codStore,
+      created_at:     order.createdAt.toISOString(),
+      total_discount: toCents(order.discount),
+      customer,
+      order_method:   orderMethod,
       items,
-      payment_types: paymentTypes,
+      payment_types:  paymentTypes,
     };
 
-    if (orderMethod === "DELIVERY" && order.deliveryAddress) {
+    if (order.notes) payload.notes = order.notes;
+
+    if (order.type === "DELIVERY" && order.deliveryAddress) {
       const a = order.deliveryAddress;
       payload.delivery_address = {
         street:       a.street,
@@ -575,7 +705,7 @@ export class SaiposIntegrationService {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
-        customer:        { select: { name: true, phone: true } },
+        customer:        { select: { name: true, phone: true, email: true, document: true, isGuest: true } },
         deliveryAddress: true,
         payment:         { select: { method: true, amount: true } },
         items: {
