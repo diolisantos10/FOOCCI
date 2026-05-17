@@ -28,23 +28,24 @@ import type { SaiposRaw } from "@/services/integrations/SaiposIntegrationService
 const SAIPOS_AUTH_URL = "https://order-api.saipos.com/auth";
 
 interface AuthAttemptResult {
-  bodyKeys:              string[];          // request body keys
-  requestHeaders:        string[];          // keys sent in request
-  responseStatus:        number | null;
-  responseStatusText:    string | null;
-  responseContentType:   string | null;
-  responseBodyType:      string;            // "json" | "html" | "text" | "empty" | "unknown"
-  responseBodyEmpty:     boolean;
+  bodyKeys:                string[];        // request body keys sent
+  requestHeaders:          string[];        // header keys sent in request
+  responseStatus:          number | null;
+  responseStatusText:      string | null;
+  responseContentType:     string | null;
+  responseBodyLength:      number;          // raw byte length of response body
+  responseBodyType:        string;          // "json" | "html" | "text" | "empty" | "unknown"
+  responseBodyEmpty:       boolean;
   responseBodyPreviewSafe: string;          // ≤300 chars, safe for support logs
-  responseBodyKeys:      string[] | null;   // JSON response body keys, if parsed
-  responseCorrelationId: string | null;
-  responseServerHeader:  string | null;
-  responseDateHeader:    string | null;
-  responseCfRay:         string | null;     // Cloudflare Ray ID — present if blocked by CF WAF
-  responseErrorCode:     string | number | null;
-  responseErrorMessage:  string | null;
-  responsePreview:       string;            // kept for backward compat
-  success:               boolean;
+  responseBodyKeys:        string[] | null; // top-level JSON keys, if body parsed as JSON
+  responseCorrelationId:   string | null;   // x-request-id / correlation-id
+  responseServerHeader:    string | null;
+  responseDateHeader:      string | null;
+  responseCfRay:           string | null;   // Cloudflare Ray ID — non-null = CF edge handled it
+  responseCfMitigated:     string | null;   // cf-mitigated header — non-null = CF WAF active block
+  responseErrorCode:       string | number | null;
+  responseErrorMessage:    string | null;
+  success:                 boolean;
 }
 
 async function tryAuth(
@@ -69,23 +70,24 @@ async function tryAuth(
     responseText = await res.text().catch(() => "");
   } catch (err) {
     return {
-      bodyKeys:              requestBodyKeys,
+      bodyKeys:                requestBodyKeys,
       requestHeaders,
-      responseStatus:        null,
-      responseStatusText:    null,
-      responseContentType:   null,
-      responseBodyType:      "unknown",
-      responseBodyEmpty:     true,
+      responseStatus:          null,
+      responseStatusText:      null,
+      responseContentType:     null,
+      responseBodyLength:      0,
+      responseBodyType:        "unknown",
+      responseBodyEmpty:       true,
       responseBodyPreviewSafe: "",
-      responseBodyKeys:      null,
-      responseCorrelationId: null,
-      responseServerHeader:  null,
-      responseDateHeader:    null,
-      responseCfRay:         null,
-      responseErrorCode:     null,
-      responseErrorMessage:  err instanceof Error ? err.message : String(err),
-      responsePreview:       "",
-      success:               false,
+      responseBodyKeys:        null,
+      responseCorrelationId:   null,
+      responseServerHeader:    null,
+      responseDateHeader:      null,
+      responseCfRay:           null,
+      responseCfMitigated:     null,
+      responseErrorCode:       null,
+      responseErrorMessage:    err instanceof Error ? err.message : String(err),
+      success:                 false,
     };
   }
 
@@ -99,7 +101,9 @@ async function tryAuth(
   const responseServerHeader = res.headers.get("server");
   const responseDateHeader   = res.headers.get("date");
   const responseCfRay        = res.headers.get("cf-ray");
-  const responseBodyEmpty    = !responseText;
+  const responseCfMitigated  = res.headers.get("cf-mitigated");
+  const responseBodyLength   = Buffer.byteLength(responseText, "utf8");
+  const responseBodyEmpty    = responseBodyLength === 0;
   const ct = responseContentType ?? "";
 
   let responseBodyType: string;
@@ -137,11 +141,12 @@ async function tryAuth(
   }
 
   return {
-    bodyKeys:              requestBodyKeys,
+    bodyKeys:                requestBodyKeys,
     requestHeaders,
-    responseStatus:        res.status,
-    responseStatusText:    res.statusText ?? null,
+    responseStatus:          res.status,
+    responseStatusText:      res.statusText ?? null,
     responseContentType,
+    responseBodyLength,
     responseBodyType,
     responseBodyEmpty,
     responseBodyPreviewSafe,
@@ -150,10 +155,10 @@ async function tryAuth(
     responseServerHeader,
     responseDateHeader,
     responseCfRay,
-    responseErrorCode:    errorCode,
-    responseErrorMessage: errorMessage,
-    responsePreview:      responseText.slice(0, 300),
-    success:              res.status >= 200 && res.status < 300 && hasToken,
+    responseCfMitigated,
+    responseErrorCode:       errorCode,
+    responseErrorMessage:    errorMessage,
+    success:                 res.status >= 200 && res.status < 300 && hasToken,
   };
 }
 
@@ -216,6 +221,6 @@ export async function POST(req: NextRequest) {
     optionA: { label: '{ "idPartner", "secret" }', ...optionA },
     optionB: { label: '{ "partnerId", "secret" }', ...optionB },
     currentDefaultFormat: "optionA",
-    note: "Option A { idPartner, secret } is the current default. Each result includes: requestHeaders, responseStatus, responseStatusText, responseContentType, responseBodyType, responseBodyEmpty, responseBodyPreviewSafe, responseBodyKeys, responseCorrelationId, responseServerHeader, responseDateHeader, responseCfRay — safe to share with Saipos support.",
+    note: "Option A { idPartner, secret } is the current default. Each result includes: requestHeaders, responseStatus, responseStatusText, responseContentType, responseBodyLength, responseBodyType, responseBodyEmpty, responseBodyPreviewSafe, responseBodyKeys, responseCorrelationId, responseServerHeader, responseDateHeader, responseCfRay, responseCfMitigated — safe to share with Saipos support.",
   });
 }
