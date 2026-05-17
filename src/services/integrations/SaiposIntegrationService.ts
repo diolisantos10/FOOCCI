@@ -639,7 +639,7 @@ export class SaiposIntegrationService {
     const items: SaiposOrderItem[] = order.items.map((item) => {
       const integrationCode = item.menuItem?.saiposIntegrationCode ?? "";
       if (!integrationCode) {
-        warnings.push(`Item "${item.name}" sem saiposIntegrationCode — enviado sem código PDV.`);
+        warnings.push(`Produto sem código Saipos/PDV: ${item.name}`);
       }
       if (item.addonsJson != null) {
         warnings.push(`Item "${item.name}" tem addonsJson mas choice_items não está implementado — complementos não enviados.`);
@@ -671,6 +671,7 @@ export class SaiposIntegrationService {
       cod_store:      raw.codStore,
       created_at:     order.createdAt.toISOString(),
       total_discount: toCents(order.discount),
+      total_amount:   toCents(order.total),
       customer,
       order_method:   orderMethod,
       items,
