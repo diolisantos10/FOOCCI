@@ -6,6 +6,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
+import { SaiposManualButton } from "@/components/saipos/SaiposManualButton";
 
 export const metadata = { title: "Pedido" };
 
@@ -179,11 +180,33 @@ export default async function OrderDetailPage({
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-violet-400">
               Saipos PDV
             </h2>
+
+            {/* Manual fallback banner */}
+            {order.saiposStatus === "AUTH_BLOCKED_403" && !order.saiposSentAt && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-1">
+                <p className="font-semibold">Lançamento manual necessário ⚠️</p>
+                <p>
+                  A Saipos está retornando HTTP 403 — acesso negado (autenticação API bloqueada).
+                  Lance este pedido manualmente no painel Saipos e clique em &quot;Marcar como lançado manualmente&quot;.
+                </p>
+              </div>
+            )}
+
             <dl className="grid grid-cols-2 gap-3 text-sm">
               {order.saiposStatus && (
                 <div>
                   <dt className="text-gray-500">Status Saipos</dt>
-                  <dd className="font-medium">{order.saiposStatus}</dd>
+                  <dd className="font-medium">
+                    {order.saiposStatus === "AUTH_BLOCKED_403"
+                      ? "Aguardando liberação Saipos"
+                      : order.saiposStatus === "MANUALLY_REGISTERED"
+                      ? "Lançado manualmente"
+                      : order.saiposStatus === "PENDING_SAIPOS_VALIDATION"
+                      ? "Validação pendente"
+                      : order.saiposStatus === "SENT"
+                      ? "Enviado"
+                      : order.saiposStatus}
+                  </dd>
                 </div>
               )}
               {order.saiposSentAt && (
@@ -214,14 +237,22 @@ export default async function OrderDetailPage({
                   <dd className="font-mono font-medium text-red-600">{order.saiposLastErrorCode}</dd>
                 </div>
               )}
-              {order.saiposError && (
+              {order.saiposError && order.saiposStatus !== "MANUALLY_REGISTERED" && (
                 <div className="col-span-2">
                   <dt className="text-gray-500">Erro</dt>
                   <dd className="font-medium text-red-600 text-xs break-words">{order.saiposError}</dd>
                 </div>
               )}
             </dl>
-            <div className="mt-4">
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              {/* Manual fallback button — shown when blocked or failed without prior API success */}
+              {!order.saiposSentAt && (
+                <SaiposManualButton
+                  orderId={order.id}
+                  saiposStatus={order.saiposStatus ?? null}
+                />
+              )}
               <SaiposRetryButton
                 orderId={order.id}
                 saiposSentAt={order.saiposSentAt?.toISOString() ?? null}

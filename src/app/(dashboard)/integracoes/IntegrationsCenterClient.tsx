@@ -1246,6 +1246,19 @@ function DetailPanel({
                 </div>
               )}
 
+              {/* Saipos-specific: HTTP 403 explanation */}
+              {provider === "saipos" && !testResult.success &&
+                (testResult.debug as Record<string, unknown> | undefined)?.responseStatus === 403 && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800 space-y-1">
+                  <p className="font-semibold">HTTP 403 — Acesso negado pela Saipos</p>
+                  <p>
+                    A URL v2.5 está correta, mas a Saipos ainda não autorizou este parceiro/credencial.
+                    Até a liberação, os pedidos continuarão funcionando no Foocci e poderão ser lançados
+                    manualmente na Saipos pela tela de pedidos.
+                  </p>
+                </div>
+              )}
+
               {/* Safe auth diagnostics — Saipos only, always shown when available */}
               {provider === "saipos" && testResult.debug && (
                 <>

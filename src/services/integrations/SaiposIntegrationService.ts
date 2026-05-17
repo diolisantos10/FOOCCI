@@ -652,10 +652,15 @@ export class SaiposIntegrationService {
         data: { saiposLastAttemptAt: attemptAt },
       }).catch(() => {/* non-critical */});
     } catch (err) {
-      const msg            = err instanceof Error ? err.message : String(err);
-      const is902          = err instanceof SaiposAuthError && String(err.errorCode) === "902";
-      const saiposStatus   = is902 ? "PENDING_SAIPOS_VALIDATION" : "FAILED";
-      const errorCode      = err instanceof SaiposAuthError ? String(err.errorCode ?? "") : "";
+      const msg          = err instanceof Error ? err.message : String(err);
+      const is902        = err instanceof SaiposAuthError && String(err.errorCode) === "902";
+      const is403        = err instanceof SaiposAuthError && err.responseStatus === 403;
+      const saiposStatus = is902 ? "PENDING_SAIPOS_VALIDATION"
+                         : is403 ? "AUTH_BLOCKED_403"
+                         : "FAILED";
+      const errorCode    = err instanceof SaiposAuthError
+        ? (err.errorCode ? String(err.errorCode) : err.responseStatus ? String(err.responseStatus) : "")
+        : "";
       console.error(`[saipos] Failed to send order ${orderId}:`, msg);
       await prisma.order.update({
         where: { id: orderId },
@@ -697,8 +702,11 @@ export class SaiposIntegrationService {
     } catch (err) {
       const msg       = err instanceof Error ? err.message : String(err);
       const is902     = err instanceof SaiposAuthError && String(err.errorCode) === "902";
-      const status    = is902 ? "PENDING_SAIPOS_VALIDATION" : "FAILED";
-      const errorCode = err instanceof SaiposAuthError ? String(err.errorCode ?? "") : "";
+      const is403     = err instanceof SaiposAuthError && err.responseStatus === 403;
+      const status    = is902 ? "PENDING_SAIPOS_VALIDATION" : is403 ? "AUTH_BLOCKED_403" : "FAILED";
+      const errorCode = err instanceof SaiposAuthError
+        ? (err.errorCode ? String(err.errorCode) : err.responseStatus ? String(err.responseStatus) : "")
+        : "";
       await prisma.order.update({
         where: { id: orderId },
         data: {
