@@ -827,10 +827,10 @@ function SaiposForm({
       {/* ID do parceiro */}
       <div>
         <TextField
-          label="ID do parceiro (idPartner)"
+          label="ID da loja no canal de venda (idPartner)"
           name="idPartner"
           placeholder="Ex: 49f2fe58c6c5de7cf2b43c741d08b374"
-          hint="Fornecido pela equipe Saipos no cadastro do parceiro."
+          hint="Identificador desta loja no canal de venda Saipos. Cada loja conectada ao parceiro tem um idPartner diferente."
           value={idPartner}
           onChange={(v) => { setIdPartner(v); setErrors((p) => ({ ...p, idPartner: "" })); }}
         />
@@ -843,37 +843,47 @@ function SaiposForm({
           label="Código do estabelecimento (cod_store)"
           name="codStore"
           placeholder="Ex: 87877"
-          hint="Código numérico do seu restaurante na plataforma Saipos."
+          hint="Código numérico do estabelecimento na plataforma Saipos (ex: 87877). Diferente do idPartner — este é o código do restaurante, não do canal de venda."
           value={codStore}
           onChange={(v) => { setCodStore(v); setErrors((p) => ({ ...p, codStore: "" })); }}
         />
         {errors.codStore && <p className={errCls}>{errors.codStore}</p>}
       </div>
 
-      {/* Secret — input is ALWAYS empty on load; preview shown as a separate label */}
+      {/* Secret do parceiro — input is ALWAYS empty on load; preview shown as a separate label */}
       <div>
         <p className="mb-1 text-sm font-medium text-gray-700">
-          Secret / Senha de acesso à API Saipos
+          Secret do parceiro / canal de venda Saipos
         </p>
         {existingSecretPreview && (
           <p className="mb-1.5 text-xs text-gray-500">
-            Secret atual salva:{" "}
+            Secret atual salvo:{" "}
             <span className="font-mono font-semibold text-gray-700">{existingSecretPreview}</span>
           </p>
         )}
         <input
           type="password"
           name="saiposSecret"
-          placeholder="Cole a nova senha"
+          placeholder="Cole o secret do parceiro/canal"
           value={apiKey}
           autoComplete="new-password"
           onChange={(e) => { setApiKey(e.target.value); setErrors((p) => ({ ...p, apiKey: "" })); }}
           className={inputCls}
         />
         <p className="mt-1 text-xs text-gray-400">
-          Cole aqui a Senha para acesso à API da integração Saipos. Deixe em branco para manter a atual.
+          Cole aqui o secret do parceiro/canal de venda informado pela equipe Saipos após o credenciamento. Não use a senha da loja nem a API Key pública, a menos que a Saipos confirme que ela é o secret do canal. Deixe em branco para manter o atual.
         </p>
         {errors.apiKey && <p className={errCls}>{errors.apiKey}</p>}
+      </div>
+
+      {/* Informational box: what secret to use */}
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 space-y-1">
+        <p className="text-xs font-semibold text-blue-800">Qual secret usar?</p>
+        <p className="text-xs text-blue-700">
+          Na API de Pedidos v2.5, o <code className="font-mono">idPartner</code> identifica a loja no canal de venda.
+          Já o <code className="font-mono">secret</code> é a senha única do parceiro/canal, igual para todas as lojas integradas por esse parceiro.
+          A documentação informa que esse secret é enviado pela equipe Saipos após o credenciamento.
+        </p>
       </div>
 
       <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
@@ -959,29 +969,33 @@ function SaiposForm({
 
 function SaiposAuthDebugPanel({ debug }: { debug: Record<string, unknown> }) {
   const rows: [string, string][] = [
-    ["Auth URL",        String(debug.authUrl ?? "—")],
-    ["Body keys",       Array.isArray(debug.requestBodyKeys)
+    ["Auth URL",           String(debug.authUrl ?? "—")],
+    ["Body keys",          Array.isArray(debug.requestBodyKeys)
       ? (debug.requestBodyKeys as string[]).join(", ")
       : String(debug.requestBodyKeys ?? "—")],
-    ["idPartner",       `exists=${debug.idPartnerExists}  len=${debug.idPartnerLength}  preview=${debug.idPartnerPreview}`],
-    ["secret",          `exists=${debug.secretExists}  len=${debug.secretLength}  preview=${debug.secretPreview}`],
-    ["cod_store",       String(debug.codStore ?? "—")],
-    ["environment",     String(debug.environment ?? "—")],
-    ["HTTP status",     String(debug.responseStatus ?? "—")],
-    ["Resp body keys",  Array.isArray(debug.responseBodyKeys)
+    ["idPartner (loja)",   `exists=${debug.idPartnerExists}  len=${debug.idPartnerLength}  preview=${debug.idPartnerPreview}`],
+    ["secret (parceiro)",  `exists=${debug.secretExists}  len=${debug.secretLength}  preview=${debug.secretPreview}`],
+    ["cod_store",          String(debug.codStore ?? "—")],
+    ["environment",        String(debug.environment ?? "—")],
+    ["HTTP status",        String(debug.responseStatus ?? "—")],
+    ["Resp body keys",     Array.isArray(debug.responseBodyKeys)
       ? (debug.responseBodyKeys as string[]).join(", ")
       : "—"],
-    ["Error code",      String(debug.responseErrorCode ?? "—")],
-    ["Error message",   String(debug.responseErrorMessage ?? "—")],
+    ["Error code",         String(debug.responseErrorCode ?? "—")],
+    ["Error message",      String(debug.responseErrorMessage ?? "—")],
   ];
 
   return (
     <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-      <p className="mb-2 text-xs font-semibold text-gray-500">Diagnóstico Saipos Auth</p>
+      <p className="mb-1 text-xs font-semibold text-gray-500">Diagnóstico Saipos Auth</p>
+      <p className="mb-2 text-[10px] text-gray-400">
+        idPartner = ID da loja no canal de venda (store-specific).
+        secret = senha única do parceiro/canal (igual para todas as lojas do parceiro).
+      </p>
       <div className="space-y-1.5">
         {rows.map(([label, value]) => (
           <div key={label} className="flex min-w-0 gap-2">
-            <span className="w-28 shrink-0 text-[10px] font-medium text-gray-400 uppercase tracking-wide">{label}</span>
+            <span className="w-32 shrink-0 text-[10px] font-medium text-gray-400 uppercase tracking-wide">{label}</span>
             <span className="min-w-0 flex-1 break-all font-mono text-[11px] text-gray-800">{value}</span>
           </div>
         ))}
@@ -997,18 +1011,17 @@ function SaiposCopyDiagnosticsButton({ debug }: { debug: Record<string, unknown>
 
   const handleCopy = () => {
     const payload = {
-      authUrl:              debug.authUrl,
-      bodyKeys:             debug.requestBodyKeys,
-      idPartnerPreview:     debug.idPartnerPreview,
-      idPartnerLength:      debug.idPartnerLength,
-      secretPreview:        debug.secretPreview,
-      secretLength:         debug.secretLength,
-      codStore:             debug.codStore,
-      environment:          debug.environment,
-      httpStatus:           debug.responseStatus,
-      responseBodyKeys:     debug.responseBodyKeys,
-      errorCode:            debug.responseErrorCode,
-      errorMessage:         debug.responseErrorMessage,
+      note:                   "idPartner=store-specific; secret=partner/channel-level (same for all stores of this partner)",
+      authUrl:                debug.authUrl,
+      bodyKeys:               debug.requestBodyKeys,
+      idPartner_storeSide:    `len=${debug.idPartnerLength}  preview=${debug.idPartnerPreview}`,
+      secret_partnerChannel:  `len=${debug.secretLength}  preview=${debug.secretPreview}`,
+      codStore:               debug.codStore,
+      environment:            debug.environment,
+      httpStatus:             debug.responseStatus,
+      responseBodyKeys:       debug.responseBodyKeys,
+      errorCode:              debug.responseErrorCode,
+      errorMessage:           debug.responseErrorMessage,
     };
     navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).then(() => {
       setCopied(true);
@@ -1059,14 +1072,14 @@ function SaiposTempSecretTester() {
 
   return (
     <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-4 space-y-3">
-      <p className="text-xs font-semibold text-amber-800">Testar com secret temporário</p>
+      <p className="text-xs font-semibold text-amber-800">Testar com secret do parceiro temporário</p>
       <p className="text-xs text-amber-700">
-        Testa a autenticação com um secret diferente sem alterar o secret salvo.
+        Testa a autenticação com um secret diferente sem alterar o secret salvo. Use para validar o secret do parceiro/canal enviado pela Saipos antes de salvar.
       </p>
       <div className="flex gap-2">
         <input
           type="password"
-          placeholder="Cole o secret temporário"
+          placeholder="Cole o secret do parceiro/canal"
           value={tempSecret}
           autoComplete="off"
           onChange={(e) => setTempSecret(e.target.value)}
@@ -1253,7 +1266,8 @@ function DetailPanel({
                   <p className="font-semibold">HTTP 403 — acesso negado pela Saipos no endpoint v2.5</p>
                   <p>
                     A URL informada pelo suporte está em uso, mas a credencial/parceiro ainda não foi autorizado para autenticação.
-                    Aguarde a liberação do acesso pela Saipos.
+                    Verifique se o <code className="font-mono">secret</code> salvo é o secret do parceiro/canal de venda enviado pela Saipos após o credenciamento — não a senha da loja nem uma API Key pública.
+                    Se o secret estiver correto, aguarde a liberação do acesso pela Saipos.
                   </p>
                 </div>
               )}

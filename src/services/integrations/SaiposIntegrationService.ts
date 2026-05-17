@@ -18,6 +18,11 @@
  *   Auth (v2.5)  : https://order-api.saipos.com/auth  (always, env-independent)
  *   Homologation : https://homolog-order-api.saipos.com  (non-auth endpoints)
  *   Production   : https://order-api.saipos.com          (non-auth endpoints)
+ *
+ * Auth body: { idPartner, secret }
+ *   idPartner — store-specific ID within the sales channel
+ *   secret    — partner/channel-level secret, same across all stores of the partner;
+ *               provided by Saipos after credentialing (NOT the store API password)
  */
 
 import { prisma } from "@/lib/prisma";
@@ -41,8 +46,15 @@ export class SaiposAuthError extends Error {
 
 export interface SaiposRaw {
   environment:     string;   // "HOMOLOGATION" | "PRODUCTION"
-  apiKey:          string;   // partner key (secret)
+  // apiKey stores the Saipos partner/channel secret (v2.5 field name: "secret").
+  // This is NOT the store-level API password. It is the unique partner/channel secret
+  // provided by the Saipos team after partner credentialing — identical for all stores
+  // integrated by the same partner. Sent as { secret: apiKey } in /auth body.
+  apiKey:          string;
+  // idPartner is store-specific: each store connected to the sales channel gets a
+  // different idPartner. Sent as { idPartner } in /auth body.
   idPartner:       string;
+  // codStore is the numeric store code on the Saipos platform.
   codStore:        string;
   autoSendOrders:  boolean;
   syncCatalog:     boolean;
@@ -429,7 +441,7 @@ export class SaiposIntegrationService {
     if (!raw.environment) missing.push("environment");
     if (!raw.idPartner)   missing.push("idPartner");
     if (!raw.codStore)    missing.push("codStore");
-    if (!raw.apiKey)      missing.push("secret");
+    if (!raw.apiKey)      missing.push("secret (partner/channel secret)");
 
     if (missing.length > 0) {
       return {
