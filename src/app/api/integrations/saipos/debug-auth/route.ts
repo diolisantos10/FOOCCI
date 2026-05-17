@@ -28,59 +28,121 @@ import type { SaiposRaw } from "@/services/integrations/SaiposIntegrationService
 const SAIPOS_AUTH_URL = "https://order-api.saipos.com/auth";
 
 interface AuthAttemptResult {
-  bodyKeys:            string[];
-  responseStatus:      number | null;
-  responseErrorCode:   string | number | null;
-  responseErrorMessage: string | null;
-  responsePreview:     string;
-  success:             boolean;
+  bodyKeys:              string[];          // request body keys
+  responseStatus:        number | null;
+  responseStatusText:    string | null;
+  responseContentType:   string | null;
+  responseBodyType:      string;            // "json" | "html" | "text" | "empty" | "unknown"
+  responseBodyEmpty:     boolean;
+  responseBodyPreviewSafe: string;          // ≤300 chars, safe for support logs
+  responseBodyKeys:      string[] | null;   // JSON response body keys, if parsed
+  responseCorrelationId: string | null;
+  responseServerHeader:  string | null;
+  responseDateHeader:    string | null;
+  responseErrorCode:     string | number | null;
+  responseErrorMessage:  string | null;
+  responsePreview:       string;            // kept for backward compat
+  success:               boolean;
 }
 
 async function tryAuth(
   authUrl: string,
   body: Record<string, string>
 ): Promise<AuthAttemptResult> {
-  let responseStatus: number | null = null;
-  let responseText = "";
+  const requestBodyKeys = Object.keys(body);
 
+  let res: Response;
+  let responseText = "";
   try {
-    const res = await fetch(authUrl, {
+    res = await fetch(authUrl, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(body),
       signal:  AbortSignal.timeout(10_000),
     });
-    responseStatus = res.status;
-    responseText   = await res.text().catch(() => "");
+    responseText = await res.text().catch(() => "");
   } catch (err) {
     return {
-      bodyKeys:             Object.keys(body),
-      responseStatus:       null,
-      responseErrorCode:    null,
-      responseErrorMessage: err instanceof Error ? err.message : String(err),
-      responsePreview:      "",
-      success:              false,
+      bodyKeys:              requestBodyKeys,
+      responseStatus:        null,
+      responseStatusText:    null,
+      responseContentType:   null,
+      responseBodyType:      "unknown",
+      responseBodyEmpty:     true,
+      responseBodyPreviewSafe: "",
+      responseBodyKeys:      null,
+      responseCorrelationId: null,
+      responseServerHeader:  null,
+      responseDateHeader:    null,
+      responseErrorCode:     null,
+      responseErrorMessage:  err instanceof Error ? err.message : String(err),
+      responsePreview:       "",
+      success:               false,
     };
   }
 
-  let errorCode:    string | number | null = null;
-  let errorMessage: string | null          = null;
+  const responseContentType = res.headers.get("content-type");
+  const responseCorrelationId =
+    res.headers.get("x-request-id") ??
+    res.headers.get("request-id") ??
+    res.headers.get("x-correlation-id") ??
+    res.headers.get("correlation-id") ??
+    null;
+  const responseServerHeader = res.headers.get("server");
+  const responseDateHeader   = res.headers.get("date");
+  const responseBodyEmpty    = !responseText;
+  const ct = responseContentType ?? "";
+
+  let responseBodyType: string;
+  if (!responseText) {
+    responseBodyType = "empty";
+  } else if (ct.includes("application/json") || responseText.trimStart().startsWith("{") || responseText.trimStart().startsWith("[")) {
+    responseBodyType = "json";
+  } else if (ct.includes("text/html") || responseText.trimStart().startsWith("<")) {
+    responseBodyType = "html";
+  } else if (ct.includes("text/plain")) {
+    responseBodyType = "text";
+  } else {
+    responseBodyType = "unknown";
+  }
+
+  const responseBodyPreviewSafe = responseText.slice(0, 300);
+
+  let errorCode:       string | number | null = null;
+  let errorMessage:    string | null          = null;
+  let responseBodyKeys: string[] | null       = null;
   let hasToken = false;
 
   try {
     const parsed = JSON.parse(responseText) as Record<string, unknown>;
-    errorCode    = (parsed.code ?? parsed.error_code ?? parsed.errorCode) as string | number | null ?? null;
-    errorMessage = (parsed.message ?? parsed.error ?? parsed.mensagem) as string | null ?? null;
-    hasToken     = Boolean((parsed as Record<string, unknown>).token);
+    errorCode       = (parsed.code ?? parsed.error_code ?? parsed.errorCode) as string | number | null ?? null;
+    errorMessage    = (parsed.message ?? parsed.error ?? parsed.mensagem) as string | null ?? null;
+    hasToken        = Boolean(parsed.token);
+    responseBodyKeys = Object.keys(parsed);
   } catch { /* not JSON */ }
 
+  if (res.status === 403 && !errorMessage) {
+    errorMessage = responseBodyEmpty
+      ? "HTTP 403 returned by Saipos with empty response body."
+      : "Falha na autenticação Saipos (HTTP 403): acesso negado pela Saipos no endpoint v2.5. Verifique se o parceiro/credencial está liberado para autenticação em https://order-api.saipos.com/auth.";
+  }
+
   return {
-    bodyKeys:             Object.keys(body),
-    responseStatus,
+    bodyKeys:              requestBodyKeys,
+    responseStatus:        res.status,
+    responseStatusText:    res.statusText ?? null,
+    responseContentType,
+    responseBodyType,
+    responseBodyEmpty,
+    responseBodyPreviewSafe,
+    responseBodyKeys,
+    responseCorrelationId,
+    responseServerHeader,
+    responseDateHeader,
     responseErrorCode:    errorCode,
     responseErrorMessage: errorMessage,
     responsePreview:      responseText.slice(0, 300),
-    success:              responseStatus !== null && responseStatus >= 200 && responseStatus < 300 && hasToken,
+    success:              res.status >= 200 && res.status < 300 && hasToken,
   };
 }
 
@@ -143,6 +205,6 @@ export async function POST(req: NextRequest) {
     optionA: { label: '{ "idPartner", "secret" }', ...optionA },
     optionB: { label: '{ "partnerId", "secret" }', ...optionB },
     currentDefaultFormat: "optionA",
-    note: "Option A is the format currently used by SaiposIntegrationService.getAuthToken(). If Option B succeeds and A fails, update the auth body accordingly.",
+    note: "Option A { idPartner, secret } is the current default. Each result includes: responseStatus, responseStatusText, responseContentType, responseBodyType, responseBodyEmpty, responseBodyPreviewSafe, responseBodyKeys, responseCorrelationId, responseServerHeader, responseDateHeader — safe to share with Saipos support.",
   });
 }

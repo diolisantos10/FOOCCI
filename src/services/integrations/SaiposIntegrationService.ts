@@ -67,10 +67,18 @@ export interface SaiposAuthDebug {
   secretPreview:        string;
   codStore:             string;
   environment:          string;
-  responseStatus:       number | null;
-  responseBodyKeys:     string[] | null; // keys present in the JSON response body
-  responseErrorCode:    string | number | null;
-  responseErrorMessage: string | null;
+  responseStatus:          number | null;
+  responseStatusText:      string | null;
+  responseContentType:     string | null;
+  responseBodyType:        "json" | "html" | "text" | "empty" | "unknown" | null;
+  responseBodyEmpty:       boolean | null;
+  responseBodyPreviewSafe: string | null;   // ≤300 chars, only for non-JSON bodies
+  responseCorrelationId:   string | null;   // x-request-id / correlation-id header
+  responseServerHeader:    string | null;
+  responseDateHeader:      string | null;
+  responseBodyKeys:        string[] | null; // keys present in the JSON response body
+  responseErrorCode:       string | number | null;
+  responseErrorMessage:    string | null;
 }
 
 interface SaiposOrderItem {
@@ -231,10 +239,18 @@ export class SaiposIntegrationService {
         : "(too short or empty)",
       codStore:             raw.codStore,
       environment:          raw.environment,
-      responseStatus:       null,
-      responseBodyKeys:     null,
-      responseErrorCode:    null,
-      responseErrorMessage: null,
+      responseStatus:          null,
+      responseStatusText:      null,
+      responseContentType:     null,
+      responseBodyType:        null,
+      responseBodyEmpty:       null,
+      responseBodyPreviewSafe: null,
+      responseCorrelationId:   null,
+      responseServerHeader:    null,
+      responseDateHeader:      null,
+      responseBodyKeys:        null,
+      responseErrorCode:       null,
+      responseErrorMessage:    null,
     };
 
     console.log(
@@ -253,7 +269,36 @@ export class SaiposIntegrationService {
         signal:  AbortSignal.timeout(10_000),
       });
       const text = await res.text().catch(() => "");
-      debug.responseStatus = res.status;
+      debug.responseStatus     = res.status;
+      debug.responseStatusText = res.statusText ?? null;
+      debug.responseContentType = res.headers.get("content-type");
+      debug.responseCorrelationId =
+        res.headers.get("x-request-id") ??
+        res.headers.get("request-id") ??
+        res.headers.get("x-correlation-id") ??
+        res.headers.get("correlation-id") ??
+        null;
+      debug.responseServerHeader = res.headers.get("server");
+      debug.responseDateHeader   = res.headers.get("date");
+      debug.responseBodyEmpty    = !text;
+
+      const ct = debug.responseContentType ?? "";
+      if (!text) {
+        debug.responseBodyType = "empty";
+      } else if (ct.includes("application/json") || text.trimStart().startsWith("{") || text.trimStart().startsWith("[")) {
+        debug.responseBodyType = "json";
+      } else if (ct.includes("text/html") || text.trimStart().startsWith("<")) {
+        debug.responseBodyType = "html";
+      } else if (ct.includes("text/plain")) {
+        debug.responseBodyType = "text";
+      } else {
+        debug.responseBodyType = "unknown";
+      }
+
+      // Safe preview for non-JSON bodies only (JSON keys captured separately below)
+      if (debug.responseBodyType !== "json") {
+        debug.responseBodyPreviewSafe = text.slice(0, 300) || null;
+      }
 
       try {
         const parsed = JSON.parse(text) as Record<string, unknown>;
@@ -263,9 +308,15 @@ export class SaiposIntegrationService {
         debug.responseErrorMessage = message;
       } catch { /* response body is not JSON */ }
 
-      // Apply fallback message only on error responses where no message was found
+      // Specific 403 messages; generic fallback for other errors with no body message
       if (!res.ok && !debug.responseErrorMessage) {
-        debug.responseErrorMessage = "Mensagem de erro não retornada pela Saipos.";
+        if (res.status === 403) {
+          debug.responseErrorMessage = debug.responseBodyEmpty
+            ? "HTTP 403 returned by Saipos with empty response body."
+            : "Falha na autenticação Saipos (HTTP 403): acesso negado pela Saipos no endpoint v2.5. Verifique se o parceiro/credencial está liberado para autenticação em https://order-api.saipos.com/auth.";
+        } else {
+          debug.responseErrorMessage = "Mensagem de erro não retornada pela Saipos.";
+        }
       }
 
       console.log(
@@ -310,7 +361,10 @@ export class SaiposIntegrationService {
       const debug: SaiposAuthDebug = {
         authUrl: "", requestBodyKeys: [], idPartnerExists: false, idPartnerLength: 0,
         idPartnerPreview: "", secretExists: false, secretLength: 0, secretPreview: "",
-        codStore: "", environment: "", responseStatus: null, responseBodyKeys: null,
+        codStore: "", environment: "", responseStatus: null, responseStatusText: null,
+        responseContentType: null, responseBodyType: null, responseBodyEmpty: null,
+        responseBodyPreviewSafe: null, responseCorrelationId: null,
+        responseServerHeader: null, responseDateHeader: null, responseBodyKeys: null,
         responseErrorCode: null, responseErrorMessage: "Integração não configurada.",
       };
       return { success: false, message: "Integração Saipos não configurada.", debug };
@@ -323,7 +377,10 @@ export class SaiposIntegrationService {
       const debug: SaiposAuthDebug = {
         authUrl: "", requestBodyKeys: [], idPartnerExists: false, idPartnerLength: 0,
         idPartnerPreview: "", secretExists: false, secretLength: 0, secretPreview: "",
-        codStore: "", environment: "", responseStatus: null, responseBodyKeys: null,
+        codStore: "", environment: "", responseStatus: null, responseStatusText: null,
+        responseContentType: null, responseBodyType: null, responseBodyEmpty: null,
+        responseBodyPreviewSafe: null, responseCorrelationId: null,
+        responseServerHeader: null, responseDateHeader: null, responseBodyKeys: null,
         responseErrorCode: null, responseErrorMessage: "Configuração corrompida.",
       };
       return { success: false, message: "Falha ao ler configuração salva.", debug };
