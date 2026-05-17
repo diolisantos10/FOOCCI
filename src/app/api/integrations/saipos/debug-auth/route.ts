@@ -30,6 +30,8 @@ const SAIPOS_AUTH_URL = "https://order-api.saipos.com/auth";
 interface AuthAttemptResult {
   bodyKeys:                string[];        // request body keys sent
   requestHeaders:          string[];        // header keys sent in request
+  requestContentTypeHeader: string;         // exact Content-Type value sent
+  requestAcceptHeader:     string;          // exact Accept value sent
   responseStatus:          number | null;
   responseStatusText:      string | null;
   responseContentType:     string | null;
@@ -54,7 +56,9 @@ async function tryAuth(
 ): Promise<AuthAttemptResult> {
   const requestBodyKeys = Object.keys(body);
 
-  const requestHeaders = ["Content-Type", "Accept"];
+  const requestHeaders          = ["Content-Type", "Accept"];
+  const requestContentTypeHeader = "application/json";
+  const requestAcceptHeader      = "application/json";
   let res: Response;
   let responseText = "";
   try {
@@ -70,24 +74,26 @@ async function tryAuth(
     responseText = await res.text().catch(() => "");
   } catch (err) {
     return {
-      bodyKeys:                requestBodyKeys,
+      bodyKeys:                 requestBodyKeys,
       requestHeaders,
-      responseStatus:          null,
-      responseStatusText:      null,
-      responseContentType:     null,
-      responseBodyLength:      0,
-      responseBodyType:        "unknown",
-      responseBodyEmpty:       true,
-      responseBodyPreviewSafe: "",
-      responseBodyKeys:        null,
-      responseCorrelationId:   null,
-      responseServerHeader:    null,
-      responseDateHeader:      null,
-      responseCfRay:           null,
-      responseCfMitigated:     null,
-      responseErrorCode:       null,
-      responseErrorMessage:    err instanceof Error ? err.message : String(err),
-      success:                 false,
+      requestContentTypeHeader,
+      requestAcceptHeader,
+      responseStatus:           null,
+      responseStatusText:       null,
+      responseContentType:      null,
+      responseBodyLength:       0,
+      responseBodyType:         "unknown",
+      responseBodyEmpty:        true,
+      responseBodyPreviewSafe:  "",
+      responseBodyKeys:         null,
+      responseCorrelationId:    null,
+      responseServerHeader:     null,
+      responseDateHeader:       null,
+      responseCfRay:            null,
+      responseCfMitigated:      null,
+      responseErrorCode:        null,
+      responseErrorMessage:     err instanceof Error ? err.message : String(err),
+      success:                  false,
     };
   }
 
@@ -141,9 +147,11 @@ async function tryAuth(
   }
 
   return {
-    bodyKeys:                requestBodyKeys,
+    bodyKeys:                 requestBodyKeys,
     requestHeaders,
-    responseStatus:          res.status,
+    requestContentTypeHeader,
+    requestAcceptHeader,
+    responseStatus:           res.status,
     responseStatusText:      res.statusText ?? null,
     responseContentType,
     responseBodyLength,
