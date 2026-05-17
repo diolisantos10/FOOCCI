@@ -824,6 +824,12 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   const [resetConfirming, setResetConfirming] = useState(false);
   const [qrPanelKey,      setQrPanelKey]      = useState(0);
   const [autoStartQR,     setAutoStartQR]     = useState(false);
+  // QR panel visibility (separate from connection state)
+  const [showQrPanel, setShowQrPanel] = useState(false);
+  // Text confirmation for hard reset
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  // Technical tools accordion
+  const [isTechToolsOpen, setIsTechToolsOpen] = useState(false);
 
   // Diagnostic state
   const [diagnosing,  setDiagnosing]  = useState(false);
@@ -1022,6 +1028,37 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
   );
   const showSelfTestButton = syncResult?.success || liveConfigResult?.isHealthy === true;
 
+  // Human-readable connection info from diagnostic results
+  const phone = (() => {
+    const jid = syncResult?.instanceInfo?.ownerJidMasked ?? eventDiagResult?.ownerJidMasked;
+    if (!jid) return null;
+    return `+${jid.split("@")[0]}`;
+  })();
+  const profileName = syncResult?.instanceInfo?.profileName ?? null;
+  const now = Date.now();
+  const lastRealIso = webhookLogSummary?.lastRealEventAt ?? webhookLogSummary?.lastEventAt ?? null;
+  const lastRealAgo = lastRealIso
+    ? (() => {
+        const ms = now - new Date(lastRealIso).getTime();
+        const m = Math.floor(ms / 60000);
+        if (m < 60) return `${m} min atrás`;
+        const h = Math.floor(m / 60);
+        return h < 24 ? `${h}h atrás` : `${Math.floor(h / 24)}d atrás`;
+      })()
+    : null;
+  const webhookStatusLabel = (() => {
+    if (!lastRealIso) return { label: "Sem atividade recente", color: "text-amber-600", dot: "bg-amber-400" };
+    const ms = now - new Date(lastRealIso).getTime();
+    if (ms < 5 * 60_000) return { label: "Recebendo mensagens", color: "text-green-600", dot: "bg-green-500" };
+    if (ms < 60 * 60_000) return { label: `Último evento há ${Math.floor(ms / 60_000)} min`, color: "text-green-600", dot: "bg-green-400" };
+    return { label: "Sem eventos há mais de 1h", color: "text-amber-600", dot: "bg-amber-400 animate-pulse" };
+  })();
+
+  // Auto-hide QR panel when WhatsApp successfully reconnects
+  useEffect(() => {
+    if (simpleStatus === "connected") setShowQrPanel(false);
+  }, [simpleStatus]);
+
   // Per-field errors — only shown after first Save attempt
   const instanceNameErr = submitAttempted ? validateInstanceName(instanceName) : null;
   const baseUrlErr      = submitAttempted ? validateBaseUrl(baseUrl)           : null;
@@ -1124,11 +1161,10 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
 
   function handleHardReset() {
     setFeedback(null);
-    setResetConfirming(false);
-    // Remount the QR panel with autoStart — SimpleQRPanel.handleCreateQR runs the full
-    // hard-reset (logout → delete → create → QR capture) and shows the result inline.
+    setResetConfirmText("");
     setAutoStartQR(true);
     setQrPanelKey((k) => k + 1);
+    setShowQrPanel(true);
   }
 
   const webhookUrl = typeof window !== "undefined"
@@ -1187,39 +1223,129 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
         }`}>
           <span>{feedback.type === "ok" ? "✓" : "⚠"}</span>
           {feedback.msg}
+          <button type="button" onClick={() => setFeedback(null)} className="ml-auto text-current opacity-50 hover:opacity-100">✕</button>
         </div>
       )}
 
-      {/* ── Simple connection card ─────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
-        <div>
-          <p className="text-sm font-semibold text-gray-800">Conectar WhatsApp do restaurante</p>
-          <p className="mt-0.5 text-xs text-gray-500">
-            Escaneie o QR Code abaixo com o celular do restaurante para começar a atender clientes.
-          </p>
+      {/* ── Connected state ────────────────────────────────────────────────── */}
+      {simpleStatus === "connected" && !showQrPanel ? (
+        <div className="rounded-2xl border border-green-100 bg-white p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-800">WhatsApp conectado</p>
+            <span className="flex items-center gap-1.5 text-xs font-medium text-green-600">
+              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              Ativo
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+            {phone && (
+              <>
+                <span className="text-gray-500">Número</span>
+                <span className="font-mono font-semibold text-gray-800">{phone}</span>
+              </>
+            )}
+            {profileName && (
+              <>
+                <span className="text-gray-500">Perfil</span>
+                <span className="text-gray-700">{profileName}</span>
+              </>
+            )}
+            <span className="text-gray-500">Recebimento</span>
+            <span className={`flex items-center gap-1.5 font-medium ${webhookStatusLabel.color}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${webhookStatusLabel.dot}`} />
+              {webhookStatusLabel.label}
+            </span>
+            {lastRealAgo && (
+              <>
+                <span className="text-gray-500">Última atividade</span>
+                <span className="text-gray-700">{lastRealAgo}</span>
+              </>
+            )}
+            <span className="text-gray-500">Mensagens hoje</span>
+            <span className="font-semibold text-gray-800">{webhookLogSummary?.inboundToday ?? 0} recebidas</span>
+          </div>
+
+          {webhookLogSummary?.lastError && (webhookLogSummary.acceptedRealEvents ?? 0) === 0 && (
+            <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+              Atenção: {webhookLogSummary.lastError === "signature_mismatch"
+                ? "Webhook com problema de autenticação. Acesse Configurações avançadas → Diagnósticos."
+                : webhookLogSummary.lastError}
+            </div>
+          )}
+
+          <div className="space-y-2 pt-1">
+            <Link
+              href="/atendimento"
+              className="flex items-center justify-between rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700 transition"
+            >
+              <span>Abrir Central de Mensagens</span>
+              <span>→</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setShowQrPanel(true)}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+            >
+              Reconectar WhatsApp
+            </button>
+          </div>
         </div>
+      ) : (
+        /* ── Disconnected / QR state ──────────────────────────────────────── */
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">
+              {showQrPanel ? "Reconectar WhatsApp" : "Conectar WhatsApp do restaurante"}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              {showQrPanel
+                ? "Escaneie o QR Code para reconectar."
+                : "Escaneie o QR Code com o celular do restaurante para começar a atender clientes."}
+            </p>
+          </div>
 
-        <SimpleQRPanel
-          key={qrPanelKey}
-          isConfigured={isConfigured}
-          isOwner={isOwner}
-          isActive={view?.isActive ?? false}
-          onDisconnect={handleDisconnect}
-          onStartConnect={() => setFeedback(null)}
-          onConnected={() => void loadView()}
-          autoStart={autoStartQR}
-        />
-      </div>
+          {!showQrPanel && isConfigured && (
+            <div className="space-y-3">
+              <ol className="space-y-1.5 text-xs text-gray-600 list-decimal list-inside">
+                <li>Abra o WhatsApp no celular</li>
+                <li>Toque em <span className="font-medium">Aparelhos conectados</span></li>
+                <li>Toque em <span className="font-medium">Conectar aparelho</span></li>
+                <li>Escaneie o QR Code</li>
+              </ol>
+              <button
+                type="button"
+                onClick={() => setShowQrPanel(true)}
+                className="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700 active:scale-[0.99] transition"
+              >
+                Gerar QR Code
+              </button>
+            </div>
+          )}
 
-      {/* Central de Mensagens link — only when connected */}
-      {simpleStatus === "connected" && (
-        <Link
-          href="/atendimento"
-          className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700 hover:bg-green-100 transition-colors"
-        >
-          <span>Central de Mensagens</span>
-          <span>→</span>
-        </Link>
+          {(showQrPanel || !isConfigured || simpleStatus !== "connected") && (
+            <SimpleQRPanel
+              key={qrPanelKey}
+              isConfigured={isConfigured}
+              isOwner={isOwner}
+              isActive={view?.isActive ?? false}
+              onDisconnect={handleDisconnect}
+              onStartConnect={() => setFeedback(null)}
+              onConnected={() => { void loadView(); setShowQrPanel(false); }}
+              autoStart={showQrPanel || autoStartQR}
+            />
+          )}
+
+          {showQrPanel && simpleStatus !== "connected" && (
+            <button
+              type="button"
+              onClick={() => setShowQrPanel(false)}
+              className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 transition"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
       )}
 
       {/* Webhook health card — owner only */}
@@ -1252,379 +1378,69 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
             className="flex w-full items-center justify-between px-5 py-3.5 text-left hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center gap-2.5">
-              <span className="text-sm font-semibold text-gray-700">
-                Configurações avançadas
-              </span>
+              <span className="text-sm font-semibold text-gray-700">Configurações avançadas</span>
               <span className="rounded-full border border-gray-200 px-2 py-px text-[10px] font-medium text-gray-400">
-                suporte técnico
+                suporte Foocci
               </span>
             </div>
-            <span className={`text-gray-400 transition-transform ${isAdvancedOpen ? "rotate-180" : ""}`}>
-              ▾
-            </span>
+            <span className={`text-gray-400 transition-transform ${isAdvancedOpen ? "rotate-180" : ""}`}>▾</span>
           </button>
 
           {isAdvancedOpen && (
             <div className="border-t border-gray-100 px-5 pb-5 pt-4 space-y-5">
 
-              {/* Warning */}
-              <div className="flex gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-                <span className="mt-0.5 text-amber-500">⚠</span>
-                <p className="text-xs text-amber-800">
-                  <span className="font-semibold">Uso interno Foocci / suporte técnico.</span>{" "}
-                  Não altere estes campos sem orientação do suporte. Credenciais incorretas desconectam o WhatsApp.
-                </p>
-              </div>
-
-              {/* Last tested info */}
-              {(lastTested || view?.lastError) && (
-                <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-xs space-y-1">
-                  {lastTested && (
-                    <p className="text-gray-500">
-                      <span className="font-medium text-gray-700">Último teste:</span> {lastTested}
-                    </p>
-                  )}
-                  {view?.lastError && (
-                    <p className={view.isActive ? "text-green-700" : "text-red-600"}>
-                      {view.isActive ? "✓" : "⚠"} {view.lastError}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <form onSubmit={(e) => void handleSave(e)} className="space-y-4">
-
-                {/* Instance name */}
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                    Nome da instância
-                  </label>
-                  <input
-                    type="text"
-                    value={instanceName}
-                    onChange={(e) => setInstanceName(e.target.value)}
-                    placeholder="sushicazza"
-                    className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${
-                      instanceNameErr
-                        ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                        : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"
-                    }`}
-                  />
-                  <FieldError msg={instanceNameErr} />
-                  <p className="mt-1 text-xs text-gray-400">
-                    Nome da instância criada na Evolution API. Ex: sushicazza
-                  </p>
-                </div>
-
-                {/* Base URL */}
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                    URL do servidor Evolution
-                  </label>
-                  <input
-                    type="text"
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder="https://evo.seuservidor.com"
-                    className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${
-                      baseUrlErr
-                        ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                        : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"
-                    }`}
-                  />
-                  {/* Persistent warning when the already-saved value is invalid */}
-                  {loadedBaseUrlErr && !baseUrlErr && (
-                    <div className="mt-1 flex items-start gap-1.5 rounded-lg border border-red-100 bg-red-50 px-2.5 py-2">
-                      <span className="shrink-0 text-xs text-red-500">⚠</span>
-                      <p className="text-xs text-red-700">
-                        A URL do servidor Evolution salva está inválida.
-                        Informe a URL pública da Evolution API.
-                      </p>
-                    </div>
-                  )}
-                  <FieldError msg={baseUrlErr} />
-                  <p className="mt-1 text-xs text-gray-400">
-                    URL pública do serviço Evolution API hospedado separadamente.
-                    Não é e-mail. {URL_EXAMPLE}
-                  </p>
-                </div>
-
-                {/* API Key */}
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                    API Key
-                  </label>
-                  {f.apiKeyPreview && (
-                    <p className="mb-1 text-xs text-gray-500">
-                      Atual:{" "}
-                      <span className="font-mono font-semibold text-gray-700">{f.apiKeyPreview}</span>
-                    </p>
-                  )}
-                  <input
-                    type="password"
-                    name="apiKey"
-                    autoComplete="off"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder={
-                      f.apiKeyPreview
-                        ? "Nova chave — deixe em branco para manter"
-                        : "Cole sua API Key"
-                    }
-                    className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${
-                      apiKeyErr
-                        ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                        : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"
-                    }`}
-                  />
-                  <FieldError msg={apiKeyErr} />
-                  <p className="mt-1 text-xs text-gray-400">
-                    AUTHENTICATION_API_KEY configurada no serviço Evolution API.
-                    Nunca compartilhe com o restaurante.
-                  </p>
-                </div>
-
-                {/* Webhook Secret */}
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                    Webhook Secret
-                  </label>
-                  {f.webhookSecretPreview && (
-                    <p className="mb-1 text-xs text-gray-500">
-                      Atual:{" "}
-                      <span className="font-mono font-semibold text-gray-700">{f.webhookSecretPreview}</span>
-                    </p>
-                  )}
-                  <input
-                    type="password"
-                    name="webhookSecret"
-                    autoComplete="off"
-                    value={webhookSecret}
-                    onChange={(e) => setWebhookSecret(e.target.value)}
-                    placeholder={
-                      f.webhookSecretPreview
-                        ? "Novo secret — deixe em branco para manter"
-                        : "Cole o Webhook Secret"
-                    }
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">
-                    Usado para validar a autenticidade das mensagens recebidas.
-                  </p>
-                </div>
-
-                {/* Webhook URL */}
-                <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 space-y-1">
-                  <p className="text-xs font-medium text-gray-700">
-                    URL do Webhook — configure na Evolution API:
-                  </p>
-                  <p className="break-all font-mono text-xs text-gray-500">{webhookUrl}</p>
-                </div>
-
-                <div className="flex items-center gap-3 pt-1">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition"
-                  >
-                    {saving ? "Salvando…" : "Salvar credenciais"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleTest()}
-                    disabled={testing || view?.status === "unconfigured" || !view}
-                    className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
-                  >
-                    {testing ? "Testando…" : "Testar conexão"}
-                  </button>
-                </div>
-              </form>
-
-              {/* Hard reset — break-glass for stuck/unknown WhatsApp sessions */}
-              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-4 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold text-red-700">Resetar instância WhatsApp</p>
-                  <p className="mt-0.5 text-xs text-red-600">
-                    Remove a sessão WhatsApp atual da Evolution, recria a instância do zero e gera um novo QR Code.
-                    Use somente se o QR não aparecer após reconectar.
-                  </p>
-                </div>
-
-                {!resetConfirming && (
-                  <button
-                    type="button"
-                    onClick={() => setResetConfirming(true)}
-                    disabled={!isConfigured}
-                    className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40 transition"
-                  >
-                    Resetar instância WhatsApp
-                  </button>
-                )}
-
-                {resetConfirming && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-red-800">
-                      Isso vai desconectar a instância atual e gerar uma nova sessão WhatsApp. Continuar?
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleHardReset()}
-                        className="rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 transition"
-                      >
-                        Sim, resetar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setResetConfirming(false)}
-                        className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Webhook diagnostics ────────────────────────────────── */}
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-4 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold text-blue-700">Diagnósticos do webhook</p>
-                  <p className="mt-0.5 text-xs text-blue-600">
-                    Ferramentas para diagnosticar e corrigir o pipeline de mensagens WhatsApp.
-                  </p>
-                </div>
+              {/* ── Grupo A — Diagnósticos ────────────────────────────────── */}
+              <div className="space-y-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Diagnósticos</p>
 
                 {/* Signature mismatch alert */}
                 {hasSignatureMismatch && (
-                  <div className="rounded-lg border border-red-200 bg-white px-3 py-3 text-xs space-y-2">
-                    <p className="font-semibold text-red-800">✗ Webhook recebido mas secret não confere</p>
-                    <p className="text-red-700">
-                      A Evolution está enviando eventos mas o secret não bate com o banco.
-                      Clique em <strong>Sincronizar webhook</strong> para reenviar o secret correto com token na URL.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => void handleSyncWebhook()}
-                      disabled={syncingWebhook}
-                      className="w-full rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition"
-                    >
-                      {syncingWebhook ? "Sincronizando…" : "Corrigir secret do webhook"}
-                    </button>
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-xs space-y-2">
+                    <p className="font-semibold text-red-800">Webhook com problema de autenticação</p>
+                    <p className="text-red-700">O secret enviado pela Evolution não bate com o banco. Use &ldquo;Sincronizar webhook&rdquo; abaixo para corrigir.</p>
                   </div>
                 )}
 
-                {/* Sync result */}
-                {syncResult && (
-                  <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-1.5 ${
-                    syncResult.success ? "border-green-200 bg-white text-green-800" : "border-red-200 bg-white text-red-700"
-                  }`}>
-                    <p className="font-semibold">
-                      {syncResult.success
-                        ? syncResult.secretInfo?.tokenInUrl
-                          ? "✓ Webhook configurado com token seguro"
-                          : "✓ Webhook sincronizado"
-                        : "✗ Falha na sincronização"}
-                    </p>
-                    <p className="text-[10px]">{syncResult.recommendation}</p>
-                    {syncResult.error && (
-                      <p className="font-mono text-[10px] break-all">{syncResult.error}</p>
-                    )}
-                    {syncResult.webhookConfig && (
-                      <div className="font-mono text-[10px] space-y-0.5 bg-gray-50 rounded px-2 py-1">
-                        <p>url: <span className="break-all">{syncResult.webhookConfig.url ?? "?"}</span>
-                          {" "}{syncResult.webhookConfig.urlMatches
-                            ? <span className="text-green-600">✓</span>
-                            : <span className="text-red-500">✗ diverge</span>}
-                        </p>
-                        <p>webhookByEvents: <span className={syncResult.webhookConfig.webhookByEvents === false ? "text-green-700 font-bold" : "text-red-600 font-bold"}>
-                          {String(syncResult.webhookConfig.webhookByEvents ?? "?")}
-                        </span></p>
-                        <p>enabled: {String(syncResult.webhookConfig.enabled ?? "?")}</p>
-                        <p>auth: {syncResult.secretInfo?.tokenInUrl ? <span className="text-green-700">token na URL ✓</span> : "—"}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Verify + Sync + Self-test buttons */}
-                {simpleStatus === "connected" && (
+                {/* Verify webhook */}
+                {isConfigured && (
                   <button
                     type="button"
                     onClick={() => void handleVerifyConfig()}
                     disabled={verifyingConfig}
-                    className="w-full rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition"
                   >
                     {verifyingConfig ? "Consultando Evolution…" : "Verificar webhook na Evolution"}
                   </button>
                 )}
-
-                {/* Live config result */}
                 {liveConfigResult && (
                   <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-1.5 ${
-                    liveConfigResult.isHealthy ? "border-green-200 bg-white text-green-800" : "border-red-200 bg-white text-red-800"
+                    liveConfigResult.isHealthy ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-800"
                   }`}>
-                    <p className="font-semibold">
-                      {liveConfigResult.isHealthy ? "✓ Webhook na Evolution: correto" : "✗ Problemas detectados"}
-                    </p>
-                    <div className="font-mono text-[10px] space-y-0.5 bg-gray-50 rounded px-2 py-1">
-                      <p><span className="text-gray-500">url: </span>{liveConfigResult.url ?? "—"}
-                        {" "}{liveConfigResult.urlMatches
-                          ? <span className="text-green-600">✓</span>
-                          : <span className="text-red-500">✗ diverge</span>}
-                      </p>
-                      <p><span className="text-gray-500">webhookByEvents: </span>
-                        <span className={liveConfigResult.byEventsIsFalse ? "text-green-700 font-bold" : "text-red-600 font-bold"}>
-                          {String(liveConfigResult.webhookByEvents ?? "?")}
-                        </span>
-                      </p>
-                      <p><span className="text-gray-500">auth: </span>
-                        {liveConfigResult.tokenInUrl
-                          ? <span className="text-green-700">token na URL ✓</span>
-                          : liveConfigResult.secretPresent
-                            ? <span className="text-green-700">secret presente ✓</span>
-                            : <span className="text-amber-600">secret ausente</span>}
-                      </p>
-                      <p><span className="text-gray-500">events: </span>[{liveConfigResult.events.join(", ") || "—"}]
-                        {!liveConfigResult.hasMessagesUpsert && <span className="text-red-500"> ← MESSAGES_UPSERT ausente</span>}
-                      </p>
+                    <p className="font-semibold">{liveConfigResult.isHealthy ? "✓ Webhook correto" : "✗ Problemas detectados"}</p>
+                    <div className="font-mono text-[10px] space-y-0.5">
+                      <p>url: {liveConfigResult.url ?? "—"}{" "}{liveConfigResult.urlMatches ? <span className="text-green-600">✓</span> : <span className="text-red-500">✗ diverge</span>}</p>
+                      <p>webhookByEvents: <span className={liveConfigResult.byEventsIsFalse ? "text-green-700 font-bold" : "text-red-600 font-bold"}>{String(liveConfigResult.webhookByEvents ?? "?")}</span></p>
+                      <p>auth: {liveConfigResult.tokenInUrl ? <span className="text-green-700">token na URL ✓</span> : liveConfigResult.secretPresent ? <span className="text-green-700">secret ✓</span> : <span className="text-amber-600">ausente</span>}</p>
                     </div>
-                    {liveConfigResult.issues.length > 0 && (
-                      <ul className="space-y-0.5 text-[10px]">
-                        {liveConfigResult.issues.map((issue, i) => (
-                          <li key={i} className="text-red-700">⚠ {issue}</li>
-                        ))}
-                      </ul>
-                    )}
+                    {liveConfigResult.issues.length > 0 && liveConfigResult.issues.map((iss, i) => <p key={i} className="text-[10px]">⚠ {iss}</p>)}
                     <p className="text-[10px] text-gray-600">{liveConfigResult.recommendation}</p>
                   </div>
                 )}
 
-                {showSyncButton && (
-                  <button
-                    type="button"
-                    onClick={() => void handleSyncWebhook()}
-                    disabled={syncingWebhook}
-                    className="w-full rounded-xl border border-amber-200 bg-white px-4 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-50 transition"
-                  >
-                    {syncingWebhook ? "Sincronizando webhook…" : "Sincronizar webhook"}
-                  </button>
-                )}
-
-                {showSelfTestButton && (
+                {/* Self-test */}
+                {(showSelfTestButton || isConfigured) && (
                   <button
                     type="button"
                     onClick={() => void handleSelfTest()}
                     disabled={selfTesting}
-                    className="w-full rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition"
+                    className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition"
                   >
                     {selfTesting ? "Testando receiver…" : "Testar receiver Foocci"}
                   </button>
                 )}
-
                 {selfTestResult && (
                   <div className={`rounded-lg border px-3 py-2 text-xs space-y-1 ${
-                    selfTestResult.success ? "border-blue-200 bg-white text-blue-800" : "border-red-200 bg-white text-red-700"
+                    selfTestResult.success ? "border-blue-200 bg-blue-50 text-blue-800" : "border-red-200 bg-red-50 text-red-700"
                   }`}>
                     <p className="font-semibold">{selfTestResult.success ? "✓ Receiver OK" : "✗ Receiver com problema"}</p>
                     <p className="text-[10px]">{selfTestResult.diagnosis}</p>
@@ -1633,25 +1449,24 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                 )}
 
                 {/* Auth self-test */}
-                <button
-                  type="button"
-                  onClick={() => void handleAuthTest()}
-                  disabled={authTesting}
-                  className="w-full rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition"
-                >
-                  {authTesting ? "Testando…" : "Testar lógica de autenticação"}
-                </button>
+                {isConfigured && (
+                  <button
+                    type="button"
+                    onClick={() => void handleAuthTest()}
+                    disabled={authTesting}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition"
+                  >
+                    {authTesting ? "Testando…" : "Testar lógica de autenticação"}
+                  </button>
+                )}
                 {authTestResult && (
                   <div className={`rounded border px-2 py-1.5 text-[10px] font-mono space-y-0.5 ${
-                    authTestResult.allWorkingCorrectly ? "border-green-200 bg-white text-green-800" : "border-red-200 bg-white text-red-700"
+                    authTestResult.allWorkingCorrectly ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"
                   }`}>
-                    <p className="font-semibold">{authTestResult.allWorkingCorrectly ? "✓ Lógica OK" : "✗ Lógica com falha"}</p>
+                    <p className="font-semibold">{authTestResult.allWorkingCorrectly ? "✓ Auth OK" : "✗ Auth com falha"}</p>
                     <p className="text-gray-600">{authTestResult.diagnosis}</p>
                     {authTestResult.tests && Object.entries(authTestResult.tests).map(([k, v]) => (
-                      <p key={k}>
-                        <span className={v.accepted ? "text-green-600" : "text-red-500"}>{v.accepted ? "✓" : "✗"}</span>
-                        {" "}{k}
-                      </p>
+                      <p key={k}><span className={v.accepted ? "text-green-600" : "text-red-500"}>{v.accepted ? "✓" : "✗"}</span> {k}</p>
                     ))}
                   </div>
                 )}
@@ -1662,363 +1477,363 @@ export function WhatsAppIntegrationClient({ userRole }: { userRole: string }) {
                     type="button"
                     onClick={() => void handleEventDiag()}
                     disabled={eventDiagLoading}
-                    className="w-full rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition"
+                    className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition"
                   >
                     {eventDiagLoading ? "Diagnosticando eventos…" : "Diagnóstico de eventos"}
                   </button>
                 )}
                 {eventDiagResult && <EventDiagCard result={eventDiagResult} />}
-
-                {/* Railway logging instructions */}
                 {(eventDiagResult?.verdict === "ok_waiting" || eventDiagResult?.verdict === "webhook_ok_not_emitting") && (
-                  <div className="rounded-lg border border-amber-100 bg-white px-3 py-3 text-xs space-y-2">
-                    <p className="font-semibold text-amber-800">Como verificar os logs da Evolution no Railway:</p>
-                    <ol className="list-decimal list-inside space-y-1 text-amber-700 text-[10px]">
-                      <li>railway.app → seu projeto → serviço <span className="font-mono">evolution-api</span></li>
-                      <li>Deployments → deploy ativo → View logs</li>
+                  <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 text-[10px] space-y-1">
+                    <p className="font-semibold text-amber-800">Como verificar logs da Evolution no Railway:</p>
+                    <ol className="list-decimal list-inside space-y-0.5 text-amber-700">
+                      <li>railway.app → projeto → serviço evolution-api → Deployments → View logs</li>
                       <li>Envie mensagem pelo WhatsApp ao número conectado</li>
-                      <li>Procure: <span className="font-mono">MESSAGES_UPSERT</span>, <span className="font-mono">webhook</span>, <span className="font-mono">error</span></li>
+                      <li>Procure: MESSAGES_UPSERT, webhook, error</li>
                     </ol>
                   </div>
                 )}
               </div>
 
-              {/* ── Secret rotation ──────────────────────────────────────── */}
-              <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-4 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold text-amber-700">Rotacionar secret do webhook</p>
-                  <p className="mt-0.5 text-xs text-amber-600">
-                    Use apenas se o token foi exposto. Gera novo secret e atualiza a URL na Evolution.
-                    Não desconecta o WhatsApp.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleRotateSecret()}
-                  disabled={rotatingSecret || !isConfigured}
-                  className="rounded-xl border border-amber-200 bg-white px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40 transition"
-                >
-                  {rotatingSecret ? "Rotacionando…" : "Rotacionar secret do webhook"}
-                </button>
-                {rotateResult && (
-                  <div className={`rounded-lg border px-3 py-2 text-xs ${
-                    rotateResult.success ? "border-green-200 bg-white text-green-800" : "border-red-200 bg-white text-red-700"
+              {/* ── Grupo B — Manutenção ──────────────────────────────────── */}
+              <div className="space-y-3 border-t border-gray-100 pt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Manutenção</p>
+
+                {/* Sync webhook */}
+                {showSyncButton && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs space-y-2">
+                    <p className="font-semibold text-amber-800">Webhook precisa de sincronização</p>
+                    <button
+                      type="button"
+                      onClick={() => void handleSyncWebhook()}
+                      disabled={syncingWebhook}
+                      className="w-full rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition"
+                    >
+                      {syncingWebhook ? "Sincronizando…" : "Sincronizar webhook"}
+                    </button>
+                  </div>
+                )}
+                {!showSyncButton && isConfigured && (
+                  <button
+                    type="button"
+                    onClick={() => void handleSyncWebhook()}
+                    disabled={syncingWebhook}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition"
+                  >
+                    {syncingWebhook ? "Sincronizando…" : "Sincronizar webhook"}
+                  </button>
+                )}
+                {syncResult && (
+                  <div className={`rounded-lg border px-3 py-2 text-xs space-y-1 ${
+                    syncResult.success ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"
                   }`}>
-                    <p className="font-semibold">{rotateResult.success ? "✓ Secret rotacionado" : "✗ Falha na rotação"}</p>
-                    <p className="text-[10px] mt-1">{rotateResult.message}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Diagnostic tool */}
-              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold text-gray-700">Diagnosticar Evolution</p>
-                  <p className="mt-0.5 text-xs text-gray-500">
-                    Verifica conectividade, autenticação, estado da instância e disponibilidade de QR.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleDiagnose()}
-                  disabled={diagnosing || !isConfigured}
-                  className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
-                >
-                  {diagnosing ? "Diagnosticando…" : "Executar diagnóstico"}
-                </button>
-
-                {diagResult && (
-                  <div className="space-y-3 pt-1">
-                    {/* Version marker — confirms production is running new code */}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[10px]">
-                      <span className="font-mono font-semibold text-blue-700">{diagResult.qrFlowVersion ?? "versão desconhecida"}</span>
-                      <span className="text-blue-500">reset usa create: {diagResult.hardResetUsesCreateQr ? "✓ sim" : "✗ não"}</span>
-                      <span className="text-blue-500">diag cria instância: {diagResult.diagnoseTestsCreateQr ? "✓ sim" : "✗ não (seguro)"}</span>
-                    </div>
-
-                    {/* Summary row */}
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                      <span className="text-gray-500">Servidor</span>
-                      <span className="font-mono text-gray-700 truncate">{diagResult.baseUrlMasked}</span>
-                      <span className="text-gray-500">Instância</span>
-                      <span className="font-mono text-gray-700">{diagResult.instanceName}</span>
-                      <span className="text-gray-500">Estado</span>
-                      <span className={`font-semibold ${
-                        diagResult.instanceState === "open"       ? "text-green-600" :
-                        diagResult.instanceState === "connecting" ? "text-amber-600" :
-                        "text-red-600"
-                      }`}>{diagResult.instanceState}</span>
-                      <span className="text-gray-500">QR extraído</span>
-                      <span className={diagResult.qrAvailable ? "text-green-600 font-semibold" : "text-red-600"}>
-                        {diagResult.qrAvailable ? "sim" : "não"}
-                      </span>
-                    </div>
-
-                    {/* Step results */}
-                    <div className="space-y-2">
-                      {diagResult.steps.map((s) => {
-                        const shapeStep = s.label === "qr_response_shape" && s.ok && s.detail;
-                        const shape = shapeStep
-                          ? (s.detail as {
-                              availableKeys?: string[];
-                              keyMeta?: Record<string, { type: string; length?: number }>;
-                              qrExtracted?: boolean;
-                              pairingCodeExtracted?: boolean;
-                              reason?: string | null;
-                              foundIn?: string | null;
-                            })
-                          : null;
-
-                        const isVariants = s.label === "qr_endpoint_variants" && s.ok && Array.isArray(s.detail);
-                        const variants = isVariants
-                          ? (s.detail as Array<{ path: string; method: string; httpStatus?: number; qrExtracted?: boolean; reason?: string | null; error?: string }>)
-                          : null;
-
-                        return (
-                          <div key={s.label} className="text-[11px]">
-                            <div className="flex items-center gap-1.5">
-                              <span className={s.ok ? "text-green-500" : "text-red-500"}>{s.ok ? "✓" : "✗"}</span>
-                              <span className="font-mono text-gray-600">{s.label}</span>
-                              {s.label === "qr_connect_endpoint" && s.ok && (
-                                <span className={
-                                  (s.detail as { qrExtracted?: boolean })?.qrExtracted
-                                    ? "text-green-600"
-                                    : "text-amber-600"
-                                }>
-                                  {(s.detail as { qrExtracted?: boolean })?.qrExtracted
-                                    ? "→ QR encontrado"
-                                    : "→ respondeu, QR não encontrado"}
-                                </span>
-                              )}
-                              {!s.ok && s.error && (
-                                <span className="text-red-600 break-all">{s.error}</span>
-                              )}
-                            </div>
-                            {shape && (
-                              <div className="ml-4 mt-1 space-y-0.5 text-gray-500">
-                                <p>Chaves: [{shape.availableKeys?.join(", ") ?? "—"}]</p>
-                                {shape.keyMeta && Object.entries(shape.keyMeta).map(([k, v]) => (
-                                  <p key={k} className="font-mono">
-                                    {k}: {v.type}{v.length !== undefined ? ` (${v.length} chars)` : ""}
-                                  </p>
-                                ))}
-                                {shape.reason && <p className="text-amber-600">{shape.reason}</p>}
-                              </div>
-                            )}
-                            {variants && (
-                              <div className="ml-4 mt-1 space-y-1 text-gray-500">
-                                {variants.map((v) => (
-                                  <div key={`${v.method}:${v.path}`} className="flex items-center gap-1.5">
-                                    <span className={v.qrExtracted ? "text-green-500" : v.error ? "text-red-400" : "text-gray-400"}>
-                                      {v.qrExtracted ? "✓" : "·"}
-                                    </span>
-                                    <span className="font-mono">{v.method} {v.path}</span>
-                                    {v.httpStatus && <span className="text-gray-400">HTTP {v.httpStatus}</span>}
-                                    {v.qrExtracted && <span className="text-green-600 font-semibold">QR encontrado aqui!</span>}
-                                    {v.error && <span className="text-red-500">{v.error}</span>}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Env-var audit — Railway config recommendations ──────── */}
-              <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-4 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold text-orange-700">Auditoria de Env Vars (Railway)</p>
-                  <p className="mt-0.5 text-xs text-orange-600">
-                    Retorna as variáveis de ambiente necessárias para Evolution v2.2.3 com valores recomendados,
-                    prioridade e instruções Railway. Use quando QR retorna apenas &#123; count &#125;.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleAudit()}
-                  disabled={auditing || !isConfigured}
-                  className="rounded-xl border border-orange-200 bg-white px-4 py-2 text-xs font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-40 transition"
-                >
-                  {auditing ? "Auditando…" : "Ver env vars necessárias"}
-                </button>
-
-                {auditResult && (
-                  <div className="space-y-3 pt-1">
-                    {/* Summary */}
-                    <div className="rounded-lg border border-orange-200 bg-white px-3 py-2 text-[11px] space-y-1 text-gray-700">
-                      <p className="font-semibold text-orange-700 mb-1">Plano de ação — em ordem:</p>
-                      <p>1. {auditResult.summary.step1}</p>
-                      <p>2. {auditResult.summary.step2}</p>
-                      <p>3. {auditResult.summary.step3}</p>
-                      <p>4. {auditResult.summary.step4}</p>
-                      <p className="font-mono text-gray-500 mt-1">Script: {auditResult.summary.scriptToRun}</p>
-                    </div>
-
-                    {/* Prioritised fixes */}
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-semibold text-gray-700">Correções prioritárias (adicione ao Railway):</p>
-                      {auditResult.prioritisedFixes.slice(0, 8).map((fix) => (
-                        <div key={fix.variable} className={`rounded-lg border px-3 py-2 text-[11px] ${
-                          fix.priority <= 3 ? "border-red-200 bg-red-50" :
-                          fix.priority <= 6 ? "border-amber-100 bg-amber-50" :
-                          "border-gray-100 bg-gray-50"
-                        }`}>
-                          <div className="flex items-center gap-2">
-                            <span className={`font-mono font-semibold ${fix.priority <= 3 ? "text-red-700" : fix.priority <= 6 ? "text-amber-700" : "text-gray-700"}`}>
-                              {fix.priority}. {fix.variable}
-                            </span>
-                            {fix.value && (
-                              <span className="font-mono text-green-700 bg-green-50 border border-green-100 px-1.5 py-0.5 rounded">
-                                = {fix.value}
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-0.5 text-gray-600">{fix.reason}</p>
-                          <p className="mt-0.5 font-mono text-gray-500">{fix.railwayHow}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Log patterns */}
-                    <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] space-y-1">
-                      <p className="font-semibold text-gray-700 mb-1">Após LOG_BAILEYS=debug — o que procurar nos logs Railway:</p>
-                      {auditResult.logPatterns.railwayCLI.map((line, i) => (
-                        <p key={i} className="font-mono text-gray-500">{line}</p>
-                      ))}
-                      <div className="mt-2 space-y-0.5">
-                        {auditResult.logPatterns.patterns.map((p) => (
-                          <p key={p.grep} className="text-gray-600">
-                            <span className="font-mono text-amber-600">&quot;{p.grep}&quot;</span> → {p.meaning}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Upgrade recommendation */}
-                    {auditResult.upgradeRecommendation.needed && (
-                      <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] space-y-1">
-                        <p className="font-semibold text-blue-700">Recomendação: Atualizar Evolution</p>
-                        <p className="text-gray-600">{auditResult.upgradeRecommendation.reason}</p>
-                        <p className="text-gray-600">Versão atual: <span className="font-mono">{auditResult.upgradeRecommendation.currentVersion}</span></p>
-                        <p className="text-gray-600">Recomendado: <span className="font-mono">{auditResult.upgradeRecommendation.recommendedVersion}</span></p>
-                        <p className="text-blue-500">Risco: {auditResult.upgradeRecommendation.riskLevel} — {auditResult.upgradeRecommendation.riskNote}</p>
-                        <div className="mt-1 space-y-0.5">
-                          {auditResult.upgradeRecommendation.railwayUpgradePath.map((step, i) => (
-                            <p key={i} className="font-mono text-gray-500">{step}</p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* ── Webhook event log ────────────────────────────────────── */}
-              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-700">Log de eventos webhook</p>
-                    <p className="mt-0.5 text-xs text-gray-500">
-                      Últimos 20 eventos recebidos. Prova se a Evolution está enviando webhooks ao Foocci.
+                    <p className="font-semibold">
+                      {syncResult.success
+                        ? syncResult.secretInfo?.tokenInUrl ? "✓ Webhook configurado com token seguro" : "✓ Webhook sincronizado"
+                        : "✗ Falha na sincronização"}
                     </p>
+                    <p className="text-[10px]">{syncResult.recommendation}</p>
+                    {syncResult.error && <p className="font-mono text-[10px] break-all">{syncResult.error}</p>}
+                  </div>
+                )}
+
+                {/* Secret rotation */}
+                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2.5">
+                  <div>
+                    <p className="text-xs font-medium text-gray-700">Rotacionar secret do webhook</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">Use apenas se o token foi exposto. Não desconecta o WhatsApp.</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => void loadWebhookLog()}
-                    disabled={webhookLogLoading}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                    onClick={() => void handleRotateSecret()}
+                    disabled={rotatingSecret || !isConfigured}
+                    className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 transition"
                   >
-                    {webhookLogLoading ? "…" : "Atualizar"}
+                    {rotatingSecret ? "Rotacionando…" : "Rotacionar secret"}
                   </button>
+                  {rotateResult && (
+                    <div className={`rounded-lg border px-3 py-2 text-xs ${
+                      rotateResult.success ? "border-green-200 bg-white text-green-800" : "border-red-200 bg-white text-red-700"
+                    }`}>
+                      <p className="font-semibold">{rotateResult.success ? "✓ Secret rotacionado" : "✗ Falha"}</p>
+                      <p className="text-[10px] mt-0.5">{rotateResult.message}</p>
+                    </div>
+                  )}
                 </div>
-                <WebhookLogTable events={webhookLogEvents} />
+
+                {/* Log de eventos webhook */}
+                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-gray-700">Log de eventos webhook</p>
+                    <button
+                      type="button"
+                      onClick={() => void loadWebhookLog()}
+                      disabled={webhookLogLoading}
+                      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+                    >
+                      {webhookLogLoading ? "…" : "Atualizar"}
+                    </button>
+                  </div>
+                  <WebhookLogTable events={webhookLogEvents} />
+                </div>
               </div>
 
-              {/* ── Deep probe — definitive infrastructure test ──────────── */}
-              <div className="rounded-xl border border-purple-100 bg-purple-50 px-4 py-4 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold text-purple-700">Diagnóstico Profundo (~35 s)</p>
-                  <p className="mt-0.5 text-xs text-purple-600">
-                    Cria uma instância temporária para determinar se o problema de QR é específico
-                    desta instância ou server-wide (Evolution não consegue alcançar WhatsApp).
-                  </p>
-                </div>
+              {/* ── Grupo C — Ferramentas técnicas (nested accordion) ─────── */}
+              <div className="border-t border-gray-100 pt-4">
                 <button
                   type="button"
-                  onClick={() => void handleDeepProbe()}
-                  disabled={deepProbing || !isConfigured}
-                  className="rounded-xl border border-purple-200 bg-white px-4 py-2 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-40 transition"
+                  onClick={() => setIsTechToolsOpen((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-left hover:bg-red-100 transition-colors"
                 >
-                  {deepProbing ? "Analisando… (~35 s)" : "Executar diagnóstico profundo"}
+                  <div>
+                    <p className="text-xs font-semibold text-red-700">Ferramentas técnicas — uso interno Foocci</p>
+                    <p className="text-[10px] text-red-500 mt-0.5">Use apenas com orientação técnica. Pode afetar a conexão.</p>
+                  </div>
+                  <span className={`text-red-400 transition-transform ${isTechToolsOpen ? "rotate-180" : ""}`}>▾</span>
                 </button>
 
-                {deepResult && (
-                  <div className="space-y-3 pt-1">
-                    {/* Verdict banner */}
-                    <div className={`rounded-lg border px-3 py-2.5 text-xs font-semibold ${
-                      deepResult.verdictCode === "instance_specific" ? "border-amber-200 bg-amber-50 text-amber-800" :
-                      deepResult.verdictCode === "server_wide"       ? "border-red-200 bg-red-50 text-red-800" :
-                      "border-gray-200 bg-gray-50 text-gray-700"
-                    }`}>
-                      {deepResult.verdict}
+                {isTechToolsOpen && (
+                  <div className="mt-3 space-y-4">
+
+                    {/* Warning */}
+                    <div className="flex gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                      <span className="mt-0.5 text-amber-500">⚠</span>
+                      <p className="text-xs text-amber-800">
+                        <span className="font-semibold">Uso interno Foocci / suporte técnico.</span>{" "}
+                        Não altere credenciais sem orientação. Configurações incorretas desconectam o WhatsApp.
+                        {/* TODO de produto: Em produção, EvolutionConfig deve ser provisionado no onboarding do restaurante. Cliente só escaneia QR. */}
+                      </p>
                     </div>
 
-                    {/* Recommendation */}
-                    <div className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-[11px] text-gray-700 whitespace-pre-wrap">
-                      <span className="font-semibold">Recomendação: </span>{deepResult.recommendation}
-                    </div>
-
-                    {/* Temp instance test summary */}
-                    <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] font-mono space-y-0.5 text-gray-600">
-                      <p className="font-semibold text-gray-700 mb-1">Instância temporária ({deepResult.tempInstanceTest.tempName})</p>
-                      <p>criada: {deepResult.tempInstanceTest.created ? "sim" : "não"}{deepResult.tempInstanceTest.error ? ` — ${deepResult.tempInstanceTest.error}` : ""}</p>
-                      {deepResult.tempInstanceTest.created && (
-                        <>
-                          <p>create_keys: [{deepResult.tempInstanceTest.createKeys.join(", ")}]</p>
-                          <p>qrcode: [{deepResult.tempInstanceTest.qrcodeShape.join(", ")}]{deepResult.tempInstanceTest.qrcodeIsCountOnly ? " ← count only" : ""}</p>
-                          <p>QR no create: {deepResult.tempInstanceTest.createQRFound ? "sim ✓" : "não"}</p>
-                          {deepResult.tempInstanceTest.pollResults.map((p) => (
-                            <p key={p.attempt}>poll {p.attempt}: HTTP {p.httpStatus} keys=[{p.keys.join(",")}] {p.isCountOnly ? "count-only" : ""} {p.qrFound ? "QR ✓" : ""}</p>
-                          ))}
-                          <p className={deepResult.tempInstanceTest.qrFound ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
-                            resultado: {deepResult.tempInstanceTest.qrFound ? "QR GERADO ✓" : "QR NÃO GERADO ✗"}
+                    {/* Credentials form */}
+                    {(lastTested || view?.lastError) && (
+                      <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-xs space-y-1">
+                        {lastTested && <p className="text-gray-500"><span className="font-medium text-gray-700">Último teste:</span> {lastTested}</p>}
+                        {view?.lastError && (
+                          <p className={view.isActive ? "text-green-700" : "text-red-600"}>
+                            {view.isActive ? "✓" : "⚠"} {view.lastError}
                           </p>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Configured instance state */}
-                    {deepResult.configuredInstance && (
-                      <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] font-mono space-y-0.5 text-gray-600">
-                        <p className="font-semibold text-gray-700 mb-1">Instância configurada</p>
-                        <p>status: {String(deepResult.configuredInstance.status ?? "—")}</p>
-                        <p>connectionStatus: {String(deepResult.configuredInstance.connectionStatus ?? "—")}</p>
-                        <p>integration: {String(deepResult.configuredInstance.integration ?? "—")}</p>
-                        <p>ownerJid (já autenticou?): {deepResult.configuredInstance.hasOwner ? "sim — teve sessão anterior" : "não"}</p>
-                        <p>profileName: {String(deepResult.configuredInstance.profileName ?? "null")}</p>
+                        )}
                       </div>
                     )}
 
-                    {/* Evolution version */}
-                    <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] font-mono space-y-0.5 text-gray-600">
-                      <p className="font-semibold text-gray-700 mb-1">Versão Evolution (GET /)</p>
-                      <p>HTTP: {deepResult.evolutionVersion.httpStatus}</p>
-                      {Object.entries(deepResult.evolutionVersion.info).map(([k, v]) => (
-                        <p key={k}>{k}: {typeof v === "object" ? JSON.stringify(v) : String(v)}</p>
-                      ))}
+                    <form onSubmit={(e) => void handleSave(e)} className="space-y-4">
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">Nome da instância</label>
+                        <input type="text" value={instanceName} onChange={(e) => setInstanceName(e.target.value)} placeholder="sushicazza"
+                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${instanceNameErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"}`}
+                        />
+                        <FieldError msg={instanceNameErr} />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">URL do servidor Evolution</label>
+                        <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://evo.seuservidor.com"
+                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${baseUrlErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"}`}
+                        />
+                        {loadedBaseUrlErr && !baseUrlErr && (
+                          <div className="mt-1 flex items-start gap-1.5 rounded-lg border border-red-100 bg-red-50 px-2.5 py-2">
+                            <span className="shrink-0 text-xs text-red-500">⚠</span>
+                            <p className="text-xs text-red-700">A URL do servidor Evolution salva está inválida. Informe a URL pública da Evolution API.</p>
+                          </div>
+                        )}
+                        <FieldError msg={baseUrlErr} />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">API Key</label>
+                        {f.apiKeyPreview && <p className="mb-1 text-xs text-gray-500">Atual: <span className="font-mono font-semibold text-gray-700">{f.apiKeyPreview}</span></p>}
+                        <input type="password" name="apiKey" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                          placeholder={f.apiKeyPreview ? "Nova chave — deixe em branco para manter" : "Cole sua API Key"}
+                          className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 transition ${apiKeyErr ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-indigo-400 focus:ring-indigo-100"}`}
+                        />
+                        <FieldError msg={apiKeyErr} />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">Webhook Secret</label>
+                        {f.webhookSecretPreview && <p className="mb-1 text-xs text-gray-500">Atual: <span className="font-mono font-semibold text-gray-700">{f.webhookSecretPreview}</span></p>}
+                        <input type="password" name="webhookSecret" autoComplete="off" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)}
+                          placeholder={f.webhookSecretPreview ? "Novo secret — deixe em branco para manter" : "Cole o Webhook Secret"}
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+                        />
+                        <p className="mt-1 text-xs text-gray-400">Usado para autenticar as mensagens recebidas.</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 space-y-0.5">
+                        <p className="text-xs font-medium text-gray-700">URL do Webhook (base)</p>
+                        <p className="break-all font-mono text-[10px] text-gray-500">{webhookUrl}</p>
+                      </div>
+                      <div className="flex items-center gap-3 pt-1">
+                        <button type="submit" disabled={saving} className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition">
+                          {saving ? "Salvando…" : "Salvar credenciais"}
+                        </button>
+                        <button type="button" onClick={() => void handleTest()} disabled={testing || view?.status === "unconfigured" || !view}
+                          className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition">
+                          {testing ? "Testando…" : "Testar conexão"}
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Diagnose Evolution */}
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700">Diagnosticar Evolution</p>
+                        <p className="mt-0.5 text-xs text-gray-500">Verifica conectividade, autenticação, estado da instância e disponibilidade de QR.</p>
+                      </div>
+                      <button type="button" onClick={() => void handleDiagnose()} disabled={diagnosing || !isConfigured}
+                        className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition">
+                        {diagnosing ? "Diagnosticando…" : "Executar diagnóstico"}
+                      </button>
+                      {diagResult && (
+                        <div className="space-y-3 pt-1">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[10px]">
+                            <span className="font-mono font-semibold text-blue-700">{diagResult.qrFlowVersion ?? "versão desconhecida"}</span>
+                            <span className="text-blue-500">reset usa create: {diagResult.hardResetUsesCreateQr ? "✓" : "✗"}</span>
+                            <span className="text-blue-500">diag cria instância: {diagResult.diagnoseTestsCreateQr ? "✓" : "✗ (seguro)"}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            <span className="text-gray-500">Servidor</span><span className="font-mono text-gray-700 truncate">{diagResult.baseUrlMasked}</span>
+                            <span className="text-gray-500">Instância</span><span className="font-mono text-gray-700">{diagResult.instanceName}</span>
+                            <span className="text-gray-500">Estado</span>
+                            <span className={`font-semibold ${diagResult.instanceState === "open" ? "text-green-600" : diagResult.instanceState === "connecting" ? "text-amber-600" : "text-red-600"}`}>{diagResult.instanceState}</span>
+                            <span className="text-gray-500">QR extraído</span>
+                            <span className={diagResult.qrAvailable ? "text-green-600 font-semibold" : "text-red-600"}>{diagResult.qrAvailable ? "sim" : "não"}</span>
+                          </div>
+                          <div className="space-y-2">
+                            {diagResult.steps.map((s) => {
+                              const shapeStep = s.label === "qr_response_shape" && s.ok && s.detail;
+                              const shape = shapeStep ? (s.detail as { availableKeys?: string[]; keyMeta?: Record<string, { type: string; length?: number }>; reason?: string | null }) : null;
+                              const isVariants = s.label === "qr_endpoint_variants" && s.ok && Array.isArray(s.detail);
+                              const variants = isVariants ? (s.detail as Array<{ path: string; method: string; httpStatus?: number; qrExtracted?: boolean; error?: string }>) : null;
+                              return (
+                                <div key={s.label} className="text-[11px]">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={s.ok ? "text-green-500" : "text-red-500"}>{s.ok ? "✓" : "✗"}</span>
+                                    <span className="font-mono text-gray-600">{s.label}</span>
+                                    {!s.ok && s.error && <span className="text-red-600 break-all">{s.error}</span>}
+                                  </div>
+                                  {shape && (
+                                    <div className="ml-4 mt-1 space-y-0.5 text-gray-500 text-[10px]">
+                                      {shape.availableKeys && <p>Chaves: [{shape.availableKeys.join(", ")}]</p>}
+                                      {shape.reason && <p className="text-amber-600">{shape.reason}</p>}
+                                    </div>
+                                  )}
+                                  {variants && (
+                                    <div className="ml-4 mt-1 space-y-1 text-gray-500 text-[10px]">
+                                      {variants.map((v) => (
+                                        <div key={`${v.method}:${v.path}`} className="flex items-center gap-1.5">
+                                          <span className={v.qrExtracted ? "text-green-500" : v.error ? "text-red-400" : "text-gray-400"}>{v.qrExtracted ? "✓" : "·"}</span>
+                                          <span className="font-mono">{v.method} {v.path}</span>
+                                          {v.httpStatus && <span className="text-gray-400">HTTP {v.httpStatus}</span>}
+                                          {v.qrExtracted && <span className="text-green-600 font-semibold">QR encontrado aqui!</span>}
+                                          {v.error && <span className="text-red-500">{v.error}</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Railway checklist */}
-                    <div className="rounded-lg border border-gray-100 bg-white px-3 py-2 text-[11px] space-y-1">
-                      <p className="font-semibold text-gray-700 mb-1">Checklist Railway / Evolution env</p>
-                      {deepResult.railwayCheckList.map((item, i) => (
-                        <p key={i} className="text-gray-500">• {item}</p>
-                      ))}
+                    {/* Env-var audit */}
+                    <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-4 space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold text-orange-700">Auditoria de Env Vars (Railway)</p>
+                        <p className="mt-0.5 text-xs text-orange-600">Retorna variáveis necessárias para Evolution com valores recomendados. Use quando QR retorna apenas &#123; count &#125;.</p>
+                      </div>
+                      <button type="button" onClick={() => void handleAudit()} disabled={auditing || !isConfigured}
+                        className="rounded-xl border border-orange-200 bg-white px-4 py-2 text-xs font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-40 transition">
+                        {auditing ? "Auditando…" : "Ver env vars necessárias"}
+                      </button>
+                      {auditResult && (
+                        <div className="space-y-3 pt-1">
+                          <div className="rounded-lg border border-orange-200 bg-white px-3 py-2 text-[11px] space-y-1 text-gray-700">
+                            <p className="font-semibold text-orange-700 mb-1">Plano de ação:</p>
+                            <p>1. {auditResult.summary.step1}</p>
+                            <p>2. {auditResult.summary.step2}</p>
+                            <p>3. {auditResult.summary.step3}</p>
+                            <p>4. {auditResult.summary.step4}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[11px] font-semibold text-gray-700">Correções prioritárias:</p>
+                            {auditResult.prioritisedFixes.slice(0, 8).map((fix) => (
+                              <div key={fix.variable} className={`rounded-lg border px-3 py-2 text-[11px] ${fix.priority <= 3 ? "border-red-200 bg-red-50" : fix.priority <= 6 ? "border-amber-100 bg-amber-50" : "border-gray-100 bg-gray-50"}`}>
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-mono font-semibold ${fix.priority <= 3 ? "text-red-700" : fix.priority <= 6 ? "text-amber-700" : "text-gray-700"}`}>{fix.priority}. {fix.variable}</span>
+                                  {fix.value && <span className="font-mono text-green-700 bg-green-50 border border-green-100 px-1.5 py-0.5 rounded">= {fix.value}</span>}
+                                </div>
+                                <p className="mt-0.5 text-gray-600">{fix.reason}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Deep probe */}
+                    <div className="rounded-xl border border-purple-100 bg-purple-50 px-4 py-4 space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold text-purple-700">Diagnóstico Profundo (~35 s)</p>
+                        <p className="mt-0.5 text-xs text-purple-600">Cria instância temporária para determinar se o problema de QR é específico desta instância ou server-wide.</p>
+                      </div>
+                      <button type="button" onClick={() => void handleDeepProbe()} disabled={deepProbing || !isConfigured}
+                        className="rounded-xl border border-purple-200 bg-white px-4 py-2 text-xs font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-40 transition">
+                        {deepProbing ? "Analisando… (~35 s)" : "Executar diagnóstico profundo"}
+                      </button>
+                      {deepResult && (
+                        <div className="space-y-3 pt-1">
+                          <div className={`rounded-lg border px-3 py-2.5 text-xs font-semibold ${deepResult.verdictCode === "instance_specific" ? "border-amber-200 bg-amber-50 text-amber-800" : deepResult.verdictCode === "server_wide" ? "border-red-200 bg-red-50 text-red-800" : "border-gray-200 bg-gray-50 text-gray-700"}`}>
+                            {deepResult.verdict}
+                          </div>
+                          <div className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-[11px] text-gray-700 whitespace-pre-wrap">
+                            <span className="font-semibold">Recomendação: </span>{deepResult.recommendation}
+                          </div>
+                          <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] font-mono space-y-0.5 text-gray-600">
+                            <p className="font-semibold text-gray-700 mb-1">Instância temporária ({deepResult.tempInstanceTest.tempName})</p>
+                            <p>criada: {deepResult.tempInstanceTest.created ? "sim" : "não"}{deepResult.tempInstanceTest.error ? ` — ${deepResult.tempInstanceTest.error}` : ""}</p>
+                            {deepResult.tempInstanceTest.created && (
+                              <>
+                                <p>QR no create: {deepResult.tempInstanceTest.createQRFound ? "sim ✓" : "não"}</p>
+                                <p className={deepResult.tempInstanceTest.qrFound ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>resultado: {deepResult.tempInstanceTest.qrFound ? "QR GERADO ✓" : "QR NÃO GERADO ✗"}</p>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Hard reset — requires text confirmation */}
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4 space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold text-red-700">Resetar instância WhatsApp</p>
+                        <p className="mt-0.5 text-xs text-red-600">
+                          Remove a sessão WhatsApp atual, recria a instância do zero e gera novo QR Code.
+                          Use somente se o QR não aparecer após reconectar.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-red-700 font-medium">
+                          Para confirmar, digite: <span className="font-mono font-bold">RESETAR {(f.instanceName ?? "INSTANCIA").toUpperCase()}</span>
+                        </p>
+                        <input
+                          type="text"
+                          value={resetConfirmText}
+                          onChange={(e) => setResetConfirmText(e.target.value)}
+                          placeholder={`RESETAR ${(f.instanceName ?? "INSTANCIA").toUpperCase()}`}
+                          className="w-full rounded-xl border border-red-200 px-3 py-2 text-xs font-mono focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100 transition"
+                        />
+                        <button
+                          type="button"
+                          disabled={resetConfirmText.trim().toUpperCase() !== `RESETAR ${(f.instanceName ?? "INSTANCIA").toUpperCase()}` || !isConfigured}
+                          onClick={() => { setResetConfirmText(""); handleHardReset(); }}
+                          className="w-full rounded-xl border border-red-300 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                        >
+                          Resetar instância WhatsApp
+                        </button>
+                      </div>
+                    </div>
+
                   </div>
                 )}
               </div>
