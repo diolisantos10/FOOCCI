@@ -1250,11 +1250,10 @@ function DetailPanel({
               {provider === "saipos" && !testResult.success &&
                 (testResult.debug as Record<string, unknown> | undefined)?.responseStatus === 403 && (
                 <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800 space-y-1">
-                  <p className="font-semibold">HTTP 403 — Acesso negado pela Saipos</p>
+                  <p className="font-semibold">HTTP 403 — acesso negado pela Saipos no endpoint v2.5</p>
                   <p>
-                    A URL v2.5 está correta, mas a Saipos ainda não autorizou este parceiro/credencial.
-                    Até a liberação, os pedidos continuarão funcionando no Foocci e poderão ser lançados
-                    manualmente na Saipos pela tela de pedidos.
+                    A URL informada pelo suporte está em uso, mas a credencial/parceiro ainda não foi autorizado para autenticação.
+                    Aguarde a liberação do acesso pela Saipos.
                   </p>
                 </div>
               )}

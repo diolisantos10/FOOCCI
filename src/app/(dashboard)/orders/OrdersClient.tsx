@@ -806,17 +806,17 @@ function OrderCard({
           if (!st && !sent) return null;
           if (sent) return (
             <span className="mt-1 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
-              Saipos enviado
+              Saipos: Enviado ✅
             </span>
           );
-          if (st === "MANUALLY_REGISTERED") return (
-            <span className="mt-1 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-              Saipos manual
+          if (st === "AUTH_BLOCKED_403" || st === "FAILED" || st === "ORDER_SEND_FAILED") return (
+            <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+              Saipos: Falha na integração ⚠️
             </span>
           );
-          if (st === "AUTH_BLOCKED_403" || st === "PENDING_SAIPOS_VALIDATION" || st === "FAILED" || st === "ORDER_SEND_FAILED") return (
+          if (st === "PENDING_SAIPOS_VALIDATION") return (
             <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-              Lançar manualmente
+              Saipos: Aguardando envio
             </span>
           );
           return null;
@@ -1021,47 +1021,6 @@ function StatusTimeline({ order }: { order: MockOrder }) {
 
 // ─── SaiposSection ────────────────────────────────────────────
 
-function buildCopySummary(order: MockOrder, n: string): string {
-  const modality =
-    order.type === "DELIVERY" ? "Delivery"
-    : order.type === "TABLE"  ? `Mesa — ${order.address}`
-    : "Retirada";
-
-  const itemLines = order.items
-    .map((item) => {
-      let line = `- ${item.qty}x ${item.name} — R$ ${item.price.toFixed(2)}`;
-      if (item.addons?.length) line += `\n  Adicionais: ${item.addons.join(", ")}`;
-      if (item.note)           line += `\n  Obs.: ${item.note}`;
-      return line;
-    })
-    .join("\n");
-
-  const discount = order.subtotal + (order.deliveryFee ?? 0) - order.total;
-
-  const lines = [
-    `PEDIDO FOOCCI #${String(order.num).padStart(3, "0")}`,
-    `Cliente: ${order.customer}`,
-    `Telefone: ${order.phone}`,
-    `Modalidade: ${modality}`,
-    `Pagamento: ${order.payment}`,
-    "",
-    "Itens:",
-    itemLines,
-    "",
-    `Subtotal: R$ ${order.subtotal.toFixed(2)}`,
-  ];
-  if ((order.deliveryFee ?? 0) > 0)
-    lines.push(`Entrega: R$ ${order.deliveryFee!.toFixed(2)}`);
-  if (discount > 0.01)
-    lines.push(`Desconto: R$ ${discount.toFixed(2)}`);
-  lines.push(`Total: R$ ${order.total.toFixed(2)}`);
-  if (order.notes) {
-    lines.push("", `Observações: ${order.notes}`);
-  }
-  lines.push("", `(Lançar manualmente no ${n})`);
-  return lines.join("\n");
-}
-
 function SaiposSection({
   order,
   managerIntegrationDisplayName = MANAGER_INTEGRATION_DISPLAY_NAME,
@@ -1069,12 +1028,7 @@ function SaiposSection({
   order: MockOrder;
   managerIntegrationDisplayName?: string;
 }) {
-  const [marking,     setMarking]     = useState(false);
-  const [markResult,  setMarkResult]  = useState<string | null>(null);
-  const [copied,      setCopied]      = useState(false);
-  const [localStatus, setLocalStatus] = useState<string | null>(null);
-
-  const saiposStatus        = localStatus ?? order.saiposStatus ?? null;
+  const saiposStatus        = order.saiposStatus        ?? null;
   const saiposSentAt        = order.saiposSentAt        ?? null;
   const saiposError         = order.saiposError         ?? null;
   const saiposLastErrorCode = order.saiposLastErrorCode ?? null;
@@ -1086,105 +1040,49 @@ function SaiposSection({
 
   const n = managerIntegrationDisplayName;
 
-  const isManual   = saiposStatus === "MANUALLY_REGISTERED";
-  const is403      = saiposStatus === "AUTH_BLOCKED_403";
-  const is902      = saiposStatus === "PENDING_SAIPOS_VALIDATION";
-  const isFailed   = saiposStatus === "FAILED" || saiposStatus === "ORDER_SEND_FAILED";
-  const needsManual = !saiposSentAt && !isManual && (is403 || is902 || isFailed);
+  const is403  = saiposStatus === "AUTH_BLOCKED_403";
+  const is902  = saiposStatus === "PENDING_SAIPOS_VALIDATION";
+  const isFailed = saiposStatus === "FAILED" || saiposStatus === "ORDER_SEND_FAILED";
 
-  const statusMessage = (() => {
+  const statusBanner = (() => {
     if (saiposSentAt)
-      return { text: `Pedido enviado para a ${n}.`, color: "text-green-700", bg: "bg-green-50 border-green-100" };
-    if (isManual)
-      return { text: `Pedido lançado manualmente no ${n}.`, color: "text-blue-700", bg: "bg-blue-50 border-blue-100" };
+      return { label: `${n}: Enviado ✅`, color: "text-green-700", bg: "bg-green-50 border-green-100" };
     if (is403)
       return {
-        text: `A Saipos recusou a autenticação com HTTP 403. O Foocci está funcionando normalmente, mas o envio automático para a ${n} depende de liberação da API pela Saipos.`,
-        color: "text-amber-800", bg: "bg-amber-50 border-amber-200",
+        label: `${n}: Falha na integração ⚠️`,
+        detail: "HTTP 403 — acesso negado pela Saipos. A integração ainda não está autorizada no endpoint v2.5.",
+        color: "text-red-800", bg: "bg-red-50 border-red-200",
       };
     if (is902)
       return {
-        text: `Erro 902 — credenciais aguardando validação da ${n}. O pedido foi criado no Foocci, mas ainda não pôde ser enviado.`,
-        color: "text-amber-700", bg: "bg-amber-50 border-amber-100",
+        label: `${n}: Falha na integração ⚠️`,
+        detail: "Erro 902 — credenciais aguardando validação pela Saipos.",
+        color: "text-amber-800", bg: "bg-amber-50 border-amber-200",
       };
     if (isFailed)
-      return { text: `Falha ao enviar pedido para a ${n}.`, color: "text-red-700", bg: "bg-red-50 border-red-100" };
-    return { text: `Aguardando tentativa de envio para a ${n}.`, color: "text-gray-500", bg: "bg-gray-50 border-gray-100" };
+      return { label: `${n}: Falha na integração ⚠️`, color: "text-red-700", bg: "bg-red-50 border-red-100" };
+    return { label: `${n}: Aguardando envio`, color: "text-gray-500", bg: "bg-gray-50 border-gray-100" };
   })();
-
-  const handleCopy = async () => {
-    const text = buildCopySummary(order, n);
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      // Fallback: create a temporary textarea
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity  = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    }
-  };
-
-  const handleMarkManual = async () => {
-    setMarking(true);
-    setMarkResult(null);
-    try {
-      const res  = await fetch("/api/integrations/saipos/mark-manual", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ orderId: order.id }),
-      });
-      const data = await res.json().catch(() => ({})) as { success?: boolean; message?: string };
-      if (data.success) {
-        setLocalStatus("MANUALLY_REGISTERED");
-        setMarkResult("✓ " + (data.message ?? "Pedido marcado como lançado manualmente na Saipos."));
-      } else {
-        setMarkResult("⚠ " + (data.message ?? "Erro ao marcar pedido."));
-      }
-    } catch {
-      setMarkResult("⚠ Erro de rede ao marcar pedido.");
-    } finally {
-      setMarking(false);
-    }
-  };
 
   return (
     <div className="border-t border-dashed border-gray-200 pt-4">
       <SectionLabel>Sistema de gestão</SectionLabel>
 
-      {/* Provider label */}
-      <p className="mb-2 text-xs font-semibold text-gray-500">{n}</p>
-
       {/* Status banner */}
-      <div className={`mb-3 rounded-lg border px-3 py-2 text-xs font-medium ${statusMessage.bg} ${statusMessage.color}`}>
-        {needsManual && <span className="mr-1">⚠</span>}
-        {isManual    && <span className="mr-1">✓</span>}
-        {statusMessage.text}
+      <div className={`mb-3 rounded-lg border px-3 py-2 text-xs font-medium ${statusBanner.bg} ${statusBanner.color}`}>
+        <p>{statusBanner.label}</p>
+        {"detail" in statusBanner && statusBanner.detail && (
+          <p className="mt-0.5 font-normal opacity-80">{statusBanner.detail}</p>
+        )}
       </div>
-
-      {/* Manual fallback instructions */}
-      {needsManual && (
-        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 space-y-1">
-          <p className="font-semibold">{n}: Lançamento manual necessário ⚠️</p>
-          <p>O pedido foi criado no Foocci, mas ainda não foi enviado automaticamente para a {n}. Lance este pedido manualmente no {n} até a API ser liberada.</p>
-        </div>
-      )}
 
       {/* Diagnostic rows */}
       <div className="space-y-1.5">
         {saiposStatus && (
           <Row label={`Status ${n}`} value={
-            saiposStatus === "AUTH_BLOCKED_403"         ? "Aguardando liberação Saipos"
-            : saiposStatus === "PENDING_SAIPOS_VALIDATION" ? "Integração pendente (902)"
-            : saiposStatus === "MANUALLY_REGISTERED"      ? "Lançado manualmente"
+            saiposStatus === "AUTH_BLOCKED_403"            ? "Falha na integração (HTTP 403)"
+            : saiposStatus === "PENDING_SAIPOS_VALIDATION" ? "Falha na integração (erro 902)"
+            : saiposStatus === "SENT"                      ? "Enviado"
             : saiposStatus
           } />
         )}
@@ -1194,7 +1092,7 @@ function SaiposSection({
         {saiposLastErrorCode && (
           <Row label="Código do erro" value={saiposLastErrorCode} />
         )}
-        {saiposError && !isManual && (
+        {saiposError && (
           <Row label="Último erro" value={<span className="max-w-[180px] break-words text-right text-red-600">{saiposError}</span>} />
         )}
         {saiposSentAt && (
@@ -1205,45 +1103,16 @@ function SaiposSection({
         )}
       </div>
 
-      {/* Action buttons */}
-      <div className="mt-3 space-y-2">
-        {/* Copy summary */}
-        {!saiposSentAt && (
-          <button
-            type="button"
-            onClick={() => void handleCopy()}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition"
-          >
-            {copied ? "✓ Copiado!" : "Copiar resumo para Saipos"}
-          </button>
-        )}
-
-        {/* Mark as manually registered */}
-        {needsManual && (
-          <button
-            type="button"
-            onClick={() => void handleMarkManual()}
-            disabled={marking}
-            className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-40 transition"
-          >
-            {marking ? "Salvando…" : "Marcar como lançado manualmente"}
-          </button>
-        )}
-        {markResult && (
-          <p className={`text-xs font-medium ${markResult.startsWith("✓") ? "text-blue-700" : "text-red-600"}`}>
-            {markResult}
-          </p>
-        )}
-
-        {/* Retry via API */}
-        {!saiposSentAt && !isManual && (
+      {/* Retry via API */}
+      {!saiposSentAt && (
+        <div className="mt-3">
           <SaiposRetryButton
             orderId={order.id}
             saiposSentAt={saiposSentAt}
             saiposStatus={saiposStatus}
           />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

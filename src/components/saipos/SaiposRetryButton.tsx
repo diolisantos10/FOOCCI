@@ -53,13 +53,17 @@ export function SaiposRetryButton({ orderId, saiposSentAt, saiposStatus }: Props
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
             saiposStatus === "SENT"
               ? "bg-green-100 text-green-700"
+              : saiposStatus === "AUTH_BLOCKED_403" || saiposStatus === "FAILED"
+              ? "bg-red-100 text-red-600"
               : saiposStatus === "PENDING_SAIPOS_VALIDATION"
               ? "bg-amber-100 text-amber-700"
-              : saiposStatus === "FAILED"
-              ? "bg-red-100 text-red-600"
               : "bg-gray-100 text-gray-600"
           }`}>
-            {saiposStatus === "PENDING_SAIPOS_VALIDATION" ? "Validação pendente" : saiposStatus}
+            {saiposStatus === "AUTH_BLOCKED_403"
+              ? "HTTP 403 — acesso negado"
+              : saiposStatus === "PENDING_SAIPOS_VALIDATION"
+              ? "Erro 902"
+              : saiposStatus}
           </span>
         )}
       </div>
