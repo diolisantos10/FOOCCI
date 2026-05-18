@@ -823,33 +823,42 @@ function OrderCard({
         })()}
 
         {/* Row 4: actions */}
-        {!isTerminal && (
-          <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
-            {nextAction && (
-              <button
-                onClick={() => onAction(order.id, nextAction.next)}
-                className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600"
-              >
-                {nextAction.label}
-              </button>
-            )}
+        <div className="mt-2 flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+          {!isTerminal && nextAction && (
+            <button
+              onClick={() => onAction(order.id, nextAction.next)}
+              className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600"
+            >
+              {nextAction.label}
+            </button>
+          )}
+          {!isTerminal && (
             <button
               onClick={() => onCancel(order.id)}
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50"
             >
               Cancelar
             </button>
-            {order.conversationId && (
-              <a
-                href={`/atendimento?conv=${order.conversationId}`}
-                onClick={(e) => e.stopPropagation()}
-                className="ml-auto flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-              >
-                💬 Abrir conversa
-              </a>
-            )}
-          </div>
-        )}
+          )}
+          <a
+            href={`/orders/${order.id}/imprimir`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+          >
+            🖨️ Imprimir
+          </a>
+          {order.conversationId && (
+            <a
+              href={`/atendimento?conv=${order.conversationId}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+            >
+              💬 Abrir conversa
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1174,6 +1183,14 @@ function DetailPanel({
         <span className="font-mono text-xs text-gray-400">
           Pedido #{String(order.num).padStart(3, "0")}
         </span>
+        <a
+          href={`/orders/${order.id}/imprimir`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+        >
+          🖨️ Imprimir
+        </a>
       </div>
 
       {/* Desktop header */}
@@ -1184,11 +1201,21 @@ function DetailPanel({
           </p>
           <h3 className="mt-0.5 text-base font-bold text-gray-900">{order.customer}</h3>
         </div>
-        <button onClick={onClose} className="mt-0.5 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-          <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path d="M4 4l8 8M12 4l-8 8" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/orders/${order.id}/imprimir`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+          >
+            🖨️ Imprimir comanda
+          </a>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
+            <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Customer name — mobile only (since desktop header above has it) */}

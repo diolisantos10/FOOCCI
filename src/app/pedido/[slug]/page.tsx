@@ -64,6 +64,7 @@ export default async function PedidoPage({
       instagramUrl: true, tiktokUrl: true,
       brandPrimaryColor: true, brandSecondaryColor: true,
       ga4MeasurementId: true, gtmId: true,
+      brandPersona: true,
     },
   });
 
@@ -279,7 +280,13 @@ gtag('config', '${ga4Id}');
       <PedidoClient
         slug={slug}
         restaurantName={restaurant.name}
-        logoUrl={restaurant.logoUrl ?? null}
+        logoUrl={
+          (brandConfig?.brandPersona != null && typeof brandConfig.brandPersona === "object"
+            ? (brandConfig.brandPersona as Record<string, unknown>).logoUrl as string | undefined
+            : undefined) ??
+          restaurant.logoUrl ??
+          null
+        }
         phone={restaurant.storeProfile?.whatsappPhone ?? restaurant.phone ?? null}
         categories={allCategories}
         knownCustomerPhone={knownCustomerPhone}

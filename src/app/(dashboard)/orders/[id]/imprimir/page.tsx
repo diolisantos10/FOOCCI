@@ -46,10 +46,10 @@ export default async function ImprimirPage({
       {/* Action bar — screen only, hidden during print */}
       <div className="flex items-center justify-between border-b border-gray-100 bg-white px-6 py-3 print:hidden">
         <Link
-          href={`/orders/${order.id}`}
+          href="/orders"
           className="text-sm text-brand-600 hover:underline"
         >
-          ← Voltar para o pedido
+          ← Voltar para Pedidos
         </Link>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400">

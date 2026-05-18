@@ -2904,8 +2904,8 @@ export function PedidoClient({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={logoUrl} alt={restaurantName} className="h-9 w-9 rounded-full object-cover shrink-0" />
       ) : (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl leading-none" style={{ backgroundColor: pc }}>
-          🍕
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white leading-none" style={{ backgroundColor: pc }}>
+          {restaurantName.charAt(0).toUpperCase()}
         </div>
       )}
       <div className="flex-1 min-w-0">
