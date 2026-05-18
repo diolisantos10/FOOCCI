@@ -81,7 +81,11 @@ export async function resolveAudience(
   targetSegment: string,
   templateId?: string
 ): Promise<AudienceCustomer[]> {
-  const seg = targetSegment || (templateId ? TEMPLATE_SEGMENT_MAP[templateId] : null) || "TODOS";
+  // Resolve canonical segment — template IDs (e.g. "recuperar-frios") may arrive in targetSegment
+  const rawSeg = (targetSegment ?? "").trim();
+  const seg = (TEMPLATE_SEGMENT_MAP[rawSeg] ?? rawSeg)
+    || (templateId ? TEMPLATE_SEGMENT_MAP[templateId] : null)
+    || "TODOS";
   const rid = restaurantId;
   const now = new Date();
 

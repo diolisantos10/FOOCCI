@@ -493,7 +493,7 @@ const ACTION_TEMPLATES: ActionTemplate[] = [
     readiness: "SUGGESTED_TEMPLATE",
     hasAudienceQuery: true,
     audienceKey: "frioCustomers",
-    suggestedMessage: "Fala {nome}! 😊 Sentimos sua falta! Que tal voltar com um desconto especial de 10% no seu próximo pedido? Use o código VOLTEI e aproveite!",
+    suggestedMessage: "Oi, {nome}! Tudo bem? 😊 Passando pra avisar que o {restaurante} está atendendo hoje pelo delivery. Se quiser fazer seu pedido, é só acessar: {link_cardapio}",
   },
   {
     id: "reativar-mornos",
@@ -754,8 +754,8 @@ function ActionConfigDrawer({
               <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Canal</p>
               <div className="mt-0.5 flex items-center gap-1.5">
                 <p className="text-sm font-semibold text-gray-800">WhatsApp</p>
-                <span className="rounded-full bg-yellow-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-yellow-700">
-                  Em breve
+                <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-green-700">
+                  ativo
                 </span>
               </div>
             </div>
@@ -891,6 +891,8 @@ const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
   SCHEDULED:"Agendado",
 };
 
+const PILOT_MAX = 20; // safety cap for manual pilot dispatches
+
 function CampaignReviewModal({
   campaignId,
   initialRecipients,
@@ -911,6 +913,10 @@ function CampaignReviewModal({
   const [result,   setResult]   = useState<{ totalSent: number; totalFailed: number } | null>(null);
 
   const active = initialRecipients.filter((r) => !removed.has(r.id));
+
+  function applyCap() {
+    setRemoved((prev) => new Set([...prev, ...active.slice(PILOT_MAX).map((r) => r.id)]));
+  }
 
   async function handleSend() {
     setSending(true);
@@ -955,8 +961,11 @@ function CampaignReviewModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div>
             <h2 className="text-base font-bold text-gray-900">Revisar e enviar</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {active.length} destinatário{active.length !== 1 ? "s" : ""} · Canal: WhatsApp
+            <p className={`text-xs mt-0.5 ${active.length > PILOT_MAX ? "text-yellow-600 font-semibold" : "text-gray-500"}`}>
+              {active.length} destinatário{active.length !== 1 ? "s" : ""}
+              {active.length > PILOT_MAX
+                ? ` · ⚠️ acima do limite piloto (${PILOT_MAX})`
+                : " · Canal: WhatsApp"}
             </p>
           </div>
           <button onClick={onClose} className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 transition-colors">
@@ -986,6 +995,21 @@ function CampaignReviewModal({
           </div>
         ) : (
           <>
+            {/* Pilot cap warning */}
+            {active.length > PILOT_MAX && (
+              <div className="border-b border-yellow-100 bg-yellow-50 px-5 py-3 flex items-center justify-between gap-3 shrink-0">
+                <p className="text-xs text-yellow-800">
+                  ⚠️ <strong>Limite piloto:</strong> {active.length} destinatários — máximo permitido: {PILOT_MAX}. Remova manualmente ou aplique o limite automático.
+                </p>
+                <button
+                  onClick={applyCap}
+                  className="shrink-0 rounded-lg bg-yellow-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-yellow-700 transition-colors"
+                >
+                  Aplicar limite ({PILOT_MAX})
+                </button>
+              </div>
+            )}
+
             {/* Recipients list */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
               {active.length === 0 ? (
@@ -1031,10 +1055,15 @@ function CampaignReviewModal({
               </button>
               <button
                 onClick={handleSend}
-                disabled={sending || active.length === 0}
+                disabled={sending || active.length === 0 || active.length > PILOT_MAX}
+                title={active.length > PILOT_MAX ? `Reduza para no máximo ${PILOT_MAX} destinatários antes de enviar` : undefined}
                 className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {sending ? "Enviando…" : `Enviar ${active.length} mensagem${active.length !== 1 ? "s" : ""}`}
+                {sending
+                  ? "Enviando…"
+                  : active.length > PILOT_MAX
+                    ? `Limite: reduza para ≤ ${PILOT_MAX}`
+                    : `Enviar ${active.length} mensagem${active.length !== 1 ? "s" : ""}`}
               </button>
             </div>
           </>
