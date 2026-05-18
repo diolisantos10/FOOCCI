@@ -191,6 +191,7 @@ export class RestaurantSettingsService {
       distancePricePerKm:   input.distancePricePerKm   != null ? new Decimal(input.distancePricePerKm)   : null,
       distanceMaxKm:        input.distanceMaxKm         ?? null,
       distanceMinFee:       input.distanceMinFee        != null ? new Decimal(input.distanceMinFee)       : null,
+      distanceMinFeeKm:     input.distanceMinFeeKm      ?? null,
       distanceMaxFee:       input.distanceMaxFee        != null ? new Decimal(input.distanceMaxFee)       : null,
       distanceEstimatedBase: input.distanceEstimatedBase ?? null,
       peakHoursEnabled:  input.peakHoursEnabled,

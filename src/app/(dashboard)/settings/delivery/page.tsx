@@ -44,6 +44,7 @@ interface DeliveryFormState {
   distancePricePerKm: string;
   distanceMaxKm: string;
   distanceMinFee: string;
+  distanceMinFeeKm: string;
   distanceMaxFee: string;
   distanceEstimatedBase: string;
 }
@@ -58,6 +59,44 @@ function toNum(v: string): number | null {
 function fmtCurrency(v: string | number | null): string {
   if (v == null || v === "") return "";
   return String(Number(v));
+}
+
+/**
+ * Single source of truth for the distance-based fee formula.
+ *
+ * When minFeeKm is configured:
+ *   km ≤ minFeeKm  →  fee = minFee
+ *   km > minFeeKm  →  fee = minFee + (km - minFeeKm) * pricePerKm
+ *
+ * Without minFeeKm (legacy):
+ *   fee = baseFee + km * pricePerKm
+ *   fee = max(fee, minFee)
+ *
+ * Both paths apply maxFee cap at the end.
+ */
+function calcDistanceFee(
+  km:        number,
+  baseFee:   number,
+  perKm:     number,
+  minFee:    number | null,
+  minFeeKm:  number | null,
+  maxFee:    number | null
+): number {
+  let fee: number;
+
+  if (minFee != null && minFee > 0 && minFeeKm != null && minFeeKm >= 0) {
+    // New formula: taxa mínima covers the first minFeeKm kilometres
+    fee = km <= minFeeKm
+      ? minFee
+      : minFee + (km - minFeeKm) * perKm;
+  } else {
+    // Legacy formula: baseFee + km * perKm, floored by minFee
+    fee = baseFee + km * perKm;
+    if (minFee != null && minFee > 0 && fee < minFee) fee = minFee;
+  }
+
+  if (maxFee != null && maxFee > 0 && fee > maxFee) fee = maxFee;
+  return fee;
 }
 
 // ── Zone-bar color palettes ───────────────────────────────────────────────────
@@ -139,14 +178,12 @@ function CoverageOverview({
     const perKm      = toNum(form.distancePricePerKm);
     const maxKm      = toNum(form.distanceMaxKm);
     const minFee     = toNum(form.distanceMinFee);
+    const minFeeKm   = toNum(form.distanceMinFeeKm);
     const maxFee     = toNum(form.distanceMaxFee);
     const estBase    = form.distanceEstimatedBase ? parseInt(form.distanceEstimatedBase, 10) : null;
 
     const feeAt = (km: number) => {
-      let f = (baseFee ?? 0) + km * (perKm ?? 0);
-      if (minFee != null && minFee > 0 && f < minFee) f = minFee;
-      if (maxFee != null && maxFee > 0 && f > maxFee) f = maxFee;
-      return f;
+      return calcDistanceFee(km, baseFee ?? 0, perKm ?? 0, minFee, minFeeKm, maxFee);
     };
 
     const exampleKm = maxKm != null ? Math.round(maxKm / 2 * 10) / 10 : null;
@@ -403,12 +440,13 @@ function simulateDelivery(
   }
 
   if (form.mode === "distance") {
-    const baseFee  = toNum(form.distanceBaseFee) ?? 0;
-    const perKm    = toNum(form.distancePricePerKm) ?? 0;
-    const maxKm    = toNum(form.distanceMaxKm);
-    const minFee   = toNum(form.distanceMinFee);
-    const maxFee   = toNum(form.distanceMaxFee);
-    const estBase  = form.distanceEstimatedBase ? parseInt(form.distanceEstimatedBase, 10) : undefined;
+    const baseFee   = toNum(form.distanceBaseFee) ?? 0;
+    const perKm     = toNum(form.distancePricePerKm) ?? 0;
+    const maxKm     = toNum(form.distanceMaxKm);
+    const minFee    = toNum(form.distanceMinFee);
+    const minFeeKm  = toNum(form.distanceMinFeeKm);
+    const maxFee    = toNum(form.distanceMaxFee);
+    const estBase   = form.distanceEstimatedBase ? parseInt(form.distanceEstimatedBase, 10) : undefined;
     const globalMin = toNum(form.minOrderValue) ?? 0;
 
     if (maxKm != null && distanceKm > maxKm) {
@@ -419,10 +457,7 @@ function simulateDelivery(
       return { allowed: false, blockedReason: `Pedido mínimo não atingido.`, fee: 0, effectiveFee: 0, estimatedMinutes: estBase, freeDeliveryApplied: false, minOrderBlocked: true, minOrderRequired: globalMin };
     }
 
-    let fee = baseFee + distanceKm * perKm;
-    if (minFee != null && minFee > 0 && fee < minFee) fee = minFee;
-    if (maxFee != null && maxFee > 0 && fee > maxFee) fee = maxFee;
-
+    const fee = calcDistanceFee(distanceKm, baseFee, perKm, minFee, minFeeKm, maxFee);
     const freeDeliveryApplied = freeAbove != null && freeAbove > 0 && orderValue >= freeAbove;
     return { allowed: true, zoneName: "Por distância", fee, effectiveFee: freeDeliveryApplied ? 0 : fee, estimatedMinutes: estBase, freeDeliveryApplied, minOrderBlocked: false };
   }
@@ -840,6 +875,7 @@ export default function DeliveryPage() {
     distancePricePerKm: "",
     distanceMaxKm: "",
     distanceMinFee: "",
+    distanceMinFeeKm: "",
     distanceMaxFee: "",
     distanceEstimatedBase: "",
   });
@@ -871,8 +907,9 @@ export default function DeliveryPage() {
           geoRadiusKm:      data.geoRadiusKm != null ? String(data.geoRadiusKm) : "",
           distanceBaseFee:       fmtCurrency(data.distanceBaseFee),
           distancePricePerKm:    fmtCurrency(data.distancePricePerKm),
-          distanceMaxKm:         data.distanceMaxKm != null ? String(data.distanceMaxKm) : "",
+          distanceMaxKm:         data.distanceMaxKm    != null ? String(data.distanceMaxKm)    : "",
           distanceMinFee:        fmtCurrency(data.distanceMinFee),
+          distanceMinFeeKm:      data.distanceMinFeeKm != null ? String(data.distanceMinFeeKm) : "",
           distanceMaxFee:        fmtCurrency(data.distanceMaxFee),
           distanceEstimatedBase: data.distanceEstimatedBase != null ? String(data.distanceEstimatedBase) : "",
         });
@@ -901,6 +938,7 @@ export default function DeliveryPage() {
       distancePricePerKm:    toNum(form.distancePricePerKm),
       distanceMaxKm:         toNum(form.distanceMaxKm),
       distanceMinFee:        toNum(form.distanceMinFee),
+      distanceMinFeeKm:      toNum(form.distanceMinFeeKm),
       distanceMaxFee:        toNum(form.distanceMaxFee),
       distanceEstimatedBase: form.distanceEstimatedBase ? parseInt(form.distanceEstimatedBase, 10) : null,
       peakHoursEnabled:  form.peakHoursEnabled,
@@ -1272,7 +1310,15 @@ export default function DeliveryPage() {
               <PageCard>
                 <SectionHeading
                   title="Configuração por distância"
-                  subtitle="Fórmula: taxa = base + (km × preço/km) — com piso e teto opcionais."
+                  subtitle={(() => {
+                    const minF   = toNum(form.distanceMinFee);
+                    const minFKm = toNum(form.distanceMinFeeKm);
+                    const perK   = toNum(form.distancePricePerKm);
+                    if (minF != null && minF > 0 && minFKm != null && minFKm > 0) {
+                      return `Taxa mínima R$ ${minF.toFixed(2).replace(".", ",")} até ${minFKm} km; depois soma R$ ${(perK ?? 0).toFixed(2).replace(".", ",")}/km adicional.`;
+                    }
+                    return "Fórmula: taxa = base + (km × preço/km) — com piso e teto opcionais.";
+                  })()}
                 />
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Taxa base (R$)" hint="Taxa cobrada mesmo em distância zero.">
@@ -1330,6 +1376,20 @@ export default function DeliveryPage() {
                       placeholder="Ex: 5,00"
                     />
                   </Field>
+                  <Field
+                    label="Km incluídos na taxa mínima"
+                    hint="Até essa distância, será cobrada apenas a taxa mínima."
+                  >
+                    <input
+                      className={INPUT}
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={form.distanceMinFeeKm}
+                      onChange={(e) => setForm((f) => ({ ...f, distanceMinFeeKm: e.target.value }))}
+                      placeholder="Ex: 3"
+                    />
+                  </Field>
                   <Field label="Taxa máxima (R$)" hint="Teto para a taxa calculada. Opcional.">
                     <input
                       className={INPUT}
@@ -1349,13 +1409,12 @@ export default function DeliveryPage() {
                     <p className="text-xs font-semibold text-indigo-700 mb-1.5">Prévia da fórmula</p>
                     <div className="flex flex-wrap gap-3 text-xs text-indigo-800">
                       {[1, 3, 5, 10].filter((km) => toNum(form.distanceMaxKm) == null || km <= (toNum(form.distanceMaxKm) ?? 0)).map((km) => {
-                        const base = toNum(form.distanceBaseFee) ?? 0;
-                        const perK = toNum(form.distancePricePerKm) ?? 0;
-                        const minF = toNum(form.distanceMinFee);
-                        const maxF = toNum(form.distanceMaxFee);
-                        let fee = base + km * perK;
-                        if (minF != null && minF > 0 && fee < minF) fee = minF;
-                        if (maxF != null && maxF > 0 && fee > maxF) fee = maxF;
+                        const base   = toNum(form.distanceBaseFee) ?? 0;
+                        const perK   = toNum(form.distancePricePerKm) ?? 0;
+                        const minF   = toNum(form.distanceMinFee);
+                        const minFKm = toNum(form.distanceMinFeeKm);
+                        const maxF   = toNum(form.distanceMaxFee);
+                        const fee    = calcDistanceFee(km, base, perK, minF, minFKm, maxF);
                         return (
                           <span key={km} className="rounded-full bg-indigo-100 px-2.5 py-0.5 font-medium">
                             {km} km → R$ {fee.toFixed(2).replace(".", ",")}

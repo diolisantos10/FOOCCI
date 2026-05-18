@@ -91,6 +91,7 @@ export const upsertDeliverySchema = z.object({
   distancePricePerKm:    z.number().min(0).nullable().optional(),
   distanceMaxKm:         z.number().min(0.1).nullable().optional(),
   distanceMinFee:        z.number().min(0).nullable().optional(),
+  distanceMinFeeKm:      z.number().min(0).nullable().optional(),
   distanceMaxFee:        z.number().min(0).nullable().optional(),
   distanceEstimatedBase: z.number().int().min(1).max(300).nullable().optional(),
 

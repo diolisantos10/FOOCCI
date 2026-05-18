@@ -1133,6 +1133,7 @@ model DeliveryConfig {
   distancePricePerKm    Decimal? @db.Decimal(10, 2)
   distanceMaxKm         Float?
   distanceMinFee        Decimal? @db.Decimal(10, 2)
+  distanceMinFeeKm      Float?                         // km included in minimumFee (new formula)
   distanceMaxFee        Decimal? @db.Decimal(10, 2)
   distanceEstimatedBase Int?
 
