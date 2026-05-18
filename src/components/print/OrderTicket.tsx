@@ -1,10 +1,9 @@
 import { isGuestIdentifier } from "@/lib/guest";
 
-// ── Money helpers ─────────────────────────────────────────────────────────────
+// ── Money ─────────────────────────────────────────────────────────────────────
 
 function brl(value: unknown): string {
-  const n = Number(value);
-  return `R$ ${n.toFixed(2).replace(".", ",")}`;
+  return `R$ ${Number(value).toFixed(2).replace(".", ",")}`;
 }
 
 function displayId(orderId: string): string {
@@ -22,7 +21,8 @@ function fmtDate(date: Date): string {
 }
 
 // ── Addon parsing ─────────────────────────────────────────────────────────────
-// addonsJson has no guaranteed shape — parse defensively and never throw.
+// addonsJson has no guaranteed shape. Parse defensively — never throw, never
+// show raw JSON to the user.
 
 interface ParsedAddon {
   name:   string;
@@ -32,20 +32,25 @@ interface ParsedAddon {
 function parseAddons(raw: unknown): ParsedAddon[] {
   if (raw == null) return [];
   try {
-    const arr = typeof raw === "string" ? (JSON.parse(raw) as unknown) : raw;
+    const arr: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (!Array.isArray(arr)) return [];
     const result: ParsedAddon[] = [];
     for (const entry of arr) {
       if (typeof entry !== "object" || entry === null) continue;
       const e = entry as Record<string, unknown>;
-      const name =
-        e.name ?? e.label ?? e.desc_item_choice ?? e.description ?? e.desc;
-      if (typeof name !== "string" || !name) continue;
+      // Accept any reasonable name field from known Saipos / generic shapes
+      const rawName =
+        e.name ?? e.label ?? e.desc_item_choice ??
+        e.description ?? e.desc ?? e.title;
+      if (typeof rawName !== "string" || !rawName.trim()) continue;
       const rawPrice =
         e.price ?? e.unitPrice ?? e.unit_price ??
-        e.aditional_price ?? e.additionalPrice;
+        e.aditional_price ?? e.additionalPrice ?? e.additional_price;
       const price = rawPrice != null ? Number(rawPrice) : undefined;
-      result.push({ name, price: price != null && !isNaN(price) ? price : undefined });
+      result.push({
+        name:  rawName.trim(),
+        price: price != null && !isNaN(price) && price !== 0 ? price : undefined,
+      });
     }
     return result;
   } catch {
@@ -62,13 +67,13 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
-  CASH:           "Dinheiro",
-  CREDIT_CARD:    "Cartão de Crédito",
-  DEBIT_CARD:     "Cartão de Débito",
-  PIX:            "Pix",
-  ONLINE:         "Online",
-  CARD_MACHINE:   "Maquininha",
-  PIX_IN_PERSON:  "Pix na Entrega",
+  CASH:          "Dinheiro",
+  CREDIT_CARD:   "Cartão de Crédito",
+  DEBIT_CARD:    "Cartão de Débito",
+  PIX:           "Pix",
+  ONLINE:        "Online",
+  CARD_MACHINE:  "Maquininha",
+  PIX_IN_PERSON: "Pix na Entrega",
 };
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -111,185 +116,247 @@ interface OrderTicketOrder {
 interface Props {
   order:          OrderTicketOrder;
   restaurantName: string;
+  /**
+   * "hidden"  — invisible on screen, rendered for @media print only.
+   *             Used on the order detail page alongside the full admin UI.
+   * "preview" — visible on screen, centered receipt card.
+   *             Used on the /imprimir preview page.
+   */
+  mode?: "hidden" | "preview";
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-// Hidden on screen. Visible only inside @media print via the page-level style tag.
+// ── Receipt content ───────────────────────────────────────────────────────────
 
-export function OrderTicket({ order, restaurantName }: Props) {
+function ReceiptContent({
+  order,
+  restaurantName,
+}: {
+  order:          OrderTicketOrder;
+  restaurantName: string;
+}) {
   const phone =
     !order.customer.phone || isGuestIdentifier(order.customer.phone)
       ? null
       : order.customer.phone;
 
-  const discountCents = Number(order.discount);
-  const deliveryFeeCents = Number(order.deliveryFee);
+  const discountAmt    = Number(order.discount);
+  const deliveryFeeAmt = Number(order.deliveryFee);
 
   return (
-    <div id="foocci-print-ticket" className="hidden">
-      <div
-        style={{
-          fontFamily:  "monospace, monospace",
-          fontSize:    "12px",
-          lineHeight:  "1.5",
-          width:       "72mm",
-          padding:     "4mm",
-          color:       "#000",
-          background:  "#fff",
-        }}
-      >
-        {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: "8px" }}>
-          <div style={{ fontWeight: "bold", fontSize: "14px", textTransform: "uppercase" }}>
-            {restaurantName}
-          </div>
-          <div style={{ fontSize: "11px", marginTop: "2px" }}>
-            {TYPE_LABELS[order.type] ?? order.type}
-          </div>
+    <>
+      {/* Header */}
+      <div style={{ textAlign: "center", marginBottom: "8px" }}>
+        <div style={{ fontWeight: "bold", fontSize: "14px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          {restaurantName}
         </div>
-
-        <Divider />
-
-        {/* Order ID + date */}
-        <Row label="Pedido" value={displayId(order.id)} />
-        <Row label="Data"   value={fmtDate(order.createdAt)} />
-
-        <Divider />
-
-        {/* Customer */}
-        <Row label="Cliente" value={order.customer.name} />
-        {phone && <Row label="Tel" value={phone} />}
-
-        {/* Delivery address */}
-        {order.type === "DELIVERY" && order.deliveryAddress && (
-          <>
-            <Divider dashed />
-            <div style={{ marginBottom: "4px" }}>
-              <span style={{ fontWeight: "bold" }}>Endereço:</span>
-            </div>
-            <div style={{ paddingLeft: "4px" }}>
-              <div>
-                {order.deliveryAddress.street}, {order.deliveryAddress.number}
-                {order.deliveryAddress.complement
-                  ? ` — ${order.deliveryAddress.complement}`
-                  : ""}
-              </div>
-              <div>{order.deliveryAddress.neighborhood}</div>
-              <div>
-                {order.deliveryAddress.city}/{order.deliveryAddress.state}
-              </div>
-              <div>CEP: {order.deliveryAddress.zipCode}</div>
-            </div>
-          </>
-        )}
-
-        <Divider />
-
-        {/* Items */}
-        <div style={{ fontWeight: "bold", marginBottom: "4px" }}>ITENS</div>
-        {order.items.map((item, i) => {
-          const addons = parseAddons(item.addonsJson);
-          return (
-            <div key={i} style={{ marginBottom: "6px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>
-                  {item.quantity}× {item.name}
-                </span>
-                <span>{brl(Number(item.price) * item.quantity)}</span>
-              </div>
-              {item.notes && (
-                <div style={{ paddingLeft: "12px", fontSize: "11px", color: "#444" }}>
-                  obs: {item.notes}
-                </div>
-              )}
-              {addons.map((a, ai) => (
-                <div
-                  key={ai}
-                  style={{
-                    paddingLeft: "12px",
-                    fontSize:    "11px",
-                    display:     "flex",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <span>+ {a.name}</span>
-                  {a.price != null && <span>{brl(a.price)}</span>}
-                </div>
-              ))}
-            </div>
-          );
-        })}
-
-        <Divider />
-
-        {/* Totals */}
-        <Row label="Subtotal" value={brl(order.subtotal)} />
-        {deliveryFeeCents > 0 && (
-          <Row label="Entrega" value={brl(order.deliveryFee)} />
-        )}
-        {discountCents > 0 && (
-          <Row label="Desconto" value={`– ${brl(order.discount)}`} />
-        )}
-        <div
-          style={{
-            display:       "flex",
-            justifyContent: "space-between",
-            fontWeight:    "bold",
-            fontSize:      "13px",
-            marginTop:     "4px",
-            paddingTop:    "4px",
-            borderTop:     "1px solid #000",
-          }}
-        >
-          <span>TOTAL</span>
-          <span>{brl(order.total)}</span>
-        </div>
-
-        <Divider />
-
-        {/* Payment */}
-        <Row
-          label="Pagamento"
-          value={
-            order.payment
-              ? (PAYMENT_LABELS[order.payment.method] ?? order.payment.method)
-              : "—"
-          }
-        />
-
-        {/* Order notes */}
-        {order.notes && (
-          <>
-            <Divider dashed />
-            <div style={{ fontSize: "11px" }}>
-              <span style={{ fontWeight: "bold" }}>Obs: </span>
-              {order.notes}
-            </div>
-          </>
-        )}
-
-        <Divider />
-
-        <div style={{ textAlign: "center", fontSize: "10px", color: "#666" }}>
-          Foocci — {fmtDate(new Date())}
+        <div style={{ fontSize: "11px", marginTop: "3px", color: "#444" }}>
+          {TYPE_LABELS[order.type] ?? order.type}
         </div>
       </div>
-    </div>
+
+      <Divider />
+
+      {/* Order ID + date */}
+      <Row label="Pedido" value={displayId(order.id)} bold />
+      <Row label="Data"   value={fmtDate(order.createdAt)} />
+
+      <Divider />
+
+      {/* Customer */}
+      <Row label="Cliente" value={order.customer.name} />
+      {phone && <Row label="Tel" value={phone} />}
+
+      {/* Delivery address */}
+      {order.type === "DELIVERY" && order.deliveryAddress && (() => {
+        const a = order.deliveryAddress!;
+        return (
+          <>
+            <Divider dashed />
+            <div style={{ fontWeight: "bold", marginBottom: "3px", fontSize: "11px" }}>
+              ENDEREÇO DE ENTREGA
+            </div>
+            <div style={{ fontSize: "11px", lineHeight: "1.5", paddingLeft: "2px" }}>
+              <div>{a.street}, {a.number}{a.complement ? ` — ${a.complement}` : ""}</div>
+              <div>{a.neighborhood}</div>
+              <div>{a.city}/{a.state}</div>
+              <div style={{ color: "#555" }}>CEP: {a.zipCode}</div>
+            </div>
+          </>
+        );
+      })()}
+
+      <Divider />
+
+      {/* Items */}
+      <div style={{ fontWeight: "bold", marginBottom: "5px", fontSize: "11px" }}>
+        ITENS
+      </div>
+      {order.items.map((item, i) => {
+        const addons = parseAddons(item.addonsJson);
+        return (
+          <div
+            key={i}
+            style={{
+              marginBottom:    "7px",
+              pageBreakInside: "avoid",
+              breakInside:     "avoid",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "4px" }}>
+              <span style={{ flex: 1 }}>
+                <strong>{item.quantity}×</strong> {item.name}
+              </span>
+              <span style={{ whiteSpace: "nowrap" }}>
+                {brl(Number(item.price) * item.quantity)}
+              </span>
+            </div>
+            {item.notes && (
+              <div style={{ paddingLeft: "14px", fontSize: "11px", color: "#555", marginTop: "1px" }}>
+                ↳ {item.notes}
+              </div>
+            )}
+            {addons.length > 0 && (
+              <div style={{ paddingLeft: "14px" }}>
+                {addons.map((a, ai) => (
+                  <div
+                    key={ai}
+                    style={{
+                      display:        "flex",
+                      justifyContent: "space-between",
+                      fontSize:       "11px",
+                      color:          "#444",
+                      marginTop:      "1px",
+                    }}
+                  >
+                    <span>+ {a.name}</span>
+                    {a.price != null && <span>{brl(a.price)}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <Divider />
+
+      {/* Totals */}
+      <Row label="Subtotal" value={brl(order.subtotal)} />
+      {deliveryFeeAmt > 0 && (
+        <Row label="Entrega" value={brl(order.deliveryFee)} />
+      )}
+      {discountAmt > 0 && (
+        <Row label="Desconto" value={`– ${brl(order.discount)}`} />
+      )}
+      <div
+        style={{
+          display:         "flex",
+          justifyContent:  "space-between",
+          fontWeight:      "bold",
+          fontSize:        "13px",
+          marginTop:       "5px",
+          paddingTop:      "5px",
+          borderTop:       "1px solid #000",
+          pageBreakInside: "avoid",
+          breakInside:     "avoid",
+        }}
+      >
+        <span>TOTAL</span>
+        <span>{brl(order.total)}</span>
+      </div>
+
+      <Divider />
+
+      {/* Payment */}
+      <Row
+        label="Pagamento"
+        value={order.payment
+          ? (PAYMENT_LABELS[order.payment.method] ?? order.payment.method)
+          : "—"}
+      />
+
+      {/* Order notes */}
+      {order.notes && (
+        <>
+          <Divider dashed />
+          <div style={{ fontSize: "11px" }}>
+            <span style={{ fontWeight: "bold" }}>Obs: </span>
+            {order.notes}
+          </div>
+        </>
+      )}
+
+      <Divider />
+
+      <div style={{ textAlign: "center", fontSize: "10px", color: "#777" }}>
+        Foocci · {fmtDate(new Date())}
+      </div>
+    </>
   );
 }
 
-// ── Small layout helpers ──────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 
-function Row({ label, value }: { label: string; value: string }) {
+export function OrderTicket({ order, restaurantName, mode = "hidden" }: Props) {
+  const receiptStyle: React.CSSProperties = {
+    fontFamily:  "'Courier New', Courier, monospace",
+    fontSize:    "12px",
+    lineHeight:  "1.6",
+    width:       "72mm",
+    padding:     "5mm",
+    color:       "#000",
+    background:  "#fff",
+  };
+
+  const ticketEl = (
+    <div id="foocci-print-ticket" style={receiptStyle}>
+      <ReceiptContent order={order} restaurantName={restaurantName} />
+    </div>
+  );
+
+  if (mode === "preview") {
+    return (
+      // Screen: center the receipt card. Print: ignored — ticket is position:fixed.
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <div
+          style={{
+            boxShadow:    "0 2px 20px rgba(0,0,0,0.12)",
+            borderRadius: "4px",
+            overflow:     "hidden",
+          }}
+        >
+          {ticketEl}
+        </div>
+      </div>
+    );
+  }
+
+  // hidden: not displayed on screen; revealed by @media print via page-level CSS
+  return <div className="hidden">{ticketEl}</div>;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function Row({
+  label,
+  value,
+  bold,
+}: {
+  label: string;
+  value: string;
+  bold?: boolean;
+}) {
   return (
     <div
       style={{
-        display:        "flex",
-        justifyContent: "space-between",
-        marginBottom:   "2px",
+        display:         "flex",
+        justifyContent:  "space-between",
+        gap:             "4px",
+        marginBottom:    "2px",
+        fontWeight:      bold ? "bold" : undefined,
       }}
     >
-      <span style={{ color: "#555" }}>{label}</span>
+      <span style={{ color: bold ? "#000" : "#555" }}>{label}</span>
       <span>{value}</span>
     </div>
   );
@@ -299,8 +366,8 @@ function Divider({ dashed }: { dashed?: boolean }) {
   return (
     <div
       style={{
-        borderTop:    `1px ${dashed ? "dashed" : "solid"} #ccc`,
-        margin:       "6px 0",
+        borderTop: `1px ${dashed ? "dashed" : "solid"} #ccc`,
+        margin:    "6px 0",
       }}
     />
   );

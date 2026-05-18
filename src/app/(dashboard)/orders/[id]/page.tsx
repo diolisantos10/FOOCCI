@@ -57,7 +57,15 @@ export default async function OrderDetailPage({
           <Link href="/orders" className="text-sm text-brand-600 hover:underline">
             ← Voltar para pedidos
           </Link>
-          <PrintButton />
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/orders/${order.id}/imprimir`}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+            >
+              🔍 Pré-visualizar comanda
+            </Link>
+            <PrintButton />
+          </div>
         </div>
 
         {/* Status + meta */}
@@ -269,8 +277,10 @@ export default async function OrderDetailPage({
       <style>{`
         @media print {
           * { visibility: hidden; }
-          #foocci-print-ticket { display: block !important; visibility: visible; position: fixed; top: 0; left: 0; width: 100%; }
+          #foocci-print-ticket { display: block !important; visibility: visible; position: fixed; top: 0; left: 0; }
           #foocci-print-ticket * { visibility: visible; }
+          @page { margin: 0; size: 80mm auto; }
+          body { margin: 0; }
         }
       `}</style>
     </>
