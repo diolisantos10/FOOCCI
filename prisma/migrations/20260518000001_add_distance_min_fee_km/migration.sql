@@ -1,2 +1,2 @@
--- AlterTable: add distanceMinFeeKm to DeliveryConfig
-ALTER TABLE "DeliveryConfig" ADD COLUMN "distanceMinFeeKm" DOUBLE PRECISION;
+-- AlterTable: add distanceMinFeeKm to delivery_configs
+ALTER TABLE "delivery_configs" ADD COLUMN "distanceMinFeeKm" DOUBLE PRECISION;
