@@ -1582,6 +1582,132 @@ function ReactivationHelper({
   );
 }
 
+// ── WhatsApp Send Modal ───────────────────────────────────────────────────────
+
+function WhatsAppSendModal({
+  customer,
+  onClose,
+}: {
+  customer: CRMCustomer;
+  onClose: () => void;
+}) {
+  const firstName = customer.name.split(" ")[0];
+  const [message, setMessage] = useState(
+    `Oi, ${firstName}! Tudo bem? 😊 Passando para dizer que estamos aqui caso queira fazer um pedido. Qualquer dúvida é só falar!`
+  );
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<
+    { ok: true; conversationId: string } | { ok: false; error: string } | null
+  >(null);
+
+  async function handleSend() {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/customers/${customer.id}/send-whatsapp`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ message: trimmed }),
+      });
+      const json = await res.json() as {
+        success?: boolean;
+        data?:    { conversationId: string };
+        error?:   string;
+      };
+      if (res.ok && json.data?.conversationId) {
+        setResult({ ok: true, conversationId: json.data.conversationId });
+      } else {
+        setResult({ ok: false, error: json.error ?? "Falha ao enviar mensagem." });
+      }
+    } catch {
+      setResult({ ok: false, error: "Erro de conexão. Tente novamente." });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const maskedPhone = formatPhone(customer.phone);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4 sm:pb-0"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">
+              Enviar WhatsApp para {customer.name}
+            </h3>
+            <p className="mt-0.5 text-xs text-gray-500">{maskedPhone}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-3">
+          {result?.ok ? (
+            <div className="rounded-xl bg-green-50 border border-green-200 p-4 text-sm text-green-800">
+              <p className="font-semibold">Mensagem enviada pelo WhatsApp.</p>
+              <a
+                href={`/atendimento?conversation=${result.conversationId}`}
+                className="mt-1 inline-flex items-center gap-1 text-green-700 underline underline-offset-2 hover:text-green-900"
+              >
+                Ver conversa em Atendimento →
+              </a>
+            </div>
+          ) : (
+            <>
+              {result && !result.ok && (
+                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                  {result.error}
+                </div>
+              )}
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={5}
+                maxLength={4096}
+                placeholder="Digite a mensagem…"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none transition"
+              />
+              <p className="text-right text-xs text-gray-400">{message.length}/4096</p>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-2 border-t border-gray-100 px-5 py-4">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            {result?.ok ? "Fechar" : "Cancelar"}
+          </button>
+          {!result?.ok && (
+            <button
+              onClick={handleSend}
+              disabled={sending || !message.trim()}
+              className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
+              {sending ? "Enviando…" : "Enviar WhatsApp"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Customers Tab ─────────────────────────────────────────────────────────────
 
 type CRMFilter = "all" | "inactive" | "morno" | "frio" | "neverOrdered" | "vip" | "firstTime" | "recent";
@@ -1597,31 +1723,42 @@ function CustomersTab({
   onImportOpen: () => void;
   reviewLinks: { google: string | null; ifood: string | null };
 }) {
-  const [filter, setFilter] = useState<CRMFilter>(initialFilter);
+  const [filter,    setFilter]    = useState<CRMFilter>(initialFilter);
   const [customers, setCustomers] = useState<CRMCustomer[]>(
     initialFilter === "all" ? initialCustomers : []
   );
   const [loading,   setLoading]   = useState(initialFilter !== "all");
   const [sortValue, setSortValue] = useState("spend-desc");
+  const [search,    setSearch]    = useState("");
+  const [debSearch, setDebSearch] = useState("");
+  const [waSend,    setWaSend]    = useState<CRMCustomer | null>(null);
 
+  // Debounce search → debSearch triggers the API call
   useEffect(() => {
-    if (initialFilter !== "all") {
-      fetch(`/api/crm/customers?filter=${initialFilter}`)
-        .then((r) => r.json())
-        .then((json) => { setCustomers(json.data ?? []); setLoading(false); });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const t = setTimeout(() => setDebSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  async function applyFilter(f: CRMFilter) {
-    setFilter(f);
-    setLoading(true);
-    const res = await fetch(`/api/crm/customers?filter=${f}`);
-    if (res.ok) {
-      const json = await res.json();
-      setCustomers(json.data ?? []);
+  // Single fetch effect: runs on filter OR debounced search change
+  useEffect(() => {
+    if (filter === "all" && !debSearch) {
+      setCustomers(initialCustomers);
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+    setLoading(true);
+    const qs = new URLSearchParams({ filter });
+    if (debSearch) qs.set("search", debSearch);
+    fetch(`/api/crm/customers?${qs}`)
+      .then((r) => r.json())
+      .then((json) => setCustomers((json.data as CRMCustomer[]) ?? []))
+      .catch(() => setCustomers([]))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, debSearch]);
+
+  function applyFilter(f: CRMFilter) {
+    setFilter(f);
   }
 
   const sortedCustomers = applyCRMSort(customers, sortValue);
@@ -1630,6 +1767,37 @@ function CustomersTab({
 
   return (
     <div className="space-y-4">
+      {waSend && (
+        <WhatsAppSendModal customer={waSend} onClose={() => setWaSend(null)} />
+      )}
+
+      {/* Search box */}
+      <div className="relative">
+        <svg
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+        </svg>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar cliente por nome ou telefone…"
+          className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-10 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        )}
+      </div>
+
       {/* Filter pills + actions */}
       <div className="flex flex-wrap items-center gap-2">
         {filterKeys.map((f) => (
@@ -1653,7 +1821,9 @@ function CustomersTab({
         >
           {CRM_SORT_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <span className="text-xs text-gray-400 ml-1">{customers.length} clientes</span>
+        <span className="text-xs text-gray-400 ml-1">
+          {debSearch ? `${customers.length} resultado${customers.length !== 1 ? "s" : ""}` : `${customers.length} clientes`}
+        </span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <NewCustomerButton onCreated={() => applyFilter(filter)} />
           {customers.length > 0 && (
@@ -1683,7 +1853,21 @@ function CustomersTab({
       {loading ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando…</div>
       ) : customers.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-400">Nenhum cliente neste filtro.</div>
+        <div className="py-12 text-center space-y-3">
+          <p className="text-sm text-gray-500">
+            {debSearch
+              ? "Não encontramos clientes com esse nome ou telefone."
+              : "Nenhum cliente neste filtro."}
+          </p>
+          {debSearch && (
+            <button
+              onClick={() => setSearch("")}
+              className="rounded-full border border-gray-200 px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Limpar busca
+            </button>
+          )}
+        </div>
       ) : (
         <>
           {/* Desktop table */}
@@ -1696,6 +1880,7 @@ function CustomersTab({
                   <th className="px-4 py-3 text-right">Gasto total</th>
                   <th className="px-4 py-3 text-right">Pedidos</th>
                   <th className="px-4 py-3 text-right">Último pedido</th>
+                  <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -1741,6 +1926,24 @@ function CustomersTab({
                         {relativeDate(c.lastOrderAt)}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      {c.contactStatus === "OPT_OUT" ? (
+                        <span className="text-[10px] text-gray-400 italic">Opt-out</span>
+                      ) : !c.phone || c.contactStatus === "SEM_TELEFONE" ? (
+                        <span className="text-[10px] text-gray-400 italic">Sem telefone</span>
+                      ) : (
+                        <button
+                          onClick={() => setWaSend(c)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                        >
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347Z"/>
+                            <path d="M11.955 2C6.469 2 2 6.469 2 11.955c0 1.92.525 3.716 1.44 5.26L2 22l4.94-1.418A9.913 9.913 0 0 0 11.955 22C17.44 22 22 17.531 22 12.045 22 6.559 17.44 2 11.955 2Zm0 18.18a8.205 8.205 0 0 1-4.19-1.146l-.3-.178-3.107.893.893-3.026-.196-.312A8.178 8.178 0 0 1 3.82 12.045c0-4.489 3.647-8.135 8.135-8.135 4.489 0 8.135 3.646 8.135 8.135 0 4.489-3.646 8.135-8.135 8.135Z"/>
+                          </svg>
+                          WhatsApp
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1762,8 +1965,8 @@ function CustomersTab({
           {/* Mobile cards */}
           <div className="sm:hidden space-y-2">
             {sortedCustomers.map((c) => (
-              <Link key={c.id} href={`/customers/${c.id}`}>
-                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+              <div key={c.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <Link href={`/customers/${c.id}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-900 truncate">
@@ -1792,8 +1995,22 @@ function CustomersTab({
                       {relativeDate(c.lastOrderAt)}
                     </span>
                   </div>
-                </div>
-              </Link>
+                </Link>
+                {c.phone && c.contactStatus !== "SEM_TELEFONE" && c.contactStatus !== "OPT_OUT" && (
+                  <div className="mt-3 border-t border-gray-50 pt-3">
+                    <button
+                      onClick={() => setWaSend(c)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                    >
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347Z"/>
+                        <path d="M11.955 2C6.469 2 2 6.469 2 11.955c0 1.92.525 3.716 1.44 5.26L2 22l4.94-1.418A9.913 9.913 0 0 0 11.955 22C17.44 22 22 17.531 22 12.045 22 6.559 17.44 2 11.955 2Zm0 18.18a8.205 8.205 0 0 1-4.19-1.146l-.3-.178-3.107.893.893-3.026-.196-.312A8.178 8.178 0 0 1 3.82 12.045c0-4.489 3.647-8.135 8.135-8.135 4.489 0 8.135 3.646 8.135 8.135 0 4.489-3.646 8.135-8.135 8.135Z"/>
+                      </svg>
+                      Enviar WhatsApp
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </>

@@ -6,6 +6,7 @@ import { z } from "zod";
 
 const querySchema = z.object({
   filter: z.enum(["all", "inactive", "neverOrdered", "morno", "frio", "vip", "recent", "firstTime"]).default("all"),
+  search: z.string().max(100).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
     const parsed = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams));
     if (!parsed.success) return badRequest("Parâmetros inválidos");
 
-    const result = await CRMService.getCustomers(ctx.restaurantId, parsed.data.filter);
+    const result = await CRMService.getCustomers(ctx.restaurantId, parsed.data.filter, parsed.data.search);
     if (!result.ok) return serverError(result.error);
 
     return ok(result.data);
