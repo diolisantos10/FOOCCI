@@ -6,6 +6,8 @@ import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
+import { PrintButton } from "@/components/print/PrintButton";
+import { OrderTicket } from "@/components/print/OrderTicket";
 
 export const metadata = { title: "Pedido" };
 
@@ -41,13 +43,22 @@ export default async function OrderDetailPage({
     notFound();
   }
 
+  const restaurant = await prisma.restaurant.findUnique({
+    where:  { id: session.user.restaurantId },
+    select: { name: true },
+  });
+  const restaurantName = restaurant?.name ?? "Restaurante";
+
   return (
     <>
       <TopBar title={`Pedido — ${order.customer.name}`} />
       <div className="p-6 space-y-5">
-        <Link href="/orders" className="text-sm text-brand-600 hover:underline">
-          ← Voltar para pedidos
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link href="/orders" className="text-sm text-brand-600 hover:underline">
+            ← Voltar para pedidos
+          </Link>
+          <PrintButton />
+        </div>
 
         {/* Status + meta */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -252,6 +263,16 @@ export default async function OrderDetailPage({
           </div>
         )}
       </div>
+
+      {/* Print ticket — hidden on screen, full-page during @media print */}
+      <OrderTicket order={order} restaurantName={restaurantName} />
+      <style>{`
+        @media print {
+          * { visibility: hidden; }
+          #foocci-print-ticket { display: block !important; visibility: visible; position: fixed; top: 0; left: 0; width: 100%; }
+          #foocci-print-ticket * { visibility: visible; }
+        }
+      `}</style>
     </>
   );
 }

@@ -22,7 +22,8 @@ const GROUPS: Group[] = [
       { href: "/settings/store",     label: "Loja",       icon: "🏪" },
       { href: "/settings/delivery",  label: "Entrega",    icon: "🛵" },
       { href: "/settings/operation", label: "Operação",   icon: "⏰" },
-      { href: "/settings/payments",  label: "Pagamentos", icon: "💳" },
+      { href: "/settings/payments",     label: "Pagamentos",  icon: "💳" },
+      { href: "/settings/impressoras", label: "Impressoras", icon: "🖨️" },
     ],
   },
   {
