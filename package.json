@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "npx prisma migrate resolve --rolled-back 20260518000001_add_distance_min_fee_km || true && npx prisma migrate deploy && npx next start",
+    "start": "bash scripts/start-production.sh",
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",

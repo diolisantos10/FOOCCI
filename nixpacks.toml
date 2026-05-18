@@ -7,4 +7,4 @@ cmds = ["npm ci --include=dev"]
 # Emergency P3009 recovery — baked into image CMD so it cannot be overridden
 # by Railway dashboard settings. Remove this [start] block after confirmed stable.
 [start]
-cmd = "echo 'FOOCCI EMERGENCY MIGRATION RECOVERY START' && npx prisma migrate resolve --rolled-back 20260518000001_add_distance_min_fee_km || true && npx prisma migrate deploy && npx next start"
+cmd = "bash scripts/start-production.sh"
