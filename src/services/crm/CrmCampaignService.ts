@@ -53,9 +53,10 @@ export interface SendInput {
 }
 
 export interface SendResult {
-  totalSent:   number;
-  totalFailed: number;
-  results:     Array<{ id: string; status: "SENT" | "FAILED"; error?: string }>;
+  totalSent:        number;
+  totalFailed:      number;
+  duplicateSkipped: number;
+  results:          Array<{ id: string; status: "SENT" | "FAILED"; error?: string }>;
 }
 
 // ─── template → segment mapping ───────────────────────────────
@@ -404,11 +405,43 @@ export class CrmCampaignService {
         : []
     );
 
-    let totalSent   = 0;
-    let totalFailed = 0;
+    // Pre-fetch customers already successfully reached via any other campaign in the last 24 h.
+    // Prevents sending the same customer a second CRM WhatsApp message on the same day.
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentlySentIds = new Set(
+      customerIds.length > 0
+        ? (await prisma.campaignExecution.findMany({
+            where: {
+              restaurantId,
+              customerId:   { in: customerIds },
+              campaignId:   { not: campaignId },
+              status:       { in: ["SENT", "DELIVERED", "READ"] },
+              sentAt:       { gte: cutoff24h },
+            },
+            select: { customerId: true },
+          })).map((e) => e.customerId).filter(Boolean) as string[]
+        : []
+    );
+
+    let totalSent        = 0;
+    let totalFailed      = 0;
+    let duplicateSkipped = 0;
     const results: SendResult["results"] = [];
 
     for (const exec of executions) {
+      // 24 h duplicate guard: do not send via Evolution if this customer already received
+      // a successful CRM WhatsApp message from another campaign today.
+      if (exec.customerId && recentlySentIds.has(exec.customerId)) {
+        await prisma.campaignExecution.update({
+          where: { id: exec.id },
+          data:  { status: "FAILED", failedReason: "DUPLICATE_24H_SKIP" },
+        });
+        duplicateSkipped++;
+        totalFailed++;
+        results.push({ id: exec.id, status: "FAILED", error: "DUPLICATE_24H_SKIP" });
+        continue;
+      }
+
       // LGPD safety: skip opted-out customers even if they slipped into the execution list
       if (exec.customerId && optedOutIds.has(exec.customerId)) {
         await prisma.campaignExecution.update({
@@ -497,14 +530,14 @@ export class CrmCampaignService {
     await prisma.campaign.update({
       where: { id: campaignId },
       data:  {
-        status:      totalFailed === executions.length ? "CANCELLED" : "SENT",
+        status:      totalSent === 0 ? "CANCELLED" : "SENT",
         sentAt:      new Date(),
         totalSent:   { increment: totalSent   },
         totalFailed: { increment: totalFailed },
       },
     });
 
-    return { totalSent, totalFailed, results };
+    return { totalSent, totalFailed, duplicateSkipped, results };
   }
 }
 
