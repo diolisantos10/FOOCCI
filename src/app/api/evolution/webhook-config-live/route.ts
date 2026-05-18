@@ -84,11 +84,17 @@ export async function GET(req: NextRequest) {
     const isEnabled         = enabled === true;
 
     const issues: string[] = [];
-    if (fetchError)           issues.push(`Erro ao consultar Evolution: ${fetchError}`);
-    if (!isEnabled)           issues.push("enabled=false — webhook está desativado");
-    if (!urlMatches)          issues.push(`URL diverge. Evolution tem: "${urlBase ?? "vazia"}" — esperada: "${baseUrl}"`);
-    if (!byEventsIsFalse)     issues.push(`webhookByEvents=${String(webhookByEvents)} — deve ser false para endpoint único`);
-    if (!hasMessagesUpsert)   issues.push("MESSAGES_UPSERT não está na lista de eventos");
+    if (fetchError)         issues.push(`Erro ao consultar Evolution: ${fetchError}`);
+    if (!isEnabled)         issues.push("enabled=false — webhook está desativado");
+    // URL check: flag only when the path itself is wrong.
+    // If the path is correct and a token/secret is present, auth is valid — not a diverge.
+    if (!urlBaseMatches) {
+      issues.push(`URL diverge. Evolution tem: "${urlBase ?? "vazia"}" — esperada: "${baseUrl}"`);
+    } else if (!tokenInUrl && !secretPresent) {
+      issues.push("Webhook sem autenticação: token não está na URL e nenhum secret foi detectado. Sincronize o webhook.");
+    }
+    if (!byEventsIsFalse)   issues.push(`webhookByEvents=${String(webhookByEvents)} — deve ser false para endpoint único`);
+    if (!hasMessagesUpsert) issues.push("MESSAGES_UPSERT não está na lista de eventos");
 
     const isHealthy = issues.length === 0;
 

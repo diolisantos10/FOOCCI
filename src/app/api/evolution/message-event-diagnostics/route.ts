@@ -111,6 +111,13 @@ export async function GET(req: NextRequest) {
       // best-effort
     }
 
+    // Derive base URL (no query params) and token presence from Evolution's URL.
+    // Computed outside the try block so verdict section can use them.
+    const webhookUrlBase    = webhookUrl ? webhookUrl.split("?")[0] : null;
+    const webhookTokenInUrl = !!webhookUrl && webhookUrl.includes("?token=");
+    // URL is correct when the path matches, regardless of ?token= presence.
+    const urlBaseMatches    = !!webhookUrlBase && webhookUrlBase.trim() === expectedUrl;
+
     // ── 3. Instance settings ──────────────────────────────────
     let rejectCall:      boolean | null = null;
     let groupsIgnore:    boolean | null = null;
@@ -166,7 +173,8 @@ export async function GET(req: NextRequest) {
     const isConnected       = connectionStatus === "open" || isReceivingEvents;
     const hasMessagesUpsert = webhookEvents.some((e) => e === "MESSAGES_UPSERT");
     const hasMessagesUpdate = webhookEvents.some((e) => e === "MESSAGES_UPDATE");
-    const urlMatches        = !!webhookUrl && webhookUrl.trim() === expectedUrl;
+    // urlMatches: path-only comparison — token in URL is valid auth, not a diverge.
+    const urlMatches        = urlBaseMatches;
     const byEventsIsFalse   = webhookByEvents === false;
     const isEnabled         = webhookEnabled  === true;
 
@@ -188,7 +196,8 @@ export async function GET(req: NextRequest) {
       const issues: string[] = [];
       if (!isEnabled)       issues.push("webhook desativado (enabled=false)");
       if (!byEventsIsFalse) issues.push(`webhookByEvents=${String(webhookByEvents)} — deve ser false`);
-      if (!urlMatches)      issues.push(`URL diverge (Evolution: "${webhookUrl ?? "vazia"}" — esperada: "${expectedUrl}")`);
+      // Show base URL only — token in URL is auth, not a path error.
+      if (!urlMatches)      issues.push(`URL diverge (Evolution: "${webhookUrlBase ?? "vazia"}" — esperada: "${expectedUrl}")`);
       verdictMessage = `Webhook com problema: ${issues.join("; ")}. Clique em 'Sincronizar webhook'.`;
     } else {
       verdict        = "ok_waiting";
@@ -206,13 +215,15 @@ export async function GET(req: NextRequest) {
       ownerJidMasked,
       integration,
       webhook: {
-        url:               webhookUrl,
+        url:               webhookUrlBase,  // strip token before returning to client
         enabled:           webhookEnabled,
         webhookByEvents,
         events:            webhookEvents,
         hasMessagesUpsert,
         hasMessagesUpdate,
         urlMatches,
+        tokenInUrl:        webhookTokenInUrl,
+        authMode:          webhookTokenInUrl ? "query_token" : "unknown",
       },
       settings: {
         rejectCall,
