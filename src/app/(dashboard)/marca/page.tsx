@@ -78,6 +78,7 @@ const COMM_STYLE_OPTIONS = [
 // ── Form state ───────────────────────────────────────────────────────────────
 
 interface MarcaForm {
+  logoUrl: string;
   brandName: string;
   shortDescription: string;
   brandStory: string;
@@ -105,6 +106,7 @@ interface MarcaForm {
 }
 
 const FORM_DEFAULTS: MarcaForm = {
+  logoUrl: "",
   brandName: "",
   shortDescription: "",
   brandStory: "",
@@ -286,12 +288,16 @@ export default function MarcaPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+  const [logoSaved, setLogoSaved] = useState(false);
 
   useEffect(() => {
     apiFetch("/api/brand-config").then(({ ok, data }) => {
       if (ok && data) {
         const p = (data.brandPersona ?? {}) as Record<string, unknown>;
         setForm({
+          logoUrl:               String(p.logoUrl ?? ""),
           brandName:             String(p.brandName ?? ""),
           shortDescription:      String(p.shortDescription ?? ""),
           brandStory:            String(p.brandStory ?? ""),
@@ -327,6 +333,45 @@ export default function MarcaPage() {
     return (value: MarcaForm[K]) => setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  async function handleLogoUpload(file: File) {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      setLogoUploadError("Formato inválido. Use JPEG, PNG ou WebP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoUploadError("Arquivo muito grande. Máximo 5 MB.");
+      return;
+    }
+    setLogoUploading(true);
+    setLogoUploadError(null);
+    setLogoSaved(false);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/menu/upload", { method: "POST", body: fd });
+      const data = await res.json() as { url?: string; error?: string };
+
+      if (!res.ok || !data.url) {
+        setLogoUploadError(data.error ?? "Erro ao enviar imagem.");
+        return;
+      }
+
+      set("logoUrl")(data.url);
+
+      // Persist immediately so the logo survives even without clicking "Salvar"
+      await apiFetch("/api/brand-config", "PATCH", {
+        brandPersona: { logoUrl: data.url },
+      });
+      setLogoSaved(true);
+    } catch {
+      setLogoUploadError("Erro de conexão. Tente novamente.");
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -339,6 +384,7 @@ export default function MarcaPage() {
       comboFocus:            form.comboFocus,
       avgTicketFocus:        form.avgTicketFocus,
     };
+    if (form.logoUrl)                brandPersona.logoUrl = form.logoUrl;
     if (form.brandName)              brandPersona.brandName = form.brandName;
     if (form.shortDescription)       brandPersona.shortDescription = form.shortDescription;
     if (form.brandStory)             brandPersona.brandStory = form.brandStory;
@@ -378,6 +424,54 @@ export default function MarcaPage() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <Feedback success={success} error={error} onDismiss={() => setError(null)} />
+
+      {/* ── 0. Logomarca ─────────────────────────────────────────── */}
+      <PageCard>
+        <SectionHeading
+          title="🖼️ Logomarca do restaurante"
+          subtitle="Usada no cardápio digital e nas comunicações com o cliente."
+        />
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+          <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50">
+            {form.logoUrl ? (
+              <img src={form.logoUrl} alt="Logo" className="h-full w-full object-contain p-1" />
+            ) : (
+              <span className="text-3xl">🏪</span>
+            )}
+          </div>
+          <div className="space-y-2">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                disabled={logoUploading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleLogoUpload(file);
+                  e.target.value = "";
+                }}
+              />
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
+                  logoUploading
+                    ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                    : "border-indigo-300 bg-white text-indigo-600 hover:bg-indigo-50 cursor-pointer"
+                }`}
+              >
+                {logoUploading ? "Enviando…" : form.logoUrl ? "Trocar logo" : "Fazer upload"}
+              </span>
+            </label>
+            <p className="text-xs text-gray-400">JPEG, PNG ou WebP · máx. 5 MB</p>
+            {logoUploadError && (
+              <p className="text-xs text-red-500">{logoUploadError}</p>
+            )}
+            {logoSaved && !logoUploadError && (
+              <p className="text-xs text-green-600">Logo salva com sucesso.</p>
+            )}
+          </div>
+        </div>
+      </PageCard>
 
       {/* ── 1. Identidade da Marca ────────────────────────────────── */}
       <PageCard>

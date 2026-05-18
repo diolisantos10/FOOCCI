@@ -328,7 +328,7 @@ export function TopBar({ title }: TopBarProps) {
 
         {/* ── Sign out ─────────────────────────────────────────────────── */}
         <button
-          onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
+          onClick={() => signOut({ callbackUrl: "/login" })}
           className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
         >
           <span>Sair</span>
