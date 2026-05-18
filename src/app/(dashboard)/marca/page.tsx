@@ -351,18 +351,21 @@ export default function MarcaPage() {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/menu/upload", { method: "POST", body: fd });
-      const data = await res.json() as { url?: string; error?: string };
+      // API wraps responses as { success, data } — unwrap before reading url
+      const json = await res.json() as { success?: boolean; data?: { url?: string }; error?: string };
+      const uploadedUrl = json?.data?.url;
 
-      if (!res.ok || !data.url) {
-        setLogoUploadError(data.error ?? "Erro ao enviar imagem.");
+      if (!res.ok || !uploadedUrl) {
+        const errMsg = json?.error ?? (res.status === 401 ? "Sessão expirada. Faça login novamente." : "Falha no envio. Tente novamente.");
+        setLogoUploadError(errMsg);
         return;
       }
 
-      set("logoUrl")(data.url);
+      set("logoUrl")(uploadedUrl);
 
       // Persist immediately so the logo survives even without clicking "Salvar"
       await apiFetch("/api/brand-config", "PATCH", {
-        brandPersona: { logoUrl: data.url },
+        brandPersona: { logoUrl: uploadedUrl },
       });
       setLogoSaved(true);
     } catch {

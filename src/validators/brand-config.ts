@@ -70,6 +70,9 @@ export const brandPersonaSchema = z.object({
   // ── Avatar (Section 8)
   cuisineType:          z.enum(CUISINE_TYPES).optional(),
 
+  // ── Logomarca
+  logoUrl:              z.string().max(500).optional(),
+
   // ── Público-alvo detalhado
   targetAgeRange:       z.string().max(20).optional(),
   targetGender:         z.enum(TARGET_GENDERS).optional(),

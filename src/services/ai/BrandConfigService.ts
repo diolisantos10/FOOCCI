@@ -72,7 +72,16 @@ export class BrandConfigService {
     if (input.tiktokUrl         !== undefined) data.tiktokUrl         = input.tiktokUrl ?? null;
     if (input.googleReviewUrl   !== undefined) data.googleReviewUrl   = input.googleReviewUrl ?? null;
     if (input.ifoodReviewUrl    !== undefined) data.ifoodReviewUrl    = input.ifoodReviewUrl ?? null;
-    if (input.brandPersona      !== undefined) data.brandPersona      = input.brandPersona ?? undefined;
+    if (input.brandPersona !== undefined) {
+      // Merge with existing JSON so a partial PATCH (e.g. logo-only) never
+      // wipes out fields set by other parts of the form or the system.
+      const existing = await prisma.restaurantBrandConfig.findUnique({
+        where:  { restaurantId },
+        select: { brandPersona: true },
+      });
+      const base = (existing?.brandPersona as Record<string, unknown>) ?? {};
+      data.brandPersona = { ...base, ...(input.brandPersona as Record<string, unknown>) };
+    }
 
     const config = await prisma.restaurantBrandConfig.upsert({
       where:  { restaurantId },
