@@ -278,7 +278,7 @@ export async function POST(
         where: { restaurantId },
         select: {
           mode: true, fee: true, freeDeliveryAbove: true,
-          distanceBaseFee: true, distanceMinFee: true, distanceMaxFee: true,
+          distanceBaseFee: true, distanceMinFee: true, distanceMinFeeKm: true, distanceMaxFee: true,
         },
       })
     : null;
@@ -296,11 +296,15 @@ export async function POST(
 
     if (deliveryCfg.mode === "distance" || deliveryCfg.mode === "advanced") {
       const baseFee  = deliveryCfg.distanceBaseFee  != null ? Number(deliveryCfg.distanceBaseFee)  : 0;
-      const minFee   = deliveryCfg.distanceMinFee   != null ? Number(deliveryCfg.distanceMinFee)   : baseFee;
+      const minFee   = deliveryCfg.distanceMinFee   != null ? Number(deliveryCfg.distanceMinFee)   : null;
+      const minFeeKm = deliveryCfg.distanceMinFeeKm != null ? Number(deliveryCfg.distanceMinFeeKm) : null;
       const maxFee   = deliveryCfg.distanceMaxFee   != null ? Number(deliveryCfg.distanceMaxFee)   : Infinity;
-      // Use client-calculated fee (shown to customer) but clamp to [max(baseFee, minFee), maxFee]
-      const floorFee = Math.max(baseFee, minFee);
-      const raw      = clientDeliveryFee != null ? clientDeliveryFee : floorFee;
+      // When minFeeKm is configured the floor is minFee (customer always pays at least that).
+      // Legacy path: floor = max(baseFee, minFee).
+      const floorFee = (minFee != null && minFee > 0 && minFeeKm != null)
+        ? minFee
+        : Math.max(baseFee, minFee ?? baseFee);
+      const raw = clientDeliveryFee != null ? clientDeliveryFee : floorFee;
       return Math.min(Math.max(raw, floorFee), maxFee === Infinity ? raw : maxFee);
     }
 
