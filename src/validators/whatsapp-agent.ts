@@ -23,9 +23,11 @@ export const menuOptionSchema = z.object({
 export type MenuOption = z.infer<typeof menuOptionSchema>;
 
 export const DEFAULT_MENU_OPTIONS: MenuOption[] = [
-  { id: "preset-order",      label: "Fazer pedido",        flow: "order"      },
-  { id: "preset-handoff",    label: "Falar com atendente", flow: "handoff"    },
-  { id: "preset-promotions", label: "Ver promoções",       flow: "promotions" },
+  { id: "preset-order",   label: "Fazer pedido",             flow: "order"   },
+  { id: "preset-menu",    label: "Ver cardápio",             flow: "menu"    },
+  { id: "preset-hours",   label: "Horário de funcionamento", flow: "custom"  },
+  { id: "preset-status",  label: "Acompanhar pedido",        flow: "custom",  message: "Para acompanhar seu pedido, fale com nossa equipe de atendimento. 😊" },
+  { id: "preset-handoff", label: "Falar com atendente",      flow: "handoff" },
 ];
 
 // ── URL validation ─────────────────────────────────────────────────────────────
@@ -62,10 +64,10 @@ export const AGENT_DEFAULTS: UpsertAgentConfigInput = {
   agentName:       "Agente",
   tone:            "informal",
   style:           "sales_driven",
-  welcomeMessage:  "Olá! Bem-vindo! 😊 O que você deseja?",
+  welcomeMessage:  "Oi! 👋 Como posso te ajudar hoje?",
   menuOptions:     DEFAULT_MENU_OPTIONS,
-  orderPreMessage: "Ótimo! Aqui está nosso cardápio 👇",
+  orderPreMessage: "Acesse nosso cardápio e faça seu pedido diretamente:",
   menuUrl:         null,
   handoffPhone:    null,
-  handoffMessage:  "Vou te conectar com um atendente. Um momento! 👋",
+  handoffMessage:  "Vou deixar nossa equipe te atender. Um momento! 👋",
 };

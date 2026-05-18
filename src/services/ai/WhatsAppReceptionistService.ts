@@ -28,6 +28,11 @@ import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { ConversationStatus } from "@prisma/client";
 import type { MenuOption } from "@/validators/whatsapp-agent";
 
+// ─── constants ────────────────────────────────────────────────
+
+const EMOJI_NUMBERS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"] as const;
+const DAY_NAMES_PT  = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
+
 // ─── intent detection ─────────────────────────────────────────
 
 type Intent =
@@ -107,14 +112,15 @@ interface ReplyContext {
   handoffMessage:  string;
   agentMode:       string;
   menuOptions:     MenuOption[];
+  hoursText:       string | null;
 }
 
 // ─── reply builders ───────────────────────────────────────────
 
-/** Formats the configured menu options as a numbered text list. */
+/** Formats the configured menu options as an emoji-numbered text list. */
 function buildMenuList(options: MenuOption[]): string {
   if (options.length === 0) return "";
-  return "\n\n" + options.map((o, i) => `${i + 1}. ${o.label}`).join("\n");
+  return "\n\n" + options.map((o, i) => `${EMOJI_NUMBERS[i] ?? `${i + 1}.`} ${o.label}`).join("\n");
 }
 
 /** Builds the reply for a specific selected menu option (by number or label). */
@@ -134,7 +140,9 @@ function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
         ? `Confira nossas promoções atuais:\n${pedidoUrl}`
         : "Entre em contato com a loja para saber sobre nossas promoções.";
     case "custom":
-      return opt.message?.trim() || ctx.welcomeMessage;
+      if (opt.message?.trim()) return opt.message.trim();
+      // No static message set — fall back to hours text (hours option) or welcome
+      return ctx.hoursText ?? ctx.welcomeMessage;
     default:
       return ctx.welcomeMessage;
   }
@@ -147,7 +155,7 @@ function buildReply(intent: Intent, ctx: ReplyContext): string {
     case "GREETING": {
       const menuList = buildMenuList(menuOptions);
       if (menuList) {
-        return ctx.welcomeMessage + menuList + "\n\nResponda com o número da opção desejada 😊";
+        return ctx.welcomeMessage + menuList + "\n\nResponda com o número da opção 😊";
       }
       return ctx.welcomeMessage + (pedidoUrl ? `\n\nCardápio: ${pedidoUrl}` : "");
     }
@@ -159,8 +167,11 @@ function buildReply(intent: Intent, ctx: ReplyContext): string {
         : "Para ver nosso cardápio, entre em contato com a loja. 😊";
 
     case "HOURS_REQUEST":
+      if (ctx.hoursText) {
+        return ctx.hoursText + (pedidoUrl ? `\n\n📱 Cardápio: ${pedidoUrl}` : "");
+      }
       return pedidoUrl
-        ? `Para conferir nossos horários atualizados, acesse nosso cardápio ou entre em contato com a loja:\n${pedidoUrl}`
+        ? `Para conferir nossos horários, acesse nosso cardápio:\n${pedidoUrl}`
         : "Para saber nossos horários, entre em contato diretamente com a loja.";
 
     case "ADDRESS_REQUEST":
@@ -183,8 +194,8 @@ function buildReply(intent: Intent, ctx: ReplyContext): string {
 
     case "PAYMENT_INFO":
       return pedidoUrl
-        ? `As formas de pagamento aceitas estão disponíveis no nosso cardápio online:\n${pedidoUrl}`
-        : "Para informações sobre formas de pagamento, entre em contato com a loja.";
+        ? `As opções de pagamento ficam visíveis ao finalizar o pedido no nosso cardápio:\n${pedidoUrl}`
+        : "Para saber as formas de pagamento aceitas, entre em contato com a loja. Nossa equipe vai te ajudar! 😊";
 
     // ORDER_STATUS and COMPLAINT always hand off — message matches handoffMessage.
     case "ORDER_STATUS":
@@ -200,11 +211,11 @@ function buildReply(intent: Intent, ctx: ReplyContext): string {
       }
       const menuList = buildMenuList(menuOptions);
       if (menuList) {
-        return `Não entendi bem. Você pode escolher uma das opções:${menuList}\n\nOu responda com o número da opção desejada 😊`;
+        return `Desculpe, não entendi. Como posso te ajudar?${menuList}\n\nResponda com o número da opção 😊`;
       }
       return pedidoUrl
-        ? `Não entendi bem, mas posso te ajudar! Acesse nosso cardápio ou peça para falar com nossa equipe:\n\nCardápio: ${pedidoUrl}`
-        : `Não entendi bem. Se precisar de ajuda, é só pedir que chamarei alguém da equipe.`;
+        ? `Desculpe, não entendi. Posso te enviar nosso cardápio ou conectar com nossa equipe:\n\nCardápio: ${pedidoUrl}`
+        : `Desculpe, não entendi. Se precisar de ajuda, é só pedir que chamo alguém da equipe. 😊`;
     }
   }
 }
@@ -263,7 +274,7 @@ async function run(conversationId: string): Promise<void> {
   const lastMessage = await prisma.message.findFirst({
     where:   { conversationId, direction: "INBOUND" },
     orderBy: { sentAt: "desc" },
-    select:  { content: true },
+    select:  { content: true, type: true },
   });
 
   if (!lastMessage) return;
@@ -271,7 +282,7 @@ async function run(conversationId: string): Promise<void> {
   const { restaurantId } = conversation;
 
   // Load all config in parallel — no sequential round-trips
-  const [restaurant, storeProfile, agentCfg, evolutionResult] = await Promise.all([
+  const [restaurant, storeProfile, agentCfg, evolutionResult, businessHoursRows] = await Promise.all([
     prisma.restaurant.findUnique({
       where:  { id: restaurantId },
       select: { name: true, slug: true, address: true },
@@ -292,6 +303,11 @@ async function run(conversationId: string): Promise<void> {
       },
     }),
     EvolutionConfigService.getSnapshot(restaurantId),
+    prisma.businessHours.findMany({
+      where:   { restaurantId },
+      select:  { dayOfWeek: true, isOpen: true, openTime: true, closeTime: true },
+      orderBy: { dayOfWeek: "asc" },
+    }),
   ]);
 
   if (!evolutionResult.ok) {
@@ -328,17 +344,48 @@ async function run(conversationId: string): Promise<void> {
 
   const agentMode = agentCfg?.agentMode ?? "RECEPTIONIST_ONLY";
 
+  // Build human-readable hours from BusinessHours rows
+  const todayDow = new Date().getDay(); // 0 = Sunday … 6 = Saturday
+  let hoursText: string | null = null;
+  if (businessHoursRows.length > 0) {
+    const todayRow = businessHoursRows.find((h) => h.dayOfWeek === todayDow);
+    const todayStatus = todayRow
+      ? todayRow.isOpen
+        ? `Hoje (${DAY_NAMES_PT[todayDow] ?? ""}) estamos *abertos* das ${todayRow.openTime} às ${todayRow.closeTime}.\n\n`
+        : `Hoje (${DAY_NAMES_PT[todayDow] ?? ""}) estamos *fechados*.\n\n`
+      : "";
+    const weekLines = businessHoursRows
+      .map((h) => {
+        const day = DAY_NAMES_PT[h.dayOfWeek] ?? `Dia ${h.dayOfWeek}`;
+        return h.isOpen ? `${day}: ${h.openTime} – ${h.closeTime}` : `${day}: Fechado`;
+      })
+      .join("\n");
+    hoursText = `${todayStatus}*Horários de funcionamento:*\n${weekLines}`;
+  }
+
   const ctx: ReplyContext = {
     restaurantName:  restaurant?.name ?? "nossa loja",
     pedidoUrl,
     address,
     deliveryEnabled: storeProfile?.deliveryEnabled ?? false,
-    welcomeMessage:  agentCfg?.welcomeMessage  ?? "Olá! Sou o assistente da loja 😊 Posso te enviar o cardápio ou conectar com nossa equipe.",
-    orderPreMessage: agentCfg?.orderPreMessage ?? "Você pode fazer seu pedido pelo nosso cardápio aqui:",
-    handoffMessage:  agentCfg?.handoffMessage  ?? "Claro. Vou deixar essa conversa para a equipe da loja te atender. 👋",
+    welcomeMessage:  agentCfg?.welcomeMessage  ?? `Oi! 👋 Sou o atendimento de ${restaurant?.name ?? "nossa loja"}. Como posso te ajudar hoje?`,
+    orderPreMessage: agentCfg?.orderPreMessage ?? "Acesse nosso cardápio e faça seu pedido diretamente:",
+    handoffMessage:  agentCfg?.handoffMessage  ?? "Vou deixar nossa equipe te atender. Um momento! 👋",
     agentMode,
     menuOptions,
+    hoursText,
   };
+
+  const toPhone = conversation.customer.phone.replace(/^\+/, "");
+
+  // Handle media messages gracefully — we cannot process images, audio, or documents.
+  if (lastMessage.type !== "TEXT") {
+    const mediaReply = ctx.pedidoUrl
+      ? `Recebi sua mensagem! 😊 Posso te ajudar melhor por texto. Para fazer seu pedido:\n${ctx.pedidoUrl}`
+      : "Recebi sua mensagem! 😊 Posso te ajudar melhor por texto. É só digitar o que você precisa!";
+    await sendReply(evolutionResult.data, toPhone, mediaReply, conversationId);
+    return;
+  }
 
   // Check if customer selected a numbered or named menu option first
   const selectedOpt = detectSelectedOption(lastMessage.content, menuOptions);
@@ -365,8 +412,6 @@ async function run(conversationId: string): Promise<void> {
     });
   }
 
-  // Send reply and log the outbound message
-  const toPhone = conversation.customer.phone.replace(/^\+/, "");
   await sendReply(evolutionResult.data, toPhone, replyText, conversationId);
 }
 
