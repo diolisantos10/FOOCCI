@@ -63,28 +63,17 @@ export async function POST(req: NextRequest) {
     try {
       url = await uploadToS3(buffer, key, file.type);
     } catch (s3Err) {
-      const msg = s3Err instanceof Error ? s3Err.message : "";
-      // AWS SDK v3 puts the error code in error.name, not error.message.
-      // e.g. name="AccessControlListNotSupported", message="The bucket does not allow ACLs"
-      const code = s3Err instanceof Error ? (s3Err.name ?? "") : "";
-      const fallback =
-        msg.includes("not configured") ||
-        code === "AccessControlListNotSupported" ||
-        code === "InvalidBucketAclWithObjectOwnership" ||
-        msg.includes("AccessControlListNotSupported") ||
-        msg.includes("InvalidBucketAclWithObjectOwnership");
-      if (fallback) {
-        // S3 not configured or bucket blocks ACLs — store in PostgreSQL DB.
-        // This persists across container restarts unlike local filesystem.
-        url = await saveToDatabase(buffer, file.type, ctx.restaurantId);
-      } else {
-        throw s3Err;
-      }
+      // Log real error for server-side debugging (no secrets exposed in message/name)
+      const errName = s3Err instanceof Error ? s3Err.name : "UnknownError";
+      const errMsg  = s3Err instanceof Error ? s3Err.message : String(s3Err);
+      console.warn(`[upload] S3 unavailable (${errName}: ${errMsg}), falling back to DB storage.`);
+      // Any S3 failure → store in PostgreSQL. Persists across container restarts.
+      url = await saveToDatabase(buffer, file.type, ctx.restaurantId);
     }
 
     return ok({ url });
   } catch (err) {
     console.error("[POST /api/menu/upload]", err);
-    return serverError("Falha ao enviar imagem. Tente novamente.");
+    return serverError("Falha no upload: S3 indisponível e armazenamento local também falhou. Tente novamente.");
   }
 }
