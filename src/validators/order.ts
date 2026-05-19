@@ -52,7 +52,8 @@ export const updateOrderStatusSchema = z.object({
     "DELIVERED",
     "CANCELLED",
   ]),
-  estimatedAt: z.string().datetime().optional(),
+  estimatedAt:  z.string().datetime().optional(),
+  cancelReason: z.string().max(200).optional(),
 });
 
 export const orderListQuerySchema = z.object({

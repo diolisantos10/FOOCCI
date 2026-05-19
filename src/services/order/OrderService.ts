@@ -14,6 +14,7 @@ import { serviceOk, serviceFail, ServiceResult, PaginatedResult } from "@/types"
 import type { UpdateOrderStatusInput, OrderListQuery } from "@/validators/order";
 import type { Order, OrderItem, Payment, OrderStatus } from "@prisma/client";
 import { SaiposIntegrationService } from "@/services/integrations/SaiposIntegrationService";
+import { OrderNotificationService } from "@/services/order/OrderNotificationService";
 
 export type OrderWithDetails = Order & {
   items: OrderItem[];
@@ -169,6 +170,14 @@ export class OrderService {
         console.error("[saipos] updateStatus send failed:", e)
       );
     }
+
+    // Fire-and-forget: notify customer via WhatsApp on key status changes.
+    OrderNotificationService.notifyCustomerOnStatusChange(
+      restaurantId,
+      orderId,
+      input.status,
+      input.cancelReason ? { cancelReason: input.cancelReason } : undefined
+    ).catch((e) => console.error("[OrderNotification] fire-and-forget failed:", e));
 
     return serviceOk(updated);
   }

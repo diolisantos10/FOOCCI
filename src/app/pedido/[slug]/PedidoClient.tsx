@@ -16,6 +16,187 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEven
 import type { WaiterMemory, CheckoutUpsellStage } from "@/services/ai/WaiterBrainV2";
 import { buildWhatsAppUrl, buildInstagramUrl, buildTikTokUrl } from "@/lib/social";
 
+// ── Order tracking (post-checkout) ────────────────────────────────────────────
+
+interface OrderTrackingData {
+  id: string;
+  orderNumber: string;
+  status: string;
+  type: string;
+  isFinal: boolean;
+  cancelledAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  restaurantName: string;
+  restaurantPhone: string | null;
+  items: { name: string; quantity: number }[];
+  paymentMethodLabel: string | null;
+}
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  PENDING:           "Aguardando aceite",
+  AWAITING_PAYMENT:  "Aguardando pagamento",
+  CONFIRMED:         "Aceito",
+  PREPARING:         "Em preparo",
+  READY:             "Pronto",
+  OUT_FOR_DELIVERY:  "Saindo para entrega",
+  DELIVERED:         "Entregue",
+  CANCELLED:         "Cancelado",
+};
+
+const TRACKING_STEPS_DELIVERY = [
+  { status: "PENDING",          label: "Recebido",  icon: "📋" },
+  { status: "CONFIRMED",        label: "Aceito",    icon: "✅" },
+  { status: "PREPARING",        label: "Em preparo",icon: "👨‍🍳" },
+  { status: "OUT_FOR_DELIVERY", label: "A caminho", icon: "🛵" },
+  { status: "DELIVERED",        label: "Entregue",  icon: "🎉" },
+];
+
+const TRACKING_STEPS_PICKUP = [
+  { status: "PENDING",   label: "Recebido",   icon: "📋" },
+  { status: "CONFIRMED", label: "Aceito",     icon: "✅" },
+  { status: "PREPARING", label: "Em preparo", icon: "👨‍🍳" },
+  { status: "READY",     label: "Pronto",     icon: "🎉" },
+];
+
+const TRACKING_STATUS_IDX: Record<string, number> = {
+  PENDING: 0, AWAITING_PAYMENT: 0,
+  CONFIRMED: 1,
+  PREPARING: 2,
+  READY: 3, OUT_FOR_DELIVERY: 3,
+  DELIVERED: 4,
+};
+
+function OrderTrackingPanel({
+  data,
+  brandColor,
+  onNewOrder,
+}: {
+  data: OrderTrackingData | null;
+  brandColor: string;
+  onNewOrder: () => void;
+}) {
+  if (!data) {
+    return (
+      <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-5 text-center">
+        <p className="text-2xl">⏳</p>
+        <p className="mt-1 text-sm font-semibold text-gray-600">Carregando status…</p>
+      </div>
+    );
+  }
+
+  const isCancelled = data.status === "CANCELLED";
+  const isDelivered = data.status === "DELIVERED";
+  const steps       = data.type === "DELIVERY" ? TRACKING_STEPS_DELIVERY : TRACKING_STEPS_PICKUP;
+  const currentIdx  = TRACKING_STATUS_IDX[data.status] ?? 0;
+
+  return (
+    <div className="shrink-0 border-t border-gray-100 bg-white overflow-y-auto" style={{ maxHeight: "60vh" }}>
+
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 text-center">
+        {isCancelled ? (
+          <>
+            <p className="text-2xl">❌</p>
+            <p className="mt-1 text-sm font-bold text-red-700">Pedido cancelado</p>
+          </>
+        ) : isDelivered ? (
+          <>
+            <p className="text-2xl">🎉</p>
+            <p className="mt-1 text-sm font-bold text-green-700">Pedido entregue!</p>
+          </>
+        ) : (
+          <>
+            <p className="mt-1 text-sm font-bold text-gray-900">Acompanhe seu pedido</p>
+            <p className="mt-0.5 text-xs text-gray-400">
+              {ORDER_STATUS_LABELS[data.status] ?? data.status}
+            </p>
+          </>
+        )}
+        <p className="mt-0.5 text-[11px] text-gray-400">Pedido #{data.orderNumber}</p>
+      </div>
+
+      {/* Progress steps */}
+      {!isCancelled && (
+        <div className="px-3 pb-3">
+          <div className="flex items-start">
+            {steps.map((step, i) => {
+              const done    = i < currentIdx;
+              const current = i === currentIdx;
+              const isLast  = i === steps.length - 1;
+              return (
+                <div key={step.status} className="flex flex-1 flex-col items-center">
+                  <div className="flex w-full items-center">
+                    <div className={`h-px flex-1 transition-colors ${
+                      i === 0 ? "invisible" : done || current ? "bg-green-400" : "bg-gray-200"
+                    }`} />
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm transition-all ${
+                        done    ? "bg-green-500 text-white text-xs font-bold"
+                        : current ? "border-2 text-base"
+                        :           "bg-gray-100 text-base"
+                      }`}
+                      style={current ? { borderColor: brandColor } : {}}
+                    >
+                      {done ? "✓" : step.icon}
+                    </div>
+                    <div className={`h-px flex-1 transition-colors ${
+                      isLast ? "invisible" : done ? "bg-green-400" : "bg-gray-200"
+                    }`} />
+                  </div>
+                  <p className={`mt-1 text-center text-[9px] leading-tight px-0.5 ${
+                    current ? "font-bold text-gray-900"
+                    : done   ? "text-gray-400"
+                    :          "text-gray-300"
+                  }`}>
+                    {step.label}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Items summary */}
+      <div className="mx-4 mb-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+        <div className="space-y-0.5">
+          {data.items.map((item, i) => (
+            <p key={i} className="text-sm text-gray-700">
+              <span className="font-semibold text-gray-400">{item.quantity}×</span>{" "}{item.name}
+            </p>
+          ))}
+        </div>
+        {data.paymentMethodLabel && (
+          <p className="mt-2 border-t border-gray-200 pt-2 text-xs text-gray-400">
+            Pagamento: {data.paymentMethodLabel}
+          </p>
+        )}
+      </div>
+
+      {/* Buttons */}
+      <div className="mx-4 mb-4 flex flex-col gap-2">
+        {data.restaurantPhone && (
+          <a
+            href={`https://wa.me/${data.restaurantPhone.replace(/\D/g, "")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            💬 Falar com o restaurante
+          </a>
+        )}
+        <button
+          onClick={onNewOrder}
+          className="w-full rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
+        >
+          Fazer novo pedido
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const UPSELL_STAGE_ORDER: Record<CheckoutUpsellStage, number> = {
   none: 0, drink_shown: 1, dessert_shown: 2, completed: 3,
 };
@@ -1616,6 +1797,7 @@ export function PedidoClient({
 
   // ── Stage / flow ──────────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
+  const ACTIVE_ORDER_KEY = `foocci_active_order_${slug}`;
 
   // ── AI permission state ───────────────────────────────────────────
   // idle            → timer running, prompt not yet shown
@@ -1676,6 +1858,10 @@ export function PedidoClient({
   const [paymentMethodSub, setPaymentMethodSub] = useState<PaymentMethodSub | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [orderTrackingData, setOrderTrackingData]   = useState<OrderTrackingData | null>(null);
+  const [activeOrderId,     setActiveOrderId]       = useState<string | null>(null);
+  const [showActiveBanner,  setShowActiveBanner]    = useState(false);
+  const trackingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Poll payment status while in PAYMENT_LINK stage ───────────────
   useEffect(() => {
@@ -1695,6 +1881,62 @@ export function PedidoClient({
     }, 4000);
     return () => clearInterval(interval);
   }, [stage, orderId]);
+
+  // ── On mount: check localStorage for an in-progress order ─────────
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ACTIVE_ORDER_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { orderId: string; createdAt: number };
+      if (Date.now() - parsed.createdAt > 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(ACTIVE_ORDER_KEY);
+        return;
+      }
+      fetch(`/api/pedido/order-status?orderId=${parsed.orderId}`)
+        .then((r) => r.json())
+        .then((data: OrderTrackingData) => {
+          if (!data.isFinal) {
+            setActiveOrderId(parsed.orderId);
+            setOrderTrackingData(data);
+            setShowActiveBanner(true);
+          } else {
+            localStorage.removeItem(ACTIVE_ORDER_KEY);
+          }
+        })
+        .catch(() => {});
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally run once on mount
+
+  // ── Poll order status while in DONE stage ─────────────────────────
+  useEffect(() => {
+    if (stage !== "DONE") {
+      if (trackingPollRef.current) clearInterval(trackingPollRef.current);
+      return;
+    }
+    const currentId = orderId ?? activeOrderId;
+    if (!currentId) return;
+
+    const poll = () => {
+      fetch(`/api/pedido/order-status?orderId=${currentId}`)
+        .then((r) => r.json())
+        .then((data: OrderTrackingData) => {
+          setOrderTrackingData(data);
+          if (data.isFinal) {
+            if (trackingPollRef.current) clearInterval(trackingPollRef.current);
+            try { localStorage.removeItem(ACTIVE_ORDER_KEY); } catch { /* ignore */ }
+          }
+        })
+        .catch(() => {});
+    };
+
+    poll(); // immediate first fetch
+    trackingPollRef.current = setInterval(poll, 12_000);
+    return () => {
+      if (trackingPollRef.current) clearInterval(trackingPollRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, orderId, activeOrderId]);
 
   // ── Derived ───────────────────────────────────────────────────────
   // activeUpsell: the last offered type (persists after resolution so the
@@ -2516,6 +2758,12 @@ export function PedidoClient({
       const resolvedOrderId = data.orderId ?? data.data?.orderId ?? null;
       setOrderId(resolvedOrderId);
 
+      if (resolvedOrderId) {
+        try {
+          localStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify({ orderId: resolvedOrderId, createdAt: Date.now() }));
+        } catch { /* ignore */ }
+      }
+
       if (paymentMode === "pay_now" && data.paymentUrl) {
         setPaymentUrl(data.paymentUrl);
         setStage("PAYMENT_LINK");
@@ -2593,6 +2841,33 @@ export function PedidoClient({
   // ── Checkout UI panels ────────────────────────────────────────────
 
   function renderCheckoutPanel() {
+    // Active-order banner — shown in BROWSE when customer has an in-progress order
+    if (stage === "BROWSE" && showActiveBanner && orderTrackingData) {
+      return (
+        <div className="shrink-0 border-t border-orange-100 bg-orange-50 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-orange-800">🍽️ Pedido em andamento</p>
+              <p className="truncate text-[11px] text-orange-600">
+                #{orderTrackingData.orderNumber} · {ORDER_STATUS_LABELS[orderTrackingData.status] ?? orderTrackingData.status}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setOrderId(activeOrderId);
+                setStage("DONE");
+                setShowActiveBanner(false);
+              }}
+              className="shrink-0 rounded-xl px-3 py-2 text-xs font-bold text-white transition-colors hover:opacity-90"
+              style={{ backgroundColor: pc }}
+            >
+              Acompanhar
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (stage === "DELIVERY_TYPE") {
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
@@ -2900,19 +3175,18 @@ export function PedidoClient({
 
     if (stage === "DONE") {
       return (
-        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-4 text-center">
-          <p className="text-2xl">🎉</p>
-          <p className="mt-1 text-sm font-bold text-gray-900">Pedido confirmado!</p>
-          {orderId && (
-            <p className="mt-0.5 text-xs text-gray-400">Pedido #{orderId.slice(-6).toUpperCase()}</p>
-          )}
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-3 rounded-xl border border-gray-200 px-5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-          >
-            Novo pedido
-          </button>
-        </div>
+        <OrderTrackingPanel
+          data={orderTrackingData}
+          brandColor={pc}
+          onNewOrder={() => {
+            try { localStorage.removeItem(ACTIVE_ORDER_KEY); } catch { /* ignore */ }
+            setOrderTrackingData(null);
+            setActiveOrderId(null);
+            setShowActiveBanner(false);
+            setOrderId(null);
+            window.location.reload();
+          }}
+        />
       );
     }
 

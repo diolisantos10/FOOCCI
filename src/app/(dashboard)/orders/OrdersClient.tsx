@@ -1387,11 +1387,12 @@ function NewOrderModal({
   order: MockOrder;
   queueLength: number;
   onAccept: () => void;
-  onReject: () => void;
+  onReject: (reason?: string) => void;
   accepting: boolean;
   rejecting: boolean;
 }) {
   const [confirmReject, setConfirmReject] = useState(false);
+  const [rejectReason,  setRejectReason]  = useState("");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
@@ -1510,19 +1511,27 @@ function NewOrderModal({
             </div>
           ) : (
             <div>
-              <p className="mb-3 text-center text-sm font-semibold text-gray-800">
+              <p className="mb-2 text-center text-sm font-semibold text-gray-800">
                 Confirmar recusa deste pedido?
               </p>
-              <div className="flex gap-3">
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Motivo do cancelamento (opcional — será enviado ao cliente)"
+                rows={2}
+                disabled={rejecting}
+                className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:opacity-50"
+              />
+              <div className="mt-3 flex gap-3">
                 <button
-                  onClick={() => setConfirmReject(false)}
+                  onClick={() => { setConfirmReject(false); setRejectReason(""); }}
                   disabled={rejecting}
                   className="flex-1 rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
                 >
                   Voltar
                 </button>
                 <button
-                  onClick={onReject}
+                  onClick={() => onReject(rejectReason.trim() || undefined)}
                   disabled={rejecting}
                   className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-40"
                 >
@@ -1556,6 +1565,7 @@ export default function OrdersClient() {
   });
   const knownIds = useRef<Set<string>>(new Set());
   const hasFetched = useRef(false);
+  const [cancelDialog, setCancelDialog] = useState<{ id: string; reason: string } | null>(null);
   const [modalQueue,     setModalQueue]     = useState<MockOrder[]>([]);
   const [modalAccepting, setModalAccepting] = useState(false);
   const [modalRejecting, setModalRejecting] = useState(false);
@@ -1645,12 +1655,12 @@ export default function OrdersClient() {
   }, [filtered, statusFilter, searchQuery]);
   const selectedOrder = orders.find((o) => o.id === selectedId) ?? null;
 
-  async function persistStatus(id: string, status: OrderStatus) {
+  async function persistStatus(id: string, status: OrderStatus, cancelReason?: string) {
     try {
       await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, ...(cancelReason ? { cancelReason } : {}) }),
       });
     } catch (err) {
       console.error("[OrdersClient] status persist failed", err);
@@ -1663,9 +1673,13 @@ export default function OrdersClient() {
   }
 
   function handleCancel(id: string) {
+    setCancelDialog({ id, reason: "" });
+  }
+
+  function executeCancelWithReason(id: string, reason?: string) {
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "CANCELLED" as OrderStatus } : o)));
     if (selectedId === id) setSelectedId(null);
-    void persistStatus(id, "CANCELLED");
+    void persistStatus(id, "CANCELLED", reason || undefined);
   }
 
   function handleSelect(id: string) {
@@ -1714,11 +1728,11 @@ export default function OrdersClient() {
     }
   }
 
-  async function handleModalReject() {
+  async function handleModalReject(reason?: string) {
     if (!modalOrder || modalRejecting) return;
     setModalRejecting(true);
     try {
-      await persistStatus(modalOrder.id, "CANCELLED");
+      await persistStatus(modalOrder.id, "CANCELLED", reason || undefined);
       setOrders((prev) =>
         prev.map((o) => (o.id === modalOrder.id ? { ...o, status: "CANCELLED" as OrderStatus } : o))
       );
@@ -1806,6 +1820,40 @@ export default function OrdersClient() {
           onClose={() => setSelectedId(null)}
         />
       </div>
+
+      {/* Cancel confirmation dialog */}
+      {cancelDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">Cancelar pedido?</h3>
+            <p className="mt-1 text-sm text-gray-500">Esta ação não pode ser desfeita.</p>
+            <textarea
+              value={cancelDialog.reason}
+              onChange={(e) => setCancelDialog((prev) => prev ? { ...prev, reason: e.target.value } : null)}
+              placeholder="Motivo do cancelamento (opcional — será enviado ao cliente via WhatsApp)"
+              rows={2}
+              className="mt-3 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-100"
+            />
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => setCancelDialog(null)}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={() => {
+                  executeCancelWithReason(cancelDialog.id, cancelDialog.reason.trim() || undefined);
+                  setCancelDialog(null);
+                }}
+                className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition-colors"
+              >
+                Confirmar cancelamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalOrder && (
         <NewOrderModal
