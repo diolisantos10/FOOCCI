@@ -1597,7 +1597,9 @@ export default function OrdersClient() {
               playBeep();
             }
             const newPending = newOnes.filter(
-              (o) => o.status === "PENDING" && !shownInModal.current.has(o.id)
+              (o) =>
+                (o.status === "PENDING" || o.status === "CONFIRMED") &&
+                !shownInModal.current.has(o.id)
             );
             if (newPending.length > 0) {
               newPending.forEach((o) => shownInModal.current.add(o.id));
@@ -1700,9 +1702,10 @@ export default function OrdersClient() {
     if (!modalOrder || modalAccepting) return;
     setModalAccepting(true);
     try {
-      await persistStatus(modalOrder.id, "CONFIRMED");
+      const nextStatus = NEXT_ACTION[modalOrder.status]?.next ?? "CONFIRMED";
+      await persistStatus(modalOrder.id, nextStatus);
       setOrders((prev) =>
-        prev.map((o) => (o.id === modalOrder.id ? { ...o, status: "CONFIRMED" as OrderStatus } : o))
+        prev.map((o) => (o.id === modalOrder.id ? { ...o, status: nextStatus } : o))
       );
       if (autoPrintOnAccept) printOrder(modalOrder.id);
       setModalQueue((prev) => prev.slice(1));
