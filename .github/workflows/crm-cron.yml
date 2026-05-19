@@ -1,0 +1,216 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CRM Cron — Foocci recurring campaigns + automations dispatcher
+#
+# Required GitHub Secrets (Settings → Secrets and variables → Actions):
+#
+#   FOOCCI_BASE_URL   Production URL with no trailing slash.
+#                     Example: https://foocci-production.up.railway.app
+#
+#   CRON_SECRET       Must match the CRON_SECRET env var set in Railway.
+#                     Never printed in logs — injected via env:, not ${{ }}.
+#
+# Scheduled triggers (both disabled by default until secrets are configured):
+#
+#   Campaigns   — every 15 minutes           cron: "*/15 * * * *"
+#   Automations — 11:00 UTC = 08:00 Brasília cron: "0 11 * * *"
+#
+# Why GitHub Actions instead of Railway native cron:
+#   Railway's cron plugin sends plain GET requests with no custom headers.
+#   Both CRM endpoints require  Authorization: Bearer {CRON_SECRET}.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CRM Cron
+
+on:
+  schedule:
+    # Job: run-campaigns  — every 15 minutes, 24 h / 7 d
+    - cron: "*/15 * * * *"
+    # Job: run-automations — daily at 11:00 UTC = 08:00 America/Sao_Paulo
+    - cron: "0 11 * * *"
+
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which cron to call"
+        required: true
+        default: campaigns
+        type: choice
+        options:
+          - campaigns
+          - automations
+          - both
+
+      dry_run:
+        description: "Dry run — preview only, no messages sent"
+        required: false
+        default: true
+        type: boolean
+
+      campaign_id:
+        description: "Scope to one campaign ID (campaigns only, optional)"
+        required: false
+        type: string
+
+      restaurant_id:
+        description: "Scope to one restaurant ID (optional)"
+        required: false
+        type: string
+
+      limit:
+        description: "Max recipients per batch, 1–200 (campaigns only, default 1 for safety)"
+        required: false
+        default: "1"
+        type: string
+
+jobs:
+  # ── Job 1: Scheduled Campaigns ───────────────────────────────────────────────
+  #
+  # Fires on the */15 schedule or when workflow_dispatch targets campaigns/both.
+  # Scheduled runs: dryRun=false, no optional scoping.
+  # Manual runs:    honour all inputs.
+  # ─────────────────────────────────────────────────────────────────────────────
+  run-campaigns:
+    name: "Scheduled Campaigns"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event.schedule == '*/15 * * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.target == 'campaigns' || inputs.target == 'both'))
+
+    steps:
+      # Build the full URL and JSON body before touching any secrets.
+      - name: Build request parameters
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          BASE_URL="${BASE_URL%/}"   # strip any trailing slash
+          echo "url=${BASE_URL}/api/cron/run-scheduled-campaigns" >> "$GITHUB_OUTPUT"
+
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            # Scheduled run: always live, no optional fields
+            echo 'body={"dryRun":false}' >> "$GITHUB_OUTPUT"
+            echo "dry_run=false"         >> "$GITHUB_OUTPUT"
+          else
+            # Manual dispatch: honour inputs
+            DRY_RUN="${{ inputs.dry_run }}"
+            BODY="{\"dryRun\":${DRY_RUN}"
+
+            [[ -n "${{ inputs.campaign_id }}" ]] \
+              && BODY="${BODY},\"campaignId\":\"${{ inputs.campaign_id }}\""
+
+            [[ -n "${{ inputs.restaurant_id }}" ]] \
+              && BODY="${BODY},\"restaurantId\":\"${{ inputs.restaurant_id }}\""
+
+            LIMIT="${{ inputs.limit }}"
+            [[ -n "$LIMIT" ]] \
+              && BODY="${BODY},\"limit\":${LIMIT}"
+
+            BODY="${BODY}}"
+            echo "body=${BODY}"     >> "$GITHUB_OUTPUT"
+            echo "dry_run=${DRY_RUN}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # CRON_SECRET is injected via env: so it never appears in the step
+      # definition or in workflow logs (GitHub masks it automatically).
+      - name: "POST /api/cron/run-scheduled-campaigns"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          REQUEST_BODY: ${{ steps.params.outputs.body }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "────────────────────────────────────"
+          echo "→ Endpoint : $ENDPOINT_URL"
+          echo "→ dryRun   : ${{ steps.params.outputs.dry_run }}"
+          echo "→ Body     : $REQUEST_BODY"
+          echo "────────────────────────────────────"
+
+          # Write body to a temp file to avoid shell quoting issues
+          printf '%s' "$REQUEST_BODY" > /tmp/request.json
+
+          HTTP_STATUS=$(curl -s \
+            -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/request.json \
+            -o /tmp/response.json \
+            -w "%{http_code}")
+
+          echo "← HTTP Status : $HTTP_STATUS"
+          echo "← Response:"
+          jq . /tmp/response.json 2>/dev/null || cat /tmp/response.json
+
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            echo ""
+            echo "::error::Endpoint returned non-2xx status ($HTTP_STATUS). Check response above."
+            exit 1
+          fi
+
+  # ── Job 2: CRM Automations ───────────────────────────────────────────────────
+  #
+  # Fires on the 0 11 * * * schedule or when workflow_dispatch targets
+  # automations/both. Covers REACTIVATION, BIRTHDAY, and POST_ORDER triggers.
+  # ─────────────────────────────────────────────────────────────────────────────
+  run-automations:
+    name: "CRM Automations"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event.schedule == '0 11 * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.target == 'automations' || inputs.target == 'both'))
+
+    steps:
+      - name: Build request parameters
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/execute-crm-automations" >> "$GITHUB_OUTPUT"
+
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo 'body={"dryRun":false}' >> "$GITHUB_OUTPUT"
+            echo "dry_run=false"         >> "$GITHUB_OUTPUT"
+          else
+            DRY_RUN="${{ inputs.dry_run }}"
+            BODY="{\"dryRun\":${DRY_RUN}"
+
+            [[ -n "${{ inputs.restaurant_id }}" ]] \
+              && BODY="${BODY},\"restaurantId\":\"${{ inputs.restaurant_id }}\""
+
+            BODY="${BODY}}"
+            echo "body=${BODY}"     >> "$GITHUB_OUTPUT"
+            echo "dry_run=${DRY_RUN}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: "POST /api/cron/execute-crm-automations"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          REQUEST_BODY: ${{ steps.params.outputs.body }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "────────────────────────────────────"
+          echo "→ Endpoint : $ENDPOINT_URL"
+          echo "→ dryRun   : ${{ steps.params.outputs.dry_run }}"
+          echo "→ Body     : $REQUEST_BODY"
+          echo "────────────────────────────────────"
+
+          printf '%s' "$REQUEST_BODY" > /tmp/request.json
+
+          HTTP_STATUS=$(curl -s \
+            -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/request.json \
+            -o /tmp/response.json \
+            -w "%{http_code}")
+
+          echo "← HTTP Status : $HTTP_STATUS"
+          echo "← Response:"
+          jq . /tmp/response.json 2>/dev/null || cat /tmp/response.json
+
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            echo ""
+            echo "::error::Endpoint returned non-2xx status ($HTTP_STATUS). Check response above."
+            exit 1
+          fi
