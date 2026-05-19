@@ -16,16 +16,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ScheduledCampaignRunnerService } from "@/services/crm/ScheduledCampaignRunnerService";
 
-function isCronAuthorized(req: NextRequest): boolean {
+function checkCronAuth(req: NextRequest): { ok: true } | { ok: false; status: 401 | 503; error: string } {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
+  if (!secret) {
+    console.error("[cron/run-scheduled-campaigns] CRON_SECRET env var is not configured — scheduled campaigns will not run");
+    return { ok: false, status: 503, error: "CRON_SECRET is not configured" };
+  }
   const auth = req.headers.get("authorization") ?? "";
-  return auth === `Bearer ${secret}`;
+  if (auth !== `Bearer ${secret}`) {
+    return { ok: false, status: 401, error: "Unauthorized" };
+  }
+  return { ok: true };
 }
 
 export async function POST(req: NextRequest) {
-  if (!isCronAuthorized(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = checkCronAuth(req);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   try {

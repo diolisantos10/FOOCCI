@@ -297,10 +297,13 @@ export class AutomationSchedulerService {
         const windowEnd = new Date(Date.now() - automation.triggerAfterDays * 86_400_000);
         const windowStart = new Date(windowEnd.getTime() - 86_400_000);
 
+        // OrderStatus enum terminal values: DELIVERED is the only completed-delivery
+        // state in this system (no separate COMPLETED status exists).
+        // Both delivery and pickup orders are marked DELIVERED when fulfilled.
         const orders = await prisma.order.findMany({
           where: {
             restaurantId,
-            status: "DELIVERED",
+            status: { in: ["DELIVERED"] },
             completedAt: { gte: windowStart, lte: windowEnd },
           },
           select: { customerId: true },

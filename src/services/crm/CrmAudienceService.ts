@@ -166,11 +166,23 @@ export class CrmAudienceService {
 
       // ── Templates needing more data (birthday, product-based, etc.) ──────────
       case "aniversariantes": {
-        // Compute raw segment count (customers with birthDate set)
-        const total = await prisma.customer.count({
+        // Count customers whose birth month matches the current calendar month.
+        // Prisma has no month() filter; fetch all with birthDate and filter in JS.
+        const currentMonth = ts.getMonth(); // 0-indexed
+        const withBirthday = await prisma.customer.findMany({
           where: { restaurantId, isGuest: false, birthDate: { not: null } },
+          select: {
+            birthDate: true, isActive: true,
+            hasOptedOut: true, crmContactable: true, phone: true,
+          },
         });
-        return build(false, total, 0, [], { noPhone: 0, notContactable: 0, isGuest: 0 });
+        const thisMonth = withBirthday.filter(
+          (r) => r.birthDate !== null && r.birthDate.getMonth() === currentMonth
+        );
+        const eligible = thisMonth.filter(
+          (r) => r.isActive && !r.hasOptedOut && r.crmContactable && r.phone !== null
+        ).length;
+        return build(true, thisMonth.length, eligible, [], { noPhone: 0, notContactable: 0, isGuest: 0 });
       }
 
       case "aumentar-sobremesas":

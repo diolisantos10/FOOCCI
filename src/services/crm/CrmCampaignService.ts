@@ -191,21 +191,25 @@ export async function resolveAudience(
       }) as Row[]);
 
     case "ANIVERSARIANTES": {
-      const month = now.getMonth() + 1;
-      return serialize(await prisma.customer.findMany({
+      // Include only customers whose birth month matches the current calendar month.
+      // Prisma has no native month() filter, so we fetch candidates with birthDate set
+      // and filter in JS. The MAX_AUDIENCE take() is applied before the JS filter;
+      // this is acceptable for V1 (birthday lists are naturally small).
+      const currentMonth = now.getMonth(); // 0-indexed: 0=Jan … 11=Dec
+      const withBirthday = await prisma.customer.findMany({
         where: {
           ...baseWhere,
           birthDate: { not: null },
         },
         orderBy: { birthDate: "asc" },
-        take: MAX_AUDIENCE, select: baseSelect,
-      }) as Row[]).filter((c) => {
-        if (!c.lastOrderAt) return false;
-        // Use lastOrderAt as fallback — real birthday filter requires raw SQL month()
-        return true;
-      });
-      // Note: filtering by birth month in Prisma requires raw SQL. For V1, this returns
-      // all customers with a birthDate set; the UI can show a note about this limitation.
+        take: MAX_AUDIENCE,
+        select: { ...baseSelect, birthDate: true },
+      }) as (Row & { birthDate: Date | null })[];
+      return serialize(
+        withBirthday.filter(
+          (r) => r.birthDate !== null && r.birthDate.getMonth() === currentMonth
+        ) as Row[]
+      );
     }
 
     case "TODOS":

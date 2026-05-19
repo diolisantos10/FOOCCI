@@ -282,8 +282,8 @@ function CreateActionModal({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Criar ação personalizada</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Salvará como rascunho no seu CRM</p>
+            <h2 className="text-base font-bold text-gray-900">Salvar modelo de mensagem</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Rascunho — não envia mensagens automaticamente</p>
           </div>
           <button onClick={onClose} className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -439,9 +439,11 @@ function CreateActionModal({
           </div>
 
           {/* 7. Status info */}
-          <div className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2.5">
-            <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-bold text-gray-600">Rascunho</span>
-            <p className="text-xs text-gray-500">A ação será salva como rascunho. Disparo automático em breve.</p>
+          <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
+            <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-bold text-gray-600 shrink-0">Rascunho</span>
+            <p className="text-xs text-amber-700">
+              Salvo como modelo. Para enviar mensagens, crie uma <strong>Campanha</strong> ou configure uma <strong>Automação</strong>.
+            </p>
           </div>
         </div>
 
@@ -1492,26 +1494,32 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
         ))}
       </div>
 
-      {/* ── Minhas ações ─────────────────────────────────────────────────────── */}
+      {/* ── Modelos salvos (ex "Minhas ações") ──────────────────────────────── */}
       <div>
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
-          Minhas ações
-        </h3>
+        <div className="mb-3">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400">
+            Modelos salvos
+          </h3>
+          <p className="mt-1 text-xs text-gray-400">
+            Rascunhos de mensagens para referência.{" "}
+            <span className="font-semibold text-gray-500">Para enviar mensagens, use Campanhas ou Automações.</span>
+          </p>
+        </div>
 
         {loadingCustom ? (
           <div className="py-6 text-center text-sm text-gray-400">Carregando…</div>
         ) : customActions.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 py-10 text-center">
             <span className="text-3xl">✍️</span>
-            <p className="mt-2 text-sm font-semibold text-gray-500">Nenhuma ação criada ainda</p>
+            <p className="mt-2 text-sm font-semibold text-gray-500">Nenhum modelo salvo ainda</p>
             <p className="mt-0.5 text-xs text-gray-400">
-              Clique em &quot;Criar ação&quot; para montar sua primeira ação personalizada.
+              Salve rascunhos de mensagens aqui para reutilizá-los em Campanhas.
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
               className="mt-4 rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 transition-colors"
             >
-              Criar primeira ação
+              Salvar primeiro modelo
             </button>
           </div>
         ) : (
