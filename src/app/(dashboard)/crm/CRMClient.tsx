@@ -958,8 +958,7 @@ function ActionConfigDrawer({
           </div>
 
           {/* Scheduling section */}
-          {template.hasAudienceQuery && (
-            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-3">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-3">
               <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Quando enviar</p>
 
               {/* Mode selector */}
@@ -1111,8 +1110,7 @@ function ActionConfigDrawer({
                   )}
                 </div>
               )}
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -1132,12 +1130,12 @@ function ActionConfigDrawer({
           >
             {copied ? "✓ Copiado" : "Copiar"}
           </button>
-          {template.hasAudienceQuery && (sendMode === "recurring" || audience?.computed) ? (
+          {(!template.hasAudienceQuery || sendMode === "recurring" || audience?.computed) ? (
             <button
               onClick={handlePrepareCampaign}
               disabled={
                 preparing ||
-                (sendMode !== "recurring" && (audience?.eligibleCount ?? audience?.count ?? 0) === 0) ||
+                (template.hasAudienceQuery && sendMode === "now" && (audience?.eligibleCount ?? audience?.count ?? 0) === 0) ||
                 (sendMode === "scheduled_once" && !scheduleDate) ||
                 (sendMode === "recurring" && weekdays.length === 0)
               }
@@ -1149,19 +1147,23 @@ function ActionConfigDrawer({
                   ? weekdays.length === 0
                     ? "Selecione os dias"
                     : "Ativar campanha recorrente →"
-                  : (audience?.eligibleCount ?? audience?.count ?? 0) === 0
-                    ? "Sem público elegível"
-                    : sendMode === "scheduled_once"
-                      ? scheduleDate ? "Agendar →" : "Escolha uma data"
-                      : "Preparar disparo →"}
+                  : !template.hasAudienceQuery
+                    ? sendMode === "scheduled_once"
+                      ? scheduleDate ? "Agendar campanha →" : "Escolha uma data"
+                      : "Criar campanha agora →"
+                    : (audience?.eligibleCount ?? audience?.count ?? 0) === 0
+                      ? "Sem público elegível"
+                      : sendMode === "scheduled_once"
+                        ? scheduleDate ? "Agendar →" : "Escolha uma data"
+                        : "Preparar disparo →"}
             </button>
           ) : (
             <button
               disabled
-              title={loadingAudience ? "Calculando público…" : "Configure o público antes de disparar"}
+              title={loadingAudience ? "Calculando público…" : "Aguardando dados do público…"}
               className="flex-1 cursor-not-allowed rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-400"
             >
-              {loadingAudience ? "Calculando público…" : template.hasAudienceQuery ? "Aguardando público…" : "Calcular público"}
+              {loadingAudience ? "Calculando público…" : "Aguardando público…"}
             </button>
           )}
         </div>
@@ -1378,14 +1380,61 @@ function CampaignReviewModal({
   );
 }
 
-// ── Ações Tab ─────────────────────────────────────────────────────────────────
+// ── Campanhas Tab ─────────────────────────────────────────────────────────────
 
-function AcoesTab({ stats }: { stats: OverviewStats }) {
+const BLANK_CAMPAIGN_TEMPLATE: ActionTemplate = {
+  id: "custom",
+  emoji: "📢",
+  title: "Nova campanha",
+  objective: "Campanha personalizada",
+  targetLabel: "Todos os clientes",
+  description: "",
+  readiness: "READY_TO_CONFIGURE",
+  hasAudienceQuery: false,
+  audienceKey: null,
+  suggestedMessage: "",
+};
+
+const SEGMENT_TO_TEMPLATE_ID: Record<string, string> = {
+  FRIO:            "recuperar-frios",
+  MORNO:           "reativar-mornos",
+  NOVOS:           "segunda-compra",
+  PRIMEIRO_PEDIDO: "segunda-compra",
+  VIP:             "clientes-vip",
+};
+
+const SEGMENT_TO_AUDIENCE_KEY: Partial<Record<string, keyof OverviewStats | "vip">> = {
+  FRIO:            "frioCustomers",
+  MORNO:           "mornoCustomers",
+  NOVOS:           "newCustomers",
+  PRIMEIRO_PEDIDO: "newCustomers",
+  VIP:             "vip",
+};
+
+function customActionToTemplate(action: CustomActionRow): ActionTemplate {
+  const tplId   = SEGMENT_TO_TEMPLATE_ID[action.targetSegment];
+  const aKey    = SEGMENT_TO_AUDIENCE_KEY[action.targetSegment] ?? null;
+  return {
+    id:               tplId ?? "custom",
+    emoji:            "📢",
+    title:            action.name,
+    objective:        OBJECTIVE_LABELS[action.objective] ?? action.objective,
+    targetLabel:      SEGMENT_LABELS[action.targetSegment] ?? action.targetSegment,
+    description:      "",
+    readiness:        "READY_TO_CONFIGURE",
+    hasAudienceQuery: aKey !== null,
+    audienceKey:      aKey,
+    suggestedMessage: action.message,
+  };
+}
+
+function CampanhasTab({ stats }: { stats: OverviewStats }) {
   const [selectedTemplate,  setSelectedTemplate]  = useState<ActionTemplate | null>(null);
   const [showCreateModal,   setShowCreateModal]    = useState(false);
   const [customActions,     setCustomActions]      = useState<CustomActionRow[]>([]);
   const [loadingCustom,     setLoadingCustom]      = useState(true);
   const [expandedCustom,    setExpandedCustom]     = useState<string | null>(null);
+  const [deletingAction,    setDeletingAction]     = useState<string | null>(null);
 
   // Campaign review flow
   const [activeCampaign, setActiveCampaign] = useState<{ id: string; recipients: CampaignRecipientRow[] } | null>(null);
@@ -1437,6 +1486,17 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
     setCustomActions((prev) => [action, ...prev]);
   }
 
+  async function handleDeleteAction(id: string) {
+    if (!confirm("Excluir este modelo salvo?")) return;
+    setDeletingAction(id);
+    try {
+      const res = await fetch(`/api/crm/custom-actions/${id}`, { method: "DELETE" });
+      if (res.ok) setCustomActions((prev) => prev.filter((a) => a.id !== id));
+    } finally {
+      setDeletingAction(null);
+    }
+  }
+
   const vipCount = (stats.segments.find((s) => s.tier === "OURO")?.count ?? 0) +
                    (stats.segments.find((s) => s.tier === "DIAMANTE")?.count ?? 0);
 
@@ -1460,22 +1520,30 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-gray-900">Ações de CRM</h2>
+          <h2 className="text-base font-bold text-gray-900">Campanhas de CRM</h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            Templates prontos para engajar, recuperar e fidelizar clientes via WhatsApp.
+            Envie agora, agende uma vez ou configure recorrência via WhatsApp.
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="shrink-0 flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Criar ação
-        </button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            onClick={() => setSelectedTemplate(BLANK_CAMPAIGN_TEMPLATE)}
+            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Nova campanha
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Novo modelo
+          </button>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -1549,13 +1617,31 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
                       </div>
                       <p className="text-sm font-bold text-gray-900 truncate">{action.name}</p>
                     </div>
-                    {/* Expand toggle */}
-                    <button
-                      onClick={() => setExpandedCustom(isExpanded ? null : action.id)}
-                      className="shrink-0 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
-                    >
-                      {isExpanded ? "Fechar" : "Ver"}
-                    </button>
+                    {/* Actions */}
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      <button
+                        onClick={() => setSelectedTemplate(customActionToTemplate(action))}
+                        className="rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors whitespace-nowrap"
+                      >
+                        Usar em campanha
+                      </button>
+                      <button
+                        onClick={() => setExpandedCustom(isExpanded ? null : action.id)}
+                        className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
+                      >
+                        {isExpanded ? "Fechar" : "Ver"}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAction(action.id)}
+                        disabled={deletingAction === action.id}
+                        title="Excluir modelo"
+                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
 
                   {isExpanded && (
@@ -1596,7 +1682,7 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
       {/* ── Ações sugeridas ──────────────────────────────────────────────────── */}
       <div>
         <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
-          Ações sugeridas
+          Templates de campanha
         </h3>
 
       {/* Action templates grid */}
@@ -1640,7 +1726,7 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
                 onClick={() => setSelectedTemplate(tpl)}
                 className="w-full rounded-xl bg-gray-900 py-2 text-xs font-bold text-white hover:bg-gray-700 transition-colors"
               >
-                Configurar ação
+                Configurar campanha
               </button>
             </div>
           );
@@ -1653,13 +1739,13 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
       {(campaigns.length > 0 || !loadingHistory) && (
         <div>
           <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
-            Histórico de ações
+            Histórico de campanhas
           </h3>
           {loadingHistory ? (
             <div className="py-4 text-center text-sm text-gray-400">Carregando…</div>
           ) : campaigns.length === 0 ? (
             <div className="rounded-2xl border-2 border-dashed border-gray-100 py-6 text-center text-xs text-gray-400">
-              Nenhuma campanha enviada ainda. Use os templates acima para disparar sua primeira ação.
+              Nenhuma campanha ainda. Use os templates acima para disparar sua primeira campanha.
             </div>
           ) : (
             <div className="space-y-2">
@@ -2567,7 +2653,233 @@ ${googleReviewUrl ? `\n⭐ Google: ${googleReviewUrl}` : "⭐ Google: [configure
 
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "overview" | "acoes" | "customers" | "programa" | "avaliacoes";
+// ── Automações Tab ────────────────────────────────────────────────────────────
+
+type AutomationLocalRow = {
+  trigger: string;
+  isEnabled: boolean;
+  messageTemplate: string;
+  triggerAfterDays: number;
+};
+
+const AUTOMATION_META: Record<string, {
+  emoji: string;
+  label: string;
+  description: string;
+  defaultDays: number;
+  daysLabel: string;
+  showDays: boolean;
+}> = {
+  REACTIVATION: {
+    emoji: "🔄",
+    label: "Recuperação de clientes",
+    description: "Dispara para clientes que não pedem há X dias. Cada cliente recebe uma vez por período.",
+    defaultDays: 30,
+    daysLabel: "Dias sem pedido para disparar",
+    showDays: true,
+  },
+  BIRTHDAY: {
+    emoji: "🎂",
+    label: "Feliz aniversário",
+    description: "Envia mensagem de aniversário no dia do cliente (requer data de nascimento cadastrada).",
+    defaultDays: 0,
+    daysLabel: "",
+    showDays: false,
+  },
+  POST_ORDER: {
+    emoji: "⭐",
+    label: "Pós-venda",
+    description: "Envia mensagem de avaliação após um pedido ser entregue.",
+    defaultDays: 1,
+    daysLabel: "Dias após entrega para disparar",
+    showDays: true,
+  },
+};
+
+const AUTOMATION_TRIGGERS = ["REACTIVATION", "BIRTHDAY", "POST_ORDER"] as const;
+
+function AutomacoesTab() {
+  const [local, setLocal]   = useState<Record<string, AutomationLocalRow>>(() => {
+    const init: Record<string, AutomationLocalRow> = {};
+    for (const trigger of AUTOMATION_TRIGGERS) {
+      const meta = AUTOMATION_META[trigger];
+      const defaultDays = meta?.defaultDays ?? 0;
+      init[trigger] = { trigger, isEnabled: false, messageTemplate: "", triggerAfterDays: defaultDays };
+    }
+    return init;
+  });
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState<Record<string, boolean>>({});
+  const [savedOk,  setSavedOk]  = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    fetch("/api/crm/automations")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json: { data?: { trigger: string; isEnabled: boolean; messageTemplate: string; triggerAfterDays: number }[] }) => {
+        const rows = json.data ?? [];
+        setLocal((prev) => {
+          const next = { ...prev };
+          for (const row of rows) {
+            next[row.trigger] = {
+              trigger:          row.trigger,
+              isEnabled:        row.isEnabled,
+              messageTemplate:  row.messageTemplate,
+              triggerAfterDays: row.triggerAfterDays,
+            };
+          }
+          return next;
+        });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  function updateLocal(trigger: string, patch: Partial<AutomationLocalRow>) {
+    setLocal((prev) => ({
+      ...prev,
+      [trigger]: { ...prev[trigger], ...patch } as AutomationLocalRow,
+    }));
+  }
+
+  async function handleSave(trigger: string) {
+    const state = local[trigger];
+    if (!state) return;
+    setSaving((prev) => ({ ...prev, [trigger]: true }));
+    try {
+      const res = await fetch(`/api/crm/automations/${trigger}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          isEnabled:        state.isEnabled,
+          messageTemplate:  state.messageTemplate,
+          triggerAfterDays: state.triggerAfterDays,
+        }),
+      });
+      if (res.ok) {
+        setSavedOk((prev) => ({ ...prev, [trigger]: true }));
+        setTimeout(() => setSavedOk((prev) => ({ ...prev, [trigger]: false })), 2500);
+      }
+    } finally {
+      setSaving((prev) => ({ ...prev, [trigger]: false }));
+    }
+  }
+
+  if (loading) {
+    return <div className="py-12 text-center text-sm text-gray-400">Carregando automações…</div>;
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-base font-bold text-gray-900">Automações de CRM</h2>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Regras sempre ativas. O sistema dispara automaticamente todos os dias às 08:00 (Brasília).
+        </p>
+      </div>
+
+      {AUTOMATION_TRIGGERS.map((trigger) => {
+        const meta  = AUTOMATION_META[trigger];
+        const state = local[trigger];
+        if (!meta || !state) return null;
+        return (
+          <div
+            key={trigger}
+            className={`rounded-2xl border p-5 space-y-4 transition-colors ${
+              state.isEnabled ? "border-green-200 bg-green-50/30" : "border-gray-100 bg-white"
+            }`}
+          >
+            {/* Header row */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{meta.emoji}</span>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">{meta.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{meta.description}</p>
+                </div>
+              </div>
+              {/* Toggle */}
+              <button
+                onClick={() => updateLocal(trigger, { isEnabled: !state.isEnabled })}
+                aria-label={state.isEnabled ? "Desativar" : "Ativar"}
+                className={`shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                  state.isEnabled ? "bg-green-500" : "bg-gray-200"
+                }`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  state.isEnabled ? "translate-x-6" : "translate-x-1"
+                }`} />
+              </button>
+            </div>
+
+            {/* Days field */}
+            {meta.showDays && (
+              <div>
+                <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                  {meta.daysLabel}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={state.triggerAfterDays}
+                    onChange={(e) => updateLocal(trigger, { triggerAfterDays: Math.max(1, parseInt(e.target.value) || 1) })}
+                    className="w-20 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-800 focus:border-brand-400 focus:outline-none"
+                  />
+                  <span className="text-xs text-gray-500">dias</span>
+                </div>
+              </div>
+            )}
+
+            {/* Message template */}
+            <div>
+              <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                Mensagem
+              </label>
+              <textarea
+                rows={4}
+                value={state.messageTemplate}
+                onChange={(e) => updateLocal(trigger, { messageTemplate: e.target.value })}
+                placeholder="Oi {nome}! …"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 resize-none focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-100"
+              />
+              <p className="mt-1 text-[10px] text-gray-400">
+                Use <code className="rounded bg-gray-100 px-1">{"{nome}"}</code> para o nome do cliente.
+              </p>
+            </div>
+
+            {/* Save row */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleSave(trigger)}
+                disabled={saving[trigger]}
+                className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50 transition-colors"
+              >
+                {saving[trigger] ? "Salvando…" : "Salvar"}
+              </button>
+              {savedOk[trigger] && (
+                <span className="text-xs font-semibold text-green-600">✓ Salvo</span>
+              )}
+              {!state.isEnabled && (
+                <span className="text-[10px] text-gray-400">Desativada — salve após ativar para iniciar os disparos.</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
+        <p className="text-xs text-gray-500">
+          <strong>Como funciona:</strong> O cron executa diariamente e envia para clientes elegíveis que ainda não receberam a automação no período. Ative e salve a mensagem para iniciar.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Main CRM Component ────────────────────────────────────────────────────────
+
+type Tab = "overview" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes";
 
 export function CRMClient({
   initialCustomers,
@@ -2641,11 +2953,12 @@ export function CRMClient({
   const friasCount = currentStats.frioCustomers + currentStats.mornoCustomers;
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
-    { id: "overview",  label: "Visão Geral" },
-    { id: "acoes",     label: "Ações", badge: friasCount || undefined },
-    { id: "customers", label: "Clientes" },
-    { id: "programa",  label: "Programa de Relacionamento" },
-    { id: "avaliacoes",label: "Avaliações" },
+    { id: "overview",   label: "Visão Geral" },
+    { id: "campanhas",  label: "Campanhas", badge: friasCount || undefined },
+    { id: "automacoes", label: "Automações" },
+    { id: "customers",  label: "Clientes" },
+    { id: "programa",   label: "Programa de Relacionamento" },
+    { id: "avaliacoes", label: "Avaliações" },
   ];
 
   function goToInactive() {
@@ -2654,7 +2967,7 @@ export function CRMClient({
   }
 
   function goToOpportunities() {
-    setTab("acoes");
+    setTab("campanhas");
   }
 
   return (
@@ -2694,8 +3007,11 @@ export function CRMClient({
           onDateChange={handleDateChange}
         />
       )}
-      {tab === "acoes" && (
-        <AcoesTab stats={currentStats} />
+      {tab === "campanhas" && (
+        <CampanhasTab stats={currentStats} />
+      )}
+      {tab === "automacoes" && (
+        <AutomacoesTab />
       )}
       {tab === "customers" && (
         <CustomersTab
