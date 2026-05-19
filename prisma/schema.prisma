@@ -623,6 +623,8 @@ model Campaign {
   totalFailed    Int            @default(0)
   totalRead      Int            @default(0)
   totalResponded Int            @default(0)
+  totalConverted Int            @default(0)
+  totalRevenue   Decimal        @default(0) @db.Decimal(12, 2)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -642,13 +644,17 @@ model CampaignExecution {
   customerId    String
   customerName  String? // snapshot at campaign creation
   customerPhone String? // snapshot at campaign creation
-  messageText   String?         @db.Text // personalized message for this recipient
-  status        ExecutionStatus @default(PENDING)
-  sentAt        DateTime?
-  readAt        DateTime?
-  failedReason  String?
-  errorMessage  String?
-  createdAt     DateTime        @default(now())
+  messageText      String?         @db.Text // personalized message for this recipient
+  status           ExecutionStatus @default(PENDING)
+  sentAt           DateTime?
+  readAt           DateTime?
+  failedReason     String?
+  errorMessage     String?
+  converted        Boolean         @default(false)
+  convertedAt      DateTime?
+  revenue          Decimal?        @db.Decimal(10, 2) // order.total at time of conversion
+  convertedOrderId String? // denormalized Order.id — no FK to avoid cascade complexity
+  createdAt        DateTime        @default(now())
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
@@ -1464,6 +1470,7 @@ model CRMActionLog {
   revenue      Decimal?        @db.Decimal(10, 2)
   respondedAt  DateTime?
   convertedAt  DateTime?
+  orderId      String? // denormalized Order.id — no FK to avoid cascade complexity
   createdAt    DateTime        @default(now())
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
