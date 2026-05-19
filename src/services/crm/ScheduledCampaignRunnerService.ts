@@ -290,7 +290,7 @@ export class ScheduledCampaignRunnerService {
     const candidates = await prisma.campaign.findMany({
       where: {
         status:         { in: ["ACTIVE", "SCHEDULED"] as never[] },
-        scheduleConfig: { not: undefined },
+        scheduleConfig: { not: null },
         ...(restaurantId ? { restaurantId } : {}),
       },
       select: {
