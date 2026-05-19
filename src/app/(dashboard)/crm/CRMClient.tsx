@@ -188,15 +188,38 @@ function CreateActionModal({
   onClose: () => void;
   onCreated: (action: CustomActionRow) => void;
 }) {
-  const [name,          setName]          = useState("");
-  const [objective,     setObjective]     = useState("");
-  const [targetSegment, setTargetSegment] = useState("");
-  const [channel,       setChannel]       = useState("WHATSAPP");
-  const [message,       setMessage]       = useState("");
-  const [notes,         setNotes]         = useState("");
-  const [errors,        setErrors]        = useState<CreateActionFormErrors>({});
-  const [saving,        setSaving]        = useState(false);
-  const [copied,        setCopied]        = useState(false);
+  const [name,            setName]            = useState("");
+  const [objective,       setObjective]       = useState("");
+  const [targetSegment,   setTargetSegment]   = useState("");
+  const [channel,         setChannel]         = useState("WHATSAPP");
+  const [message,         setMessage]         = useState("");
+  const [notes,           setNotes]           = useState("");
+  const [errors,          setErrors]          = useState<CreateActionFormErrors>({});
+  const [saving,          setSaving]          = useState(false);
+  const [copied,          setCopied]          = useState(false);
+  const [audienceCount,   setAudienceCount]   = useState<number | null>(null);
+  const [audienceLoading, setAudienceLoading] = useState(false);
+
+  // Map segment values to audience API template names
+  const SEGMENT_TEMPLATES: Record<string, string> = {
+    FRIO:            "recuperar-frios",
+    MORNO:           "reativar-mornos",
+    PRIMEIRO_PEDIDO: "segunda-compra",
+    VIP:             "clientes-vip",
+    RECORRENTES:     "recorrente-sumido",
+  };
+
+  useEffect(() => {
+    const tpl = SEGMENT_TEMPLATES[targetSegment];
+    if (!tpl) { setAudienceCount(null); return; }
+    setAudienceLoading(true);
+    fetch(`/api/crm/audience?template=${tpl}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json: { data?: { count: number } }) => setAudienceCount(json.data?.count ?? null))
+      .catch(() => setAudienceCount(null))
+      .finally(() => setAudienceLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetSegment]);
 
   function validate(): CreateActionFormErrors {
     const e: CreateActionFormErrors = {};
@@ -322,6 +345,15 @@ function CreateActionModal({
               ))}
             </select>
             {errors.targetSegment && <p className="mt-1 text-xs text-red-500">{errors.targetSegment}</p>}
+            {targetSegment && (
+              <p className="mt-1.5 text-[11px] text-gray-500">
+                {audienceLoading
+                  ? "Buscando estimativa…"
+                  : audienceCount !== null
+                    ? `≈ ${audienceCount} cliente${audienceCount !== 1 ? "s" : ""} neste segmento`
+                    : "Estimativa não disponível para este segmento"}
+              </p>
+            )}
           </div>
 
           {/* 4. Canal */}
@@ -1336,21 +1368,39 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
                 const sentDate = c.sentAt
                   ? new Date(c.sentAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
                   : new Date(c.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+                const isDeletable = c.status === "DRAFT" || c.status === "CANCELLED";
                 return (
                   <div key={c.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">WhatsApp · {sentDate}</p>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
-                        {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
-                      </span>
-                      {c.status === "SENT" && (
-                        <p className="mt-0.5 text-[10px] text-gray-500">
-                          {c.totalSent} enviados
-                          {c.totalFailed > 0 && <span className="text-red-500"> · {c.totalFailed} falhas</span>}
-                        </p>
+                    <div className="shrink-0 flex items-center gap-2">
+                      <div className="text-right">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
+                          {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
+                        </span>
+                        {c.status === "SENT" && (
+                          <p className="mt-0.5 text-[10px] text-gray-500">
+                            {c.totalSent} enviados
+                            {c.totalFailed > 0 && <span className="text-red-500"> · {c.totalFailed} falhas</span>}
+                          </p>
+                        )}
+                      </div>
+                      {isDeletable && (
+                        <button
+                          title="Excluir rascunho"
+                          onClick={async () => {
+                            if (!confirm("Tem certeza que deseja excluir este rascunho?")) return;
+                            const res = await fetch(`/api/crm/campaigns/${c.id}`, { method: "DELETE" });
+                            if (res.ok) setCampaigns((prev) => prev.filter((x) => x.id !== c.id));
+                          }}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       )}
                     </div>
                   </div>

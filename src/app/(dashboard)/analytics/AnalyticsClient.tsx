@@ -105,10 +105,197 @@ const TABS = [
   { id: "categorias",   label: "Categorias"          },
   { id: "clientes",     label: "Clientes"            },
   { id: "canais",       label: "Canais"              },
+  { id: "delivery",     label: "Cardápio Delivery"   },
   { id: "historico",    label: "Histórico Importado" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["id"];
+
+// ─── Delivery tab types ───────────────────────────────────────────────────────
+
+interface MenuSourceRow {
+  source:         string;
+  label:          string;
+  visits:         number;
+  orders:         number;
+  revenue:        number;
+  conversionRate: number;
+  avgTicket:      number;
+}
+
+// ─── TabDelivery ──────────────────────────────────────────────────────────────
+
+function TabDelivery({ restaurantSlug }: { restaurantSlug: string }) {
+  const [range,   setRange]   = useState<"today" | "7d" | "30d">("7d");
+  const [rows,    setRows]    = useState<MenuSourceRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [copied,  setCopied]  = useState<string | null>(null);
+
+  const SOURCES = [
+    { key: "instagram", label: "Instagram",  icon: "📸" },
+    { key: "whatsapp",  label: "WhatsApp",   icon: "💬" },
+    { key: "google",    label: "Google",     icon: "🔍" },
+    { key: "qrcode",    label: "QR Code",    icon: "📷" },
+    { key: "crm",       label: "CRM",        icon: "📧" },
+    { key: "manual",    label: "Manual",     icon: "✍️"  },
+  ];
+
+  const baseUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/pedido/${restaurantSlug}`
+    : `/pedido/${restaurantSlug}`;
+
+  function copyLink(src: string) {
+    const url = `${baseUrl}?src=${src}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(src);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  }
+
+  const loadData = useCallback(async (r: "today" | "7d" | "30d") => {
+    setLoading(true);
+    try {
+      const res  = await fetch(`/api/analytics/menu-sources?range=${r}`);
+      const json = await res.json() as { data?: { rows: MenuSourceRow[] } };
+      setRows(json.data?.rows ?? []);
+    } catch {
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadData(range); }, [range, loadData]);
+
+  const fmt = (n: number) =>
+    n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  const totalVisits  = rows.reduce((s, r) => s + r.visits,  0);
+  const totalOrders  = rows.reduce((s, r) => s + r.orders,  0);
+  const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+
+  return (
+    <div className="space-y-6">
+
+      {/* Header + range selector */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-gray-900">Cardápio Delivery — Origem dos acessos</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Visitas e pedidos por canal de origem
+          </p>
+        </div>
+        <div className="flex gap-1 rounded-lg border border-gray-200 bg-white p-0.5">
+          {(["today", "7d", "30d"] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                range === r ? "bg-orange-500 text-white" : "text-gray-500 hover:bg-gray-100"
+              }`}
+            >
+              {r === "today" ? "Hoje" : r === "7d" ? "7 dias" : "30 dias"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Summary KPIs */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Visitas",  value: totalVisits.toLocaleString("pt-BR"),        color: "text-blue-700"  },
+          { label: "Pedidos",  value: totalOrders.toLocaleString("pt-BR"),        color: "text-orange-700"},
+          { label: "Receita",  value: fmt(totalRevenue),                           color: "text-green-700" },
+        ].map((kpi) => (
+          <div key={kpi.label} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+            <p className="text-xs text-gray-400 font-medium">{kpi.label}</p>
+            <p className={`mt-1 text-xl font-bold ${kpi.color}`}>{kpi.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Source breakdown table */}
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-gray-100 px-5 py-3">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400">Por canal</h3>
+        </div>
+        {loading ? (
+          <div className="py-10 text-center text-sm text-gray-400">Carregando…</div>
+        ) : rows.length === 0 ? (
+          <div className="py-10 text-center text-sm text-gray-400">
+            Nenhum dado ainda. Use os links rastreáveis abaixo para começar a monitorar origens.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  {["Canal", "Visitas", "Pedidos", "Receita", "Conversão", "Ticket médio"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {rows.map((row) => (
+                  <tr key={row.source} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-semibold text-gray-800">{row.label}</td>
+                    <td className="px-4 py-3 tabular-nums text-gray-700">{row.visits.toLocaleString("pt-BR")}</td>
+                    <td className="px-4 py-3 tabular-nums text-gray-700">{row.orders.toLocaleString("pt-BR")}</td>
+                    <td className="px-4 py-3 tabular-nums text-gray-700">{fmt(row.revenue)}</td>
+                    <td className="px-4 py-3 tabular-nums">
+                      <span className={`font-semibold ${row.conversionRate >= 5 ? "text-green-700" : "text-gray-600"}`}>
+                        {row.conversionRate}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-gray-700">
+                      {row.avgTicket > 0 ? fmt(row.avgTicket) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Link generator */}
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-5 py-3">
+          <h3 className="text-sm font-bold text-gray-900">Links rastreáveis do cardápio</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Clique para copiar e cole na bio, stories ou QR Code</p>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {SOURCES.map((src) => {
+            const url = `${baseUrl}?src=${src.key}`;
+            const isCopied = copied === src.key;
+            return (
+              <div key={src.key} className="flex items-center gap-3 px-5 py-3">
+                <span className="text-base">{src.icon}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-gray-700">{src.label}</p>
+                  <p className="truncate text-[11px] font-mono text-gray-400">{url}</p>
+                </div>
+                <button
+                  onClick={() => copyLink(src.key)}
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    isCopied
+                      ? "bg-green-100 text-green-700"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {isCopied ? "✓ Copiado!" : "Copiar link"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+    </div>
+  );
+}
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -1706,7 +1893,7 @@ function TabHistorico({ data, loading }: { data: AnalyticsOverview | null; loadi
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AnalyticsClient() {
+export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: string }) {
   const [preset, setPreset]   = useState<Preset>("30d");
   const [from, setFrom]       = useState(() => presetRange("30d").from);
   const [to,   setTo]         = useState(() => presetRange("30d").to);
@@ -1866,6 +2053,9 @@ export function AnalyticsClient() {
         )}
         {activeTab === "canais" && (
           <TabCanais data={data} loading={loading} />
+        )}
+        {activeTab === "delivery" && (
+          <TabDelivery restaurantSlug={restaurantSlug} />
         )}
         {activeTab === "historico" && (
           <TabHistorico data={data} loading={loading} />

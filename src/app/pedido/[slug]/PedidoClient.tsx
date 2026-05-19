@@ -1466,25 +1466,60 @@ export function PedidoClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── UTM capture — read from URL params and persist to sessionStorage ──────────
-  const utmKey = `foocci-utm-${slug}`;
+  // ── UTM + source capture — read from URL params and persist to sessionStorage ─
+  const utmKey      = `foocci-utm-${slug}`;
+  const viewFiredKey = `foocci-view-fired-${slug}`;
+
+  const SRC_NORMALIZE: Record<string, string> = {
+    instagram: "instagram", ig: "instagram",
+    whatsapp:  "whatsapp",  wa: "whatsapp",
+    google:    "google",
+    qrcode:    "qrcode",    qr: "qrcode",
+    crm:       "crm",
+    manual:    "manual",
+    direct:    "direct",
+  };
+
   useEffect(() => {
-    const sp = new URLSearchParams(window.location.search);
-    const source   = sp.get("utm_source");
-    const medium   = sp.get("utm_medium");
-    const campaign = sp.get("utm_campaign");
-    const content  = sp.get("utm_content");
-    const tlid     = sp.get("_tlid");
-    if (source || medium || campaign || content || tlid) {
-      sessionStorage.setItem(utmKey, JSON.stringify({ source, medium, campaign, content, tlid }));
+    const sp          = new URLSearchParams(window.location.search);
+    const srcParam    = sp.get("src");
+    const utmSource   = sp.get("utm_source");
+    const medium      = sp.get("utm_medium");
+    const campaign    = sp.get("utm_campaign");
+    const content     = sp.get("utm_content");
+    const tlid        = sp.get("_tlid");
+    const campaignId  = sp.get("campaignId");
+    const customerId  = sp.get("customerId");
+
+    // Normalize: src > utm_source > direct
+    const rawSrc   = srcParam ?? utmSource ?? null;
+    const source   = rawSrc ? (SRC_NORMALIZE[rawSrc.toLowerCase()] ?? "other") : "direct";
+
+    sessionStorage.setItem(utmKey, JSON.stringify({
+      source, medium, campaign, content, tlid, campaignId, customerId,
+      landingPath: window.location.pathname + window.location.search,
+      firstSeenAt: new Date().toISOString(),
+    }));
+
+    // Fire MENU_VIEW once per session per restaurant
+    if (!sessionStorage.getItem(viewFiredKey)) {
+      sessionStorage.setItem(viewFiredKey, "1");
+      fetch("/api/menu/analytics/event", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ slug, source }),
+      }).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function getUtm(): { source?: string; medium?: string; campaign?: string; content?: string; tlid?: string } {
+  function getUtm(): {
+    source?: string; medium?: string; campaign?: string; content?: string;
+    tlid?: string; campaignId?: string; customerId?: string;
+  } {
     try {
       const raw = sessionStorage.getItem(utmKey);
-      return raw ? (JSON.parse(raw) as { source?: string; medium?: string; campaign?: string; content?: string; tlid?: string }) : {};
+      return raw ? (JSON.parse(raw) as ReturnType<typeof getUtm>) : {};
     } catch { return {}; }
   }
 

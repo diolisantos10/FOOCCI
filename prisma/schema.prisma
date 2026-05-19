@@ -1667,3 +1667,17 @@ model CustomerDataSignal {
   @@index([restaurantId, status])
   @@map("customer_data_signals")
 }
+
+// Lightweight page-view event fired when a customer opens the delivery menu.
+// Used to compute visits-by-source without touching the Order table.
+model MenuEvent {
+  id           String   @id @default(cuid())
+  restaurantId String
+  /// Normalized source: instagram | whatsapp | google | qrcode | crm | manual | direct | other
+  source       String?
+  createdAt    DateTime @default(now())
+
+  @@index([restaurantId, source])
+  @@index([restaurantId, createdAt])
+  @@map("menu_events")
+}
