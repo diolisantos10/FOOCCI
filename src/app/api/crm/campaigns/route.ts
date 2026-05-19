@@ -21,19 +21,22 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take:    50,
       select: {
-        id:            true,
-        name:          true,
-        objective:     true,
-        channel:       true,
-        targetSegment: true,
-        templateId:    true,
-        status:        true,
-        totalAudience: true,
-        totalSent:     true,
-        totalFailed:   true,
+        id:             true,
+        name:           true,
+        objective:      true,
+        channel:        true,
+        targetSegment:  true,
+        templateId:     true,
+        status:         true,
+        totalAudience:  true,
+        totalSent:      true,
+        totalFailed:    true,
         totalResponded: true,
-        createdAt:     true,
-        sentAt:        true,
+        totalConverted: true,
+        totalRevenue:   true,
+        scheduledAt:    true,
+        createdAt:      true,
+        sentAt:         true,
       },
     });
 
@@ -58,6 +61,9 @@ export async function POST(req: NextRequest) {
       messageTemplate?: string;
       objective?:       string;
       channel?:         string;
+      scheduledAt?:     string | null;
+      scheduleConfig?:  Record<string, unknown> | null;
+      audienceConfig?:  Record<string, unknown> | null;
     };
 
     if (!body.name?.trim()) {
@@ -77,6 +83,9 @@ export async function POST(req: NextRequest) {
       messageTemplate: body.messageTemplate.trim(),
       objective:       body.objective?.trim(),
       channel:         body.channel ?? "WHATSAPP",
+      scheduledAt:     body.scheduledAt ? new Date(body.scheduledAt) : undefined,
+      scheduleConfig:  body.scheduleConfig ?? undefined,
+      audienceConfig:  body.audienceConfig ?? undefined,
     });
 
     return ok(result, 201);

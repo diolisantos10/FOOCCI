@@ -118,15 +118,19 @@ type CampaignRecipientRow = {
 };
 
 type CampaignHistoryRow = {
-  id:            string;
-  name:          string;
-  objective:     string | null;
-  status:        string;
-  totalAudience: number;
-  totalSent:     number;
-  totalFailed:   number;
-  createdAt:     string;
-  sentAt:        string | null;
+  id:             string;
+  name:           string;
+  objective:      string | null;
+  status:         string;
+  totalAudience:  number;
+  totalSent:      number;
+  totalFailed:    number;
+  totalResponded: number;
+  totalConverted: number;
+  totalRevenue:   number;
+  scheduledAt:    string | null;
+  createdAt:      string;
+  sentAt:         string | null;
 };
 
 // ── Custom action types ───────────────────────────────────────────────────────
@@ -478,9 +482,16 @@ type CustomerPreview = {
 };
 
 type AudienceData = {
-  count:     number;
-  customers: CustomerPreview[];
-  computed:  boolean;
+  count:              number;
+  customers:          CustomerPreview[];
+  computed:           boolean;
+  totalSegmentCount?: number;
+  eligibleCount?:     number;
+  exclusionBreakdown?: {
+    noPhone:        number;
+    notContactable: number;
+    isGuest:        number;
+  };
 };
 
 const TIER_BADGE: Record<string, { bg: string; text: string; icon: string }> = {
@@ -682,10 +693,16 @@ function ActionConfigDrawer({
 }) {
   const [message,  setMessage]  = useState(template.suggestedMessage);
   const [copied,   setCopied]   = useState(false);
-  const [audience, setAudience] = useState<{ count: number; customers: CustomerPreview[]; computed: boolean } | null>(null);
+  const [audience, setAudience] = useState<AudienceData | null>(null);
   const [loadingAudience, setLoadingAudience] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [prepError, setPrepError] = useState<string | null>(null);
+
+  // Scheduling
+  type SendMode = "now" | "scheduled";
+  const [sendMode,     setSendMode]     = useState<SendMode>("now");
+  const [scheduleDate, setScheduleDate] = useState("");  // "YYYY-MM-DD"
+  const [scheduleTime, setScheduleTime] = useState("09:00");
 
   useEffect(() => {
     if (!template.hasAudienceQuery) return;
@@ -703,11 +720,17 @@ function ActionConfigDrawer({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function buildScheduledAt(): string | null {
+    if (sendMode !== "scheduled" || !scheduleDate) return null;
+    return new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
+  }
+
   async function handlePrepareCampaign() {
     if (!onStartCampaign) return;
     setPreparing(true);
     setPrepError(null);
     try {
+      const scheduledAt = buildScheduledAt();
       const res = await fetch("/api/crm/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -717,6 +740,7 @@ function ActionConfigDrawer({
           targetSegment:   template.id,
           messageTemplate: message,
           objective:       template.objective,
+          ...(scheduledAt ? { scheduledAt, scheduleConfig: { mode: "scheduled", scheduledAt } } : {}),
         }),
       });
       const json = await res.json() as { data?: { campaignId: string; recipients: CampaignRecipientRow[] }; error?: string };
@@ -724,8 +748,13 @@ function ActionConfigDrawer({
         setPrepError("Erro ao preparar campanha. Tente novamente.");
         return;
       }
-      onStartCampaign(json.data.campaignId, json.data.recipients);
-      onClose();
+      if (sendMode === "scheduled") {
+        // For scheduled campaigns: skip review modal, close drawer directly
+        onClose();
+      } else {
+        onStartCampaign(json.data.campaignId, json.data.recipients);
+        onClose();
+      }
     } catch {
       setPrepError("Falha de rede. Tente novamente.");
     } finally {
@@ -734,10 +763,6 @@ function ActionConfigDrawer({
   }
 
   const rc = READINESS_CONFIG[template.readiness];
-
-  const audienceCount = audience?.computed
-    ? audience.count
-    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -772,48 +797,65 @@ function ActionConfigDrawer({
               <p className="mt-0.5 text-sm font-semibold text-gray-800">{template.targetLabel}</p>
             </div>
             <div className="rounded-xl bg-gray-50 px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Público estimado</p>
-              <p className="mt-0.5 text-sm font-semibold text-gray-800">
-                {loadingAudience
-                  ? <span className="text-gray-400 text-xs">Calculando…</span>
-                  : audienceCount !== null
-                    ? <>{audienceCount} <span className="font-normal text-gray-500">clientes</span></>
-                    : <span className="text-gray-400 text-xs">indisponível</span>
-                }
-              </p>
-            </div>
-            <div className="rounded-xl bg-gray-50 px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Canal</p>
               <div className="mt-0.5 flex items-center gap-1.5">
                 <p className="text-sm font-semibold text-gray-800">WhatsApp</p>
-                <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-green-700">
-                  ativo
-                </span>
+                <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-green-700">ativo</span>
               </div>
-            </div>
-            <div className="rounded-xl bg-gray-50 px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Status</p>
-              <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${rc.bg} ${rc.text}`}>
-                {rc.label}
-              </span>
             </div>
           </div>
 
-          {/* Customer preview list */}
+          {/* Audience counts — the key fix */}
           {template.hasAudienceQuery && (
+            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Público estimado</p>
+              {loadingAudience ? (
+                <p className="text-xs text-gray-400">Calculando…</p>
+              ) : !audience ? null : !audience.computed ? (
+                <p className="text-xs text-gray-500">
+                  {audience.totalSegmentCount != null && audience.totalSegmentCount > 0
+                    ? `${audience.totalSegmentCount} clientes no segmento — dados de contato ainda não disponíveis para esta ação.`
+                    : "Dados insuficientes para calcular o público desta ação."}
+                </p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">No segmento</span>
+                    <span className="font-bold text-gray-900">{audience.totalSegmentCount ?? audience.count}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-green-700">Elegíveis WhatsApp</span>
+                    <span className="font-bold text-green-700">{audience.eligibleCount ?? audience.count}</span>
+                  </div>
+                  {(() => {
+                    const excl = audience.exclusionBreakdown;
+                    const excluded = (excl?.noPhone ?? 0) + (excl?.notContactable ?? 0);
+                    if (excluded === 0) return null;
+                    const reasons: string[] = [];
+                    if (excl?.noPhone) reasons.push(`${excl.noPhone} sem telefone`);
+                    if (excl?.notContactable) reasons.push(`${excl.notContactable} opt-out`);
+                    return (
+                      <p className="text-[10px] text-gray-400 border-t border-gray-200 pt-1.5 mt-0.5">
+                        {excluded} excluído{excluded !== 1 ? "s" : ""}: {reasons.join(", ")}
+                      </p>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Customer preview list — only when computed and has eligible customers */}
+          {template.hasAudienceQuery && audience?.computed && (audience.eligibleCount ?? audience.count) > 0 && (
             <div>
               <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-                Prévia do público
+                Prévia do público elegível
               </p>
               {loadingAudience ? (
                 <div className="py-4 text-center text-xs text-gray-400">Carregando clientes…</div>
-              ) : !audience?.computed ? (
-                <div className="rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500">
-                  Esta ação precisa de mais dados para calcular o público.
-                </div>
               ) : audience.customers.length === 0 ? (
                 <div className="rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500">
-                  Nenhum cliente neste segmento no momento.
+                  Nenhum cliente elegível no momento.
                 </div>
               ) : (
                 <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-xl border border-gray-100 p-2">
@@ -843,9 +885,9 @@ function ActionConfigDrawer({
                       </div>
                     );
                   })}
-                  {audience.count > audience.customers.length && (
+                  {(audience.eligibleCount ?? audience.count) > audience.customers.length && (
                     <p className="text-center text-[10px] text-gray-400 py-1">
-                      +{audience.count - audience.customers.length} clientes não exibidos
+                      +{(audience.eligibleCount ?? audience.count) - audience.customers.length} clientes não exibidos
                     </p>
                   )}
                 </div>
@@ -871,6 +913,58 @@ function ActionConfigDrawer({
               Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para inserir o nome do cliente automaticamente.
             </p>
           </div>
+
+          {/* Scheduling section */}
+          {onStartCampaign && template.hasAudienceQuery && (
+            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Quando enviar</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSendMode("now")}
+                  className={`flex-1 rounded-lg py-2 text-xs font-semibold border transition-colors ${
+                    sendMode === "now"
+                      ? "bg-brand-600 text-white border-brand-600"
+                      : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  Enviar agora
+                </button>
+                <button
+                  onClick={() => setSendMode("scheduled")}
+                  className={`flex-1 rounded-lg py-2 text-xs font-semibold border transition-colors ${
+                    sendMode === "scheduled"
+                      ? "bg-brand-600 text-white border-brand-600"
+                      : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  Programar
+                </button>
+              </div>
+              {sendMode === "scheduled" && (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1">Data</label>
+                    <input
+                      type="date"
+                      value={scheduleDate}
+                      min={new Date().toISOString().split("T")[0]}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1">Hora</label>
+                    <input
+                      type="time"
+                      value={scheduleTime}
+                      onChange={(e) => setScheduleTime(e.target.value)}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -882,29 +976,37 @@ function ActionConfigDrawer({
         <div className="flex gap-2 border-t border-gray-100 px-5 py-4 shrink-0">
           <button
             onClick={copyMessage}
-            className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors ${
+            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
               copied
                 ? "bg-green-100 text-green-700"
                 : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
             }`}
           >
-            {copied ? "✓ Copiado!" : "Copiar sugestão"}
+            {copied ? "✓ Copiado" : "Copiar"}
           </button>
           {onStartCampaign && template.hasAudienceQuery && audience?.computed ? (
             <button
               onClick={handlePrepareCampaign}
-              disabled={preparing || audience.count === 0}
+              disabled={preparing || (audience.eligibleCount ?? audience.count) === 0 || (sendMode === "scheduled" && !scheduleDate)}
               className="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {preparing ? "Preparando…" : audience.count === 0 ? "Sem público" : `Preparar disparo →`}
+              {preparing
+                ? "Processando…"
+                : (audience.eligibleCount ?? audience.count) === 0
+                  ? "Sem público elegível"
+                  : sendMode === "scheduled"
+                    ? scheduleDate
+                      ? `Agendar →`
+                      : "Escolha uma data"
+                    : `Preparar disparo →`}
             </button>
           ) : (
             <button
               disabled
-              title="Calcule o público antes de disparar"
+              title={loadingAudience ? "Calculando público…" : "Configure o público antes de disparar"}
               className="flex-1 cursor-not-allowed rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-400"
             >
-              {loadingAudience ? "Calculando público…" : "Calcule o público"}
+              {loadingAudience ? "Calculando público…" : template.hasAudienceQuery ? "Aguardando público…" : "Calcular público"}
             </button>
           )}
         </div>
@@ -916,11 +1018,19 @@ function ActionConfigDrawer({
 // ── Campaign Review Modal ─────────────────────────────────────────────────────
 
 const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
-  DRAFT:    "Rascunho",
-  SENDING:  "Enviando",
-  SENT:     "Enviado",
-  CANCELLED:"Cancelado",
-  SCHEDULED:"Agendado",
+  DRAFT:     "Rascunho",
+  SENDING:   "Em execução",
+  SENT:      "Concluída",
+  CANCELLED: "Cancelada",
+  SCHEDULED: "Programada",
+};
+
+const CAMPAIGN_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  DRAFT:     { bg: "bg-gray-100",   text: "text-gray-600"   },
+  SENDING:   { bg: "bg-blue-100",   text: "text-blue-700"   },
+  SENT:      { bg: "bg-green-100",  text: "text-green-700"  },
+  CANCELLED: { bg: "bg-red-100",    text: "text-red-600"    },
+  SCHEDULED: { bg: "bg-amber-100",  text: "text-amber-700"  },
 };
 
 const PILOT_MAX = 20; // safety cap for manual pilot dispatches
@@ -1236,9 +1346,14 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
                         <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
                           {SEGMENT_LABELS[action.targetSegment] ?? action.targetSegment}
                         </span>
-                        <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-600">
-                          Rascunho
-                        </span>
+                        {(() => {
+                          const sc = CAMPAIGN_STATUS_COLORS[action.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                          return (
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
+                              {CAMPAIGN_STATUS_LABELS[action.status] ?? "Rascunho"}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <p className="text-sm font-bold text-gray-900 truncate">{action.name}</p>
                     </div>
@@ -1357,52 +1472,59 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
           ) : (
             <div className="space-y-2">
               {campaigns.map((c) => {
-                const statusCfg: Record<string, { bg: string; text: string }> = {
-                  DRAFT:     { bg: "bg-gray-100",   text: "text-gray-600"  },
-                  SENDING:   { bg: "bg-blue-100",   text: "text-blue-700"  },
-                  SENT:      { bg: "bg-green-100",  text: "text-green-700" },
-                  CANCELLED: { bg: "bg-red-100",    text: "text-red-600"   },
-                  SCHEDULED: { bg: "bg-amber-100",  text: "text-amber-700" },
-                };
-                const sc = statusCfg[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
-                const sentDate = c.sentAt
+                const sc = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                const displayDate = c.sentAt
                   ? new Date(c.sentAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
-                  : new Date(c.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+                  : c.scheduledAt
+                    ? `Prog. ${new Date(c.scheduledAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })}`
+                    : new Date(c.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
                 const isDeletable = c.status === "DRAFT" || c.status === "CANCELLED";
+                const convRate = c.totalSent > 0
+                  ? Math.round((c.totalConverted / c.totalSent) * 100)
+                  : null;
                 return (
-                  <div key={c.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">WhatsApp · {sentDate}</p>
-                    </div>
-                    <div className="shrink-0 flex items-center gap-2">
-                      <div className="text-right">
+                  <div key={c.id} className="rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">WhatsApp · {displayDate}</p>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-2">
                         <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
                           {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
                         </span>
-                        {c.status === "SENT" && (
-                          <p className="mt-0.5 text-[10px] text-gray-500">
-                            {c.totalSent} enviados
-                            {c.totalFailed > 0 && <span className="text-red-500"> · {c.totalFailed} falhas</span>}
-                          </p>
+                        {isDeletable && (
+                          <button
+                            title="Excluir"
+                            onClick={async () => {
+                              if (!confirm("Excluir esta ação?")) return;
+                              const res = await fetch(`/api/crm/campaigns/${c.id}`, { method: "DELETE" });
+                              if (res.ok) setCampaigns((prev) => prev.filter((x) => x.id !== c.id));
+                            }}
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         )}
                       </div>
-                      {isDeletable && (
-                        <button
-                          title="Excluir rascunho"
-                          onClick={async () => {
-                            if (!confirm("Tem certeza que deseja excluir este rascunho?")) return;
-                            const res = await fetch(`/api/crm/campaigns/${c.id}`, { method: "DELETE" });
-                            if (res.ok) setCampaigns((prev) => prev.filter((x) => x.id !== c.id));
-                          }}
-                          className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
                     </div>
+                    {/* Stats row */}
+                    {(c.status === "SENT" || c.status === "SENDING") && (
+                      <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-gray-500 border-t border-gray-50 pt-2">
+                        <span>{c.totalSent} enviados</span>
+                        {c.totalFailed > 0 && <span className="text-red-500">{c.totalFailed} falhas</span>}
+                        {c.totalResponded > 0 && <span className="text-blue-600">{c.totalResponded} responderam</span>}
+                        {c.totalConverted > 0 && (
+                          <span className="text-green-600 font-semibold">
+                            {c.totalConverted} conversões
+                            {convRate !== null && ` (${convRate}%)`}
+                            {" · R$"}{Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -38,6 +38,11 @@ export interface CreateCampaignInput {
   messageTemplate: string;   // raw template with {nome} placeholders
   objective?:      string;
   channel?:        string;
+  scheduledAt?:    Date;     // if set, campaign starts as SCHEDULED
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  scheduleConfig?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  audienceConfig?: any;
 }
 
 export interface CampaignRecipientRow {
@@ -299,14 +304,17 @@ export class CrmCampaignService {
       const c = await tx.campaign.create({
         data: {
           restaurantId,
-          name:          input.name,
-          message:       input.messageTemplate,
-          objective:     input.objective ?? null,
-          channel:       input.channel ?? "WHATSAPP",
-          targetSegment: input.targetSegment,
-          templateId:    input.templateId ?? null,
-          totalAudience: customers.length,
-          status:        "DRAFT",
+          name:           input.name,
+          message:        input.messageTemplate,
+          objective:      input.objective ?? null,
+          channel:        input.channel ?? "WHATSAPP",
+          targetSegment:  input.targetSegment,
+          templateId:     input.templateId ?? null,
+          totalAudience:  customers.length,
+          status:         input.scheduledAt ? "SCHEDULED" : "DRAFT",
+          scheduledAt:    input.scheduledAt ?? null,
+          scheduleConfig: input.scheduleConfig ?? undefined,
+          audienceConfig: input.audienceConfig ?? undefined,
         },
       });
 
