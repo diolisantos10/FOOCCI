@@ -55,18 +55,19 @@ interface ActiveDraft {
 }
 
 interface ConvSummary {
-  id:            string;
-  status:        ConvStatus;
-  channel:       Channel;
-  aiEnabled:     boolean;
-  assignedTo:    string | null;
-  unreadCount:   number;
-  lastMessageAt: string | null;
-  createdAt:     string;
-  customerName:  string | null;
-  customerPhone: string | null;
-  customer:      { name: string; phone: string } | null;
-  messages:      { content: string; direction: string; senderType: string | null; type: string }[];
+  id:               string;
+  status:           ConvStatus;
+  channel:          Channel;
+  aiEnabled:        boolean;
+  assignedTo:       string | null;
+  unreadCount:      number;
+  lastMessageAt:    string | null;
+  createdAt:        string;
+  customerName:     string | null;
+  customerPhone:    string | null;
+  contextType:      string | null;
+  customer:         { name: string; phone: string } | null;
+  messages:         { content: string; direction: string; senderType: string | null; type: string }[];
 }
 
 interface Message {
@@ -147,6 +148,13 @@ function getHandlerBadge(c: ConvSummary): HandlerBadge {
     return { label: "Humano",     cls: "bg-green-100  text-green-700 border-green-200" };
   return   { label: "IA ativa",   cls: "bg-purple-100 text-purple-700 border-purple-200" };
 }
+
+const CONTEXT_BADGE: Record<string, { label: string; cls: string }> = {
+  CRM_CAMPAIGN:   { label: "Campanha CRM",  cls: "bg-violet-100 text-violet-700 border-violet-200" },
+  CRM_AUTOMATION: { label: "Automação CRM", cls: "bg-blue-100   text-blue-700   border-blue-200"   },
+  ORDER_SUPPORT:  { label: "Pós-venda",     cls: "bg-orange-100 text-orange-700 border-orange-200" },
+  HUMAN_SUPPORT:  { label: "Suporte",       cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+};
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "";
@@ -597,6 +605,12 @@ export function AtendimentoClient({
                             <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${badge.cls}`}>
                               {badge.label}
                             </span>
+                            {/* Context badge — only shown for CRM/special contexts */}
+                            {conv.contextType && CONTEXT_BADGE[conv.contextType] && (
+                              <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${CONTEXT_BADGE[conv.contextType]!.cls}`}>
+                                {CONTEXT_BADGE[conv.contextType]!.label}
+                              </span>
+                            )}
                           </div>
 
                           <p className="mt-1 truncate text-xs text-gray-500">

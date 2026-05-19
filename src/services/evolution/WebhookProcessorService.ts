@@ -29,6 +29,7 @@ import type {
 import { ConversationStatus, MessageType } from "@prisma/client";
 // Phase 4: lazy import to avoid circular dependency issues at module load time
 import type { AIOrderService as AIOrderServiceType } from "@/services/ai/AIOrderService";
+import { markCrmReplyIfApplicable } from "@/services/agents/AgentRoutingService";
 
 // Resolved conversations older than this are treated as new threads.
 const REOPEN_WINDOW_HOURS = 24;
@@ -123,6 +124,10 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
       },
     }),
   ]);
+
+  // 7a. CRM attribution: if customer replied to a CRM conversation, mark it.
+  //     Fire-and-forget — never block the webhook hot path.
+  markCrmReplyIfApplicable(conversation.id).catch(() => {});
 
   // 7. Route to the correct agent based on WhatsApp mode.
   //    HUMAN / RESOLVED conversations are never touched by AI.

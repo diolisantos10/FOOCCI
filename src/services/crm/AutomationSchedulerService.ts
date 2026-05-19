@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { personalizeMessage, type AudienceCustomer } from "@/services/crm/CrmCampaignService";
 import { CrmCampaignService } from "@/services/crm/CrmCampaignService";
 import type { CRMAutomation } from "@prisma/client";
+import { assignConversationContext, buildConversationMetadataForCrmSend } from "@/services/agents/AgentRoutingService";
 
 // Campaign templateId prefix for automation-created campaigns.
 // Used for dedup lookups and stats queries.
@@ -98,6 +99,13 @@ export class AutomationSchedulerService {
 
     const sendResult = await CrmCampaignService.send(campaignId, restaurantId, {
       messages: recipients.map((r) => ({ recipientId: r.id, messageText: r.messageText })),
+    });
+
+    // Re-tag conversations from CRM_CAMPAIGN → CRM_AUTOMATION
+    // (findOrCreateCrmConversation defaults to CRM_CAMPAIGN; automations need their own context)
+    await prisma.conversation.updateMany({
+      where: { relatedCampaignId: campaignId, contextType: "CRM_CAMPAIGN" },
+      data:  { contextType: "CRM_AUTOMATION" },
     });
 
     return {

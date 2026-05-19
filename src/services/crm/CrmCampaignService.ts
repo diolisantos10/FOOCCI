@@ -16,6 +16,7 @@ import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigServ
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { isGuestIdentifier } from "@/lib/guest";
 import { ConversationStatus } from "@prisma/client";
+import { assignConversationContext, buildConversationMetadataForCrmSend, CONTEXT_TYPE } from "@/services/agents/AgentRoutingService";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -485,6 +486,9 @@ export class CrmCampaignService {
           restaurantId, exec.customerId, exec.customerPhone!, campaignId
         );
 
+        // Tag conversation with CRM context (first-write-wins, idempotent)
+        await assignConversationContext(convId, "CRM_CAMPAIGN", { relatedCampaignId: campaignId });
+
         // Log outbound message in Chat Inbox
         await prisma.$transaction([
           prisma.message.create({
@@ -497,6 +501,7 @@ export class CrmCampaignService {
               sentAt:            now,
               externalMessageId: evoResult.key.id,
               externalStatus:    "sent",
+              metadata:          buildConversationMetadataForCrmSend(campaignId, exec.id),
             },
           }),
           prisma.conversation.update({
@@ -574,10 +579,12 @@ async function findOrCreateCrmConversation(
     data: {
       restaurantId,
       customerId,
-      channel:      "WHATSAPP",
-      status:       ConversationStatus.OPEN,
-      customerPhone: customer?.phone ?? phone,
-      customerName:  customer?.name ?? phone,
+      channel:          "WHATSAPP",
+      status:           ConversationStatus.OPEN,
+      customerPhone:    customer?.phone ?? phone,
+      customerName:     customer?.name ?? phone,
+      contextType:      CONTEXT_TYPE.CRM_CAMPAIGN,
+      relatedCampaignId: campaignId,
     },
   });
 
