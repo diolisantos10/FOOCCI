@@ -16,7 +16,7 @@
 import { prisma } from "@/lib/prisma";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
-import { ConversationStatus } from "@prisma/client";
+import { Prisma, ConversationStatus } from "@prisma/client";
 import {
   resolveAudience,
   personalizeMessage,
@@ -290,7 +290,7 @@ export class ScheduledCampaignRunnerService {
     const candidates = await prisma.campaign.findMany({
       where: {
         status:         { in: ["ACTIVE", "SCHEDULED"] as never[] },
-        scheduleConfig: { not: null },
+        scheduleConfig: { not: Prisma.AnyNull },
         ...(restaurantId ? { restaurantId } : {}),
       },
       select: {
