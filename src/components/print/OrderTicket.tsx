@@ -146,10 +146,10 @@ function ReceiptContent({
     <>
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: "8px" }}>
-        <div style={{ fontWeight: "bold", fontSize: "14px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+        <div style={{ fontWeight: "bold", fontSize: "16px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
           {restaurantName}
         </div>
-        <div style={{ fontSize: "11px", marginTop: "3px", color: "#444" }}>
+        <div style={{ fontSize: "13px", marginTop: "3px", color: "#000" }}>
           {TYPE_LABELS[order.type] ?? order.type}
         </div>
       </div>
@@ -172,14 +172,14 @@ function ReceiptContent({
         return (
           <>
             <Divider dashed />
-            <div style={{ fontWeight: "bold", marginBottom: "3px", fontSize: "11px" }}>
+            <div style={{ fontWeight: "bold", marginBottom: "3px", fontSize: "13px" }}>
               ENDEREÇO DE ENTREGA
             </div>
-            <div style={{ fontSize: "11px", lineHeight: "1.5", paddingLeft: "2px" }}>
+            <div style={{ fontSize: "13px", lineHeight: "1.5", paddingLeft: "2px" }}>
               <div>{a.street}, {a.number}{a.complement ? ` — ${a.complement}` : ""}</div>
               <div>{a.neighborhood}</div>
               <div>{a.city}/{a.state}</div>
-              <div style={{ color: "#555" }}>CEP: {a.zipCode}</div>
+              <div style={{ color: "#000" }}>CEP: {a.zipCode}</div>
             </div>
           </>
         );
@@ -188,7 +188,7 @@ function ReceiptContent({
       <Divider />
 
       {/* Items */}
-      <div style={{ fontWeight: "bold", marginBottom: "5px", fontSize: "11px" }}>
+      <div style={{ fontWeight: "bold", marginBottom: "5px", fontSize: "13px" }}>
         ITENS
       </div>
       {order.items.map((item, i) => {
@@ -211,7 +211,7 @@ function ReceiptContent({
               </span>
             </div>
             {item.notes && (
-              <div style={{ paddingLeft: "14px", fontSize: "11px", color: "#555", marginTop: "1px" }}>
+              <div style={{ paddingLeft: "14px", fontSize: "13px", color: "#000", marginTop: "1px" }}>
                 ↳ {item.notes}
               </div>
             )}
@@ -223,8 +223,8 @@ function ReceiptContent({
                     style={{
                       display:        "flex",
                       justifyContent: "space-between",
-                      fontSize:       "11px",
-                      color:          "#444",
+                      fontSize:       "13px",
+                      color:          "#000",
                       marginTop:      "1px",
                     }}
                   >
@@ -253,7 +253,7 @@ function ReceiptContent({
           display:         "flex",
           justifyContent:  "space-between",
           fontWeight:      "bold",
-          fontSize:        "13px",
+          fontSize:        "15px",
           marginTop:       "5px",
           paddingTop:      "5px",
           borderTop:       "1px solid #000",
@@ -288,7 +288,7 @@ function ReceiptContent({
 
       <Divider />
 
-      <div style={{ textAlign: "center", fontSize: "10px", color: "#777" }}>
+      <div style={{ textAlign: "center", fontSize: "12px", color: "#444" }}>
         Foocci · {fmtDate(new Date())}
       </div>
     </>
@@ -300,7 +300,7 @@ function ReceiptContent({
 export function OrderTicket({ order, restaurantName, mode = "hidden" }: Props) {
   const receiptStyle: React.CSSProperties = {
     fontFamily:  "'Courier New', Courier, monospace",
-    fontSize:    "12px",
+    fontSize:    "14px",
     lineHeight:  "1.6",
     width:       "72mm",
     padding:     "5mm",
@@ -356,7 +356,7 @@ function Row({
         fontWeight:      bold ? "bold" : undefined,
       }}
     >
-      <span style={{ color: bold ? "#000" : "#555" }}>{label}</span>
+      <span style={{ color: "#000" }}>{label}</span>
       <span>{value}</span>
     </div>
   );
@@ -366,7 +366,7 @@ function Divider({ dashed }: { dashed?: boolean }) {
   return (
     <div
       style={{
-        borderTop: `1px ${dashed ? "dashed" : "solid"} #ccc`,
+        borderTop: `1px ${dashed ? "dashed" : "solid"} #666`,
         margin:    "6px 0",
       }}
     />

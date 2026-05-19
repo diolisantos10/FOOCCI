@@ -6,13 +6,16 @@ import { TopBar } from "@/components/layout/TopBar";
 import { prisma } from "@/lib/prisma";
 import { PrintButton } from "@/components/print/PrintButton";
 import { OrderTicket } from "@/components/print/OrderTicket";
+import { AutoPrintTrigger } from "@/components/print/AutoPrintTrigger";
 
 export const metadata = { title: "Pré-visualizar comanda" };
 
 export default async function ImprimirPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { autoprint?: string };
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -38,9 +41,11 @@ export default async function ImprimirPage({
   }
 
   const restaurantName = restaurant?.name ?? "Restaurante";
+  const autoPrint = searchParams.autoprint === "1";
 
   return (
     <>
+      {autoPrint && <AutoPrintTrigger />}
       <TopBar title={`Comanda — ${order.customer.name}`} />
 
       {/* Action bar — screen only, hidden during print */}
@@ -73,7 +78,7 @@ export default async function ImprimirPage({
         @media print {
           * { visibility: hidden; }
           #foocci-print-ticket { display: block !important; visibility: visible; position: fixed; top: 0; left: 0; }
-          #foocci-print-ticket * { visibility: visible; }
+          #foocci-print-ticket * { visibility: visible; color: #000 !important; }
           @page { margin: 0; size: 80mm auto; }
           body { margin: 0; }
         }

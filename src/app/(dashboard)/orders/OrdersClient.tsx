@@ -1344,6 +1344,162 @@ function DetailPanel({
   );
 }
 
+// ─── NewOrderModal ────────────────────────────────────────────
+
+function NewOrderModal({
+  order,
+  onAccept,
+  onReject,
+  accepting,
+  rejecting,
+}: {
+  order: MockOrder;
+  onAccept: () => void;
+  onReject: () => void;
+  accepting: boolean;
+  rejecting: boolean;
+}) {
+  const [confirmReject, setConfirmReject] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="relative mx-4 w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+
+        {/* Header */}
+        <div className="bg-orange-500 px-6 py-4 text-white">
+          <div className="flex items-center gap-3">
+            <span className="h-3 w-3 animate-pulse rounded-full bg-white shrink-0" />
+            <span className="text-xl font-bold tracking-wide">NOVO PEDIDO!</span>
+          </div>
+          <p className="mt-0.5 text-sm text-orange-100">
+            Um novo pedido aguarda sua confirmação
+          </p>
+        </div>
+
+        {/* Order details */}
+        <div className="max-h-[55vh] overflow-y-auto px-6 py-4 space-y-4">
+
+          {/* Customer + number + total */}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-mono text-xs text-gray-400">
+                Pedido #{String(order.num).padStart(3, "0")}
+              </p>
+              <h3 className="mt-0.5 text-xl font-bold text-gray-900 leading-tight">
+                {order.customer}
+              </h3>
+              <p className="text-sm text-gray-500">{order.phone}</p>
+            </div>
+            <span className="shrink-0 text-2xl font-bold text-gray-900">
+              {fmtCurrency(order.total)}
+            </span>
+          </div>
+
+          {/* Type + payment chips */}
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+              {order.type === "DELIVERY" ? "🛵 Delivery" : order.type === "TABLE" ? "🍽️ Mesa" : "🏃 Retirada"}
+            </span>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+              💳 {order.payment}
+            </span>
+          </div>
+
+          {/* Address (delivery only) */}
+          {order.type === "DELIVERY" && (
+            <div className="rounded-lg bg-gray-50 px-3 py-2.5">
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                Endereço
+              </p>
+              <p className="text-sm text-gray-800 leading-snug">{order.address}</p>
+            </div>
+          )}
+
+          {/* Items */}
+          <div>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">Itens</p>
+            <div className="space-y-1.5">
+              {order.items.map((item, i) => (
+                <div key={i} className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="text-gray-800">
+                    <span className="font-semibold text-gray-500">{item.qty}×</span>{" "}
+                    {item.name}
+                    {item.note && (
+                      <span className="ml-1 italic text-xs text-gray-400">({item.note})</span>
+                    )}
+                  </span>
+                  <span className="shrink-0 font-medium text-gray-700">
+                    {fmtCurrency(item.price * item.qty)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="border-t border-gray-100 pt-3 space-y-1.5">
+            {order.type === "DELIVERY" && order.deliveryFee != null && (
+              <div className="flex justify-between text-sm text-gray-500">
+                <span>Taxa de entrega</span>
+                <span>{fmtCurrency(order.deliveryFee)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-base font-bold text-gray-900">
+              <span>Total</span>
+              <span>{fmtCurrency(order.total)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="border-t border-gray-100 px-6 py-4">
+          {!confirmReject ? (
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmReject(true)}
+                disabled={accepting || rejecting}
+                className="flex-1 rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40"
+              >
+                Recusar pedido
+              </button>
+              <button
+                onClick={onAccept}
+                disabled={accepting || rejecting}
+                className="flex-1 rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-orange-600 disabled:opacity-40"
+              >
+                {accepting ? "Aceitando…" : "✓ Aceitar pedido"}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <p className="mb-3 text-center text-sm font-semibold text-gray-800">
+                Confirmar recusa deste pedido?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmReject(false)}
+                  disabled={rejecting}
+                  className="flex-1 rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                >
+                  Voltar
+                </button>
+                <button
+                  onClick={onReject}
+                  disabled={rejecting}
+                  className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-40"
+                >
+                  {rejecting ? "Recusando…" : "Confirmar recusa"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ─── Root ─────────────────────────────────────────────────────
 
 export default function OrdersClient() {
@@ -1362,6 +1518,10 @@ export default function OrdersClient() {
   });
   const knownIds = useRef<Set<string>>(new Set());
   const hasFetched = useRef(false);
+  const [modalOrder,     setModalOrder]     = useState<MockOrder | null>(null);
+  const [modalAccepting, setModalAccepting] = useState(false);
+  const [modalRejecting, setModalRejecting] = useState(false);
+  const shownInModal = useRef<Set<string>>(new Set());
 
   function toggleSound() {
     setSoundEnabled((prev) => {
@@ -1378,11 +1538,18 @@ export default function OrdersClient() {
         if (res.success && Array.isArray(res.data?.data)) {
           const incoming = res.data.data.map(apiOrderToMock);
 
-          // Sound alert: detect new IDs after first load
+          // Sound alert + takeover modal: detect new IDs after first load
           if (hasFetched.current) {
             const newOnes = incoming.filter((o) => !knownIds.current.has(o.id));
             if (newOnes.length > 0 && soundEnabled) {
               playBeep();
+            }
+            const newPending = newOnes.filter(
+              (o) => o.status === "PENDING" && !shownInModal.current.has(o.id)
+            );
+            if (newPending.length > 0) {
+              newPending.forEach((o) => shownInModal.current.add(o.id));
+              setModalOrder(newPending[0] ?? null);
             }
           }
           hasFetched.current = true;
@@ -1477,6 +1644,36 @@ export default function OrdersClient() {
     ids.forEach((id) => void persistStatus(id, "OUT_FOR_DELIVERY"));
   }
 
+  async function handleModalAccept() {
+    if (!modalOrder) return;
+    setModalAccepting(true);
+    try {
+      await persistStatus(modalOrder.id, "CONFIRMED");
+      setOrders((prev) =>
+        prev.map((o) => (o.id === modalOrder.id ? { ...o, status: "CONFIRMED" as OrderStatus } : o))
+      );
+      window.open(`/orders/${modalOrder.id}/imprimir?autoprint=1`, "_blank");
+    } finally {
+      setModalAccepting(false);
+      setModalOrder(null);
+    }
+  }
+
+  async function handleModalReject() {
+    if (!modalOrder) return;
+    setModalRejecting(true);
+    try {
+      await persistStatus(modalOrder.id, "CANCELLED");
+      setOrders((prev) =>
+        prev.map((o) => (o.id === modalOrder.id ? { ...o, status: "CANCELLED" as OrderStatus } : o))
+      );
+      if (selectedId === modalOrder.id) setSelectedId(null);
+    } finally {
+      setModalRejecting(false);
+      setModalOrder(null);
+    }
+  }
+
   return (
     <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "calc(100vh - 56px)" }}>
 
@@ -1535,6 +1732,16 @@ export default function OrdersClient() {
           onClose={() => setSelectedId(null)}
         />
       </div>
+
+      {modalOrder && (
+        <NewOrderModal
+          order={modalOrder}
+          onAccept={handleModalAccept}
+          onReject={handleModalReject}
+          accepting={modalAccepting}
+          rejecting={modalRejecting}
+        />
+      )}
 
     </div>
   );
