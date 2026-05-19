@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
         totalConverted: true,
         totalRevenue:   true,
         scheduledAt:    true,
+        scheduleConfig: true,
         createdAt:      true,
         sentAt:         true,
       },

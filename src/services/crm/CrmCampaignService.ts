@@ -294,8 +294,12 @@ export class CrmCampaignService {
       googleReviewUrl: brandConfig?.googleReviewUrl ?? null,
     };
 
-    // Resolve audience
-    const customers = await resolveAudience(restaurantId, input.targetSegment, input.templateId);
+    // Recurring campaigns resolve audience at execution time, not creation time
+    const isRecurring = (input.scheduleConfig as { mode?: string } | undefined)?.mode === "RECURRING";
+
+    const customers = isRecurring
+      ? []
+      : await resolveAudience(restaurantId, input.targetSegment, input.templateId);
 
     // Create campaign + executions in a transaction
     const campaign = await prisma.$transaction(async (tx) => {
@@ -309,14 +313,15 @@ export class CrmCampaignService {
           targetSegment:  input.targetSegment,
           templateId:     input.templateId ?? null,
           totalAudience:  customers.length,
-          status:         input.scheduledAt ? "SCHEDULED" : "DRAFT",
+          // RECURRING → ACTIVE immediately; scheduled once → SCHEDULED; else DRAFT
+          status:         isRecurring ? "ACTIVE" as never : (input.scheduledAt ? "SCHEDULED" : "DRAFT"),
           scheduledAt:    input.scheduledAt ?? null,
           scheduleConfig: input.scheduleConfig ?? undefined,
           audienceConfig: input.audienceConfig ?? undefined,
         },
       });
 
-      if (customers.length > 0) {
+      if (!isRecurring && customers.length > 0) {
         await tx.campaignExecution.createMany({
           data: customers.map((customer) => ({
             campaignId:    c.id,

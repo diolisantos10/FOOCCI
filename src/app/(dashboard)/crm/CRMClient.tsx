@@ -129,6 +129,7 @@ type CampaignHistoryRow = {
   totalConverted: number;
   totalRevenue:   number;
   scheduledAt:    string | null;
+  scheduleConfig: Record<string, unknown> | null;
   createdAt:      string;
   sentAt:         string | null;
 };
@@ -686,10 +687,12 @@ function ActionConfigDrawer({
   template,
   onClose,
   onStartCampaign,
+  onAfterCreate,
 }: {
   template: ActionTemplate;
   onClose: () => void;
   onStartCampaign?: (campaignId: string, recipients: CampaignRecipientRow[]) => void;
+  onAfterCreate?: () => void;
 }) {
   const [message,  setMessage]  = useState(template.suggestedMessage);
   const [copied,   setCopied]   = useState(false);
@@ -699,10 +702,25 @@ function ActionConfigDrawer({
   const [prepError, setPrepError] = useState<string | null>(null);
 
   // Scheduling
-  type SendMode = "now" | "scheduled";
-  const [sendMode,     setSendMode]     = useState<SendMode>("now");
-  const [scheduleDate, setScheduleDate] = useState("");  // "YYYY-MM-DD"
-  const [scheduleTime, setScheduleTime] = useState("09:00");
+  type SendMode = "now" | "scheduled_once" | "recurring";
+  const [sendMode,        setSendMode]        = useState<SendMode>("now");
+  const [scheduleDate,    setScheduleDate]    = useState("");      // "YYYY-MM-DD"
+  const [scheduleTime,    setScheduleTime]    = useState("09:00");
+  // Recurring config
+  const [weekdays,        setWeekdays]        = useState<number[]>([1, 2, 3, 4, 5]);
+  const [timeWindowStart, setTimeWindowStart] = useState("10:00");
+  const [timeWindowEnd,   setTimeWindowEnd]   = useState("18:00");
+  const [dailyLimit,      setDailyLimit]      = useState(20);
+  type EndCondition = "AUDIENCE_EXHAUSTED" | "END_DATE" | "MAX_TOTAL";
+  const [endCondition, setEndCondition] = useState<EndCondition>("AUDIENCE_EXHAUSTED");
+  const [endDate,      setEndDate]      = useState("");
+  const [maxTotal,     setMaxTotal]     = useState(100);
+
+  function toggleWeekday(day: number) {
+    setWeekdays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()
+    );
+  }
 
   useEffect(() => {
     if (!template.hasAudienceQuery) return;
@@ -721,38 +739,61 @@ function ActionConfigDrawer({
   }
 
   function buildScheduledAt(): string | null {
-    if (sendMode !== "scheduled" || !scheduleDate) return null;
+    if (sendMode !== "scheduled_once" || !scheduleDate) return null;
     return new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
   }
 
   async function handlePrepareCampaign() {
-    if (!onStartCampaign) return;
+    if (!onStartCampaign && sendMode !== "recurring") return;
     setPreparing(true);
     setPrepError(null);
     try {
       const scheduledAt = buildScheduledAt();
+
+      const body: Record<string, unknown> = {
+        name:            template.title,
+        templateId:      template.id,
+        targetSegment:   template.id,
+        messageTemplate: message,
+        objective:       template.objective,
+      };
+
+      if (sendMode === "recurring") {
+        body.scheduleConfig = {
+          mode:         "RECURRING",
+          weekdays,
+          timeWindow:   { start: timeWindowStart, end: timeWindowEnd },
+          dailyLimit:   Math.max(1, Math.min(200, dailyLimit)),
+          endCondition,
+          endDate:      endCondition === "END_DATE"   ? (endDate || null) : null,
+          maxTotal:     endCondition === "MAX_TOTAL"  ? maxTotal          : null,
+          timezone:     "America/Sao_Paulo",
+        };
+        body.audienceConfig = {
+          templateId:         template.id,
+          channel:            "WHATSAPP",
+          excludeAlreadySent: true,
+        };
+      } else if (scheduledAt) {
+        body.scheduledAt    = scheduledAt;
+        body.scheduleConfig = { mode: "SCHEDULED_ONCE", scheduledAt };
+      }
+
       const res = await fetch("/api/crm/campaigns", {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name:            template.title,
-          templateId:      template.id,
-          targetSegment:   template.id,
-          messageTemplate: message,
-          objective:       template.objective,
-          ...(scheduledAt ? { scheduledAt, scheduleConfig: { mode: "scheduled", scheduledAt } } : {}),
-        }),
+        body:    JSON.stringify(body),
       });
       const json = await res.json() as { data?: { campaignId: string; recipients: CampaignRecipientRow[] }; error?: string };
       if (!res.ok || !json.data) {
         setPrepError("Erro ao preparar campanha. Tente novamente.");
         return;
       }
-      if (sendMode === "scheduled") {
-        // For scheduled campaigns: skip review modal, close drawer directly
+      if (sendMode === "recurring" || sendMode === "scheduled_once") {
         onClose();
+        onAfterCreate?.();
       } else {
-        onStartCampaign(json.data.campaignId, json.data.recipients);
+        onStartCampaign!(json.data.campaignId, json.data.recipients);
         onClose();
       }
     } catch {
@@ -915,32 +956,32 @@ function ActionConfigDrawer({
           </div>
 
           {/* Scheduling section */}
-          {onStartCampaign && template.hasAudienceQuery && (
+          {template.hasAudienceQuery && (
             <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-3">
               <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Quando enviar</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSendMode("now")}
-                  className={`flex-1 rounded-lg py-2 text-xs font-semibold border transition-colors ${
-                    sendMode === "now"
-                      ? "bg-brand-600 text-white border-brand-600"
-                      : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
-                  }`}
-                >
-                  Enviar agora
-                </button>
-                <button
-                  onClick={() => setSendMode("scheduled")}
-                  className={`flex-1 rounded-lg py-2 text-xs font-semibold border transition-colors ${
-                    sendMode === "scheduled"
-                      ? "bg-brand-600 text-white border-brand-600"
-                      : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
-                  }`}
-                >
-                  Programar
-                </button>
+
+              {/* Mode selector */}
+              <div className="flex gap-1.5">
+                {(["now", "scheduled_once", "recurring"] as const).map((mode) => {
+                  const labels = { now: "Agora", scheduled_once: "Uma vez", recurring: "Recorrente" };
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => setSendMode(mode)}
+                      className={`flex-1 rounded-lg py-2 text-xs font-semibold border transition-colors ${
+                        sendMode === mode
+                          ? "bg-brand-600 text-white border-brand-600"
+                          : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      {labels[mode]}
+                    </button>
+                  );
+                })}
               </div>
-              {sendMode === "scheduled" && (
+
+              {/* Scheduled once: date + time */}
+              {sendMode === "scheduled_once" && (
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div>
                     <label className="block text-[10px] font-semibold text-gray-500 mb-1">Data</label>
@@ -961,6 +1002,111 @@ function ActionConfigDrawer({
                       className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Recurring: full config */}
+              {sendMode === "recurring" && (
+                <div className="space-y-3 pt-1">
+                  {/* Weekdays */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1.5">Dias da semana</label>
+                    <div className="flex gap-1">
+                      {WEEKDAY_LABELS.map((label, day) => (
+                        <button
+                          key={day}
+                          onClick={() => toggleWeekday(day)}
+                          className={`flex-1 rounded-lg py-1.5 text-[10px] font-bold border transition-colors ${
+                            weekdays.includes(day)
+                              ? "bg-brand-600 text-white border-brand-600"
+                              : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {weekdays.length === 0 && (
+                      <p className="mt-1 text-[10px] text-red-500">Selecione pelo menos um dia</p>
+                    )}
+                  </div>
+
+                  {/* Time window */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">Horário início</label>
+                      <input
+                        type="time"
+                        value={timeWindowStart}
+                        onChange={(e) => setTimeWindowStart(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">Horário fim</label>
+                      <input
+                        type="time"
+                        value={timeWindowEnd}
+                        onChange={(e) => setTimeWindowEnd(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Daily limit */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1">
+                      Limite diário <span className="font-normal text-gray-400">(1–200)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={dailyLimit}
+                      onChange={(e) => setDailyLimit(Math.max(1, Math.min(200, parseInt(e.target.value) || 1)))}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* End condition */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1">Condição de término</label>
+                    <select
+                      value={endCondition}
+                      onChange={(e) => setEndCondition(e.target.value as EndCondition)}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                    >
+                      <option value="AUDIENCE_EXHAUSTED">Até acabar o público</option>
+                      <option value="END_DATE">Até uma data final</option>
+                      <option value="MAX_TOTAL">Até número máximo de envios</option>
+                    </select>
+                  </div>
+
+                  {endCondition === "END_DATE" && (
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">Data final</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        min={new Date().toISOString().split("T")[0]}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {endCondition === "MAX_TOTAL" && (
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">Máximo total de envios</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={maxTotal}
+                        onChange={(e) => setMaxTotal(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -984,21 +1130,28 @@ function ActionConfigDrawer({
           >
             {copied ? "✓ Copiado" : "Copiar"}
           </button>
-          {onStartCampaign && template.hasAudienceQuery && audience?.computed ? (
+          {template.hasAudienceQuery && (sendMode === "recurring" || audience?.computed) ? (
             <button
               onClick={handlePrepareCampaign}
-              disabled={preparing || (audience.eligibleCount ?? audience.count) === 0 || (sendMode === "scheduled" && !scheduleDate)}
+              disabled={
+                preparing ||
+                (sendMode !== "recurring" && (audience?.eligibleCount ?? audience?.count ?? 0) === 0) ||
+                (sendMode === "scheduled_once" && !scheduleDate) ||
+                (sendMode === "recurring" && weekdays.length === 0)
+              }
               className="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {preparing
                 ? "Processando…"
-                : (audience.eligibleCount ?? audience.count) === 0
-                  ? "Sem público elegível"
-                  : sendMode === "scheduled"
-                    ? scheduleDate
-                      ? `Agendar →`
-                      : "Escolha uma data"
-                    : `Preparar disparo →`}
+                : sendMode === "recurring"
+                  ? weekdays.length === 0
+                    ? "Selecione os dias"
+                    : "Ativar campanha recorrente →"
+                  : (audience?.eligibleCount ?? audience?.count ?? 0) === 0
+                    ? "Sem público elegível"
+                    : sendMode === "scheduled_once"
+                      ? scheduleDate ? "Agendar →" : "Escolha uma data"
+                      : "Preparar disparo →"}
             </button>
           ) : (
             <button
@@ -1019,19 +1172,27 @@ function ActionConfigDrawer({
 
 const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
   DRAFT:     "Rascunho",
+  SCHEDULED: "Programada",
+  ACTIVE:    "Ativa",
   SENDING:   "Em execução",
   SENT:      "Concluída",
+  PAUSED:    "Pausada",
+  COMPLETED: "Concluída",
   CANCELLED: "Cancelada",
-  SCHEDULED: "Programada",
 };
 
 const CAMPAIGN_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   DRAFT:     { bg: "bg-gray-100",   text: "text-gray-600"   },
+  SCHEDULED: { bg: "bg-amber-100",  text: "text-amber-700"  },
+  ACTIVE:    { bg: "bg-green-100",  text: "text-green-700"  },
   SENDING:   { bg: "bg-blue-100",   text: "text-blue-700"   },
   SENT:      { bg: "bg-green-100",  text: "text-green-700"  },
+  PAUSED:    { bg: "bg-yellow-100", text: "text-yellow-700" },
+  COMPLETED: { bg: "bg-green-100",  text: "text-green-700"  },
   CANCELLED: { bg: "bg-red-100",    text: "text-red-600"    },
-  SCHEDULED: { bg: "bg-amber-100",  text: "text-amber-700"  },
 };
+
+const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 const PILOT_MAX = 20; // safety cap for manual pilot dispatches
 
@@ -1231,6 +1392,13 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
   const [campaigns,       setCampaigns]       = useState<CampaignHistoryRow[]>([]);
   const [loadingHistory,  setLoadingHistory]  = useState(true);
 
+  function refreshCampaigns() {
+    fetch("/api/crm/campaigns")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setCampaigns(json.data ?? []))
+      .catch(() => {});
+  }
+
   useEffect(() => {
     fetch("/api/crm/campaigns")
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -1238,6 +1406,22 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
       .catch(() => {})
       .finally(() => setLoadingHistory(false));
   }, []);
+
+  async function handleCampaignAction(id: string, action: "pause" | "resume" | "cancel") {
+    const res = await fetch(`/api/crm/campaigns/${id}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ action }),
+    });
+    if (res.ok) {
+      const json = await res.json() as { data?: { id: string; status: string } };
+      if (json.data) {
+        setCampaigns((prev) =>
+          prev.map((c) => c.id === id ? { ...c, status: json.data!.status } : c)
+        );
+      }
+    }
+  }
 
   useEffect(() => {
     fetch("/api/crm/custom-actions")
@@ -1472,22 +1656,28 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
           ) : (
             <div className="space-y-2">
               {campaigns.map((c) => {
-                const sc = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                const sc         = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                const cfg        = c.scheduleConfig as { mode?: string; weekdays?: number[]; timeWindow?: { start: string; end: string }; dailyLimit?: number } | null;
+                const isRecurring = cfg?.mode === "RECURRING";
                 const displayDate = c.sentAt
                   ? new Date(c.sentAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
                   : c.scheduledAt
                     ? `Prog. ${new Date(c.scheduledAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })}`
                     : new Date(c.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
-                const isDeletable = c.status === "DRAFT" || c.status === "CANCELLED";
-                const convRate = c.totalSent > 0
+                const isDeletable  = c.status === "DRAFT" || c.status === "CANCELLED";
+                const isControllable = isRecurring && ["ACTIVE", "SCHEDULED", "PAUSED"].includes(c.status);
+                const convRate     = c.totalSent > 0
                   ? Math.round((c.totalConverted / c.totalSent) * 100)
                   : null;
+                const showStats = ["SENT", "SENDING", "ACTIVE", "PAUSED", "COMPLETED"].includes(c.status) && c.totalSent > 0;
                 return (
                   <div key={c.id} className="rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">WhatsApp · {displayDate}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          {isRecurring ? "Recorrente · WhatsApp" : `WhatsApp · ${displayDate}`}
+                        </p>
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
                         <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
@@ -1510,8 +1700,18 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
                         )}
                       </div>
                     </div>
+
+                    {/* Recurring schedule summary */}
+                    {isRecurring && cfg && (
+                      <div className="mt-1.5 text-[10px] text-gray-500">
+                        {cfg.weekdays && cfg.weekdays.map((d: number) => WEEKDAY_LABELS[d]).join(", ")}
+                        {cfg.timeWindow && ` · ${cfg.timeWindow.start}–${cfg.timeWindow.end}`}
+                        {cfg.dailyLimit && ` · ${cfg.dailyLimit}/dia`}
+                      </div>
+                    )}
+
                     {/* Stats row */}
-                    {(c.status === "SENT" || c.status === "SENDING") && (
+                    {showStats && (
                       <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-gray-500 border-t border-gray-50 pt-2">
                         <span>{c.totalSent} enviados</span>
                         {c.totalFailed > 0 && <span className="text-red-500">{c.totalFailed} falhas</span>}
@@ -1523,6 +1723,36 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
                             {" · R$"}{Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </span>
                         )}
+                      </div>
+                    )}
+
+                    {/* Recurring controls: pause / resume / cancel */}
+                    {isControllable && (
+                      <div className="mt-2 flex gap-2 border-t border-gray-50 pt-2">
+                        {c.status === "PAUSED" ? (
+                          <button
+                            onClick={() => handleCampaignAction(c.id, "resume")}
+                            className="rounded-lg bg-green-50 px-3 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                          >
+                            Retomar
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleCampaignAction(c.id, "pause")}
+                            className="rounded-lg bg-yellow-50 px-3 py-1 text-[10px] font-semibold text-yellow-700 hover:bg-yellow-100 transition-colors"
+                          >
+                            Pausar
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (!confirm("Cancelar esta campanha recorrente permanentemente?")) return;
+                            handleCampaignAction(c.id, "cancel");
+                          }}
+                          className="rounded-lg bg-red-50 px-3 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-100 transition-colors"
+                        >
+                          Cancelar
+                        </button>
                       </div>
                     )}
                   </div>
@@ -1541,6 +1771,7 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
           onStartCampaign={(campaignId, recipients) => {
             setActiveCampaign({ id: campaignId, recipients });
           }}
+          onAfterCreate={refreshCampaigns}
         />
       )}
 
@@ -1550,13 +1781,7 @@ function AcoesTab({ stats }: { stats: OverviewStats }) {
           campaignId={activeCampaign.id}
           initialRecipients={activeCampaign.recipients}
           onClose={() => setActiveCampaign(null)}
-          onSent={() => {
-            // Refresh history after sending
-            fetch("/api/crm/campaigns")
-              .then((r) => r.ok ? r.json() : Promise.reject())
-              .then((json) => setCampaigns(json.data ?? []))
-              .catch(() => {});
-          }}
+          onSent={refreshCampaigns}
         />
       )}
 

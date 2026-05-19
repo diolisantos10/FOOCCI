@@ -89,11 +89,8 @@ export async function PATCH(
       return notFound("Campaign not found");
     }
 
-    if (!["DRAFT", "SCHEDULED"].includes(campaign.status)) {
-      return badRequest("Apenas rascunhos e agendamentos podem ser editados");
-    }
-
     const body = await req.json() as {
+      action?:          "pause" | "resume" | "cancel";
       name?:            string;
       message?:         string;
       targetSegment?:   string;
@@ -102,14 +99,51 @@ export async function PATCH(
       sendWindowEnd?:   string | null;
     };
 
+    // ── lifecycle actions (pause / resume / cancel) ──────────────
+    if (body.action) {
+      const TERMINAL = ["SENT", "COMPLETED", "CANCELLED"];
+      if (TERMINAL.includes(campaign.status)) {
+        return badRequest("Campanha já finalizada — não pode ser modificada");
+      }
+
+      let newStatus: string;
+      const currentStatus = campaign.status as string;
+      if (body.action === "pause") {
+        if (!["ACTIVE", "SCHEDULED"].includes(currentStatus)) {
+          return badRequest("Apenas campanhas ativas ou agendadas podem ser pausadas");
+        }
+        newStatus = "PAUSED";
+      } else if (body.action === "resume") {
+        if (currentStatus !== "PAUSED") {
+          return badRequest("Apenas campanhas pausadas podem ser retomadas");
+        }
+        newStatus = "ACTIVE";
+      } else {
+        // cancel
+        newStatus = "CANCELLED";
+      }
+
+      const updated = await prisma.campaign.update({
+        where: { id: params.id },
+        data:  { status: newStatus as never },
+        select: { id: true, status: true },
+      });
+      return ok(updated);
+    }
+
+    // ── edit draft / scheduled ────────────────────────────────────
+    if (!["DRAFT", "SCHEDULED"].includes(campaign.status)) {
+      return badRequest("Apenas rascunhos e agendamentos podem ser editados");
+    }
+
     const newStatus = body.scheduledAt ? "SCHEDULED" : "DRAFT";
 
     const updated = await prisma.campaign.update({
       where: { id: params.id },
       data: {
-        ...(body.name?.trim()          ? { name: body.name.trim() }                          : {}),
-        ...(body.targetSegment?.trim() ? { targetSegment: body.targetSegment.trim() }         : {}),
-        ...(body.message?.trim()       ? { message: body.message.trim() }                     : {}),
+        ...(body.name?.trim()          ? { name: body.name.trim() }              : {}),
+        ...(body.targetSegment?.trim() ? { targetSegment: body.targetSegment.trim() } : {}),
+        ...(body.message?.trim()       ? { message: body.message.trim() }        : {}),
         scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
         status:      newStatus,
       },

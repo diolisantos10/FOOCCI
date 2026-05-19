@@ -668,8 +668,11 @@ model CampaignExecution {
 enum CampaignStatus {
   DRAFT
   SCHEDULED
+  ACTIVE      // recurring campaign is live and within its schedule window
   SENDING
   SENT
+  PAUSED      // recurring campaign manually paused
+  COMPLETED   // recurring: audience exhausted or end condition met
   CANCELLED
 }
 
