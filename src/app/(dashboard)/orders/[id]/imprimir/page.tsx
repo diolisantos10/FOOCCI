@@ -10,12 +10,22 @@ import { AutoPrintTrigger } from "@/components/print/AutoPrintTrigger";
 
 export const metadata = { title: "Pré-visualizar comanda" };
 
+const PRINT_CSS = `
+  @media print {
+    * { visibility: hidden; }
+    #foocci-print-ticket { display: block !important; visibility: visible; position: fixed; top: 0; left: 0; }
+    #foocci-print-ticket * { visibility: visible; color: #000 !important; }
+    @page { margin: 0; size: 80mm auto; }
+    body { margin: 0; }
+  }
+`;
+
 export default async function ImprimirPage({
   params,
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { autoprint?: string };
+  searchParams: { autoprint?: string; printOnly?: string };
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -41,7 +51,20 @@ export default async function ImprimirPage({
   }
 
   const restaurantName = restaurant?.name ?? "Restaurante";
-  const autoPrint = searchParams.autoprint === "1";
+  const autoPrint  = searchParams.autoprint  === "1";
+  const printOnly  = searchParams.printOnly  === "1";
+
+  // printOnly: minimal wrapper used by hidden-iframe printing.
+  // No layout chrome — just the ticket + print CSS.
+  if (printOnly) {
+    return (
+      <>
+        <style>{`body{margin:0;background:#fff;}`}</style>
+        <style>{PRINT_CSS}</style>
+        <OrderTicket order={order} restaurantName={restaurantName} mode="preview" />
+      </>
+    );
+  }
 
   return (
     <>
@@ -50,10 +73,7 @@ export default async function ImprimirPage({
 
       {/* Action bar — screen only, hidden during print */}
       <div className="flex items-center justify-between border-b border-gray-100 bg-white px-6 py-3 print:hidden">
-        <Link
-          href="/orders"
-          className="text-sm text-brand-600 hover:underline"
-        >
+        <Link href="/orders" className="text-sm text-brand-600 hover:underline">
           ← Voltar para Pedidos
         </Link>
         <div className="flex items-center gap-2">
@@ -66,23 +86,10 @@ export default async function ImprimirPage({
 
       {/* Ticket preview — centered on gray background */}
       <div className="min-h-[calc(100vh-8rem)] bg-gray-100 py-10 print:bg-transparent print:py-0">
-        <OrderTicket
-          order={order}
-          restaurantName={restaurantName}
-          mode="preview"
-        />
+        <OrderTicket order={order} restaurantName={restaurantName} mode="preview" />
       </div>
 
-      {/* Print CSS: hide everything except the ticket; 80mm page size */}
-      <style>{`
-        @media print {
-          * { visibility: hidden; }
-          #foocci-print-ticket { display: block !important; visibility: visible; position: fixed; top: 0; left: 0; }
-          #foocci-print-ticket * { visibility: visible; color: #000 !important; }
-          @page { margin: 0; size: 80mm auto; }
-          body { margin: 0; }
-        }
-      `}</style>
+      <style>{PRINT_CSS}</style>
     </>
   );
 }

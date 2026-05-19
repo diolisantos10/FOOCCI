@@ -840,15 +840,12 @@ function OrderCard({
               Cancelar
             </button>
           )}
-          <a
-            href={`/orders/${order.id}/imprimir`}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
+          <button
+            onClick={(e) => { e.stopPropagation(); printOrder(order.id); }}
             className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
           >
             🖨️ Imprimir
-          </a>
+          </button>
           {order.conversationId && (
             <a
               href={`/atendimento?conv=${order.conversationId}`}
@@ -1183,14 +1180,12 @@ function DetailPanel({
         <span className="font-mono text-xs text-gray-400">
           Pedido #{String(order.num).padStart(3, "0")}
         </span>
-        <a
-          href={`/orders/${order.id}/imprimir`}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={() => printOrder(order.id)}
           className="ml-auto flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
         >
           🖨️ Imprimir
-        </a>
+        </button>
       </div>
 
       {/* Desktop header */}
@@ -1202,14 +1197,12 @@ function DetailPanel({
           <h3 className="mt-0.5 text-base font-bold text-gray-900">{order.customer}</h3>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href={`/orders/${order.id}/imprimir`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => printOrder(order.id)}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
           >
             🖨️ Imprimir comanda
-          </a>
+          </button>
           <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
             <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
               <path d="M4 4l8 8M12 4l-8 8" />
@@ -1344,16 +1337,55 @@ function DetailPanel({
   );
 }
 
+// ─── Direct print via hidden iframe ──────────────────────────
+// Opens the print route in an off-screen iframe and calls contentWindow.print().
+// Falls back to a new tab with ?autoprint=1 on any iframe error.
+
+function printOrder(orderId: string): void {
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText =
+    "position:fixed;width:0;height:0;top:-9999px;left:-9999px;border:none;opacity:0;pointer-events:none;";
+  iframe.src = `/orders/${orderId}/imprimir?printOnly=1`;
+  document.body.appendChild(iframe);
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    setTimeout(() => {
+      if (document.body.contains(iframe)) document.body.removeChild(iframe);
+    }, 500);
+  };
+
+  iframe.addEventListener("load", () => {
+    try {
+      iframe.contentWindow?.print();
+      iframe.contentWindow?.addEventListener("afterprint", cleanup, { once: true });
+    } catch {
+      window.open(`/orders/${orderId}/imprimir?autoprint=1`, "_blank");
+      cleanup();
+    }
+    setTimeout(cleanup, 15_000);
+  }, { once: true });
+
+  iframe.addEventListener("error", () => {
+    window.open(`/orders/${orderId}/imprimir?autoprint=1`, "_blank");
+    cleanup();
+  }, { once: true });
+}
+
 // ─── NewOrderModal ────────────────────────────────────────────
 
 function NewOrderModal({
   order,
+  queueLength,
   onAccept,
   onReject,
   accepting,
   rejecting,
 }: {
   order: MockOrder;
+  queueLength: number;
   onAccept: () => void;
   onReject: () => void;
   accepting: boolean;
@@ -1362,7 +1394,7 @@ function NewOrderModal({
   const [confirmReject, setConfirmReject] = useState(false);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
       <div className="relative mx-4 w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
 
         {/* Header */}
@@ -1371,9 +1403,15 @@ function NewOrderModal({
             <span className="h-3 w-3 animate-pulse rounded-full bg-white shrink-0" />
             <span className="text-xl font-bold tracking-wide">NOVO PEDIDO!</span>
           </div>
-          <p className="mt-0.5 text-sm text-orange-100">
-            Um novo pedido aguarda sua confirmação
-          </p>
+          {queueLength > 1 ? (
+            <p className="mt-0.5 text-sm text-orange-100">
+              Há {queueLength} pedidos aguardando aceite — mostrando 1 de {queueLength}.
+            </p>
+          ) : (
+            <p className="mt-0.5 text-sm text-orange-100">
+              Um novo pedido aguarda sua confirmação
+            </p>
+          )}
         </div>
 
         {/* Order details */}
@@ -1518,10 +1556,24 @@ export default function OrdersClient() {
   });
   const knownIds = useRef<Set<string>>(new Set());
   const hasFetched = useRef(false);
-  const [modalOrder,     setModalOrder]     = useState<MockOrder | null>(null);
+  const [modalQueue,     setModalQueue]     = useState<MockOrder[]>([]);
   const [modalAccepting, setModalAccepting] = useState(false);
   const [modalRejecting, setModalRejecting] = useState(false);
   const shownInModal = useRef<Set<string>>(new Set());
+  const [autoPrintOnAccept, setAutoPrintOnAccept] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const saved = localStorage.getItem("foocci_autoprint_on_accept");
+    return saved === null ? true : saved === "true";
+  });
+
+  const modalOrder = modalQueue[0] ?? null;
+
+  // Repeat alert sound every 25 s while a new-order modal is open
+  useEffect(() => {
+    if (!modalOrder || !soundEnabled) return;
+    const id = setInterval(() => playBeep(), 25_000);
+    return () => clearInterval(id);
+  }, [modalOrder?.id, soundEnabled]);
 
   function toggleSound() {
     setSoundEnabled((prev) => {
@@ -1549,7 +1601,7 @@ export default function OrdersClient() {
             );
             if (newPending.length > 0) {
               newPending.forEach((o) => shownInModal.current.add(o.id));
-              setModalOrder(newPending[0] ?? null);
+              setModalQueue((prev) => [...prev, ...newPending]);
             }
           }
           hasFetched.current = true;
@@ -1645,22 +1697,22 @@ export default function OrdersClient() {
   }
 
   async function handleModalAccept() {
-    if (!modalOrder) return;
+    if (!modalOrder || modalAccepting) return;
     setModalAccepting(true);
     try {
       await persistStatus(modalOrder.id, "CONFIRMED");
       setOrders((prev) =>
         prev.map((o) => (o.id === modalOrder.id ? { ...o, status: "CONFIRMED" as OrderStatus } : o))
       );
-      window.open(`/orders/${modalOrder.id}/imprimir?autoprint=1`, "_blank");
+      if (autoPrintOnAccept) printOrder(modalOrder.id);
+      setModalQueue((prev) => prev.slice(1));
     } finally {
       setModalAccepting(false);
-      setModalOrder(null);
     }
   }
 
   async function handleModalReject() {
-    if (!modalOrder) return;
+    if (!modalOrder || modalRejecting) return;
     setModalRejecting(true);
     try {
       await persistStatus(modalOrder.id, "CANCELLED");
@@ -1668,9 +1720,9 @@ export default function OrdersClient() {
         prev.map((o) => (o.id === modalOrder.id ? { ...o, status: "CANCELLED" as OrderStatus } : o))
       );
       if (selectedId === modalOrder.id) setSelectedId(null);
+      setModalQueue((prev) => prev.slice(1));
     } finally {
       setModalRejecting(false);
-      setModalOrder(null);
     }
   }
 
@@ -1679,8 +1731,8 @@ export default function OrdersClient() {
 
       <PerformanceBar orders={orders} />
 
-      {/* ── Sound alert toggle ── */}
-      <div className="flex justify-end px-4 pt-2">
+      {/* ── Alert toggles ── */}
+      <div className="flex justify-end gap-2 px-4 pt-2">
         <button
           type="button"
           onClick={toggleSound}
@@ -1692,7 +1744,26 @@ export default function OrdersClient() {
           }`}
         >
           {soundEnabled ? "🔔" : "🔕"}
-          <span>{soundEnabled ? "Som ativo" : "Som desativado"}</span>
+          <span className="hidden sm:inline">{soundEnabled ? "Som ativo" : "Som desativado"}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAutoPrintOnAccept((prev) => {
+              const next = !prev;
+              localStorage.setItem("foocci_autoprint_on_accept", String(next));
+              return next;
+            });
+          }}
+          title={autoPrintOnAccept ? "Desativar impressão automática ao aceitar" : "Ativar impressão automática ao aceitar"}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            autoPrintOnAccept
+              ? "bg-blue-50 text-blue-600 hover:bg-blue-100"
+              : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+          }`}
+        >
+          🖨️
+          <span className="hidden sm:inline">{autoPrintOnAccept ? "Impr. automática" : "Impr. manual"}</span>
         </button>
       </div>
 
@@ -1736,6 +1807,7 @@ export default function OrdersClient() {
       {modalOrder && (
         <NewOrderModal
           order={modalOrder}
+          queueLength={modalQueue.length}
           onAccept={handleModalAccept}
           onReject={handleModalReject}
           accepting={modalAccepting}

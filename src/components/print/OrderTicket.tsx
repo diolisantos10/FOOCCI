@@ -21,8 +21,6 @@ function fmtDate(date: Date): string {
 }
 
 // ── Addon parsing ─────────────────────────────────────────────────────────────
-// addonsJson has no guaranteed shape. Parse defensively — never throw, never
-// show raw JSON to the user.
 
 interface ParsedAddon {
   name:   string;
@@ -38,7 +36,6 @@ function parseAddons(raw: unknown): ParsedAddon[] {
     for (const entry of arr) {
       if (typeof entry !== "object" || entry === null) continue;
       const e = entry as Record<string, unknown>;
-      // Accept any reasonable name field from known Saipos / generic shapes
       const rawName =
         e.name ?? e.label ?? e.desc_item_choice ??
         e.description ?? e.desc ?? e.title;
@@ -118,11 +115,79 @@ interface Props {
   restaurantName: string;
   /**
    * "hidden"  — invisible on screen, rendered for @media print only.
-   *             Used on the order detail page alongside the full admin UI.
    * "preview" — visible on screen, centered receipt card.
-   *             Used on the /imprimir preview page.
    */
   mode?: "hidden" | "preview";
+}
+
+// ── Shared style constants ────────────────────────────────────────────────────
+
+const BLACK   = "#000";
+const DARK    = "#111";
+const DIM     = "#444";
+const DIVIDER = "#666";
+
+const BASE: React.CSSProperties = {
+  fontFamily: "'Courier New', Courier, monospace",
+  fontSize:   "15px",
+  lineHeight: "1.5",
+  color:      BLACK,
+};
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function Divider({ dashed }: { dashed?: boolean }) {
+  return (
+    <div
+      style={{
+        borderTop: `1px ${dashed ? "dashed" : "solid"} ${DIVIDER}`,
+        margin:    "7px 0",
+      }}
+    />
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontWeight:    "bold",
+        fontSize:      "16px",
+        letterSpacing: "0.5px",
+        color:         BLACK,
+        marginBottom:  "5px",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  large,
+}: {
+  label: string;
+  value: React.ReactNode;
+  large?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display:        "flex",
+        justifyContent: "space-between",
+        gap:            "6px",
+        marginBottom:   "3px",
+        fontSize:       large ? "17px" : "15px",
+        fontWeight:     large ? "bold" : undefined,
+        color:          BLACK,
+      }}
+    >
+      <span style={{ color: large ? BLACK : DIM }}>{label}</span>
+      <span style={{ textAlign: "right" }}>{value}</span>
+    </div>
+  );
 }
 
 // ── Receipt content ───────────────────────────────────────────────────────────
@@ -144,27 +209,55 @@ function ReceiptContent({
 
   return (
     <>
-      {/* Header */}
+      {/* Restaurant header */}
       <div style={{ textAlign: "center", marginBottom: "8px" }}>
-        <div style={{ fontWeight: "bold", fontSize: "16px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+        <div
+          style={{
+            fontWeight:    "bold",
+            fontSize:      "17px",
+            textTransform: "uppercase",
+            letterSpacing: "1px",
+            color:         BLACK,
+          }}
+        >
           {restaurantName}
         </div>
-        <div style={{ fontSize: "13px", marginTop: "3px", color: "#000" }}>
+        <div style={{ fontSize: "14px", color: DARK, marginTop: "2px" }}>
           {TYPE_LABELS[order.type] ?? order.type}
         </div>
       </div>
 
       <Divider />
 
-      {/* Order ID + date */}
-      <Row label="Pedido" value={displayId(order.id)} bold />
-      <Row label="Data"   value={fmtDate(order.createdAt)} />
+      {/* Order number — very prominent */}
+      <div style={{ textAlign: "center", margin: "8px 0" }}>
+        <div
+          style={{
+            fontSize:      "28px",
+            fontWeight:    "bold",
+            letterSpacing: "2px",
+            color:         BLACK,
+            lineHeight:    "1.1",
+          }}
+        >
+          {displayId(order.id)}
+        </div>
+        <div style={{ fontSize: "13px", color: DARK, marginTop: "3px" }}>
+          {fmtDate(order.createdAt)}
+        </div>
+      </div>
 
       <Divider />
 
       {/* Customer */}
-      <Row label="Cliente" value={order.customer.name} />
-      {phone && <Row label="Tel" value={phone} />}
+      <div style={{ marginBottom: "4px" }}>
+        <div style={{ fontSize: "19px", fontWeight: "bold", color: BLACK }}>
+          {order.customer.name}
+        </div>
+        {phone && (
+          <div style={{ fontSize: "15px", color: DARK }}>Tel: {phone}</div>
+        )}
+      </div>
 
       {/* Delivery address */}
       {order.type === "DELIVERY" && order.deliveryAddress && (() => {
@@ -172,14 +265,12 @@ function ReceiptContent({
         return (
           <>
             <Divider dashed />
-            <div style={{ fontWeight: "bold", marginBottom: "3px", fontSize: "13px" }}>
-              ENDEREÇO DE ENTREGA
-            </div>
-            <div style={{ fontSize: "13px", lineHeight: "1.5", paddingLeft: "2px" }}>
+            <SectionTitle>ENDEREÇO DE ENTREGA</SectionTitle>
+            <div style={{ fontSize: "15px", lineHeight: "1.5", color: BLACK }}>
               <div>{a.street}, {a.number}{a.complement ? ` — ${a.complement}` : ""}</div>
               <div>{a.neighborhood}</div>
               <div>{a.city}/{a.state}</div>
-              <div style={{ color: "#000" }}>CEP: {a.zipCode}</div>
+              <div>CEP: {a.zipCode}</div>
             </div>
           </>
         );
@@ -188,44 +279,40 @@ function ReceiptContent({
       <Divider />
 
       {/* Items */}
-      <div style={{ fontWeight: "bold", marginBottom: "5px", fontSize: "13px" }}>
-        ITENS
-      </div>
+      <SectionTitle>ITENS</SectionTitle>
       {order.items.map((item, i) => {
         const addons = parseAddons(item.addonsJson);
         return (
           <div
             key={i}
-            style={{
-              marginBottom:    "7px",
-              pageBreakInside: "avoid",
-              breakInside:     "avoid",
-            }}
+            style={{ marginBottom: "9px", pageBreakInside: "avoid", breakInside: "avoid" }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: "4px" }}>
               <span style={{ flex: 1 }}>
-                <strong>{item.quantity}×</strong> {item.name}
+                <strong style={{ fontSize: "21px", color: BLACK }}>{item.quantity}×</strong>
+                {" "}
+                <span style={{ fontSize: "17px", color: BLACK }}>{item.name}</span>
               </span>
-              <span style={{ whiteSpace: "nowrap" }}>
+              <span style={{ whiteSpace: "nowrap", fontSize: "15px", color: BLACK }}>
                 {brl(Number(item.price) * item.quantity)}
               </span>
             </div>
             {item.notes && (
-              <div style={{ paddingLeft: "14px", fontSize: "13px", color: "#000", marginTop: "1px" }}>
+              <div style={{ paddingLeft: "16px", fontSize: "14px", color: DARK, marginTop: "2px" }}>
                 ↳ {item.notes}
               </div>
             )}
             {addons.length > 0 && (
-              <div style={{ paddingLeft: "14px" }}>
+              <div style={{ paddingLeft: "16px" }}>
                 {addons.map((a, ai) => (
                   <div
                     key={ai}
                     style={{
                       display:        "flex",
                       justifyContent: "space-between",
-                      fontSize:       "13px",
-                      color:          "#000",
-                      marginTop:      "1px",
+                      fontSize:       "14px",
+                      color:          DARK,
+                      marginTop:      "2px",
                     }}
                   >
                     <span>+ {a.name}</span>
@@ -253,10 +340,11 @@ function ReceiptContent({
           display:         "flex",
           justifyContent:  "space-between",
           fontWeight:      "bold",
-          fontSize:        "15px",
-          marginTop:       "5px",
-          paddingTop:      "5px",
-          borderTop:       "1px solid #000",
+          fontSize:        "22px",
+          color:           BLACK,
+          marginTop:       "6px",
+          paddingTop:      "6px",
+          borderTop:       `2px solid ${BLACK}`,
           pageBreakInside: "avoid",
           breakInside:     "avoid",
         }}
@@ -273,14 +361,15 @@ function ReceiptContent({
         value={order.payment
           ? (PAYMENT_LABELS[order.payment.method] ?? order.payment.method)
           : "—"}
+        large
       />
 
       {/* Order notes */}
       {order.notes && (
         <>
           <Divider dashed />
-          <div style={{ fontSize: "11px" }}>
-            <span style={{ fontWeight: "bold" }}>Obs: </span>
+          <SectionTitle>OBSERVAÇÕES</SectionTitle>
+          <div style={{ fontSize: "15px", color: BLACK, lineHeight: "1.4" }}>
             {order.notes}
           </div>
         </>
@@ -288,7 +377,7 @@ function ReceiptContent({
 
       <Divider />
 
-      <div style={{ textAlign: "center", fontSize: "12px", color: "#444" }}>
+      <div style={{ textAlign: "center", fontSize: "13px", color: DIM }}>
         Foocci · {fmtDate(new Date())}
       </div>
     </>
@@ -299,13 +388,10 @@ function ReceiptContent({
 
 export function OrderTicket({ order, restaurantName, mode = "hidden" }: Props) {
   const receiptStyle: React.CSSProperties = {
-    fontFamily:  "'Courier New', Courier, monospace",
-    fontSize:    "14px",
-    lineHeight:  "1.6",
-    width:       "72mm",
-    padding:     "5mm",
-    color:       "#000",
-    background:  "#fff",
+    ...BASE,
+    width:      "72mm",
+    padding:    "5mm",
+    background: "#fff",
   };
 
   const ticketEl = (
@@ -316,7 +402,6 @@ export function OrderTicket({ order, restaurantName, mode = "hidden" }: Props) {
 
   if (mode === "preview") {
     return (
-      // Screen: center the receipt card. Print: ignored — ticket is position:fixed.
       <div style={{ display: "flex", justifyContent: "center" }}>
         <div
           style={{
@@ -331,44 +416,5 @@ export function OrderTicket({ order, restaurantName, mode = "hidden" }: Props) {
     );
   }
 
-  // hidden: not displayed on screen; revealed by @media print via page-level CSS
   return <div className="hidden">{ticketEl}</div>;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function Row({
-  label,
-  value,
-  bold,
-}: {
-  label: string;
-  value: string;
-  bold?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        display:         "flex",
-        justifyContent:  "space-between",
-        gap:             "4px",
-        marginBottom:    "2px",
-        fontWeight:      bold ? "bold" : undefined,
-      }}
-    >
-      <span style={{ color: "#000" }}>{label}</span>
-      <span>{value}</span>
-    </div>
-  );
-}
-
-function Divider({ dashed }: { dashed?: boolean }) {
-  return (
-    <div
-      style={{
-        borderTop: `1px ${dashed ? "dashed" : "solid"} #666`,
-        margin:    "6px 0",
-      }}
-    />
-  );
 }
