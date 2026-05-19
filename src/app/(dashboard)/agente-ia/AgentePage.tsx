@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
+import Link from "next/link";
 import {
   DEFAULT_BRAND_CONFIG,
   PERSONALITY_VOICE_MAP,
@@ -55,8 +56,8 @@ const AGENT_TABS: Array<{
     id:          "crm",
     label:       "CRM",
     icon:        "📊",
-    status:      "breve",
-    statusLabel: "Em breve",
+    status:      "parcial",
+    statusLabel: "Ativo",
     description: "Reativação, fidelização e relacionamento pós-venda. Segmenta clientes por temperatura e aciona campanhas personalizadas.",
   },
   {
@@ -217,6 +218,105 @@ function toAgentForm(d: Record<string, unknown>): AgentFormState {
     handoffPhone:    String(d.handoffPhone    ?? ""),
     handoffMessage:  String(d.handoffMessage  ?? def.handoffMessage),
   };
+}
+
+// ── CRM Agent types ───────────────────────────────────────────────────────────
+
+type CRMAgentSummary = {
+  overview: {
+    totalCustomers:    number;
+    frioCustomers:     number;
+    mornoCustomers:    number;
+    ativoCustomers:    number;
+    newCustomers:      number;
+    vipCustomers:      number;
+    birthdayThisMonth: number;
+  };
+  campaigns: {
+    activeCount: number;
+    list: Array<{
+      id:             string;
+      name:           string;
+      status:         string;
+      targetSegment:  string | null;
+      scheduleConfig: Record<string, unknown> | null;
+      totalSent:      number;
+      totalResponded: number;
+      totalConverted: number;
+      totalRevenue:   number;
+      scheduledAt:    string | null;
+    }>;
+  };
+  automations: {
+    enabledCount: number;
+    list: Array<{
+      trigger:          string;
+      isEnabled:        boolean;
+      triggerAfterDays: number;
+    }>;
+  };
+  revenue: {
+    totalSent:      number;
+    totalResponded: number;
+    totalConverted: number;
+    totalRevenue:   number;
+  };
+};
+
+const CRM_TRIGGER_LABELS: Record<string, string> = {
+  REACTIVATION: "Recuperação de clientes",
+  BIRTHDAY:     "Feliz aniversário",
+  POST_ORDER:   "Pós-venda",
+};
+
+const CRM_TRIGGER_DESC: Record<string, string> = {
+  REACTIVATION: "Clientes inativos após X dias sem pedido",
+  BIRTHDAY:     "Dispara no dia do aniversário do cliente",
+  POST_ORDER:   "Enviado após entrega de um pedido",
+};
+
+const CRM_STATUS_LABELS: Record<string, string> = {
+  ACTIVE:    "Ativa",
+  SCHEDULED: "Agendada",
+  PAUSED:    "Em pausa",
+  SENDING:   "Em execução",
+};
+
+const CRM_SEGMENT_LABELS: Record<string, string> = {
+  FRIO:            "Clientes frios",
+  MORNO:           "Clientes mornos",
+  NOVOS:           "Novos clientes",
+  VIP:             "Clientes VIP",
+  PRIMEIRO_PEDIDO: "1º pedido",
+  TODOS:           "Todos os clientes",
+  RECORRENTES:     "Recorrentes",
+};
+
+// ── Stat card for CRM dashboard ───────────────────────────────────────────────
+
+function StatCard({
+  emoji,
+  label,
+  value,
+  desc,
+  bg,
+  color,
+}: {
+  emoji:  string;
+  label:  string;
+  value:  number;
+  desc:   string;
+  bg:     string;
+  color:  string;
+}) {
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${bg}`}>
+      <p className="text-base leading-none">{emoji}</p>
+      <p className={`mt-2 text-2xl font-bold leading-none ${color}`}>{value.toLocaleString("pt-BR")}</p>
+      <p className="mt-1 text-xs font-semibold text-gray-700">{label}</p>
+      <p className="mt-0.5 text-[10px] text-gray-400">{desc}</p>
+    </div>
+  );
 }
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -449,6 +549,21 @@ function ComingSoon({ title, items }: { title: string; items: string[] }) {
 
 export function AgentePage() {
   const [activeTab, setActiveTab] = useState<AgentTab>("whatsapp-host");
+
+  // CRM Agent state ─────────────────────────────────────────────────────────
+  const [crmSummary, setCrmSummary] = useState<CRMAgentSummary | null>(null);
+  const [crmLoading, setCrmLoading] = useState(false);
+  const [crmLoaded,  setCrmLoaded]  = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== "crm" || crmLoaded) return;
+    setCrmLoading(true);
+    fetch("/api/crm/agent-summary")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json: { data?: CRMAgentSummary }) => setCrmSummary(json.data ?? null))
+      .catch(() => setCrmSummary(null))
+      .finally(() => { setCrmLoading(false); setCrmLoaded(true); });
+  }, [activeTab, crmLoaded]);
 
   // Brand config state (Waiter tab) ─────────────────────────────────────────
   const [form, setForm]     = useState<UpsertBrandConfigInput>(DEFAULT_BRAND_CONFIG);
@@ -1225,63 +1340,266 @@ export function AgentePage() {
           CRM
       ════════════════════════════════════════════════════════════════════ */}
       {activeTab === "crm" && (
-        <div className="space-y-6">
+        <div className="space-y-5">
 
-          <Section
-            title="O que o Agente CRM faz"
-            subtitle="Inteligência dedicada a relacionamento, retenção e reativação de clientes."
-          >
-            <div className="rounded-lg border border-brand-100 bg-brand-50 p-4 space-y-2">
-              <p className="text-sm font-medium text-brand-800">Responsabilidades:</p>
-              <ul className="space-y-1.5 text-sm text-brand-700">
-                {[
-                  "Identificar clientes inativos e acionar reativação",
-                  "Segmentar clientes por temperatura (Ativo, Morno, Frio)",
-                  "Sugerir mensagens personalizadas por segmento",
-                  "Monitorar oportunidades de fidelização",
-                  "Disparar alertas de VIPs em risco",
-                ].map((item) => (
-                  <li key={item} className="flex items-center gap-2">
-                    <span className="text-brand-500 font-bold">✓</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
+          {/* Page header */}
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Agente CRM</h2>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Identifica oportunidades de recompra, clientes inativos, VIPs, campanhas, automações e receita gerada pelo relacionamento.
+            </p>
+          </div>
+
+          {/* Loading */}
+          {crmLoading && (
+            <div className="py-10 text-center text-sm text-gray-400">
+              Carregando dados do CRM…
             </div>
-          </Section>
+          )}
 
-          <Section title="Segmentação por temperatura">
-            <div className="space-y-2">
-              {[
-                { icon: "🟢", label: "Ativo",       desc: "Pedido nos últimos 30 dias — manter engajamento",       bg: "bg-green-50",  text: "text-green-700"  },
-                { icon: "🟡", label: "Morno",       desc: "Sem pedido entre 31 e 60 dias — momento de reativação", bg: "bg-yellow-50", text: "text-yellow-700" },
-                { icon: "🔴", label: "Frio",        desc: "Sem pedido há mais de 60 dias — oferta agressiva",      bg: "bg-red-50",    text: "text-red-700"    },
-                { icon: "⬛", label: "Nunca pediu", desc: "Cadastrado mas sem pedido — ativar primeiro pedido",    bg: "bg-gray-50",   text: "text-gray-700"   },
-              ].map((s) => (
-                <div key={s.label} className={`flex items-start gap-3 rounded-lg border border-gray-100 ${s.bg} p-3`}>
-                  <span className="text-lg leading-none mt-0.5">{s.icon}</span>
-                  <div>
-                    <p className={`text-sm font-semibold ${s.text}`}>{s.label}</p>
-                    <p className="text-xs text-gray-500">{s.desc}</p>
+          {/* Error / not loaded */}
+          {!crmLoading && crmLoaded && !crmSummary && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 py-8 text-center text-sm text-gray-400">
+              Não foi possível carregar os dados do CRM.
+            </div>
+          )}
+
+          {/* ── Main content ── */}
+          {!crmLoading && crmSummary && (() => {
+            const s = crmSummary;
+            const hasRevenue = s.revenue.totalSent > 0;
+
+            const opportunities: Array<{
+              emoji: string;
+              label: string;
+              desc:  string;
+              why:   string;
+            }> = [
+              s.overview.frioCustomers > 0 && {
+                emoji: "🥶",
+                label: "Recuperar clientes frios",
+                desc:  `${s.overview.frioCustomers} clientes sem comprar há mais de 60 dias.`,
+                why:   "Alto risco de perda definitiva — o momento de agir é agora.",
+              },
+              s.overview.mornoCustomers > 0 && {
+                emoji: "🌡️",
+                label: "Reativar clientes mornos",
+                desc:  `${s.overview.mornoCustomers} clientes sem comprar entre 31 e 60 dias.`,
+                why:   "Uma lembrança no momento certo evita que fiquem frios.",
+              },
+              s.overview.newCustomers > 0 && {
+                emoji: "🔁",
+                label: "Garantir a segunda compra",
+                desc:  `${s.overview.newCustomers} clientes novos este mês.`,
+                why:   "O segundo pedido é o mais importante para criar fidelidade.",
+              },
+              s.overview.birthdayThisMonth > 0 && {
+                emoji: "🎂",
+                label: "Aniversariantes do mês",
+                desc:  `${s.overview.birthdayThisMonth} clientes com aniversário este mês.`,
+                why:   "Mensagens de aniversário têm alta taxa de conversão.",
+              },
+              s.overview.vipCustomers > 0 && {
+                emoji: "👑",
+                label: "Oferta exclusiva para VIPs",
+                desc:  `${s.overview.vipCustomers} clientes VIP na base.`,
+                why:   "Seus melhores clientes merecem tratamento especial.",
+              },
+            ].filter((x): x is { emoji: string; label: string; desc: string; why: string } => x !== false);
+
+            return (
+              <>
+                {/* 1 — Resumo comercial */}
+                <Section title="Resumo comercial" subtitle="Situação atual da base de clientes e do CRM.">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <StatCard emoji="🥶" label="Clientes frios"      value={s.overview.frioCustomers}     desc="+60 dias sem comprar"          bg="bg-blue-50 border-blue-100"     color="text-blue-700"   />
+                    <StatCard emoji="🌡️" label="Clientes mornos"     value={s.overview.mornoCustomers}    desc="31–60 dias sem comprar"         bg="bg-amber-50 border-amber-100"   color="text-amber-700"  />
+                    <StatCard emoji="👑" label="Clientes VIP"        value={s.overview.vipCustomers}      desc="Ouro + Diamante"                bg="bg-cyan-50 border-cyan-100"     color="text-cyan-700"   />
+                    <StatCard emoji="📣" label="Campanhas ativas"    value={s.campaigns.activeCount}      desc="Ativas, agendadas ou em pausa"  bg="bg-green-50 border-green-100"   color="text-green-700"  />
+                    <StatCard emoji="🔄" label="Automações ativas"   value={s.automations.enabledCount}   desc="Disparos automáticos ligados"   bg="bg-purple-50 border-purple-100" color="text-purple-700" />
+                    <StatCard emoji="🎂" label="Aniversariantes"     value={s.overview.birthdayThisMonth} desc="Neste mês"                      bg="bg-rose-50 border-rose-100"     color="text-rose-700"   />
                   </div>
-                </div>
-              ))}
-            </div>
-          </Section>
+                </Section>
 
-          <ComingSoon
-            title="Configurações do Agente CRM"
-            items={[
-              "Reativação automática — gatilhos e mensagens por segmento",
-              "Pós-venda — mensagens automáticas após o pedido",
-              "Pedido de avaliação — timing e canal de envio",
-              "Clientes VIP — critérios e tratamento especial",
-              "Frequência máxima de contato por período",
-              "Aprovação humana antes de envio",
-              "Canais permitidos — WhatsApp, e-mail, SMS",
-              "Campanhas automáticas por temperatura",
-            ]}
-          />
+                {/* 2 — Oportunidades */}
+                <Section title="Oportunidades para agir agora" subtitle="Segmentos com maior potencial de resultado hoje.">
+                  {opportunities.length === 0 ? (
+                    <p className="text-sm text-gray-400">
+                      Nenhuma oportunidade identificada no momento — base de clientes ativa e bem aquecida.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {opportunities.map((opp) => (
+                        <div
+                          key={opp.label}
+                          className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3"
+                        >
+                          <span className="text-xl leading-none mt-0.5 shrink-0">{opp.emoji}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900">{opp.label}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{opp.desc}</p>
+                            <p className="text-[11px] text-gray-400 mt-1 italic">{opp.why}</p>
+                          </div>
+                          <Link
+                            href="/crm"
+                            className="shrink-0 self-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-700 transition-colors"
+                          >
+                            Criar campanha
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Section>
+
+                {/* 3 — Campanhas em andamento */}
+                <Section title="Campanhas em andamento" subtitle="Campanhas ativas, agendadas e em pausa.">
+                  {s.campaigns.list.length === 0 ? (
+                    <div className="space-y-3">
+                      <p className="text-sm text-gray-400">Nenhuma campanha ativa no momento.</p>
+                      <Link
+                        href="/crm"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 transition-colors"
+                      >
+                        Criar primeira campanha →
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {s.campaigns.list.map((c) => {
+                        const cfg         = c.scheduleConfig as { mode?: string } | null;
+                        const isRecurring = cfg?.mode === "RECURRING";
+                        const isScheduled = cfg?.mode === "SCHEDULED_ONCE";
+                        const modeLabel   = isRecurring ? "Recorrente" : isScheduled ? "Agendada" : "Manual";
+                        const statusCls   = c.status === "ACTIVE"
+                          ? "bg-green-100 text-green-700"
+                          : c.status === "SCHEDULED"
+                          ? "bg-amber-100 text-amber-700"
+                          : c.status === "PAUSED"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : "bg-blue-100 text-blue-700";
+                        const hasStats    = c.totalSent > 0;
+                        const convRate    = c.totalSent > 0
+                          ? Math.round((c.totalConverted / c.totalSent) * 100)
+                          : null;
+                        return (
+                          <div key={c.id} className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
+                                <p className="text-[10px] text-gray-400 mt-0.5">
+                                  {CRM_SEGMENT_LABELS[c.targetSegment ?? ""] ?? c.targetSegment ?? "—"} · {modeLabel}
+                                </p>
+                              </div>
+                              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${statusCls}`}>
+                                {CRM_STATUS_LABELS[c.status] ?? c.status}
+                              </span>
+                            </div>
+                            {hasStats && (
+                              <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-gray-500 border-t border-gray-50 pt-2">
+                                <span>{c.totalSent.toLocaleString("pt-BR")} enviados</span>
+                                {c.totalResponded > 0 && <span className="text-blue-600">{c.totalResponded} respostas</span>}
+                                {c.totalConverted > 0 && (
+                                  <span className="text-green-600 font-semibold">
+                                    {c.totalConverted} conversões{convRate !== null && ` (${convRate}%)`}
+                                    {c.totalRevenue > 0 && ` · R$${c.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <Link
+                        href="/crm"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+                      >
+                        Ver todas as campanhas →
+                      </Link>
+                    </div>
+                  )}
+                </Section>
+
+                {/* 4 — Automações */}
+                <Section title="Automações do CRM" subtitle="Regras ativas que disparam mensagens automaticamente.">
+                  <div className="space-y-2">
+                    {(["REACTIVATION", "BIRTHDAY", "POST_ORDER"] as const).map((trigger) => {
+                      const auto = s.automations.list.find((a) => a.trigger === trigger);
+                      const enabled = auto?.isEnabled ?? false;
+                      return (
+                        <div
+                          key={trigger}
+                          className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
+                            enabled ? "border-green-200 bg-green-50/40" : "border-gray-100 bg-white"
+                          }`}
+                        >
+                          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${enabled ? "bg-green-500" : "bg-gray-300"}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900">
+                              {CRM_TRIGGER_LABELS[trigger] ?? trigger}
+                            </p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {CRM_TRIGGER_DESC[trigger]}
+                              {auto && trigger !== "BIRTHDAY" && ` · ${auto.triggerAfterDays}d`}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 text-[10px] font-bold ${enabled ? "text-green-600" : "text-gray-400"}`}>
+                            {enabled ? "Ativa" : "Inativa"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="pt-1">
+                    <Link
+                      href="/crm"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+                    >
+                      Gerenciar automações →
+                    </Link>
+                  </div>
+                </Section>
+
+                {/* 5 — Resultado do CRM */}
+                <Section title="Resultado do CRM" subtitle="Receita e conversões atribuídas a campanhas e automações.">
+                  {!hasRevenue ? (
+                    <p className="text-sm text-gray-400">
+                      Ainda não há receita atribuída ao CRM. Quando campanhas e automações gerarem pedidos, os resultados aparecerão aqui.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Mensagens enviadas</p>
+                          <p className="mt-1 text-xl font-bold text-gray-900">{s.revenue.totalSent.toLocaleString("pt-BR")}</p>
+                        </div>
+                        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Respostas</p>
+                          <p className="mt-1 text-xl font-bold text-gray-900">{s.revenue.totalResponded.toLocaleString("pt-BR")}</p>
+                        </div>
+                        <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600">Conversões</p>
+                          <p className="mt-1 text-xl font-bold text-green-700">{s.revenue.totalConverted.toLocaleString("pt-BR")}</p>
+                          {s.revenue.totalSent > 0 && (
+                            <p className="text-[10px] text-green-500 mt-0.5">
+                              {Math.round((s.revenue.totalConverted / s.revenue.totalSent) * 100)}% de conversão
+                            </p>
+                          )}
+                        </div>
+                        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Receita gerada</p>
+                          <p className="mt-1 text-xl font-bold text-emerald-700">
+                            R${s.revenue.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </Section>
+              </>
+            );
+          })()}
+
         </div>
       )}
 
