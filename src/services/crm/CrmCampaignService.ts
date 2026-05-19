@@ -39,10 +39,8 @@ export interface CreateCampaignInput {
   objective?:      string;
   channel?:        string;
   scheduledAt?:    Date;     // if set, campaign starts as SCHEDULED
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  scheduleConfig?: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  audienceConfig?: any;
+  scheduleConfig?: any; // Prisma Json? field
+  audienceConfig?: any; // Prisma Json? field
 }
 
 export interface CampaignRecipientRow {
