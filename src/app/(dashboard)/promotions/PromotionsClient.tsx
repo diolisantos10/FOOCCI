@@ -169,6 +169,14 @@ const TRIGGER_META: Record<string, { label: string; icon: string; description: s
   POST_ORDER:   { label: "Pós-pedido",  icon: "⭐", description: "Enviado X dias após a conclusão de um pedido." },
 };
 
+interface AutomationStatRow {
+  trigger: string;
+  lastRunAt: string | null;
+  lastSent: number;
+  lastFailed: number;
+  campaignId: string | null;
+}
+
 function AutomationsSection({ initialAutomations }: { initialAutomations: AutomationRow[] }) {
   const placeholders = useMemo(() => ({
     REACTIVATION: pickAutomationPlaceholder("REACTIVATION"),
@@ -187,6 +195,20 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
   const [expanded, setExpanded]       = useState<string | null>(null);
   const [saving, setSaving]           = useState<string | null>(null);
   const [saved, setSaved]             = useState<string | null>(null);
+  const [stats, setStats]             = useState<Record<string, AutomationStatRow>>({});
+  const [testing, setTesting]         = useState<string | null>(null);
+  const [testResult, setTestResult]   = useState<Record<string, { sent: number; targeted: number } | null>>({});
+
+  useEffect(() => {
+    fetch("/api/crm/automations/stats")
+      .then((r) => r.json())
+      .then((json: { data?: AutomationStatRow[] }) => {
+        const map: Record<string, AutomationStatRow> = {};
+        (json.data ?? []).forEach((s) => { map[s.trigger] = s; });
+        setStats(map);
+      })
+      .catch(() => {});
+  }, []);
 
   function handleUpdate(trigger: string, patch: Partial<AutomationRow>) {
     setAutomations((prev) => ({ ...prev, [trigger]: { ...prev[trigger]!, ...patch } }));
@@ -215,6 +237,35 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
     setSaving(null);
   }
 
+  async function testAutomation(trigger: string) {
+    setTesting(trigger);
+    setTestResult((prev) => ({ ...prev, [trigger]: null }));
+    try {
+      const res = await fetch("/api/crm/automations/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger, dryRun: false }),
+      });
+      const json = await res.json();
+      const r = json.data?.result;
+      if (r) {
+        setTestResult((prev) => ({ ...prev, [trigger]: { sent: r.messagesSent ?? 0, targeted: r.customersTargeted ?? 0 } }));
+        // Refresh stats after a successful run
+        fetch("/api/crm/automations/stats")
+          .then((x) => x.json())
+          .then((x: { data?: AutomationStatRow[] }) => {
+            const map: Record<string, AutomationStatRow> = {};
+            (x.data ?? []).forEach((s) => { map[s.trigger] = s; });
+            setStats(map);
+          })
+          .catch(() => {});
+      }
+    } catch {
+      // silently ignore
+    }
+    setTesting(null);
+  }
+
   return (
     <div className="space-y-3">
       <p className="text-xs text-gray-500">
@@ -226,6 +277,8 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
         const a    = automations[trigger]!;
         const meta = TRIGGER_META[trigger]!;
         const isOpen = expanded === trigger;
+        const stat = stats[trigger];
+        const tr = testResult[trigger];
 
         return (
           <div key={trigger} className={`rounded-2xl border bg-white shadow-sm overflow-hidden transition-all ${
@@ -236,6 +289,14 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-gray-900">{meta.label}</p>
                 <p className="text-xs text-gray-500">{meta.description}</p>
+                {stat?.lastRunAt && (
+                  <p className="mt-0.5 text-[10px] text-gray-400">
+                    Último envio:{" "}
+                    {new Date(stat.lastRunAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                    {" · "}{stat.lastSent} enviadas
+                    {stat.lastFailed > 0 && `, ${stat.lastFailed} falhas`}
+                  </p>
+                )}
               </div>
 
               <button
@@ -312,13 +373,37 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
                   </div>
                 </div>
 
-                <button
-                  onClick={() => saveAutomation(trigger)}
-                  disabled={saving === trigger}
-                  className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white hover:bg-brand-700 transition-colors disabled:opacity-60 shadow-sm"
-                >
-                  {saving === trigger ? "Salvando…" : saved === trigger ? "✓ Salvo!" : "Salvar configuração"}
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={() => saveAutomation(trigger)}
+                    disabled={saving === trigger}
+                    className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white hover:bg-brand-700 transition-colors disabled:opacity-60 shadow-sm"
+                  >
+                    {saving === trigger ? "Salvando…" : saved === trigger ? "✓ Salvo!" : "Salvar configuração"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => testAutomation(trigger)}
+                    disabled={testing === trigger || !a.isEnabled}
+                    title={!a.isEnabled ? "Ative a automação para testar" : undefined}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 shadow-sm"
+                  >
+                    {testing === trigger ? "Executando…" : "▶ Executar agora"}
+                  </button>
+                </div>
+
+                {tr !== undefined && tr !== null && (
+                  <p className={`text-xs font-medium rounded-lg px-3 py-2 ${
+                    tr.sent > 0 ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600"
+                  }`}>
+                    {tr.sent > 0
+                      ? `✓ ${tr.sent} mensage${tr.sent === 1 ? "m enviada" : "ns enviadas"} de ${tr.targeted} cliente${tr.targeted === 1 ? "" : "s"} elegíveis`
+                      : tr.targeted === 0
+                        ? "Nenhum cliente elegível no momento"
+                        : `${tr.targeted} cliente${tr.targeted === 1 ? "" : "s"} elegíveis — nenhuma mensagem enviada (verifique a integração WhatsApp)`}
+                  </p>
+                )}
               </div>
             )}
           </div>
