@@ -25,8 +25,6 @@ import { isCrmCountable } from "./crm-countable";
 import { computeTier, computeSegment } from "./crm-helpers";
 export { isCrmCountable } from "./crm-countable";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
 type SyncResult = "synced" | "skipped_already_synced" | "skipped_not_countable" | "skipped_no_customer" | "skipped_guest";
 
 // ── Service ────────────────────────────────────────────────────────────────────
@@ -126,6 +124,17 @@ export class CustomerMetricsSyncService {
     console.info(
       `[CRMSync:${source}] Synced order ${orderId} → customer ${order.customerId} (+R$${Number(amount).toFixed(2)})`
     );
+
+    // Fire-and-forget CRM attribution: link this order back to a recent CRM action
+    // if one exists within the attribution window. Never blocks the sync return.
+    import("@/services/crm/CRMAttributionService")
+      .then(({ CRMAttributionService }) =>
+        CRMAttributionService.attributeOrderToRecentCrmAction(orderId).catch((e) =>
+          console.error("[CRMAttribution] fire-and-forget failed:", e)
+        )
+      )
+      .catch(() => {});
+
     return "synced";
   }
 
