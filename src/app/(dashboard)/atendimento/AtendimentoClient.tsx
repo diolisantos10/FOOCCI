@@ -7,6 +7,7 @@ import {
   useCallback,
   useMemo,
   FormEvent,
+  type ReactNode,
 } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
 
@@ -22,8 +23,9 @@ type ConvStatus =
 
 type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL";
 
-type StatusFilter = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED";
+type StatusFilter  = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED";
 type ChannelFilter = "ALL" | "WHATSAPP" | "MENU" | "MANUAL" | "EMAIL" | "SMS";
+type SortOption    = "RECENT" | "OLDEST" | "NAME_AZ" | "NAME_ZA" | "CHANNEL";
 
 interface ActiveOrderItem {
   name:     string;
@@ -98,7 +100,7 @@ const CHANNEL_META: Record<Channel, { label: string; icon: string }> = {
   EMAIL:     { label: "E-mail",   icon: "✉️"  },
   SMS:       { label: "SMS",      icon: "💬"  },
   QR_AGENT:  { label: "Cardápio", icon: "📋"  },
-  WEB_AGENT: { label: "Web",      icon: "🌐"  },
+  WEB_AGENT: { label: "Cardápio", icon: "📋"  },
   MANUAL:    { label: "Manual",   icon: "✍️"  },
 };
 
@@ -117,6 +119,14 @@ const CHANNEL_FILTERS: { id: ChannelFilter; label: string; icon: string }[] = [
   { id: "MANUAL",   label: "Manual",            icon: "✍️"  },
   { id: "EMAIL",    label: "E-mail",            icon: "✉️"  },
   { id: "SMS",      label: "SMS",               icon: "💬"  },
+];
+
+const SORT_OPTIONS: { id: SortOption; label: string }[] = [
+  { id: "RECENT",  label: "Mais recentes" },
+  { id: "OLDEST",  label: "Mais antigas"  },
+  { id: "NAME_AZ", label: "Nome A–Z"      },
+  { id: "NAME_ZA", label: "Nome Z–A"      },
+  { id: "CHANNEL", label: "Canal"         },
 ];
 
 // ── Priority helpers ──────────────────────────────────────────────────────────
@@ -178,6 +188,65 @@ function initials(name: string): string {
     .join("");
 }
 
+// ── ScrollableChips ───────────────────────────────────────────────────────────
+
+function ScrollableChips({ children, className }: { children: ReactNode; className?: string }) {
+  const rail      = useRef<HTMLDivElement>(null);
+  const [canLeft,  setCanLeft]  = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const sync = useCallback(() => {
+    const el = rail.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 4);
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    sync();
+    const el = rail.current;
+    if (!el) return;
+    el.addEventListener("scroll", sync, { passive: true });
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", sync); ro.disconnect(); };
+  }, [sync]);
+
+  const nudge = (dir: 1 | -1) =>
+    rail.current?.scrollBy({ left: dir * 130, behavior: "smooth" });
+
+  return (
+    <div className="relative flex items-center">
+      {canLeft && (
+        <button
+          type="button"
+          onClick={() => nudge(-1)}
+          aria-label="Rolar esquerda"
+          className="absolute left-0 z-10 flex h-full items-center bg-gradient-to-r from-white via-white/80 to-transparent pl-0.5 pr-3 text-sm text-gray-400 hover:text-gray-600"
+        >
+          ‹
+        </button>
+      )}
+      <div
+        ref={rail}
+        className={`flex gap-1.5 overflow-x-auto scrollbar-hide w-full px-3 py-2 ${className ?? ""}`}
+      >
+        {children}
+      </div>
+      {canRight && (
+        <button
+          type="button"
+          onClick={() => nudge(1)}
+          aria-label="Rolar direita"
+          className="absolute right-0 z-10 flex h-full items-center bg-gradient-to-l from-white via-white/80 to-transparent pr-0.5 pl-3 text-sm text-gray-400 hover:text-gray-600"
+        >
+          ›
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function AtendimentoClient({
@@ -202,6 +271,7 @@ export function AtendimentoClient({
 
   const [statusFilter,  setStatusFilter]  = useState<StatusFilter>("ALL");
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>("ALL");
+  const [sortBy,        setSortBy]        = useState<SortOption>("RECENT");
   const [search,        setSearch]        = useState("");
   const [searchInput,   setSearchInput]   = useState("");
 
@@ -226,8 +296,7 @@ export function AtendimentoClient({
     if (channelFilter === "MANUAL")   params.set("channel", "MANUAL");
     if (channelFilter === "EMAIL")    params.set("channel", "EMAIL");
     if (channelFilter === "SMS")      params.set("channel", "SMS");
-    // MENU (WEB_AGENT + QR_AGENT) requires client-side OR — no server param
-    if (search.trim()) params.set("search", search.trim());
+    // MENU (WEB_AGENT + QR_AGENT) and search are handled client-side
 
     try {
       // Use /api/chat/conversations: supports channel, all status values, aiEnabled
@@ -241,7 +310,7 @@ export function AtendimentoClient({
     } finally {
       setLoadingList(false);
     }
-  }, [statusFilter, channelFilter, search]);
+  }, [statusFilter, channelFilter]);
 
   // Immediate refetch when filter/search changes
   useEffect(() => {
@@ -326,6 +395,17 @@ export function AtendimentoClient({
   const displayed = useMemo(() => {
     let items = [...conversations];
 
+    // Search: name, phone, last message content
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      items = items.filter((c) => {
+        const name    = (c.customer?.name    ?? c.customerName  ?? "").toLowerCase();
+        const phone   = (c.customer?.phone   ?? c.customerPhone ?? "").toLowerCase();
+        const lastMsg = (c.messages?.[0]?.content ?? "").toLowerCase();
+        return name.includes(q) || phone.includes(q) || lastMsg.includes(q);
+      });
+    }
+
     // Status filter (client-side for non-RESOLVED)
     if (statusFilter !== "ALL" && statusFilter !== "RESOLVED") {
       items = items.filter((c) => {
@@ -346,13 +426,30 @@ export function AtendimentoClient({
     }
 
     return items.sort((a, b) => {
+      if (sortBy === "NAME_AZ") {
+        const na = (a.customer?.name ?? a.customerName ?? "").toLowerCase();
+        const nb = (b.customer?.name ?? b.customerName ?? "").toLowerCase();
+        return na.localeCompare(nb, "pt-BR");
+      }
+      if (sortBy === "NAME_ZA") {
+        const na = (a.customer?.name ?? a.customerName ?? "").toLowerCase();
+        const nb = (b.customer?.name ?? b.customerName ?? "").toLowerCase();
+        return nb.localeCompare(na, "pt-BR");
+      }
+      if (sortBy === "CHANNEL") {
+        if (a.channel !== b.channel) return a.channel.localeCompare(b.channel);
+        const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+        const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+        return tb - ta;
+      }
+      // RECENT (default) or OLDEST: priority-based, then time
       const pd = handlerPriority(a) - handlerPriority(b);
       if (pd !== 0) return pd;
       const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
       const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-      return tb - ta;
+      return sortBy === "OLDEST" ? ta - tb : tb - ta;
     });
-  }, [conversations, statusFilter, channelFilter]);
+  }, [conversations, statusFilter, channelFilter, search, sortBy]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   async function handleAction(action: string) {
@@ -465,14 +562,14 @@ export function AtendimentoClient({
         `}
         style={isDesktop ? { width: leftWidth } : undefined}
       >
-        {/* Search */}
-        <div className="border-b border-gray-100 px-3 pt-3 pb-2">
+        {/* Search + Sort */}
+        <div className="border-b border-gray-100 px-3 pt-3 pb-2 space-y-2">
           <form onSubmit={handleSearchSubmit} className="flex gap-2">
             <input
               type="search"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Nome ou telefone…"
+              placeholder="Nome, telefone ou mensagem…"
               className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
             <button
@@ -482,42 +579,58 @@ export function AtendimentoClient({
               Buscar
             </button>
           </form>
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[11px] text-gray-400">Ordenar:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 focus:border-orange-400 focus:outline-none"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Status filter chips */}
-        <div className="flex gap-1.5 overflow-x-auto border-b border-gray-100 px-3 py-2 scrollbar-hide">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setStatusFilter(f.id)}
-              className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                statusFilter === f.id
-                  ? "bg-orange-500 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="border-b border-gray-100">
+          <ScrollableChips>
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setStatusFilter(f.id)}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  statusFilter === f.id
+                    ? "bg-orange-500 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </ScrollableChips>
         </div>
 
         {/* Channel filter chips */}
-        <div className="flex gap-1.5 overflow-x-auto border-b border-gray-100 px-3 py-1.5 scrollbar-hide">
-          {CHANNEL_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setChannelFilter(f.id)}
-              className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                channelFilter === f.id
-                  ? "bg-gray-700 text-white"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-              }`}
-            >
-              {f.icon ? `${f.icon} ` : ""}{f.label}
-            </button>
-          ))}
+        <div className="border-b border-gray-100">
+          <ScrollableChips className="py-1.5">
+            {CHANNEL_FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setChannelFilter(f.id)}
+                className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                  channelFilter === f.id
+                    ? "bg-gray-700 text-white"
+                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                }`}
+              >
+                {f.icon ? `${f.icon} ` : ""}{f.label}
+              </button>
+            ))}
+          </ScrollableChips>
         </div>
 
         {/* List */}
