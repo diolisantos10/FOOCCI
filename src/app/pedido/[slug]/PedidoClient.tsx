@@ -674,9 +674,11 @@ function ProductModal({
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
 
-  const paidExtras = item.extras.filter((e) => e.price > 0);
-  const freeExtras = item.extras.filter((e) => e.price === 0);
-  const hasCustomization = !item.hasVariants && (item.optionGroups.length > 0 || paidExtras.length > 0);
+  const paidExtras    = item.extras.filter((e) => e.price > 0);
+  const freeExtras    = item.extras.filter((e) => e.price === 0);
+  // Valid variants: must have a price and a name; if empty the product falls back to base-price add.
+  const validVariants = item.variants.filter((v) => v.price > 0 && v.name.trim());
+  const hasCustomization = (!item.hasVariants || validVariants.length === 0) && (item.optionGroups.length > 0 || paidExtras.length > 0);
   // A removal group is optional and all its options are free — use checkboxes
   function isRemovalGroup(group: OptionGroup) {
     return !group.required && group.options.every((o) => o.price === 0);
@@ -968,13 +970,13 @@ function ProductModal({
           )}
 
           {/* ── Variants ── */}
-          {item.hasVariants && item.variants.length > 0 && (
+          {validVariants.length > 0 && (
             <div className="mt-5">
               <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                 Escolha uma opção
               </p>
               <div className="space-y-2">
-                {item.variants.filter((v) => v.price > 0 && v.name.trim()).map((v) => {
+                {validVariants.map((v) => {
                   const vQty = cart ? variantCartQty(item.id, v.id, cart) : 0;
                   return (
                     <button
@@ -1001,8 +1003,8 @@ function ProductModal({
             </div>
           )}
 
-          {/* ── Notes (only for items with interactive customization) ── */}
-          {!item.hasVariants && (
+          {/* ── Notes (non-variant products, or variant products with no valid variants) ── */}
+          {(!item.hasVariants || validVariants.length === 0) && (
             <div className="mt-4 mb-2">
               <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                 Observações
@@ -1031,12 +1033,12 @@ function ProductModal({
             </div>
           )}
 
-          {!item.hasVariants ? (
+          {(!item.hasVariants || validVariants.length === 0) ? (
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Preço</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  R$ {finalPrice.toFixed(2).replace(".", ",")}
+                  R$ {(isNaN(finalPrice) ? item.price : finalPrice).toFixed(2).replace(".", ",")}
                 </p>
               </div>
               <button
@@ -1864,7 +1866,9 @@ export function PedidoClient({
   const [orderTrackingData, setOrderTrackingData]   = useState<OrderTrackingData | null>(null);
   const [activeOrderId,     setActiveOrderId]       = useState<string | null>(null);
   const [showActiveBanner,  setShowActiveBanner]    = useState(false);
-  const trackingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const trackingPollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const categoryBarRef     = useRef<HTMLDivElement>(null);
+  const [categoryFadeEnd, setCategoryFadeEnd] = useState(true);
 
   // ── Poll payment status while in PAYMENT_LINK stage ───────────────
   useEffect(() => {
@@ -1897,6 +1901,20 @@ export function PedidoClient({
         .catch(() => {});
     });
   }, [pixCopyPaste, pixQrCodeBase64]);
+
+  // ── Category bar: show right-fade hint when more categories are off-screen ──
+  useEffect(() => {
+    const el = categoryBarRef.current;
+    if (!el) return;
+    const check = () => setCategoryFadeEnd(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, [categories]);
 
   // ── On mount: check localStorage for an in-progress order ─────────
   useEffect(() => {
@@ -3632,23 +3650,31 @@ export function PedidoClient({
 
         {/* Mobile: category carousel — compact, sticky above CartBar/input */}
         {stage === "BROWSE" && entryPhase === "browsing" && categories.length > 0 && (
-          <div
-            className="lg:hidden shrink-0 flex overflow-x-auto gap-2 border-t border-gray-200 bg-white px-3 py-1.5 [&::-webkit-scrollbar]:hidden"
-            style={{ scrollbarWidth: "none" }}
-          >
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => { setSuggestedProducts([]); handleCategorySelect(cat); }}
-                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium min-h-[36px] transition-all ${
-                  selectedCategoryId === cat.id
-                    ? "bg-gray-700 text-white shadow-sm"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95"
-                }`}
-              >
-                {categoryEmoji(cat.name)} {cat.name}
-              </button>
-            ))}
+          <div className="lg:hidden relative shrink-0">
+            <div
+              ref={categoryBarRef}
+              className="flex overflow-x-auto gap-2 border-t border-gray-200 bg-white px-3 py-1.5 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => { setSuggestedProducts([]); handleCategorySelect(cat); }}
+                  className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium min-h-[36px] transition-all ${
+                    selectedCategoryId === cat.id
+                      ? "bg-gray-700 text-white shadow-sm"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95"
+                  }`}
+                >
+                  {categoryEmoji(cat.name)} {cat.name}
+                </button>
+              ))}
+            </div>
+            {/* Fade hint: hints that more categories exist off-screen to the right */}
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent transition-opacity duration-200"
+              style={{ opacity: categoryFadeEnd ? 1 : 0 }}
+            />
           </div>
         )}
 
