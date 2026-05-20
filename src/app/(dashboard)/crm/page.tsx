@@ -8,7 +8,23 @@ import type { CRMCustomer, Opportunity, OverviewStats } from "@/services/crm/CRM
 export const metadata = { title: "CRM — Motor de Receita" };
 export const dynamic = "force-dynamic";
 
-export default async function CRMPage() {
+type Tab = "overview" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes";
+
+const TAB_PARAM_MAP: Record<string, Tab> = {
+  "visao-geral": "overview",
+  "campanhas":   "campanhas",
+  "automacoes":  "automacoes",
+  "clientes":    "customers",
+  "avaliacoes":  "avaliacoes",
+};
+
+export default async function CRMPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab: tabParam } = await searchParams;
+  const initialTab: Tab = TAB_PARAM_MAP[tabParam ?? ""] ?? "overview";
   let restaurantId: string | null = null;
   let restaurantName = "Restaurante";
   try { restaurantId = getTenantId(); } catch { /* unauthenticated */ }
@@ -104,6 +120,7 @@ export default async function CRMPage() {
         overviewStats={overviewStats}
         opportunitiesCount={opportunities.length}
         reviewLinks={reviewLinks}
+        initialTab={initialTab}
       />
     </>
   );

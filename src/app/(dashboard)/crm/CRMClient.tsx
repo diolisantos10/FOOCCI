@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
 import { ImportModal } from "./ImportModal";
@@ -2881,12 +2881,30 @@ function AutomacoesTab() {
 
 type Tab = "overview" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes";
 
+const TAB_PARAM_MAP: Record<string, Tab> = {
+  "visao-geral": "overview",
+  "campanhas":   "campanhas",
+  "automacoes":  "automacoes",
+  "clientes":    "customers",
+  "avaliacoes":  "avaliacoes",
+};
+
+const TAB_URL_MAP: Record<Tab, string> = {
+  overview:   "visao-geral",
+  campanhas:  "campanhas",
+  automacoes: "automacoes",
+  customers:  "clientes",
+  programa:   "programa",
+  avaliacoes: "avaliacoes",
+};
+
 export function CRMClient({
   initialCustomers,
   initialOpportunities,
   overviewStats,
   opportunitiesCount,
   reviewLinks = { google: null, ifood: null },
+  initialTab,
 }: {
   initialCustomers:     CRMCustomer[];
   initialOpportunities: Opportunity[];
@@ -2894,11 +2912,26 @@ export function CRMClient({
   overviewStats:        OverviewStats;
   opportunitiesCount:   number;
   reviewLinks?:         { google: string | null; ifood: string | null };
+  initialTab?:          Tab;
 }) {
   const googleReviewUrl = reviewLinks.google;
   const ifoodReviewUrl  = reviewLinks.ifood;
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("overview");
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<Tab>(initialTab ?? "overview");
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    const slug = TAB_URL_MAP[tab];
+    if (slug === "visao-geral") {
+      params.delete("tab");
+    } else {
+      params.set("tab", slug);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "?", { scroll: false });
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [showImport, setShowImport] = useState(false);
   const [customerFilter, setCustomerFilter] = useState<CRMFilter>("all");
 

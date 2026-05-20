@@ -1441,7 +1441,7 @@ export function AgentePage() {
                             <p className="text-[11px] text-gray-400 mt-1 italic">{opp.why}</p>
                           </div>
                           <Link
-                            href="/crm"
+                            href="/crm?tab=campanhas"
                             className="shrink-0 self-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-700 transition-colors"
                           >
                             Criar campanha
@@ -1458,7 +1458,7 @@ export function AgentePage() {
                     <div className="space-y-3">
                       <p className="text-sm text-gray-400">Nenhuma campanha ativa no momento.</p>
                       <Link
-                        href="/crm"
+                        href="/crm?tab=campanhas"
                         className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 transition-colors"
                       >
                         Criar primeira campanha →
@@ -1511,7 +1511,7 @@ export function AgentePage() {
                         );
                       })}
                       <Link
-                        href="/crm"
+                        href="/crm?tab=campanhas"
                         className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
                       >
                         Ver todas as campanhas →
@@ -1552,7 +1552,7 @@ export function AgentePage() {
                   </div>
                   <div className="pt-1">
                     <Link
-                      href="/crm"
+                      href="/crm?tab=automacoes"
                       className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
                     >
                       Gerenciar automações →
