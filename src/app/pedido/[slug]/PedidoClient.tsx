@@ -1858,6 +1858,9 @@ export function PedidoClient({
   const [paymentMethodSub, setPaymentMethodSub] = useState<PaymentMethodSub | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [pixCopyPaste,    setPixCopyPaste]    = useState<string | null>(null);
+  const [pixQrCodeBase64, setPixQrCodeBase64] = useState<string | null>(null);
+  const [pixCopied,       setPixCopied]       = useState(false);
   const [orderTrackingData, setOrderTrackingData]   = useState<OrderTrackingData | null>(null);
   const [activeOrderId,     setActiveOrderId]       = useState<string | null>(null);
   const [showActiveBanner,  setShowActiveBanner]    = useState(false);
@@ -1876,6 +1879,8 @@ export function PedidoClient({
         } else if (data.paymentStatus === "EXPIRED") {
           clearInterval(interval);
           setPaymentUrl(null);
+          setPixCopyPaste(null);
+          setPixQrCodeBase64(null);
         }
       } catch { /* ignore */ }
     }, 4000);
@@ -2764,8 +2769,17 @@ export function PedidoClient({
         } catch { /* ignore */ }
       }
 
-      if (paymentMode === "pay_now" && data.paymentUrl) {
-        setPaymentUrl(data.paymentUrl);
+      if (paymentMode === "pay_now" && (data.pixCopyPaste || data.paymentUrl)) {
+        if (data.pixCopyPaste) {
+          // MP direct Pix — show inline QR screen
+          setPixCopyPaste(data.pixCopyPaste);
+          setPixQrCodeBase64(data.pixQrCodeBase64 ?? null);
+          setPaymentUrl(null);
+        } else {
+          // Stone / Checkout Pro redirect
+          setPaymentUrl(data.paymentUrl);
+          setPixCopyPaste(null);
+        }
         setStage("PAYMENT_LINK");
       } else {
         setStage("DONE");
@@ -3148,6 +3162,52 @@ export function PedidoClient({
     }
 
     if (stage === "PAYMENT_LINK") {
+      // ── Pix QR (Mercado Pago direct) ──────────────────────────────
+      if (pixCopyPaste) {
+        return (
+          <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-4">
+            <p className="text-sm font-semibold text-gray-800">Pague com Pix</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Escaneie o QR Code ou copie o código Pix abaixo. O pedido é confirmado automaticamente assim que o pagamento for identificado.
+            </p>
+
+            {pixQrCodeBase64 && (
+              <div className="mt-3 flex justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`data:image/png;base64,${pixQrCodeBase64}`}
+                  alt="QR Code Pix"
+                  className="h-44 w-44 rounded-xl border border-gray-200 shadow-sm"
+                />
+              </div>
+            )}
+
+            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Pix Copia e Cola</p>
+              <p className="break-all font-mono text-[11px] text-gray-700 select-all">{pixCopyPaste}</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(pixCopyPaste).then(() => {
+                  setPixCopied(true);
+                  setTimeout(() => setPixCopied(false), 3000);
+                }).catch(() => {});
+              }}
+              className="mt-2.5 w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+            >
+              {pixCopied ? "✅ Código copiado!" : "Copiar código Pix"}
+            </button>
+
+            <p className="mt-2.5 text-center text-[10px] text-gray-400 animate-pulse">
+              ⏳ Aguardando confirmação do pagamento…
+            </p>
+          </div>
+        );
+      }
+
+      // ── Redirect link (Stone / Checkout Pro fallback) ──────────────
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-4">
           <p className="text-sm font-semibold text-gray-800">💳 Pagamento online</p>

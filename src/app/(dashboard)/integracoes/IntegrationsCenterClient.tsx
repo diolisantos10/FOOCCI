@@ -508,6 +508,14 @@ function StoneForm({
   );
 }
 
+const MP_PAYMENT_METHODS = [
+  { id: "pix",              label: "Pix",                   active: true  },
+  { id: "credit_card",      label: "Cartão de crédito",     active: false },
+  { id: "debit_card",       label: "Cartão de débito",      active: false },
+  { id: "boleto",           label: "Boleto bancário",       active: false },
+  { id: "mp_wallet",        label: "Carteira Mercado Pago", active: false },
+] as const;
+
 function MercadoPagoForm({
   view, saving, onSave,
 }: {
@@ -530,6 +538,31 @@ function MercadoPagoForm({
       onSubmit={(e) => { e.preventDefault(); onSave({ environment, accessToken }); }}
       className="space-y-4"
     >
+      {/* Payment methods — read-only status panel */}
+      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+        <p className="mb-2.5 text-xs font-semibold text-gray-700">Formas de pagamento</p>
+        <div className="space-y-1.5">
+          {MP_PAYMENT_METHODS.map((m) => (
+            <div key={m.id} className="flex items-center justify-between">
+              <span className="text-xs text-gray-700">{m.label}</span>
+              {m.active ? (
+                <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  Ativo
+                </span>
+              ) : (
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-400">
+                  Em breve
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="mt-2.5 text-[10px] leading-relaxed text-gray-400">
+          No momento apenas Pix está disponível. Os demais métodos serão liberados em breve.
+        </p>
+      </div>
+
       <SelectField
         label="Ambiente"
         name="environment"

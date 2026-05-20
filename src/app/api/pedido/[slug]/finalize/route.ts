@@ -23,7 +23,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { createMPPaymentLink } from "@/lib/mercadopago";
+import { createPixPayment } from "@/lib/mercadopago";
 import { createPaymentLink } from "@/lib/stone";
 import { decrypt } from "@/lib/crypto";
 import { Decimal } from "@prisma/client/runtime/library";
@@ -424,24 +424,29 @@ export async function POST(
     }
 
     let providerReference: string;
-    let paymentUrl: string;
+    let paymentUrl: string;       // stores Pix copy-paste key (MP) or hosted URL (Stone)
     let expiresAtStr: string;
     let providerName: string;
+    // Pix-specific fields — only set when using MP direct Pix API
+    let pixCopyPaste: string | undefined;
+    let pixQrCodeBase64: string | undefined;
 
     if (mpToken) {
+      // Backend guard: MP is always pix_only — reject if somehow called for non-Pix
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
       try {
-        const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? "";
-        const mpResult = await createMPPaymentLink(mpToken, {
-          orderId:          orderId,
-          amount:           orderTotal,
-          description:      `Pedido – ${restaurantId}`,
-          expiresInMinutes: 30,
-          notificationUrl:  appUrl ? `${appUrl}/api/payments/mercadopago/webhook` : undefined,
+        const pixResult = await createPixPayment(mpToken, {
+          orderId,
+          amount:          orderTotal,
+          description:     `Pedido – ${restaurantId}`,
+          notificationUrl: appUrl ? `${appUrl}/api/payments/mercadopago/webhook` : undefined,
         });
-        providerReference = mpResult.providerReference;
-        paymentUrl        = mpResult.paymentUrl;
-        expiresAtStr      = mpResult.expiresAt;
-        providerName      = "mercadopago";
+        providerReference  = pixResult.paymentId;
+        paymentUrl         = pixResult.pixCopyPaste; // stored in paymentUrl column for later retrieval
+        expiresAtStr       = pixResult.expiresAt;
+        providerName       = "mercadopago";
+        pixCopyPaste       = pixResult.pixCopyPaste;
+        pixQrCodeBase64    = pixResult.pixQrCodeBase64;
       } catch (err) {
         await prisma.order.delete({ where: { id: orderId } });
         const msg = err instanceof Error ? err.message : "MP error";
@@ -486,7 +491,16 @@ export async function POST(
       });
     });
 
-    return NextResponse.json({ orderId, paymentUrl, providerReference, expiresAt: expiresAtStr });
+    // Return Pix data when available (MP); fallback to paymentUrl redirect (Stone)
+    return NextResponse.json({
+      orderId,
+      providerReference,
+      expiresAt: expiresAtStr,
+      ...(pixCopyPaste
+        ? { pixCopyPaste, pixQrCodeBase64: pixQrCodeBase64 ?? "" }
+        : { paymentUrl }
+      ),
+    });
   }
 
   // ── pay_on_delivery / pay_on_pickup ────────────────────────────

@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant";
-import { createMPPaymentLink } from "@/lib/mercadopago";
+import { createPixPayment } from "@/lib/mercadopago";
 import { decrypt } from "@/lib/crypto";
 import { Decimal } from "@prisma/client/runtime/library";
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   });
   if (!order) return NextResponse.json({ error: "Pedido não encontrado" }, { status: 404 });
 
-  // Idempotency: if there's already a non-expired link, return it
+  // Idempotency: if there's already a non-expired Pix payment, return stored copy-paste key
   const existing = await prisma.payment.findUnique({
     where: { orderId },
     select: { status: true, paymentUrl: true, providerReference: true, expiresAt: true },
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   ) {
     return NextResponse.json({
       orderId,
-      paymentUrl: existing.paymentUrl,
+      pixCopyPaste: existing.paymentUrl, // paymentUrl column stores Pix copy-paste key
       providerReference: existing.providerReference,
       expiresAt: existing.expiresAt.toISOString(),
     });
@@ -77,21 +77,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Create preference (payment link)
-  let mpResult;
+  // Create direct Pix payment (pix_only mode enforced here)
+  let pixResult;
   try {
-    mpResult = await createMPPaymentLink(accessToken, {
+    pixResult = await createPixPayment(accessToken, {
       orderId,
       amount: Number(order.total),
       description: `Pedido #${orderId.slice(-6).toUpperCase()}`,
-      expiresInMinutes: 30,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "MP error";
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  // Upsert payment record
+  // Upsert payment record — paymentUrl stores Pix copy-paste key for later retrieval
   await prisma.payment.upsert({
     where: { orderId },
     create: {
@@ -101,16 +100,16 @@ export async function POST(req: NextRequest) {
       amount: new Decimal(Number(order.total)),
       paymentMode: "PAY_NOW",
       providerName: "mercadopago",
-      providerReference: mpResult.providerReference,
-      paymentUrl: mpResult.paymentUrl,
-      expiresAt: new Date(mpResult.expiresAt),
+      providerReference: pixResult.paymentId,
+      paymentUrl: pixResult.pixCopyPaste,
+      expiresAt: new Date(pixResult.expiresAt),
     },
     update: {
       status: "LINK_SENT",
       providerName: "mercadopago",
-      providerReference: mpResult.providerReference,
-      paymentUrl: mpResult.paymentUrl,
-      expiresAt: new Date(mpResult.expiresAt),
+      providerReference: pixResult.paymentId,
+      paymentUrl: pixResult.pixCopyPaste,
+      expiresAt: new Date(pixResult.expiresAt),
     },
   });
 
@@ -124,8 +123,9 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     orderId,
-    paymentUrl: mpResult.paymentUrl,
-    providerReference: mpResult.providerReference,
-    expiresAt: mpResult.expiresAt,
+    pixCopyPaste: pixResult.pixCopyPaste,
+    pixQrCodeBase64: pixResult.pixQrCodeBase64,
+    providerReference: pixResult.paymentId,
+    expiresAt: pixResult.expiresAt,
   });
 }
