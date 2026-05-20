@@ -29,7 +29,7 @@ export type PatchConversationInput = z.infer<typeof patchConversationSchema>;
 // ─── Send outbound message ────────────────────────────────────
 
 export const sendMessageSchema = z.object({
-  content: z.string().min(1).max(4096),
+  content: z.string().max(4096).default(""),
   type: z.enum(["TEXT", "IMAGE", "AUDIO", "DOCUMENT"]).default("TEXT"),
   mediaUrl: z.string().url().optional(),
 });

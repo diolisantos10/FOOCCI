@@ -85,6 +85,13 @@ interface Message {
   externalStatus: string | null;
 }
 
+interface AttachmentState {
+  file:       File;
+  previewUrl: string | null;
+  mediaType:  "IMAGE" | "DOCUMENT";
+  fileName:   string;
+}
+
 interface ConvDetail extends ConvSummary {
   messages: Message[];
   customer: {
@@ -282,6 +289,8 @@ export function AtendimentoClient({
   const [sending,       setSending]       = useState(false);
   const [sendError,     setSendError]     = useState<string | null>(null);
   const [sendNote,      setSendNote]      = useState<string | null>(null);
+  const [attachment,    setAttachment]    = useState<AttachmentState | null>(null);
+  const [uploading,     setUploading]     = useState(false);
 
   const [leftWidth,     setLeftWidth]     = useState<number>(320);
   const [isDesktop,     setIsDesktop]     = useState<boolean>(false);
@@ -485,17 +494,73 @@ export function AtendimentoClient({
     }
   }
 
+  function handleAttachmentSelect(file: File) {
+    const isImage   = file.type.startsWith("image/");
+    const mediaType = isImage ? ("IMAGE" as const) : ("DOCUMENT" as const);
+    const previewUrl = isImage ? URL.createObjectURL(file) : null;
+    setAttachment((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return { file, previewUrl, mediaType, fileName: file.name };
+    });
+  }
+
+  function handleAttachmentClear() {
+    setAttachment((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }
+
   async function handleSend(e: FormEvent) {
     e.preventDefault();
-    if (!text.trim() || !selectedId) return;
+    if (!selectedId) return;
+    if (!attachment && !text.trim()) return;
+
     setSending(true);
     setSendError(null);
     setSendNote(null);
+
+    let mediaUrl: string | null = null;
+    let messageType = "TEXT";
+
+    if (attachment) {
+      setUploading(true);
+      try {
+        const form = new FormData();
+        form.append("file", attachment.file);
+        const uploadRes = await fetch("/api/atendimento/upload", { method: "POST", body: form });
+        if (!uploadRes.ok) {
+          const json = await uploadRes.json();
+          setSendError(json.error ?? "Falha no upload do arquivo.");
+          setSending(false);
+          setUploading(false);
+          return;
+        }
+        const uploadJson = await uploadRes.json();
+        mediaUrl    = uploadJson.data?.url ?? null;
+        messageType = attachment.mediaType; // "IMAGE" | "DOCUMENT"
+      } catch {
+        setSendError("Falha de rede ao enviar o arquivo.");
+        setSending(false);
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
     try {
+      const caption = text.trim() ||
+        (attachment?.mediaType === "DOCUMENT" ? attachment.fileName : "");
+
       const res = await fetch(`/api/conversations/${selectedId}/messages`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ content: text.trim(), type: "TEXT" }),
+        body:    JSON.stringify({
+          content:  caption,
+          type:     messageType,
+          ...(mediaUrl ? { mediaUrl } : {}),
+        }),
       });
       if (!res.ok) {
         const json = await res.json();
@@ -509,6 +574,9 @@ export function AtendimentoClient({
       }
       const json = await res.json();
       setText("");
+      // Clean up attachment
+      if (attachment?.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      setAttachment(null);
       if (json.data?._internalOnly) {
         setSendNote("Mensagem registrada internamente. Este canal não usa WhatsApp.");
       }
@@ -792,6 +860,10 @@ export function AtendimentoClient({
             onBack={handleMobileBack}
             activeOrder={activeOrder}
             activeDraft={activeDraft}
+            attachment={attachment}
+            onAttachmentSelect={handleAttachmentSelect}
+            onAttachmentClear={handleAttachmentClear}
+            uploading={uploading}
           />
         ) : null}
       </section>
@@ -802,21 +874,25 @@ export function AtendimentoClient({
 // ── Thread Panel ──────────────────────────────────────────────────────────────
 
 interface ThreadPanelProps {
-  thread:        ConvDetail;
-  userId:        string;
-  actionLoading: boolean;
-  onAction:      (action: string) => void;
-  onAIAction:    (action: "takeover" | "release") => void;
-  text:          string;
-  setText:       (v: string) => void;
-  sending:       boolean;
-  sendError:     string | null;
-  sendNote:      string | null;
-  onSend:        (e: FormEvent) => void;
-  bottomRef:     React.RefObject<HTMLDivElement>;
-  onBack?:       () => void;
-  activeOrder?:  ActiveOrder | null;
-  activeDraft?:  ActiveDraft | null;
+  thread:             ConvDetail;
+  userId:             string;
+  actionLoading:      boolean;
+  onAction:           (action: string) => void;
+  onAIAction:         (action: "takeover" | "release") => void;
+  text:               string;
+  setText:            (v: string) => void;
+  sending:            boolean;
+  sendError:          string | null;
+  sendNote:           string | null;
+  onSend:             (e: FormEvent) => void;
+  bottomRef:          React.RefObject<HTMLDivElement>;
+  onBack?:            () => void;
+  activeOrder?:       ActiveOrder | null;
+  activeDraft?:       ActiveDraft | null;
+  attachment:         AttachmentState | null;
+  onAttachmentSelect: (file: File) => void;
+  onAttachmentClear:  () => void;
+  uploading:          boolean;
 }
 
 // ── ActiveDraftPanel ──────────────────────────────────────────
@@ -1051,7 +1127,12 @@ function ThreadPanel({
   onBack,
   activeOrder,
   activeDraft,
+  attachment,
+  onAttachmentSelect,
+  onAttachmentClear,
+  uploading,
 }: ThreadPanelProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const badge          = getHandlerBadge(thread);
   const channel        = CHANNEL_META[thread.channel] ?? { label: thread.channel, icon: "💬" };
   const isResolved     = thread.status === "RESOLVED";
@@ -1190,28 +1271,84 @@ function ThreadPanel({
       {isHumanHandling ? (
         <form
           onSubmit={onSend}
-          className="flex shrink-0 items-end gap-2 border-t border-gray-200 bg-white px-4 py-3"
+          className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 space-y-2"
         >
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                onSend(e as unknown as FormEvent);
-              }
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onAttachmentSelect(file);
+              e.target.value = "";
             }}
-            placeholder="Digite uma mensagem… (Enter para enviar)"
-            rows={1}
-            className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
           />
-          <button
-            type="submit"
-            disabled={sending || !text.trim()}
-            className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
-          >
-            {sending ? "…" : "Enviar"}
-          </button>
+
+          {/* Attachment preview */}
+          {attachment && (
+            <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+              {attachment.mediaType === "IMAGE" && attachment.previewUrl ? (
+                <img
+                  src={attachment.previewUrl}
+                  alt="preview"
+                  className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                />
+              ) : (
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-200 text-xl">
+                  📄
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-gray-700">{attachment.fileName}</p>
+                <p className="text-[10px] text-gray-400">
+                  {attachment.mediaType === "IMAGE" ? "Imagem" : "Documento PDF"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onAttachmentClear}
+                aria-label="Remover anexo"
+                className="shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Input row */}
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || sending}
+              aria-label="Anexar arquivo"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-orange-500 disabled:opacity-40 transition-colors"
+            >
+              📎
+            </button>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  onSend(e as unknown as FormEvent);
+                }
+              }}
+              placeholder={attachment ? "Legenda (opcional)…" : "Digite uma mensagem… (Enter para enviar)"}
+              rows={1}
+              className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+            />
+            <button
+              type="submit"
+              disabled={sending || uploading || (!text.trim() && !attachment)}
+              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+            >
+              {uploading ? "Enviando…" : sending ? "…" : "Enviar"}
+            </button>
+          </div>
         </form>
       ) : isResolved ? (
         <div className="shrink-0 border-t border-gray-200 bg-gray-50 px-4 py-3 text-center text-xs text-gray-400">
@@ -1424,12 +1561,46 @@ function MessageBubble({
               : "rounded-bl-sm bg-white text-gray-900 border border-gray-100"
           }`}
         >
-          {msg.type !== "TEXT" && (
+          {/* Image */}
+          {msg.type === "IMAGE" && msg.mediaUrl && (
+            <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="mb-1 block">
+              <img
+                src={msg.mediaUrl}
+                alt="imagem"
+                className="max-h-48 max-w-full rounded-xl object-cover"
+                loading="lazy"
+              />
+            </a>
+          )}
+
+          {/* Document */}
+          {msg.type === "DOCUMENT" && msg.mediaUrl && (
+            <a
+              href={msg.mediaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold underline ${
+                isOutbound
+                  ? "border-orange-400/50 bg-orange-600 text-white"
+                  : "border-gray-200 bg-gray-100 text-gray-700"
+              }`}
+            >
+              <span>📄</span>
+              <span className="truncate">{msg.content || "Documento"}</span>
+            </a>
+          )}
+
+          {/* Unknown media label (AUDIO, etc.) */}
+          {msg.type !== "TEXT" && msg.type !== "IMAGE" && msg.type !== "DOCUMENT" && (
             <p className={`mb-1 text-xs font-medium ${isOutbound ? "text-orange-200" : "text-gray-400"}`}>
               [{msg.type.toLowerCase()}]
             </p>
           )}
-          <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+
+          {/* Text content / caption — skip for DOCUMENT (already shown in card) */}
+          {msg.type !== "DOCUMENT" && msg.content && (
+            <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 px-1 text-[10px] text-gray-400">
