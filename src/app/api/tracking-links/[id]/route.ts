@@ -8,13 +8,15 @@ import { z } from "zod";
 import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { ok, badRequest, unauthorized, notFound, serverError } from "@/lib/api-response";
+import { generateUniqueShortCode } from "@/lib/shortCode";
 
 const patchSchema = z.object({
-  name:     z.string().min(1).max(100).optional(),
-  isActive: z.boolean().optional(),
-  campaign: z.string().max(100).nullable().optional(),
-  content:  z.string().max(100).nullable().optional(),
-  term:     z.string().max(100).nullable().optional(),
+  name:                 z.string().min(1).max(100).optional(),
+  isActive:             z.boolean().optional(),
+  campaign:             z.string().max(100).nullable().optional(),
+  content:              z.string().max(100).nullable().optional(),
+  term:                 z.string().max(100).nullable().optional(),
+  regenerateShortCode:  z.boolean().optional(), // if true, generates a new shortCode
 });
 
 type Params = { params: Promise<{ id: string }> };
@@ -38,9 +40,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const parsed = patchSchema.safeParse(raw);
     if (!parsed.success) return badRequest("Validation failed", parsed.error.flatten());
 
+    const { regenerateShortCode, ...fields } = parsed.data;
+
+    const updateData: Record<string, unknown> = { ...fields };
+    if (regenerateShortCode) {
+      updateData.shortCode = await generateUniqueShortCode();
+    }
+
     const updated = await prisma.trackingLink.update({
       where: { id },
-      data:  parsed.data,
+      data:  updateData,
     });
     return ok(updated);
   } catch (err) {

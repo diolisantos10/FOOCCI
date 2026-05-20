@@ -8,6 +8,7 @@ interface TrackingLink {
   id:                      string;
   name:                    string;
   slug:                    string;
+  shortCode:               string | null;
   destinationType:         string;
   source:                  string;
   medium:                  string;
@@ -97,6 +98,10 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
   const [loading, setLoading]     = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [activeTab, setActiveTab] = useState<"links" | "analytics">("links");
+  // Per-link copy state: tracks which link's short URL was just copied
+  const [copiedShortId, setCopiedShortId] = useState<string | null>(null);
+  // Per-link regenerate loading state
+  const [regenLoadingId, setRegenLoadingId] = useState<string | null>(null);
 
   // Create form state
   const [form, setForm] = useState({
@@ -247,6 +252,37 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
     return `${origin}/l/${restaurantSlug}/${link.slug}`;
   }
 
+  function getShortUrl(link: TrackingLink): string | null {
+    if (!link.shortCode) return null;
+    const origin = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? "");
+    return `${origin}/r/${link.shortCode}`;
+  }
+
+  async function handleRegenShortCode(link: TrackingLink) {
+    setRegenLoadingId(link.id);
+    try {
+      const res  = await fetch(`/api/tracking-links/${link.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ regenerateShortCode: true }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data?.shortCode) {
+        setLinks((ls) => ls.map((l) => l.id === link.id ? { ...l, shortCode: json.data.shortCode } : l));
+      }
+    } catch { /* ignore */ }
+    finally { setRegenLoadingId(null); }
+  }
+
+  function handleCopyShortUrl(link: TrackingLink) {
+    const url = getShortUrl(link);
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedShortId(link.id);
+      setTimeout(() => setCopiedShortId((prev) => prev === link.id ? null : prev), 2500);
+    }).catch(() => {});
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -291,15 +327,33 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
           <span className="text-xl">✅</span>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-green-800">Link criado com sucesso!</p>
-            <p className="mt-1 break-all text-xs font-mono text-green-700">{getLinkUrl(createdLink)}</p>
+            <div className="mt-1 space-y-0.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600">Rastreável</p>
+              <p className="break-all text-xs font-mono text-green-700">{getLinkUrl(createdLink)}</p>
+              {getShortUrl(createdLink) && (
+                <>
+                  <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-orange-500">Link curto</p>
+                  <p className="break-all text-xs font-mono font-semibold text-gray-800">{getShortUrl(createdLink)}</p>
+                </>
+              )}
+            </div>
             <div className="mt-2 flex gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => { navigator.clipboard.writeText(getLinkUrl(createdLink)); }}
                 className="rounded-lg bg-green-600 px-3 py-1 text-xs font-bold text-white hover:bg-green-700"
               >
-                Copiar link
+                Copiar link rastreável
               </button>
+              {getShortUrl(createdLink) && (
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(getShortUrl(createdLink)!); }}
+                  className="rounded-lg border border-orange-300 bg-white px-3 py-1 text-xs font-bold text-orange-600 hover:bg-orange-50"
+                >
+                  Copiar link curto
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setQrUrl(getLinkUrl(createdLink))}
@@ -489,8 +543,47 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                           {link.campaign ? ` · ${link.campaign}` : ""}
                         </p>
 
-                        {/* URL */}
-                        <p className="mt-1 break-all text-[11px] font-mono text-gray-400">{url}</p>
+                        {/* URLs: rastreável + curto */}
+                        <div className="mt-2 space-y-1.5">
+                          {/* Link rastreável */}
+                          <div className="flex items-center gap-1.5">
+                            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400 w-20">Rastreável</span>
+                            <p className="flex-1 truncate text-[11px] font-mono text-gray-400">{url}</p>
+                            <button
+                              type="button"
+                              title="Copiar link rastreável"
+                              onClick={() => navigator.clipboard.writeText(url)}
+                              className="shrink-0 rounded-md border border-gray-200 px-1.5 py-0.5 text-[10px] text-gray-500 hover:bg-gray-50 transition-colors"
+                            >
+                              Copiar
+                            </button>
+                          </div>
+
+                          {/* Link curto */}
+                          {(() => {
+                            const shortUrl = getShortUrl(link);
+                            if (!shortUrl) return null;
+                            const isCopied = copiedShortId === link.id;
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-orange-400 w-20">Link curto</span>
+                                <p className="flex-1 truncate text-[11px] font-mono font-medium text-gray-700">{shortUrl}</p>
+                                <button
+                                  type="button"
+                                  title="Copiar link curto"
+                                  onClick={() => handleCopyShortUrl(link)}
+                                  className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold transition-colors ${
+                                    isCopied
+                                      ? "border-green-200 bg-green-50 text-green-700"
+                                      : "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                                  }`}
+                                >
+                                  {isCopied ? "✓ Copiado" : "Copiar"}
+                                </button>
+                              </div>
+                            );
+                          })()}
+                        </div>
 
                         {/* Metrics */}
                         <div className="mt-2 flex flex-wrap gap-3">
@@ -513,19 +606,20 @@ export function CanaisClient({ restaurantSlug }: { restaurantSlug: string }) {
                         <div className="flex gap-1">
                           <button
                             type="button"
-                            title="Copiar link"
-                            onClick={() => navigator.clipboard.writeText(url)}
-                            className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 transition-colors"
-                          >
-                            📋 Copiar
-                          </button>
-                          <button
-                            type="button"
                             title="Ver QR Code"
                             onClick={() => setQrUrl(url)}
                             className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 transition-colors"
                           >
                             📷 QR
+                          </button>
+                          <button
+                            type="button"
+                            title="Regenerar link curto"
+                            onClick={() => handleRegenShortCode(link)}
+                            disabled={regenLoadingId === link.id}
+                            className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            {regenLoadingId === link.id ? "…" : "↺ Regenerar"}
                           </button>
                         </div>
                         <div className="flex gap-1">

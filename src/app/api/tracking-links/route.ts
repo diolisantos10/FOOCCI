@@ -8,6 +8,7 @@ import { z } from "zod";
 import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { ok, created, badRequest, unauthorized, serverError } from "@/lib/api-response";
+import { generateUniqueShortCode } from "@/lib/shortCode";
 
 const createSchema = z.object({
   name:            z.string().min(1).max(100),
@@ -31,6 +32,22 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
+    // Lazy-generate shortCodes for any links that don't have one yet.
+    // Runs once per link after deployment; no-op once all links have codes.
+    const linksWithoutCode = links.filter((l) => !l.shortCode);
+    if (linksWithoutCode.length > 0) {
+      await Promise.all(
+        linksWithoutCode.map(async (link) => {
+          const code = await generateUniqueShortCode();
+          await prisma.trackingLink.update({
+            where: { id: link.id },
+            data:  { shortCode: code },
+          });
+          link.shortCode = code;
+        })
+      );
+    }
+
     return ok(links);
   } catch (err) {
     console.error("[GET /api/tracking-links]", err);
@@ -47,8 +64,10 @@ export async function POST(req: NextRequest) {
     const parsed = createSchema.safeParse(raw);
     if (!parsed.success) return badRequest("Validation failed", parsed.error.flatten());
 
+    const shortCode = await generateUniqueShortCode();
+
     const link = await prisma.trackingLink.create({
-      data: { restaurantId: ctx.restaurantId, ...parsed.data },
+      data: { restaurantId: ctx.restaurantId, shortCode, ...parsed.data },
     });
 
     return created(link);
