@@ -131,11 +131,26 @@ export class ChatSimPage {
   async selectPaymentMode(mode: "pay_now" | "pay_on_delivery" | "pay_on_pickup") {
     await this.waitForIdle();
     const labels = {
-      pay_now: "💳 Pagar agora (link)",
-      pay_on_delivery: "🛵 Pagar na entrega",
+      pay_now: "💳 Pagar agora — link de pagamento",
+      pay_on_delivery: "🚪 Pagar na entrega",
       pay_on_pickup: "🏪 Pagar na retirada",
     };
     await this.page.locator(S.checkoutArea).getByText(labels[mode]).click();
+    await this.page.waitForTimeout(300);
+  }
+
+  /** Select online payment method (ONLINE_METHOD_SELECT stage) — currently only Pix available. */
+  async selectOnlinePaymentMethod(method: "pix") {
+    await this.waitForIdle();
+    if (method === "pix") {
+      await this.page.locator(S.pixOnlineSelectBtn).click();
+    }
+    await this.page.waitForTimeout(300);
+  }
+
+  /** Cancel Pix payment and return to checkout (PAYMENT_LINK stage). */
+  async cancelPixPayment() {
+    await this.page.locator(S.cancelPixBtn).click();
     await this.page.waitForTimeout(300);
   }
 

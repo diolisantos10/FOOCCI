@@ -39,6 +39,12 @@ export const S = {
   // ── Done state ───────────────────────────────────────────────
   /** DONE stage celebration banner */
   stageDone: '[data-testid="stage-done"]',
+
+  // ── Online payment ───────────────────────────────────────────
+  /** Pix option button in ONLINE_METHOD_SELECT stage */
+  pixOnlineSelectBtn: '[data-testid="pix-online-select-btn"]',
+  /** Cancel Pix and return button in PAYMENT_LINK stage */
+  cancelPixBtn: '[data-testid="cancel-pix-btn"]',
 } as const;
 
 /** Read the current stage from the phone frame's data-stage attribute. */

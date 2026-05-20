@@ -91,7 +91,7 @@ function OrderTrackingPanel({
   const currentIdx  = TRACKING_STATUS_IDX[data.status] ?? 0;
 
   return (
-    <div className="shrink-0 border-t border-gray-100 bg-white overflow-y-auto" style={{ maxHeight: "60vh" }}>
+    <div data-testid="stage-done" className="shrink-0 border-t border-gray-100 bg-white overflow-y-auto" style={{ maxHeight: "60vh" }}>
 
       {/* Header */}
       <div className="px-4 pt-4 pb-3 text-center">
@@ -315,6 +315,7 @@ type Stage =
   | "ASK_NAME"
   | "PAYMENT"
   | "PAYMENT_METHOD"
+  | "ONLINE_METHOD_SELECT"
   | "REVIEW_ORDER"
   | "PAYMENT_LINK"
   | "DONE";
@@ -471,9 +472,10 @@ const CHECKOUT_ENTRY_PROMPT: Partial<Record<Stage, string>> = {
   ADDRESS_COMPLETE: "Confirme o endereço de entrega 👇",
   ADDRESS_CONFIRM:  "Endereço certo? Confirma para seguir 👇",
   ASK_NAME:         "Como posso te chamar? 😊",
-  PAYMENT:          "Quer pagar agora ou na entrega? 👇",
-  PAYMENT_METHOD:   "Como prefere pagar? 👇",
-  REVIEW_ORDER:     "Quase pronto! Confere e confirma 👇",
+  PAYMENT:               "Quer pagar agora ou na entrega? 👇",
+  PAYMENT_METHOD:        "Como prefere pagar? 👇",
+  ONLINE_METHOD_SELECT:  "Escolha como quer pagar online 👇",
+  REVIEW_ORDER:          "Quase pronto! Confere e confirma 👇",
 };
 
 function formatAddress(a: Address): string {
@@ -515,8 +517,9 @@ function computeResumeStage(
     if (!address.number.trim()) return "ADDRESS_COMPLETE";
   }
   if (!customerName.trim()) return "ASK_NAME";
-  if (!paymentMode)         return "PAYMENT";
-  if (paymentMode !== "pay_now" && !paymentMethodSub) return "PAYMENT_METHOD";
+  if (!paymentMode)                                    return "PAYMENT";
+  if (paymentMode === "pay_now")                       return "ONLINE_METHOD_SELECT";
+  if (!paymentMethodSub)                               return "PAYMENT_METHOD";
   return "REVIEW_ORDER";
 }
 
@@ -605,7 +608,7 @@ function ProductCard({
 }) {
   return (
     /* Fixed outer size keeps the grid perfectly uniform regardless of name length */
-    <div className="flex h-44 w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <div data-testid={`product-card-${item.id}`} className="flex h-44 w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
 
       {/* Image zone — fixed height, tappable */}
       <button onClick={onOpen} className={`block w-full shrink-0 overflow-hidden ${CARD_IMG_H}`}>
@@ -754,6 +757,7 @@ function ProductModal({
 
   return (
     <div
+      data-testid="modal-overlay"
       className="fixed inset-0 z-50 bg-white flex flex-col sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm"
       onTouchStart={(e) => {
         touchStartX.current = e.touches[0]!.clientX;
@@ -1092,6 +1096,7 @@ function CartBar({
         </div>
       ) : (
         <button
+          data-testid="finalize-button"
           onClick={onFinalize}
           className={`flex w-full items-center justify-between rounded-2xl px-5 py-2 text-sm font-bold text-white shadow transition ${
             upsellPending
@@ -1104,7 +1109,7 @@ function CartBar({
             {count}
           </span>
           <span>{upsellPending ? "Continuar →" : "Finalizar pedido"}</span>
-          <span>R$ {total.toFixed(2).replace(".", ",")}</span>
+          <span data-testid="cart-badge">R$ {total.toFixed(2).replace(".", ",")}</span>
         </button>
       )}
     </div>
@@ -2787,9 +2792,9 @@ export function PedidoClient({
     (mode: PaymentMode) => {
       setPaymentMode(mode);
       if (mode === "pay_now") {
-        setStage("REVIEW_ORDER");
+        setStage("ONLINE_METHOD_SELECT");
         pushUserMessage("💳 Pagar agora — link de pagamento");
-        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["REVIEW_ORDER"]!);
+        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ONLINE_METHOD_SELECT"]!);
       } else {
         setStage("PAYMENT_METHOD");
         const label = mode === "pay_on_delivery" ? "🚪 Pagar na entrega" : "🏪 Pagar na retirada";
@@ -2886,6 +2891,22 @@ export function PedidoClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, cart, customerName, deliveryMethod, address, paymentMode, paymentMethodSub, ga4Id]);
 
+  const handleOnlinePaymentSelect = useCallback(() => {
+    setStage("REVIEW_ORDER");
+    pushUserMessage("⚡ Pix — QR Code");
+    pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["REVIEW_ORDER"]!);
+  }, [pushUserMessage, pushAssistantMessage]);
+
+  const handleCancelPix = useCallback(() => {
+    setPixCopyPaste(null);
+    setPixQrCodeBase64(null);
+    setPixCopied(false);
+    setPaymentUrl(null);
+    setOrderId(null);
+    try { localStorage.removeItem(ACTIVE_ORDER_KEY); } catch { /* ignore */ }
+    setStage("REVIEW_ORDER");
+  }, []);
+
   const handleBackToBrowse = useCallback(() => {
     // Return to browsing without wiping checkout data.
     // deliveryMethod, address, customerName, paymentMode, paymentMethodSub are
@@ -2929,6 +2950,7 @@ export function PedidoClient({
       case "ADDRESS_CONFIRM":
       case "PAYMENT":
       case "PAYMENT_METHOD":
+      case "ONLINE_METHOD_SELECT":
       case "REVIEW_ORDER":
         sendText(text, cart, stage, activeUpsell, { event: "AFTER_CHECKOUT" });
         break;
@@ -3069,7 +3091,7 @@ export function PedidoClient({
         ? prepMin + 10
         : prepMin + (deliveryEstimatedMinutes ?? 30) + 10;
       return (
-        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3" data-testid="checkout-area">
           <div className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
             <p className="font-semibold">{address.street}, {address.number}</p>
             <p>{address.neighborhood}{address.complement ? ` — ${address.complement}` : ""}</p>
@@ -3085,6 +3107,7 @@ export function PedidoClient({
           </p>
           <div className="flex gap-2">
             <button
+              data-testid="address-confirm-button"
               onClick={handleAddressConfirm}
               className="flex-1 rounded-xl py-2 text-sm font-bold text-white hover:opacity-90"
               style={{ backgroundColor: 'var(--brand-primary)' }}
@@ -3112,7 +3135,7 @@ export function PedidoClient({
       const isDelivery = deliveryMethod === "delivery";
       const isPickup = deliveryMethod === "pickup";
       return (
-        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3" data-testid="checkout-area">
           <p className="mb-2 text-xs font-semibold text-gray-500">Quer pagar agora ou na entrega?</p>
           <div className="flex flex-col gap-2">
             <button onClick={() => handlePaymentMode("pay_now")} className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-left text-sm font-semibold text-indigo-700 hover:bg-indigo-100">
@@ -3135,7 +3158,7 @@ export function PedidoClient({
 
     if (stage === "PAYMENT_METHOD") {
       return (
-        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3" data-testid="checkout-area">
           <p className="mb-2 text-xs font-semibold text-gray-500">{paymentMode === "pay_on_delivery" ? "Como prefere pagar na entrega?" : "Como prefere pagar na retirada?"}</p>
           <div className="flex flex-col gap-2">
             {(["card_machine", "pix_in_person", "cash"] as PaymentMethodSub[]).map((m) => {
@@ -3146,6 +3169,45 @@ export function PedidoClient({
                 </button>
               );
             })}
+          </div>
+        </div>
+      );
+    }
+
+    if (stage === "ONLINE_METHOD_SELECT") {
+      return (
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-4" data-testid="checkout-area">
+          <p className="text-sm font-semibold text-gray-800">Escolha como quer pagar online</p>
+          <p className="mt-1 mb-3 text-xs text-gray-500">
+            Por enquanto, o pagamento online disponível é Pix.
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              data-testid="pix-online-select-btn"
+              onClick={handleOnlinePaymentSelect}
+              className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left hover:bg-indigo-100 active:scale-[0.99] transition-all"
+            >
+              <span className="mt-0.5 shrink-0 text-lg">⚡</span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-indigo-800">Pix</p>
+                <p className="text-xs text-indigo-600">QR Code ou copia e cola</p>
+              </div>
+              <span className="shrink-0 self-center rounded-lg bg-indigo-600 px-3 py-1 text-xs font-bold text-white">
+                Gerar QR Code Pix
+              </span>
+            </button>
+            {(["Cartão de crédito", "Cartão de débito", "Boleto"] as const).map((label) => (
+              <div
+                key={label}
+                className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 cursor-not-allowed opacity-50"
+              >
+                <span className="mt-0.5 shrink-0 text-lg">💳</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-500">{label}</p>
+                  <p className="text-xs text-gray-400">Em breve</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       );
@@ -3165,7 +3227,7 @@ export function PedidoClient({
         ? prepMin + 10
         : prepMin + (deliveryEstimatedMinutes ?? 30) + 10;
       return (
-        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3" data-testid="checkout-area">
           <p className="mb-2 text-xs font-semibold text-gray-500">Revise seu pedido</p>
 
           {/* Cart items */}
@@ -3234,6 +3296,7 @@ export function PedidoClient({
 
           <div className="flex gap-2">
             <button
+              data-testid="checkout-confirm-btn"
               onClick={handleFinalConfirm}
               disabled={ui === "thinking"}
               className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
@@ -3256,7 +3319,7 @@ export function PedidoClient({
       // ── Pix QR (Mercado Pago direct) ──────────────────────────────
       if (pixCopyPaste) {
         return (
-          <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-4">
+          <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-4" data-testid="checkout-area">
             <p className="text-sm font-semibold text-gray-800">Aguardando pagamento Pix</p>
             <p className="mt-1 text-xs text-gray-500">
               Seu pedido será enviado ao restaurante assim que o pagamento for confirmado.
@@ -3300,6 +3363,15 @@ export function PedidoClient({
             <p className="mt-2.5 text-center text-[10px] text-gray-400 animate-pulse">
               ⏳ Aguardando confirmação do pagamento…
             </p>
+
+            <button
+              data-testid="cancel-pix-btn"
+              type="button"
+              onClick={handleCancelPix}
+              className="mt-3 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50 active:scale-95 transition-all"
+            >
+              Cancelar pagamento e voltar
+            </button>
           </div>
         );
       }
@@ -3445,7 +3517,7 @@ export function PedidoClient({
   );
 
   return (
-    <div className="fixed inset-0 flex flex-col lg:flex-row bg-[#ece5dd]" style={{ '--brand-primary': pc, '--brand-secondary': sc } as React.CSSProperties}>
+    <div data-testid="phone-frame" data-stage={stage} className="fixed inset-0 flex flex-col lg:flex-row bg-[#ece5dd]" style={{ '--brand-primary': pc, '--brand-secondary': sc } as React.CSSProperties}>
 
       {/* ═══════════════════════════════════════════════════════════
           LEFT PANEL — Chat
@@ -3601,7 +3673,7 @@ export function PedidoClient({
 
         {/* Mobile: unified product area — suggestions OR category items, never both */}
         {stage === "BROWSE" && entryPhase === "browsing" && (
-          <div className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
+          <div data-testid="browse-area" className="lg:hidden shrink-0 border-t border-gray-100 bg-gray-50">
             {suggestedProducts.length > 0 ? (
               <div className="px-3 pt-2 pb-1" data-testid="waiter-suggestion-grid">
                 <div
@@ -3666,6 +3738,7 @@ export function PedidoClient({
               {categories.map((cat) => (
                 <button
                   key={cat.id}
+                  data-testid={`category-tab-${cat.id}`}
                   onClick={() => { setSuggestedProducts([]); handleCategorySelect(cat); }}
                   className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium min-h-[36px] transition-all ${
                     selectedCategoryId === cat.id
