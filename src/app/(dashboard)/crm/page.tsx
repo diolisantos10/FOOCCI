@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { getTenantId } from "@/lib/tenant";
 import { TopBar } from "@/components/layout/TopBar";
@@ -113,15 +114,21 @@ export default async function CRMPage({
   return (
     <>
       <TopBar title="CRM — Motor de Receita" />
-      <CRMClient
-        initialCustomers={customers}
-        initialOpportunities={opportunities}
-        restaurantName={restaurantName}
-        overviewStats={overviewStats}
-        opportunitiesCount={opportunities.length}
-        reviewLinks={reviewLinks}
-        initialTab={initialTab}
-      />
+      <Suspense fallback={
+        <div className="flex items-center justify-center py-24 text-sm text-gray-400">
+          Carregando CRM…
+        </div>
+      }>
+        <CRMClient
+          initialCustomers={customers}
+          initialOpportunities={opportunities}
+          restaurantName={restaurantName}
+          overviewStats={overviewStats}
+          opportunitiesCount={opportunities.length}
+          reviewLinks={reviewLinks}
+          initialTab={initialTab}
+        />
+      </Suspense>
     </>
   );
 }
