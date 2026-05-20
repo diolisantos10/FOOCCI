@@ -323,21 +323,28 @@ export class SaiposIntegrationService {
   // ── Auth — internal attempt (returns token + safe diagnostics) ──────────────
 
   private static async _attemptAuth(raw: SaiposRaw): Promise<{ token: string | null; debug: SaiposAuthDebug }> {
-    const authUrl    = SAIPOS_AUTH_URL;
-    const body       = { idPartner: raw.idPartner, secret: raw.apiKey };
+    const authUrl = SAIPOS_AUTH_URL;
+
+    // Normalize credentials — strip whitespace and invisible Unicode characters.
+    // These can be silently introduced by copy-paste from browsers or password managers
+    // and cause 403 even when the value looks visually correct.
+    const INVISIBLE_RE = /[\r\n\t​‌‍﻿ ]/g;
+    const idPartner = (raw.idPartner ?? "").replace(INVISIBLE_RE, "").trim();
+    const secret    = (raw.apiKey   ?? "").replace(INVISIBLE_RE, "").trim();
+    const body      = { idPartner, secret };
 
     const debug: SaiposAuthDebug = {
       authUrl,
       requestBodyKeys:      Object.keys(body),            // ["idPartner", "secret"]
-      idPartnerExists:      Boolean(raw.idPartner),
-      idPartnerLength:      raw.idPartner?.length ?? 0,
-      idPartnerPreview:     (raw.idPartner?.length ?? 0) >= 8
-        ? `${raw.idPartner.slice(0, 4)}...${raw.idPartner.slice(-4)}`
+      idPartnerExists:      Boolean(idPartner),
+      idPartnerLength:      idPartner.length,
+      idPartnerPreview:     idPartner.length >= 8
+        ? `${idPartner.slice(0, 4)}...${idPartner.slice(-4)}`
         : "(too short)",
-      secretExists:         Boolean(raw.apiKey),
-      secretLength:         raw.apiKey?.length ?? 0,
-      secretPreview:        (raw.apiKey?.length ?? 0) >= 4
-        ? `${raw.apiKey.slice(0, 2)}...${raw.apiKey.slice(-2)}`
+      secretExists:         Boolean(secret),
+      secretLength:         secret.length,
+      secretPreview:        secret.length >= 4
+        ? `${secret.slice(0, 2)}...${secret.slice(-2)}`
         : "(too short or empty)",
       codStore:             raw.codStore,
       environment:          raw.environment,
@@ -367,8 +374,10 @@ export class SaiposIntegrationService {
       const res  = await fetch(authUrl, {
         method:  "POST",
         headers: {
+          // Content-Type only — matches the confirmed working cURL/Postman shape.
+          // Accept: application/json was previously included but is absent from the
+          // successful external test; omitting it to minimize header divergence.
           "Content-Type": "application/json",
-          "Accept":       "application/json",
         },
         body:    JSON.stringify(body),
         signal:  AbortSignal.timeout(10_000),
