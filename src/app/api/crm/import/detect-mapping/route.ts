@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       return obj;
     });
 
-    const detected = autoDetect(headers);
+    const detected = autoDetect(headers, sampleRows);
 
     return NextResponse.json({
       headers,

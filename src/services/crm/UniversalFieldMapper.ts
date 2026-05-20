@@ -276,6 +276,42 @@ interface ScoredCandidate {
   matchedAlias: string;
 }
 
+// ── Sample-value bonus scoring ─────────────────────────────────────────────────
+// Returns 0–12 bonus points based on how well sample values match the field's parseType.
+
+function sampleBonus(values: string[], parseType: CanonicalField["parseType"]): number {
+  const nonEmpty = values.filter((v) => v.trim().length > 0);
+  if (nonEmpty.length === 0) return 0;
+
+  let matches = 0;
+  for (const v of nonEmpty) {
+    const t = v.trim();
+    switch (parseType) {
+      case "phone":
+        if (/^[\d\s()\-+]{8,20}$/.test(t) && t.replace(/\D/g, "").length >= 8) matches++;
+        break;
+      case "decimal":
+        if (/^R?\$?\s*[\d.,]+$/.test(t) && /\d/.test(t)) matches++;
+        break;
+      case "integer":
+        if (/^\d+$/.test(t)) matches++;
+        break;
+      case "date":
+        if (/\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(t) || /\d{4}-\d{2}-\d{2}/.test(t)) matches++;
+        break;
+      case "boolean":
+        if (/^(sim|n[aã]o|s|n|yes|no|true|false|1|0)$/i.test(t)) matches++;
+        break;
+      case "string":
+        matches++;
+        break;
+    }
+  }
+
+  const ratio = matches / nonEmpty.length;
+  return ratio >= 0.8 ? 12 : ratio >= 0.5 ? 6 : 0;
+}
+
 function scoreHeader(normalized: string, field: CanonicalField): ScoredCandidate | null {
   let best: ScoredCandidate | null = null;
 
@@ -300,17 +336,30 @@ function scoreHeader(normalized: string, field: CanonicalField): ScoredCandidate
   return best;
 }
 
-export function autoDetect(headers: string[]): DetectedMapping[] {
+export function autoDetect(
+  headers: string[],
+  sampleRows?: Record<string, string>[]
+): DetectedMapping[] {
   // normalized header → original header
   const normalized = headers.map((h) => ({ original: h, norm: normalizeHeader(h) }));
 
   // For each source header, find best-scoring canonical field
   const perHeader: Array<{ original: string; candidates: ScoredCandidate[] }> = normalized.map(
     ({ original, norm }) => {
+      const sampleValues = sampleRows
+        ? sampleRows.map((r) => r[original] ?? "").filter(Boolean).slice(0, 10)
+        : [];
+
       const candidates: ScoredCandidate[] = [];
       for (const field of CANONICAL_FIELDS) {
         const match = scoreHeader(norm, field);
-        if (match && match.score >= 50) candidates.push(match);
+        if (match) {
+          const bonus     = sampleValues.length > 0 ? sampleBonus(sampleValues, field.parseType) : 0;
+          const baseScore = match.score + bonus;
+          if (baseScore >= 50) {
+            candidates.push({ ...match, score: Math.min(100, baseScore) });
+          }
+        }
       }
       candidates.sort((a, b) => b.score - a.score);
       return { original, candidates };

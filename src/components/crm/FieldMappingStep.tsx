@@ -24,29 +24,47 @@ export interface FieldMappingStepProps {
   onDeleteTemplate: (id: string) => Promise<void>;
 }
 
-// ── Confidence badge ──────────────────────────────────────────────────────────
+// ── Confidence dot ────────────────────────────────────────────────────────────
+// Score-based color: GREEN ≥85, YELLOW 70-84, AMBER 50-69, GRAY <50 or conflict.
 
-const CONFIDENCE_STYLES: Record<ConfidenceLevel, string> = {
-  high:     "bg-emerald-100 text-emerald-700",
-  medium:   "bg-yellow-100  text-yellow-700",
-  low:      "bg-orange-100  text-orange-700",
-  conflict: "bg-red-100     text-red-700",
-};
+function ConfidenceDot({
+  score,
+  conflict,
+  tooltip,
+}: {
+  score:     number;
+  conflict?: boolean;
+  tooltip?:  string;
+}) {
+  const dotColor = conflict
+    ? "bg-red-400"
+    : score >= 85 ? "bg-emerald-500"
+    : score >= 70 ? "bg-yellow-400"
+    : score >= 50 ? "bg-amber-500"
+    : "bg-gray-300";
 
-const CONFIDENCE_LABELS: Record<ConfidenceLevel, string> = {
+  const label = conflict
+    ? "Conflito"
+    : score >= 85 ? "Alta"
+    : score >= 70 ? "Média"
+    : "Baixa";
+
+  return (
+    <span className="inline-flex items-center gap-1.5" title={tooltip}>
+      <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${dotColor}`} />
+      <span className="text-xs text-gray-500">{label}</span>
+    </span>
+  );
+}
+
+// kept for type-checking only — no longer rendered
+const _CONFIDENCE_LABELS: Record<ConfidenceLevel, string> = {
   high:     "Alta",
   medium:   "Média",
   low:      "Baixa",
   conflict: "Conflito",
 };
-
-function ConfidenceBadge({ level }: { level: ConfidenceLevel }) {
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${CONFIDENCE_STYLES[level]}`}>
-      {CONFIDENCE_LABELS[level]}
-    </span>
-  );
-}
+void _CONFIDENCE_LABELS;
 
 // ── Group labels ──────────────────────────────────────────────────────────────
 
@@ -225,12 +243,19 @@ export function FieldMappingStep({
                     )}
                   </td>
 
-                  {/* Confidence badge */}
+                  {/* Confidence dot */}
                   <td className="px-4 py-2">
                     {detectedEntry ? (
-                      <ConfidenceBadge level={detectedEntry.confidence} />
+                      <ConfidenceDot
+                        score={detectedEntry.score}
+                        conflict={detectedEntry.confidence === "conflict"}
+                        tooltip={`${detectedEntry.score}/100 — "${detectedEntry.matchedAlias}" → ${detectedEntry.canonicalLabel}`}
+                      />
                     ) : (
-                      <span className="text-xs text-gray-400">—</span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-gray-200" />
+                        <span className="text-xs text-gray-400">—</span>
+                      </span>
                     )}
                   </td>
 
