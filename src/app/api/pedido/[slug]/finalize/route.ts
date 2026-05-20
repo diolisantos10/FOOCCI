@@ -32,6 +32,7 @@ import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { toE164 } from "@/lib/phone";
 import { isGuestIdentifier } from "@/lib/guest";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
+import { calcDeliveryFee } from "@/lib/delivery";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -278,7 +279,8 @@ export async function POST(
         where: { restaurantId },
         select: {
           mode: true, fee: true, freeDeliveryAbove: true,
-          distanceBaseFee: true, distanceMinFee: true, distanceMinFeeKm: true, distanceMaxFee: true,
+          distanceBaseFee: true, distancePricePerKm: true,
+          distanceMinFee: true, distanceMinFeeKm: true, distanceMaxFee: true,
         },
       })
     : null;
@@ -295,17 +297,19 @@ export async function POST(
     }
 
     if (deliveryCfg.mode === "distance" || deliveryCfg.mode === "advanced") {
-      const baseFee  = deliveryCfg.distanceBaseFee  != null ? Number(deliveryCfg.distanceBaseFee)  : 0;
-      const minFee   = deliveryCfg.distanceMinFee   != null ? Number(deliveryCfg.distanceMinFee)   : null;
-      const minFeeKm = deliveryCfg.distanceMinFeeKm != null ? Number(deliveryCfg.distanceMinFeeKm) : null;
-      const maxFee   = deliveryCfg.distanceMaxFee   != null ? Number(deliveryCfg.distanceMaxFee)   : Infinity;
-      // When minFeeKm is configured the floor is minFee (customer always pays at least that).
-      // Legacy path: floor = max(baseFee, minFee).
-      const floorFee = (minFee != null && minFee > 0 && minFeeKm != null)
-        ? minFee
-        : Math.max(baseFee, minFee ?? baseFee);
-      const raw = clientDeliveryFee != null ? clientDeliveryFee : floorFee;
-      return Math.min(Math.max(raw, floorFee), maxFee === Infinity ? raw : maxFee);
+      const baseFee  = deliveryCfg.distanceBaseFee   != null ? Number(deliveryCfg.distanceBaseFee)   : 0;
+      const perKm    = deliveryCfg.distancePricePerKm != null ? Number(deliveryCfg.distancePricePerKm) : 0;
+      const minFee   = deliveryCfg.distanceMinFee    != null ? Number(deliveryCfg.distanceMinFee)    : null;
+      const minFeeKm = deliveryCfg.distanceMinFeeKm  != null ? Number(deliveryCfg.distanceMinFeeKm)  : null;
+      const maxFee   = deliveryCfg.distanceMaxFee    != null ? Number(deliveryCfg.distanceMaxFee)    : null;
+      // Distance is unknown server-side (no geocoding); clientDeliveryFee carries the
+      // per-km total computed on the client. Floor = minimum fee at distance 0.
+      const effectiveMin  = (minFee != null && minFee > 0) ? minFee : baseFee;
+      const effectiveIncl = (minFeeKm != null && minFeeKm >= 0) ? minFeeKm : 0;
+      const floorFee = calcDeliveryFee(0, effectiveMin, perKm, effectiveIncl, maxFee);
+      const raw = (clientDeliveryFee != null && clientDeliveryFee > 0) ? clientDeliveryFee : floorFee;
+      const capped = maxFee != null && maxFee > 0 ? Math.min(raw, maxFee) : raw;
+      return Math.max(capped, floorFee);
     }
 
     // manual — fee to be agreed at delivery

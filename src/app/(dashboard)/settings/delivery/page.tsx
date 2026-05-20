@@ -11,6 +11,7 @@ import {
   PageCard,
   SectionHeading,
 } from "../_shared";
+import { calcDeliveryFee } from "@/lib/delivery";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -61,42 +62,20 @@ function fmtCurrency(v: string | number | null): string {
   return String(Number(v));
 }
 
-/**
- * Single source of truth for the distance-based fee formula.
- *
- * When minFeeKm is configured:
- *   km ≤ minFeeKm  →  fee = minFee
- *   km > minFeeKm  →  fee = minFee + (km - minFeeKm) * pricePerKm
- *
- * Without minFeeKm (legacy):
- *   fee = baseFee + km * pricePerKm
- *   fee = max(fee, minFee)
- *
- * Both paths apply maxFee cap at the end.
- */
+// Thin adapter so call-sites keep the same signature (baseFee + minFee + minFeeKm).
+// Delegates entirely to the shared calcDeliveryFee utility so both the settings
+// preview and the order finalize path use the exact same formula.
 function calcDistanceFee(
-  km:        number,
-  baseFee:   number,
-  perKm:     number,
-  minFee:    number | null,
-  minFeeKm:  number | null,
-  maxFee:    number | null
+  km:       number,
+  baseFee:  number,
+  perKm:    number,
+  minFee:   number | null,
+  minFeeKm: number | null,
+  maxFee:   number | null,
 ): number {
-  let fee: number;
-
-  if (minFee != null && minFee > 0 && minFeeKm != null && minFeeKm >= 0) {
-    // New formula: taxa mínima covers the first minFeeKm kilometres
-    fee = km <= minFeeKm
-      ? minFee
-      : minFee + (km - minFeeKm) * perKm;
-  } else {
-    // Legacy formula: baseFee + km * perKm, floored by minFee
-    fee = baseFee + km * perKm;
-    if (minFee != null && minFee > 0 && fee < minFee) fee = minFee;
-  }
-
-  if (maxFee != null && maxFee > 0 && fee > maxFee) fee = maxFee;
-  return fee;
+  const effectiveMin  = (minFee != null && minFee > 0) ? minFee : baseFee;
+  const effectiveIncl = (minFeeKm != null && minFeeKm >= 0) ? minFeeKm : 0;
+  return calcDeliveryFee(km, effectiveMin, perKm, effectiveIncl, maxFee);
 }
 
 // ── Zone-bar color palettes ───────────────────────────────────────────────────
@@ -334,9 +313,14 @@ function CommercialSummary({
     const perKm    = toNum(form.distancePricePerKm);
     const maxKm    = toNum(form.distanceMaxKm);
     const minFee   = toNum(form.distanceMinFee);
+    const minFeeKm = toNum(form.distanceMinFeeKm);
     const maxFee   = toNum(form.distanceMaxFee);
     if (perKm != null) {
-      chips.push({ label: `R$ ${(baseFee ?? 0).toFixed(2).replace(".", ",")} + R$ ${perKm.toFixed(2).replace(".", ",")}/km`, color: "indigo" });
+      if (minFee != null && minFee > 0 && minFeeKm != null && minFeeKm > 0) {
+        chips.push({ label: `R$ ${minFee.toFixed(2).replace(".", ",")} até ${minFeeKm} km. Após isso, R$ ${perKm.toFixed(2).replace(".", ",")}/km adicional.`, color: "indigo" });
+      } else {
+        chips.push({ label: `R$ ${(baseFee ?? 0).toFixed(2).replace(".", ",")} + R$ ${perKm.toFixed(2).replace(".", ",")}/km`, color: "indigo" });
+      }
     }
     if (maxKm != null) {
       chips.push({ label: `Máx. ${maxKm} km`, color: "gray" });
@@ -1095,7 +1079,15 @@ export default function DeliveryPage() {
                 )}
                 {form.mode === "distance" && toNum(form.distancePricePerKm) != null && (
                   <Chip color="indigo">
-                    R$ {(toNum(form.distanceBaseFee) ?? 0).toFixed(2).replace(".", ",")} + R$ {Number(toNum(form.distancePricePerKm)).toFixed(2).replace(".", ",")}/km
+                    {(() => {
+                      const minF   = toNum(form.distanceMinFee);
+                      const minFKm = toNum(form.distanceMinFeeKm);
+                      const perK   = toNum(form.distancePricePerKm) ?? 0;
+                      if (minF != null && minF > 0 && minFKm != null && minFKm > 0) {
+                        return `R$ ${minF.toFixed(2).replace(".", ",")} até ${minFKm} km. Depois R$ ${perK.toFixed(2).replace(".", ",")}/km.`;
+                      }
+                      return `R$ ${(toNum(form.distanceBaseFee) ?? 0).toFixed(2).replace(".", ",")} + R$ ${perK.toFixed(2).replace(".", ",")}/km`;
+                    })()}
                   </Chip>
                 )}
                 {form.mode === "distance" && toNum(form.distanceMaxKm) != null && (
