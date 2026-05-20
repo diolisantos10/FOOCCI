@@ -1409,6 +1409,7 @@ model CRMAutomation {
   triggerAfterDays Int               @default(30)
   discountType     String? // "PERCENTAGE" | "FIXED" | null
   discountValue    Decimal?          @db.Decimal(10, 2)
+  scheduleConfig   Json?   // { sendTime?, sendDays?, timezone? }
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 

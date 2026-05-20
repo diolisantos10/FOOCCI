@@ -56,7 +56,7 @@ const AGENT_TABS: Array<{
     id:          "crm",
     label:       "CRM",
     icon:        "📊",
-    status:      "parcial",
+    status:      "ativo",
     statusLabel: "Ativo",
     description: "Reativação, fidelização e relacionamento pós-venda. Segmenta clientes por temperatura e aciona campanhas personalizadas.",
   },

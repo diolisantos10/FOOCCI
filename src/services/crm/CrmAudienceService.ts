@@ -94,10 +94,11 @@ export class CrmAudienceService {
     const ts = now();
 
     switch (templateId) {
-      // ── Segment: FRIO ────────────────────────────────────────────────────────
+      // ── Segment: FRIO — time-based (matches overviewStats logic) ─────────────
       case "recuperar-frios": {
-        const segWhere   = { restaurantId, segment: "FRIO" };
-        const eligWhere  = { ...segWhere, ...ELIGIBLE_FILTERS };
+        const cutoff    = new Date(ts.getTime() - 60 * 86_400_000);
+        const segWhere  = { restaurantId, isGuest: false, lastOrderAt: { lt: cutoff } };
+        const eligWhere = { ...segWhere, ...ELIGIBLE_FILTERS };
         const [total, eligible, preview] = await Promise.all([
           prisma.customer.count({ where: segWhere }),
           prisma.customer.count({ where: eligWhere }),
@@ -107,13 +108,15 @@ export class CrmAudienceService {
         return build(true, total, eligible, serialize(preview as RawRow[]), excl);
       }
 
-      // ── Segment: MORNO ───────────────────────────────────────────────────────
+      // ── Segment: MORNO — time-based (matches overviewStats logic) ────────────
       case "reativar-mornos":
       case "recorrente-sumido": {
+        const sixtyAgo  = new Date(ts.getTime() - 60 * 86_400_000);
+        const thirtyAgo = new Date(ts.getTime() - 30 * 86_400_000);
         const extraFilter = templateId === "recorrente-sumido"
           ? { totalOrders: { gte: 2 } }
           : {};
-        const segWhere  = { restaurantId, segment: "MORNO", ...extraFilter };
+        const segWhere  = { restaurantId, isGuest: false, lastOrderAt: { gte: sixtyAgo, lt: thirtyAgo }, ...extraFilter };
         const eligWhere = { ...segWhere, ...ELIGIBLE_FILTERS };
         const [total, eligible, preview] = await Promise.all([
           prisma.customer.count({ where: segWhere }),
@@ -194,8 +197,71 @@ export class CrmAudienceService {
         return build(false, total, 0, [], { noPhone: 0, notContactable: 0, isGuest: 0 });
       }
 
+      // ── Tier-based segments ───────────────────────────────────────────────────
+      case "tier-bronze": {
+        const segWhere  = { restaurantId, isGuest: false, tier: "BRONZE" };
+        const eligWhere = { ...segWhere, ...ELIGIBLE_FILTERS };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: { totalSpend: "desc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, segWhere, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+      case "tier-prata": {
+        const segWhere  = { restaurantId, isGuest: false, tier: "PRATA" };
+        const eligWhere = { ...segWhere, ...ELIGIBLE_FILTERS };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: { totalSpend: "desc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, segWhere, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+      case "tier-ouro": {
+        const segWhere  = { restaurantId, isGuest: false, tier: "OURO" };
+        const eligWhere = { ...segWhere, ...ELIGIBLE_FILTERS };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: { totalSpend: "desc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, segWhere, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+      case "tier-diamante": {
+        const segWhere  = { restaurantId, isGuest: false, tier: "DIAMANTE" };
+        const eligWhere = { ...segWhere, ...ELIGIBLE_FILTERS };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: { totalSpend: "desc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, segWhere, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+
+      // ── All contactable customers ─────────────────────────────────────────────
+      case "todos-clientes": {
+        const segWhere  = { restaurantId, isGuest: false };
+        const eligWhere = { ...segWhere, ...ELIGIBLE_FILTERS };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({ where: eligWhere, orderBy: { totalSpend: "desc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+        ]);
+        const excl = await computeExclusions(restaurantId, segWhere, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+
       default:
-        throw new Error(`Template '${templateId}' desconhecido`);
+        // Unknown template — return non-computed with total customer count so UI
+        // can show an informational state rather than throw a 400.
+        console.warn(`[CrmAudienceService] Unknown template: '${templateId}'`);
+        const total = await prisma.customer.count({ where: { restaurantId, isGuest: false } });
+        return build(false, total, 0, [], { noPhone: 0, notContactable: 0, isGuest: 0 });
     }
   }
 

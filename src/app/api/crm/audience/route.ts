@@ -26,9 +26,6 @@ export async function GET(req: NextRequest) {
     const result = await CrmAudienceService.getAudiencePreview(ctx.restaurantId, template);
     return ok(result);
   } catch (err) {
-    if (err instanceof Error && err.message.startsWith("Template '")) {
-      return badRequest(err.message);
-    }
     console.error("[GET /api/crm/audience]", err);
     return serverError();
   }

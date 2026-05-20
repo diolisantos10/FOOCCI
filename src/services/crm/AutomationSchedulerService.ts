@@ -74,20 +74,31 @@ export class AutomationSchedulerService {
     automation: CRMAutomation,
     dryRun = false
   ): Promise<AutomationRunResult> {
-    const customers = await AutomationSchedulerService.getTriggerableCustomers(
-      restaurantId,
-      automation
-    );
-
     const base: AutomationRunResult = {
       trigger: automation.trigger,
       automationId: automation.id,
-      customersTargeted: customers.length,
+      customersTargeted: 0,
       messagesSent: 0,
       messagesFailed: 0,
       duplicatesSkipped: 0,
       dryRun,
     };
+
+    // Respect per-automation sendDays config (0=Sun … 6=Sat)
+    const schedCfg = (automation.scheduleConfig as { sendDays?: number[] } | null);
+    if (schedCfg?.sendDays && schedCfg.sendDays.length > 0) {
+      const nowBrasilia = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+      if (!schedCfg.sendDays.includes(nowBrasilia.getDay())) {
+        console.log(`[AutomationScheduler] ${automation.trigger} skipped — not a configured send day`);
+        return base;
+      }
+    }
+
+    const customers = await AutomationSchedulerService.getTriggerableCustomers(
+      restaurantId,
+      automation
+    );
+    base.customersTargeted = customers.length;
 
     if (customers.length === 0 || dryRun || !automation.messageTemplate.trim()) return base;
 

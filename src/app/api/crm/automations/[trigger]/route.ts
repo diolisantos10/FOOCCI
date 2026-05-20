@@ -13,6 +13,11 @@ const bodySchema = z.object({
   triggerAfterDays: z.number().int().min(0).max(365).optional(),
   discountType:     z.enum(["PERCENTAGE", "FIXED"]).nullable().optional(),
   discountValue:    z.number().min(0).nullable().optional(),
+  scheduleConfig:   z.object({
+    sendTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+    sendDays: z.array(z.number().int().min(0).max(6)).optional(),
+    timezone: z.string().optional(),
+  }).nullable().optional(),
 });
 
 type Params = { params: Promise<{ trigger: string }> };

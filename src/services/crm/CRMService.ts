@@ -139,6 +139,7 @@ export type AutomationRow = {
   triggerAfterDays: number;
   discountType: string | null;
   discountValue: number | null;
+  scheduleConfig: { sendTime?: string; sendDays?: number[]; timezone?: string } | null;
 };
 
 // ── Input types ───────────────────────────────────────────────────────────────
@@ -149,6 +150,7 @@ export type UpsertAutomationInput = {
   triggerAfterDays?: number;
   discountType?: string | null;
   discountValue?: number | null;
+  scheduleConfig?: { sendTime?: string; sendDays?: number[]; timezone?: string } | null;
 };
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -381,6 +383,7 @@ export class CRMService {
         triggerAfterDays: r.triggerAfterDays,
         discountType:     r.discountType ?? null,
         discountValue:    r.discountValue != null ? Number(r.discountValue) : null,
+        scheduleConfig:   (r.scheduleConfig as AutomationRow["scheduleConfig"]) ?? null,
       }))
     );
   }
@@ -398,6 +401,7 @@ export class CRMService {
       ...(input.discountValue !== undefined && {
         discountValue: input.discountValue != null ? new Decimal(input.discountValue) : null,
       }),
+      ...(input.scheduleConfig != null && { scheduleConfig: input.scheduleConfig }),
     };
 
     const existing = await prisma.cRMAutomation.findUnique({
@@ -425,6 +429,7 @@ export class CRMService {
       triggerAfterDays: r.triggerAfterDays,
       discountType:     r.discountType ?? null,
       discountValue:    r.discountValue != null ? Number(r.discountValue) : null,
+      scheduleConfig:   (r.scheduleConfig as AutomationRow["scheduleConfig"]) ?? null,
     });
   }
 

@@ -685,6 +685,20 @@ const READINESS_CONFIG: Record<ActionReadiness, { label: string; bg: string; tex
 
 // ── Action Config Drawer ───────────────────────────────────────────────────────
 
+const MANUAL_AUDIENCE_OPTIONS: Array<{ id: string; label: string; emoji: string }> = [
+  { id: "recuperar-frios",  label: "Frios — sem pedido 60d+",        emoji: "🥶" },
+  { id: "reativar-mornos",  label: "Mornos — sem pedido 31–60d",     emoji: "😶" },
+  { id: "clientes-vip",     label: "VIP — Ouro e Diamante",           emoji: "👑" },
+  { id: "segunda-compra",   label: "Novos — somente 1 pedido",        emoji: "🌱" },
+  { id: "pedido-avaliacao", label: "Recentes — pedido nos últimos 7d", emoji: "⭐" },
+  { id: "aniversariantes",  label: "Aniversariantes do mês",          emoji: "🎂" },
+  { id: "tier-bronze",      label: "Bronze",                           emoji: "🥉" },
+  { id: "tier-prata",       label: "Prata",                            emoji: "🥈" },
+  { id: "tier-ouro",        label: "Ouro",                             emoji: "🥇" },
+  { id: "tier-diamante",    label: "Diamante",                         emoji: "💎" },
+  { id: "todos-clientes",   label: "Todos os clientes",                emoji: "👥" },
+];
+
 function ActionConfigDrawer({
   template,
   onClose,
@@ -702,6 +716,12 @@ function ActionConfigDrawer({
   const [loadingAudience, setLoadingAudience] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [prepError, setPrepError] = useState<string | null>(null);
+
+  const isCustom = template.id === "custom";
+  const [customAudienceId, setCustomAudienceId] = useState("");
+  const audienceFetchId = isCustom
+    ? (customAudienceId || null)
+    : (template.hasAudienceQuery ? template.id : null);
 
   // Scheduling
   type SendMode = "now" | "scheduled_once" | "recurring";
@@ -725,14 +745,15 @@ function ActionConfigDrawer({
   }
 
   useEffect(() => {
-    if (!template.hasAudienceQuery) return;
+    if (!audienceFetchId) { setAudience(null); return; }
     setLoadingAudience(true);
-    fetch(`/api/crm/audience?template=${encodeURIComponent(template.id)}`)
+    setAudience(null);
+    fetch(`/api/crm/audience?template=${encodeURIComponent(audienceFetchId)}`)
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => setAudience(json.data ?? null))
       .catch(() => {})
       .finally(() => setLoadingAudience(false));
-  }, [template.id, template.hasAudienceQuery]);
+  }, [audienceFetchId]);
 
   function copyMessage() {
     navigator.clipboard.writeText(message);
@@ -747,15 +768,17 @@ function ActionConfigDrawer({
 
   async function handlePrepareCampaign() {
     if (!onStartCampaign && sendMode !== "recurring") return;
+    if (isCustom && !customAudienceId) return;
     setPreparing(true);
     setPrepError(null);
     try {
       const scheduledAt = buildScheduledAt();
+      const targetId = isCustom ? customAudienceId : template.id;
 
       const body: Record<string, unknown> = {
         name:            template.title,
-        templateId:      template.id,
-        targetSegment:   template.id,
+        templateId:      targetId,
+        targetSegment:   targetId,
         messageTemplate: message,
         objective:       template.objective,
       };
@@ -772,7 +795,7 @@ function ActionConfigDrawer({
           timezone:     "America/Sao_Paulo",
         };
         body.audienceConfig = {
-          templateId:         template.id,
+          templateId:         targetId,
           channel:            "WHATSAPP",
           excludeAlreadySent: true,
         };
@@ -835,11 +858,31 @@ function ActionConfigDrawer({
         <div className="p-5 space-y-4 overflow-y-auto flex-1">
           {/* Info grid */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-gray-50 px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Segmento alvo</p>
-              <p className="mt-0.5 text-sm font-semibold text-gray-800">{template.targetLabel}</p>
-            </div>
-            <div className="rounded-xl bg-gray-50 px-3 py-2.5">
+            {isCustom ? (
+              <div className="col-span-2">
+                <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                  Público alvo
+                </label>
+                <select
+                  value={customAudienceId}
+                  onChange={(e) => setCustomAudienceId(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                >
+                  <option value="">Selecione o público…</option>
+                  {MANUAL_AUDIENCE_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.emoji} {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="rounded-xl bg-gray-50 px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Segmento alvo</p>
+                <p className="mt-0.5 text-sm font-semibold text-gray-800">{template.targetLabel}</p>
+              </div>
+            )}
+            <div className={`rounded-xl bg-gray-50 px-3 py-2.5 ${isCustom ? "col-span-2" : ""}`}>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Canal</p>
               <div className="mt-0.5 flex items-center gap-1.5">
                 <p className="text-sm font-semibold text-gray-800">WhatsApp</p>
@@ -849,7 +892,7 @@ function ActionConfigDrawer({
           </div>
 
           {/* Audience counts — the key fix */}
-          {template.hasAudienceQuery && (
+          {(template.hasAudienceQuery || (isCustom && !!customAudienceId)) && (
             <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
               <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Público estimado</p>
               {loadingAudience ? (
@@ -889,7 +932,7 @@ function ActionConfigDrawer({
           )}
 
           {/* Customer preview list — only when computed and has eligible customers */}
-          {template.hasAudienceQuery && audience?.computed && (audience.eligibleCount ?? audience.count) > 0 && (
+          {(template.hasAudienceQuery || (isCustom && !!customAudienceId)) && audience?.computed && (audience.eligibleCount ?? audience.count) > 0 && (
             <div>
               <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">
                 Prévia do público elegível
@@ -1130,12 +1173,13 @@ function ActionConfigDrawer({
           >
             {copied ? "✓ Copiado" : "Copiar"}
           </button>
-          {(!template.hasAudienceQuery || sendMode === "recurring" || audience?.computed) ? (
+          {(isCustom ? !!customAudienceId : (!template.hasAudienceQuery || sendMode === "recurring" || audience?.computed)) ? (
             <button
               onClick={handlePrepareCampaign}
               disabled={
                 preparing ||
-                (template.hasAudienceQuery && sendMode === "now" && (audience?.eligibleCount ?? audience?.count ?? 0) === 0) ||
+                (isCustom && !customAudienceId) ||
+                ((template.hasAudienceQuery || (isCustom && !!customAudienceId)) && sendMode === "now" && (audience?.eligibleCount ?? audience?.count ?? 0) === 0) ||
                 (sendMode === "scheduled_once" && !scheduleDate) ||
                 (sendMode === "recurring" && weekdays.length === 0)
               }
@@ -1147,7 +1191,7 @@ function ActionConfigDrawer({
                   ? weekdays.length === 0
                     ? "Selecione os dias"
                     : "Ativar campanha recorrente →"
-                  : !template.hasAudienceQuery
+                  : (!template.hasAudienceQuery && !isCustom)
                     ? sendMode === "scheduled_once"
                       ? scheduleDate ? "Agendar campanha →" : "Escolha uma data"
                       : "Criar campanha agora →"
@@ -1160,7 +1204,13 @@ function ActionConfigDrawer({
           ) : (
             <button
               disabled
-              title={loadingAudience ? "Calculando público…" : "Aguardando dados do público…"}
+              title={
+                isCustom && !customAudienceId
+                  ? "Selecione o público alvo"
+                  : loadingAudience
+                    ? "Calculando público…"
+                    : "Aguardando dados do público…"
+              }
               className="flex-1 cursor-not-allowed rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-400"
             >
               {loadingAudience ? "Calculando público…" : "Aguardando público…"}
@@ -2660,6 +2710,8 @@ type AutomationLocalRow = {
   isEnabled: boolean;
   messageTemplate: string;
   triggerAfterDays: number;
+  sendTime: string;
+  sendDays: number[];
 };
 
 const AUTOMATION_META: Record<string, {
@@ -2704,7 +2756,7 @@ function AutomacoesTab() {
     for (const trigger of AUTOMATION_TRIGGERS) {
       const meta = AUTOMATION_META[trigger];
       const defaultDays = meta?.defaultDays ?? 0;
-      init[trigger] = { trigger, isEnabled: false, messageTemplate: "", triggerAfterDays: defaultDays };
+      init[trigger] = { trigger, isEnabled: false, messageTemplate: "", triggerAfterDays: defaultDays, sendTime: "08:00", sendDays: [0, 1, 2, 3, 4, 5, 6] };
     }
     return init;
   });
@@ -2715,7 +2767,7 @@ function AutomacoesTab() {
   useEffect(() => {
     fetch("/api/crm/automations")
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((json: { data?: { trigger: string; isEnabled: boolean; messageTemplate: string; triggerAfterDays: number }[] }) => {
+      .then((json: { data?: { trigger: string; isEnabled: boolean; messageTemplate: string; triggerAfterDays: number; scheduleConfig?: { sendTime?: string; sendDays?: number[] } | null }[] }) => {
         const rows = json.data ?? [];
         setLocal((prev) => {
           const next = { ...prev };
@@ -2725,6 +2777,8 @@ function AutomacoesTab() {
               isEnabled:        row.isEnabled,
               messageTemplate:  row.messageTemplate,
               triggerAfterDays: row.triggerAfterDays,
+              sendTime:         row.scheduleConfig?.sendTime  ?? prev[row.trigger]?.sendTime  ?? "08:00",
+              sendDays:         row.scheduleConfig?.sendDays  ?? prev[row.trigger]?.sendDays  ?? [0, 1, 2, 3, 4, 5, 6],
             };
           }
           return next;
@@ -2753,6 +2807,11 @@ function AutomacoesTab() {
           isEnabled:        state.isEnabled,
           messageTemplate:  state.messageTemplate,
           triggerAfterDays: state.triggerAfterDays,
+          scheduleConfig:   {
+            sendTime: state.sendTime,
+            sendDays: state.sendDays,
+            timezone: "America/Sao_Paulo",
+          },
         }),
       });
       if (res.ok) {
@@ -2773,7 +2832,7 @@ function AutomacoesTab() {
       <div>
         <h2 className="text-base font-bold text-gray-900">Automações de CRM</h2>
         <p className="mt-0.5 text-xs text-gray-500">
-          Regras sempre ativas. O sistema dispara automaticamente todos os dias às 08:00 (Brasília).
+          Regras sempre ativas. Configure os dias e o horário de disparo para cada automação.
         </p>
       </div>
 
@@ -2830,6 +2889,48 @@ function AutomacoesTab() {
                 </div>
               </div>
             )}
+
+            {/* Timing config */}
+            <div className="space-y-2.5">
+              <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                Dias de envio
+              </label>
+              <div className="flex gap-1">
+                {WEEKDAY_LABELS.map((label, day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => {
+                      const current = state.sendDays;
+                      const next = current.includes(day)
+                        ? current.filter((d) => d !== day)
+                        : [...current, day].sort((a, b) => a - b);
+                      updateLocal(trigger, { sendDays: next });
+                    }}
+                    className={`flex-1 rounded-lg py-1.5 text-[10px] font-bold border transition-colors ${
+                      state.sendDays.includes(day)
+                        ? "bg-brand-600 text-white border-brand-600"
+                        : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {state.sendDays.length === 0 && (
+                <p className="text-[10px] text-red-500">Selecione pelo menos um dia</p>
+              )}
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] font-semibold text-gray-500 shrink-0">Horário de envio</label>
+                <input
+                  type="time"
+                  value={state.sendTime}
+                  onChange={(e) => updateLocal(trigger, { sendTime: e.target.value })}
+                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                />
+                <span className="text-[10px] text-gray-400">(Brasília)</span>
+              </div>
+            </div>
 
             {/* Message template */}
             <div>

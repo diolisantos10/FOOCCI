@@ -185,9 +185,9 @@ function AutomationsSection({ initialAutomations }: { initialAutomations: Automa
   }), []);
 
   const defaults: Record<string, AutomationRow> = {
-    REACTIVATION: { id: "", trigger: "REACTIVATION", isEnabled: false, messageTemplate: "", triggerAfterDays: 30, discountType: null, discountValue: null },
-    BIRTHDAY:     { id: "", trigger: "BIRTHDAY",     isEnabled: false, messageTemplate: "", triggerAfterDays: 0,  discountType: null, discountValue: null },
-    POST_ORDER:   { id: "", trigger: "POST_ORDER",   isEnabled: false, messageTemplate: "", triggerAfterDays: 1,  discountType: null, discountValue: null },
+    REACTIVATION: { id: "", trigger: "REACTIVATION", isEnabled: false, messageTemplate: "", triggerAfterDays: 30, discountType: null, discountValue: null, scheduleConfig: null },
+    BIRTHDAY:     { id: "", trigger: "BIRTHDAY",     isEnabled: false, messageTemplate: "", triggerAfterDays: 0,  discountType: null, discountValue: null, scheduleConfig: null },
+    POST_ORDER:   { id: "", trigger: "POST_ORDER",   isEnabled: false, messageTemplate: "", triggerAfterDays: 1,  discountType: null, discountValue: null, scheduleConfig: null },
   };
   initialAutomations.forEach((a) => { defaults[a.trigger] = a; });
 
