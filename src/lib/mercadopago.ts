@@ -57,7 +57,7 @@ export async function createPixPayment(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
-      "X-Idempotency-Key": orderId,
+      "X-Idempotency-Key": `mercadopago-pix-${orderId}`,
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(20_000),
