@@ -83,6 +83,7 @@ const bodySchema = z.object({
   paymentMode:      z.enum(["pay_now", "pay_on_delivery", "pay_on_pickup"]),
   paymentMethodSub: z.enum(["card_machine", "pix_in_person", "cash"]).nullable().optional(),
   customerPhone:    z.string().optional(),
+  customerId:       z.string().optional(), // pre-resolved customer ID from identify flow
   clientDeliveryFee: z.number().nonnegative().optional(),
   // UTM / channel attribution
   trackingLinkId:   z.string().optional(),
@@ -140,7 +141,8 @@ export async function POST(
 
   const {
     cart, customerName, deliveryMethod, address,
-    paymentMode, paymentMethodSub, customerPhone, clientDeliveryFee,
+    paymentMode, paymentMethodSub, customerPhone, customerId: incomingCustomerId,
+    clientDeliveryFee,
     trackingLinkId, trafficSource, trafficMedium, trafficCampaign, trafficContent,
   } = parsed.data;
 
@@ -324,12 +326,48 @@ export async function POST(
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const customer = await tx.customer.upsert({
-        where:  { phone_restaurantId: { phone, restaurantId } },
-        create: { restaurantId, name: customerName, phone, isGuest: isGuestIdentifier(phone) },
-        update: { name: customerName },
-        select: { id: true },
-      });
+      // Resolve customer: prefer the pre-verified customerId from the identify flow.
+      // This ensures a WhatsApp customer whose phone was already in the DB gets
+      // their order linked to the correct Customer row even if the ordering page
+      // generated a fresh guest phone.
+      let resolvedId: string;
+      if (incomingCustomerId) {
+        const validated = await tx.customer.findUnique({
+          where:  { id: incomingCustomerId },
+          select: { id: true, restaurantId: true },
+        });
+        if (validated?.restaurantId === restaurantId) {
+          resolvedId = validated.id;
+          console.debug("[finalize] customer resolved via customerId", {
+            customerId: resolvedId, strategy: "customerId",
+          });
+        } else {
+          // Cross-restaurant or stale ID — fall through to phone upsert
+          const fallback = await tx.customer.upsert({
+            where:  { phone_restaurantId: { phone, restaurantId } },
+            create: { restaurantId, name: customerName, phone, isGuest: isGuestIdentifier(phone) },
+            update: { name: customerName },
+            select: { id: true },
+          });
+          resolvedId = fallback.id;
+          console.debug("[finalize] customer resolved via phone (customerId invalid)", {
+            customerId: resolvedId, strategy: "phone_lookup",
+          });
+        }
+      } else {
+        const upserted = await tx.customer.upsert({
+          where:  { phone_restaurantId: { phone, restaurantId } },
+          create: { restaurantId, name: customerName, phone, isGuest: isGuestIdentifier(phone) },
+          update: { name: customerName },
+          select: { id: true },
+        });
+        resolvedId = upserted.id;
+        const strategy = isGuestIdentifier(phone) ? "created_guest" : "phone_lookup";
+        console.debug("[finalize] customer resolved via phone upsert", {
+          customerId: resolvedId, strategy,
+        });
+      }
+      const customer = { id: resolvedId };
 
       let deliveryAddressId: string | null = null;
       if (deliveryMethod === "delivery") {

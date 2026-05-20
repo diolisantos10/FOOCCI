@@ -4,10 +4,12 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 
-// ─── Sound alert (Web Audio API beep, no external file needed) ────────────────
+// ─── Sound alert ──────────────────────────────────────────────────────────────
 
 const SOUND_PREF_KEY = "foocci_order_sound";
+const ALERT_WAV      = "/sounds/foocci-order-alert.wav";
 
+// Oscillator fallback — used when WAV file is unavailable or AudioContext is not suspended
 function playBeep() {
   try {
     const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -21,7 +23,6 @@ function playBeep() {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.4);
-    // Second beep
     const osc2 = ctx.createOscillator();
     const gain2 = ctx.createGain();
     osc2.connect(gain2);
@@ -33,7 +34,7 @@ function playBeep() {
     osc2.start(ctx.currentTime + 0.5);
     osc2.stop(ctx.currentTime + 0.9);
   } catch {
-    // Browser may block AudioContext without user gesture — silent fail
+    // silent fail — browser may block AudioContext without user gesture
   }
 }
 
@@ -1563,6 +1564,8 @@ export default function OrdersClient() {
     const saved = localStorage.getItem(SOUND_PREF_KEY);
     return saved === null ? true : saved === "true";
   });
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const knownIds = useRef<Set<string>>(new Set());
   const hasFetched = useRef(false);
   const [cancelDialog, setCancelDialog] = useState<{ id: string; reason: string } | null>(null);
@@ -1578,12 +1581,41 @@ export default function OrdersClient() {
 
   const modalOrder = modalQueue[0] ?? null;
 
-  // Repeat alert sound every 25 s while a new-order modal is open
+  // Initialise the WAV audio element once on mount
   useEffect(() => {
-    if (!modalOrder || !soundEnabled) return;
-    const id = setInterval(() => playBeep(), 25_000);
+    const audio = new Audio(ALERT_WAV);
+    alertAudioRef.current = audio;
+    return () => { audio.pause(); audio.src = ""; };
+  }, []);
+
+  // Whether there is at least one order waiting for acceptance
+  const hasPendingOrders = useMemo(() => orders.some((o) => o.status === "PENDING"), [orders]);
+
+  // Repeat alert every 5 s while pending orders exist.
+  // Stops automatically (effect cleanup) when all pending orders are resolved.
+  useEffect(() => {
+    if (!hasPendingOrders || !soundEnabled) return;
+
+    const doPlay = () => {
+      const audio = alertAudioRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch((err: unknown) => {
+          if (err instanceof DOMException && err.name === "NotAllowedError") {
+            setAudioBlocked(true); // browser blocked — show unlock button
+          } else {
+            playBeep(); // file missing or decode error — oscillator fallback
+          }
+        });
+      } else {
+        playBeep();
+      }
+    };
+
+    doPlay();
+    const id = setInterval(doPlay, 5_000);
     return () => clearInterval(id);
-  }, [modalOrder?.id, soundEnabled]);
+  }, [hasPendingOrders, soundEnabled]);
 
   function toggleSound() {
     setSoundEnabled((prev) => {
@@ -1593,6 +1625,19 @@ export default function OrdersClient() {
     });
   }
 
+  // Called when operator clicks "Ativar som de pedidos" after browser blocks autoplay
+  function unlockAudio() {
+    setAudioBlocked(false);
+    const audio = alertAudioRef.current;
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => playBeep());
+    } else {
+      playBeep();
+    }
+    localStorage.setItem("foocciOrderSoundEnabled", "true");
+  }
+
   const fetchOrders = useCallback(() => {
     fetch("/api/orders?limit=100")
       .then((r) => r.json())
@@ -1600,11 +1645,23 @@ export default function OrdersClient() {
         if (res.success && Array.isArray(res.data?.data)) {
           const incoming = res.data.data.map(apiOrderToMock);
 
-          // Sound alert + takeover modal: detect new IDs after first load
+          // Immediate alert on new order arrival (interval handles repeat)
           if (hasFetched.current) {
             const newOnes = incoming.filter((o) => !knownIds.current.has(o.id));
             if (newOnes.length > 0 && soundEnabled) {
-              playBeep();
+              const audio = alertAudioRef.current;
+              if (audio) {
+                audio.currentTime = 0;
+                audio.play().catch((err: unknown) => {
+                  if (err instanceof DOMException && err.name === "NotAllowedError") {
+                    setAudioBlocked(true);
+                  } else {
+                    playBeep();
+                  }
+                });
+              } else {
+                playBeep();
+              }
             }
             const newPending = newOnes.filter(
               (o) =>
@@ -1749,7 +1806,23 @@ export default function OrdersClient() {
       <PerformanceBar orders={orders} />
 
       {/* ── Alert toggles ── */}
-      <div className="flex justify-end gap-2 px-4 pt-2">
+      <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-2">
+        {/* Active alert banner */}
+        {hasPendingOrders && soundEnabled && !audioBlocked && (
+          <span className="flex items-center gap-1.5 rounded-lg bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-700 animate-pulse">
+            🔊 Novo pedido aguardando aceite
+          </span>
+        )}
+        {/* Unlock button — shown when browser blocked autoplay */}
+        {audioBlocked && (
+          <button
+            type="button"
+            onClick={unlockAudio}
+            className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
+          >
+            🔇 Ativar som de pedidos
+          </button>
+        )}
         <button
           type="button"
           onClick={toggleSound}

@@ -85,6 +85,9 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   }
 
   // 3. Find or create Customer
+  // On UPDATE: refresh name from WhatsApp pushName if the sender has one.
+  // This keeps the CRM name in sync when the contact updates their display name,
+  // and also fixes records that were created with a phone-number fallback name.
   const customer = await prisma.customer.upsert({
     where: { phone_restaurantId: { phone: event.phone, restaurantId } },
     create: {
@@ -92,7 +95,7 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
       phone: event.phone,
       name: event.senderName ?? event.phone, // use WhatsApp display name when available
     },
-    update: {}, // do not overwrite existing customer data
+    update: event.senderName ? { name: event.senderName } : {},
   });
 
   // 4. Conversation reuse logic

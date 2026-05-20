@@ -2838,6 +2838,8 @@ export function PedidoClient({
         body: JSON.stringify({
           cart,
           customerName,
+          customerPhone:  effectiveCustomerPhone  ?? undefined,
+          customerId:     resolvedCustomerId       ?? undefined,
           deliveryMethod,
           address,
           paymentMode,
@@ -2889,7 +2891,7 @@ export function PedidoClient({
       setUi("idle");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, cart, customerName, deliveryMethod, address, paymentMode, paymentMethodSub, ga4Id]);
+  }, [slug, cart, customerName, effectiveCustomerPhone, resolvedCustomerId, deliveryMethod, address, paymentMode, paymentMethodSub, ga4Id]);
 
   const handleOnlinePaymentSelect = useCallback(() => {
     setStage("REVIEW_ORDER");
