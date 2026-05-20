@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
+import { KNOWLEDGE_CATEGORIES } from "@/services/knowledge/RestaurantKnowledgeService";
+import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledgeService";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1158,7 +1160,12 @@ function ThreadPanel({
         ) : (
           <div className="space-y-2">
             {thread.messages.map((msg) => (
-              <MessageBubble key={msg.id} msg={msg} customerName={thread.customer?.name ?? thread.customerName ?? "Cliente"} />
+              <MessageBubble
+                key={msg.id}
+                msg={msg}
+                customerName={thread.customer?.name ?? thread.customerName ?? "Cliente"}
+                allMessages={thread.messages}
+              />
             ))}
             <div ref={bottomRef} />
           </div>
@@ -1226,47 +1233,223 @@ function ThreadPanel({
   );
 }
 
+// ── TeachAIModal ───────────────────────────────────────────────────────────────
+
+interface TeachAIModalProps {
+  humanMessage:    Message;
+  customerMessage: Message | null;
+  onClose:         () => void;
+}
+
+function TeachAIModal({ humanMessage, customerMessage, onClose }: TeachAIModalProps) {
+  const [question,  setQuestion]  = useState(customerMessage?.content ?? "");
+  const [answer,    setAnswer]    = useState(humanMessage.content);
+  const [category,  setCategory]  = useState<KnowledgeCategory>("FAQ");
+  const [saving,    setSaving]    = useState(false);
+  const [saved,     setSaved]     = useState(false);
+  const [err,       setErr]       = useState<string | null>(null);
+
+  async function handleSave() {
+    if (!question.trim() || !answer.trim()) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/knowledge", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          title:            question.trim().slice(0, 80),
+          category,
+          questionPatterns: [question.trim()],
+          answer:           answer.trim(),
+          status:           "SUGGESTED",
+          source:           "HUMAN_REPLY",
+          createdFromMessageIds: [
+            ...(customerMessage ? [customerMessage.id] : []),
+            humanMessage.id,
+          ],
+        }),
+      });
+      if (!res.ok) throw new Error("Erro ao salvar");
+      setSaved(true);
+    } catch {
+      setErr("Falha ao salvar. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div>
+            <p className="text-sm font-bold text-gray-900">Ensinar IA</p>
+            <p className="text-xs text-gray-500 mt-0.5">Salvar como aprendizado sugerido (aguarda aprovação)</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+        </div>
+
+        {saved ? (
+          <div className="px-5 py-8 text-center">
+            <div className="text-3xl mb-2">✅</div>
+            <p className="text-sm font-semibold text-gray-800">Aprendizado salvo!</p>
+            <p className="text-xs text-gray-500 mt-1">Acesse Agentes IA → WhatsApp Host para aprovar.</p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-4 rounded-lg bg-orange-500 px-4 py-2 text-xs font-bold text-white hover:bg-orange-600"
+            >
+              Fechar
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4 px-5 py-4">
+            {/* Customer question */}
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                Pergunta do cliente
+              </label>
+              <textarea
+                rows={2}
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="O que o cliente perguntou?"
+                className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            {/* Suggested answer */}
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                Resposta da equipe (a IA usará isso)
+              </label>
+              <textarea
+                rows={3}
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="Qual foi a resposta correta?"
+                className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+
+            {/* Category */}
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                Categoria
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as KnowledgeCategory)}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-orange-400 focus:outline-none"
+              >
+                {KNOWLEDGE_CATEGORIES.filter((c) => c.id !== "UNKNOWN_GAP").map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {err && <p className="text-xs text-red-600">{err}</p>}
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || !question.trim() || !answer.trim()}
+                className="flex-1 rounded-lg bg-orange-500 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+              >
+                {saving ? "Salvando…" : "Salvar aprendizado"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Message Bubble ────────────────────────────────────────────────────────────
 
 function MessageBubble({
   msg,
   customerName,
+  allMessages,
 }: {
   msg:          Message;
   customerName: string;
+  allMessages:  Message[];
 }) {
   const isOutbound  = msg.direction === "OUTBOUND";
+  const isHumanMsg  = isOutbound && msg.senderType === "HUMAN";
   const senderLabel = isOutbound
     ? (msg.senderType === "AI" ? "IA" : "Equipe")
     : customerName;
 
+  const [teachOpen, setTeachOpen] = useState(false);
+
+  // Find the most recent customer message before this human reply
+  const precedingCustomerMsg = isHumanMsg
+    ? [...allMessages]
+        .reverse()
+        .find((m) => m.direction === "INBOUND" && new Date(m.sentAt) < new Date(msg.sentAt))
+        ?? null
+    : null;
+
   return (
-    <div className={`flex flex-col gap-1 ${isOutbound ? "items-end" : "items-start"}`}>
-      <span className="px-1 text-[10px] text-gray-400">{senderLabel}</span>
+    <>
+      {teachOpen && isHumanMsg && (
+        <TeachAIModal
+          humanMessage={msg}
+          customerMessage={precedingCustomerMsg}
+          onClose={() => setTeachOpen(false)}
+        />
+      )}
 
-      <div
-        className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
-          isOutbound
-            ? "rounded-br-sm bg-orange-500 text-white"
-            : "rounded-bl-sm bg-white text-gray-900 border border-gray-100"
-        }`}
-      >
-        {msg.type !== "TEXT" && (
-          <p className={`mb-1 text-xs font-medium ${isOutbound ? "text-orange-200" : "text-gray-400"}`}>
-            [{msg.type.toLowerCase()}]
-          </p>
-        )}
-        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-      </div>
+      <div className={`flex flex-col gap-1 ${isOutbound ? "items-end" : "items-start"}`}>
+        <span className="px-1 text-[10px] text-gray-400">{senderLabel}</span>
 
-      <div className="flex items-center gap-1 px-1 text-[10px] text-gray-400">
-        <span>{fmtTime(msg.sentAt)}</span>
-        {isOutbound && msg.externalStatus && (
-          <span>
-            {msg.externalStatus === "read" || msg.externalStatus === "delivered" ? "✓✓" : "✓"}
-          </span>
-        )}
+        <div
+          className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
+            isOutbound
+              ? "rounded-br-sm bg-orange-500 text-white"
+              : "rounded-bl-sm bg-white text-gray-900 border border-gray-100"
+          }`}
+        >
+          {msg.type !== "TEXT" && (
+            <p className={`mb-1 text-xs font-medium ${isOutbound ? "text-orange-200" : "text-gray-400"}`}>
+              [{msg.type.toLowerCase()}]
+            </p>
+          )}
+          <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+        </div>
+
+        <div className="flex items-center gap-2 px-1 text-[10px] text-gray-400">
+          <span>{fmtTime(msg.sentAt)}</span>
+          {isOutbound && msg.externalStatus && (
+            <span>
+              {msg.externalStatus === "read" || msg.externalStatus === "delivered" ? "✓✓" : "✓"}
+            </span>
+          )}
+          {isHumanMsg && (
+            <button
+              type="button"
+              onClick={() => setTeachOpen(true)}
+              className="rounded-full border border-orange-200 bg-orange-50 px-2 py-px text-[10px] font-semibold text-orange-600 hover:bg-orange-100 transition-colors"
+            >
+              Ensinar IA
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

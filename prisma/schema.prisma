@@ -70,6 +70,7 @@ model Restaurant {
   onboardingStatus       RestaurantOnboardingStatus?
   productSalesAggregates ProductSalesAggregate[]
   customerDataSignals    CustomerDataSignal[]
+  knowledgeItems         RestaurantKnowledgeItem[]
 
   @@map("restaurants")
 }
@@ -1698,4 +1699,54 @@ model MenuEvent {
   @@index([restaurantId, source])
   @@index([restaurantId, createdAt])
   @@map("menu_events")
+}
+
+// ═══════════════════════════════════════════
+//  RESTAURANT KNOWLEDGE BASE
+// ═══════════════════════════════════════════
+//
+// Stores facts, FAQs and operational answers learned from human conversations
+// or entered manually. The WhatsApp Agent uses ACTIVE items to answer customers
+// without hallucinating. SUGGESTED items await owner approval.
+
+model RestaurantKnowledgeItem {
+  id           String   @id @default(cuid())
+  restaurantId String
+
+  // Human-readable title for the owner (not shown to customer)
+  title    String
+  category String // FAQ | POLICY | PROMOTION | BUSINESS_HOURS | DELIVERY_INFO | RODIZIO_INFO | BIRTHDAY_BENEFIT | PAYMENT_INFO | HUMAN_HANDOFF_RULE | UNKNOWN_GAP
+
+  // Example phrases the customer might use — used for keyword matching
+  questionPatterns Json // string[]
+
+  // What the agent will say to the customer (empty when status=UNKNOWN_GAP)
+  answer String @default("")
+
+  // Lifecycle: SUGGESTED → APPROVED/REJECTED → ACTIVE
+  status String @default("SUGGESTED") // SUGGESTED | APPROVED | REJECTED | ACTIVE
+
+  // Origin of this knowledge item
+  source String // HUMAN_REPLY | MANUAL | AI_SUGGESTED | IMPORTED
+
+  // Confidence score (0.0–1.0); null means manually set / unconditional
+  confidence Float?
+
+  // Audit trail — links this item back to the conversation it was learned from
+  createdFromConversationId String?
+  createdFromMessageIds     Json? // string[]
+
+  // Usage stats
+  usageCount Int       @default(0)
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([restaurantId, status])
+  @@index([restaurantId, category])
+  @@map("restaurant_knowledge_items")
 }

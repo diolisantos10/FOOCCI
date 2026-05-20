@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useCallback, type FormEvent } from "react";
 import Link from "next/link";
 import {
   DEFAULT_BRAND_CONFIG,
@@ -20,6 +20,11 @@ import {
   type MenuOption,
   type FlowType,
 } from "@/validators/whatsapp-agent";
+import {
+  KNOWLEDGE_CATEGORIES,
+  type KnowledgeItem,
+  type KnowledgeCategory,
+} from "@/services/knowledge/RestaurantKnowledgeService";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -657,6 +662,80 @@ export function AgentePage() {
       .finally(() => setAgentLoading(false));
   }, []);
 
+  // Knowledge base state ────────────────────────────────────────────────────
+  const [knowledgeItems,   setKnowledgeItems]   = useState<KnowledgeItem[]>([]);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+  const [knowledgeLoaded,  setKnowledgeLoaded]  = useState(false);
+  const [addKnowledge,     setAddKnowledge]      = useState(false);
+  const [kNewTitle,        setKNewTitle]         = useState("");
+  const [kNewPatterns,     setKNewPatterns]      = useState("");
+  const [kNewAnswer,       setKNewAnswer]        = useState("");
+  const [kNewCategory,     setKNewCategory]      = useState<KnowledgeCategory>("FAQ");
+  const [kSaving,          setKSaving]           = useState(false);
+  const [kSaveErr,         setKSaveErr]          = useState<string | null>(null);
+
+  const fetchKnowledge = useCallback(() => {
+    setKnowledgeLoading(true);
+    fetch("/api/knowledge")
+      .then((r) => r.ok ? r.json() : null)
+      .then((json) => { if (json?.data) setKnowledgeItems(json.data as KnowledgeItem[]); })
+      .catch(() => {})
+      .finally(() => { setKnowledgeLoading(false); setKnowledgeLoaded(true); });
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "whatsapp-host" && !knowledgeLoaded) {
+      fetchKnowledge();
+    }
+  }, [activeTab, knowledgeLoaded, fetchKnowledge]);
+
+  async function handleKnowledgeStatusChange(id: string, status: "ACTIVE" | "REJECTED") {
+    await fetch(`/api/knowledge/${id}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ status }),
+    }).catch(() => {});
+    fetchKnowledge();
+  }
+
+  async function handleKnowledgeDelete(id: string) {
+    await fetch(`/api/knowledge/${id}`, { method: "DELETE" }).catch(() => {});
+    setKnowledgeItems((prev) => prev.filter((k) => k.id !== id));
+  }
+
+  async function handleKnowledgeSave() {
+    if (!kNewTitle.trim() || !kNewAnswer.trim() || !kNewPatterns.trim()) return;
+    setKSaving(true);
+    setKSaveErr(null);
+    try {
+      const patterns = kNewPatterns.split("\n").map((s) => s.trim()).filter(Boolean);
+      const res = await fetch("/api/knowledge", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          title:            kNewTitle.trim(),
+          category:         kNewCategory,
+          questionPatterns: patterns,
+          answer:           kNewAnswer.trim(),
+          status:           "ACTIVE",
+          source:           "MANUAL",
+        }),
+      });
+      if (!res.ok) throw new Error("Erro ao salvar");
+      setAddKnowledge(false);
+      setKNewTitle(""); setKNewPatterns(""); setKNewAnswer(""); setKNewCategory("FAQ");
+      fetchKnowledge();
+    } catch {
+      setKSaveErr("Falha ao salvar. Tente novamente.");
+    } finally {
+      setKSaving(false);
+    }
+  }
+
+  const suggested = knowledgeItems.filter((k) => k.status === "SUGGESTED");
+  const active    = knowledgeItems.filter((k) => k.status === "ACTIVE");
+  const gaps      = knowledgeItems.filter((k) => k.category === "UNKNOWN_GAP" && k.status !== "REJECTED");
+
   function patchAgent(key: keyof AgentFormState) {
     return (value: string) => setAgentForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -782,6 +861,7 @@ export function AgentePage() {
           WhatsApp Host
       ════════════════════════════════════════════════════════════════════ */}
       {activeTab === "whatsapp-host" && (
+        <>
         <form onSubmit={saveAgentConfig} className="space-y-6">
 
           {agentOk && (
@@ -1134,6 +1214,216 @@ export function AgentePage() {
 
           <SaveRow saving={agentSaving} label="Salvar WhatsApp Host" />
         </form>
+
+        {/* ── Knowledge Base ─────────────────────────────────────────────── */}
+        <div className="mt-8 space-y-6">
+
+          {/* Suggested learnings */}
+          {(suggested.length > 0 || gaps.length > 0) && (
+            <Section
+              title={`Aprendizados pendentes ${suggested.length + gaps.length > 0 ? `(${suggested.length + gaps.length})` : ""}`}
+              subtitle="Respostas sugeridas pela equipe aguardando sua aprovação. Aprove para que a IA passe a usar."
+            >
+              {knowledgeLoading && <p className="text-sm text-gray-400">Carregando…</p>}
+              {suggested.map((item) => (
+                <div key={item.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">
+                          {KNOWLEDGE_CATEGORIES.find((c) => c.id === item.category)?.label ?? item.category}
+                        </span>
+                        <span className="text-[10px] text-amber-500 bg-amber-100 px-2 py-px rounded-full">
+                          {item.source === "HUMAN_REPLY" ? "Aprendido da equipe" : item.source.toLowerCase()}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-gray-800 truncate">{item.title}</p>
+                      {item.questionPatterns.length > 0 && (
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          Ex: <em>&ldquo;{item.questionPatterns[0]}&rdquo;</em>
+                        </p>
+                      )}
+                      {item.answer && (
+                        <p className="mt-1 text-xs text-gray-700 bg-white border border-gray-100 rounded-lg px-3 py-2">
+                          {item.answer}
+                        </p>
+                      )}
+                      {!item.answer && item.category === "UNKNOWN_GAP" && (
+                        <p className="mt-1 text-xs italic text-gray-400">
+                          Gap detectado — a IA pediu ajuda da equipe. Preencha a resposta abaixo.
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleKnowledgeStatusChange(item.id, "ACTIVE")}
+                        className="rounded-lg bg-green-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-600 transition-colors"
+                      >
+                        Aprovar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleKnowledgeStatusChange(item.id, "REJECTED")}
+                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 transition-colors"
+                      >
+                        Rejeitar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {gaps.filter((g) => !suggested.includes(g)).map((item) => (
+                <div key={item.id} className="rounded-xl border border-red-200 bg-red-50/60 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-xs font-bold text-red-600 uppercase tracking-wide">Gap — sem resposta</span>
+                      <p className="mt-1 text-sm text-gray-800">{item.title}</p>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        O cliente perguntou e a IA não soube responder. Adicione a resposta manualmente.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleKnowledgeDelete(item.id)}
+                      className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-medium text-gray-400 hover:bg-gray-100"
+                    >
+                      Ignorar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </Section>
+          )}
+
+          {/* Active knowledge */}
+          <Section
+            title={`Base de conhecimento ativa (${active.length})`}
+            subtitle="Fatos aprovados que a IA usa para responder clientes automaticamente."
+          >
+            {knowledgeLoading && <p className="text-sm text-gray-400">Carregando…</p>}
+            {!knowledgeLoading && active.length === 0 && (
+              <p className="text-sm text-gray-400">
+                Nenhum conhecimento ativo ainda. Adicione manualmente ou aprove sugestões acima.
+              </p>
+            )}
+            <div className="space-y-2">
+              {active.map((item) => (
+                <div key={item.id} className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50/40 p-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold text-green-700 uppercase tracking-wide">
+                        {KNOWLEDGE_CATEGORIES.find((c) => c.id === item.category)?.label ?? item.category}
+                      </span>
+                      {item.usageCount > 0 && (
+                        <span className="text-[10px] text-green-600 bg-green-100 px-2 py-px rounded-full">
+                          {item.usageCount}× usado
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-sm font-semibold text-gray-800">{item.title}</p>
+                    <p className="mt-0.5 text-xs text-gray-600 line-clamp-2">{item.answer}</p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleKnowledgeStatusChange(item.id, "REJECTED")}
+                      className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] text-gray-500 hover:bg-gray-100"
+                    >
+                      Desativar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKnowledgeDelete(item.id)}
+                      className="rounded-lg border border-red-100 px-2.5 py-1.5 text-[11px] text-red-500 hover:bg-red-50"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Add knowledge manually */}
+            {!addKnowledge ? (
+              <button
+                type="button"
+                onClick={() => setAddKnowledge(true)}
+                className="mt-2 rounded-lg border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-500 hover:border-orange-400 hover:text-orange-500 w-full transition-colors"
+              >
+                + Adicionar conhecimento manualmente
+              </button>
+            ) : (
+              <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-800">Novo conhecimento</p>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Título</label>
+                  <input
+                    type="text"
+                    value={kNewTitle}
+                    onChange={(e) => setKNewTitle(e.target.value)}
+                    placeholder="Ex: Benefício para aniversariante"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">
+                    Exemplos de pergunta <span className="font-normal text-gray-400">(uma por linha)</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={kNewPatterns}
+                    onChange={(e) => setKNewPatterns(e.target.value)}
+                    placeholder={"Tem algo para aniversariante?\nAniversariante ganha algo?"}
+                    className="w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Resposta da IA</label>
+                  <textarea
+                    rows={3}
+                    value={kNewAnswer}
+                    onChange={(e) => setKNewAnswer(e.target.value)}
+                    placeholder="Sim! Aqui o aniversariante ganha uma sobremesa 🎉"
+                    className="w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Categoria</label>
+                  <select
+                    value={kNewCategory}
+                    onChange={(e) => setKNewCategory(e.target.value as KnowledgeCategory)}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-orange-400 focus:outline-none"
+                  >
+                    {KNOWLEDGE_CATEGORIES.filter((c) => c.id !== "UNKNOWN_GAP").map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {kSaveErr && <p className="text-xs text-red-600">{kSaveErr}</p>}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleKnowledgeSave}
+                    disabled={kSaving || !kNewTitle.trim() || !kNewAnswer.trim() || !kNewPatterns.trim()}
+                    className="rounded-lg bg-orange-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                  >
+                    {kSaving ? "Salvando…" : "Salvar como ativo"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAddKnowledge(false); setKSaveErr(null); }}
+                    className="rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </Section>
+
+        </div>
+        </>
       )}
 
       {/* ════════════════════════════════════════════════════════════════════

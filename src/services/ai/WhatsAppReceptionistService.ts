@@ -27,6 +27,7 @@ import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigServ
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { ConversationStatus } from "@prisma/client";
 import type { MenuOption } from "@/validators/whatsapp-agent";
+import { RestaurantKnowledgeService } from "@/services/knowledge/RestaurantKnowledgeService";
 
 // ─── constants ────────────────────────────────────────────────
 
@@ -394,12 +395,38 @@ async function run(conversationId: string): Promise<void> {
   let triggerHandoff: boolean;
 
   if (selectedOpt) {
-    replyText     = buildFlowReply(selectedOpt, ctx);
+    replyText      = buildFlowReply(selectedOpt, ctx);
     triggerHandoff = selectedOpt.flow === "handoff";
   } else {
-    const intent  = detectIntent(lastMessage.content);
-    replyText     = buildReply(intent, ctx);
-    triggerHandoff = needsHandoff(intent, agentMode);
+    const intent = detectIntent(lastMessage.content);
+
+    // Before using a template reply, check if the restaurant has an ACTIVE
+    // knowledge item that better answers this specific question.
+    // Knowledge answers take priority over generic templates for non-handoff intents.
+    const knowledgeMatch =
+      !needsHandoff(intent, agentMode) &&
+      intent !== "GREETING" &&
+      (await RestaurantKnowledgeService.findMatch(restaurantId, lastMessage.content).catch(() => null));
+
+    if (knowledgeMatch) {
+      replyText      = knowledgeMatch.answer;
+      triggerHandoff = false;
+      // Async — do not await to avoid blocking the reply
+      RestaurantKnowledgeService.incrementUsage(knowledgeMatch.id).catch(() => {});
+    } else {
+      replyText      = buildReply(intent, ctx);
+      triggerHandoff = needsHandoff(intent, agentMode);
+
+      // When intent is UNKNOWN and no knowledge covers it, create a gap suggestion
+      // so the owner can later fill in the correct answer.
+      if (intent === "UNKNOWN" && !triggerHandoff) {
+        RestaurantKnowledgeService.createGap(
+          restaurantId,
+          lastMessage.content,
+          conversationId,
+        ).catch(() => {});
+      }
+    }
   }
 
   // Transition conversation to HUMAN — set both status and aiEnabled so the
