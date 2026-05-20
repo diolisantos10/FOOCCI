@@ -10,6 +10,7 @@ import Script from "next/script";
 import { prisma } from "@/lib/prisma";
 import { PedidoClient } from "./PedidoClient";
 import { phoneCandidates } from "@/lib/phone";
+import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +55,40 @@ export default async function PedidoPage({
   // ── Delivery config (fee + mode shown in checkout) ───────────────────────────
   const deliveryConfig = await prisma.deliveryConfig.findUnique({
     where: { restaurantId: restaurant.id },
-    select: { mode: true, fee: true, enabled: true, estimatedMinutes: true },
+    select: {
+      mode: true, fee: true, enabled: true, estimatedMinutes: true,
+      // Distance-mode fields — needed to compute the floor fee for the checkout display
+      distanceBaseFee: true, distanceMinFee: true, distanceMinFeeKm: true,
+      distancePricePerKm: true, distanceMaxFee: true,
+    },
   });
+
+  // For distance mode the simple `fee` field is null.
+  // Compute the floor fee (minimum charge when distance is unknown) so the
+  // checkout never shows "Grátis" when baseFee > 0.
+  const checkoutDeliveryFee = (() => {
+    if (!deliveryConfig?.enabled) return null;
+    if (deliveryConfig.mode === "simple" && deliveryConfig.fee != null) {
+      return Number(deliveryConfig.fee);
+    }
+    if (deliveryConfig.mode === "distance") {
+      const floor = calcDeliveryFeeFromConfig(
+        {
+          baseFee:    deliveryConfig.distanceBaseFee   != null ? Number(deliveryConfig.distanceBaseFee)   : 0,
+          minimumFee: deliveryConfig.distanceMinFee    != null ? Number(deliveryConfig.distanceMinFee)    : null,
+          includedKm: deliveryConfig.distanceMinFeeKm  != null ? Number(deliveryConfig.distanceMinFeeKm)  : 0,
+          pricePerKm: deliveryConfig.distancePricePerKm != null ? Number(deliveryConfig.distancePricePerKm) : 0,
+          maxFee:     deliveryConfig.distanceMaxFee    != null ? Number(deliveryConfig.distanceMaxFee)    : null,
+        },
+        null, // distance unknown at page load — baseFee/minimumFee is the safe fallback
+      );
+      if (process.env.NODE_ENV !== "production" && floor === 0 && Number(deliveryConfig.distanceBaseFee ?? 0) > 0) {
+        console.warn("[pedido/page] delivery distance missing; using base fee fallback");
+      }
+      return floor;
+    }
+    return null; // manual/advanced mode — "A combinar" or null handled by client
+  })();
 
   // ── Brand config (social links for ordering header) ──────────────────────────
   const brandConfig = await prisma.restaurantBrandConfig.findUnique({
@@ -299,7 +332,7 @@ gtag('config', '${ga4Id}');
         brandSecondaryColor={brandConfig?.brandSecondaryColor ?? null}
         banners={activeBanners}
         deliveryMode={deliveryConfig?.mode ?? "simple"}
-        deliveryFee={deliveryConfig?.fee != null ? Number(deliveryConfig.fee) : null}
+        deliveryFee={checkoutDeliveryFee}
         deliveryEstimatedMinutes={deliveryConfig?.estimatedMinutes ?? null}
         averagePreparationMinutes={restaurant.storeProfile?.averagePreparationMinutes ?? null}
         ga4Id={ga4Id}

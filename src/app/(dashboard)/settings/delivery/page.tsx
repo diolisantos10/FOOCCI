@@ -11,7 +11,7 @@ import {
   PageCard,
   SectionHeading,
 } from "../_shared";
-import { calcDeliveryFee } from "@/lib/delivery";
+import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -63,8 +63,8 @@ function fmtCurrency(v: string | number | null): string {
 }
 
 // Thin adapter so call-sites keep the same signature (baseFee + minFee + minFeeKm).
-// Delegates entirely to the shared calcDeliveryFee utility so both the settings
-// preview and the order finalize path use the exact same formula.
+// Delegates to calcDeliveryFeeFromConfig — the same canonical formula used in
+// the ordering page checkout and order finalization.
 function calcDistanceFee(
   km:       number,
   baseFee:  number,
@@ -73,9 +73,10 @@ function calcDistanceFee(
   minFeeKm: number | null,
   maxFee:   number | null,
 ): number {
-  const effectiveMin  = (minFee != null && minFee > 0) ? minFee : baseFee;
-  const effectiveIncl = (minFeeKm != null && minFeeKm >= 0) ? minFeeKm : 0;
-  return calcDeliveryFee(km, effectiveMin, perKm, effectiveIncl, maxFee);
+  return calcDeliveryFeeFromConfig(
+    { baseFee, minimumFee: minFee, includedKm: minFeeKm, pricePerKm: perKm, maxFee },
+    km,
+  );
 }
 
 // ── Zone-bar color palettes ───────────────────────────────────────────────────

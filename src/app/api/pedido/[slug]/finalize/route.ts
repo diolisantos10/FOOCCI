@@ -32,7 +32,7 @@ import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { toE164 } from "@/lib/phone";
 import { isGuestIdentifier } from "@/lib/guest";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
-import { calcDeliveryFee } from "@/lib/delivery";
+import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -299,18 +299,18 @@ export async function POST(
     }
 
     if (deliveryCfg.mode === "distance" || deliveryCfg.mode === "advanced") {
-      const baseFee  = deliveryCfg.distanceBaseFee   != null ? Number(deliveryCfg.distanceBaseFee)   : 0;
-      const perKm    = deliveryCfg.distancePricePerKm != null ? Number(deliveryCfg.distancePricePerKm) : 0;
-      const minFee   = deliveryCfg.distanceMinFee    != null ? Number(deliveryCfg.distanceMinFee)    : null;
-      const minFeeKm = deliveryCfg.distanceMinFeeKm  != null ? Number(deliveryCfg.distanceMinFeeKm)  : null;
-      const maxFee   = deliveryCfg.distanceMaxFee    != null ? Number(deliveryCfg.distanceMaxFee)    : null;
+      const cfg = {
+        baseFee:    deliveryCfg.distanceBaseFee    != null ? Number(deliveryCfg.distanceBaseFee)    : 0,
+        minimumFee: deliveryCfg.distanceMinFee     != null ? Number(deliveryCfg.distanceMinFee)     : null,
+        includedKm: deliveryCfg.distanceMinFeeKm   != null ? Number(deliveryCfg.distanceMinFeeKm)   : 0,
+        pricePerKm: deliveryCfg.distancePricePerKm != null ? Number(deliveryCfg.distancePricePerKm) : 0,
+        maxFee:     deliveryCfg.distanceMaxFee     != null ? Number(deliveryCfg.distanceMaxFee)     : null,
+      };
       // Distance is unknown server-side (no geocoding); clientDeliveryFee carries the
-      // per-km total computed on the client. Floor = minimum fee at distance 0.
-      const effectiveMin  = (minFee != null && minFee > 0) ? minFee : baseFee;
-      const effectiveIncl = (minFeeKm != null && minFeeKm >= 0) ? minFeeKm : 0;
-      const floorFee = calcDeliveryFee(0, effectiveMin, perKm, effectiveIncl, maxFee);
+      // per-km total computed on the client. Floor = baseFee/minimumFee at unknown distance.
+      const floorFee = calcDeliveryFeeFromConfig(cfg, null);
       const raw = (clientDeliveryFee != null && clientDeliveryFee > 0) ? clientDeliveryFee : floorFee;
-      const capped = maxFee != null && maxFee > 0 ? Math.min(raw, maxFee) : raw;
+      const capped = cfg.maxFee != null && cfg.maxFee > 0 ? Math.min(raw, cfg.maxFee) : raw;
       return Math.max(capped, floorFee);
     }
 
