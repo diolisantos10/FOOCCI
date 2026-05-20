@@ -676,9 +676,9 @@ function ProductModal({
 
   const paidExtras    = item.extras.filter((e) => e.price > 0);
   const freeExtras    = item.extras.filter((e) => e.price === 0);
-  // Valid variants: must have a price and a name; if empty the product falls back to base-price add.
+  // Valid variants: must have a price and a non-empty name.
   const validVariants = item.variants.filter((v) => v.price > 0 && v.name.trim());
-  const hasCustomization = (!item.hasVariants || validVariants.length === 0) && (item.optionGroups.length > 0 || paidExtras.length > 0);
+  const hasCustomization = !item.hasVariants && (item.optionGroups.length > 0 || paidExtras.length > 0);
   // A removal group is optional and all its options are free — use checkboxes
   function isRemovalGroup(group: OptionGroup) {
     return !group.required && group.options.every((o) => o.price === 0);
@@ -1003,8 +1003,8 @@ function ProductModal({
             </div>
           )}
 
-          {/* ── Notes (non-variant products, or variant products with no valid variants) ── */}
-          {(!item.hasVariants || validVariants.length === 0) && (
+          {/* ── Notes (only for non-variant products) ── */}
+          {!item.hasVariants && (
             <div className="mt-4 mb-2">
               <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                 Observações
@@ -1033,7 +1033,7 @@ function ProductModal({
             </div>
           )}
 
-          {(!item.hasVariants || validVariants.length === 0) ? (
+          {!item.hasVariants ? (
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Preço</p>
@@ -1049,11 +1049,18 @@ function ProductModal({
                 {qty > 0 ? `+ Adicionar (${qty} no carrinho)` : "Adicionar ao pedido"}
               </button>
             </div>
-          ) : qty > 0 ? (
-            <p className="text-center text-xs text-gray-400">
-              {qty} {qty === 1 ? "item" : "itens"} no carrinho
-            </p>
-          ) : null}
+          ) : validVariants.length > 0 ? (
+            qty > 0 ? (
+              <p className="text-center text-xs text-gray-400">
+                {qty} {qty === 1 ? "item" : "itens"} no carrinho
+              </p>
+            ) : null
+          ) : (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-center">
+              <p className="text-sm font-semibold text-amber-800">Produto com variações pendentes de cadastro.</p>
+              <p className="mt-1 text-xs text-amber-600">Corrija as variações no cardápio para liberar este item.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
