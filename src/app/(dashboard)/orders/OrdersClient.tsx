@@ -1592,22 +1592,37 @@ export default function OrdersClient() {
   // Initialise the WAV audio element once on mount
   useEffect(() => {
     const audio = new Audio(ALERT_WAV);
+    audio.preload = "auto";
+    audio.volume  = 1.0;
     alertAudioRef.current = audio;
     return () => { audio.pause(); audio.src = ""; };
   }, []);
 
+  // Track pending count via ref so the alert effect can log it without adding orders to deps
+  const pendingCountRef = useRef(0);
+
   // Whether there is at least one order waiting for acceptance
-  const hasPendingOrders = useMemo(() => orders.some((o) => o.status === "PENDING"), [orders]);
+  const hasPendingOrders = useMemo(() => {
+    const count = orders.filter((o) => o.status === "PENDING").length;
+    pendingCountRef.current = count;
+    return count > 0;
+  }, [orders]);
 
   // Repeat alert every 5 s while pending orders exist.
   // Stops automatically (effect cleanup) when all pending orders are resolved.
   useEffect(() => {
     if (!hasPendingOrders || !soundEnabled) return;
 
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[order-alert]", { hasPendingOrders, soundEnabled, pendingCount: pendingCountRef.current });
+    }
+
     const doPlay = () => {
       const audio = alertAudioRef.current;
       if (audio) {
+        audio.pause();           // stop any in-progress playback before restarting
         audio.currentTime = 0;
+        audio.volume = 1.0;
         audio.play().catch((err: unknown) => {
           if (err instanceof DOMException && err.name === "NotAllowedError") {
             setAudioBlocked(true); // browser blocked — show unlock button
@@ -1636,14 +1651,16 @@ export default function OrdersClient() {
   // Called when operator clicks "Ativar som de pedidos" after browser blocks autoplay
   function unlockAudio() {
     setAudioBlocked(false);
+    localStorage.setItem(SOUND_PREF_KEY, "true");
     const audio = alertAudioRef.current;
     if (audio) {
+      audio.pause();
       audio.currentTime = 0;
+      audio.volume = 1.0;
       audio.play().catch(() => playBeep());
     } else {
       playBeep();
     }
-    localStorage.setItem("foocciOrderSoundEnabled", "true");
   }
 
   const fetchOrders = useCallback(() => {
@@ -1659,7 +1676,9 @@ export default function OrdersClient() {
             if (newOnes.length > 0 && soundEnabled) {
               const audio = alertAudioRef.current;
               if (audio) {
+                audio.pause();
                 audio.currentTime = 0;
+                audio.volume = 1.0;
                 audio.play().catch((err: unknown) => {
                   if (err instanceof DOMException && err.name === "NotAllowedError") {
                     setAudioBlocked(true);
