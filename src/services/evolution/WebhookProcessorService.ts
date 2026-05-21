@@ -196,25 +196,45 @@ type _AIRef = AIOrderServiceType;
 
 // ─── conversation reuse ───────────────────────────────────────
 
+const ACTIVE_STATUSES = [
+  ConversationStatus.OPEN,
+  ConversationStatus.HUMAN,
+  ConversationStatus.BOT,
+] as const;
+
+async function findActiveConversation(restaurantId: string, customerId: string) {
+  return prisma.conversation.findFirst({
+    where: {
+      restaurantId,
+      customerId,
+      status: { in: [...ACTIVE_STATUSES] },
+    },
+    orderBy: { lastMessageAt: "desc" },
+  });
+}
+
+/**
+ * Race-safe find-or-create conversation.
+ *
+ * Pattern: findFirst → (maybe reopen resolved) → create.
+ * If two webhook events arrive simultaneously for the same customer,
+ * both may pass the initial findFirst check and both attempt create.
+ * The second create will usually succeed too (no DB unique constraint),
+ * producing a duplicate. The retry block catches this: after any
+ * create failure OR as a second-pass check, we re-query for the active
+ * conversation that the racing request created, and return it.
+ */
 async function resolveConversation(
   restaurantId: string,
   customerId: string,
   customerPhone: string,
   customerName: string,
 ) {
-  // Prefer any OPEN or HUMAN conversation (most recent first)
-  const active = await prisma.conversation.findFirst({
-    where: {
-      restaurantId,
-      customerId,
-      status: { in: [ConversationStatus.OPEN, ConversationStatus.HUMAN] },
-    },
-    orderBy: { lastMessageAt: "desc" },
-  });
-
+  // 1. Prefer any active conversation (most recent first)
+  const active = await findActiveConversation(restaurantId, customerId);
   if (active) return active;
 
-  // Check for a recently resolved conversation worth reopening
+  // 2. Check for a recently resolved conversation worth reopening
   const reopenThreshold = new Date();
   reopenThreshold.setHours(reopenThreshold.getHours() - REOPEN_WINDOW_HOURS);
 
@@ -239,17 +259,27 @@ async function resolveConversation(
     });
   }
 
-  // Create a fresh conversation with denormalized contact info for fast lookup
-  return prisma.conversation.create({
-    data: {
-      restaurantId,
-      customerId,
-      channel: "WHATSAPP",
-      status: ConversationStatus.OPEN,
-      customerPhone,
-      customerName,
-    },
-  });
+  // 3. Create a fresh conversation — with race-condition retry guard.
+  //    If another concurrent webhook already created one between step 1
+  //    and here, we detect it and return that conversation instead.
+  try {
+    return await prisma.conversation.create({
+      data: {
+        restaurantId,
+        customerId,
+        channel: "WHATSAPP",
+        status: ConversationStatus.OPEN,
+        customerPhone,
+        customerName,
+      },
+    });
+  } catch (err) {
+    // Re-query in case a concurrent webhook won the race
+    const raced = await findActiveConversation(restaurantId, customerId);
+    if (raced) return raced;
+    // Genuinely unexpected error — re-throw so the webhook processor logs it
+    throw err;
+  }
 }
 
 // ─── message status update ────────────────────────────────────

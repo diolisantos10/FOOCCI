@@ -52,37 +52,56 @@ export async function GET(req: NextRequest) {
       } : {}),
     };
 
-    const [rows, total] = await Promise.all([
-      prisma.conversation.findMany({
-        where,
-        orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
-        skip,
-        take: limit,
-        select: {
-          id:               true,
-          channel:          true,
-          status:           true,
-          aiEnabled:        true,
-          customerName:     true,
-          customerPhone:    true,
-          lastMessageAt:    true,
-          unreadCount:      true,
-          createdAt:        true,
-          contextType:      true,
-          relatedCampaignId:true,
-          customer: { select: { id: true, name: true, phone: true, tier: true } },
-          messages: {
-            orderBy: { sentAt: "desc" },
-            take: 1,
-            select: { content: true, senderType: true, direction: true, sentAt: true, type: true },
-          },
+    // Fetch more rows than requested so deduplication leaves enough results.
+    // Conversations are grouped by canonical customer identity (customerId or
+    // customerPhone) and only the most recent active conversation per customer
+    // is returned. This prevents the same customer appearing multiple times in
+    // the atendimento list when duplicate conversation rows exist in the DB.
+    const fetchLimit = Math.min(limit * 4, 400);
+
+    const rows = await prisma.conversation.findMany({
+      where,
+      orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
+      take: fetchLimit,
+      select: {
+        id:               true,
+        channel:          true,
+        status:           true,
+        aiEnabled:        true,
+        customerName:     true,
+        customerPhone:    true,
+        lastMessageAt:    true,
+        unreadCount:      true,
+        createdAt:        true,
+        contextType:      true,
+        relatedCampaignId:true,
+        customer: { select: { id: true, name: true, phone: true, tier: true } },
+        // Exclude SYSTEM messages (e.g. [handoff:AI_ESCALATION]) from preview.
+        messages: {
+          where:   { senderType: { not: "SYSTEM" } },
+          orderBy: { sentAt: "desc" },
+          take: 1,
+          select: { content: true, senderType: true, direction: true, sentAt: true, type: true },
         },
-      }),
-      prisma.conversation.count({ where }),
-    ]);
+      },
+    });
+
+    // Deduplicate: one row per canonical customer (customerId takes priority,
+    // then customerPhone). Rows are already sorted most-recent-first so the
+    // first occurrence of each key wins.
+    const seen = new Set<string>();
+    const deduped = rows.filter((r) => {
+      const key = r.customer?.id ?? r.customerPhone ?? r.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const paged = deduped.slice(skip, skip + limit);
+    const total = deduped.length;
 
     return ok({
-      data:       rows,
+      data:       paged,
       total,
       page,
       limit,

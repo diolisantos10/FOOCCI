@@ -500,13 +500,14 @@ export function AtendimentoClient({
   const displayed = useMemo(() => {
     let items = [...conversations];
 
-    // Search: name, phone, last message content
+    // Search: name, phone, last message content (excluding system events)
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       items = items.filter((c) => {
-        const name    = (c.customer?.name    ?? c.customerName  ?? "").toLowerCase();
-        const phone   = (c.customer?.phone   ?? c.customerPhone ?? "").toLowerCase();
-        const lastMsg = (c.messages?.[0]?.content ?? "").toLowerCase();
+        const name      = (c.customer?.name    ?? c.customerName  ?? "").toLowerCase();
+        const phone     = (c.customer?.phone   ?? c.customerPhone ?? "").toLowerCase();
+        const visibleMsg = (c.messages ?? []).find((m) => m.senderType !== "SYSTEM");
+        const lastMsg   = (visibleMsg?.content ?? "").toLowerCase();
         return name.includes(q) || phone.includes(q) || lastMsg.includes(q);
       });
     }
@@ -847,7 +848,10 @@ export function AtendimentoClient({
           ) : (
             <ul className="divide-y divide-gray-100">
               {displayed.map((conv) => {
-                const lastMsg  = (conv.messages ?? [])[0];
+                // Skip SYSTEM messages (handoff events) for the preview snippet.
+                // The API already excludes them from the messages subquery, but
+                // guard here too in case older cached data slips through.
+                const lastMsg  = (conv.messages ?? []).find((m) => m.senderType !== "SYSTEM");
                 const preview  = lastMsg
                   ? (lastMsg.type && lastMsg.type !== "TEXT")
                     ? `[${lastMsg.type.toLowerCase()}]`
@@ -1646,6 +1650,35 @@ function TeachAIModal({ humanMessage, customerMessage, onClose }: TeachAIModalPr
 
 // ── Message Bubble ────────────────────────────────────────────────────────────
 
+// Handoff reason → human-readable Portuguese label
+const HANDOFF_LABELS: Record<string, string> = {
+  AI_ESCALATION:      "IA solicitou atendimento humano",
+  MENU_OPTION:        "Cliente pediu falar com humano",
+  WAITER_ESCALATION:  "Garçom solicitou atendimento humano",
+  CUSTOMER_REQUEST:   "Cliente solicitou atendimento humano",
+  COMPLAINT:          "Reclamação — aguardando atendimento",
+  UNKNOWN:            "Solicitação de atendimento humano",
+};
+
+function SystemEventNote({ msg }: { msg: Message }) {
+  // Parse [handoff:REASON] or show generic system text
+  const match = msg.content.match(/^\[handoff:([A-Z_]+)\]$/);
+  const reason = match?.[1] ?? "";
+  const label = match
+    ? (HANDOFF_LABELS[reason] ?? "Solicitação de atendimento humano")
+    : msg.content;
+
+  return (
+    <div className="flex items-center gap-2 py-1">
+      <div className="h-px flex-1 bg-gray-200" />
+      <span className="shrink-0 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+        {label}
+      </span>
+      <div className="h-px flex-1 bg-gray-200" />
+    </div>
+  );
+}
+
 function MessageBubble({
   msg,
   customerName,
@@ -1655,6 +1688,11 @@ function MessageBubble({
   customerName: string;
   allMessages:  Message[];
 }) {
+  // System events (handoff, escalation metadata) are not chat bubbles.
+  if (msg.senderType === "SYSTEM") {
+    return <SystemEventNote msg={msg} />;
+  }
+
   const isOutbound  = msg.direction === "OUTBOUND";
   const isHumanMsg  = isOutbound && msg.senderType === "HUMAN";
   const senderLabel = isOutbound
