@@ -400,6 +400,9 @@ model Order {
   saiposError         String? // last error message if send failed
   saiposLastErrorCode String? // error code from last failed attempt (e.g. "902")
   saiposLastAttemptAt DateTime? // timestamp of last Saipos send attempt
+  // ── Coupon / promotion ────────────────────────────────────────────────
+  couponCode          String? // code entered by customer at checkout
+  promotionId         String? // FK to Promotion that was applied (soft reference — no CASCADE)
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 

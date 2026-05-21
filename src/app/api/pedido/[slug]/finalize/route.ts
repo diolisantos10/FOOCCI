@@ -85,6 +85,7 @@ const bodySchema = z.object({
   customerPhone:    z.string().optional(),
   customerId:       z.string().optional(), // pre-resolved customer ID from identify flow
   clientDeliveryFee: z.number().nonnegative().optional(),
+  couponCode:       z.string().max(50).optional(),
   // UTM / channel attribution
   trackingLinkId:   z.string().optional(),
   trafficSource:    z.string().max(100).optional(),
@@ -142,7 +143,7 @@ export async function POST(
   const {
     cart, customerName, deliveryMethod, address,
     paymentMode, paymentMethodSub, customerPhone, customerId: incomingCustomerId,
-    clientDeliveryFee,
+    clientDeliveryFee, couponCode,
     trackingLinkId, trafficSource, trafficMedium, trafficCampaign, trafficContent,
   } = parsed.data;
 
@@ -320,6 +321,66 @@ export async function POST(
 
   const orderTotal = subtotal + deliveryFeeAmount;
 
+  // ── Coupon validation (server-side — do not trust client calc) ────────────
+  let discountAmount        = 0;
+  let resolvedPromoId:      string | null = null;
+  let resolvedCouponCode:   string | null = null;
+  let promoOneTimePerUser   = false;
+
+  if (couponCode?.trim()) {
+    const promo = await prisma.promotion.findFirst({
+      where: {
+        restaurantId,
+        status:     "ACTIVE",
+        couponCode: { equals: couponCode.trim(), mode: "insensitive" },
+      },
+      select: {
+        id: true, type: true, discountValue: true, channel: true,
+        minOrderValue: true, maxUses: true, usedCount: true,
+        oneTimePerUser: true, startsAt: true, endsAt: true, daysOfWeek: true,
+        couponCode: true,
+      },
+    });
+
+    if (promo) {
+      const now       = new Date();
+      const notYet    = promo.startsAt != null && promo.startsAt > now;
+      const expired   = promo.endsAt   != null && promo.endsAt   < now;
+      const dayOk     = promo.daysOfWeek.length === 0 || promo.daysOfWeek.includes(now.getDay());
+      const channelOk = promo.channel === "ALL"
+        || (promo.channel === "DELIVERY" && deliveryMethod === "delivery")
+        || (promo.channel === "QR_MENU"  && deliveryMethod === "pickup");
+      const minOk     = promo.minOrderValue == null || subtotal >= Number(promo.minOrderValue);
+      const usesOk    = promo.maxUses == null || promo.maxUses === 0 || promo.usedCount < promo.maxUses;
+
+      if (!notYet && !expired && dayOk && channelOk && minOk && usesOk) {
+        const dv = Number(promo.discountValue);
+        switch (promo.type) {
+          case "PERCENTAGE":
+            discountAmount = Math.min((subtotal * dv) / 100, subtotal);
+            break;
+          case "FIXED":
+          case "COUPON":
+            discountAmount = Math.min(dv, orderTotal);
+            break;
+          case "FREE_DELIVERY":
+            discountAmount = deliveryFeeAmount;
+            break;
+        }
+        discountAmount      = Math.round(discountAmount * 100) / 100;
+        resolvedPromoId     = promo.id;
+        resolvedCouponCode  = promo.couponCode ?? couponCode.trim();
+        promoOneTimePerUser = promo.oneTimePerUser;
+      } else {
+        console.info("[finalize] coupon rejected", {
+          couponCode: couponCode.trim(), notYet, expired, dayOk, channelOk, minOk, usesOk,
+        });
+      }
+    }
+  }
+
+  const finalTotal = Math.max(0, Math.round((orderTotal - discountAmount) * 100) / 100);
+
   // ── Phase-1 transaction: customer + address + order ───────────
   let orderId: string;
   let customerId: string;
@@ -387,6 +448,15 @@ export async function POST(
         deliveryAddressId = addr.id;
       }
 
+      // oneTimePerUser guard — runs inside transaction so it's serialized with order creation
+      if (resolvedPromoId && promoOneTimePerUser) {
+        const alreadyUsed = await tx.order.findFirst({
+          where:  { customerId: customer.id, promotionId: resolvedPromoId },
+          select: { id: true },
+        });
+        if (alreadyUsed) throw new Error("COUPON_ALREADY_USED");
+      }
+
       const order = await tx.order.create({
         data: {
           restaurantId,
@@ -396,8 +466,10 @@ export async function POST(
           source:         "pedido",
           subtotal:       new Decimal(subtotal),
           deliveryFee:    new Decimal(deliveryFeeAmount),
-          discount:       new Decimal(0),
-          total:          new Decimal(orderTotal),
+          discount:       new Decimal(discountAmount),
+          total:          new Decimal(finalTotal),
+          couponCode:     resolvedCouponCode,
+          promotionId:    resolvedPromoId,
           deliveryAddressId,
           idempotencyKey: ikey,
           trackingLinkId:  trackingLinkId  ?? null,
@@ -425,12 +497,22 @@ export async function POST(
         select: { id: true },
       });
 
+      if (resolvedPromoId) {
+        await tx.promotion.update({
+          where: { id: resolvedPromoId },
+          data:  { usedCount: { increment: 1 } },
+        });
+      }
+
       return { customerId: customer.id, orderId: order.id };
     });
 
     orderId    = result.orderId;
     customerId = result.customerId;
   } catch (err) {
+    if (err instanceof Error && err.message === "COUPON_ALREADY_USED") {
+      return NextResponse.json({ error: "Cupom já utilizado por este cliente" }, { status: 400 });
+    }
     console.error("[POST /api/pedido/[slug]/finalize] phase-1 transaction failed", err);
     return NextResponse.json({ error: "Erro ao criar pedido." }, { status: 500 });
   }
@@ -479,7 +561,7 @@ export async function POST(
       try {
         const pixResult = await createPixPayment(mpToken, {
           orderId,
-          amount:          orderTotal,
+          amount:          finalTotal,
           description:     `Pedido – ${restaurantId}`,
           notificationUrl: appUrl ? `${appUrl}/api/payments/mercadopago/webhook` : undefined,
         });
@@ -498,7 +580,7 @@ export async function POST(
       try {
         const stoneResult = await createPaymentLink({
           orderId:          orderId,
-          amount:           orderTotal,
+          amount:           finalTotal,
           description:      `Pedido – ${restaurantId}`,
           expiresInMinutes: 30,
         });
@@ -519,7 +601,7 @@ export async function POST(
           orderId:           orderId,
           method:            "ONLINE",
           status:            "LINK_SENT",
-          amount:            new Decimal(orderTotal),
+          amount:            new Decimal(finalTotal),
           paymentMode:       "PAY_NOW",
           providerName,
           providerReference,
@@ -560,7 +642,7 @@ export async function POST(
         orderId:     orderId,
         method:      dbMethod,
         status:      isDelivery ? "PAY_ON_DELIVERY" : "PAY_ON_PICKUP",
-        amount:      new Decimal(orderTotal),
+        amount:      new Decimal(finalTotal),
         paymentMode: isDelivery ? "PAY_ON_DELIVERY" : "PAY_ON_PICKUP",
       },
     }),
