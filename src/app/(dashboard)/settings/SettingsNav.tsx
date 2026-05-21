@@ -55,7 +55,7 @@ export default function SettingsNav() {
                   href={item.href}
                   className={`group mx-2 flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                     active
-                      ? "bg-indigo-50 text-indigo-700"
+                      ? "bg-brand-50 text-brand-600"
                       : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   } ${item.soon ? "opacity-50 cursor-default pointer-events-none" : ""}`}
                 >
@@ -83,7 +83,7 @@ export default function SettingsNav() {
               href={item.href}
               className={`shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
                 active
-                  ? "bg-indigo-50 text-indigo-700"
+                  ? "bg-brand-50 text-brand-600"
                   : "text-gray-500 hover:text-gray-800"
               } ${item.soon ? "opacity-40 pointer-events-none" : ""}`}
             >

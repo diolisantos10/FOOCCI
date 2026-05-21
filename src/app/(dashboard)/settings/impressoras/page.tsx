@@ -40,7 +40,7 @@ export default function ImpressorasPage() {
             <>Confirme a impressão na janela do navegador. A comanda é enviada para a impressora padrão.</>,
           ].map((text, i) => (
             <li key={i} className="flex items-start gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
                 {i + 1}
               </span>
               <span className="text-sm text-gray-700 pt-0.5">{text}</span>
@@ -97,7 +97,7 @@ export default function ImpressorasPage() {
                   "Para sair do modo kiosk, pressione Alt + F4.",
                 ].map((text, i) => (
                   <li key={i} className="flex items-start gap-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
                       {i + 1}
                     </span>
                     <span className="text-sm text-gray-700 pt-0.5">{text}</span>
@@ -155,7 +155,7 @@ export default function ImpressorasPage() {
             "Verifique se o texto cabe dentro dos 72mm da bobina. Se a fonte ficar pequena, aumente para 110–120%.",
           ].map((text, i) => (
             <li key={i} className="flex items-start gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
                 {i + 1}
               </span>
               <span className="text-sm text-gray-700 pt-0.5">{text}</span>

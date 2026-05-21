@@ -82,7 +82,7 @@ function calcDistanceFee(
 // ── Zone-bar color palettes ───────────────────────────────────────────────────
 
 const ZONE_BAR_COLORS = [
-  "bg-indigo-400",
+  "bg-orange-400",
   "bg-violet-500",
   "bg-purple-500",
   "bg-fuchsia-500",
@@ -90,7 +90,7 @@ const ZONE_BAR_COLORS = [
 ];
 
 const ZONE_BG_COLORS = [
-  "bg-indigo-50",
+  "bg-orange-50",
   "bg-violet-50",
   "bg-purple-50",
   "bg-fuchsia-50",
@@ -124,17 +124,17 @@ function CoverageOverview({
           title="Visão da cobertura"
           subtitle="Como o cliente verá sua entrega."
         />
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+        <div className="rounded-xl border border-orange-100 bg-orange-50 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-semibold text-indigo-900">Toda a área de entrega</span>
-            <span className="text-sm font-bold text-indigo-700">
+            <span className="text-sm font-semibold text-orange-900">Toda a área de entrega</span>
+            <span className="text-sm font-bold text-orange-700">
               {fee == null || fee === 0
                 ? <span className="text-green-600">Grátis</span>
                 : `R$ ${fee.toFixed(2).replace(".", ",")}`}
             </span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-indigo-100">
-            <div className="h-2 w-full rounded-full bg-indigo-400" />
+          <div className="h-2 w-full overflow-hidden rounded-full bg-orange-100">
+            <div className="h-2 w-full rounded-full bg-orange-400" />
           </div>
           <div className="mt-3 flex flex-wrap gap-3">
             {minutes != null && minutes > 0 && (
@@ -174,16 +174,16 @@ function CoverageOverview({
           title="Visão da cobertura"
           subtitle="Preço por distância com limites configuráveis."
         />
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+        <div className="rounded-xl border border-orange-100 bg-orange-50 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-semibold text-indigo-900">Cobertura por distância</span>
+            <span className="text-sm font-semibold text-orange-900">Cobertura por distância</span>
             {maxKm != null && (
-              <span className="text-sm font-bold text-indigo-700">até {maxKm} km</span>
+              <span className="text-sm font-bold text-orange-700">até {maxKm} km</span>
             )}
           </div>
           {/* Gradient bar representing escalating fee */}
-          <div className="h-2 w-full overflow-hidden rounded-full bg-indigo-100">
-            <div className="h-2 w-full rounded-full bg-gradient-to-r from-indigo-300 to-indigo-600" />
+          <div className="h-2 w-full overflow-hidden rounded-full bg-orange-100">
+            <div className="h-2 w-full rounded-full bg-gradient-to-r from-orange-300 to-orange-600" />
           </div>
           <div className="mt-3 flex flex-wrap gap-3">
             {baseFee != null && (
@@ -524,7 +524,7 @@ function DeliverySimulator({
         <div className="mt-4 flex items-center gap-2">
           <button
             type="submit"
-            className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+            className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >
             Simular →
           </button>
@@ -610,7 +610,7 @@ function DeliverySimulator({
 // ── Chip ──────────────────────────────────────────────────────────────────────
 
 const CHIP_STYLES = {
-  indigo: "bg-indigo-100 text-indigo-700",
+  indigo: "bg-orange-100 text-orange-700",
   green:  "bg-green-100  text-green-700",
   amber:  "bg-amber-100  text-amber-700",
   gray:   "bg-gray-100   text-gray-500",
@@ -649,7 +649,7 @@ function ZoneRow({ zone, index, onDelete, onToggle, onEdit }: ZoneRowProps) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">
             {index + 1}
           </span>
           <div>
@@ -679,7 +679,7 @@ function ZoneRow({ zone, index, onDelete, onToggle, onEdit }: ZoneRowProps) {
             className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
               zone.isActive
                 ? "border-gray-200 text-gray-500 hover:bg-gray-50"
-                : "border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                : "border-brand-200 bg-brand-50 text-brand-600 hover:bg-brand-100"
             }`}
           >
             {zone.isActive ? "Desativar" : "Ativar"}
@@ -830,7 +830,7 @@ function ZoneEditor({ initial, onSave, onCancel, saving }: ZoneEditorProps) {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             >
               {saving ? "Salvando…" : "Salvar zona"}
             </button>
@@ -1119,7 +1119,7 @@ export default function DeliveryPage() {
                   onClick={() => setForm((f) => ({ ...f, mode: "simple" }))}
                   className={`rounded-xl border p-4 text-left transition ${
                     form.mode === "simple"
-                      ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300"
+                      ? "border-brand-400 bg-brand-50 ring-1 ring-brand-300"
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
@@ -1133,7 +1133,7 @@ export default function DeliveryPage() {
                   onClick={() => setForm((f) => ({ ...f, mode: "advanced" }))}
                   className={`rounded-xl border p-4 text-left transition ${
                     form.mode === "advanced"
-                      ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300"
+                      ? "border-brand-400 bg-brand-50 ring-1 ring-brand-300"
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
@@ -1147,7 +1147,7 @@ export default function DeliveryPage() {
                   onClick={() => setForm((f) => ({ ...f, mode: "distance" }))}
                   className={`rounded-xl border p-4 text-left transition ${
                     form.mode === "distance"
-                      ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300"
+                      ? "border-brand-400 bg-brand-50 ring-1 ring-brand-300"
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
@@ -1161,7 +1161,7 @@ export default function DeliveryPage() {
                   onClick={() => setForm((f) => ({ ...f, mode: "manual" }))}
                   className={`rounded-xl border p-4 text-left transition ${
                     form.mode === "manual"
-                      ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300"
+                      ? "border-brand-400 bg-brand-50 ring-1 ring-brand-300"
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
@@ -1246,7 +1246,7 @@ export default function DeliveryPage() {
                   <button
                     type="button"
                     onClick={openNewZone}
-                    className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                    className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
                   >
                     + Adicionar zona
                   </button>
@@ -1258,7 +1258,7 @@ export default function DeliveryPage() {
                     <button
                       type="button"
                       onClick={openNewZone}
-                      className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                      className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
                     >
                       Criar primeira zona →
                     </button>
@@ -1398,9 +1398,9 @@ export default function DeliveryPage() {
 
                 {/* Live formula preview */}
                 {(toNum(form.distancePricePerKm) != null) && (
-                  <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
-                    <p className="text-xs font-semibold text-indigo-700 mb-1.5">Prévia da fórmula</p>
-                    <div className="flex flex-wrap gap-3 text-xs text-indigo-800">
+                  <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3">
+                    <p className="text-xs font-semibold text-orange-700 mb-1.5">Prévia da fórmula</p>
+                    <div className="flex flex-wrap gap-3 text-xs text-orange-800">
                       {[1, 3, 5, 10].filter((km) => toNum(form.distanceMaxKm) == null || km <= (toNum(form.distanceMaxKm) ?? 0)).map((km) => {
                         const base   = toNum(form.distanceBaseFee) ?? 0;
                         const perK   = toNum(form.distancePricePerKm) ?? 0;
@@ -1409,7 +1409,7 @@ export default function DeliveryPage() {
                         const maxF   = toNum(form.distanceMaxFee);
                         const fee    = calcDistanceFee(km, base, perK, minF, minFKm, maxF);
                         return (
-                          <span key={km} className="rounded-full bg-indigo-100 px-2.5 py-0.5 font-medium">
+                          <span key={km} className="rounded-full bg-orange-100 px-2.5 py-0.5 font-medium">
                             {km} km → R$ {fee.toFixed(2).replace(".", ",")}
                           </span>
                         );
@@ -1523,17 +1523,17 @@ export default function DeliveryPage() {
             </div>
 
             {/* ── Phase 5 placeholder — map zones ──────────────────────────────── */}
-            <div className="rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/50 p-5">
+            <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50/50 p-5">
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 text-lg">🗺</span>
                 <div>
-                  <p className="text-sm font-semibold text-indigo-800">
+                  <p className="text-sm font-semibold text-brand-800">
                     Zonas desenhadas no mapa
-                    <span className="ml-2 rounded-full bg-indigo-200 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-indigo-600">
+                    <span className="ml-2 rounded-full bg-brand-200 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-600">
                       em breve
                     </span>
                   </p>
-                  <p className="mt-1 text-xs text-indigo-600 opacity-80">
+                  <p className="mt-1 text-xs text-brand-600 opacity-80">
                     Defina áreas de entrega diretamente no mapa, com precisão geográfica por polígonos.
                     O modelo de dados já suporta isso — a interface está em desenvolvimento.
                   </p>

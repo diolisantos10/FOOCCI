@@ -14,7 +14,7 @@ export async function apiFetch(url: string, method = "GET", body?: object) {
 }
 
 export const INPUT =
-  "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition";
+  "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition";
 
 export const SELECT = INPUT;
 
@@ -69,7 +69,7 @@ export function SaveButton({ saving, label = "Salvar" }: { saving: boolean; labe
       <button
         type="submit"
         disabled={saving}
-        className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition"
+        className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
       >
         {saving ? "Salvando…" : label}
       </button>
@@ -98,7 +98,7 @@ export function Toggle({
           onChange={(e) => onChange(e.target.checked)}
         />
         <div
-          className={`h-5 w-9 rounded-full transition-colors ${checked ? "bg-indigo-500" : "bg-gray-300"}`}
+          className={`h-5 w-9 rounded-full transition-colors ${checked ? "bg-brand-500" : "bg-gray-300"}`}
         />
         <div
           className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${

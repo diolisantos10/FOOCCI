@@ -173,13 +173,13 @@ export function FieldMappingStep({
     <div className="flex flex-col gap-4">
       {/* ── Saved templates strip ─────────────────────────────────────────── */}
       {savedTemplates.length > 0 && (
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
-          <p className="mb-2 text-xs font-semibold text-indigo-700">Templates salvos</p>
+        <div className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3">
+          <p className="mb-2 text-xs font-semibold text-brand-700">Templates salvos</p>
           <div className="flex flex-wrap gap-2">
             {savedTemplates.map((tpl) => (
-              <div key={tpl.id} className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2 py-1 text-xs">
+              <div key={tpl.id} className="flex items-center gap-1 rounded-lg border border-brand-200 bg-white px-2 py-1 text-xs">
                 <button
-                  className="font-medium text-indigo-700 hover:underline"
+                  className="font-medium text-brand-700 hover:underline"
                   onClick={() => handleLoadTemplate(tpl.id)}
                 >
                   {tpl.name}
@@ -262,7 +262,7 @@ export function FieldMappingStep({
                   {/* Canonical field selector */}
                   <td className="px-4 py-2">
                     <select
-                      className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                       value={m.canonicalKey}
                       onChange={(e) => setMapping(m.sourceHeader, e.target.value)}
                     >
@@ -308,7 +308,7 @@ export function FieldMappingStep({
       <div className="flex items-start gap-3">
         {!showSave ? (
           <button
-            className="text-xs text-indigo-600 hover:underline"
+            className="text-xs text-brand-600 hover:underline"
             onClick={() => setShowSave(true)}
           >
             + Salvar como template
@@ -320,10 +320,10 @@ export function FieldMappingStep({
               placeholder="Nome do template…"
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
-              className="rounded-lg border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="rounded-lg border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
             <button
-              className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-lg bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
               disabled={savingTemplate || !templateName.trim()}
               onClick={handleSaveTemplate}
             >
@@ -345,7 +345,7 @@ export function FieldMappingStep({
       {/* ── Confirm button ────────────────────────────────────────────────── */}
       <div className="flex justify-end pt-2">
         <button
-          className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={!validation.valid}
           onClick={() => onConfirm(mappings)}
         >

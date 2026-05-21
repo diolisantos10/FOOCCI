@@ -184,7 +184,7 @@ export default function TeamPage() {
               <button
                 type="submit"
                 disabled={adding}
-                className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+                className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 transition"
               >
                 {adding ? "Criando…" : "Criar usuário"}
               </button>
@@ -195,7 +195,7 @@ export default function TeamPage() {
         <button
           type="button"
           onClick={() => setShowForm(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 py-4 text-sm font-medium text-gray-400 hover:border-indigo-300 hover:text-indigo-600 transition"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 py-4 text-sm font-medium text-gray-400 hover:border-brand-300 hover:text-brand-600 transition"
         >
           + Adicionar membro
         </button>

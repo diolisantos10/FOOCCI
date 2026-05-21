@@ -335,7 +335,7 @@ export default function StorePage() {
               type="button"
               onClick={lookupCep}
               disabled={cepLoading}
-              className="mb-[1px] rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition"
+              className="mb-[1px] rounded-xl border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50 transition"
             >
               {cepLoading ? "Buscando…" : "Buscar CEP"}
             </button>
@@ -570,9 +570,9 @@ export default function StorePage() {
 
           <p className="rounded-lg bg-gray-50 px-4 py-3 text-xs text-gray-500">
             💡 Taxas, zonas e horários de entrega são configurados em{" "}
-            <a href="/settings/delivery" className="font-medium text-indigo-600 hover:underline">Configurações › Entrega</a>.
+            <a href="/settings/delivery" className="font-medium text-brand-600 hover:underline">Configurações › Entrega</a>.
             Horários de funcionamento em{" "}
-            <a href="/settings/hours" className="font-medium text-indigo-600 hover:underline">Configurações › Horários</a>.
+            <a href="/settings/hours" className="font-medium text-brand-600 hover:underline">Configurações › Horários</a>.
           </p>
         </div>
       </PageCard>

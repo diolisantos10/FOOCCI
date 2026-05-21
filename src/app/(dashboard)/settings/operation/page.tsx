@@ -8,7 +8,7 @@ const DAY_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const DAY_FULL  = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
 const TIME_INPUT =
-  "rounded-xl border border-gray-200 bg-white px-2 py-2 text-sm text-gray-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition w-24";
+  "rounded-xl border border-gray-200 bg-white px-2 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition w-24";
 
 interface Period {
   open:  string;
@@ -144,7 +144,7 @@ export default function OperationPage() {
               onClick={() => toggleDay(idx, !day.isOpen)}
               className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold transition-colors ${
                 day.isOpen
-                  ? "bg-indigo-600 text-white shadow-sm shadow-indigo-200"
+                  ? "bg-brand-600 text-white shadow-sm"
                   : "bg-gray-100 text-gray-400 hover:bg-gray-200"
               }`}
             >
@@ -205,7 +205,7 @@ export default function OperationPage() {
                             type="button"
                             onClick={() => copyToWeekdays(day)}
                             title="Copiar todos os períodos para dias úteis"
-                            className="ml-1 text-[10px] text-indigo-400 hover:text-indigo-600 underline"
+                            className="ml-1 text-[10px] text-brand-400 hover:text-brand-600 underline"
                           >
                             copiar
                           </button>
@@ -217,7 +217,7 @@ export default function OperationPage() {
                     <button
                       type="button"
                       onClick={() => addPeriod(dayIdx)}
-                      className="self-start text-[11px] text-indigo-500 hover:text-indigo-700 underline"
+                      className="self-start text-[11px] text-brand-500 hover:text-brand-700 underline"
                     >
                       + Adicionar período
                     </button>

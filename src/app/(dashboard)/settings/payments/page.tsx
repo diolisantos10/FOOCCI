@@ -87,7 +87,7 @@ export default function PaymentsPage() {
             <div
               key={key}
               className={`flex items-center gap-4 rounded-xl px-4 py-4 transition-colors ${
-                form[key as MethodKey] ? "bg-indigo-50" : "bg-gray-50"
+                form[key as MethodKey] ? "bg-brand-50" : "bg-gray-50"
               }`}
             >
               <span className="text-2xl">{icon}</span>

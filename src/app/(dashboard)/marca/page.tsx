@@ -158,7 +158,7 @@ function Chips({
             onClick={() => onChange(allowDeselect && active ? "" : opt.value)}
             className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
               active
-                ? "border-indigo-500 bg-indigo-600 text-white shadow-sm"
+                ? "border-brand-500 bg-brand-600 text-white shadow-sm"
                 : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
             }`}
           >
@@ -214,7 +214,7 @@ function MultiChips({
               onClick={() => toggle(trait)}
               className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
                 active
-                  ? "border-indigo-500 bg-indigo-600 text-white"
+                  ? "border-brand-500 bg-brand-600 text-white"
                   : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
               }`}
             >
@@ -229,13 +229,13 @@ function MultiChips({
           {customSelected.map((t) => (
             <span
               key={t}
-              className="flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-700"
+              className="flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm text-brand-700"
             >
               {t}
               <button
                 type="button"
                 onClick={() => onChange(value.filter((x) => x !== t))}
-                className="ml-0.5 text-indigo-400 hover:text-indigo-700"
+                className="ml-0.5 text-brand-400 hover:text-brand-700"
               >
                 ×
               </button>
@@ -258,7 +258,7 @@ function MultiChips({
             }}
             placeholder="Adicionar traço personalizado…"
             maxLength={30}
-            className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+            className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition"
           />
           <button
             type="button"
@@ -459,7 +459,7 @@ export default function MarcaPage() {
                 className={`inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
                   logoUploading
                     ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
-                    : "border-indigo-300 bg-white text-indigo-600 hover:bg-indigo-50 cursor-pointer"
+                    : "border-brand-300 bg-white text-brand-600 hover:bg-brand-50 cursor-pointer"
                 }`}
               >
                 {logoUploading ? "Enviando…" : form.logoUrl ? "Trocar logo" : "Fazer upload"}
@@ -727,14 +727,14 @@ export default function MarcaPage() {
                 onClick={() => set("cuisineType")(active ? "" : opt.value)}
                 className={`flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-center transition-all ${
                   active
-                    ? "border-indigo-400 bg-indigo-50 shadow-sm"
+                    ? "border-brand-400 bg-brand-50 shadow-sm"
                     : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
                 }`}
               >
                 <span className="text-2xl leading-none">{opt.emoji}</span>
                 <span
                   className={`text-[10px] font-medium leading-tight ${
-                    active ? "text-indigo-700" : "text-gray-600"
+                    active ? "text-brand-700" : "text-gray-600"
                   }`}
                 >
                   {opt.label}

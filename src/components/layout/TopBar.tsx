@@ -468,7 +468,7 @@ export function TopBar({ title }: TopBarProps) {
             <select
               value={modalReason}
               onChange={(e) => setModalReason(e.target.value)}
-              className="mb-4 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="mb-4 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
             >
               {PAUSE_REASONS.map((r) => (
                 <option key={r} value={r}>{r}</option>
@@ -479,7 +479,7 @@ export function TopBar({ title }: TopBarProps) {
             <select
               value={modalResume ?? ""}
               onChange={(e) => setModalResume(e.target.value === "" ? null : Number(e.target.value))}
-              className="mb-6 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="mb-6 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
             >
               {AUTO_RESUME_OPTIONS.map((o) => (
                 <option key={o.label} value={o.minutes ?? ""}>{o.label}</option>

@@ -74,8 +74,8 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-900">CRM Restaurante</h1>
-        <p className="mt-1 text-sm text-gray-500">Acesse sua conta para continuar</p>
+        <h1 className="text-2xl font-bold text-gray-900">Foocci</h1>
+        <p className="mt-1 text-sm text-gray-500">Seu atendimento vendendo sozinho.</p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
@@ -117,14 +117,14 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 w-full rounded-lg bg-orange-500 py-3 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-60"
+            className="mt-2 w-full rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
 
         <div className="mt-4 text-center">
-          <a href="/recover" className="text-sm text-orange-500 hover:underline">
+          <a href="/recover" className="text-sm text-brand-600 hover:underline">
             Esqueci minha senha
           </a>
         </div>
