@@ -95,7 +95,10 @@ export default async function OrderDetailPage({
             <div>
               <dt className="text-gray-500">Data</dt>
               <dd className="font-medium">
-                {new Date(order.createdAt).toLocaleString("pt-BR")}
+                {new Date(order.createdAt).toLocaleString("pt-BR", {
+                  day: "2-digit", month: "2-digit", year: "numeric",
+                  hour: "2-digit", minute: "2-digit",
+                })}
               </dd>
             </div>
             {order.deliveryAddress && (

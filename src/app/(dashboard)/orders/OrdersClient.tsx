@@ -414,6 +414,14 @@ function elapsed(date: Date): string {
   return `${h}h ${m % 60}min`;
 }
 
+function formatCardDateTime(date: Date): string {
+  const d = String(date.getDate()).padStart(2, "0");
+  const mo = String(date.getMonth() + 1).padStart(2, "0");
+  const h  = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  return `${d}/${mo} · ${h}:${mi}`;
+}
+
 function isDelayed(order: MockOrder): boolean {
   if (TERMINAL.includes(order.status)) return false;
   return minutesSince(order.createdAt) > DELAY_THRESHOLD;
@@ -737,7 +745,7 @@ function OrderCard({
           </span>
           {badge}
           <span className={`ml-auto text-xs font-semibold tabular-nums ${delayed ? "text-red-600" : "text-gray-400"}`}>
-            {mins < 1 ? "agora" : `${mins} min`}
+            {formatCardDateTime(order.createdAt)}
           </span>
         </div>
 
