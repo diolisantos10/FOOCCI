@@ -44,10 +44,14 @@ export default function OperationPage() {
         const merged = DEFAULT_DAYS.map((def) => {
           const found = (data as Record<string, unknown>[]).find((d) => d.dayOfWeek === def.dayOfWeek);
           if (!found) return def;
-          const apiPeriods = found.periods as Period[] | undefined;
+          // API returns `periodsJson` (DB column name); saved payload uses `periods`.
+          // Check both so that data round-trips correctly after a save/reload cycle.
+          const rawPeriods =
+            (Array.isArray(found.periodsJson) ? found.periodsJson : null) ??
+            (Array.isArray(found.periods)     ? found.periods     : null);
           const periods: Period[] =
-            Array.isArray(apiPeriods) && apiPeriods.length > 0
-              ? apiPeriods
+            rawPeriods && (rawPeriods as Period[]).length > 0
+              ? (rawPeriods as Period[])
               : [{ open: (found.openTime as string) ?? "09:00", close: (found.closeTime as string) ?? "22:00" }];
           return { dayOfWeek: def.dayOfWeek, isOpen: !!found.isOpen, periods };
         });

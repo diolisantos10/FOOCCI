@@ -31,7 +31,7 @@ import { ConversationStatus } from "@prisma/client";
 import type { MenuOption } from "@/validators/whatsapp-agent";
 import { RestaurantKnowledgeService } from "@/services/knowledge/RestaurantKnowledgeService";
 import { markConversationNeedsHuman } from "@/lib/handoff";
-import { getPeriodsForRow, isInPeriod } from "@/lib/business-hours";
+import { getPeriodsForRow, isInPeriod, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
 
 // ─── constants ────────────────────────────────────────────────
 
@@ -119,6 +119,7 @@ interface ReplyContext {
   menuOptions:      MenuOption[];
   hoursText:        string | null;
   isCurrentlyOpen:  boolean;
+  closedMessage:    string | null; // rich closed message with today's hours + next opening
 }
 
 // ─── GPT reply generation ─────────────────────────────────────
@@ -153,15 +154,16 @@ ${ctx.pedidoUrl ? `- Cardápio / pedidos online: ${ctx.pedidoUrl}` : ""}
 ${ctx.address    ? `- Endereço: ${ctx.address}`                    : ""}
 - Delivery: ${ctx.deliveryEnabled ? "Sim, fazemos entrega" : "Retirada no local"}
 ${ctx.hoursText  ? `- Horários:\n${ctx.hoursText}`                 : ""}
+${!ctx.isCurrentlyOpen && ctx.closedMessage ? `⚠️ STATUS ATUAL: O restaurante está FECHADO agora. ${ctx.closedMessage}` : ""}
 ${knowledgeSection}
 
 INSTRUÇÕES:
 1. Máximo 2 parágrafos curtos. Sem listas longas.
 2. Nunca invente preços, produtos ou promoções que não estão no contexto acima.
-3. Se o cliente pedir para ver o cardápio ou fazer pedido, manda o link${ctx.pedidoUrl ? ` (${ctx.pedidoUrl})` : ""}.
-4. Se houver reclamação, urgência ou o cliente pedir para falar com uma pessoa, retorne needsHandoff=true.
-5. Se não souber responder com certeza, retorne needsHandoff=true.
-6. Use emoji com moderação 😊.
+3. Se o cliente pedir para ver o cardápio, pode enviar o link${ctx.pedidoUrl ? ` (${ctx.pedidoUrl})` : ""}, mas deixe claro que${!ctx.isCurrentlyOpen ? " os pedidos estão pausados e" : ""} ele deve finalizar durante o horário de funcionamento.
+${!ctx.isCurrentlyOpen ? "4. Não ofereça o link de pedido como se estivesse aberto. Informe o horário de reabertura quando disponível.\n5." : "4."}Se houver reclamação, urgência ou o cliente pedir para falar com uma pessoa, retorne needsHandoff=true.
+${!ctx.isCurrentlyOpen ? "6." : "5."}Se não souber responder com certeza, retorne needsHandoff=true.
+${!ctx.isCurrentlyOpen ? "7." : "6."}Use emoji com moderação 😊.
 
 Responda APENAS com JSON válido: {"reply":"...","needsHandoff":false}`;
 
@@ -205,6 +207,12 @@ function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
   const { orderPreMessage, pedidoUrl, handoffMessage } = ctx;
   switch (opt.flow) {
     case "order":
+      if (!ctx.isCurrentlyOpen) {
+        const base = ctx.closedMessage ?? "No momento estamos fechados.";
+        return pedidoUrl
+          ? `${base}\n\nVeja nosso cardápio (pedidos pausados até reabrirmos):\n${pedidoUrl}`
+          : base;
+      }
       return orderPreMessage + (pedidoUrl ? `\n${pedidoUrl}` : "");
     case "handoff":
       return handoffMessage;
@@ -225,11 +233,13 @@ function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
 }
 
 function buildTemplateReply(intent: Intent, ctx: ReplyContext): string | null {
-  // Block ordering attempts outside business hours
+  // Block ordering attempts outside business hours — reply with details + allow browsing
   if (!ctx.isCurrentlyOpen && (intent === "ORDER" || intent === "MENU_REQUEST")) {
-    return ctx.hoursText
-      ? `No momento estamos fechados. 😕\n\n${ctx.hoursText}`
-      : "No momento estamos fechados. Por favor, tente novamente durante nosso horário de atendimento.";
+    const base = ctx.closedMessage ?? "No momento estamos fechados.";
+    const menuLine = ctx.pedidoUrl
+      ? `\n\nVocê pode consultar o cardápio à vontade (pedidos ficam pausados até reabrirmos) 😊\n${ctx.pedidoUrl}`
+      : "";
+    return `${base}${menuLine}`;
   }
 
   switch (intent) {
@@ -386,10 +396,16 @@ async function run(conversationId: string): Promise<void> {
   const nowMin    = nowDate.getHours() * 60 + nowDate.getMinutes();
   let hoursText: string | null = null;
   let isCurrentlyOpen = true; // default open when no config
+  let closedMessage: string | null = null;
   if (businessHoursRows.length > 0) {
-    const todayRow = businessHoursRows.find((h) => h.dayOfWeek === todayDow);
+    const todayRow     = businessHoursRows.find((h) => h.dayOfWeek === todayDow);
     const todayPeriods = todayRow ? getPeriodsForRow(todayRow) : [];
-    isCurrentlyOpen = todayPeriods.some((p) => isInPeriod(nowMin, p));
+    isCurrentlyOpen    = todayPeriods.some((p) => isInPeriod(nowMin, p));
+
+    if (!isCurrentlyOpen) {
+      const nextOpenAt = getNextOpenAt(businessHoursRows, todayDow, nowMin);
+      closedMessage    = buildClosedMessage(todayPeriods, nextOpenAt);
+    }
 
     const todayPeriodsStr = todayPeriods.map((p) => `${p.open}–${p.close}`).join(", ");
     const todayStatus = todayRow
@@ -421,6 +437,7 @@ async function run(conversationId: string): Promise<void> {
     menuOptions,
     hoursText,
     isCurrentlyOpen,
+    closedMessage,
   };
 
   const toPhone = conversation.customer.phone.replace(/^\+/, "");
@@ -518,10 +535,18 @@ async function run(conversationId: string): Promise<void> {
         } else {
           // Use GREETING template (with menu list) or data-backed template
           if (intent === "GREETING") {
-            const menuList = buildMenuList(menuOptions);
-            replyText = ctx.welcomeMessage + (menuList
-              ? menuList + "\n\nResponda com o número da opção 😊"
-              : (ctx.pedidoUrl ? `\n\nCardápio: ${ctx.pedidoUrl}` : ""));
+            if (!ctx.isCurrentlyOpen && ctx.closedMessage) {
+              // Closed greeting: lead with closed message, offer menu for browsing
+              const menuLine = ctx.pedidoUrl
+                ? `\n\nVocê pode ver nosso cardápio à vontade (pedidos ficam pausados até reabrirmos) 😊\n${ctx.pedidoUrl}`
+                : "";
+              replyText = `Oi! 👋 ${ctx.closedMessage}${menuLine}`;
+            } else {
+              const menuList = buildMenuList(menuOptions);
+              replyText = ctx.welcomeMessage + (menuList
+                ? menuList + "\n\nResponda com o número da opção 😊"
+                : (ctx.pedidoUrl ? `\n\nCardápio: ${ctx.pedidoUrl}` : ""));
+            }
           } else {
             replyText = templateReply ?? ctx.welcomeMessage;
           }

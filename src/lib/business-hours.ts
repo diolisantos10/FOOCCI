@@ -17,6 +17,11 @@ export interface TimePeriod {
   close: string; // "HH:MM"
 }
 
+const DAY_LABELS_PT = [
+  "domingo", "segunda-feira", "terça-feira",
+  "quarta-feira", "quinta-feira", "sexta-feira", "sábado",
+];
+
 export function toMinutes(hhmm: string): number {
   const [h = "0", m = "0"] = hhmm.split(":");
   return parseInt(h, 10) * 60 + parseInt(m, 10);
@@ -48,6 +53,70 @@ export function getPeriodsForRow(row: {
     if (Array.isArray(parsed) && parsed.length > 0) return parsed;
   }
   return [{ open: row.openTime, close: row.closeTime }];
+}
+
+/**
+ * Finds the next future opening time given all rows, current day, and current minute.
+ * Returns `{ dayLabel: "hoje"|"amanhã"|"<day name>", time: "HH:MM" }` or null if no
+ * scheduled opening is found in the next 7 days.
+ */
+export function getNextOpenAt(
+  rows: Array<{ dayOfWeek: number; isOpen: boolean; openTime: string; closeTime: string; periodsJson: unknown }>,
+  todayDow: number,
+  nowMin: number,
+): { dayLabel: string; time: string } | null {
+  // Remaining periods today
+  const todayRow = rows.find((r) => r.dayOfWeek === todayDow);
+  if (todayRow) {
+    const todayPeriods = getPeriodsForRow(todayRow);
+    const next = todayPeriods.find((p) => toMinutes(p.open) > nowMin);
+    if (next) return { dayLabel: "hoje", time: next.open };
+  }
+  // Next 6 days
+  for (let i = 1; i <= 6; i++) {
+    const nextDow  = (todayDow + i) % 7;
+    const row      = rows.find((r) => r.dayOfWeek === nextDow);
+    if (!row) continue;
+    const periods  = getPeriodsForRow(row);
+    if (periods.length > 0) {
+      const dayLabel = i === 1 ? "amanhã" : (DAY_LABELS_PT[nextDow] ?? `dia ${nextDow}`);
+      return { dayLabel, time: periods[0]!.open };
+    }
+  }
+  return null;
+}
+
+/**
+ * Builds a human-readable Portuguese closed message.
+ * Examples:
+ *   "Estamos fechados no momento. Hoje funcionamos das 11:00–15:00 e das 18:00–23:00. Voltamos hoje às 18:00."
+ *   "Estamos fechados no momento. Hoje funcionamos das 11:00–22:00. Voltamos amanhã às 11:00."
+ *   "Hoje estamos fechados. Voltamos segunda-feira às 11:00."
+ */
+export function buildClosedMessage(
+  todayPeriods: TimePeriod[],
+  nextOpenAt: { dayLabel: string; time: string } | null,
+): string {
+  const nextStr = nextOpenAt
+    ? ` Voltamos ${
+        nextOpenAt.dayLabel === "hoje"   ? "hoje às" :
+        nextOpenAt.dayLabel === "amanhã" ? "amanhã às" :
+        `${nextOpenAt.dayLabel} às`
+      } ${nextOpenAt.time}.`
+    : "";
+
+  if (todayPeriods.length > 0) {
+    const hoursStr = todayPeriods.map((p) => `${p.open}–${p.close}`).join(" e ");
+    return `Estamos fechados no momento. Hoje funcionamos das ${hoursStr}.${nextStr}`;
+  }
+  if (nextOpenAt) {
+    const prefix =
+      nextOpenAt.dayLabel === "hoje"   ? "Voltamos hoje às" :
+      nextOpenAt.dayLabel === "amanhã" ? "Voltamos amanhã às" :
+      `Voltamos ${nextOpenAt.dayLabel} às`;
+    return `Hoje estamos fechados. ${prefix} ${nextOpenAt.time}.`;
+  }
+  return "Estamos fechados no momento.";
 }
 
 /**

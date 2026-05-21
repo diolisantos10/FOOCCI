@@ -11,7 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { PedidoClient } from "./PedidoClient";
 import { phoneCandidates } from "@/lib/phone";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
-import { isOpenFromRow } from "@/lib/business-hours";
+import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
 
 export const dynamic = "force-dynamic";
 
@@ -145,16 +145,23 @@ export default async function PedidoPage({
   }
 
   // ── Business hours — is the restaurant currently open? ──────────────────────
-  const now = new Date();
-  const tz  = restaurant.timezone ?? "America/Sao_Paulo";
+  const now      = new Date();
+  const tz       = restaurant.timezone ?? "America/Sao_Paulo";
   const localNow = new Date(now.toLocaleString("en-US", { timeZone: tz }));
   const todayDow = localNow.getDay(); // 0=Sun … 6=Sat (in restaurant's local time)
+  const localMin = localNow.getHours() * 60 + localNow.getMinutes();
 
-  const todayHoursRow = await prisma.businessHours.findUnique({
-    where:  { restaurantId_dayOfWeek: { restaurantId: restaurant.id, dayOfWeek: todayDow } },
-    select: { isOpen: true, openTime: true, closeTime: true, periodsJson: true },
+  // Fetch all 7 days so we can compute next-opening-at for the closed banner
+  const allHoursRows = await prisma.businessHours.findMany({
+    where:   { restaurantId: restaurant.id },
+    orderBy: { dayOfWeek: "asc" },
+    select:  { dayOfWeek: true, isOpen: true, openTime: true, closeTime: true, periodsJson: true },
   });
+  const todayHoursRow    = allHoursRows.find((r) => r.dayOfWeek === todayDow) ?? null;
   const restaurantIsOpen = isOpenFromRow(todayHoursRow, tz, now);
+  const todayPeriods     = todayHoursRow ? getPeriodsForRow(todayHoursRow) : [];
+  const nextOpenAt       = restaurantIsOpen ? null : getNextOpenAt(allHoursRows, todayDow, localMin);
+  const closedMessage    = restaurantIsOpen ? null : buildClosedMessage(todayPeriods, nextOpenAt);
 
   // ── Active banners for today ─────────────────────────────────────────────────
   const rawBanners = await prisma.promotion.findMany({
@@ -348,6 +355,7 @@ gtag('config', '${ga4Id}');
         averagePreparationMinutes={restaurant.storeProfile?.averagePreparationMinutes ?? null}
         ga4Id={ga4Id}
         restaurantIsOpen={restaurantIsOpen}
+        closedMessage={closedMessage}
       />
     </>
   );

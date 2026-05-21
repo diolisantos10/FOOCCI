@@ -366,6 +366,8 @@ interface Props {
   ga4Id?: string | null;
   /** Whether the restaurant is currently within its configured business hours. */
   restaurantIsOpen?: boolean;
+  /** Pre-computed closed message with today's hours and next opening time. */
+  closedMessage?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1625,6 +1627,7 @@ export function PedidoClient({
   deliveryEstimatedMinutes = null, averagePreparationMinutes = null,
   ga4Id = null,
   restaurantIsOpen = true,
+  closedMessage = null,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -3703,9 +3706,13 @@ export function PedidoClient({
 
         {/* Closed banner — shown when the restaurant is outside business hours */}
         {!restaurantIsOpen && (
-          <div className="mx-3 mt-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
-            <span className="text-base">🕐</span>
-            <span>Estamos fechados no momento. Você pode explorar o cardápio, mas pedidos só são aceitos durante o horário de funcionamento.</span>
+          <div className="mx-3 mt-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex gap-2">
+            <span className="text-base shrink-0 mt-0.5">🕐</span>
+            <span>
+              {closedMessage
+                ? `${closedMessage} Você pode explorar o cardápio, mas pedidos ficam pausados até reabrirmos.`
+                : "Estamos fechados no momento. Você pode explorar o cardápio, mas pedidos são aceitos somente durante o horário de funcionamento."}
+            </span>
           </div>
         )}
 
