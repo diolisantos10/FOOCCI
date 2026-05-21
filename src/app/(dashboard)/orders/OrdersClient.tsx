@@ -1392,6 +1392,8 @@ function NewOrderModal({
   onReject,
   accepting,
   rejecting,
+  audioBlocked,
+  onUnlockAudio,
 }: {
   order: MockOrder;
   queueLength: number;
@@ -1399,6 +1401,8 @@ function NewOrderModal({
   onReject: (reason?: string) => void;
   accepting: boolean;
   rejecting: boolean;
+  audioBlocked: boolean;
+  onUnlockAudio: () => void;
 }) {
   const [confirmReject, setConfirmReject] = useState(false);
   const [rejectReason,  setRejectReason]  = useState("");
@@ -1409,9 +1413,20 @@ function NewOrderModal({
 
         {/* Header */}
         <div className="bg-orange-500 px-6 py-4 text-white">
-          <div className="flex items-center gap-3">
-            <span className="h-3 w-3 animate-pulse rounded-full bg-white shrink-0" />
-            <span className="text-xl font-bold tracking-wide">NOVO PEDIDO!</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="h-3 w-3 animate-pulse rounded-full bg-white shrink-0" />
+              <span className="text-xl font-bold tracking-wide">NOVO PEDIDO!</span>
+            </div>
+            {audioBlocked && (
+              <button
+                type="button"
+                onClick={onUnlockAudio}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white/20 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-white/30 transition-colors animate-pulse"
+              >
+                🔇 Ativar som
+              </button>
+            )}
           </div>
           {queueLength > 1 ? (
             <p className="mt-0.5 text-sm text-orange-100">
@@ -1588,6 +1603,7 @@ export default function OrdersClient() {
   });
 
   const modalOrder = modalQueue[0] ?? null;
+  const modalOrderId = modalOrder?.id ?? null;
 
   // Initialise the WAV audio element once on mount
   useEffect(() => {
@@ -1639,6 +1655,40 @@ export default function OrdersClient() {
     const id = setInterval(doPlay, 5_000);
     return () => clearInterval(id);
   }, [hasPendingOrders, soundEnabled]);
+
+  // Fire immediately when a NEW order modal opens (each unique order ID triggers once).
+  // The hasPendingOrders loop above handles the 5s repeat; this effect ensures the
+  // first play happens at the exact moment the modal appears, even if the loop was
+  // already running (dep didn't change) or the modal arrives before the next 5s tick.
+  useEffect(() => {
+    if (!modalOrderId || !soundEnabled) return;
+
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[order-alert]", {
+        modalOpen: true,
+        pendingNewOrdersCount: pendingCountRef.current,
+        soundEnabled,
+        audioPath: ALERT_WAV,
+      });
+    }
+
+    const audio = alertAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.volume = 1.0;
+      audio.play().catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "NotAllowedError") {
+          setAudioBlocked(true);
+        } else {
+          console.warn("[order-alert] audio play failed", err);
+          playBeep();
+        }
+      });
+    } else {
+      playBeep();
+    }
+  }, [modalOrderId, soundEnabled]);
 
   function toggleSound() {
     setSoundEnabled((prev) => {
@@ -1963,6 +2013,8 @@ export default function OrdersClient() {
           onReject={handleModalReject}
           accepting={modalAccepting}
           rejecting={modalRejecting}
+          audioBlocked={audioBlocked}
+          onUnlockAudio={unlockAudio}
         />
       )}
 
