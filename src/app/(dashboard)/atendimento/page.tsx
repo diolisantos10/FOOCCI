@@ -14,10 +14,16 @@ export default async function AtendimentoPage({
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
+  const isOwner = session.user.role === "OWNER";
+
   return (
     <>
       <TopBar title="Atendimento" />
-      <AtendimentoClient userId={session.user.id} initialConvId={searchParams.conv} />
+      <AtendimentoClient
+        userId={session.user.id}
+        initialConvId={searchParams.conv}
+        isOwner={isOwner}
+      />
     </>
   );
 }

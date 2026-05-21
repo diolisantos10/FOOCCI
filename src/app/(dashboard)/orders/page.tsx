@@ -10,10 +10,12 @@ export default async function OrdersPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
+  const isOwner = session.user.role === "OWNER";
+
   return (
     <>
       <TopBar title="Pedidos" />
-      <OrdersClient />
+      <OrdersClient isOwner={isOwner} />
     </>
   );
 }

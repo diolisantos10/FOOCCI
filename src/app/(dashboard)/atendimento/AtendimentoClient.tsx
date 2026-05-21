@@ -261,9 +261,11 @@ function ScrollableChips({ children, className }: { children: ReactNode; classNa
 export function AtendimentoClient({
   userId,
   initialConvId,
+  isOwner,
 }: {
   userId:         string;
   initialConvId?: string;
+  isOwner?:       boolean;
 }) {
   // ── State ──────────────────────────────────────────────────────────────────
   const [conversations, setConversations] = useState<ConvSummary[]>([]);
@@ -283,6 +285,10 @@ export function AtendimentoClient({
   const [sortBy,        setSortBy]        = useState<SortOption>("RECENT");
   const [search,        setSearch]        = useState("");
   const [searchInput,   setSearchInput]   = useState("");
+
+  const [deleteConvOpen,    setDeleteConvOpen]    = useState(false);
+  const [deleteConvLoading, setDeleteConvLoading] = useState(false);
+  const [deleteConvError,   setDeleteConvError]   = useState<string | null>(null);
 
   const [actionLoading, setActionLoading] = useState(false);
   const [text,          setText]          = useState("");
@@ -683,6 +689,28 @@ export function AtendimentoClient({
     }
   }
 
+  async function handleDeleteConversation() {
+    if (!selectedId) return;
+    const idToDelete = selectedId;
+    setDeleteConvLoading(true);
+    setDeleteConvError(null);
+    try {
+      const res  = await fetch(`/api/chat/conversations/${idToDelete}`, { method: "DELETE" });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        setConversations((prev) => prev.filter((c) => c.id !== idToDelete));
+        setSelectedId(null);
+        setDeleteConvOpen(false);
+      } else {
+        setDeleteConvError(json.error ?? "Erro ao apagar conversa.");
+      }
+    } catch {
+      setDeleteConvError("Falha de rede ao apagar conversa.");
+    } finally {
+      setDeleteConvLoading(false);
+    }
+  }
+
   function handleSearchSubmit(e: FormEvent) {
     e.preventDefault();
     setSearch(searchInput);
@@ -957,6 +985,36 @@ export function AtendimentoClient({
         className="hidden lg:flex w-1 shrink-0 cursor-col-resize bg-gray-200 hover:bg-orange-400 active:bg-orange-500 transition-colors"
       />
 
+      {deleteConvOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">Apagar conversa?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Essa ação remove a conversa, mensagens e dados vinculados a esse atendimento. Essa ação não pode ser desfeita.
+            </p>
+            {deleteConvError && (
+              <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{deleteConvError}</p>
+            )}
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => { setDeleteConvOpen(false); setDeleteConvError(null); }}
+                disabled={deleteConvLoading}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteConversation}
+                disabled={deleteConvLoading}
+                className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40 transition-colors"
+              >
+                {deleteConvLoading ? "Apagando…" : "Sim, apagar conversa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── RIGHT PANEL ──────────────────────────────────────────────────── */}
       <section className={`
         flex-col overflow-hidden
@@ -998,6 +1056,8 @@ export function AtendimentoClient({
             onAttachmentSelect={handleAttachmentSelect}
             onAttachmentClear={handleAttachmentClear}
             uploading={uploading}
+            isOwner={isOwner}
+            onDeleteConversation={() => { setDeleteConvOpen(true); setDeleteConvError(null); }}
           />
         ) : null}
       </section>
@@ -1008,25 +1068,27 @@ export function AtendimentoClient({
 // ── Thread Panel ──────────────────────────────────────────────────────────────
 
 interface ThreadPanelProps {
-  thread:             ConvDetail;
-  userId:             string;
-  actionLoading:      boolean;
-  onAction:           (action: string) => void;
-  onAIAction:         (action: "takeover" | "release") => void;
-  text:               string;
-  setText:            (v: string) => void;
-  sending:            boolean;
-  sendError:          string | null;
-  sendNote:           string | null;
-  onSend:             (e: FormEvent) => void;
-  bottomRef:          React.RefObject<HTMLDivElement>;
-  onBack?:            () => void;
-  activeOrder?:       ActiveOrder | null;
-  activeDraft?:       ActiveDraft | null;
-  attachment:         AttachmentState | null;
-  onAttachmentSelect: (file: File) => void;
-  onAttachmentClear:  () => void;
-  uploading:          boolean;
+  thread:                  ConvDetail;
+  userId:                  string;
+  actionLoading:           boolean;
+  onAction:                (action: string) => void;
+  onAIAction:              (action: "takeover" | "release") => void;
+  text:                    string;
+  setText:                 (v: string) => void;
+  sending:                 boolean;
+  sendError:               string | null;
+  sendNote:                string | null;
+  onSend:                  (e: FormEvent) => void;
+  bottomRef:               React.RefObject<HTMLDivElement>;
+  onBack?:                 () => void;
+  activeOrder?:            ActiveOrder | null;
+  activeDraft?:            ActiveDraft | null;
+  attachment:              AttachmentState | null;
+  onAttachmentSelect:      (file: File) => void;
+  onAttachmentClear:       () => void;
+  uploading:               boolean;
+  isOwner?:                boolean;
+  onDeleteConversation?:   () => void;
 }
 
 // ── ActiveDraftPanel ──────────────────────────────────────────
@@ -1265,6 +1327,8 @@ function ThreadPanel({
   onAttachmentSelect,
   onAttachmentClear,
   uploading,
+  isOwner,
+  onDeleteConversation,
 }: ThreadPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const badge          = getHandlerBadge(thread);
@@ -1359,6 +1423,16 @@ function ThreadPanel({
               className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
             >
               Reabrir
+            </button>
+          )}
+          {isOwner && onDeleteConversation && (
+            <button
+              type="button"
+              onClick={onDeleteConversation}
+              disabled={actionLoading}
+              className="shrink-0 ml-auto rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+            >
+              Apagar
             </button>
           )}
         </div>

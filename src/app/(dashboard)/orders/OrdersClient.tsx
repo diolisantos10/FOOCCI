@@ -1154,9 +1154,13 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function DetailPanel({
   order,
   onClose,
+  isOwner,
+  onDelete,
 }: {
-  order: MockOrder | null;
-  onClose: () => void;
+  order:     MockOrder | null;
+  onClose:   () => void;
+  isOwner?:  boolean;
+  onDelete?: (id: string) => void;
 }) {
   if (!order) {
     return (
@@ -1340,6 +1344,22 @@ function DetailPanel({
 
         {/* 7. Integração Saipos */}
         <SaiposSection order={order} />
+
+        {/* 8. Zona de Perigo */}
+        {isOwner && onDelete && (
+          <div className="border-t border-dashed border-red-200 pt-4">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-red-400">
+              Zona de Perigo
+            </p>
+            <button
+              type="button"
+              onClick={() => onDelete(order.id)}
+              className="w-full rounded-lg border border-red-200 bg-white px-3 py-2.5 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
+            >
+              Apagar pedido permanentemente
+            </button>
+          </div>
+        )}
 
       </div>
     </div>
@@ -1573,7 +1593,7 @@ function NewOrderModal({
 
 // ─── Root ─────────────────────────────────────────────────────
 
-export default function OrdersClient() {
+export default function OrdersClient({ isOwner }: { isOwner?: boolean } = {}) {
   const [orders,       setOrders]       = useState<MockOrder[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
@@ -1592,6 +1612,9 @@ export default function OrdersClient() {
   const knownIds = useRef<Set<string>>(new Set());
   const hasFetched = useRef(false);
   const [cancelDialog, setCancelDialog] = useState<{ id: string; reason: string } | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ id: string } | null>(null);
+  const [deleting,     setDeleting]     = useState(false);
+  const [deleteError,  setDeleteError]  = useState<string | null>(null);
   const [modalQueue,     setModalQueue]     = useState<MockOrder[]>([]);
   const [modalAccepting, setModalAccepting] = useState(false);
   const [modalRejecting, setModalRejecting] = useState(false);
@@ -1825,6 +1848,31 @@ export default function OrdersClient() {
     ids.forEach((id) => void persistStatus(id, "OUT_FOR_DELIVERY"));
   }
 
+  function handleDeleteOrder(id: string) {
+    setDeleteDialog({ id });
+    setDeleteError(null);
+  }
+
+  async function handleConfirmDelete(id: string) {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res  = await fetch(`/api/orders/${id}`, { method: "DELETE" });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        setOrders((prev) => prev.filter((o) => o.id !== id));
+        if (selectedId === id) setSelectedId(null);
+        setDeleteDialog(null);
+      } else {
+        setDeleteError(json.error ?? "Erro ao apagar pedido.");
+      }
+    } catch {
+      setDeleteError("Falha de rede ao apagar pedido.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function handleModalAccept() {
     if (!modalOrder || modalAccepting) return;
     setModalAccepting(true);
@@ -1947,6 +1995,8 @@ export default function OrdersClient() {
         <DetailPanel
           order={selectedOrder}
           onClose={() => setSelectedId(null)}
+          isOwner={isOwner}
+          onDelete={handleDeleteOrder}
         />
       </div>
 
@@ -1978,6 +2028,36 @@ export default function OrdersClient() {
                 className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition-colors"
               >
                 Confirmar cancelamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">Apagar pedido?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Essa ação remove o pedido e desfaz seus impactos em faturamento, produtos, cliente, histórico e relatórios. Essa ação não pode ser desfeita.
+            </p>
+            {deleteError && (
+              <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{deleteError}</p>
+            )}
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => { setDeleteDialog(null); setDeleteError(null); }}
+                disabled={deleting}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleConfirmDelete(deleteDialog.id)}
+                disabled={deleting}
+                className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40 transition-colors"
+              >
+                {deleting ? "Apagando…" : "Sim, apagar pedido"}
               </button>
             </div>
           </div>

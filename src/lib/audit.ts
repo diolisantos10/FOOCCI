@@ -23,13 +23,15 @@ export type AuditAction =
   | "integration.update"
   // Orders
   | "order.status_change"
+  | "order.delete"
   // Payments
   | "payment.status_change"
   // Conversations
   | "conversation.takeover"   // AI → human
   | "conversation.assign"
   | "conversation.resolve"
-  | "conversation.reopen";
+  | "conversation.reopen"
+  | "conversation.delete";
 
 export interface AuditEntry {
   action: AuditAction;

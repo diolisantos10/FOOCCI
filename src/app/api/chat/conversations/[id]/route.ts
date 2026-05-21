@@ -8,7 +8,9 @@
 import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
-import { ok, unauthorized, notFound, serverError } from "@/lib/api-response";
+import { ConversationDeleteService } from "@/services/conversation/ConversationDeleteService";
+import { auditLog } from "@/lib/audit";
+import { ok, unauthorized, forbidden, notFound, serverError } from "@/lib/api-response";
 
 export async function GET(
   req: NextRequest,
@@ -57,6 +59,50 @@ export async function GET(
     return ok(conversation);
   } catch (err) {
     console.error("[GET /api/chat/conversations/[id]]", err);
+    return serverError();
+  }
+}
+
+/**
+ * DELETE /api/chat/conversations/[id]
+ *
+ * Permanently removes a conversation and all its messages.
+ * Does NOT delete the customer record or their orders.
+ *
+ * Restricted to OWNER role only.
+ * TODO: When MASTER_ADMIN role is added, also allow MASTER_ADMIN here.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const ctx = getTenantContext(req);
+    if (!ctx) return unauthorized();
+
+    // Destructive delete: OWNER only
+    if (ctx.role !== "OWNER") {
+      return forbidden("Apenas proprietários podem apagar conversas permanentemente.");
+    }
+
+    const { id } = await params;
+
+    const result = await ConversationDeleteService.deleteConversation(ctx.restaurantId, id);
+    if (!result.ok) {
+      if (result.status === 404) return notFound(result.error);
+      return serverError(result.error);
+    }
+
+    auditLog({
+      action:       "conversation.delete",
+      restaurantId: ctx.restaurantId,
+      userId:       ctx.userId,
+      targetId:     id,
+    });
+
+    return ok({ deletedId: id });
+  } catch (err) {
+    console.error("[DELETE /api/chat/conversations/[id]]", err);
     return serverError();
   }
 }
