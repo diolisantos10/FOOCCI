@@ -417,15 +417,18 @@ export function AtendimentoClient({
     return () => { audio.pause(); audio.src = ""; };
   }, []);
 
-  // ── Inactivity-timeout poller (runs every 60 s while page is open) ────────
+  // ── Inactivity-timeout pollers (run every 60 s while page is open) ──────
+  // check-timeouts:            human hasn't replied → customer waiting → return to AI
+  // check-customer-inactivity: human replied        → customer silent  → return to AI
   useEffect(() => {
     const run = () => {
+      const refresh = (d: { data?: { timedOut?: string[] } }) => {
+        if ((d.data?.timedOut?.length ?? 0) > 0) fetchList();
+      };
       fetch("/api/atendimento/handoff/check-timeouts", { method: "POST" })
-        .then((r) => r.json())
-        .then((d: { data?: { timedOut?: string[] } }) => {
-          if ((d.data?.timedOut?.length ?? 0) > 0) fetchList();
-        })
-        .catch(() => {});
+        .then((r) => r.json()).then(refresh).catch(() => {});
+      fetch("/api/atendimento/handoff/check-customer-inactivity", { method: "POST" })
+        .then((r) => r.json()).then(refresh).catch(() => {});
     };
     run();
     const id = setInterval(run, 60_000);
