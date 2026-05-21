@@ -1762,6 +1762,8 @@ function MessageBubble({
   customerName: string;
   allMessages:  Message[];
 }) {
+  const [teachOpen, setTeachOpen] = useState(false);
+
   // System events (handoff, escalation metadata) are not chat bubbles.
   if (msg.senderType === "SYSTEM") {
     return <SystemEventNote msg={msg} />;
@@ -1772,8 +1774,6 @@ function MessageBubble({
   const senderLabel = isOutbound
     ? (msg.senderType === "AI" ? "IA" : "Equipe")
     : customerName;
-
-  const [teachOpen, setTeachOpen] = useState(false);
 
   // Find the most recent customer message before this human reply
   const precedingCustomerMsg = isHumanMsg
