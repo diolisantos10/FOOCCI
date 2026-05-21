@@ -17,6 +17,7 @@ import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { isGuestIdentifier } from "@/lib/guest";
 import { ConversationStatus } from "@prisma/client";
 import { assignConversationContext, buildConversationMetadataForCrmSend, CONTEXT_TYPE } from "@/services/agents/AgentRoutingService";
+import { getSegmentConfig, buildCutoffs } from "@/lib/crm-segments";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -108,14 +109,15 @@ export async function resolveAudience(
   const baseSelect = {
     id: true, name: true, phone: true,
     tier: true, segment: true,
-    totalOrders: true, totalSpend: true, lastOrderAt: true,
+    totalOrders: true, totalSpend: true,
+    lastOrderAt: true, importedLastOrderAt: true,
   } as const;
 
   type Row = {
     id: string; name: string; phone: string | null;
     tier: string; segment: string;
     totalOrders: number; totalSpend: { toNumber(): number };
-    lastOrderAt: Date | null;
+    lastOrderAt: Date | null; importedLastOrderAt: Date | null;
   };
 
   function serialize(rows: Row[]): AudienceCustomer[] {
@@ -124,33 +126,56 @@ export async function resolveAudience(
       .map((r) => ({
         id:          r.id,
         name:        r.name,
-        phone:       r.phone!,   // filter above guarantees non-null
+        phone:       r.phone!,
         tier:        r.tier,
         segment:     r.segment,
         totalOrders: r.totalOrders,
         totalSpend:  r.totalSpend.toNumber(),
-        lastOrderAt: r.lastOrderAt?.toISOString() ?? null,
+        // Fall back to importedLastOrderAt so imported customers get correct days-since calc
+        lastOrderAt: (r.lastOrderAt ?? r.importedLastOrderAt)?.toISOString() ?? null,
       }));
   }
+
+  // Load segment config once — used for date-based audience resolution
+  const segCfg  = await getSegmentConfig(restaurantId);
+  const cutoffs = buildCutoffs(segCfg, now);
 
   switch (seg) {
     case "FRIO":
       return serialize(await prisma.customer.findMany({
-        where: { ...baseWhere, segment: "FRIO" },
-        orderBy: { lastOrderAt: "asc" },
+        where: {
+          ...baseWhere,
+          OR: [
+            { lastOrderAt: { lt: cutoffs.warmCutoff } },
+            { lastOrderAt: null, importedLastOrderAt: { lt: cutoffs.warmCutoff } },
+          ],
+        },
+        orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);
 
     case "MORNO":
       return serialize(await prisma.customer.findMany({
-        where: { ...baseWhere, segment: "MORNO" },
-        orderBy: { lastOrderAt: "asc" },
+        where: {
+          ...baseWhere,
+          OR: [
+            { lastOrderAt: { gte: cutoffs.warmCutoff, lt: cutoffs.hotCutoff } },
+            { lastOrderAt: null, importedLastOrderAt: { gte: cutoffs.warmCutoff, lt: cutoffs.hotCutoff } },
+          ],
+        },
+        orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);
 
     case "QUENTE":
       return serialize(await prisma.customer.findMany({
-        where: { ...baseWhere, segment: "QUENTE" },
+        where: {
+          ...baseWhere,
+          OR: [
+            { lastOrderAt: { gte: cutoffs.hotCutoff } },
+            { lastOrderAt: null, importedLastOrderAt: { gte: cutoffs.hotCutoff } },
+          ],
+        },
         orderBy: { totalSpend: "desc" },
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);
@@ -180,7 +205,14 @@ export async function resolveAudience(
 
     case "RECORRENTE_SUMIDO":
       return serialize(await prisma.customer.findMany({
-        where: { ...baseWhere, totalOrders: { gte: 2 }, segment: "FRIO" },
+        where: {
+          ...baseWhere,
+          totalOrders: { gte: 2 },
+          OR: [
+            { lastOrderAt: { gte: cutoffs.warmCutoff, lt: cutoffs.hotCutoff } },
+            { lastOrderAt: null, importedLastOrderAt: { gte: cutoffs.warmCutoff, lt: cutoffs.hotCutoff } },
+          ],
+        },
         orderBy: { totalOrders: "desc" },
         take: MAX_AUDIENCE, select: baseSelect,
       }) as Row[]);

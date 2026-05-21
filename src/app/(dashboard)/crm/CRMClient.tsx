@@ -1523,7 +1523,7 @@ function CampaignReviewModal({
   );
 }
 
-// ── Campaign Detail Drawer ────────────────────────────────────────────────────
+// ── Campaign Detail Modal ─────────────────────────────────────────────────────
 
 const EXEC_STATUS_LABELS: Record<string, string> = {
   PENDING:   "Pendente",
@@ -1543,217 +1543,552 @@ const EXEC_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   CONVERTED: { bg: "bg-green-50",   text: "text-green-700" },
 };
 
-function CampaignDetailDrawer({
+type CampaignDebugResult = {
+  isRecurring:    boolean;
+  isDueNow:       boolean;
+  notDueReason:   string | null;
+  nextRunAt:      string | null;
+  safetyBlocks:   string[];
+  dailyCapStatus: string | null;
+  audience: {
+    totalEligible: number;
+    alreadySent:   number;
+    newEligible:   number;
+    error?:        string;
+  } | null;
+};
+
+const WEEKDAY_LABELS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function CampaignDetailModal({
   detailId,
   onClose,
+  onCampaignAction,
 }: {
   detailId: string;
   onClose: () => void;
+  onCampaignAction: (id: string, action: "pause" | "resume" | "cancel") => Promise<void>;
 }) {
   const [detail,  setDetail]  = useState<CampaignDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(false);
+  const [debug,   setDebug]   = useState<CampaignDebugResult | null>(null);
+  const [loadingDebug, setLoadingDebug] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     setError(false);
+    setDebug(null);
     fetch(`/api/crm/campaigns/${detailId}`)
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => setDetail(json.data ?? null))
       .catch(() => setError(true))
       .finally(() => setLoading(false));
+
+    setLoadingDebug(true);
+    fetch(`/api/crm/campaigns/${detailId}/debug`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setDebug(json.data ?? null))
+      .catch(() => {})
+      .finally(() => setLoadingDebug(false));
   }, [detailId]);
 
   const sc = detail ? (CAMPAIGN_STATUS_COLORS[detail.status] ?? { bg: "bg-gray-100", text: "text-gray-600" }) : null;
+  const cfg = detail?.scheduleConfig as { mode?: string; weekdays?: number[]; timeWindow?: { start: string; end: string }; dailyLimit?: number; timezone?: string; endCondition?: string; endDate?: string | null; maxTotal?: number | null } | null | undefined;
+  const isRecurring = cfg?.mode === "RECURRING";
+  const isControllable = isRecurring && detail && ["ACTIVE", "SCHEDULED", "PAUSED"].includes(detail.status);
 
   return (
-    <>
+    <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-white shadow-2xl sm:max-w-lg overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 shrink-0">
-          <h2 className="text-sm font-bold text-gray-900 truncate pr-4">
-            {detail ? detail.name : "Detalhes da campanha"}
-          </h2>
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 transition-colors"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
-          {loading && (
-            <div className="flex items-center justify-center py-16 text-sm text-gray-400">
-              Carregando…
+      {/* Modal */}
+      <div className="relative min-h-full flex items-start justify-center p-0 sm:p-4 sm:py-6">
+        <div className="relative w-full bg-white shadow-2xl sm:rounded-3xl sm:max-w-4xl overflow-hidden">
+          {/* Header */}
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-5 py-4 sm:px-8">
+            <div className="min-w-0 pr-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Detalhes da campanha</p>
+              <h2 className="mt-0.5 text-base font-bold text-gray-900 truncate">
+                {detail ? detail.name : "Carregando…"}
+              </h2>
             </div>
-          )}
-
-          {error && (
-            <div className="flex items-center justify-center py-16 text-sm text-red-500">
-              Erro ao carregar campanha.
-            </div>
-          )}
-
-          {detail && !loading && (
-            <>
-              {/* Status + basic info */}
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  {sc && (
-                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
-                      {CAMPAIGN_STATUS_LABELS[detail.status] ?? detail.status}
-                    </span>
+            <div className="flex items-center gap-2 shrink-0">
+              {isControllable && detail && (
+                <>
+                  {detail.status === "PAUSED" ? (
+                    <button
+                      onClick={async () => { await onCampaignAction(detail.id, "resume"); onClose(); }}
+                      className="rounded-xl bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                    >
+                      Retomar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async () => { await onCampaignAction(detail.id, "pause"); onClose(); }}
+                      className="rounded-xl bg-yellow-50 px-3 py-1.5 text-xs font-semibold text-yellow-700 hover:bg-yellow-100 transition-colors"
+                    >
+                      Pausar
+                    </button>
                   )}
-                  {detail.objective && (
-                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
-                      {OBJECTIVE_LABELS[detail.objective] ?? detail.objective}
-                    </span>
-                  )}
-                  {detail.targetSegment && (
-                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
-                      {SEGMENT_LABELS[detail.targetSegment] ?? detail.targetSegment}
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Canal</p>
-                    <p className="text-gray-700 mt-0.5">{CHANNEL_LABELS[detail.channel] ?? detail.channel}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Criada em</p>
-                    <p className="text-gray-700 mt-0.5">
-                      {new Date(detail.createdAt).toLocaleDateString("pt-BR")}
-                    </p>
-                  </div>
-                  {detail.sentAt && (
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Disparada em</p>
-                      <p className="text-gray-700 mt-0.5">
-                        {new Date(detail.sentAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </div>
-                  )}
-                  {detail.scheduledAt && !detail.sentAt && (
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Agendada para</p>
-                      <p className="text-gray-700 mt-0.5">
-                        {new Date(detail.scheduledAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Message template */}
-              {detail.message && (
-                <div>
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                    Mensagem enviada
-                  </p>
-                  <div className="rounded-2xl border border-gray-200 bg-[#e7ffd1] px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap font-mono leading-relaxed shadow-sm">
-                    {detail.message}
-                  </div>
-                </div>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("Cancelar esta campanha permanentemente?")) return;
+                      await onCampaignAction(detail.id, "cancel");
+                      onClose();
+                    }}
+                    className="rounded-xl bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </>
               )}
+              <button
+                onClick={onClose}
+                className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 transition-colors"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
 
-              {/* Delivery metrics */}
-              <div>
-                <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                  Métricas de entrega
-                </p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {[
-                    { label: "Audiência", value: detail.totalAudience, color: "text-gray-700" },
-                    { label: "Disparos",  value: detail.totalSent,      color: "text-blue-700" },
-                    { label: "Falhas",    value: detail.totalFailed,    color: detail.totalFailed > 0 ? "text-red-600" : "text-gray-400" },
-                    { label: "Lidos",     value: detail.totalRead,      color: "text-indigo-700" },
-                    { label: "Respostas", value: detail.totalResponded, color: "text-blue-600" },
-                    { label: "Compras geradas", value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700 font-bold" : "text-gray-400" },
-                  ].map((m) => (
-                    <div key={m.label} className="rounded-xl border border-gray-100 bg-white px-3 py-3 text-center shadow-sm">
-                      <p className={`text-lg font-bold leading-none ${m.color}`}>{m.value}</p>
-                      <p className="mt-1 text-[10px] text-gray-500">{m.label}</p>
+          {/* Body */}
+          <div className="px-5 py-6 sm:px-8 sm:py-8 space-y-8">
+            {loading && (
+              <div className="flex items-center justify-center py-20 text-sm text-gray-400">
+                Carregando campanha…
+              </div>
+            )}
+            {error && (
+              <div className="flex items-center justify-center py-20 text-sm text-red-500">
+                Erro ao carregar. Tente novamente.
+              </div>
+            )}
+
+            {detail && !loading && (
+              <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+                {/* ── Left column ── */}
+                <div className="space-y-6">
+
+                  {/* A. Resumo */}
+                  <section>
+                    <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">A · Resumo</h3>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        {sc && (
+                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
+                            {CAMPAIGN_STATUS_LABELS[detail.status] ?? detail.status}
+                          </span>
+                        )}
+                        {isRecurring && (
+                          <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700">Recorrente</span>
+                        )}
+                        {detail.objective && (
+                          <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                            {OBJECTIVE_LABELS[detail.objective] ?? detail.objective}
+                          </span>
+                        )}
+                        {detail.targetSegment && (
+                          <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                            {SEGMENT_LABELS[detail.targetSegment] ?? detail.targetSegment}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Canal</p>
+                          <p className="text-gray-700 mt-0.5">{CHANNEL_LABELS[detail.channel] ?? detail.channel}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Criada em</p>
+                          <p className="text-gray-700 mt-0.5">{new Date(detail.createdAt).toLocaleDateString("pt-BR")}</p>
+                        </div>
+                        {detail.sentAt && (
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Último disparo</p>
+                            <p className="text-gray-700 mt-0.5">
+                              {new Date(detail.sentAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          </div>
+                        )}
+                        {detail.scheduledAt && !detail.sentAt && (
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Agendada para</p>
+                            <p className="text-gray-700 mt-0.5">
+                              {new Date(detail.scheduledAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  ))}
+                  </section>
+
+                  {/* B. Programação (recurring only) */}
+                  {isRecurring && cfg && (
+                    <section>
+                      <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">B · Programação</h3>
+                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-2 text-xs">
+                        <div className="flex flex-wrap gap-1">
+                          {(cfg.weekdays ?? []).map((d) => (
+                            <span key={d} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700">
+                              {WEEKDAY_LABELS_PT[d] ?? `D${d}`}
+                            </span>
+                          ))}
+                        </div>
+                        {cfg.timeWindow && (
+                          <p className="text-gray-700">
+                            <span className="font-semibold">Janela:</span> {cfg.timeWindow.start}–{cfg.timeWindow.end}
+                            {cfg.timezone ? ` (${cfg.timezone})` : ""}
+                          </p>
+                        )}
+                        {cfg.dailyLimit && (
+                          <p className="text-gray-700"><span className="font-semibold">Limite diário:</span> {cfg.dailyLimit} mensagens</p>
+                        )}
+                        {cfg.endCondition && (
+                          <p className="text-gray-700">
+                            <span className="font-semibold">Encerramento:</span>{" "}
+                            {cfg.endCondition === "AUDIENCE_EXHAUSTED" ? "Quando audiência esgotar"
+                              : cfg.endCondition === "END_DATE" && cfg.endDate ? `Em ${new Date(cfg.endDate).toLocaleDateString("pt-BR")}`
+                              : cfg.endCondition === "MAX_TOTAL" && cfg.maxTotal != null ? `Após ${cfg.maxTotal} envios`
+                              : cfg.endCondition}
+                          </p>
+                        )}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* C. Mensagem */}
+                  {detail.message && (
+                    <section>
+                      <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">C · Mensagem</h3>
+                      <div className="rounded-2xl border border-gray-200 bg-[#e7ffd1] px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed shadow-sm">
+                        {detail.message}
+                      </div>
+                    </section>
+                  )}
+
                 </div>
 
-                {/* Revenue + conversion rate */}
-                {detail.totalConverted > 0 && (
-                  <div className="mt-2 flex items-center gap-3 rounded-xl border border-green-100 bg-green-50 px-4 py-3">
-                    <div className="flex-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600">Receita gerada</p>
-                      <p className="text-lg font-bold text-green-700">
-                        R$ {Number(detail.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                      </p>
+                {/* ── Right column ── */}
+                <div className="space-y-6">
+
+                  {/* D. Execução */}
+                  <section>
+                    <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">D · Execução</h3>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: "Disparos",         value: detail.totalSent,      color: "text-blue-700" },
+                        { label: "Falhas",            value: detail.totalFailed,    color: detail.totalFailed > 0 ? "text-red-600" : "text-gray-400" },
+                        { label: "Lidos",             value: detail.totalRead,      color: "text-indigo-700" },
+                        { label: "Respostas",         value: detail.totalResponded, color: "text-blue-600" },
+                        { label: "Compras geradas",   value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-gray-400" },
+                        { label: "Total audiência",   value: detail.totalAudience,  color: "text-gray-700" },
+                      ].map((m) => (
+                        <div key={m.label} className="rounded-xl border border-gray-100 bg-white px-2 py-3 text-center shadow-sm">
+                          <p className={`text-xl font-bold leading-none ${m.color}`}>{m.value}</p>
+                          <p className="mt-1.5 text-[9px] text-gray-500 leading-tight">{m.label}</p>
+                        </div>
+                      ))}
                     </div>
-                    {detail.totalSent > 0 && (
-                      <div className="text-right">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600">Conversão</p>
-                        <p className="text-lg font-bold text-green-700">
-                          {Math.round((detail.totalConverted / detail.totalSent) * 100)}%
-                        </p>
+
+                    {detail.totalConverted > 0 && (
+                      <div className="mt-2 flex items-center gap-3 rounded-xl border border-green-100 bg-green-50 px-4 py-3">
+                        <div className="flex-1">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600">Receita gerada</p>
+                          <p className="text-xl font-bold text-green-700">
+                            R$ {Number(detail.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        {detail.totalSent > 0 && (
+                          <div className="text-right">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600">Conversão</p>
+                            <p className="text-xl font-bold text-green-700">
+                              {Math.round((detail.totalConverted / detail.totalSent) * 100)}%
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
-                )}
-              </div>
+                  </section>
 
-              {/* Recipients list */}
-              {detail.executions.length > 0 && (
-                <div>
-                  <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                    Destinatários ({detail.executions.length})
-                  </p>
-                  <div className="space-y-1.5">
-                    {detail.executions.map((ex) => {
-                      const exSc = EXEC_STATUS_COLORS[ex.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
-                      return (
-                        <div key={ex.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-gray-800 truncate">
-                              {ex.customerName ?? "Cliente"}
-                            </p>
-                            <p className="text-[10px] text-gray-400 truncate">{ex.customerPhone ?? "—"}</p>
-                          </div>
-                          <div className="shrink-0 flex flex-col items-end gap-0.5">
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${exSc.bg} ${exSc.text}`}>
-                              {EXEC_STATUS_LABELS[ex.status] ?? ex.status}
-                            </span>
-                            {ex.converted && ex.revenue != null && (
-                              <span className="text-[10px] font-semibold text-green-600">
-                                R$ {Number(ex.revenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                              </span>
-                            )}
-                          </div>
+                  {/* E. Diagnóstico (recurring) */}
+                  {isRecurring && (
+                    <section>
+                      <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">E · Diagnóstico do runner</h3>
+                      {loadingDebug && (
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-xs text-gray-400">
+                          Verificando estado do runner…
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                      )}
+                      {!loadingDebug && debug && (
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3 text-xs">
+                          {/* Due now status */}
+                          <div className={`flex items-center gap-2 rounded-xl px-3 py-2 ${debug.isDueNow ? "bg-green-50 border border-green-100" : "bg-amber-50 border border-amber-100"}`}>
+                            <div className={`h-2 w-2 rounded-full shrink-0 ${debug.isDueNow ? "bg-green-500" : "bg-amber-400"}`} />
+                            <p className={`text-xs font-semibold ${debug.isDueNow ? "text-green-700" : "text-amber-700"}`}>
+                              {debug.isDueNow ? "Campanha será processada no próximo ciclo do cron" : (debug.notDueReason ?? "Não está na janela de envio")}
+                            </p>
+                          </div>
 
-              {detail.executions.length === 0 && (
-                <div className="rounded-2xl border-2 border-dashed border-gray-100 py-8 text-center text-xs text-gray-400">
-                  Nenhum destinatário registrado ainda.
+                          {/* Next run */}
+                          {debug.nextRunAt && (
+                            <p className="text-gray-600">
+                              <span className="font-semibold">Próximo envio:</span>{" "}
+                              {new Date(debug.nextRunAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          )}
+
+                          {/* Safety blocks */}
+                          {debug.safetyBlocks.length > 0 && (
+                            <div>
+                              <p className="font-semibold text-red-600 mb-1">Bloqueios de segurança ativos:</p>
+                              {debug.safetyBlocks.map((b, i) => (
+                                <p key={i} className="text-red-600">• {b}</p>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Daily cap */}
+                          {debug.dailyCapStatus && (
+                            <p className="text-gray-600">
+                              <span className="font-semibold">Cap diário:</span> {debug.dailyCapStatus}
+                            </p>
+                          )}
+
+                          {/* Live audience */}
+                          {debug.audience && (
+                            <div className="border-t border-gray-200 pt-2 space-y-1">
+                              <p className="font-semibold text-gray-700">Audiência (tempo real):</p>
+                              {debug.audience.error ? (
+                                <p className="text-red-500">Erro ao calcular: {debug.audience.error}</p>
+                              ) : (
+                                <>
+                                  <p className="text-gray-600">• {debug.audience.totalEligible} clientes elegíveis no segmento</p>
+                                  <p className="text-gray-600">• {debug.audience.alreadySent} já receberam esta campanha</p>
+                                  <p className={`font-semibold ${debug.audience.newEligible === 0 ? "text-red-600" : "text-green-700"}`}>
+                                    • {debug.audience.newEligible} novos destinatários disponíveis
+                                  </p>
+                                  {debug.audience.newEligible === 0 && debug.audience.totalEligible === 0 && (
+                                    <p className="text-amber-600 mt-1">
+                                      ⚠ Nenhum cliente elegível encontrado. Verifique se o segmento está correto e se há clientes com telefone cadastrado (crmContactable=true).
+                                    </p>
+                                  )}
+                                  {debug.audience.newEligible === 0 && debug.audience.alreadySent > 0 && (
+                                    <p className="text-amber-600 mt-1">
+                                      ⚠ Todos os clientes elegíveis já receberam esta campanha. Campanha será marcada como CONCLUÍDA no próximo ciclo.
+                                    </p>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </section>
+                  )}
+
+                  {/* F. Clientes / logs */}
+                  <section>
+                    <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                      F · Clientes ({detail.executions.length})
+                    </h3>
+                    {detail.executions.length === 0 ? (
+                      <div className="rounded-2xl border-2 border-dashed border-gray-100 py-8 text-center text-xs text-gray-400">
+                        {isRecurring
+                          ? "Nenhum envio registrado ainda. O cron executará no próximo horário configurado."
+                          : "Nenhum destinatário registrado ainda."}
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 max-h-64 overflow-y-auto rounded-xl border border-gray-100 p-2">
+                        {detail.executions.map((ex) => {
+                          const exSc = EXEC_STATUS_COLORS[ex.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                          return (
+                            <div key={ex.id} className="flex items-center gap-3 rounded-xl border border-gray-50 bg-white px-3 py-2 shadow-sm">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-gray-800 truncate">{ex.customerName ?? "Cliente"}</p>
+                                <p className="text-[10px] text-gray-400 truncate">{ex.customerPhone ?? "—"}</p>
+                                {ex.failedReason && (
+                                  <p className="text-[10px] text-red-500 truncate">{ex.failedReason}</p>
+                                )}
+                              </div>
+                              <div className="shrink-0 flex flex-col items-end gap-0.5">
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${exSc.bg} ${exSc.text}`}>
+                                  {EXEC_STATUS_LABELS[ex.status] ?? ex.status}
+                                </span>
+                                {ex.converted && ex.revenue != null && (
+                                  <span className="text-[10px] font-semibold text-green-600">
+                                    R$ {Number(ex.revenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
                 </div>
-              )}
-            </>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </>
+    </div>
+  );
+}
+
+// ── Active Campaigns Section ──────────────────────────────────────────────────
+
+const ACTIVE_STATUSES = new Set(["ACTIVE", "SENDING", "SCHEDULED", "PAUSED"]);
+const HISTORY_STATUSES = new Set(["SENT", "COMPLETED", "CANCELLED", "DRAFT"]);
+
+function CampanhasAtivasSection({
+  campaigns,
+  onDetail,
+  onAction,
+}: {
+  campaigns: CampaignHistoryRow[];
+  onDetail: (id: string) => void;
+  onAction: (id: string, action: "pause" | "resume" | "cancel") => void;
+}) {
+  const active = campaigns.filter((c) => ACTIVE_STATUSES.has(c.status));
+  if (active.length === 0) return null;
+
+  return (
+    <div>
+      <div className="mb-3">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-brand-600">
+          Campanhas ativas
+        </h3>
+        <p className="mt-1 text-xs text-gray-400">
+          Acompanhe campanhas em execução, recorrentes ou programadas.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {active.map((c) => {
+          const sc         = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+          const cfg        = c.scheduleConfig as { mode?: string; weekdays?: number[]; timeWindow?: { start: string; end: string }; dailyLimit?: number; timezone?: string } | null;
+          const isRecurring = cfg?.mode === "RECURRING";
+          const isControllable = isRecurring && ["ACTIVE", "SCHEDULED", "PAUSED"].includes(c.status);
+
+          const displayDate = c.sentAt
+            ? `Último envio: ${new Date(c.sentAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+            : c.scheduledAt
+              ? `Agendada: ${new Date(c.scheduledAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+              : "Criada recentemente";
+
+          return (
+            <div
+              key={c.id}
+              className="rounded-2xl border-2 border-brand-100 bg-white px-4 py-4 shadow-sm"
+            >
+              {/* Top row */}
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
+                      {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
+                    </span>
+                    {isRecurring && (
+                      <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700">
+                        Recorrente
+                      </span>
+                    )}
+                    {c.totalSent > 0 && (
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                        {c.totalSent} disparos
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-bold text-gray-900">{c.name}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    WhatsApp · {displayDate}
+                  </p>
+                </div>
+                <div className="shrink-0 flex flex-col items-end gap-1.5">
+                  <button
+                    onClick={() => onDetail(c.id)}
+                    className="rounded-xl bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors whitespace-nowrap"
+                  >
+                    Ver detalhes
+                  </button>
+                </div>
+              </div>
+
+              {/* Schedule summary */}
+              {isRecurring && cfg && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {(cfg.weekdays ?? []).map((d) => (
+                    <span key={d} className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+                      {WEEKDAY_LABELS_PT[d] ?? `D${d}`}
+                    </span>
+                  ))}
+                  {cfg.timeWindow && (
+                    <span className="text-[10px] text-gray-500">
+                      {cfg.timeWindow.start}–{cfg.timeWindow.end}
+                    </span>
+                  )}
+                  {cfg.dailyLimit && (
+                    <span className="text-[10px] text-gray-500">
+                      · {cfg.dailyLimit}/dia
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Stats */}
+              {c.totalSent > 0 && (
+                <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-gray-500 border-t border-gray-50 pt-2">
+                  <span>{c.totalSent} enviados</span>
+                  {c.totalFailed > 0 && <span className="text-red-500">{c.totalFailed} falhas</span>}
+                  {c.totalResponded > 0 && <span className="text-blue-600">{c.totalResponded} respostas</span>}
+                  {c.totalConverted > 0 && (
+                    <span className="text-green-600 font-semibold">
+                      {c.totalConverted} compras ·{" "}
+                      R$ {Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Controls */}
+              {isControllable && (
+                <div className="mt-2 flex gap-2 border-t border-gray-50 pt-2">
+                  {c.status === "PAUSED" ? (
+                    <button
+                      onClick={() => onAction(c.id, "resume")}
+                      className="rounded-lg bg-green-50 px-3 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                    >
+                      Retomar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => onAction(c.id, "pause")}
+                      className="rounded-lg bg-yellow-50 px-3 py-1 text-[10px] font-semibold text-yellow-700 hover:bg-yellow-100 transition-colors"
+                    >
+                      Pausar
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (!confirm("Cancelar esta campanha permanentemente?")) return;
+                      onAction(c.id, "cancel");
+                    }}
+                    className="rounded-lg bg-red-50 px-3 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-100 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -1942,6 +2277,15 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         ))}
       </div>
 
+      {/* ── Campanhas ativas ─────────────────────────────────────────────────── */}
+      {!loadingHistory && (
+        <CampanhasAtivasSection
+          campaigns={campaigns}
+          onDetail={(id) => setDetailId(id)}
+          onAction={(id, action) => { void handleCampaignAction(id, action); }}
+        />
+      )}
+
       {/* ── Ações sugeridas ──────────────────────────────────────────────────── */}
       <div>
         <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
@@ -1999,20 +2343,20 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       </div>{/* end Ações sugeridas section */}
 
       {/* ── Histórico de ações ─────────────────────────────────────────────── */}
-      {(campaigns.length > 0 || !loadingHistory) && (
+      {(!loadingHistory) && (
         <div>
           <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
             Histórico de campanhas
           </h3>
           {loadingHistory ? (
             <div className="py-4 text-center text-sm text-gray-400">Carregando…</div>
-          ) : campaigns.length === 0 ? (
+          ) : campaigns.filter((c) => HISTORY_STATUSES.has(c.status)).length === 0 ? (
             <div className="rounded-2xl border-2 border-dashed border-gray-100 py-6 text-center text-xs text-gray-400">
-              Nenhuma campanha ainda. Use os templates acima para disparar sua primeira campanha.
+              Nenhuma campanha concluída ainda.
             </div>
           ) : (
             <div className="space-y-2">
-              {campaigns.map((c) => {
+              {campaigns.filter((c) => HISTORY_STATUSES.has(c.status)).map((c) => {
                 const sc         = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
                 const cfg        = c.scheduleConfig as { mode?: string; weekdays?: number[]; timeWindow?: { start: string; end: string }; dailyLimit?: number } | null;
                 const isRecurring = cfg?.mode === "RECURRING";
@@ -2243,9 +2587,13 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         )}
       </div>
 
-      {/* Campaign detail drawer */}
+      {/* Campaign detail modal */}
       {detailId && (
-        <CampaignDetailDrawer detailId={detailId} onClose={() => setDetailId(null)} />
+        <CampaignDetailModal
+          detailId={detailId}
+          onClose={() => setDetailId(null)}
+          onCampaignAction={handleCampaignAction}
+        />
       )}
 
       {/* Config drawer for suggested templates */}
