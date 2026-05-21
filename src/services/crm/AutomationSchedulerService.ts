@@ -3,6 +3,12 @@ import { personalizeMessage, type AudienceCustomer } from "@/services/crm/CrmCam
 import { CrmCampaignService } from "@/services/crm/CrmCampaignService";
 import type { CRMAutomation } from "@prisma/client";
 import { assignConversationContext, buildConversationMetadataForCrmSend } from "@/services/agents/AgentRoutingService";
+import {
+  getSafetyConfig,
+  getTodayGlobalSendCount,
+  checkQuietHours,
+  checkWeekendBlock,
+} from "@/lib/crm-safety";
 
 // Campaign templateId prefix for automation-created campaigns.
 // Used for dedup lookups and stats queries.
@@ -93,6 +99,30 @@ export class AutomationSchedulerService {
         return base;
       }
     }
+
+    // ── Global safety checks ─────────────────────────────────────────────────
+    const safety = await getSafetyConfig(restaurantId);
+
+    const quietReason = checkQuietHours(safety);
+    if (quietReason) {
+      console.log(`[AutomationScheduler] ${automation.trigger} blocked — ${quietReason}`);
+      return base;
+    }
+
+    const weekendReason = checkWeekendBlock(safety);
+    if (weekendReason) {
+      console.log(`[AutomationScheduler] ${automation.trigger} blocked — ${weekendReason}`);
+      return base;
+    }
+
+    if (safety.dailyGlobalCap > 0) {
+      const globalToday = await getTodayGlobalSendCount(restaurantId);
+      if (globalToday >= safety.dailyGlobalCap) {
+        console.log(`[AutomationScheduler] ${automation.trigger} blocked — cap global diário atingido (${globalToday}/${safety.dailyGlobalCap})`);
+        return base;
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     const customers = await AutomationSchedulerService.getTriggerableCustomers(
       restaurantId,

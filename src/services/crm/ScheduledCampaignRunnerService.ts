@@ -26,6 +26,14 @@ import {
   buildConversationMetadataForCrmSend,
   CONTEXT_TYPE,
 } from "@/services/agents/AgentRoutingService";
+import {
+  getSafetyConfig,
+  getTodayGlobalSendCount,
+  checkQuietHours,
+  checkWeekendBlock,
+  randomDelayMs,
+  type CRMWhatsAppSafetyConfig,
+} from "@/lib/crm-safety";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -189,6 +197,31 @@ export class ScheduledCampaignRunnerService {
       return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: 0, reason: "Not due now", completed: false };
     }
 
+    // ── Global safety checks ─────────────────────────────────────────────────
+    const safety = await getSafetyConfig(campaign.restaurantId);
+
+    const quietReason = checkQuietHours(safety);
+    if (quietReason) {
+      console.log(`[ScheduledCampaignRunner] ${campaign.name} blocked — ${quietReason}`);
+      return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: 0, reason: quietReason, completed: false };
+    }
+
+    const weekendReason = checkWeekendBlock(safety);
+    if (weekendReason) {
+      console.log(`[ScheduledCampaignRunner] ${campaign.name} blocked — ${weekendReason}`);
+      return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: 0, reason: weekendReason, completed: false };
+    }
+
+    if (safety.dailyGlobalCap > 0) {
+      const globalToday = await getTodayGlobalSendCount(campaign.restaurantId);
+      if (globalToday >= safety.dailyGlobalCap) {
+        const reason = `Cap global diário atingido (${globalToday}/${safety.dailyGlobalCap})`;
+        console.log(`[ScheduledCampaignRunner] ${campaign.name} blocked — ${reason}`);
+        return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: globalToday, reason, completed: false };
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const cfg = campaign.scheduleConfig as unknown as RecurringScheduleConfig;
     const dailyLimit = Math.max(1, Math.min(cfg.dailyLimit ?? 20, 200));
 
@@ -252,7 +285,7 @@ export class ScheduledCampaignRunnerService {
     }
 
     // Send batch
-    const { sent, failed } = await this._sendBatch(campaign, batch);
+    const { sent, failed } = await this._sendBatch(campaign, batch, safety);
 
     // Check end conditions
     const totalSentAfter      = (campaign.totalSent ?? 0) + sent;
@@ -336,7 +369,8 @@ export class ScheduledCampaignRunnerService {
       id: string; restaurantId: string; name: string; status: string;
       message: string; templateId: string | null; targetSegment: string | null;
     },
-    customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>
+    customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>,
+    safety?: CRMWhatsAppSafetyConfig
   ): Promise<{ sent: number; failed: number }> {
     const cfgResult = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
     if (!cfgResult.ok) {
@@ -445,6 +479,11 @@ export class ScheduledCampaignRunnerService {
         ]);
 
         sent++;
+        // Gradual dispatch: random inter-send delay to avoid robotic behaviour
+        if (safety) {
+          const delayMs = randomDelayMs(safety);
+          if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
+        }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : "Erro desconhecido";
         await prisma.campaignExecution.create({

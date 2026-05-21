@@ -1490,13 +1490,14 @@ model CRMActionLog {
 
 /// One row per restaurant. Tone preference + cached style weights.
 model RestaurantCRMProfile {
-  id             String         @id @default(cuid())
-  restaurantId   String         @unique
-  toneProfile    CRMToneProfile @default(FRIENDLY)
-  styleWeights   Json           @default("{}") // { FRIENDLY: 0.3, PLAYFUL: 0.2, ... }
-  profileVersion Int            @default(0) // bumped each time weights are recomputed
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id                   String         @id @default(cuid())
+  restaurantId         String         @unique
+  toneProfile          CRMToneProfile @default(FRIENDLY)
+  styleWeights         Json           @default("{}") // { FRIENDLY: 0.3, PLAYFUL: 0.2, ... }
+  profileVersion       Int            @default(0)    // bumped each time weights are recomputed
+  whatsAppSafetyConfig Json?                         // CRMWhatsAppSafetyConfig — global sending safety rules
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
