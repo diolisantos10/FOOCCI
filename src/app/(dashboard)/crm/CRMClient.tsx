@@ -3422,6 +3422,162 @@ function CrmConfiguracoes() {
   );
 }
 
+function SegmentacaoConfig() {
+  const DEFAULT_SEG = { hotMaxDays: 30, warmMaxDays: 60, lostMinDays: 120 };
+  const [loading,   setLoading]   = useState(true);
+  const [saving,    setSaving]    = useState(false);
+  const [success,   setSuccess]   = useState<string | null>(null);
+  const [segError,  setSegError]  = useState<string | null>(null);
+  const [seg, setSeg] = useState(DEFAULT_SEG);
+
+  useEffect(() => {
+    fetch("/api/settings/crm-segments")
+      .then((r) => r.json())
+      .then(({ data }) => { if (data) setSeg({ ...DEFAULT_SEG, ...data }); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function setField(key: keyof typeof DEFAULT_SEG, raw: string) {
+    const val = Math.max(1, parseInt(raw, 10) || 1);
+    setSeg((prev) => ({ ...prev, [key]: val }));
+  }
+
+  const validationError =
+    seg.hotMaxDays  >= seg.warmMaxDays ? "'Cliente quente' deve ser menor que 'Cliente morno'."
+    : seg.warmMaxDays >= seg.lostMinDays ? "'Cliente morno' deve ser menor que 'Cliente perdido'."
+    : null;
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (validationError) return;
+    setSaving(true);
+    setSuccess(null);
+    setSegError(null);
+    try {
+      const res = await fetch("/api/settings/crm-segments", {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(seg),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        if (json.data) setSeg({ ...DEFAULT_SEG, ...json.data });
+        setSuccess("Segmentação salva com sucesso.");
+      } else {
+        setSegError("Erro ao salvar. Tente novamente.");
+      }
+    } catch {
+      setSegError("Falha de rede. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-400 border-t-transparent" />
+        Carregando segmentação…
+      </div>
+    );
+  }
+
+  const frio     = seg.warmMaxDays + 1;
+  const perdido  = seg.lostMinDays;
+
+  return (
+    <form onSubmit={handleSave} className="max-w-2xl space-y-5 mt-8 border-t border-gray-100 pt-8">
+      <div>
+        <h2 className="text-base font-semibold text-gray-800">Segmentação de relacionamento</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Define os limiares de dias sem pedido que classificam cada segmento. Afeta o agrupamento de clientes no painel e as campanhas de reativação.
+        </p>
+      </div>
+
+      {success && (
+        <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+          <span>✓</span> {success}
+        </div>
+      )}
+      {(segError || validationError) && (
+        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{segError ?? validationError}</span>
+          <button type="button" className="ml-2 text-xs underline opacity-70 hover:opacity-100" onClick={() => { setSegError(null); }}>fechar</button>
+        </div>
+      )}
+
+      <CfgCard
+        title="Limiares de segmento"
+        subtitle="Número máximo de dias sem pedido para cada classificação."
+      >
+        <div className="grid gap-5 sm:grid-cols-3">
+          <CfgField
+            label="Cliente quente (dias)"
+            hint={`Pediu nos últimos ${seg.hotMaxDays} dias → QUENTE`}
+          >
+            <input
+              type="number" min={1} max={364}
+              value={seg.hotMaxDays}
+              onChange={(e) => setField("hotMaxDays", e.target.value)}
+              className={CFG_INPUT}
+            />
+          </CfgField>
+
+          <CfgField
+            label="Cliente morno (dias)"
+            hint={`${seg.hotMaxDays + 1}–${seg.warmMaxDays} dias → MORNO`}
+          >
+            <input
+              type="number" min={1} max={364}
+              value={seg.warmMaxDays}
+              onChange={(e) => setField("warmMaxDays", e.target.value)}
+              className={CFG_INPUT}
+            />
+          </CfgField>
+
+          <CfgField
+            label="Cliente perdido (dias)"
+            hint={`${perdido}+ dias sem pedido → PERDIDO`}
+          >
+            <input
+              type="number" min={1} max={1000}
+              value={seg.lostMinDays}
+              onChange={(e) => setField("lostMinDays", e.target.value)}
+              className={CFG_INPUT}
+            />
+          </CfgField>
+        </div>
+
+        {/* Derived labels preview */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {[
+            { label: "Quente",  desc: `0–${seg.hotMaxDays} dias`,          color: "bg-green-100 text-green-700" },
+            { label: "Morno",   desc: `${seg.hotMaxDays + 1}–${seg.warmMaxDays} dias`, color: "bg-yellow-100 text-yellow-700" },
+            { label: "Frio",    desc: `${frio}–${seg.lostMinDays - 1} dias`, color: "bg-blue-100 text-blue-700" },
+            { label: "Perdido", desc: `${perdido}+ dias`,                   color: "bg-red-100 text-red-700" },
+          ].map((s) => (
+            <span key={s.label} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${s.color}`}>
+              {s.label}
+              <span className="font-normal opacity-75">{s.desc}</span>
+            </span>
+          ))}
+        </div>
+      </CfgCard>
+
+      <div className="flex justify-end pt-2">
+        <button
+          type="submit"
+          disabled={saving || !!validationError}
+          className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
+        >
+          {saving ? "Salvando…" : "Salvar segmentação"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
 type Tab = "overview" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
@@ -3613,7 +3769,10 @@ export function CRMClient({
         />
       )}
       {tab === "configuracoes" && (
-        <CrmConfiguracoes />
+        <div>
+          <CrmConfiguracoes />
+          <SegmentacaoConfig />
+        </div>
       )}
       <ImportModal
         open={showImport}

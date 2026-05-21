@@ -10,9 +10,16 @@
  *
  * Keeping these separate lets the UI explain *why* the eligible count
  * is smaller than the segment, which was previously confusing owners.
+ *
+ * IMPORTANT: date-based queries use an OR condition so that customers
+ * imported with only importedLastOrderAt are correctly included.
+ * The overview stats (CRMService.getOverviewStats) uses COALESCE in raw SQL
+ * for the same reason — these two paths must stay in sync.
  */
 
 import { prisma } from "@/lib/prisma";
+import type { SegmentConfig } from "@/lib/crm-segments";
+import { DEFAULT_SEGMENT_CONFIG, buildCutoffs } from "@/lib/crm-segments";
 
 const PREVIEW_LIMIT = 20;
 const now = () => new Date();
@@ -55,12 +62,14 @@ type RawRow = {
   tier: string; segment: string;
   totalOrders: number; totalSpend: { toNumber(): number };
   lastOrderAt: Date | null;
+  importedLastOrderAt: Date | null;
 };
 
 const baseSelect = {
   id: true, name: true, phone: true,
   tier: true, segment: true,
-  totalOrders: true, totalSpend: true, lastOrderAt: true,
+  totalOrders: true, totalSpend: true,
+  lastOrderAt: true, importedLastOrderAt: true,
 } as const;
 
 function serialize(rows: RawRow[]): AudienceCustomerRow[] {
@@ -72,7 +81,8 @@ function serialize(rows: RawRow[]): AudienceCustomerRow[] {
     segment:     r.segment,
     totalOrders: r.totalOrders,
     totalSpend:  r.totalSpend.toNumber(),
-    lastOrderAt: r.lastOrderAt?.toISOString() ?? null,
+    // Fall back to importedLastOrderAt for customers with no Foocci orders
+    lastOrderAt: (r.lastOrderAt ?? r.importedLastOrderAt)?.toISOString() ?? null,
   }));
 }
 
@@ -84,46 +94,107 @@ const ELIGIBLE_FILTERS = {
   phone:          { not: null as null },
 };
 
+/**
+ * Build a Prisma `where` condition that matches customers whose
+ * effective last order (real OR imported) is before `cutoff`.
+ *
+ * This mirrors the COALESCE("lastOrderAt","importedLastOrderAt") logic in the
+ * overview stats raw SQL, so both paths count the same customers.
+ */
+function effectiveLastOrderBefore(cutoff: Date) {
+  return {
+    OR: [
+      // Customer has a real Foocci order before the cutoff
+      { lastOrderAt: { lt: cutoff } },
+      // Customer has no real order yet but has an imported date before cutoff
+      { lastOrderAt: null, importedLastOrderAt: { lt: cutoff } },
+    ],
+  };
+}
+
+/**
+ * Build a Prisma `where` condition that matches customers whose
+ * effective last order falls within [gteDate, ltDate).
+ */
+function effectiveLastOrderBetween(gteDate: Date, ltDate: Date) {
+  return {
+    OR: [
+      { lastOrderAt: { gte: gteDate, lt: ltDate } },
+      { lastOrderAt: null, importedLastOrderAt: { gte: gteDate, lt: ltDate } },
+    ],
+  };
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 export class CrmAudienceService {
   static async getAudiencePreview(
     restaurantId: string,
-    templateId:   string
+    templateId:   string,
+    segCfg:       SegmentConfig = DEFAULT_SEGMENT_CONFIG
   ): Promise<AudiencePreviewResult> {
-    const ts = now();
+    const ts      = now();
+    const cutoffs = buildCutoffs(segCfg, ts);
 
     switch (templateId) {
-      // ── Segment: FRIO — time-based (matches overviewStats logic) ─────────────
+      // ── Segment: FRIO — effective last order older than warmMaxDays ──────────
       case "recuperar-frios": {
-        const cutoff    = new Date(ts.getTime() - 60 * 86_400_000);
-        const segWhere  = { restaurantId, isGuest: false, lastOrderAt: { lt: cutoff } };
-        const eligWhere = { ...segWhere, ...ELIGIBLE_FILTERS };
+        const dateCond  = effectiveLastOrderBefore(cutoffs.warmCutoff);
+        const segWhere  = { restaurantId, isGuest: false, ...dateCond };
+        const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...dateCond };
         const [total, eligible, preview] = await Promise.all([
           prisma.customer.count({ where: segWhere }),
           prisma.customer.count({ where: eligWhere }),
-          prisma.customer.findMany({ where: eligWhere, orderBy: { lastOrderAt: "asc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+          prisma.customer.findMany({
+            where:   eligWhere,
+            orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
+            take:    PREVIEW_LIMIT,
+            select:  baseSelect,
+          }),
         ]);
-        const excl = await computeExclusions(restaurantId, segWhere, eligible);
+        const excl = await computeExclusions(restaurantId, dateCond, eligible);
         return build(true, total, eligible, serialize(preview as RawRow[]), excl);
       }
 
-      // ── Segment: MORNO — time-based (matches overviewStats logic) ────────────
+      // ── Segment: MORNO — effective last order within (warmCutoff, hotCutoff) ─
       case "reativar-mornos":
       case "recorrente-sumido": {
-        const sixtyAgo  = new Date(ts.getTime() - 60 * 86_400_000);
-        const thirtyAgo = new Date(ts.getTime() - 30 * 86_400_000);
         const extraFilter = templateId === "recorrente-sumido"
           ? { totalOrders: { gte: 2 } }
           : {};
-        const segWhere  = { restaurantId, isGuest: false, lastOrderAt: { gte: sixtyAgo, lt: thirtyAgo }, ...extraFilter };
-        const eligWhere = { ...segWhere, ...ELIGIBLE_FILTERS };
+        const dateCond  = effectiveLastOrderBetween(cutoffs.warmCutoff, cutoffs.hotCutoff);
+        const segWhere  = { restaurantId, isGuest: false, ...dateCond, ...extraFilter };
+        const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...dateCond, ...extraFilter };
         const [total, eligible, preview] = await Promise.all([
           prisma.customer.count({ where: segWhere }),
           prisma.customer.count({ where: eligWhere }),
-          prisma.customer.findMany({ where: eligWhere, orderBy: { lastOrderAt: "asc" }, take: PREVIEW_LIMIT, select: baseSelect }),
+          prisma.customer.findMany({
+            where:   eligWhere,
+            orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
+            take:    PREVIEW_LIMIT,
+            select:  baseSelect,
+          }),
         ]);
-        const excl = await computeExclusions(restaurantId, segWhere, eligible);
+        const excl = await computeExclusions(restaurantId, dateCond, eligible);
+        return build(true, total, eligible, serialize(preview as RawRow[]), excl);
+      }
+
+      // ── Segment: PERDIDO — effective last order older than lostMinDays ───────
+      case "recuperar-perdidos": {
+        const dateCond  = effectiveLastOrderBefore(cutoffs.lostCutoff);
+        const segWhere  = { restaurantId, isGuest: false, ...dateCond };
+        const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...dateCond };
+        const [total, eligible, preview] = await Promise.all([
+          prisma.customer.count({ where: segWhere }),
+          prisma.customer.count({ where: eligWhere }),
+          prisma.customer.findMany({
+            where:   eligWhere,
+            orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
+            take:    PREVIEW_LIMIT,
+            select:  baseSelect,
+          }),
+        ]);
+        const excl = await computeExclusions(restaurantId, dateCond, eligible);
         return build(true, total, eligible, serialize(preview as RawRow[]), excl);
       }
 
@@ -169,8 +240,6 @@ export class CrmAudienceService {
 
       // ── Templates needing more data (birthday, product-based, etc.) ──────────
       case "aniversariantes": {
-        // Count customers whose birth month matches the current calendar month.
-        // Prisma has no month() filter; fetch all with birthDate and filter in JS.
         const currentMonth = ts.getMonth(); // 0-indexed
         const withBirthday = await prisma.customer.findMany({
           where: { restaurantId, isGuest: false, birthDate: { not: null } },
@@ -257,8 +326,6 @@ export class CrmAudienceService {
       }
 
       default:
-        // Unknown template — return non-computed with total customer count so UI
-        // can show an informational state rather than throw a 400.
         console.warn(`[CrmAudienceService] Unknown template: '${templateId}'`);
         const total = await prisma.customer.count({ where: { restaurantId, isGuest: false } });
         return build(false, total, 0, [], { noPhone: 0, notContactable: 0, isGuest: 0 });
@@ -268,9 +335,10 @@ export class CrmAudienceService {
   /** Convenience: return only the eligible customers for dispatchable templates */
   static async getEligibleCustomers(
     restaurantId: string,
-    templateId:   string
+    templateId:   string,
+    segCfg?:      SegmentConfig
   ): Promise<AudienceCustomerRow[]> {
-    const preview = await CrmAudienceService.getAudiencePreview(restaurantId, templateId);
+    const preview = await CrmAudienceService.getAudiencePreview(restaurantId, templateId, segCfg);
     return preview.previewCustomers;
   }
 }
@@ -290,20 +358,21 @@ function build(
     eligibleCount:      eligible,
     previewCustomers:   preview,
     exclusionBreakdown: excl,
-    count:              eligible,    // backward compat
-    customers:          preview,     // backward compat
+    count:              eligible,  // backward compat
+    customers:          preview,   // backward compat
   };
 }
 
 async function computeExclusions(
   restaurantId: string,
-  segWhere:     object,
+  dateCond:     object,
   eligible:     number
 ): Promise<ExclusionBreakdown> {
+  const base = { restaurantId, ...dateCond };
   const [noPhone, notContactable, isGuest] = await Promise.all([
-    prisma.customer.count({ where: { ...segWhere, restaurantId, phone: null, isGuest: false } }),
-    prisma.customer.count({ where: { ...segWhere, restaurantId, isGuest: false, phone: { not: null }, crmContactable: false } }),
-    prisma.customer.count({ where: { ...segWhere, restaurantId, isGuest: true } }),
+    prisma.customer.count({ where: { ...base, isGuest: false, phone: null } }),
+    prisma.customer.count({ where: { ...base, isGuest: false, phone: { not: null }, crmContactable: false } }),
+    prisma.customer.count({ where: { ...base, isGuest: true } }),
   ]);
   return { noPhone, notContactable, isGuest };
 }

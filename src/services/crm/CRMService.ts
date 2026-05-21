@@ -2,6 +2,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, type ServiceResult } from "@/types";
 import { pickSuggestedMessage } from "@/lib/crm-messages";
+import { getSegmentConfig } from "@/lib/crm-segments";
 import type { AutomationTrigger } from "@prisma/client";
 
 // ── Tier thresholds (aligned with CustomerProfileClient) ──────────────────────
@@ -448,8 +449,9 @@ export class CRMService {
     dateRange?: { from: Date; to: Date }
   ): Promise<ServiceResult<OverviewStats>> {
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
-    const sixtyDaysAgo  = new Date(now.getTime() - 60 * 86_400_000);
+    const segCfg = await getSegmentConfig(restaurantId);
+    const hotCutoff  = new Date(now.getTime() - segCfg.hotMaxDays  * 86_400_000);
+    const warmCutoff = new Date(now.getTime() - segCfg.warmMaxDays * 86_400_000);
 
     const newCustomersFilter = dateRange
       ? { gte: dateRange.from, lte: dateRange.to }
@@ -469,9 +471,9 @@ export class CRMService {
       prisma.$queryRaw<Array<{ bucket: string; cnt: bigint }>>`
         SELECT
           CASE
-            WHEN COALESCE("lastOrderAt", "importedLastOrderAt") >= ${thirtyDaysAgo} THEN 'ativo'
-            WHEN COALESCE("lastOrderAt", "importedLastOrderAt") >= ${sixtyDaysAgo}  THEN 'morno'
-            WHEN COALESCE("lastOrderAt", "importedLastOrderAt") IS NOT NULL          THEN 'frio'
+            WHEN COALESCE("lastOrderAt", "importedLastOrderAt") >= ${hotCutoff}  THEN 'ativo'
+            WHEN COALESCE("lastOrderAt", "importedLastOrderAt") >= ${warmCutoff} THEN 'morno'
+            WHEN COALESCE("lastOrderAt", "importedLastOrderAt") IS NOT NULL       THEN 'frio'
             ELSE 'sem_pedidos'
           END AS bucket,
           COUNT(*)::bigint AS cnt

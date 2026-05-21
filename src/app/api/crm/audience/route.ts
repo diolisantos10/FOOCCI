@@ -14,6 +14,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, unauthorized, serverError } from "@/lib/api-response";
 import { CrmAudienceService } from "@/services/crm/CrmAudienceService";
+import { getSegmentConfig } from "@/lib/crm-segments";
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,7 +24,8 @@ export async function GET(req: NextRequest) {
     const template = req.nextUrl.searchParams.get("template");
     if (!template) return badRequest("Parâmetro 'template' é obrigatório");
 
-    const result = await CrmAudienceService.getAudiencePreview(ctx.restaurantId, template);
+    const segCfg = await getSegmentConfig(ctx.restaurantId);
+    const result = await CrmAudienceService.getAudiencePreview(ctx.restaurantId, template, segCfg);
     return ok(result);
   } catch (err) {
     console.error("[GET /api/crm/audience]", err);

@@ -1508,6 +1508,7 @@ model RestaurantCRMProfile {
   styleWeights         Json           @default("{}") // { FRIENDLY: 0.3, PLAYFUL: 0.2, ... }
   profileVersion       Int            @default(0)    // bumped each time weights are recomputed
   whatsAppSafetyConfig Json?                         // CRMWhatsAppSafetyConfig — global sending safety rules
+  segmentConfig        Json?                         // SegmentConfig — relationship segment day thresholds
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
