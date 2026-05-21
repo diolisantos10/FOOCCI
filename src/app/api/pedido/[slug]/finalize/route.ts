@@ -135,6 +135,30 @@ export async function POST(
   }
   const restaurantId = restaurant.id;
 
+  // ── Emergency pause guard ─────────────────────────────────────
+  const pauseCheck = await prisma.restaurant.findUnique({
+    where:  { id: restaurantId },
+    select: { isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true },
+  });
+  if (pauseCheck?.isOrderingPaused) {
+    const now = new Date();
+    const effectivelyPaused = pauseCheck.orderingPausedUntil === null || pauseCheck.orderingPausedUntil > now;
+    if (effectivelyPaused) {
+      const reasonSuffix = pauseCheck.orderingPausedReason
+        ? ` Motivo: ${pauseCheck.orderingPausedReason}.`
+        : "";
+      return NextResponse.json(
+        { error: `Os pedidos estão temporariamente pausados.${reasonSuffix} Por favor, tente novamente em breve.` },
+        { status: 503 },
+      );
+    }
+    // Auto-resume: pausedUntil has passed — clear the pause flag
+    await prisma.restaurant.update({
+      where: { id: restaurantId },
+      data:  { isOrderingPaused: false, orderingPausedReason: null, orderingPausedAt: null, orderingPausedUntil: null, orderingPausedBy: null },
+    });
+  }
+
   // ── Business hours guard ──────────────────────────────────────
   const isOpen = await isRestaurantOpenNow(restaurantId);
   if (!isOpen) {

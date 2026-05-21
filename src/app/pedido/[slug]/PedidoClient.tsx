@@ -368,6 +368,10 @@ interface Props {
   restaurantIsOpen?: boolean;
   /** Pre-computed closed message with today's hours and next opening time. */
   closedMessage?: string | null;
+  /** Emergency pause flag — overrides business hours. */
+  isOrderingPaused?: boolean;
+  /** Reason for the emergency pause, if provided. */
+  pauseReason?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1628,6 +1632,8 @@ export function PedidoClient({
   ga4Id = null,
   restaurantIsOpen = true,
   closedMessage = null,
+  isOrderingPaused = false,
+  pauseReason = null,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -3704,8 +3710,20 @@ export function PedidoClient({
 
         {header}
 
+        {/* Emergency pause banner — overrides business hours, shown in red */}
+        {isOrderingPaused && (
+          <div className="mx-3 mt-2 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 flex gap-2">
+            <span className="text-base shrink-0 mt-0.5">🚫</span>
+            <span>
+              {"Pedidos pausados temporariamente."}
+              {pauseReason ? ` ${pauseReason}.` : ""}
+              {" Você pode explorar o cardápio, mas pedidos estão pausados no momento."}
+            </span>
+          </div>
+        )}
+
         {/* Closed banner — shown when the restaurant is outside business hours */}
-        {!restaurantIsOpen && (
+        {!restaurantIsOpen && !isOrderingPaused && (
           <div className="mx-3 mt-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex gap-2">
             <span className="text-base shrink-0 mt-0.5">🕐</span>
             <span>

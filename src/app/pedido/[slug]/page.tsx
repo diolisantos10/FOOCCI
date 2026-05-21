@@ -45,6 +45,7 @@ export default async function PedidoPage({
     where: { slug },
     select: {
       id: true, name: true, logoUrl: true, phone: true, timezone: true,
+      isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true,
       storeProfile: { select: { whatsappPhone: true, averagePreparationMinutes: true } },
     },
   });
@@ -162,6 +163,13 @@ export default async function PedidoPage({
   const todayPeriods     = todayHoursRow ? getPeriodsForRow(todayHoursRow) : [];
   const nextOpenAt       = restaurantIsOpen ? null : getNextOpenAt(allHoursRows, todayDow, localMin);
   const closedMessage    = restaurantIsOpen ? null : buildClosedMessage(todayPeriods, nextOpenAt);
+
+  // ── Emergency pause ──────────────────────────────────────────────────────────
+  const pausedUntil = restaurant.orderingPausedUntil;
+  const isOrderingPaused =
+    restaurant.isOrderingPaused &&
+    (pausedUntil === null || pausedUntil > now);
+  const pauseReason = isOrderingPaused ? (restaurant.orderingPausedReason ?? null) : null;
 
   // ── Active banners for today ─────────────────────────────────────────────────
   const rawBanners = await prisma.promotion.findMany({
@@ -356,6 +364,8 @@ gtag('config', '${ga4Id}');
         ga4Id={ga4Id}
         restaurantIsOpen={restaurantIsOpen}
         closedMessage={closedMessage}
+        isOrderingPaused={isOrderingPaused}
+        pauseReason={pauseReason}
       />
     </>
   );

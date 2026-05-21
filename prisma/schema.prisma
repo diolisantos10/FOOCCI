@@ -35,6 +35,13 @@ model Restaurant {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Emergency store pause — overrides business hours
+  isOrderingPaused     Boolean   @default(false)
+  orderingPausedReason String?
+  orderingPausedAt     DateTime?
+  orderingPausedUntil  DateTime?
+  orderingPausedBy     String?
+
   users                  User[]
   customers              Customer[]
   menuCategories         MenuCategory[]

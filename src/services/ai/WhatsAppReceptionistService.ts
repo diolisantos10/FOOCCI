@@ -120,6 +120,8 @@ interface ReplyContext {
   hoursText:        string | null;
   isCurrentlyOpen:  boolean;
   closedMessage:    string | null; // rich closed message with today's hours + next opening
+  isPaused:         boolean;       // emergency store pause overrides business hours
+  pauseReason:      string | null;
 }
 
 // ─── GPT reply generation ─────────────────────────────────────
@@ -154,7 +156,7 @@ ${ctx.pedidoUrl ? `- Cardápio / pedidos online: ${ctx.pedidoUrl}` : ""}
 ${ctx.address    ? `- Endereço: ${ctx.address}`                    : ""}
 - Delivery: ${ctx.deliveryEnabled ? "Sim, fazemos entrega" : "Retirada no local"}
 ${ctx.hoursText  ? `- Horários:\n${ctx.hoursText}`                 : ""}
-${!ctx.isCurrentlyOpen && ctx.closedMessage ? `⚠️ STATUS ATUAL: O restaurante está FECHADO agora. ${ctx.closedMessage}` : ""}
+${ctx.isPaused ? `🚫 STATUS ATUAL: Pedidos PAUSADOS temporariamente. ${ctx.pauseReason ? `Motivo: ${ctx.pauseReason}.` : ""}` : (!ctx.isCurrentlyOpen && ctx.closedMessage ? `⚠️ STATUS ATUAL: O restaurante está FECHADO agora. ${ctx.closedMessage}` : "")}
 ${knowledgeSection}
 
 INSTRUÇÕES:
@@ -335,7 +337,7 @@ async function run(conversationId: string): Promise<void> {
   const [restaurant, storeProfile, agentCfg, evolutionResult, businessHoursRows] = await Promise.all([
     prisma.restaurant.findUnique({
       where:  { id: restaurantId },
-      select: { name: true, slug: true, address: true },
+      select: { name: true, slug: true, address: true, isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true },
     }),
     prisma.storeProfile.findUnique({
       where:  { restaurantId },
@@ -394,6 +396,14 @@ async function run(conversationId: string): Promise<void> {
   const nowDate   = new Date();
   const todayDow  = nowDate.getDay();
   const nowMin    = nowDate.getHours() * 60 + nowDate.getMinutes();
+
+  // Emergency pause check
+  const isPaused = !!(
+    restaurant?.isOrderingPaused &&
+    (restaurant.orderingPausedUntil === null || restaurant.orderingPausedUntil > nowDate)
+  );
+  const pauseReason = isPaused ? (restaurant?.orderingPausedReason ?? null) : null;
+
   let hoursText: string | null = null;
   let isCurrentlyOpen = true; // default open when no config
   let closedMessage: string | null = null;
@@ -425,6 +435,12 @@ async function run(conversationId: string): Promise<void> {
     hoursText = `${todayStatus}*Horários de funcionamento:*\n${weekLines}`;
   }
 
+  // When paused, treat as closed for all intent handling
+  const effectivelyOpen = isCurrentlyOpen && !isPaused;
+  const pauseMessage = isPaused
+    ? `Pedidos pausados temporariamente.${pauseReason ? ` ${pauseReason}.` : ""} Tente novamente em breve.`
+    : null;
+
   const ctx: ReplyContext = {
     restaurantName:  restaurant?.name ?? "nossa loja",
     pedidoUrl,
@@ -436,8 +452,10 @@ async function run(conversationId: string): Promise<void> {
     agentMode,
     menuOptions,
     hoursText,
-    isCurrentlyOpen,
-    closedMessage,
+    isCurrentlyOpen: effectivelyOpen,
+    closedMessage:   isPaused ? pauseMessage : closedMessage,
+    isPaused,
+    pauseReason,
   };
 
   const toPhone = conversation.customer.phone.replace(/^\+/, "");

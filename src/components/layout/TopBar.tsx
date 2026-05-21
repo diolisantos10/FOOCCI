@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import type { NotificationItem, NotifType, NotifPriority } from "@/app/api/notifications/route";
 import { useSidebar } from "./SidebarContext";
@@ -79,9 +79,27 @@ interface TopBarProps {
   title: string;
 }
 
+const PAUSE_REASONS = [
+  "Alta demanda — cozinha sobrecarregada",
+  "Problema técnico",
+  "Falta de ingredientes",
+  "Encerramento antecipado",
+  "Manutenção",
+  "Outro",
+];
+
+const AUTO_RESUME_OPTIONS: { label: string; minutes: number | null }[] = [
+  { label: "Indefinido (manual)",   minutes: null },
+  { label: "15 minutos",            minutes: 15 },
+  { label: "30 minutos",            minutes: 30 },
+  { label: "1 hora",                minutes: 60 },
+  { label: "2 horas",               minutes: 120 },
+];
+
 export function TopBar({ title }: TopBarProps) {
   const router = useRouter();
   const { toggle: toggleSidebar } = useSidebar();
+  const { data: session } = useSession();
 
   // Panel open/close
   const [open, setOpen] = useState(false);
@@ -91,6 +109,15 @@ export function TopBar({ title }: TopBarProps) {
   // Notifications
   const [notifs, setNotifs] = useState<NotificationItem[]>([]);
   const [readIds, setReadIdsState] = useState<Set<string>>(new Set());
+
+  // ── Emergency pause state ────────────────────────────────────────────────────
+  const [isPaused, setIsPaused]         = useState(false);
+  const [pauseReason, setPauseReason]   = useState<string | null>(null);
+  const [pausedUntil, setPausedUntil]   = useState<string | null>(null);
+  const [showPauseModal, setShowPauseModal] = useState(false);
+  const [modalReason, setModalReason]   = useState(PAUSE_REASONS[0]!);
+  const [modalResume, setModalResume]   = useState<number | null>(null);
+  const [pauseLoading, setPauseLoading] = useState(false);
 
   // Hydrate read IDs from localStorage after mount
   useEffect(() => {
@@ -115,6 +142,68 @@ export function TopBar({ title }: TopBarProps) {
     const id = setInterval(fetchNotifs, 10_000);
     return () => clearInterval(id);
   }, [fetchNotifs]);
+
+  // ── Pause status polling ───────────────────────────────────────────────────
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const canPause = role === "OWNER" || role === "MANAGER";
+
+  const fetchPauseStatus = useCallback(async () => {
+    if (!canPause) return;
+    try {
+      const res = await fetch("/api/settings/store/pause");
+      if (!res.ok) return;
+      const json = await res.json() as { paused: boolean; reason: string | null; pausedUntil: string | null };
+      setIsPaused(json.paused);
+      setPauseReason(json.reason);
+      setPausedUntil(json.pausedUntil);
+    } catch {
+      // network error — keep current state
+    }
+  }, [canPause]);
+
+  useEffect(() => {
+    fetchPauseStatus();
+    const id = setInterval(fetchPauseStatus, 30_000);
+    return () => clearInterval(id);
+  }, [fetchPauseStatus]);
+
+  async function handleActivatePause() {
+    setPauseLoading(true);
+    try {
+      const pauseUntil = modalResume != null
+        ? new Date(Date.now() + modalResume * 60_000).toISOString()
+        : null;
+      const res = await fetch("/api/settings/store/pause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: modalReason, pauseUntil }),
+      });
+      if (res.ok) {
+        setIsPaused(true);
+        setPauseReason(modalReason);
+        setPausedUntil(pauseUntil);
+        setShowPauseModal(false);
+      }
+    } catch {
+      // ignore
+    }
+    setPauseLoading(false);
+  }
+
+  async function handleResumePause() {
+    setPauseLoading(true);
+    try {
+      const res = await fetch("/api/settings/store/pause", { method: "DELETE" });
+      if (res.ok) {
+        setIsPaused(false);
+        setPauseReason(null);
+        setPausedUntil(null);
+      }
+    } catch {
+      // ignore
+    }
+    setPauseLoading(false);
+  }
 
   // ── Close on outside click ────────────────────────────────────────────────
   useEffect(() => {
@@ -186,8 +275,35 @@ export function TopBar({ title }: TopBarProps) {
         )}
       </div>
 
-      {/* Right: bell + sign out */}
+      {/* Right: pause + bell + sign out */}
       <div className="flex items-center gap-1">
+
+        {/* ── Emergency pause button ───────────────────────────────────── */}
+        {canPause && (
+          isPaused ? (
+            <button
+              type="button"
+              onClick={handleResumePause}
+              disabled={pauseLoading}
+              title={pauseReason ? `Pausado: ${pauseReason}. Clique para retomar` : "Pedidos pausados — clique para retomar"}
+              className="flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:opacity-60"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="hidden sm:inline">Pedidos pausados</span>
+              <span className="sm:hidden">Pausado</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => { setModalReason(PAUSE_REASONS[0]!); setModalResume(null); setShowPauseModal(true); }}
+              title="Pausar pedidos de emergência"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-orange-50 hover:text-orange-700 border border-transparent hover:border-orange-200"
+            >
+              <span>⏸</span>
+              <span className="hidden sm:inline">Pausar pedidos</span>
+            </button>
+          )
+        )}
 
         {/* ── Notification bell ─────────────────────────────────────────── */}
         <div className="relative">
@@ -335,6 +451,61 @@ export function TopBar({ title }: TopBarProps) {
           <span className="text-gray-300">↗</span>
         </button>
       </div>
+
+      {/* ── Emergency pause modal ────────────────────────────────────────── */}
+      {showPauseModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPauseModal(false); }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl mx-4">
+            <h2 className="mb-1 text-base font-bold text-gray-900">Pausar pedidos</h2>
+            <p className="mb-4 text-xs text-gray-500">
+              Todos os canais (cardápio online, WhatsApp) vão bloquear novos pedidos imediatamente.
+            </p>
+
+            <label className="mb-1.5 block text-xs font-semibold text-gray-700">Motivo</label>
+            <select
+              value={modalReason}
+              onChange={(e) => setModalReason(e.target.value)}
+              className="mb-4 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            >
+              {PAUSE_REASONS.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+
+            <label className="mb-1.5 block text-xs font-semibold text-gray-700">Retomar automaticamente</label>
+            <select
+              value={modalResume ?? ""}
+              onChange={(e) => setModalResume(e.target.value === "" ? null : Number(e.target.value))}
+              className="mb-6 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            >
+              {AUTO_RESUME_OPTIONS.map((o) => (
+                <option key={o.label} value={o.minutes ?? ""}>{o.label}</option>
+              ))}
+            </select>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPauseModal(false)}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleActivatePause}
+                disabled={pauseLoading}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+              >
+                {pauseLoading ? "Pausando…" : "Pausar agora"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
