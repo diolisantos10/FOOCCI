@@ -12,6 +12,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, notFound, serverError } from "@/lib/api-response";
 import { ConversationStatus } from "@prisma/client";
+import { markConversationNeedsHuman } from "@/lib/handoff";
 
 export async function POST(
   req: NextRequest,
@@ -30,6 +31,10 @@ export async function POST(
 
     if (!conv || conv.restaurantId !== ctx.restaurantId) return notFound();
 
+    // Record handoff event (idempotent; creates SYSTEM message for inactivity tracking)
+    await markConversationNeedsHuman(id, "AI_ESCALATION");
+
+    // Takeover sets a more specific status and assigns the operator
     const updated = await prisma.conversation.update({
       where: { id },
       data: {

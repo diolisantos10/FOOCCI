@@ -11,7 +11,8 @@
  *   - Route ORDER / MENU requests to the /pedido/[slug] link.
  *   - Hand off to human operator on: HUMAN_REQUEST, COMPLAINT, ORDER_STATUS.
  *   - In HUMAN_ASSISTED mode: also hand off on UNKNOWN.
- *   - Set conversation.status = HUMAN + aiEnabled = false on handoff.
+ *   - For UNKNOWN in RECEPTIONIST_ONLY and for GREETING without menu options: use OpenAI GPT.
+ *   - Set conversation.status = HUMAN + aiEnabled = false on handoff via markConversationNeedsHuman.
  *   - Log all outbound replies to Conversation.
  *
  * Intentionally does NOT:
@@ -23,11 +24,13 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { openai } from "@/lib/openai";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { ConversationStatus } from "@prisma/client";
 import type { MenuOption } from "@/validators/whatsapp-agent";
 import { RestaurantKnowledgeService } from "@/services/knowledge/RestaurantKnowledgeService";
+import { markConversationNeedsHuman } from "@/lib/handoff";
 
 // ─── constants ────────────────────────────────────────────────
 
@@ -116,6 +119,77 @@ interface ReplyContext {
   hoursText:       string | null;
 }
 
+// ─── GPT reply generation ─────────────────────────────────────
+
+interface GptResult {
+  reply:        string;
+  needsHandoff: boolean;
+}
+
+async function generateGptReply(params: {
+  ctx:                 ReplyContext;
+  customerName:        string | null;
+  currentMessage:      string;
+  conversationHistory: { role: "user" | "assistant"; content: string }[];
+  knowledgeItems:      { title: string; answer: string }[];
+}): Promise<GptResult> {
+  const { ctx, customerName, currentMessage, conversationHistory, knowledgeItems } = params;
+
+  const knowledgeSection = knowledgeItems.length > 0
+    ? "\n\nBASE DE CONHECIMENTO:\n" +
+      knowledgeItems.map((k) => `P: ${k.title}\nR: ${k.answer}`).join("\n\n")
+    : "";
+
+  const greeting = customerName ? `, ${customerName.split(" ")[0]}` : "";
+
+  const systemPrompt =
+`Você é o atendente virtual do WhatsApp de "${ctx.restaurantName}". Responda em português brasileiro de forma curta, amigável e natural${greeting ? ` (chame o cliente de ${customerName?.split(" ")[0]})` : ""}.
+
+CONTEXTO:
+- Restaurante: ${ctx.restaurantName}
+${ctx.pedidoUrl ? `- Cardápio / pedidos online: ${ctx.pedidoUrl}` : ""}
+${ctx.address    ? `- Endereço: ${ctx.address}`                    : ""}
+- Delivery: ${ctx.deliveryEnabled ? "Sim, fazemos entrega" : "Retirada no local"}
+${ctx.hoursText  ? `- Horários:\n${ctx.hoursText}`                 : ""}
+${knowledgeSection}
+
+INSTRUÇÕES:
+1. Máximo 2 parágrafos curtos. Sem listas longas.
+2. Nunca invente preços, produtos ou promoções que não estão no contexto acima.
+3. Se o cliente pedir para ver o cardápio ou fazer pedido, manda o link${ctx.pedidoUrl ? ` (${ctx.pedidoUrl})` : ""}.
+4. Se houver reclamação, urgência ou o cliente pedir para falar com uma pessoa, retorne needsHandoff=true.
+5. Se não souber responder com certeza, retorne needsHandoff=true.
+6. Use emoji com moderação 😊.
+
+Responda APENAS com JSON válido: {"reply":"...","needsHandoff":false}`;
+
+  const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+    { role: "system", content: systemPrompt },
+    ...conversationHistory.slice(-6),
+    { role: "user", content: currentMessage },
+  ];
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model:           "gpt-4o-mini",
+      messages,
+      max_tokens:      300,
+      temperature:     0.65,
+      response_format: { type: "json_object" },
+    });
+
+    const raw = completion.choices[0]?.message?.content ?? "";
+    const parsed = JSON.parse(raw) as { reply?: string; needsHandoff?: boolean };
+    return {
+      reply:        (parsed.reply ?? "").trim() || ctx.handoffMessage,
+      needsHandoff: parsed.needsHandoff === true,
+    };
+  } catch (err) {
+    console.error("[WhatsAppReceptionistService] GPT error:", err);
+    return { reply: ctx.handoffMessage, needsHandoff: true };
+  }
+}
+
 // ─── reply builders ───────────────────────────────────────────
 
 /** Formats the configured menu options as an emoji-numbered text list. */
@@ -142,82 +216,39 @@ function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
         : "Entre em contato com a loja para saber sobre nossas promoções.";
     case "custom":
       if (opt.message?.trim()) return opt.message.trim();
-      // No static message set — fall back to hours text (hours option) or welcome
       return ctx.hoursText ?? ctx.welcomeMessage;
     default:
       return ctx.welcomeMessage;
   }
 }
 
-function buildReply(intent: Intent, ctx: ReplyContext): string {
-  const { pedidoUrl, address, deliveryEnabled, restaurantName, menuOptions, agentMode } = ctx;
-
+function buildTemplateReply(intent: Intent, ctx: ReplyContext): string | null {
   switch (intent) {
-    case "GREETING": {
-      const menuList = buildMenuList(menuOptions);
-      if (menuList) {
-        return ctx.welcomeMessage + menuList + "\n\nResponda com o número da opção 😊";
-      }
-      return ctx.welcomeMessage + (pedidoUrl ? `\n\nCardápio: ${pedidoUrl}` : "");
-    }
-
     case "ORDER":
     case "MENU_REQUEST":
-      return pedidoUrl
-        ? `${ctx.orderPreMessage}\n\n${pedidoUrl}`
-        : "Para ver nosso cardápio, entre em contato com a loja. 😊";
+      return ctx.pedidoUrl
+        ? `${ctx.orderPreMessage}\n\n${ctx.pedidoUrl}`
+        : null;
 
     case "HOURS_REQUEST":
       if (ctx.hoursText) {
-        return ctx.hoursText + (pedidoUrl ? `\n\n📱 Cardápio: ${pedidoUrl}` : "");
+        return ctx.hoursText + (ctx.pedidoUrl ? `\n\n📱 Cardápio: ${ctx.pedidoUrl}` : "");
       }
-      return pedidoUrl
-        ? `Para conferir nossos horários, acesse nosso cardápio:\n${pedidoUrl}`
-        : "Para saber nossos horários, entre em contato diretamente com a loja.";
+      return null;
 
     case "ADDRESS_REQUEST":
-      if (address) {
-        return `Estamos em: ${address}` + (pedidoUrl ? `\n\nCardápio: ${pedidoUrl}` : "");
+      if (ctx.address) {
+        return `Estamos em: ${ctx.address}` + (ctx.pedidoUrl ? `\n\nCardápio: ${ctx.pedidoUrl}` : "");
       }
-      return pedidoUrl
-        ? `Para mais informações sobre nossa localização, acesse:\n${pedidoUrl}`
-        : "Para informações de endereço, entre em contato com a loja.";
-
-    case "DELIVERY_REQUEST":
-      if (deliveryEnabled) {
-        return pedidoUrl
-          ? `Sim, fazemos entrega! 🛵 Faça seu pedido aqui:\n${pedidoUrl}`
-          : "Sim, fazemos entrega! Entre em contato com a loja para mais detalhes.";
-      }
-      return pedidoUrl
-        ? `No momento trabalhamos com retirada no local. 😊 Veja nosso cardápio:\n${pedidoUrl}`
-        : "No momento trabalhamos com retirada no local. Entre em contato para mais informações.";
+      return null;
 
     case "PAYMENT_INFO":
-      return pedidoUrl
-        ? `As opções de pagamento ficam visíveis ao finalizar o pedido no nosso cardápio:\n${pedidoUrl}`
-        : "Para saber as formas de pagamento aceitas, entre em contato com a loja. Nossa equipe vai te ajudar! 😊";
+      return ctx.pedidoUrl
+        ? `As opções de pagamento ficam visíveis ao finalizar o pedido no nosso cardápio:\n${ctx.pedidoUrl}`
+        : null;
 
-    // ORDER_STATUS and COMPLAINT always hand off — message matches handoffMessage.
-    case "ORDER_STATUS":
-    case "HUMAN_REQUEST":
-    case "COMPLAINT":
-      return ctx.handoffMessage;
-
-    case "UNKNOWN":
-    default: {
-      // HUMAN_ASSISTED mode escalates faster — any unrecognized message goes to human.
-      if (agentMode === "HUMAN_ASSISTED") {
-        return ctx.handoffMessage;
-      }
-      const menuList = buildMenuList(menuOptions);
-      if (menuList) {
-        return `Desculpe, não entendi. Como posso te ajudar?${menuList}\n\nResponda com o número da opção 😊`;
-      }
-      return pedidoUrl
-        ? `Desculpe, não entendi. Posso te enviar nosso cardápio ou conectar com nossa equipe:\n\nCardápio: ${pedidoUrl}`
-        : `Desculpe, não entendi. Se precisar de ajuda, é só pedir que chamo alguém da equipe. 😊`;
-    }
+    default:
+      return null;
   }
 }
 
@@ -244,7 +275,6 @@ export class WhatsAppReceptionistService {
 }
 
 async function run(conversationId: string): Promise<void> {
-  // Load conversation — include aiEnabled so we respect human takeovers
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     select: {
@@ -256,11 +286,11 @@ async function run(conversationId: string): Promise<void> {
     },
   });
 
-  // Skip if human is handling or AI has been disabled for this conversation
   if (
     !conversation ||
     !conversation.aiEnabled ||
     conversation.status === ConversationStatus.HUMAN ||
+    conversation.status === ConversationStatus.HUMANO_ASSUMIU ||
     conversation.status === ConversationStatus.RESOLVED
   ) {
     return;
@@ -282,7 +312,7 @@ async function run(conversationId: string): Promise<void> {
 
   const { restaurantId } = conversation;
 
-  // Load all config in parallel — no sequential round-trips
+  // Load all config in parallel
   const [restaurant, storeProfile, agentCfg, evolutionResult, businessHoursRows] = await Promise.all([
     prisma.restaurant.findUnique({
       where:  { id: restaurantId },
@@ -316,13 +346,11 @@ async function run(conversationId: string): Promise<void> {
     return;
   }
 
-  // Build pedido URL — prefer explicit menuUrl from config, fall back to /pedido/[slug]
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const baseUrl  = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
   const pedidoUrl =
     agentCfg?.menuUrl ||
     (restaurant?.slug && baseUrl ? `${baseUrl}/pedido/${restaurant.slug}` : null);
 
-  // Build address string from structured StoreProfile, fall back to flat field
   let address: string | null = null;
   if (storeProfile?.street) {
     address = [
@@ -338,15 +366,13 @@ async function run(conversationId: string): Promise<void> {
     address = restaurant.address;
   }
 
-  // Parse menuOptions from JSON — cast is safe because the API validates with Zod
   const menuOptions: MenuOption[] = Array.isArray(agentCfg?.menuOptions)
     ? (agentCfg.menuOptions as unknown as MenuOption[])
     : [];
 
   const agentMode = agentCfg?.agentMode ?? "RECEPTIONIST_ONLY";
 
-  // Build human-readable hours from BusinessHours rows
-  const todayDow = new Date().getDay(); // 0 = Sunday … 6 = Saturday
+  const todayDow = new Date().getDay();
   let hoursText: string | null = null;
   if (businessHoursRows.length > 0) {
     const todayRow = businessHoursRows.find((h) => h.dayOfWeek === todayDow);
@@ -379,7 +405,7 @@ async function run(conversationId: string): Promise<void> {
 
   const toPhone = conversation.customer.phone.replace(/^\+/, "");
 
-  // Handle media messages gracefully — we cannot process images, audio, or documents.
+  // Handle media messages — we cannot process images, audio, or documents.
   if (lastMessage.type !== "TEXT") {
     const mediaReply = ctx.pedidoUrl
       ? `Recebi sua mensagem! 😊 Posso te ajudar melhor por texto. Para fazer seu pedido:\n${ctx.pedidoUrl}`
@@ -388,7 +414,7 @@ async function run(conversationId: string): Promise<void> {
     return;
   }
 
-  // Check if customer selected a numbered or named menu option first
+  // ── Check if customer selected a numbered or named menu option ────────────
   const selectedOpt = detectSelectedOption(lastMessage.content, menuOptions);
 
   let replyText: string;
@@ -400,43 +426,109 @@ async function run(conversationId: string): Promise<void> {
   } else {
     const intent = detectIntent(lastMessage.content);
 
-    // Before using a template reply, check if the restaurant has an ACTIVE
-    // knowledge item that better answers this specific question.
-    // Knowledge answers take priority over generic templates for non-handoff intents.
-    const knowledgeMatch =
-      !needsHandoff(intent, agentMode) &&
-      intent !== "GREETING" &&
-      (await RestaurantKnowledgeService.findMatch(restaurantId, lastMessage.content).catch(() => null));
-
-    if (knowledgeMatch) {
-      replyText      = knowledgeMatch.answer;
-      triggerHandoff = false;
-      // Async — do not await to avoid blocking the reply
-      RestaurantKnowledgeService.incrementUsage(knowledgeMatch.id).catch(() => {});
+    // Hard handoff intents — never use GPT, always escalate immediately
+    if (needsHandoff(intent, agentMode)) {
+      replyText      = ctx.handoffMessage;
+      triggerHandoff = true;
     } else {
-      replyText      = buildReply(intent, ctx);
-      triggerHandoff = needsHandoff(intent, agentMode);
+      // Check knowledge base first (takes priority over both templates and GPT)
+      const knowledgeMatch =
+        intent !== "GREETING" &&
+        (await RestaurantKnowledgeService.findMatch(restaurantId, lastMessage.content).catch(() => null));
 
-      // When intent is UNKNOWN and no knowledge covers it, create a gap suggestion
-      // so the owner can later fill in the correct answer.
-      if (intent === "UNKNOWN" && !triggerHandoff) {
-        RestaurantKnowledgeService.createGap(
-          restaurantId,
-          lastMessage.content,
-          conversationId,
-        ).catch(() => {});
+      if (knowledgeMatch) {
+        replyText      = knowledgeMatch.answer;
+        triggerHandoff = false;
+        RestaurantKnowledgeService.incrementUsage(knowledgeMatch.id).catch(() => {});
+      } else {
+        // Try deterministic template for data-backed intents (hours, address, menu link, etc.)
+        const templateReply = buildTemplateReply(intent, ctx);
+
+        // Use GPT for GREETING (human-like warmth) and UNKNOWN (open-ended questions),
+        // and as a fallback when template data is missing.
+        const useGpt =
+          intent === "GREETING" && menuOptions.length === 0 ||
+          intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED" ||
+          (templateReply === null && intent !== "GREETING");
+
+        if (useGpt) {
+          // Load conversation history and knowledge items for GPT context
+          const [historyMsgs, knowledgeItems] = await Promise.all([
+            prisma.message.findMany({
+              where:   { conversationId, type: "TEXT" },
+              orderBy: { sentAt: "desc" },
+              take:    8,
+              select:  { direction: true, content: true },
+            }),
+            prisma.restaurantKnowledgeItem.findMany({
+              where:   { restaurantId, status: "ACTIVE" },
+              select:  { title: true, answer: true },
+              take:    10,
+            }).catch(() => [] as { title: string; answer: string }[]),
+          ]);
+
+          // Oldest first; exclude system/handoff messages
+          const conversationHistory = historyMsgs
+            .reverse()
+            .filter((m) => !m.content.startsWith("[handoff:") && !m.content.startsWith("[inactivity"))
+            .map((m) => ({
+              role:    (m.direction === "INBOUND" ? "user" : "assistant") as "user" | "assistant",
+              content: m.content,
+            }));
+
+          const gpt = await generateGptReply({
+            ctx,
+            customerName:        conversation.customer.name,
+            currentMessage:      lastMessage.content,
+            conversationHistory,
+            knowledgeItems,
+          });
+
+          replyText      = gpt.reply;
+          triggerHandoff = gpt.needsHandoff;
+
+          // Record knowledge gap when GPT also couldn't answer confidently
+          if (gpt.needsHandoff && intent === "UNKNOWN") {
+            RestaurantKnowledgeService.createGap(
+              restaurantId,
+              lastMessage.content,
+              conversationId,
+            ).catch(() => {});
+          }
+        } else {
+          // Use GREETING template (with menu list) or data-backed template
+          if (intent === "GREETING") {
+            const menuList = buildMenuList(menuOptions);
+            replyText = ctx.welcomeMessage + (menuList
+              ? menuList + "\n\nResponda com o número da opção 😊"
+              : (ctx.pedidoUrl ? `\n\nCardápio: ${ctx.pedidoUrl}` : ""));
+          } else {
+            replyText = templateReply ?? ctx.welcomeMessage;
+          }
+          triggerHandoff = false;
+
+          // Record knowledge gap for UNKNOWN when GPT was skipped (HUMAN_ASSISTED mode)
+          if (intent === "UNKNOWN") {
+            RestaurantKnowledgeService.createGap(
+              restaurantId,
+              lastMessage.content,
+              conversationId,
+            ).catch(() => {});
+          }
+        }
       }
     }
   }
 
-  // Transition conversation to HUMAN — set both status and aiEnabled so the
-  // conversation appears correctly in Central de Conversas and AI does not
-  // respond again until a human explicitly re-enables it.
+  // Transition conversation to HUMAN via the shared utility (idempotent, records event)
   if (triggerHandoff) {
-    await prisma.conversation.update({
-      where: { id: conversationId },
-      data:  { status: ConversationStatus.HUMAN, aiEnabled: false },
-    });
+    const handoffReason =
+      selectedOpt?.flow === "handoff"        ? "MENU_OPTION"
+      : detectIntent(lastMessage.content) === "COMPLAINT"     ? "COMPLAINT"
+      : detectIntent(lastMessage.content) === "HUMAN_REQUEST" ? "CUSTOMER_REQUEST"
+      : detectIntent(lastMessage.content) === "ORDER_STATUS"  ? "AI_ESCALATION"
+      :                                                          "AI_ESCALATION";
+    await markConversationNeedsHuman(conversationId, handoffReason);
   }
 
   await sendReply(evolutionResult.data, toPhone, replyText, conversationId);

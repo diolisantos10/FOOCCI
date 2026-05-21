@@ -292,6 +292,15 @@ export function AtendimentoClient({
   const [attachment,    setAttachment]    = useState<AttachmentState | null>(null);
   const [uploading,     setUploading]     = useState(false);
 
+  // ── Human-handoff alert sound ─────────────────────────────────────────────
+  const handoffAudioRef       = useRef<HTMLAudioElement | null>(null);
+  const [handoffAudioBlocked, setHandoffAudioBlocked] = useState(false);
+  const [handoffSoundEnabled, setHandoffSoundEnabled] = useState(true);
+  // Track conversation statuses to detect new transitions to HUMAN
+  const prevStatusRef    = useRef<Map<string, ConvStatus>>(new Map());
+  const alertedIds       = useRef<Set<string>>(new Set());
+  const isFirstListLoad  = useRef(true);
+
   const [leftWidth,     setLeftWidth]     = useState<number>(320);
   const [isDesktop,     setIsDesktop]     = useState<boolean>(false);
 
@@ -315,13 +324,53 @@ export function AtendimentoClient({
       if (!res.ok) return;
       const json = await res.json();
       const items: ConvSummary[] = json.data?.data ?? json.data ?? [];
-      setConversations(Array.isArray(items) ? items : []);
+      if (!Array.isArray(items)) return;
+
+      setConversations(items);
+
+      // ── Human-handoff sound detection ──────────────────────────────────────
+      if (isFirstListLoad.current) {
+        // On first load: seed the status map and alerted set WITHOUT playing sound
+        for (const c of items) {
+          prevStatusRef.current.set(c.id, c.status);
+          if (c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU") {
+            alertedIds.current.add(c.id);
+          }
+        }
+        isFirstListLoad.current = false;
+      } else {
+        const newHandoffs: string[] = [];
+        for (const c of items) {
+          const prev = prevStatusRef.current.get(c.id);
+          const isHumanNow = c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU";
+          const wasHumanBefore = prev === "HUMAN" || prev === "HUMANO_ASSUMIU";
+          // New conversation OR status just changed to HUMAN
+          if (isHumanNow && !wasHumanBefore && !alertedIds.current.has(c.id)) {
+            newHandoffs.push(c.id);
+          }
+          prevStatusRef.current.set(c.id, c.status);
+          // Clear alert tracking when conversation returns to AI
+          if (!isHumanNow) alertedIds.current.delete(c.id);
+        }
+        if (newHandoffs.length > 0 && handoffSoundEnabled) {
+          const audio = handoffAudioRef.current;
+          if (audio) {
+            audio.currentTime = 0;
+            audio.play().catch((err: unknown) => {
+              if (err instanceof DOMException && err.name === "NotAllowedError") {
+                setHandoffAudioBlocked(true);
+              }
+            });
+          }
+          newHandoffs.forEach((id) => alertedIds.current.add(id));
+        }
+      }
     } catch {
       // network error — keep current state
     } finally {
       setLoadingList(false);
     }
-  }, [statusFilter, channelFilter]);
+  }, [statusFilter, channelFilter, handoffSoundEnabled]);
 
   // Immediate refetch when filter/search changes
   useEffect(() => {
@@ -355,6 +404,33 @@ export function AtendimentoClient({
     if (!isDesktop) return;
     try { localStorage.setItem("atendimento-left-width", String(leftWidth)); } catch { /* ignore */ }
   }, [leftWidth, isDesktop]);
+
+  // ── Handoff alert sound initialization ────────────────────────────────────
+  useEffect(() => {
+    const audio = new Audio("/sounds/foocci-handoff-alert.wav");
+    handoffAudioRef.current = audio;
+    // Restore user preference
+    try {
+      const stored = localStorage.getItem("handoff-sound-enabled");
+      if (stored === "false") setHandoffSoundEnabled(false);
+    } catch { /* ignore */ }
+    return () => { audio.pause(); audio.src = ""; };
+  }, []);
+
+  // ── Inactivity-timeout poller (runs every 60 s while page is open) ────────
+  useEffect(() => {
+    const run = () => {
+      fetch("/api/atendimento/handoff/check-timeouts", { method: "POST" })
+        .then((r) => r.json())
+        .then((d: { data?: { timedOut?: string[] } }) => {
+          if ((d.data?.timedOut?.length ?? 0) > 0) fetchList();
+        })
+        .catch(() => {});
+    };
+    run();
+    const id = setInterval(run, 60_000);
+    return () => clearInterval(id);
+  }, [fetchList]);
 
   // ── Fetch conversation thread ──────────────────────────────────────────────
   const fetchThread = useCallback(async (id: string) => {
@@ -401,6 +477,21 @@ export function AtendimentoClient({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [thread?.messages?.length]);
+
+  // ── Human-handoff badge count ─────────────────────────────────────────────
+  const humanHandoffCount = useMemo(
+    () => conversations.filter((c) => c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU").length,
+    [conversations],
+  );
+
+  function unlockHandoffAudio() {
+    const audio = handoffAudioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.play()
+      .then(() => setHandoffAudioBlocked(false))
+      .catch(() => {});
+  }
 
   // ── Derived list — client-side filter + sort ──────────────────────────────
   const displayed = useMemo(() => {
@@ -663,6 +754,40 @@ export function AtendimentoClient({
           </div>
         </div>
 
+        {/* Human-handoff alert banner */}
+        {handoffAudioBlocked && (
+          <div className="border-b border-amber-200 bg-amber-50 px-3 py-1.5">
+            <button
+              type="button"
+              onClick={unlockHandoffAudio}
+              className="w-full rounded-md bg-amber-500 px-3 py-1 text-xs font-bold text-white hover:bg-amber-600 transition-colors"
+            >
+              🔔 Ativar sons de atendimento
+            </button>
+          </div>
+        )}
+
+        {/* Human-handoff count + sound toggle */}
+        {humanHandoffCount > 0 && (
+          <div className="flex items-center justify-between border-b border-orange-200 bg-orange-50 px-3 py-1.5">
+            <span className="text-xs font-semibold text-orange-700">
+              🙋 {humanHandoffCount} aguardando atendimento humano
+            </span>
+            <button
+              type="button"
+              title={handoffSoundEnabled ? "Desativar som de atendimento" : "Ativar som de atendimento"}
+              onClick={() => {
+                const next = !handoffSoundEnabled;
+                setHandoffSoundEnabled(next);
+                try { localStorage.setItem("handoff-sound-enabled", String(next)); } catch { /* ignore */ }
+              }}
+              className="ml-2 rounded p-0.5 text-orange-600 hover:bg-orange-100 transition-colors"
+            >
+              {handoffSoundEnabled ? "🔔" : "🔕"}
+            </button>
+          </div>
+        )}
+
         {/* Status filter chips */}
         <div className="border-b border-gray-100">
           <ScrollableChips>
@@ -677,7 +802,9 @@ export function AtendimentoClient({
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
-                {f.label}
+                {f.label}{f.id === "AI_OFF" && humanHandoffCount > 0
+                  ? ` (${humanHandoffCount})`
+                  : ""}
               </button>
             ))}
           </ScrollableChips>
