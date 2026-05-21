@@ -2762,7 +2762,16 @@ export function PedidoClient({
 
   const handleAddressConfirm = useCallback(() => {
     pushUserMessage("Endereço confirmado ✓");
-    if (customerName.trim()) {
+    // If name + payment were already collected (e.g. customer is changing address
+    // from the review screen), skip straight back to REVIEW_ORDER.
+    const checkoutComplete =
+      customerName.trim() &&
+      paymentMode &&
+      (paymentMode === "pay_now" || paymentMethodSub !== null);
+    if (checkoutComplete) {
+      setStage("REVIEW_ORDER");
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["REVIEW_ORDER"]!);
+    } else if (customerName.trim()) {
       // Name already known — skip ASK_NAME
       setStage("PAYMENT");
       pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT"]!);
@@ -2770,7 +2779,7 @@ export function PedidoClient({
       setStage("ASK_NAME");
       pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
     }
-  }, [pushUserMessage, pushAssistantMessage, customerName]);
+  }, [pushUserMessage, pushAssistantMessage, customerName, paymentMode, paymentMethodSub]);
 
   const handleNameInput = useCallback(
     (text: string) => {
@@ -2922,6 +2931,17 @@ export function PedidoClient({
     idleFiredRef.current    = false;
     sendText("", cart, "BROWSE", activeUpsell, { event: "ON_MENU_MODE", silent: true });
   }, [cart, activeUpsell, sendText]);
+
+  // Change delivery address from the review screen.
+  // Cart, customerName, paymentMode and paymentMethodSub are all preserved.
+  // After re-entering the address, handleAddressConfirm will detect that checkout
+  // is already complete and jump straight back to REVIEW_ORDER.
+  const handleChangeAddress = useCallback(() => {
+    setAddress({ cep: "", street: "", number: "", neighborhood: "", city: "", state: "", complement: "", referencePoint: "" });
+    setCepInputValue("");
+    setStage("CEP_INPUT");
+    pushAssistantMessage("Informe o novo CEP de entrega. 📍");
+  }, [pushAssistantMessage]);
 
   // ── Input submit ──────────────────────────────────────────────────
   function handleSubmit(e: FormEvent) {
@@ -3104,6 +3124,23 @@ export function PedidoClient({
               <p className="text-gray-500">Ref: {address.referencePoint}</p>
             )}
           </div>
+
+          {/* Delivery fee — shown as soon as address is confirmed */}
+          {deliveryMethod === "delivery" && (
+            <div className="mb-2 flex items-center justify-between rounded-lg bg-green-50 px-3 py-1.5 text-xs">
+              <span className="text-gray-600">🛵 Taxa de entrega</span>
+              <span className="font-semibold text-gray-800">
+                {deliveryMode === "manual"
+                  ? "A combinar"
+                  : deliveryFee == null
+                  ? "Calculando…"
+                  : deliveryFee === 0
+                  ? "Grátis"
+                  : `R$ ${deliveryFee.toFixed(2).replace(".", ",")}`}
+              </span>
+            </div>
+          )}
+
           <p className="mb-2 text-xs text-gray-500">
             ⏱ Previsão de {deliveryMethod === "pickup" ? "retirada" : "entrega"}: <span className="font-semibold text-gray-700">{Math.max(5, etaLow)}–{etaHigh} min</span>
           </p>
@@ -3296,22 +3333,30 @@ export function PedidoClient({
             </p>
           </div>
 
-          <div className="flex gap-2">
-            <button
-              data-testid="checkout-confirm-btn"
-              onClick={handleFinalConfirm}
-              disabled={ui === "thinking"}
-              className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: 'var(--brand-primary)' }}
-            >
-              {ui === "thinking" ? "Confirmando…" : "Confirmar pedido 🎉"}
-            </button>
+          <button
+            data-testid="checkout-confirm-btn"
+            onClick={handleFinalConfirm}
+            disabled={ui === "thinking"}
+            className="w-full rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: 'var(--brand-primary)' }}
+          >
+            {ui === "thinking" ? "Confirmando…" : "Confirmar pedido 🎉"}
+          </button>
+          <div className="mt-2 flex gap-2 justify-center">
             <button
               onClick={handleBackToBrowse}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50"
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
             >
-              Editar
+              Editar pedido
             </button>
+            {deliveryMethod === "delivery" && (
+              <button
+                onClick={handleChangeAddress}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
+              >
+                Alterar endereço
+              </button>
+            )}
           </div>
         </div>
       );
