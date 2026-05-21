@@ -102,6 +102,26 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Idempotent coupon usage count: increment Promotion.usedCount only once per order,
+  // regardless of how many times the webhook fires. The updateMany WHERE couponUsageCountedAt IS NULL
+  // ensures only the first caller wins the race; subsequent calls are no-ops.
+  const orderForCoupon = await prisma.order.findUnique({
+    where:  { id: payment.orderId },
+    select: { promotionId: true, couponUsageCountedAt: true },
+  });
+  if (orderForCoupon?.promotionId && !orderForCoupon.couponUsageCountedAt) {
+    const stamped = await prisma.order.updateMany({
+      where: { id: payment.orderId, couponUsageCountedAt: null },
+      data:  { couponUsageCountedAt: new Date() },
+    });
+    if (stamped.count > 0) {
+      await prisma.promotion.update({
+        where: { id: orderForCoupon.promotionId },
+        data:  { usedCount: { increment: 1 } },
+      });
+    }
+  }
+
   // Sync CRM metrics through the centralized service.
   // crmSyncedAt guards against double-counting on repeated webhooks.
   await CustomerMetricsSyncService.syncOrderToCustomerMetrics(payment.orderId, "stone_webhook");

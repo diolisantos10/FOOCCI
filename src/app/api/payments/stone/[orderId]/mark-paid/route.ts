@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant";
+import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 
 export async function PATCH(
   req: NextRequest,
@@ -35,8 +36,10 @@ export async function PATCH(
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: {
-      restaurantId: true,
-      status: true,
+      restaurantId:         true,
+      status:               true,
+      promotionId:          true,
+      couponUsageCountedAt: true,
       payment: { select: { id: true, status: true } },
     },
   });
@@ -71,6 +74,22 @@ export async function PATCH(
   } else {
     await paymentUpdate;
   }
+
+  // Idempotent coupon usage count
+  if (order.promotionId && !order.couponUsageCountedAt) {
+    const stamped = await prisma.order.updateMany({
+      where: { id: orderId, couponUsageCountedAt: null },
+      data:  { couponUsageCountedAt: new Date() },
+    });
+    if (stamped.count > 0) {
+      await prisma.promotion.update({
+        where: { id: order.promotionId },
+        data:  { usedCount: { increment: 1 } },
+      });
+    }
+  }
+
+  await CustomerMetricsSyncService.syncOrderToCustomerMetrics(orderId, "stone_mark_paid");
 
   return NextResponse.json({ ok: true, markedPaid: true });
 }

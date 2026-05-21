@@ -448,10 +448,16 @@ export async function POST(
         deliveryAddressId = addr.id;
       }
 
-      // oneTimePerUser guard — runs inside transaction so it's serialized with order creation
+      // oneTimePerUser guard — runs inside transaction so it's serialized with order creation.
+      // Exclude AWAITING_PAYMENT and CANCELLED so abandoned Pix orders don't permanently
+      // block the customer from reusing the coupon.
       if (resolvedPromoId && promoOneTimePerUser) {
         const alreadyUsed = await tx.order.findFirst({
-          where:  { customerId: customer.id, promotionId: resolvedPromoId },
+          where: {
+            customerId:  customer.id,
+            promotionId: resolvedPromoId,
+            status:      { notIn: ["AWAITING_PAYMENT", "CANCELLED"] },
+          },
           select: { id: true },
         });
         if (alreadyUsed) throw new Error("COUPON_ALREADY_USED");
@@ -468,8 +474,11 @@ export async function POST(
           deliveryFee:    new Decimal(deliveryFeeAmount),
           discount:       new Decimal(discountAmount),
           total:          new Decimal(finalTotal),
-          couponCode:     resolvedCouponCode,
-          promotionId:    resolvedPromoId,
+          couponCode:              resolvedCouponCode,
+          promotionId:             resolvedPromoId,
+          // For offline payments (confirmed immediately), stamp usage now.
+          // For pay_now (Pix/Stone), usage is stamped only after the webhook confirms payment.
+          couponUsageCountedAt:    (resolvedPromoId && paymentMode !== "pay_now") ? new Date() : null,
           deliveryAddressId,
           idempotencyKey: ikey,
           trackingLinkId:  trackingLinkId  ?? null,
@@ -497,7 +506,9 @@ export async function POST(
         select: { id: true },
       });
 
-      if (resolvedPromoId) {
+      // Only count usage immediately for offline payments; pay_now usage is counted
+      // in the payment webhook once the Pix/link is actually confirmed paid.
+      if (resolvedPromoId && paymentMode !== "pay_now") {
         await tx.promotion.update({
           where: { id: resolvedPromoId },
           data:  { usedCount: { increment: 1 } },

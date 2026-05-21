@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant";
+import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 
 export async function PATCH(
   req: NextRequest,
@@ -24,7 +25,7 @@ export async function PATCH(
 
   const order = await prisma.order.findFirst({
     where: { id: orderId, restaurantId: ctx.restaurantId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, promotionId: true, couponUsageCountedAt: true },
   });
   if (!order) return NextResponse.json({ error: "Pedido não encontrado" }, { status: 404 });
 
@@ -46,6 +47,22 @@ export async function PATCH(
       data: { status: "CONFIRMED" },
     }),
   ]);
+
+  // Idempotent coupon usage count
+  if (order.promotionId && !order.couponUsageCountedAt) {
+    const stamped = await prisma.order.updateMany({
+      where: { id: orderId, couponUsageCountedAt: null },
+      data:  { couponUsageCountedAt: new Date() },
+    });
+    if (stamped.count > 0) {
+      await prisma.promotion.update({
+        where: { id: order.promotionId },
+        data:  { usedCount: { increment: 1 } },
+      });
+    }
+  }
+
+  await CustomerMetricsSyncService.syncOrderToCustomerMetrics(orderId, "mp_mark_paid");
 
   return NextResponse.json({ success: true });
 }

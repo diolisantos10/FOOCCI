@@ -118,7 +118,11 @@ export async function POST(
 
   if (promo.oneTimePerUser && customerId) {
     const alreadyUsed = await prisma.order.findFirst({
-      where:  { customerId, promotionId: promo.id },
+      where: {
+        customerId,
+        promotionId: promo.id,
+        status:      { notIn: ["AWAITING_PAYMENT", "CANCELLED"] },
+      },
       select: { id: true },
     });
     if (alreadyUsed) {
