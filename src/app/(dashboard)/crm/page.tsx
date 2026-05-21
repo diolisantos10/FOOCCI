@@ -9,14 +9,15 @@ import type { CRMCustomer, Opportunity, OverviewStats } from "@/services/crm/CRM
 export const metadata = { title: "CRM — Motor de Receita" };
 export const dynamic = "force-dynamic";
 
-type Tab = "overview" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes";
+type Tab = "overview" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
 
 const TAB_PARAM_MAP: Record<string, Tab> = {
-  "visao-geral": "overview",
-  "campanhas":   "campanhas",
-  "automacoes":  "automacoes",
-  "clientes":    "customers",
-  "avaliacoes":  "avaliacoes",
+  "visao-geral":   "overview",
+  "campanhas":     "campanhas",
+  "automacoes":    "automacoes",
+  "clientes":      "customers",
+  "avaliacoes":    "avaliacoes",
+  "configuracoes": "configuracoes",
 };
 
 export default async function CRMPage({

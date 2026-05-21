@@ -1267,12 +1267,35 @@ function CampaignReviewModal({
   const [removed,  setRemoved]  = useState<Set<string>>(new Set());
   const [sending,  setSending]  = useState(false);
   const [error,    setError]    = useState<string | null>(null);
-  const [result,   setResult]   = useState<{ totalSent: number; totalFailed: number } | null>(null);
+  const [result,   setResult]   = useState<{ totalSent: number; totalFailed: number; warning?: string } | null>(null);
+
+  // Safety config — loaded at mount for the UI summary
+  const [safety, setSafety] = useState<{
+    dailyGlobalCap: number;
+    quietHoursEnabled: boolean;
+    quietHoursStart: string;
+    quietHoursEnd: string;
+    randomDelayEnabled: boolean;
+    randomDelayMinSec: number;
+    randomDelayMaxSec: number;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings/crm-safety")
+      .then((r) => r.json())
+      .then((j) => { if (j?.data) setSafety(j.data); })
+      .catch(() => {});
+  }, []);
+
+  // Effective max: min(PILOT_MAX, dailyGlobalCap) — 0 dailyGlobalCap means no cap
+  const effectiveMax = safety?.dailyGlobalCap && safety.dailyGlobalCap > 0
+    ? Math.min(PILOT_MAX, safety.dailyGlobalCap)
+    : PILOT_MAX;
 
   const active = initialRecipients.filter((r) => !removed.has(r.id));
 
   function applyCap() {
-    setRemoved((prev) => new Set([...prev, ...active.slice(PILOT_MAX).map((r) => r.id)]));
+    setRemoved((prev) => new Set([...prev, ...active.slice(effectiveMax).map((r) => r.id)]));
   }
 
   async function handleSend() {
@@ -1287,10 +1310,17 @@ function CampaignReviewModal({
         }),
       });
       const json = await res.json() as {
-        data?: { totalSent: number; totalFailed: number };
+        data?: { totalSent: number; totalFailed: number; warning?: string };
         error?: string;
         message?: string;
+        blocked?: boolean;
+        reason?: string;
+        code?: string;
       };
+      if (res.status === 422 && json.blocked) {
+        setError(json.reason ?? "Envio bloqueado pelas configurações de segurança.");
+        return;
+      }
       if (!res.ok) {
         if (json.error === "whatsapp_not_configured") {
           setError("WhatsApp não configurado neste restaurante. Configure a integração em Configurações > Integrações.");
@@ -1318,10 +1348,10 @@ function CampaignReviewModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div>
             <h2 className="text-base font-bold text-gray-900">Revisar e enviar</h2>
-            <p className={`text-xs mt-0.5 ${active.length > PILOT_MAX ? "text-yellow-600 font-semibold" : "text-gray-500"}`}>
+            <p className={`text-xs mt-0.5 ${active.length > effectiveMax ? "text-yellow-600 font-semibold" : "text-gray-500"}`}>
               {active.length} destinatário{active.length !== 1 ? "s" : ""}
-              {active.length > PILOT_MAX
-                ? ` · ⚠️ acima do limite piloto (${PILOT_MAX})`
+              {active.length > effectiveMax
+                ? ` · ⚠️ acima do limite (${effectiveMax})`
                 : " · Canal: WhatsApp"}
             </p>
           </div>
@@ -1343,6 +1373,11 @@ function CampaignReviewModal({
             <p className="text-sm text-gray-500">
               As mensagens aparecem no Chat Inbox de cada conversa.
             </p>
+            {result.warning && (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 max-w-sm">
+                ⚠️ {result.warning}
+              </p>
+            )}
             <button
               onClick={onClose}
               className="mt-2 rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-700 transition-colors"
@@ -1352,17 +1387,36 @@ function CampaignReviewModal({
           </div>
         ) : (
           <>
+            {/* Safety summary banner */}
+            {safety && (
+              <div className="border-b border-brand-100 bg-brand-50 px-5 py-2.5 shrink-0">
+                <p className="text-[11px] font-semibold text-brand-700 mb-1">🛡️ Modo seguro ativo</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-brand-600">
+                  {safety.dailyGlobalCap > 0 && (
+                    <span>Limite diário: {safety.dailyGlobalCap} msg</span>
+                  )}
+                  {safety.quietHoursEnabled && (
+                    <span>Horário quieto: {safety.quietHoursStart}–{safety.quietHoursEnd}</span>
+                  )}
+                  {safety.randomDelayEnabled && (
+                    <span>Delay: {safety.randomDelayMinSec}–{safety.randomDelayMaxSec}s entre envios</span>
+                  )}
+                  <span>Opt-out: sempre respeitado</span>
+                </div>
+              </div>
+            )}
+
             {/* Pilot cap warning */}
-            {active.length > PILOT_MAX && (
+            {active.length > effectiveMax && (
               <div className="border-b border-yellow-100 bg-yellow-50 px-5 py-3 flex items-center justify-between gap-3 shrink-0">
                 <p className="text-xs text-yellow-800">
-                  ⚠️ <strong>Limite piloto:</strong> {active.length} destinatários — máximo permitido: {PILOT_MAX}. Remova manualmente ou aplique o limite automático.
+                  ⚠️ <strong>Limite de segurança:</strong> {active.length} destinatários — máximo permitido: {effectiveMax}. Remova manualmente ou aplique o limite automático.
                 </p>
                 <button
                   onClick={applyCap}
                   className="shrink-0 rounded-lg bg-yellow-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-yellow-700 transition-colors"
                 >
-                  Aplicar limite ({PILOT_MAX})
+                  Aplicar limite ({effectiveMax})
                 </button>
               </div>
             )}
@@ -1412,14 +1466,14 @@ function CampaignReviewModal({
               </button>
               <button
                 onClick={handleSend}
-                disabled={sending || active.length === 0 || active.length > PILOT_MAX}
-                title={active.length > PILOT_MAX ? `Reduza para no máximo ${PILOT_MAX} destinatários antes de enviar` : undefined}
+                disabled={sending || active.length === 0 || active.length > effectiveMax}
+                title={active.length > effectiveMax ? `Reduza para no máximo ${effectiveMax} destinatários antes de enviar` : undefined}
                 className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {sending
                   ? "Enviando…"
-                  : active.length > PILOT_MAX
-                    ? `Limite: reduza para ≤ ${PILOT_MAX}`
+                  : active.length > effectiveMax
+                    ? `Limite: reduza para ≤ ${effectiveMax}`
                     : `Enviar ${active.length} mensagem${active.length !== 1 ? "s" : ""}`}
               </button>
             </div>
@@ -2978,25 +3032,417 @@ function AutomacoesTab() {
   );
 }
 
+// ── CRM Configurações Tab ─────────────────────────────────────────────────────
+
+const TIMEZONES_CRM = [
+  { value: "America/Sao_Paulo",   label: "Brasília (GMT-3)" },
+  { value: "America/Manaus",      label: "Manaus (GMT-4)"   },
+  { value: "America/Belem",       label: "Belém (GMT-3)"    },
+  { value: "America/Fortaleza",   label: "Fortaleza (GMT-3)" },
+  { value: "America/Recife",      label: "Recife (GMT-3)"   },
+  { value: "America/Bahia",       label: "Salvador (GMT-3)" },
+  { value: "America/Cuiaba",      label: "Cuiabá (GMT-4)"   },
+  { value: "America/Porto_Velho", label: "Porto Velho (GMT-4)" },
+  { value: "America/Rio_Branco",  label: "Rio Branco (GMT-5)" },
+  { value: "America/Noronha",     label: "Fernando de Noronha (GMT-2)" },
+];
+
+// Default values mirror crm-safety.ts DEFAULT_SAFETY_CONFIG
+const DEFAULT_CFG = {
+  dailyGlobalCap:        200,
+  customerCooldownHours: 24,
+  quietHoursEnabled:     true,
+  quietHoursStart:       "21:00",
+  quietHoursEnd:         "08:00",
+  timezone:              "America/Sao_Paulo",
+  sendOnWeekends:        true,
+  maxPerWeekPerCustomer: 5,
+  randomDelayEnabled:    true,
+  randomDelayMinSec:     5,
+  randomDelayMaxSec:     45,
+};
+
+type SafetyCfg = typeof DEFAULT_CFG;
+
+const CFG_INPUT =
+  "w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 transition";
+
+function CfgField({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+      {children}
+      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+    </div>
+  );
+}
+
+function CfgToggle({
+  label,
+  desc,
+  checked,
+  onChange,
+}: {
+  label: string;
+  desc?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3">
+      <div className="relative mt-0.5 shrink-0">
+        <input type="checkbox" className="sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+        <div className={`h-5 w-9 rounded-full transition-colors ${checked ? "bg-brand-500" : "bg-gray-300"}`} />
+        <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-gray-800">{label}</p>
+        {desc && <p className="text-xs text-gray-500">{desc}</p>}
+      </div>
+    </label>
+  );
+}
+
+function CfgCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="mb-5">
+        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+        {subtitle && <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function CrmConfiguracoes() {
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
+  const [cfg, setCfg]         = useState<SafetyCfg>({ ...DEFAULT_CFG });
+
+  useEffect(() => {
+    fetch("/api/settings/crm-safety")
+      .then((r) => r.json())
+      .then(({ data }) => { if (data) setCfg({ ...DEFAULT_CFG, ...data }); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  function set<K extends keyof SafetyCfg>(key: K, val: SafetyCfg[K]) {
+    setCfg((prev) => ({ ...prev, [key]: val }));
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setSuccess(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/crm-safety", {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(cfg),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        if (json.data) setCfg({ ...DEFAULT_CFG, ...json.data });
+        setSuccess("Configurações salvas com sucesso.");
+      } else {
+        setError("Erro ao salvar. Tente novamente.");
+      }
+    } catch {
+      setError("Falha de rede. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSave} className="max-w-2xl space-y-5">
+
+      {/* Feedback */}
+      {success && (
+        <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+          <span>✓</span> {success}
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{error}</span>
+          <button type="button" className="ml-2 text-xs underline opacity-70 hover:opacity-100" onClick={() => setError(null)}>fechar</button>
+        </div>
+      )}
+
+      {/* A — Segurança de envio WhatsApp */}
+      <CfgCard
+        title="Segurança de Envio WhatsApp"
+        subtitle="Limites e proteções aplicados a todas as campanhas manuais e automações."
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
+          <CfgField
+            label="Cap global diário"
+            hint="Máx. mensagens CRM em 24h, somando todas as campanhas. 0 = sem limite."
+          >
+            <input
+              type="number" min={0} max={10000}
+              value={cfg.dailyGlobalCap}
+              onChange={(e) => set("dailyGlobalCap", Math.max(0, parseInt(e.target.value, 10) || 0))}
+              className={CFG_INPUT}
+            />
+          </CfgField>
+
+          <CfgField
+            label="Cooldown por cliente (horas)"
+            hint="Intervalo mínimo entre mensagens ao mesmo cliente."
+          >
+            <input
+              type="number" min={1} max={720}
+              value={cfg.customerCooldownHours}
+              onChange={(e) => set("customerCooldownHours", Math.max(1, parseInt(e.target.value, 10) || 24))}
+              className={CFG_INPUT}
+            />
+          </CfgField>
+
+          <CfgField
+            label="Limite semanal por cliente"
+            hint="Máx. mensagens ao mesmo cliente em 7 dias. 0 = sem limite."
+          >
+            <input
+              type="number" min={0} max={100}
+              value={cfg.maxPerWeekPerCustomer}
+              onChange={(e) => set("maxPerWeekPerCustomer", Math.max(0, parseInt(e.target.value, 10) || 0))}
+              className={CFG_INPUT}
+            />
+          </CfgField>
+        </div>
+
+        <div className="mt-5 space-y-4 border-t border-gray-100 pt-5">
+          <CfgToggle
+            label="Ativar horário quieto"
+            desc="Bloqueia envios durante o período definido."
+            checked={cfg.quietHoursEnabled}
+            onChange={(v) => set("quietHoursEnabled", v)}
+          />
+
+          {cfg.quietHoursEnabled && (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <CfgField label="Início do silêncio">
+                <input type="time" value={cfg.quietHoursStart} onChange={(e) => set("quietHoursStart", e.target.value)} className={CFG_INPUT} />
+              </CfgField>
+              <CfgField label="Fim do silêncio">
+                <input type="time" value={cfg.quietHoursEnd} onChange={(e) => set("quietHoursEnd", e.target.value)} className={CFG_INPUT} />
+              </CfgField>
+              <CfgField label="Fuso horário">
+                <select value={cfg.timezone} onChange={(e) => set("timezone", e.target.value)} className={CFG_INPUT}>
+                  {TIMEZONES_CRM.map((tz) => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
+                </select>
+              </CfgField>
+            </div>
+          )}
+
+          <CfgToggle
+            label="Permitir envios no fim de semana"
+            desc="Quando desativado, campanhas e automações são bloqueadas no sábado e domingo."
+            checked={cfg.sendOnWeekends}
+            onChange={(v) => set("sendOnWeekends", v)}
+          />
+        </div>
+      </CfgCard>
+
+      {/* B — Comportamento gradual (delay) */}
+      <CfgCard
+        title="Comportamento Gradual"
+        subtitle="Delay aleatório entre envios para reduzir o risco de bloqueio de número."
+      >
+        <div className="space-y-4">
+          <CfgToggle
+            label="Delay aleatório entre envios"
+            desc="Insere uma pausa entre cada mensagem do lote, imitando comportamento humano."
+            checked={cfg.randomDelayEnabled}
+            onChange={(v) => set("randomDelayEnabled", v)}
+          />
+          {cfg.randomDelayEnabled && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <CfgField label="Delay mínimo (segundos)" hint="Mín. 1 s.">
+                <input
+                  type="number" min={1} max={300}
+                  value={cfg.randomDelayMinSec}
+                  onChange={(e) => set("randomDelayMinSec", Math.max(1, parseInt(e.target.value, 10) || 5))}
+                  className={CFG_INPUT}
+                />
+              </CfgField>
+              <CfgField label="Delay máximo (segundos)" hint="Máx. 300 s.">
+                <input
+                  type="number" min={1} max={300}
+                  value={cfg.randomDelayMaxSec}
+                  onChange={(e) => set("randomDelayMaxSec", Math.max(1, parseInt(e.target.value, 10) || 45))}
+                  className={CFG_INPUT}
+                />
+              </CfgField>
+            </div>
+          )}
+        </div>
+      </CfgCard>
+
+      {/* C — Opt-out */}
+      <CfgCard
+        title="Opt-out"
+        subtitle="Palavras-chave que identificam pedidos de exclusão inbound via WhatsApp."
+      >
+        <ul className="space-y-2.5">
+          {["parar", "sair", "remover", "não quero", "nao quero"].map((word) => (
+            <li key={word} className="flex items-center gap-2 text-sm text-gray-700">
+              <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">{word}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-xs text-gray-400">
+          Quando um cliente envia uma dessas palavras, ele é marcado como opt-out e excluído de todos os envios futuros.
+          A detecção é automática via webhook do WhatsApp.
+        </p>
+      </CfgCard>
+
+      {/* D — Campanhas */}
+      <CfgCard
+        title="Campanhas"
+        subtitle="Comportamento padrão das campanhas manuais."
+      >
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">⚠️ Campanhas para clientes frios</p>
+          <p className="mt-1 text-xs text-amber-700">
+            Campanhas enviadas a clientes que não interagem há mais de 60 dias têm maior risco de bloqueio.
+            Use o cap diário acima para limitar o volume. Recomendamos no máximo 20 mensagens por dia para campanhas de reativação.
+          </p>
+        </div>
+        <p className="mt-3 text-xs text-gray-400">
+          O cap diário configurado em &quot;Segurança de Envio&quot; se aplica a todos os envios manuais.
+          Campanhas recorrentes usam a configuração de limite definida em cada campanha.
+        </p>
+      </CfgCard>
+
+      {/* E — Automações */}
+      <CfgCard
+        title="Automações"
+        subtitle="As automações (reativação, aniversário, pós-pedido) também respeitam o horário quieto e o cap diário."
+      >
+        <ul className="space-y-2.5">
+          {[
+            { icon: "🔄", text: "Reativação: enviada após o número de dias configurado em cada automação" },
+            { icon: "🎂", text: "Aniversário: enviada no dia do aniversário do cliente, dentro da janela de horário" },
+            { icon: "⭐", text: "Pós-pedido: enviada após o número de horas configurado na automação" },
+            { icon: "🛡️", text: "Todas as automações respeitam o cooldown por cliente e o cap diário" },
+          ].map((item) => (
+            <li key={item.text} className="flex items-start gap-2.5 text-sm text-gray-700">
+              <span className="shrink-0">{item.icon}</span>
+              <span>{item.text}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-xs text-gray-400">
+          Para ajustar os horários e intervalos de cada automação, acesse a aba{" "}
+          <button type="button" className="text-brand-600 underline" onClick={(e) => { e.preventDefault(); }}>Automações</button>.
+        </p>
+      </CfgCard>
+
+      {/* F — Avaliações */}
+      <CfgCard
+        title="Avaliações"
+        subtitle="Links de avaliação usados em templates de campanha e automações pós-pedido."
+      >
+        <p className="text-sm text-gray-500">
+          Configure os links de avaliação na aba{" "}
+          <span className="font-medium text-gray-700">Avaliações</span>{" "}
+          ou em{" "}
+          <Link href="/settings/store" className="text-brand-600 hover:underline">Configurações → Loja</Link>.
+        </p>
+      </CfgCard>
+
+      {/* G — IA de mensagens (futuro) */}
+      <div className="rounded-2xl border border-dashed border-gray-200 p-5">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 text-lg">🤖</span>
+          <div>
+            <p className="text-sm font-semibold text-gray-700">
+              Mensagens dinâmicas por IA
+              <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">em breve</span>
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Em breve, o Agente CRM poderá variar mensagens automaticamente para evitar repetição e aumentar o engajamento.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Proteções permanentes */}
+      <CfgCard title="Proteções Permanentes">
+        <ul className="space-y-2.5">
+          {[
+            { icon: "🚫", text: "Clientes com opt-out são sempre excluídos de qualquer envio CRM" },
+            { icon: "📵", text: "Clientes sem telefone válido nunca recebem mensagens" },
+            { icon: "🔄", text: "Deduplicação: mesmo cliente não recebe a mesma campanha duas vezes" },
+            { icon: "⏱️", text: "Cooldown cruzado: cliente que recebeu qualquer campanha hoje aguarda cooldown" },
+          ].map((item) => (
+            <li key={item.text} className="flex items-start gap-2.5 text-sm text-gray-700">
+              <span className="shrink-0 text-base">{item.icon}</span>
+              <span>{item.text}</span>
+            </li>
+          ))}
+        </ul>
+      </CfgCard>
+
+      {/* Save */}
+      <div className="flex justify-end pt-2">
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 transition"
+        >
+          {saving ? "Salvando…" : "Salvar configurações"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── Main CRM Component ────────────────────────────────────────────────────────
 
-type Tab = "overview" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes";
+type Tab = "overview" | "campanhas" | "automacoes" | "customers" | "programa" | "avaliacoes" | "configuracoes";
 
 const TAB_PARAM_MAP: Record<string, Tab> = {
-  "visao-geral": "overview",
-  "campanhas":   "campanhas",
-  "automacoes":  "automacoes",
-  "clientes":    "customers",
-  "avaliacoes":  "avaliacoes",
+  "visao-geral":   "overview",
+  "campanhas":     "campanhas",
+  "automacoes":    "automacoes",
+  "clientes":      "customers",
+  "avaliacoes":    "avaliacoes",
+  "configuracoes": "configuracoes",
 };
 
 const TAB_URL_MAP: Record<Tab, string> = {
-  overview:   "visao-geral",
-  campanhas:  "campanhas",
-  automacoes: "automacoes",
-  customers:  "clientes",
-  programa:   "programa",
-  avaliacoes: "avaliacoes",
+  overview:       "visao-geral",
+  campanhas:      "campanhas",
+  automacoes:     "automacoes",
+  customers:      "clientes",
+  programa:       "programa",
+  avaliacoes:     "avaliacoes",
+  configuracoes:  "configuracoes",
 };
 
 export function CRMClient({
@@ -3087,12 +3533,13 @@ export function CRMClient({
   const friasCount = currentStats.frioCustomers + currentStats.mornoCustomers;
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
-    { id: "overview",   label: "Visão Geral" },
-    { id: "campanhas",  label: "Campanhas", badge: friasCount || undefined },
-    { id: "automacoes", label: "Automações" },
-    { id: "customers",  label: "Clientes" },
-    { id: "programa",   label: "Programa de Relacionamento" },
-    { id: "avaliacoes", label: "Avaliações" },
+    { id: "overview",      label: "Visão Geral" },
+    { id: "campanhas",     label: "Campanhas", badge: friasCount || undefined },
+    { id: "automacoes",    label: "Automações" },
+    { id: "customers",     label: "Clientes" },
+    { id: "programa",      label: "Programa de Relacionamento" },
+    { id: "avaliacoes",    label: "Avaliações" },
+    { id: "configuracoes", label: "Configurações" },
   ];
 
   function goToInactive() {
@@ -3164,6 +3611,9 @@ export function CRMClient({
           googleReviewUrl={googleReviewUrl}
           ifoodReviewUrl={ifoodReviewUrl}
         />
+      )}
+      {tab === "configuracoes" && (
+        <CrmConfiguracoes />
       )}
       <ImportModal
         open={showImport}

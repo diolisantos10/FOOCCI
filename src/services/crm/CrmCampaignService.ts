@@ -54,6 +54,8 @@ export interface CampaignRecipientRow {
 
 export interface SendInput {
   messages: Array<{ recipientId: string; messageText: string }>;
+  /** Cap how many PENDING executions are processed in this call. 0 = no limit. */
+  limit?: number;
 }
 
 export interface SendResult {
@@ -403,10 +405,11 @@ export class CrmCampaignService {
     // Build override map
     const overrideMap = new Map(input.messages.map((m) => [m.recipientId, m.messageText]));
 
-    // Fetch executions
+    // Fetch executions — honour caller-supplied batch limit if set
     const executions = await prisma.campaignExecution.findMany({
       where:   { campaignId, status: "PENDING" },
       orderBy: { createdAt: "asc" },
+      take:    input.limit && input.limit > 0 ? input.limit : undefined,
       select: { id: true, customerId: true, customerPhone: true, messageText: true },
     });
 
