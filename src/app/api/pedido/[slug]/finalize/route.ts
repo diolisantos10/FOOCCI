@@ -33,6 +33,7 @@ import { toE164 } from "@/lib/phone";
 import { isGuestIdentifier } from "@/lib/guest";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
+import { isRestaurantOpenNow } from "@/lib/business-hours";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -133,6 +134,15 @@ export async function POST(
     return NextResponse.json({ error: "Restaurante não encontrado" }, { status: 404 });
   }
   const restaurantId = restaurant.id;
+
+  // ── Business hours guard ──────────────────────────────────────
+  const isOpen = await isRestaurantOpenNow(restaurantId);
+  if (!isOpen) {
+    return NextResponse.json(
+      { error: "O restaurante está fechado no momento. Pedidos só são aceitos durante o horário de funcionamento." },
+      { status: 503 },
+    );
+  }
 
   const raw    = await req.json().catch(() => null);
   const parsed = bodySchema.safeParse(raw);

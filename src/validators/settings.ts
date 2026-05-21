@@ -126,11 +126,19 @@ export type UpsertDeliveryZoneInput = z.infer<typeof upsertDeliveryZoneSchema>;
 
 // ── Business hours ─────────────────────────────────────────────────────────────
 
+const timePeriodSchema = z.object({
+  open:  z.string().regex(/^\d{2}:\d{2}$/, "Formato HH:MM"),
+  close: z.string().regex(/^\d{2}:\d{2}$/, "Formato HH:MM"),
+});
+
 export const dayHoursSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
   isOpen:    z.boolean(),
   openTime:  z.string().regex(/^\d{2}:\d{2}$/, "Formato HH:MM"),
   closeTime: z.string().regex(/^\d{2}:\d{2}$/, "Formato HH:MM"),
+  // Multi-period support: lunch 11–15 + dinner 18–23.
+  // When set, takes precedence over openTime/closeTime.
+  periods:   z.array(timePeriodSchema).optional(),
 });
 
 export const upsertHoursSchema = z.array(dayHoursSchema).length(7);

@@ -1,4 +1,5 @@
 import { Decimal } from "@prisma/client/runtime/library";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
 import type {
@@ -288,13 +289,16 @@ export class RestaurantSettingsService {
     input: UpsertHoursInput
   ): Promise<ServiceResult<BusinessHours[]>> {
     await prisma.$transaction(
-      input.map((day) =>
-        prisma.businessHours.upsert({
+      input.map((day) => {
+        const periodsJson = day.periods && day.periods.length > 0
+          ? day.periods
+          : Prisma.DbNull;
+        return prisma.businessHours.upsert({
           where:  { restaurantId_dayOfWeek: { restaurantId, dayOfWeek: day.dayOfWeek } },
-          create: { restaurantId, ...day },
-          update: { isOpen: day.isOpen, openTime: day.openTime, closeTime: day.closeTime },
-        })
-      )
+          create: { restaurantId, dayOfWeek: day.dayOfWeek, isOpen: day.isOpen, openTime: day.openTime, closeTime: day.closeTime, periodsJson },
+          update: { isOpen: day.isOpen, openTime: day.openTime, closeTime: day.closeTime, periodsJson },
+        });
+      })
     );
     const hours = await prisma.businessHours.findMany({
       where: { restaurantId },

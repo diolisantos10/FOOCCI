@@ -31,6 +31,7 @@ import { ConversationStatus } from "@prisma/client";
 import type { MenuOption } from "@/validators/whatsapp-agent";
 import { RestaurantKnowledgeService } from "@/services/knowledge/RestaurantKnowledgeService";
 import { markConversationNeedsHuman } from "@/lib/handoff";
+import { getPeriodsForRow, isInPeriod } from "@/lib/business-hours";
 
 // ─── constants ────────────────────────────────────────────────
 
@@ -107,16 +108,17 @@ function detectSelectedOption(text: string, options: MenuOption[]): MenuOption |
 // ─── context ──────────────────────────────────────────────────
 
 interface ReplyContext {
-  restaurantName:  string;
-  pedidoUrl:       string | null;
-  address:         string | null;
-  deliveryEnabled: boolean;
-  welcomeMessage:  string;
-  orderPreMessage: string;
-  handoffMessage:  string;
-  agentMode:       string;
-  menuOptions:     MenuOption[];
-  hoursText:       string | null;
+  restaurantName:   string;
+  pedidoUrl:        string | null;
+  address:          string | null;
+  deliveryEnabled:  boolean;
+  welcomeMessage:   string;
+  orderPreMessage:  string;
+  handoffMessage:   string;
+  agentMode:        string;
+  menuOptions:      MenuOption[];
+  hoursText:        string | null;
+  isCurrentlyOpen:  boolean;
 }
 
 // ─── GPT reply generation ─────────────────────────────────────
@@ -223,6 +225,13 @@ function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
 }
 
 function buildTemplateReply(intent: Intent, ctx: ReplyContext): string | null {
+  // Block ordering attempts outside business hours
+  if (!ctx.isCurrentlyOpen && (intent === "ORDER" || intent === "MENU_REQUEST")) {
+    return ctx.hoursText
+      ? `No momento estamos fechados. 😕\n\n${ctx.hoursText}`
+      : "No momento estamos fechados. Por favor, tente novamente durante nosso horário de atendimento.";
+  }
+
   switch (intent) {
     case "ORDER":
     case "MENU_REQUEST":
@@ -336,7 +345,7 @@ async function run(conversationId: string): Promise<void> {
     EvolutionConfigService.getSnapshot(restaurantId),
     prisma.businessHours.findMany({
       where:   { restaurantId },
-      select:  { dayOfWeek: true, isOpen: true, openTime: true, closeTime: true },
+      select:  { dayOfWeek: true, isOpen: true, openTime: true, closeTime: true, periodsJson: true },
       orderBy: { dayOfWeek: "asc" },
     }),
   ]);
@@ -372,19 +381,29 @@ async function run(conversationId: string): Promise<void> {
 
   const agentMode = agentCfg?.agentMode ?? "RECEPTIONIST_ONLY";
 
-  const todayDow = new Date().getDay();
+  const nowDate   = new Date();
+  const todayDow  = nowDate.getDay();
+  const nowMin    = nowDate.getHours() * 60 + nowDate.getMinutes();
   let hoursText: string | null = null;
+  let isCurrentlyOpen = true; // default open when no config
   if (businessHoursRows.length > 0) {
     const todayRow = businessHoursRows.find((h) => h.dayOfWeek === todayDow);
+    const todayPeriods = todayRow ? getPeriodsForRow(todayRow) : [];
+    isCurrentlyOpen = todayPeriods.some((p) => isInPeriod(nowMin, p));
+
+    const todayPeriodsStr = todayPeriods.map((p) => `${p.open}–${p.close}`).join(", ");
     const todayStatus = todayRow
-      ? todayRow.isOpen
-        ? `Hoje (${DAY_NAMES_PT[todayDow] ?? ""}) estamos *abertos* das ${todayRow.openTime} às ${todayRow.closeTime}.\n\n`
+      ? todayRow.isOpen && todayPeriods.length > 0
+        ? `Hoje (${DAY_NAMES_PT[todayDow] ?? ""}) estamos *${isCurrentlyOpen ? "abertos" : "fechados no momento"}*: ${todayPeriodsStr}.\n\n`
         : `Hoje (${DAY_NAMES_PT[todayDow] ?? ""}) estamos *fechados*.\n\n`
       : "";
+
     const weekLines = businessHoursRows
       .map((h) => {
-        const day = DAY_NAMES_PT[h.dayOfWeek] ?? `Dia ${h.dayOfWeek}`;
-        return h.isOpen ? `${day}: ${h.openTime} – ${h.closeTime}` : `${day}: Fechado`;
+        const day     = DAY_NAMES_PT[h.dayOfWeek] ?? `Dia ${h.dayOfWeek}`;
+        const periods = getPeriodsForRow(h);
+        if (!h.isOpen || periods.length === 0) return `${day}: Fechado`;
+        return `${day}: ${periods.map((p) => `${p.open}–${p.close}`).join(", ")}`;
       })
       .join("\n");
     hoursText = `${todayStatus}*Horários de funcionamento:*\n${weekLines}`;
@@ -401,6 +420,7 @@ async function run(conversationId: string): Promise<void> {
     agentMode,
     menuOptions,
     hoursText,
+    isCurrentlyOpen,
   };
 
   const toPhone = conversation.customer.phone.replace(/^\+/, "");

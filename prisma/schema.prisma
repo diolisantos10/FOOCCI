@@ -1208,8 +1208,9 @@ model BusinessHours {
   restaurantId String
   dayOfWeek    Int // 0 = Sunday … 6 = Saturday
   isOpen       Boolean  @default(true)
-  openTime     String   @default("09:00") // "HH:MM"
-  closeTime    String   @default("22:00") // "HH:MM"
+  openTime     String   @default("09:00") // "HH:MM" — legacy single period open; use periodsJson when set
+  closeTime    String   @default("22:00") // "HH:MM" — legacy single period close; use periodsJson when set
+  periodsJson  Json?    // [{open:"HH:MM",close:"HH:MM"},…] — null means use openTime/closeTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

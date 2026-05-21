@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { PedidoClient } from "./PedidoClient";
 import { phoneCandidates } from "@/lib/phone";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
+import { isOpenFromRow } from "@/lib/business-hours";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function PedidoPage({
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug },
     select: {
-      id: true, name: true, logoUrl: true, phone: true,
+      id: true, name: true, logoUrl: true, phone: true, timezone: true,
       storeProfile: { select: { whatsappPhone: true, averagePreparationMinutes: true } },
     },
   });
@@ -143,9 +144,19 @@ export default async function PedidoPage({
     }
   }
 
-  // ── Active banners for today ─────────────────────────────────────────────────
+  // ── Business hours — is the restaurant currently open? ──────────────────────
   const now = new Date();
-  const todayDow = now.getDay(); // 0=Sun … 6=Sat
+  const tz  = restaurant.timezone ?? "America/Sao_Paulo";
+  const localNow = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+  const todayDow = localNow.getDay(); // 0=Sun … 6=Sat (in restaurant's local time)
+
+  const todayHoursRow = await prisma.businessHours.findUnique({
+    where:  { restaurantId_dayOfWeek: { restaurantId: restaurant.id, dayOfWeek: todayDow } },
+    select: { isOpen: true, openTime: true, closeTime: true, periodsJson: true },
+  });
+  const restaurantIsOpen = isOpenFromRow(todayHoursRow, tz, now);
+
+  // ── Active banners for today ─────────────────────────────────────────────────
   const rawBanners = await prisma.promotion.findMany({
     where: {
       restaurantId: restaurant.id,
@@ -336,6 +347,7 @@ gtag('config', '${ga4Id}');
         deliveryEstimatedMinutes={deliveryConfig?.estimatedMinutes ?? null}
         averagePreparationMinutes={restaurant.storeProfile?.averagePreparationMinutes ?? null}
         ga4Id={ga4Id}
+        restaurantIsOpen={restaurantIsOpen}
       />
     </>
   );

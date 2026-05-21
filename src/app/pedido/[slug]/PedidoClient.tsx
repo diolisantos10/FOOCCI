@@ -364,6 +364,8 @@ interface Props {
   brandSecondaryColor?: string | null;
   /** GA4 Measurement ID — used to fire gtag events client-side. */
   ga4Id?: string | null;
+  /** Whether the restaurant is currently within its configured business hours. */
+  restaurantIsOpen?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1622,6 +1624,7 @@ export function PedidoClient({
   deliveryFee = null, deliveryMode = "simple",
   deliveryEstimatedMinutes = null, averagePreparationMinutes = null,
   ga4Id = null,
+  restaurantIsOpen = true,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -3697,6 +3700,14 @@ export function PedidoClient({
                       lg:shadow-[2px_0_12px_rgba(0,0,0,0.07)]">
 
         {header}
+
+        {/* Closed banner — shown when the restaurant is outside business hours */}
+        {!restaurantIsOpen && (
+          <div className="mx-3 mt-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
+            <span className="text-base">🕐</span>
+            <span>Estamos fechados no momento. Você pode explorar o cardápio, mas pedidos só são aceitos durante o horário de funcionamento.</span>
+          </div>
+        )}
 
         {/* Identity strip — thin bar shown when customer is recognised */}
         {entryPhase === "browsing" && (identifiedName || identifiedPhone) && (
