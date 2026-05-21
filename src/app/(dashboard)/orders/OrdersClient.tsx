@@ -1624,26 +1624,35 @@ export default function OrdersClient() {
     return count > 0;
   }, [orders]);
 
-  // Repeat alert every 5 s while pending orders exist.
-  // Stops automatically (effect cleanup) when all pending orders are resolved.
+  // Loop alert every 5 s while modal is open OR there are pending orders.
+  // Deps include both so the interval restarts each time a new modal order appears.
+  // Cleanup pauses audio immediately when the condition becomes false (accepted/rejected).
   useEffect(() => {
-    if (!hasPendingOrders || !soundEnabled) return;
+    const active = hasPendingOrders || !!modalOrderId;
+    if (!active || !soundEnabled) return;
 
     if (process.env.NODE_ENV !== "production") {
-      console.debug("[order-alert]", { hasPendingOrders, soundEnabled, pendingCount: pendingCountRef.current });
+      console.debug("[order-alert-loop]", {
+        hasPendingOrders,
+        soundEnabled,
+        modalOrderId,
+        intervalActive: true,
+        audioPath: ALERT_WAV,
+      });
     }
 
     const doPlay = () => {
       const audio = alertAudioRef.current;
       if (audio) {
-        audio.pause();           // stop any in-progress playback before restarting
+        audio.pause();
         audio.currentTime = 0;
         audio.volume = 1.0;
         audio.play().catch((err: unknown) => {
           if (err instanceof DOMException && err.name === "NotAllowedError") {
-            setAudioBlocked(true); // browser blocked — show unlock button
+            setAudioBlocked(true);
           } else {
-            playBeep(); // file missing or decode error — oscillator fallback
+            console.warn("[order-alert] audio play failed", err);
+            playBeep();
           }
         });
       } else {
@@ -1653,42 +1662,12 @@ export default function OrdersClient() {
 
     doPlay();
     const id = setInterval(doPlay, 5_000);
-    return () => clearInterval(id);
-  }, [hasPendingOrders, soundEnabled]);
-
-  // Fire immediately when a NEW order modal opens (each unique order ID triggers once).
-  // The hasPendingOrders loop above handles the 5s repeat; this effect ensures the
-  // first play happens at the exact moment the modal appears, even if the loop was
-  // already running (dep didn't change) or the modal arrives before the next 5s tick.
-  useEffect(() => {
-    if (!modalOrderId || !soundEnabled) return;
-
-    if (process.env.NODE_ENV !== "production") {
-      console.debug("[order-alert]", {
-        modalOpen: true,
-        pendingNewOrdersCount: pendingCountRef.current,
-        soundEnabled,
-        audioPath: ALERT_WAV,
-      });
-    }
-
-    const audio = alertAudioRef.current;
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.volume = 1.0;
-      audio.play().catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === "NotAllowedError") {
-          setAudioBlocked(true);
-        } else {
-          console.warn("[order-alert] audio play failed", err);
-          playBeep();
-        }
-      });
-    } else {
-      playBeep();
-    }
-  }, [modalOrderId, soundEnabled]);
+    return () => {
+      clearInterval(id);
+      const audio = alertAudioRef.current;
+      if (audio) { audio.pause(); audio.currentTime = 0; }
+    };
+  }, [hasPendingOrders, modalOrderId, soundEnabled]);
 
   function toggleSound() {
     setSoundEnabled((prev) => {

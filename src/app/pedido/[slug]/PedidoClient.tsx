@@ -1334,7 +1334,7 @@ function PhoneEntryCard({
 }: {
   slug: string;
   onIdentified: (name: string | null, customerId?: string, displayPhone?: string) => void;
-  onSkip: () => void;
+  onSkip?: () => void;
 }) {
   const [phase, setPhase]               = useState<"phone" | "name">("phone");
   const [phoneInput, setPhoneInput]     = useState("");
@@ -1465,9 +1465,11 @@ function PhoneEntryCard({
         >
           {loading ? "Verificando…" : "Continuar →"}
         </button>
-        <button type="button" onClick={onSkip} className="py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
-          Pular →
-        </button>
+        {onSkip && (
+          <button type="button" onClick={onSkip} className="py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            Pular →
+          </button>
+        )}
       </form>
     </div>
   );
@@ -1871,6 +1873,15 @@ export function PedidoClient({
   const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
   const [paymentMethodSub, setPaymentMethodSub] = useState<PaymentMethodSub | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
+
+  // ── Coupon state ──────────────────────────────────────────────
+  const [couponInput,   setCouponInput]   = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    promotionId: string; couponCode: string; discountAmount: number;
+    discountType: string; name: string;
+  } | null>(null);
+  const [couponError,   setCouponError]   = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [pixCopyPaste,    setPixCopyPaste]    = useState<string | null>(null);
   const [pixQrCodeBase64, setPixQrCodeBase64] = useState<string | null>(null);
@@ -1881,6 +1892,13 @@ export function PedidoClient({
   const trackingPollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const categoryBarRef     = useRef<HTMLDivElement>(null);
   const [categoryFadeEnd, setCategoryFadeEnd] = useState(true);
+
+  // Clear coupon when delivery method changes (channel compatibility may differ)
+  useEffect(() => {
+    setAppliedCoupon(null);
+    setCouponError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryMethod]);
 
   // ── Poll payment status while in PAYMENT_LINK stage ───────────────
   useEffect(() => {
@@ -2670,6 +2688,10 @@ export function PedidoClient({
       setAiPermState("idle");
     }
 
+    if (entryPhase !== "browsing") {
+      pushAssistantMessage("Informe seu WhatsApp antes de finalizar 📱");
+      return;
+    }
     if (cart.length === 0) {
       pushAssistantMessage("Adicione pelo menos um item antes de finalizar 👆");
       return;
@@ -2684,7 +2706,7 @@ export function PedidoClient({
     // CHECKOUT_SUPPORT   → sendText auto-advances via proceedToCheckoutRef.
     checkoutPendingRef.current = true;
     sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
-  }, [cart, stage, sendText, pushAssistantMessage, aiPermState]);
+  }, [cart, stage, entryPhase, sendText, pushAssistantMessage, aiPermState]);
 
   const handleDeliveryMethod = useCallback(
     (type: "delivery" | "pickup") => {
@@ -2856,6 +2878,7 @@ export function PedidoClient({
           clientDeliveryFee: deliveryMethod === "delivery" && deliveryMode !== "manual"
             ? (deliveryFee ?? 0)
             : undefined,
+          couponCode:      appliedCoupon?.couponCode || undefined,
           trackingLinkId:  utm.tlid    || undefined,
           trafficSource:   utm.source  || undefined,
           trafficMedium:   utm.medium  || undefined,
@@ -2900,7 +2923,7 @@ export function PedidoClient({
       setUi("idle");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, cart, customerName, effectiveCustomerPhone, resolvedCustomerId, deliveryMethod, address, paymentMode, paymentMethodSub, ga4Id]);
+  }, [slug, cart, customerName, effectiveCustomerPhone, resolvedCustomerId, deliveryMethod, address, paymentMode, paymentMethodSub, ga4Id, appliedCoupon]);
 
   const handleOnlinePaymentSelect = useCallback(() => {
     setStage("REVIEW_ORDER");
@@ -2917,6 +2940,49 @@ export function PedidoClient({
     try { localStorage.removeItem(ACTIVE_ORDER_KEY); } catch { /* ignore */ }
     setStage("REVIEW_ORDER");
   }, []);
+
+  const handleApplyCoupon = useCallback(async () => {
+    if (!couponInput.trim()) return;
+    setCouponLoading(true);
+    setCouponError(null);
+    try {
+      const sub      = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const isManFee = deliveryMethod === "delivery" && deliveryMode === "manual";
+      const fee      = deliveryMethod === "delivery" && !isManFee ? (deliveryFee ?? 0) : 0;
+      const res = await fetch(`/api/pedido/${slug}/validate-coupon`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          couponCode:     couponInput.trim(),
+          subtotal:       sub,
+          deliveryFee:    fee,
+          deliveryMethod: deliveryMethod ?? "delivery",
+          customerId:     resolvedCustomerId,
+        }),
+      });
+      const data = await res.json() as {
+        valid: boolean; error?: string;
+        promotionId?: string; couponCode?: string; discountAmount?: number;
+        discountType?: string; name?: string;
+      };
+      if (data.valid) {
+        setAppliedCoupon({
+          promotionId:    data.promotionId!,
+          couponCode:     data.couponCode!,
+          discountAmount: data.discountAmount!,
+          discountType:   data.discountType!,
+          name:           data.name!,
+        });
+        setCouponInput("");
+      } else {
+        setCouponError(data.error ?? "Cupom inválido ou expirado.");
+      }
+    } catch {
+      setCouponError("Erro ao validar cupom. Tente novamente.");
+    } finally {
+      setCouponLoading(false);
+    }
+  }, [couponInput, cart, deliveryMethod, deliveryMode, deliveryFee, slug, resolvedCustomerId]);
 
   const handleBackToBrowse = useCallback(() => {
     // Return to browsing without wiping checkout data.
@@ -3253,10 +3319,12 @@ export function PedidoClient({
     }
 
     if (stage === "REVIEW_ORDER") {
-      const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const subtotal    = cart.reduce((s, i) => s + i.price * i.qty, 0);
       const isManualFee = deliveryMethod === "delivery" && deliveryMode === "manual";
       const appliedFee  = deliveryMethod === "delivery" && !isManualFee ? (deliveryFee ?? 0) : 0;
       const total       = subtotal + appliedFee;
+      const discount    = appliedCoupon?.discountAmount ?? 0;
+      const finalTotal  = Math.max(0, Math.round((total - discount) * 100) / 100);
       const pmLabel = resolvePaymentMethod(paymentMode, paymentMethodSub) ?? "—";
       const prepMin  = averagePreparationMinutes ?? 20;
       const etaLow   = deliveryMethod === "pickup"
@@ -3304,10 +3372,62 @@ export function PedidoClient({
             </div>
           )}
 
+          {/* Coupon input / applied coupon */}
+          <div className="py-1">
+            {appliedCoupon ? (
+              <div className="flex items-center justify-between rounded-lg bg-green-50 px-2.5 py-1.5 text-xs">
+                <span className="font-medium text-green-700">🏷 {appliedCoupon.couponCode}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-green-700">
+                    -{discount.toFixed(2).replace(".", ",")} R$
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setAppliedCoupon(null); setCouponError(null); }}
+                    className="text-gray-400 hover:text-gray-600 text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleApplyCoupon(); } }}
+                  placeholder="Cupom de desconto"
+                  maxLength={30}
+                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-gray-300"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleApplyCoupon()}
+                  disabled={couponLoading || !couponInput.trim()}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                >
+                  {couponLoading ? "…" : "Aplicar"}
+                </button>
+              </div>
+            )}
+            {couponError && (
+              <p className="mt-1 text-xs text-red-500">{couponError}</p>
+            )}
+          </div>
+
+          {/* Discount row */}
+          {appliedCoupon && (
+            <div className="flex justify-between py-0.5 text-xs text-green-600">
+              <span>Desconto</span>
+              <span>-R$ {discount.toFixed(2).replace(".", ",")}</span>
+            </div>
+          )}
+
           {/* Total */}
           <div className="flex justify-between border-t border-gray-100 pt-1.5 pb-2 text-sm font-bold text-gray-900">
             <span>Total{isManualFee ? " (+ frete)" : ""}</span>
-            <span>R$ {total.toFixed(2).replace(".", ",")}</span>
+            <span>R$ {finalTotal.toFixed(2).replace(".", ",")}</span>
           </div>
 
           {/* Order details summary */}
@@ -3599,7 +3719,7 @@ export function PedidoClient({
                 </div>
               </div>
               <div className="flex justify-start">
-                <PhoneEntryCard slug={slug} onIdentified={handlePhoneIdentified} onSkip={() => enterBrowsing(null)} />
+                <PhoneEntryCard slug={slug} onIdentified={handlePhoneIdentified} />
               </div>
             </>
           )}
@@ -3805,8 +3925,8 @@ export function PedidoClient({
           </div>
         )}
 
-        {/* Mobile: CartBar — always visible during BROWSE */}
-        {stage === "BROWSE" && (
+        {/* Mobile: CartBar — only visible once customer is identified */}
+        {stage === "BROWSE" && entryPhase === "browsing" && (
           <div className="lg:hidden">
             <CartBar cart={cart} onFinalize={handleFinalizeClick} upsellPending={upsellPending} />
           </div>
@@ -3857,7 +3977,7 @@ export function PedidoClient({
           RIGHT PANEL — Menu (desktop only, hidden on mobile)
       ═══════════════════════════════════════════════════════════ */}
       <div className="hidden lg:flex lg:w-1/2 flex-col overflow-hidden bg-gray-50 min-w-0">
-        {stage === "BROWSE" ? (
+        {stage === "BROWSE" && entryPhase === "browsing" ? (
           <>
             {/* Product area — fills available space, scrollable */}
             <div className="flex-1 overflow-y-auto p-5">
@@ -3947,6 +4067,10 @@ export function PedidoClient({
               ))}
             </div>
           </>
+        ) : stage === "BROWSE" ? (
+          <div className="flex flex-1 items-center justify-center p-8 text-center">
+            <p className="text-sm text-gray-400">Informe seu WhatsApp no chat para ver o cardápio 📱</p>
+          </div>
         ) : (
           /* Checkout in progress — right panel shows context */
           <div className="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
