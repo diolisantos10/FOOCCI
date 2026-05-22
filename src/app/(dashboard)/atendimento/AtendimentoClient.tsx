@@ -177,15 +177,16 @@ const CONTEXT_BADGE: Record<string, { label: string; cls: string }> = {
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "";
-  const d   = new Date(iso);
-  const now = new Date();
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth()    === now.getMonth()    &&
-    d.getDate()     === now.getDate();
-  return sameDay
-    ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const d    = new Date(iso);
+  const now  = new Date();
+  const hhmm = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dMidnight     = new Date(d.getFullYear(),   d.getMonth(),   d.getDate()).getTime();
+
+  if (dMidnight === todayMidnight)              return `Hoje · ${hhmm}`;
+  if (dMidnight === todayMidnight - 86_400_000) return `Ontem · ${hhmm}`;
+  return `${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · ${hhmm}`;
 }
 
 function initials(name: string): string {

@@ -501,21 +501,17 @@ function SearchBar({
   searchQuery,
   dateFrom,
   dateTo,
-  sortBy,
   onSearchChange,
   onDateFromChange,
   onDateToChange,
-  onSortChange,
   onClear,
 }: {
   searchQuery: string;
   dateFrom: string;
   dateTo: string;
-  sortBy: SortKey;
   onSearchChange: (v: string) => void;
   onDateFromChange: (v: string) => void;
   onDateToChange: (v: string) => void;
-  onSortChange: (v: SortKey) => void;
   onClear: () => void;
 }) {
   return (
@@ -544,19 +540,6 @@ function SearchBar({
           placeholder="Busque por cliente ou pedido…"
           className="w-full min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200 sm:w-auto"
         />
-        {/* Sort dropdown */}
-        <div className="flex items-center gap-1.5">
-          <span className="shrink-0 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Ordenar</span>
-          <select
-            value={sortBy}
-            onChange={(e) => onSortChange(e.target.value as SortKey)}
-            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
         {/* Action buttons */}
         <div className="flex w-full gap-2 sm:w-auto">
           <button className="flex-1 rounded-lg bg-orange-500 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600 sm:flex-none">
@@ -580,10 +563,14 @@ function StatusRow({
   orders,
   statusFilter,
   onFilterChange,
+  sortBy,
+  onSortChange,
 }: {
   orders: MockOrder[];
   statusFilter: StatusFilter;
   onFilterChange: (f: StatusFilter) => void;
+  sortBy: SortKey;
+  onSortChange: (v: SortKey) => void;
 }) {
   const counts = {
     PENDING:   orders.filter((o) => o.status === "PENDING").length,
@@ -604,6 +591,7 @@ function StatusRow({
 
   return (
     <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-[#E5E5E5] bg-white px-4 py-2.5 scrollbar-hide">
+      {/* Status chips */}
       {BTNS.map((btn) => {
         const isActive = statusFilter === btn.id;
         return (
@@ -623,6 +611,20 @@ function StatusRow({
           </button>
         );
       })}
+
+      {/* Sort control — right-aligned, visually next to status chips */}
+      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Ordenar</span>
+        <select
+          value={sortBy}
+          onChange={(e) => onSortChange(e.target.value as SortKey)}
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+        >
+          {SORT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
@@ -1601,7 +1603,7 @@ export default function OrdersClient({ isOwner }: { isOwner?: boolean } = {}) {
   const [searchQuery,  setSearchQuery]  = useState("");
   const [dateFrom,     setDateFrom]     = useState("");
   const [dateTo,       setDateTo]       = useState("");
-  const [sortBy,       setSortBy]       = useState<SortKey>("status");
+  const [sortBy,       setSortBy]       = useState<SortKey>("recent");
   const [soundEnabled, setSoundEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
     const saved = localStorage.getItem(SOUND_PREF_KEY);
@@ -1965,18 +1967,18 @@ export default function OrdersClient({ isOwner }: { isOwner?: boolean } = {}) {
         searchQuery={searchQuery}
         dateFrom={dateFrom}
         dateTo={dateTo}
-        sortBy={sortBy}
         onSearchChange={setSearchQuery}
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
-        onSortChange={setSortBy}
-        onClear={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); setSortBy("status"); }}
+        onClear={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); }}
       />
 
       <StatusRow
         orders={filtered}
         statusFilter={statusFilter}
         onFilterChange={setStatusFilter}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
       />
 
       <div className="flex flex-1 overflow-hidden">
