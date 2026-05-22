@@ -198,7 +198,7 @@ function OrderTrackingPanel({
 }
 
 const UPSELL_STAGE_ORDER: Record<CheckoutUpsellStage, number> = {
-  none: 0, drink_shown: 1, dessert_shown: 2, completed: 3,
+  none: 0, drink_shown: 1, dessert_shown: 2, extras_shown: 3, completed: 4,
 };
 function maxUpsellStage(a: CheckoutUpsellStage | undefined, b: CheckoutUpsellStage | undefined): CheckoutUpsellStage {
   return (UPSELL_STAGE_ORDER[b ?? "none"] ?? 0) >= (UPSELL_STAGE_ORDER[a ?? "none"] ?? 0) ? (b ?? "none") : (a ?? "none");
@@ -2117,7 +2117,7 @@ export function PedidoClient({
       text: string,
       cartSnap: CartItem[],
       stageSnap: Stage,
-      upsellOfferedSnap: "drink" | "dessert" | null,
+      upsellOfferedSnap: "drink" | "dessert" | "extras" | null,
       options?: {
         event?:         "ON_ENTRY" | "ON_MENU_MODE" | "ON_USER_MESSAGE" | "ON_ITEM_ADDED" | "ON_CART_UPDATED" | "ON_IDLE" | "ON_CHECKOUT_STARTED" | "AFTER_CHECKOUT" | "ON_PERMISSION_ACCEPT";
         lastAddedId?:   string;

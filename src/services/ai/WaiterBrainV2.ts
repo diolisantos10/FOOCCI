@@ -67,7 +67,7 @@ export interface V2CatalogItem {
 // ─── session memory ───────────────────────────────────────────
 
 /** Stage of the checkout upsell state machine. */
-export type CheckoutUpsellStage = "none" | "drink_shown" | "dessert_shown" | "completed";
+export type CheckoutUpsellStage = "none" | "drink_shown" | "dessert_shown" | "extras_shown" | "completed";
 
 /**
  * Lightweight session memory held by the client (never persisted).
@@ -610,6 +610,17 @@ function selectDessertItems(catalog: V2CatalogItem[], cartItemIds: string[], lim
   const all = tagCatalog(catalog)
     .filter((i) => i.tags.includes("dessert") && !cartItemIds.includes(i.id))
     .sort(tagSort);
+  return (limit !== undefined ? all.slice(0, limit) : all).map((i) => i.id);
+}
+
+function isExtrasCategory(name: string): boolean {
+  return /extra|adicion|molho|acess[oó]rio|complemento|adicional/i.test(name);
+}
+
+function selectExtrasItems(catalog: V2CatalogItem[], cartItemIds: string[], limit?: number): string[] {
+  const all = catalog
+    .filter((i) => isExtrasCategory(i.categoryName) && !cartItemIds.includes(i.id))
+    .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
   return (limit !== undefined ? all.slice(0, limit) : all).map((i) => i.id);
 }
 
@@ -1915,7 +1926,23 @@ function handleCheckoutStarted(input: V2Input): V2Output {
     }
   }
 
-  // "dessert_shown" or all upsells skipped (no catalog matches) → proceed.
+  // Stage "none", "drink_shown", or "dessert_shown": offer extras
+  if (stage === "none" || stage === "drink_shown" || stage === "dessert_shown") {
+    const extrasCards = selectExtrasItems(input.catalog, input.cartItemIds);
+    if (extrasCards.length > 0) {
+      return {
+        message:     "Para finalizar, quer adicionar algum item extra ao seu pedido? 🛍️",
+        cards:       extrasCards,
+        mode:        "INTERVENTION",
+        options:     [],
+        requiresAI:  false,
+        aiDirective: "",
+        memoryPatch: { checkoutUpsellStage: "extras_shown" },
+      };
+    }
+  }
+
+  // "extras_shown" or all upsells skipped (no catalog matches) → proceed.
   return done();
 }
 
@@ -2318,6 +2345,43 @@ function handleUserMessage(input: V2Input): V2Output {
         memoryPatch: { checkoutUpsellStage: "dessert_shown" },
       };
     }
+    const extrasAfterDrink = selectExtrasItems(catalog, cartItemIds);
+    if (extrasAfterDrink.length > 0) {
+      return {
+        message:     "Para finalizar, quer adicionar algum item extra? 🛍️",
+        cards:       extrasAfterDrink,
+        mode:        "INTERVENTION",
+        options:     [],
+        requiresAI:  false,
+        aiDirective: "",
+        memoryPatch: { checkoutUpsellStage: "extras_shown" },
+      };
+    }
+    return {
+      message:     "Perfeito 😊 pode finalizar por aqui.",
+      cards:       [],
+      mode:        "CHECKOUT_SUPPORT",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+      memoryPatch: { checkoutUpsellStage: "completed" },
+    };
+  }
+
+  // ── Special path: user skipped dessert upsell → offer extras ─────────────────
+  if (msgLow === "skip_dessert_upsell") {
+    const extrasCards = selectExtrasItems(catalog, cartItemIds);
+    if (extrasCards.length > 0) {
+      return {
+        message:     "Para finalizar, quer adicionar algum item extra? 🛍️",
+        cards:       extrasCards,
+        mode:        "INTERVENTION",
+        options:     [],
+        requiresAI:  false,
+        aiDirective: "",
+        memoryPatch: { checkoutUpsellStage: "extras_shown" },
+      };
+    }
     return {
       message:     "Perfeito 😊 pode finalizar por aqui.",
       cards:       [],
@@ -2657,7 +2721,7 @@ const QUESTION_BUTTON_PATTERNS: { re: RegExp; options: WaiterOption[] }[] = [
 const WEAK_PHRASE_RE = /^(legal|beleza|ótimo|ok|claro)[!.]?$/i;
 
 // Option values allowed when mode is CHECKOUT_SUPPORT
-const CHECKOUT_SAFE_OPTIONS = new Set(["continue_checkout", "browse_menu", "skip_drink_upsell"]);
+const CHECKOUT_SAFE_OPTIONS = new Set(["continue_checkout", "browse_menu", "skip_drink_upsell", "skip_dessert_upsell"]);
 
 /**
  * Validates and repairs a V2Output before it reaches the client.

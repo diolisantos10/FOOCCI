@@ -46,7 +46,7 @@ export interface AIWebTurnInput {
   history:         Array<{ role: "user" | "assistant"; content: string }>;
   cart?:           Array<{ id?: string; name: string; price: number; qty: number }>;
   stage?:          OrderStage;
-  upsellOffered?:  "drink" | "dessert" | null;
+  upsellOffered?:  "drink" | "dessert" | "extras" | null;
   deliveryMethod?: "delivery" | "pickup" | null;
   address?:        string | null;
   paymentMethod?:  string | null;

@@ -31,7 +31,7 @@ interface PedidoChatRequest {
   history:         HistoryEntry[];
   cart?:           CartItem[];
   stage?:          OrderStage;
-  upsellOffered?:  "drink" | "dessert" | null;
+  upsellOffered?:  "drink" | "dessert" | "extras" | null;
   deliveryMethod?: "delivery" | "pickup" | null;
   address?:        string | null;
   paymentMethod?:  string | null;
