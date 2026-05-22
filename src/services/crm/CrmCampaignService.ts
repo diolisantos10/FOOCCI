@@ -539,7 +539,11 @@ export class CrmCampaignService {
         // Tag conversation with CRM context (first-write-wins, idempotent)
         await assignConversationContext(convId, "CRM_CAMPAIGN", { relatedCampaignId: campaignId });
 
-        // Log outbound message in Chat Inbox
+        // Log outbound message in Chat Inbox.
+        // Intentionally do NOT update Conversation.lastMessageAt here — CRM outbound
+        // messages must not float campaign conversations above real support threads
+        // in the Atendimento sort order. lastMessageAt is updated only when the
+        // customer sends an inbound reply (handled by WebhookProcessorService).
         await prisma.$transaction([
           prisma.message.create({
             data: {
@@ -553,10 +557,6 @@ export class CrmCampaignService {
               externalStatus:    "sent",
               metadata:          buildConversationMetadataForCrmSend(campaignId, exec.id),
             },
-          }),
-          prisma.conversation.update({
-            where: { id: convId },
-            data:  { lastMessageAt: now },
           }),
           prisma.campaignExecution.update({
             where: { id: exec.id },

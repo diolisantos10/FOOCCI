@@ -25,7 +25,7 @@ type ConvStatus =
 
 type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL";
 
-type StatusFilter  = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED";
+type StatusFilter  = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED" | "CRM_SENT" | "CRM_REPLIED";
 type ChannelFilter = "ALL" | "WHATSAPP" | "MENU" | "MANUAL" | "EMAIL" | "SMS";
 type SortOption    = "RECENT" | "OLDEST" | "NAME_AZ" | "NAME_ZA" | "CHANNEL";
 
@@ -114,11 +114,13 @@ const CHANNEL_META: Record<Channel, { label: string; icon: string }> = {
 };
 
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
-  { id: "ALL",      label: "Todas"      },
-  { id: "AI_ON",    label: "IA ativa"   },
-  { id: "AI_OFF",   label: "Humano"     },
-  { id: "WAITING",  label: "Aguardando" },
-  { id: "RESOLVED", label: "Resolvidas" },
+  { id: "ALL",         label: "Todas"         },
+  { id: "AI_ON",       label: "IA ativa"      },
+  { id: "AI_OFF",      label: "Humano"        },
+  { id: "WAITING",     label: "Aguardando"    },
+  { id: "RESOLVED",    label: "Resolvidas"    },
+  { id: "CRM_SENT",    label: "CRM enviado"   },
+  { id: "CRM_REPLIED", label: "Resposta CRM"  },
 ];
 
 const CHANNEL_FILTERS: { id: ChannelFilter; label: string; icon: string }[] = [
@@ -143,10 +145,15 @@ const SORT_OPTIONS: { id: SortOption; label: string }[] = [
 type PriorityLevel = "critical" | "attention" | "ok";
 
 function handlerPriority(c: ConvSummary): number {
-  if (c.status === "OPEN" && c.unreadCount > 0)                    return 0;
-  if (c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU")       return 1;
-  if (c.status === "OPEN")                                          return 2;
-  if (c.status === "BOT"  || c.status === "AI_ATENDENDO")          return 3;
+  // CRM outbound-only (no customer reply) sorts below everything else
+  const isCrm = c.contextType === "CRM_CAMPAIGN" || c.contextType === "CRM_AUTOMATION";
+  const lastMsg = (c.messages ?? [])[0];
+  if (isCrm && lastMsg?.direction !== "INBOUND") return 5;
+
+  if (c.status === "OPEN" && c.unreadCount > 0)              return 0;
+  if (c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU") return 1;
+  if (c.status === "OPEN")                                   return 2;
+  if (c.status === "BOT"  || c.status === "AI_ATENDENDO")   return 3;
   return 4; // RESOLVED
 }
 
@@ -168,12 +175,26 @@ function getHandlerBadge(c: ConvSummary): HandlerBadge {
   return   { label: "IA ativa",   cls: "bg-purple-100 text-purple-700 border-purple-200" };
 }
 
+// CRM_CAMPAIGN and CRM_AUTOMATION are handled dynamically in getCrmBadge()
+// so the badge reflects whether the customer has replied or not.
 const CONTEXT_BADGE: Record<string, { label: string; cls: string }> = {
-  CRM_CAMPAIGN:   { label: "Campanha CRM",  cls: "bg-violet-100 text-violet-700 border-violet-200" },
-  CRM_AUTOMATION: { label: "Automação CRM", cls: "bg-blue-100   text-blue-700   border-blue-200"   },
-  ORDER_SUPPORT:  { label: "Pós-venda",     cls: "bg-orange-100 text-orange-700 border-orange-200" },
-  HUMAN_SUPPORT:  { label: "Suporte",       cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  ORDER_SUPPORT: { label: "Pós-venda", cls: "bg-orange-100 text-orange-700 border-orange-200" },
+  HUMAN_SUPPORT: { label: "Suporte",   cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
 };
+
+function getCrmBadge(c: ConvSummary): { label: string; cls: string } | null {
+  if (c.contextType !== "CRM_CAMPAIGN" && c.contextType !== "CRM_AUTOMATION") return null;
+  const lastMsg   = (c.messages ?? [])[0];
+  const hasReply  = lastMsg?.direction === "INBOUND";
+  const isAuto    = c.contextType === "CRM_AUTOMATION";
+  if (hasReply) {
+    return { label: "Resposta CRM", cls: "bg-amber-100 text-amber-700 border-amber-200" };
+  }
+  return {
+    label: isAuto ? "Automação enviada" : "Campanha enviada",
+    cls:   "bg-violet-100 text-violet-700 border-violet-200",
+  };
+}
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "";
@@ -519,16 +540,34 @@ export function AtendimentoClient({
       });
     }
 
+    // CRM context helpers
+    const isCrmOrigin = (c: ConvSummary) =>
+      c.contextType === "CRM_CAMPAIGN" || c.contextType === "CRM_AUTOMATION";
+    const hasCustomerReply = (c: ConvSummary) =>
+      ((c.messages ?? [])[0])?.direction === "INBOUND";
+
     // Status filter (client-side for non-RESOLVED)
-    if (statusFilter !== "ALL" && statusFilter !== "RESOLVED") {
-      items = items.filter((c) => {
-        switch (statusFilter) {
-          case "AI_ON":   return c.aiEnabled && c.status !== "RESOLVED";
-          case "AI_OFF":  return !c.aiEnabled && c.status !== "RESOLVED";
-          case "WAITING": return c.unreadCount > 0 && c.status !== "RESOLVED";
-          default:        return true;
-        }
-      });
+    if (statusFilter === "CRM_SENT") {
+      // Show only CRM outbound-only conversations (customer hasn't replied)
+      items = items.filter((c) => isCrmOrigin(c) && !hasCustomerReply(c));
+    } else if (statusFilter === "CRM_REPLIED") {
+      // Show only CRM conversations where customer replied
+      items = items.filter((c) => isCrmOrigin(c) && hasCustomerReply(c));
+    } else if (statusFilter !== "RESOLVED") {
+      // Default "Todas": hide CRM outbound-only — they don't need human attention
+      // and must not drown real support conversations.
+      if (statusFilter === "ALL") {
+        items = items.filter((c) => !isCrmOrigin(c) || hasCustomerReply(c));
+      }
+      if (statusFilter === "AI_ON") {
+        items = items.filter((c) => c.aiEnabled && c.status !== "RESOLVED");
+      }
+      if (statusFilter === "AI_OFF") {
+        items = items.filter((c) => !c.aiEnabled && c.status !== "RESOLVED");
+      }
+      if (statusFilter === "WAITING") {
+        items = items.filter((c) => c.unreadCount > 0 && c.status !== "RESOLVED");
+      }
     }
 
     // Channel filter (client-side for MENU, otherwise already server-filtered)
@@ -887,6 +926,7 @@ export function AtendimentoClient({
                     : (lastMsg.content?.slice(0, 60) ?? "")
                   : "Sem mensagens";
                 const badge      = getHandlerBadge(conv);
+                const crmBadge   = getCrmBadge(conv);
                 const isSelected = conv.id === selectedId;
                 const isWaiting  = conv.status === "OPEN" && conv.unreadCount > 0;
                 const priority   = convPriorityLevel(conv);
@@ -951,8 +991,12 @@ export function AtendimentoClient({
                             <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${badge.cls}`}>
                               {badge.label}
                             </span>
-                            {/* Context badge — only shown for CRM/special contexts */}
-                            {conv.contextType && CONTEXT_BADGE[conv.contextType] && (
+                            {/* Context badge — CRM (dynamic) or other special contexts */}
+                            {crmBadge ? (
+                              <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${crmBadge.cls}`}>
+                                {crmBadge.label}
+                              </span>
+                            ) : conv.contextType && CONTEXT_BADGE[conv.contextType] && (
                               <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${CONTEXT_BADGE[conv.contextType]!.cls}`}>
                                 {CONTEXT_BADGE[conv.contextType]!.label}
                               </span>

@@ -139,10 +139,19 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   //      RECEPTIONIST_ONLY       (default) — WhatsAppReceptionistService
   //      HUMAN_ASSISTED          — same receptionist path, escalates faster
   //      AI_ORDERING_EXPERIMENTAL — full AIOrderService sales agent (opt-in)
-  // Do not auto-respond if AI has been disabled for this conversation
-  // (human operator took over) or if status is already HUMAN/RESOLVED.
+  //
+  // Guard: never auto-trigger the WhatsApp Receptionist for conversations that
+  // originated from a CRM campaign or automation.  CRM replies must go to human
+  // staff first; operators can manually release AI via the Atendimento panel.
+  // This prevents the receptionist from sending greeting / business-hours messages
+  // to customers who simply acknowledged a promotional broadcast.
+  const isCrmOrigin =
+    conversation.contextType === "CRM_CAMPAIGN" ||
+    conversation.contextType === "CRM_AUTOMATION";
+
   const shouldRespond =
     conversation.aiEnabled &&
+    !isCrmOrigin &&
     (conversation.status === ConversationStatus.OPEN ||
      conversation.status === ConversationStatus.BOT);
 

@@ -458,6 +458,7 @@ export class ScheduledCampaignRunnerService {
           select: { id: true },
         });
 
+        // Intentionally omit Conversation.lastMessageAt update — see CrmCampaignService.
         await prisma.$transaction([
           prisma.message.create({
             data: {
@@ -471,10 +472,6 @@ export class ScheduledCampaignRunnerService {
               externalStatus:    "sent",
               metadata:          buildConversationMetadataForCrmSend(campaign.id, exec.id),
             },
-          }),
-          prisma.conversation.update({
-            where: { id: convId },
-            data:  { lastMessageAt: now },
           }),
         ]);
 
