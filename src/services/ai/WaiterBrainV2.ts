@@ -989,18 +989,18 @@ function isAccessoryQuery(rawQuery: string): boolean {
  * of session history. Upsell callers pass the session suggestedProductIds to
  * suppress already-shown items.
  */
-function searchMenuByQuery(
+export function searchMenuByQuery(
   rawQuery:         string,
   catalog:          V2CatalogItem[],
   cartItemIds:      string[],
   suggestedIds:     string[],
   maxBudget?:       number,
   excludeKeywords?: string[],
-): { ids: string[]; confidence: "high" | "medium" | "low" } {
+): { ids: string[]; confidence: "high" | "medium" | "low"; queryTermCount: number } {
   const normQuery  = normalizeSearch(rawQuery);
   const words      = normQuery.split(/\s+/).filter((w) => w.length >= 3 && !QUERY_STOPWORDS.has(w));
 
-  if (words.length === 0) return { ids: [], confidence: "low" };
+  if (words.length === 0) return { ids: [], confidence: "low", queryTermCount: 0 };
 
   const isAccessoryReq = isAccessoryQuery(rawQuery);
   // Pre-compute menu order: sortOrder when available, catalog array index as fallback.
@@ -1051,7 +1051,7 @@ function searchMenuByQuery(
     }
   }
 
-  if (matched.length === 0) return { ids: [], confidence: "low" };
+  if (matched.length === 0) return { ids: [], confidence: "low", queryTermCount: words.length };
 
   const confidence = topScore >= 40 ? "high" : topScore >= 20 ? "medium" : "low";
 
@@ -1063,7 +1063,7 @@ function searchMenuByQuery(
     .filter((s) => !suggestedIds.includes(s.id))
     .map((s) => s.id);
 
-  return { ids, confidence };
+  return { ids, confidence, queryTermCount: words.length };
 }
 
 // ─── Smart Product Selection Engine (Sprint 4C) ──────────────
@@ -1589,6 +1589,13 @@ function buildUserMessageDirective(cartItemIds: string[], cartValue: number): st
     BASE_DIRECTIVE,
     "",
     contextLine,
+    "",
+    "━━━ CARDÁPIO — REGRA ABSOLUTA (INVIOLÁVEL) ━━━",
+    "→ Só afirme que produto/categoria existe se estiver listado no CARDÁPIO COMPLETO acima.",
+    "→ Se o cliente pedir X e X NÃO está no cardápio: diga claramente \"Não encontrei X no nosso cardápio.\"",
+    "→ NUNCA diga \"temos massas\", \"temos pizza\", \"sim, temos\" se o item não estiver listado.",
+    "→ Se PRODUTOS CANDIDATOS forem listados abaixo: use APENAS esses IDs no suggest_upsell.",
+    "→ suggest_upsell aceita SOMENTE IDs reais do CARDÁPIO COMPLETO. NUNCA invente ou adivinhe IDs.",
     "",
     "━━━ MODELO DE DECISÃO — escolha EXATAMENTE UM comportamento ━━━",
     "",
