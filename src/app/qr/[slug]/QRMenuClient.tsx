@@ -236,14 +236,14 @@ function ProductModal({
         className="w-full h-full flex flex-col sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Image — square-ish, capped at 50vh so content stays visible */}
-        <div className="relative w-full shrink-0 bg-white overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
+        {/* Image — square, center-cropped, capped at 50vh so content stays visible */}
+        <div className="relative w-full shrink-0 bg-gray-100 overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={item.imageUrl}
               alt={item.name}
-              className="w-full h-full object-contain"
+              className="w-full h-full object-cover object-center"
               loading="lazy"
             />
           ) : (
@@ -427,13 +427,14 @@ function FeaturedCard({
       onClick={onClick}
       className="snap-start shrink-0 w-40 rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden text-left hover:shadow-md hover:border-orange-100 transition-all"
     >
-      <div className="h-36 bg-gray-100 overflow-hidden">
+      {/* Square image zone — center-cropped */}
+      <div className="aspect-square overflow-hidden bg-gray-100">
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={item.imageUrl}
             alt={item.name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover object-center"
             loading="lazy"
           />
         ) : (

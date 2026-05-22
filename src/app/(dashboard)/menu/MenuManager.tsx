@@ -233,11 +233,15 @@ function ImageUpload({
     <div className="space-y-1">
       {value && (
         <div className="relative inline-block">
-          <img
-            src={value}
-            alt="Preview"
-            className="h-16 w-16 rounded object-cover border border-gray-200"
-          />
+          {/* Square preview — image is center-cropped into a fixed square frame */}
+          <div className="h-16 w-16 overflow-hidden rounded border border-gray-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={value}
+              alt="Preview"
+              className="h-full w-full object-cover object-center"
+            />
+          </div>
           <button
             type="button"
             onClick={() => onChange(null)}
@@ -268,6 +272,9 @@ function ImageUpload({
           {uploading ? <Spinner /> : value ? "Trocar imagem" : "Adicionar imagem"}
         </button>
       </div>
+      <p className="text-[11px] text-gray-400">
+        A imagem será centralizada automaticamente em formato quadrado.
+      </p>
       {error && <InlineError message={error} />}
     </div>
   );
@@ -353,11 +360,14 @@ function SortableItemRow({
             />
           )}
           {item.imageUrl ? (
-            <img
-              src={item.imageUrl}
-              alt={item.name}
-              className="h-8 w-8 shrink-0 rounded object-cover"
-            />
+            <div className="h-8 w-8 shrink-0 overflow-hidden rounded">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={item.imageUrl}
+                alt={item.name}
+                className="h-full w-full object-cover object-center"
+              />
+            </div>
           ) : (
             <div className="h-8 w-8 shrink-0 rounded bg-gray-100" />
           )}

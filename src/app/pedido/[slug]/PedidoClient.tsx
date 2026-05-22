@@ -599,9 +599,7 @@ function TypingIndicator() {
 
 
 // ── Product card ──────────────────────────────────────────────────────────────
-// Thumbnail — uniform h-44 w-36. Image + name + price + add. No description.
-
-const CARD_IMG_H = "h-[72px]"; // compact image zone — keeps browsing carousel light
+// Thumbnail — w-36, square image zone + content. Image + name + price + add.
 
 function ProductCard({
   item,
@@ -615,14 +613,14 @@ function ProductCard({
   onOpen: () => void;
 }) {
   return (
-    /* Fixed outer size keeps the grid perfectly uniform regardless of name length */
-    <div data-testid={`product-card-${item.id}`} className="flex h-44 w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    /* w-36 card: image zone is aspect-square (144×144 px), content auto-height */
+    <div data-testid={`product-card-${item.id}`} className="flex w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
 
-      {/* Image zone — fixed height, tappable */}
-      <button onClick={onOpen} className={`block w-full shrink-0 overflow-hidden ${CARD_IMG_H}`}>
+      {/* Image zone — square, tappable, center-cropped */}
+      <button onClick={onOpen} className="aspect-square w-full shrink-0 overflow-hidden">
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover object-center" />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gray-100 text-4xl">
             {categoryEmoji(item.name)}
@@ -780,14 +778,14 @@ function ProductModal({
       {/* Card — full-screen on mobile, 92vh centered on desktop */}
       <div className="w-full h-full flex flex-col sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white">
 
-        {/* ── Image — square-ish, capped at 50 vh so content stays visible ── */}
-        <div className="relative w-full shrink-0 bg-white overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
+        {/* ── Image — square, capped at 50 vh so content stays visible ── */}
+        <div className="relative w-full shrink-0 bg-gray-100 overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={item.imageUrl}
               alt={item.name}
-              className="w-full h-full object-contain"
+              className="w-full h-full object-cover object-center"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-100 text-7xl">
@@ -1160,14 +1158,14 @@ function DesktopProductCard({
 }) {
   return (
     <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow">
-      {/* Image */}
+      {/* Image — square, center-cropped */}
       <button
         onClick={onOpen}
-        className="block w-full shrink-0 overflow-hidden h-28 bg-gray-100"
+        className="aspect-square w-full shrink-0 overflow-hidden bg-gray-100"
       >
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover object-center" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-4xl">
             {categoryEmoji(item.name)}
