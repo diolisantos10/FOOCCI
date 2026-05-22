@@ -40,6 +40,14 @@ import { signWaToken } from "@/lib/wa-token";
 const EMOJI_NUMBERS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"] as const;
 const DAY_NAMES_PT  = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
 
+// "0" / "voltar" / "menu" / "menu principal" → re-render the WhatsApp host menu.
+const BACK_TO_MENU_RE =
+  /^(0|voltar|menu|menu\s+principal|voltar\s+menu|in[ií]cio|inicio)$/i;
+
+// Footer appended to every non-handoff branch reply so the customer always
+// has a clear exit from any menu sub-branch.
+const BACK_TO_MENU_FOOTER = "\n\n0️⃣ Voltar ao menu principal";
+
 // Shown when menuOptions is null/empty in DB — ensures the menu is always visible.
 const FALLBACK_MENU_OPTIONS: MenuOption[] = [
   { id: "fallback-menu",    label: "Ver cardápio",             flow: "menu"    },
@@ -335,6 +343,16 @@ function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
     default:
       return ctx.welcomeMessage;
   }
+}
+
+function appendBackToMainMenu(text: string): string {
+  return text + BACK_TO_MENU_FOOTER;
+}
+
+function renderMainMenu(ctx: ReplyContext): string {
+  const menuList = buildMenuList(ctx.menuOptions);
+  if (!menuList) return ctx.welcomeMessage;
+  return "Claro 😊 Voltando ao menu principal:" + menuList + "\n\nResponda com o número da opção 😊";
 }
 
 function buildTemplateReply(intent: Intent, ctx: ReplyContext): string | null {
@@ -639,6 +657,12 @@ async function run(conversationId: string): Promise<void> {
     return;
   }
 
+  // ── Back-to-menu shortcut ─────────────────────────────────────────────────
+  if (BACK_TO_MENU_RE.test(lastMessage.content.trim())) {
+    await sendReply(evolutionResult.data, toPhone, renderMainMenu(ctx), conversationId);
+    return;
+  }
+
   // ── Check if customer selected a numbered or named menu option ────────────
   const selectedOpt = detectSelectedOption(lastMessage.content, menuOptions);
 
@@ -648,6 +672,9 @@ async function run(conversationId: string): Promise<void> {
   if (selectedOpt) {
     replyText      = buildFlowReply(selectedOpt, ctx);
     triggerHandoff = selectedOpt.flow === "handoff";
+    if (!triggerHandoff) {
+      replyText = appendBackToMainMenu(replyText);
+    }
   } else {
     const intent = detectIntent(lastMessage.content);
 
@@ -662,7 +689,7 @@ async function run(conversationId: string): Promise<void> {
         (await RestaurantKnowledgeService.findMatch(restaurantId, lastMessage.content).catch(() => null));
 
       if (knowledgeMatch) {
-        replyText      = knowledgeMatch.answer;
+        replyText      = appendBackToMainMenu(knowledgeMatch.answer);
         triggerHandoff = false;
         RestaurantKnowledgeService.incrementUsage(knowledgeMatch.id).catch(() => {});
       } else {
@@ -701,7 +728,7 @@ async function run(conversationId: string): Promise<void> {
           if (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED" && ctx.menuCatalog.length > 0) {
             const catalogReply = findCatalogMatch(lastMessage.content, ctx.menuCatalog, ctx.pedidoUrl);
             if (catalogReply) {
-              replyText      = catalogReply;
+              replyText      = appendBackToMainMenu(catalogReply);
               triggerHandoff = false;
               gptNeeded      = false;
             }
@@ -745,11 +772,16 @@ async function run(conversationId: string): Promise<void> {
 
             // If GPT gave a generic/short answer with no URL, append the menu so
             // the customer always knows their options.
+            let fullMenuAppended = false;
             if (!triggerHandoff && menuOptions.length > 0 && !replyText.includes("http")) {
               const menuList = buildMenuList(menuOptions);
               if (menuList) {
                 replyText += "\n\nComo posso te ajudar?" + menuList + "\n\nResponda com o número da opção 😊";
+                fullMenuAppended = true;
               }
+            }
+            if (!triggerHandoff && !fullMenuAppended) {
+              replyText = appendBackToMainMenu(replyText);
             }
 
             // Record knowledge gap when GPT also couldn't answer confidently
@@ -784,7 +816,7 @@ async function run(conversationId: string): Promise<void> {
             }
             replyText = greet;
           } else {
-            replyText = templateReply ?? ctx.welcomeMessage;
+            replyText = appendBackToMainMenu(templateReply ?? ctx.welcomeMessage);
           }
           triggerHandoff = false;
 
