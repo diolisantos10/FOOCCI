@@ -10,6 +10,7 @@ import Script from "next/script";
 import { prisma } from "@/lib/prisma";
 import { PedidoClient } from "./PedidoClient";
 import { phoneCandidates } from "@/lib/phone";
+import { verifyWaToken } from "@/lib/wa-token";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
 
@@ -39,7 +40,12 @@ export default async function PedidoPage({
 }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const rawPhone = typeof sp.phone === "string" ? sp.phone.trim() : null;
+  const rawPhone  = typeof sp.phone   === "string" ? sp.phone.trim()   : null;
+  // Decode signed WhatsApp identity token (appended by WhatsAppReceptionistService)
+  const rawWaToken = typeof sp.waToken === "string" ? sp.waToken.trim() : null;
+  const waPayload  = rawWaToken ? verifyWaToken(rawWaToken) : null;
+  // Phone from token is used when no ?phone= param is present
+  const resolvedPhone = rawPhone ?? waPayload?.phone ?? null;
 
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug },
@@ -109,8 +115,8 @@ export default async function PedidoPage({
   let knownCustomerId: string | null = null;
   let knownDefaultAddress: { street: string; number: string; neighborhood: string; complement: string } | null = null;
 
-  if (rawPhone) {
-    const candidates = phoneCandidates(rawPhone);
+  if (resolvedPhone) {
+    const candidates = phoneCandidates(resolvedPhone);
     if (candidates.length > 0) {
       const customer = await prisma.customer.findFirst({
         where: { restaurantId: restaurant.id, phone: { in: candidates } },
@@ -139,8 +145,12 @@ export default async function PedidoPage({
           };
         }
       } else {
-        // Phone is known (came from WhatsApp link) but customer record doesn't exist yet
-        knownCustomerPhone = rawPhone;
+        // Phone known (WhatsApp link) but no customer record yet
+        knownCustomerPhone = resolvedPhone;
+        // Use display name from token so the greeting can be personalised
+        if (waPayload?.name) {
+          knownCustomerName = waPayload.name.trim().split(/\s+/)[0] ?? null;
+        }
       }
     }
   }

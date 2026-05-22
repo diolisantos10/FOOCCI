@@ -33,6 +33,7 @@ import { RestaurantKnowledgeService } from "@/services/knowledge/RestaurantKnowl
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { getPeriodsForRow, isInPeriod, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
 import { getPublicMenuUrl, getPublicQrUrl } from "@/lib/public-url";
+import { signWaToken } from "@/lib/wa-token";
 
 // ─── constants ────────────────────────────────────────────────
 
@@ -215,6 +216,37 @@ Responda APENAS com JSON válido: {"reply":"...","needsHandoff":false}`;
 
 // ─── reply builders ───────────────────────────────────────────
 
+/**
+ * Appends a signed WhatsApp identity token + src=whatsapp to the pedido URL
+ * so /pedido/[slug] can skip the phone-identification step.
+ * Falls back gracefully if signing is unavailable.
+ */
+function buildIdentifiedPedidoUrl(
+  baseUrl: string | null,
+  phone: string,
+  name: string | null,
+): string | null {
+  if (!baseUrl) return null;
+  try {
+    const token = signWaToken({
+      phone,
+      ...(name ? { name: name.trim().split(/\s+/)[0] } : {}),
+    });
+    const url = new URL(baseUrl);
+    url.searchParams.set("waToken", token);
+    url.searchParams.set("src", "whatsapp");
+    return url.toString();
+  } catch {
+    try {
+      const url = new URL(baseUrl);
+      url.searchParams.set("src", "whatsapp");
+      return url.toString();
+    } catch {
+      return baseUrl;
+    }
+  }
+}
+
 /** Formats the configured menu options as an emoji-numbered text list. */
 function buildMenuList(options: MenuOption[]): string {
   if (options.length === 0) return "";
@@ -320,7 +352,7 @@ async function run(conversationId: string): Promise<void> {
       restaurantId: true,
       status:       true,
       aiEnabled:    true,
-      customer:     { select: { phone: true, name: true } },
+      customer:     { select: { id: true, phone: true, name: true } },
     },
   });
 
@@ -395,7 +427,13 @@ async function run(conversationId: string): Promise<void> {
     return;
   }
 
-  const pedidoUrl = agentCfg?.menuUrl?.trim() || (restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : null);
+  const basePedidoUrl = agentCfg?.menuUrl?.trim() || (restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : null);
+  // Build customer-identified URL so /pedido can skip the phone-entry step
+  const pedidoUrl = buildIdentifiedPedidoUrl(
+    basePedidoUrl,
+    conversation.customer.phone,
+    conversation.customer.name ?? null,
+  );
   const qrMenuUrl = restaurant?.slug ? getPublicQrUrl(restaurant.slug) : null;
 
   let address: string | null = null;
@@ -544,12 +582,12 @@ async function run(conversationId: string): Promise<void> {
         const templateReply = buildTemplateReply(intent, ctx);
 
         // GPT is used for:
-        //   - GREETING on repeat messages in same session (avoid menu spam)
-        //   - GREETING when no menu options are configured (natural warmth)
         //   - UNKNOWN intent in RECEPTIONIST_ONLY mode
         //   - any data-backed intent where template data is unavailable
+        // NOTE: GREETING is NEVER routed to GPT here — the short-circuit above
+        // handles repeat greetings within the cooldown window, and the template
+        // path below handles first-contact greetings (always shows menu).
         const useGpt =
-          (intent === "GREETING" && (menuSentRecently || menuOptions.length === 0)) ||
           (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED") ||
           (templateReply === null && intent !== "GREETING");
 
