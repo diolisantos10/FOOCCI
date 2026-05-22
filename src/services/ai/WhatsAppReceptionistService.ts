@@ -63,7 +63,7 @@ const GREETING_RE =
 const ORDER_RE =
   /quero (pedir|comprar)|fazer (um )?pedido|como (peço|fa[çc]o pedido)|link do pedido|quero fazer pedido/i;
 const MENU_RE =
-  /cardápio|cardapio|menu|ver (o )?menu|ver produtos/i;
+  /cardápio|cardapio|menu|ver (o )?menu|ver produtos|opções|opcoes|opção|opcao/i;
 const HOURS_RE =
   /horário|horario|que horas|quando (abre|fecha|funciona)|funcionamento|horários de/i;
 const ADDRESS_RE =
@@ -180,6 +180,9 @@ ${!ctx.isCurrentlyOpen ? "4. Não ofereça o link de pedido como se estivesse ab
 ${!ctx.isCurrentlyOpen ? "6." : "5."}Se não souber responder com certeza, retorne needsHandoff=true.
 ${!ctx.isCurrentlyOpen ? "7." : "6."}Use emoji com moderação 😊.
 ${!ctx.isCurrentlyOpen ? "8." : "7."}NUNCA inclua domínios Railway (crmrestaurante-production.up.railway.app ou qualquer .up.railway.app) em mensagens para clientes. Use exclusivamente os links do contexto acima.
+${!ctx.isCurrentlyOpen ? "9." : "8."}NÃO utilize seu conhecimento de treinamento sobre este restaurante específico. Use APENAS as informações fornecidas neste prompt.
+${!ctx.isCurrentlyOpen ? "10." : "9."}NÃO forneça preços de rodízio, regras, descontos por idade, itens incluídos ou disponibilidade a menos que essas informações estejam explicitamente na BASE DE CONHECIMENTO acima.
+${!ctx.isCurrentlyOpen ? "11." : "10."}Se o cliente perguntar sobre rodízio e essas informações não estiverem no contexto: responda "Vou confirmar certinho com a equipe e te passo as informações do rodízio 😊" e retorne needsHandoff=true.
 
 Responda APENAS com JSON válido: {"reply":"...","needsHandoff":false}`;
 
@@ -348,7 +351,7 @@ async function run(conversationId: string): Promise<void> {
   const { restaurantId } = conversation;
 
   // Load all config in parallel
-  const [restaurant, storeProfile, agentCfg, brandConfig, evolutionResult, businessHoursRows, inboundCount] = await Promise.all([
+  const [restaurant, storeProfile, agentCfg, brandConfig, evolutionResult, businessHoursRows, lastOutbound] = await Promise.all([
     prisma.restaurant.findUnique({
       where:  { id: restaurantId },
       select: { name: true, slug: true, address: true, timezone: true, isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true },
@@ -379,9 +382,11 @@ async function run(conversationId: string): Promise<void> {
       select:  { dayOfWeek: true, isOpen: true, openTime: true, closeTime: true, periodsJson: true },
       orderBy: { dayOfWeek: "asc" },
     }),
-    // Count inbound messages to detect first-message-in-conversation (menu display control)
-    prisma.message.count({
-      where: { conversationId, direction: "INBOUND" },
+    // Last outbound AI message — used for menu cooldown (30-min session guard)
+    prisma.message.findFirst({
+      where:   { conversationId, direction: "OUTBOUND", senderType: "AI" },
+      orderBy: { sentAt: "desc" },
+      select:  { sentAt: true },
     }),
   ]);
 
@@ -461,10 +466,13 @@ async function run(conversationId: string): Promise<void> {
     hoursText = `${todayStatus}*Horários de funcionamento:*\n${weekLines}`;
   }
 
-  // True when this is the very first inbound message in this conversation.
-  // Used to decide whether to show the configured menu (first time) or use GPT
-  // for a more context-aware response (subsequent "oi" in same session).
-  const isFirstMessage = inboundCount <= 1;
+  // Guard: don't resend the full greeting+menu if the bot already replied within
+  // the last 30 minutes (same active session).  After 30 min of silence the
+  // menu can be shown again (customer may have returned / started a new intent).
+  const MENU_COOLDOWN_MS = 30 * 60 * 1000;
+  const menuSentRecently = lastOutbound
+    ? nowDate.getTime() - lastOutbound.sentAt.getTime() < MENU_COOLDOWN_MS
+    : false;
 
   // When paused, treat as closed for all intent handling
   const effectivelyOpen = isCurrentlyOpen && !isPaused;
@@ -541,11 +549,16 @@ async function run(conversationId: string): Promise<void> {
         //   - UNKNOWN intent in RECEPTIONIST_ONLY mode
         //   - any data-backed intent where template data is unavailable
         const useGpt =
-          (intent === "GREETING" && (!isFirstMessage || menuOptions.length === 0)) ||
+          (intent === "GREETING" && (menuSentRecently || menuOptions.length === 0)) ||
           (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED") ||
           (templateReply === null && intent !== "GREETING");
 
-        if (useGpt) {
+        // When the bot already greeted within the last 30 min, skip the full
+        // greeting flow entirely — no menu re-send, no GPT call.
+        if (intent === "GREETING" && menuSentRecently) {
+          replyText      = "Estou aqui 😊 É só escolher uma opção ou me dizer o que precisa.";
+          triggerHandoff = false;
+        } else if (useGpt) {
           // Load conversation history and knowledge items for GPT context
           const [historyMsgs, knowledgeItems] = await Promise.all([
             prisma.message.findMany({
