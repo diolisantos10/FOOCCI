@@ -590,15 +590,15 @@ export function AtendimentoClient({
       }
       if (sortBy === "CHANNEL") {
         if (a.channel !== b.channel) return a.channel.localeCompare(b.channel);
-        const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-        const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+        const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.createdAt).getTime();
+        const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.createdAt).getTime();
         return tb - ta;
       }
       // RECENT (default) or OLDEST: priority-based, then time
       const pd = handlerPriority(a) - handlerPriority(b);
       if (pd !== 0) return pd;
-      const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-      const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.createdAt).getTime();
+      const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.createdAt).getTime();
       return sortBy === "OLDEST" ? ta - tb : tb - ta;
     });
   }, [conversations, statusFilter, channelFilter, search, sortBy]);

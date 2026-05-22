@@ -98,6 +98,7 @@ interface MockOrder {
   id: string;
   num: number;
   customer: string;
+  customerId?: string;
   phone: string;
   email?: string;
   channel: string;
@@ -148,7 +149,7 @@ interface ApiOrder {
   total: string;
   notes?: string | null;
   createdAt: string;
-  customer: { name: string; phone: string; totalOrders: number; totalSpend: string; lastOrderAt: string | null };
+  customer: { id?: string; name: string; phone: string; totalOrders: number; totalSpend: string; lastOrderAt: string | null };
   deliveryAddress: {
     street: string;
     number: string;
@@ -186,6 +187,7 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
     id:         o.id,
     num:        index + 1,
     customer:   o.customer.name,
+    customerId: o.customer.id ?? undefined,
     phone:      !o.customer.phone || isGuestIdentifier(o.customer.phone) ? "Telefone não informado" : o.customer.phone,
     channel:    "Online",
     total:      parseFloat(o.total),
@@ -755,7 +757,11 @@ function OrderCard({
         <div className="mt-1.5 flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1">
-              <span className="text-base font-bold text-gray-900 leading-tight">{order.customer}</span>
+              {order.customerId ? (
+                <a href={`/customers/${order.customerId}`} target="_blank" rel="noopener noreferrer" className="text-base font-bold text-gray-900 leading-tight hover:underline" title="Abrir cadastro do cliente">{order.customer}</a>
+              ) : (
+                <span className="text-base font-bold text-gray-900 leading-tight">{order.customer}</span>
+              )}
               {order.profile && (() => {
                 const { totalOrders, totalSpend, lastOrderAt } = order.profile!;
                 const tier = customerSpendTier(totalSpend);
@@ -1209,7 +1215,11 @@ function DetailPanel({
           <p className="font-mono text-xs text-gray-400">
             Pedido #{String(order.num).padStart(3, "0")}
           </p>
-          <h3 className="mt-0.5 text-base font-bold text-gray-900">{order.customer}</h3>
+          <h3 className="mt-0.5 text-base font-bold text-gray-900">
+            {order.customerId ? (
+              <a href={`/customers/${order.customerId}`} target="_blank" rel="noopener noreferrer" className="hover:underline" title="Abrir cadastro do cliente">{order.customer}</a>
+            ) : order.customer}
+          </h3>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -1228,7 +1238,11 @@ function DetailPanel({
 
       {/* Customer name — mobile only (since desktop header above has it) */}
       <div className="border-b border-gray-100 px-4 py-2 lg:hidden">
-        <h3 className="text-base font-bold text-gray-900">{order.customer}</h3>
+        <h3 className="text-base font-bold text-gray-900">
+          {order.customerId ? (
+            <a href={`/customers/${order.customerId}`} target="_blank" rel="noopener noreferrer" className="hover:underline" title="Abrir cadastro do cliente">{order.customer}</a>
+          ) : order.customer}
+        </h3>
       </div>
 
       {/* Status timeline */}
@@ -1471,7 +1485,9 @@ function NewOrderModal({
                 Pedido #{String(order.num).padStart(3, "0")}
               </p>
               <h3 className="mt-0.5 text-xl font-bold text-gray-900 leading-tight">
-                {order.customer}
+                {order.customerId ? (
+                  <a href={`/customers/${order.customerId}`} target="_blank" rel="noopener noreferrer" className="hover:underline" title="Abrir cadastro do cliente">{order.customer}</a>
+                ) : order.customer}
               </h3>
               <p className="text-sm text-gray-500">{order.phone}</p>
             </div>

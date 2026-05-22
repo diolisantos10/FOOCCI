@@ -613,11 +613,11 @@ function ProductCard({
   onOpen: () => void;
 }) {
   return (
-    /* w-36 card: image zone is aspect-square (144×144 px), content auto-height */
+    /* w-36 card: image zone compact (h-24) to preserve chat space; content auto-height */
     <div data-testid={`product-card-${item.id}`} className="flex w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
 
-      {/* Image zone — square, tappable, center-cropped */}
-      <button onClick={onOpen} className="aspect-square w-full shrink-0 overflow-hidden">
+      {/* Image zone — compact height, tappable, center-cropped */}
+      <button onClick={onOpen} className="h-24 w-full shrink-0 overflow-hidden">
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover object-center" />
@@ -775,11 +775,11 @@ function ProductModal({
         if (Math.abs(dx) > 80 && Math.abs(dx) > dy * 1.5) onClose();
       }}
     >
-      {/* Card — full-screen on mobile, 92vh centered on desktop */}
-      <div className="w-full h-full flex flex-col sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:overflow-hidden sm:shadow-2xl bg-white">
+      {/* Card — full-screen on mobile (natural scroll), 92vh flex-col on desktop */}
+      <div className="w-full h-full overflow-y-auto sm:overflow-hidden sm:max-w-md sm:h-[92vh] sm:flex sm:flex-col sm:rounded-2xl sm:shadow-2xl bg-white">
 
-        {/* ── Image — square, capped at 50 vh so content stays visible ── */}
-        <div className="relative w-full shrink-0 bg-gray-100 overflow-hidden" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
+        {/* ── Image — scrolls naturally on mobile, capped at 50 vh on desktop ── */}
+        <div className="relative w-full bg-gray-100 overflow-hidden sm:shrink-0" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -802,8 +802,8 @@ function ProductModal({
           </button>
         </div>
 
-        {/* ── Content — scrollable ── */}
-        <div className="flex-1 overflow-y-auto px-6 pt-5 pb-2">
+        {/* ── Content ── */}
+        <div className="px-6 pt-5 pb-2 sm:flex-1 sm:overflow-y-auto">
           <h2 className="text-xl font-bold leading-snug text-gray-900">{item.name}</h2>
 
           {item.description && (
@@ -1032,8 +1032,8 @@ function ProductModal({
           )}
         </div>
 
-        {/* ── Footer — price + CTA pinned to bottom ── */}
-        <div className="shrink-0 px-6 pb-8 pt-4 border-t border-gray-100 bg-white">
+        {/* ── Footer — sticky on mobile, pinned at bottom on desktop ── */}
+        <div className="sticky bottom-0 z-10 px-6 pb-8 pt-4 border-t border-gray-100 bg-white sm:shrink-0 sm:static">
           {/* Validation errors */}
           {errors.length > 0 && (
             <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 space-y-0.5">

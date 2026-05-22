@@ -19,7 +19,7 @@ import { OrderNotificationService } from "@/services/order/OrderNotificationServ
 export type OrderWithDetails = Order & {
   items: OrderItem[];
   payment: Payment | null;
-  customer: { name: string; phone: string; totalOrders: number; totalSpend: unknown; lastOrderAt: Date | null };
+  customer: { id: string; name: string; phone: string; totalOrders: number; totalSpend: unknown; lastOrderAt: Date | null };
   deliveryAddress: {
     street: string;
     number: string;
@@ -79,7 +79,7 @@ export class OrderService {
         include: {
           items: true,
           payment: true,
-          customer: { select: { name: true, phone: true, totalOrders: true, totalSpend: true, lastOrderAt: true } },
+          customer: { select: { id: true, name: true, phone: true, totalOrders: true, totalSpend: true, lastOrderAt: true } },
           deliveryAddress: {
             select: {
               street: true,
@@ -117,7 +117,7 @@ export class OrderService {
       include: {
         items: true,
         payment: true,
-        customer: { select: { name: true, phone: true } },
+        customer: { select: { id: true, name: true, phone: true } },
         deliveryAddress: {
           select: {
             street: true,
