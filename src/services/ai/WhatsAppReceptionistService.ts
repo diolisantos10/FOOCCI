@@ -32,6 +32,7 @@ import type { MenuOption } from "@/validators/whatsapp-agent";
 import { RestaurantKnowledgeService } from "@/services/knowledge/RestaurantKnowledgeService";
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { getPeriodsForRow, isInPeriod, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
+import { getPublicMenuUrl, getPublicQrUrl } from "@/lib/public-url";
 
 // ─── constants ────────────────────────────────────────────────
 
@@ -109,7 +110,10 @@ function detectSelectedOption(text: string, options: MenuOption[]): MenuOption |
 
 interface ReplyContext {
   restaurantName:   string;
-  pedidoUrl:        string | null;
+  agentName:        string;        // configured WhatsApp Host name
+  customerName:     string | null; // from CRM customer record
+  pedidoUrl:        string | null; // delivery/ordering link (foocci.com.br/pedido/slug)
+  qrMenuUrl:        string | null; // dine-in/QR link (foocci.com.br/qr/slug)
   address:          string | null;
   deliveryEnabled:  boolean;
   welcomeMessage:   string;
@@ -122,6 +126,8 @@ interface ReplyContext {
   closedMessage:    string | null; // rich closed message with today's hours + next opening
   isPaused:         boolean;       // emergency store pause overrides business hours
   pauseReason:      string | null;
+  instagramUrl:     string | null;
+  tiktokUrl:        string | null;
 }
 
 // ─── GPT reply generation ─────────────────────────────────────
@@ -147,15 +153,22 @@ async function generateGptReply(params: {
 
   const greeting = customerName ? `, ${customerName.split(" ")[0]}` : "";
 
-  const systemPrompt =
-`Você é o atendente virtual do WhatsApp de "${ctx.restaurantName}". Responda em português brasileiro de forma curta, amigável e natural${greeting ? ` (chame o cliente de ${customerName?.split(" ")[0]})` : ""}.
+  const socialSection = [
+    ctx.instagramUrl ? `- Instagram: ${ctx.instagramUrl}` : "",
+    ctx.tiktokUrl    ? `- TikTok: ${ctx.tiktokUrl}`       : "",
+  ].filter(Boolean).join("\n");
 
-CONTEXTO:
-- Restaurante: ${ctx.restaurantName}
+  const systemPrompt =
+`Você é ${ctx.agentName}, o atendente virtual do WhatsApp de "${ctx.restaurantName}". Responda em português brasileiro de forma curta, amigável e natural${greeting ? ` (chame o cliente de ${customerName?.split(" ")[0]})` : ""}.
+
+CONTEXTO DO RESTAURANTE:
+- Nome: ${ctx.restaurantName}
 ${ctx.pedidoUrl ? `- Cardápio / pedidos online: ${ctx.pedidoUrl}` : ""}
+${ctx.qrMenuUrl && ctx.qrMenuUrl !== ctx.pedidoUrl ? `- Menu salão/QR: ${ctx.qrMenuUrl}` : ""}
 ${ctx.address    ? `- Endereço: ${ctx.address}`                    : ""}
 - Delivery: ${ctx.deliveryEnabled ? "Sim, fazemos entrega" : "Retirada no local"}
 ${ctx.hoursText  ? `- Horários:\n${ctx.hoursText}`                 : ""}
+${socialSection   ? socialSection                                   : ""}
 ${ctx.isPaused ? `🚫 STATUS ATUAL: Pedidos PAUSADOS temporariamente. ${ctx.pauseReason ? `Motivo: ${ctx.pauseReason}.` : ""}` : (!ctx.isCurrentlyOpen && ctx.closedMessage ? `⚠️ STATUS ATUAL: O restaurante está FECHADO agora. ${ctx.closedMessage}` : "")}
 ${knowledgeSection}
 
@@ -166,6 +179,7 @@ INSTRUÇÕES:
 ${!ctx.isCurrentlyOpen ? "4. Não ofereça o link de pedido como se estivesse aberto. Informe o horário de reabertura quando disponível.\n5." : "4."}Se houver reclamação, urgência ou o cliente pedir para falar com uma pessoa, retorne needsHandoff=true.
 ${!ctx.isCurrentlyOpen ? "6." : "5."}Se não souber responder com certeza, retorne needsHandoff=true.
 ${!ctx.isCurrentlyOpen ? "7." : "6."}Use emoji com moderação 😊.
+${!ctx.isCurrentlyOpen ? "8." : "7."}NUNCA inclua domínios Railway (crmrestaurante-production.up.railway.app ou qualquer .up.railway.app) em mensagens para clientes. Use exclusivamente os links do contexto acima.
 
 Responda APENAS com JSON válido: {"reply":"...","needsHandoff":false}`;
 
@@ -334,7 +348,7 @@ async function run(conversationId: string): Promise<void> {
   const { restaurantId } = conversation;
 
   // Load all config in parallel
-  const [restaurant, storeProfile, agentCfg, evolutionResult, businessHoursRows, inboundCount] = await Promise.all([
+  const [restaurant, storeProfile, agentCfg, brandConfig, evolutionResult, businessHoursRows, inboundCount] = await Promise.all([
     prisma.restaurant.findUnique({
       where:  { id: restaurantId },
       select: { name: true, slug: true, address: true, timezone: true, isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true },
@@ -347,6 +361,7 @@ async function run(conversationId: string): Promise<void> {
       where:  { restaurantId },
       select: {
         agentMode:       true,
+        agentName:       true,
         welcomeMessage:  true,
         orderPreMessage: true,
         menuUrl:         true,
@@ -354,6 +369,10 @@ async function run(conversationId: string): Promise<void> {
         handoffMessage:  true,
       },
     }),
+    prisma.restaurantBrandConfig.findUnique({
+      where:  { restaurantId },
+      select: { instagramUrl: true, tiktokUrl: true },
+    }).catch(() => null),
     EvolutionConfigService.getSnapshot(restaurantId),
     prisma.businessHours.findMany({
       where:   { restaurantId },
@@ -371,10 +390,8 @@ async function run(conversationId: string): Promise<void> {
     return;
   }
 
-  const baseUrl  = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-  const pedidoUrl =
-    agentCfg?.menuUrl ||
-    (restaurant?.slug && baseUrl ? `${baseUrl}/pedido/${restaurant.slug}` : null);
+  const pedidoUrl = agentCfg?.menuUrl?.trim() || (restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : null);
+  const qrMenuUrl = restaurant?.slug ? getPublicQrUrl(restaurant.slug) : null;
 
   let address: string | null = null;
   if (storeProfile?.street) {
@@ -457,7 +474,10 @@ async function run(conversationId: string): Promise<void> {
 
   const ctx: ReplyContext = {
     restaurantName:  restaurant?.name ?? "nossa loja",
+    agentName:       agentCfg?.agentName?.trim() || "Assistente",
+    customerName:    conversation.customer.name ?? null,
     pedidoUrl,
+    qrMenuUrl,
     address,
     deliveryEnabled: storeProfile?.deliveryEnabled ?? false,
     welcomeMessage:  agentCfg?.welcomeMessage  ?? `Oi! 👋 Sou o atendimento de ${restaurant?.name ?? "nossa loja"}. Como posso te ajudar hoje?`,
@@ -470,6 +490,8 @@ async function run(conversationId: string): Promise<void> {
     closedMessage:   isPaused ? pauseMessage : closedMessage,
     isPaused,
     pauseReason,
+    instagramUrl:    brandConfig?.instagramUrl ?? null,
+    tiktokUrl:       brandConfig?.tiktokUrl    ?? null,
   };
 
   const toPhone = conversation.customer.phone.replace(/^\+/, "");
@@ -574,8 +596,17 @@ async function run(conversationId: string): Promise<void> {
             // ALWAYS show the configured menu first. If restaurant is currently
             // closed, append the closed-status note AFTER the menu — never lead
             // with "estamos fechados" on a greeting.
+            const firstName = ctx.customerName?.split(" ")[0]?.trim() ?? null;
+            const greetLine = firstName
+              ? `Olá, ${firstName}! Tudo bem? 😊 Como posso te ajudar hoje?`
+              : ctx.welcomeMessage;
             const menuList = buildMenuList(menuOptions);
-            let greet = ctx.welcomeMessage + menuList + "\n\nResponda com o número da opção 😊";
+            let greet = greetLine;
+            if (menuList) {
+              greet += menuList + "\n\nResponda com o número da opção 😊";
+            } else if (ctx.pedidoUrl) {
+              greet += `\n\nCardápio: ${ctx.pedidoUrl}`;
+            }
             if (!effectivelyOpen && ctx.closedMessage) {
               greet += `\n\n⚠️ ${ctx.closedMessage}`;
             }
