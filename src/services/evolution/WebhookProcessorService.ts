@@ -153,7 +153,8 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     conversation.aiEnabled &&
     !isCrmOrigin &&
     (conversation.status === ConversationStatus.OPEN ||
-     conversation.status === ConversationStatus.BOT);
+     conversation.status === ConversationStatus.BOT ||
+     conversation.status === ConversationStatus.AI_ATENDENDO);
 
   if (shouldRespond) {
     // Read agent mode; default to RECEPTIONIST_ONLY if no config row exists.
@@ -209,6 +210,7 @@ const ACTIVE_STATUSES = [
   ConversationStatus.OPEN,
   ConversationStatus.HUMAN,
   ConversationStatus.BOT,
+  ConversationStatus.AI_ATENDENDO,
 ] as const;
 
 async function findActiveConversation(restaurantId: string, customerId: string) {

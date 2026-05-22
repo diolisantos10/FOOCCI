@@ -40,6 +40,13 @@ import { signWaToken } from "@/lib/wa-token";
 const EMOJI_NUMBERS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"] as const;
 const DAY_NAMES_PT  = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
 
+// Shown when menuOptions is null/empty in DB — ensures the menu is always visible.
+const FALLBACK_MENU_OPTIONS: MenuOption[] = [
+  { id: "fallback-menu",    label: "Ver cardápio",             flow: "menu"    },
+  { id: "fallback-hours",   label: "Horário de funcionamento", flow: "custom"  },
+  { id: "fallback-handoff", label: "Falar com atendente",      flow: "handoff" },
+];
+
 // ─── intent detection ─────────────────────────────────────────
 
 type Intent =
@@ -60,7 +67,7 @@ const COMPLAINT_RE =
 const HUMAN_RE =
   /atendente|atendimento humano|falar com (alguém|alguem|pessoa|humano)|quero ser atendido|chamar (a )?equipe|responsável|responsavel|gerente|quero falar com/i;
 const GREETING_RE =
-  /^(oi|olá|ola|oii|bom dia|boa tarde|boa noite|hey|hi|hello|e aí|eai|tudo bem|tudo bom|pode ajudar|boas|fala)\b/i;
+  /^(oi|olá|ola|oii|bom dia|boa tarde|boa noite|hey|hi|hello|e aí|eai|tudo bem|tudo bom|pode ajudar|boas|fala|test(e)?|começar|inicio|ajuda|help)\b/i;
 const ORDER_RE =
   /quero (pedir|comprar)|fazer (um )?pedido|como (peço|fa[çc]o pedido)|link do pedido|quero fazer pedido/i;
 const MENU_RE =
@@ -422,10 +429,27 @@ async function run(conversationId: string): Promise<void> {
   const lastMessage = await prisma.message.findFirst({
     where:   { conversationId, direction: "INBOUND" },
     orderBy: { sentAt: "desc" },
-    select:  { content: true, type: true },
+    select:  { content: true, type: true, sentAt: true },
   });
 
   if (!lastMessage) return;
+
+  // Idempotency guard: skip if bot already replied after this inbound message.
+  // Prevents duplicate replies when Evolution retries webhooks or the service
+  // is triggered concurrently for the same conversation.
+  const alreadyReplied = await prisma.message.findFirst({
+    where: {
+      conversationId,
+      direction:  "OUTBOUND",
+      senderType: "AI",
+      sentAt:     { gte: lastMessage.sentAt },
+    },
+    select: { id: true },
+  });
+  if (alreadyReplied) {
+    console.info(`[WhatsAppReceptionistService] Already replied after last inbound — conv ${conversationId}, skipping`);
+    return;
+  }
 
   const { restaurantId } = conversation;
 
@@ -512,9 +536,11 @@ async function run(conversationId: string): Promise<void> {
     address = restaurant.address;
   }
 
-  const menuOptions: MenuOption[] = Array.isArray(agentCfg?.menuOptions)
+  const rawMenuOptions: MenuOption[] = Array.isArray(agentCfg?.menuOptions)
     ? (agentCfg.menuOptions as unknown as MenuOption[])
     : [];
+  // Always have at least fallback options so the menu is never empty.
+  const menuOptions: MenuOption[] = rawMenuOptions.length > 0 ? rawMenuOptions : FALLBACK_MENU_OPTIONS;
 
   const agentMode = agentCfg?.agentMode ?? "RECEPTIONIST_ONLY";
 
@@ -653,10 +679,21 @@ async function run(conversationId: string): Promise<void> {
           (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED") ||
           (templateReply === null && intent !== "GREETING");
 
-        // When the bot already greeted within the last 30 min, skip the full
-        // greeting flow entirely — no menu re-send, no GPT call.
+        // Within the 30-min session: shorter opening, but ALWAYS show the menu.
+        // Never send "escolha uma opção" without actually listing the options.
         if (intent === "GREETING" && menuSentRecently) {
-          replyText      = "Estou aqui 😊 É só escolher uma opção ou me dizer o que precisa.";
+          const firstName = ctx.customerName?.split(" ")[0]?.trim() ?? null;
+          const shortGreet = firstName
+            ? `Estou aqui, ${firstName}! 😊 Como posso te ajudar?`
+            : "Estou aqui! 😊 Como posso te ajudar?";
+          const menuList = buildMenuList(menuOptions);
+          if (menuList) {
+            replyText = shortGreet + menuList + "\n\nResponda com o número da opção 😊";
+          } else if (ctx.pedidoUrl) {
+            replyText = shortGreet + `\n\nCardápio: ${ctx.pedidoUrl}`;
+          } else {
+            replyText = shortGreet;
+          }
           triggerHandoff = false;
         } else if (useGpt) {
           // For UNKNOWN in RECEPTIONIST_ONLY: check catalog before GPT to avoid false handoffs
@@ -705,6 +742,15 @@ async function run(conversationId: string): Promise<void> {
 
             replyText      = gpt.reply;
             triggerHandoff = gpt.needsHandoff;
+
+            // If GPT gave a generic/short answer with no URL, append the menu so
+            // the customer always knows their options.
+            if (!triggerHandoff && menuOptions.length > 0 && !replyText.includes("http")) {
+              const menuList = buildMenuList(menuOptions);
+              if (menuList) {
+                replyText += "\n\nComo posso te ajudar?" + menuList + "\n\nResponda com o número da opção 😊";
+              }
+            }
 
             // Record knowledge gap when GPT also couldn't answer confidently
             if (gpt.needsHandoff && intent === "UNKNOWN") {
