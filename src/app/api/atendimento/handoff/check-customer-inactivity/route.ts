@@ -26,11 +26,14 @@ import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { ConversationStatus } from "@prisma/client";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { buildReturnToAiMessage } from "@/lib/return-to-ai-message";
+import { getPublicMenuUrl } from "@/lib/public-url";
+import type { MenuOption } from "@/validators/whatsapp-agent";
 
 const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-const CUSTOMER_INACTIVITY_MESSAGE =
-  "Como você ficou um tempinho sem responder, vou deixar nosso assistente ativo por aqui 😊 Se precisar de algo, é só mandar uma mensagem.";
+const CUSTOMER_INACTIVITY_PREAMBLE =
+  "Como você ficou um tempinho sem responder, vou deixar nosso assistente ativo por aqui 😊";
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,21 +42,39 @@ export async function POST(req: NextRequest) {
 
     const { restaurantId } = ctx;
 
-    const humanConvs = await prisma.conversation.findMany({
-      where: {
-        restaurantId,
-        aiEnabled: false,
-        status:    { in: [ConversationStatus.HUMAN, ConversationStatus.HUMANO_ASSUMIU] },
-        channel:   "WHATSAPP",
-      },
-      select: {
-        id:            true,
-        customerPhone: true,
-        customer:      { select: { phone: true } },
-      },
-    });
+    // Load common config and human conversations in parallel
+    const [humanConvs, agentCfgData, restaurantData] = await Promise.all([
+      prisma.conversation.findMany({
+        where: {
+          restaurantId,
+          aiEnabled: false,
+          status:    { in: [ConversationStatus.HUMAN, ConversationStatus.HUMANO_ASSUMIU] },
+          channel:   "WHATSAPP",
+        },
+        select: {
+          id:            true,
+          customerPhone: true,
+          customer:      { select: { phone: true, name: true } },
+        },
+      }),
+      prisma.whatsAppAgentConfig.findUnique({
+        where:  { restaurantId },
+        select: { menuOptions: true, menuUrl: true },
+      }),
+      prisma.restaurant.findUnique({
+        where:  { id: restaurantId },
+        select: { slug: true },
+      }),
+    ]);
 
     if (humanConvs.length === 0) return ok({ checked: 0, timedOut: [] });
+
+    const menuOptions: MenuOption[] = Array.isArray(agentCfgData?.menuOptions)
+      ? (agentCfgData.menuOptions as unknown as MenuOption[])
+      : [];
+    const baseMenuUrl =
+      agentCfgData?.menuUrl?.trim() ||
+      (restaurantData?.slug ? getPublicMenuUrl(restaurantData.slug) : null);
 
     const now          = new Date();
     const timedOutIds: string[] = [];
@@ -100,12 +121,16 @@ export async function POST(req: NextRequest) {
       const evolutionResult = await EvolutionConfigService.getSnapshot(restaurantId);
       if (!evolutionResult.ok) continue;
 
+      const returnText = buildReturnToAiMessage({
+        preamble:    CUSTOMER_INACTIVITY_PREAMBLE,
+        menuOptions,
+        baseMenuUrl,
+        phone:       toPhone,
+        name:        conv.customer?.name ?? null,
+      });
+
       try {
-        await EvolutionClient.sendTextMessage(
-          evolutionResult.data,
-          toPhone,
-          CUSTOMER_INACTIVITY_MESSAGE,
-        );
+        await EvolutionClient.sendTextMessage(evolutionResult.data, toPhone, returnText);
       } catch (err) {
         console.error(
           `[check-customer-inactivity] Failed to send message to conv ${conv.id}:`,
@@ -120,7 +145,7 @@ export async function POST(req: NextRequest) {
             conversationId: conv.id,
             direction:      "OUTBOUND",
             senderType:     "SYSTEM",
-            content:        CUSTOMER_INACTIVITY_MESSAGE,
+            content:        returnText,
             type:           "TEXT",
             sentAt:         now,
             metadata:       {

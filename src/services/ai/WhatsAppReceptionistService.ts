@@ -127,6 +127,7 @@ interface ReplyContext {
   closedMessage:    string | null; // rich closed message with today's hours + next opening
   isPaused:         boolean;       // emergency store pause overrides business hours
   pauseReason:      string | null;
+  menuCatalog:      { name: string; items: { name: string }[] }[];
   instagramUrl:     string | null;
   tiktokUrl:        string | null;
 }
@@ -152,6 +153,17 @@ async function generateGptReply(params: {
       knowledgeItems.map((k) => `P: ${k.title}\nR: ${k.answer}`).join("\n\n")
     : "";
 
+  const catalogSection = ctx.menuCatalog.length > 0
+    ? "\n\nCARDÁPIO (categorias disponíveis):\n" +
+      ctx.menuCatalog
+        .map((c) =>
+          c.items.length > 0
+            ? `- ${c.name} (ex.: ${c.items.slice(0, 3).map((i) => i.name).join(", ")})`
+            : `- ${c.name}`
+        )
+        .join("\n")
+    : "";
+
   const greeting = customerName ? `, ${customerName.split(" ")[0]}` : "";
 
   const socialSection = [
@@ -170,6 +182,7 @@ ${ctx.address    ? `- Endereço: ${ctx.address}`                    : ""}
 - Delivery: ${ctx.deliveryEnabled ? "Sim, fazemos entrega" : "Retirada no local"}
 ${ctx.hoursText  ? `- Horários:\n${ctx.hoursText}`                 : ""}
 ${socialSection   ? socialSection                                   : ""}
+${catalogSection}
 ${ctx.isPaused ? `🚫 STATUS ATUAL: Pedidos PAUSADOS temporariamente. ${ctx.pauseReason ? `Motivo: ${ctx.pauseReason}.` : ""}` : (!ctx.isCurrentlyOpen && ctx.closedMessage ? `⚠️ STATUS ATUAL: O restaurante está FECHADO agora. ${ctx.closedMessage}` : "")}
 ${knowledgeSection}
 
@@ -178,12 +191,13 @@ INSTRUÇÕES:
 2. Nunca invente preços, produtos ou promoções que não estão no contexto acima.
 3. Se o cliente pedir para ver o cardápio, pode enviar o link${ctx.pedidoUrl ? ` (${ctx.pedidoUrl})` : ""}, mas deixe claro que${!ctx.isCurrentlyOpen ? " os pedidos estão pausados e" : ""} ele deve finalizar durante o horário de funcionamento.
 ${!ctx.isCurrentlyOpen ? "4. Não ofereça o link de pedido como se estivesse aberto. Informe o horário de reabertura quando disponível.\n5." : "4."}Se houver reclamação, urgência ou o cliente pedir para falar com uma pessoa, retorne needsHandoff=true.
-${!ctx.isCurrentlyOpen ? "6." : "5."}Se não souber responder com certeza, retorne needsHandoff=true.
-${!ctx.isCurrentlyOpen ? "7." : "6."}Use emoji com moderação 😊.
-${!ctx.isCurrentlyOpen ? "8." : "7."}NUNCA inclua domínios Railway (crmrestaurante-production.up.railway.app ou qualquer .up.railway.app) em mensagens para clientes. Use exclusivamente os links do contexto acima.
-${!ctx.isCurrentlyOpen ? "9." : "8."}NÃO utilize seu conhecimento de treinamento sobre este restaurante específico. Use APENAS as informações fornecidas neste prompt.
-${!ctx.isCurrentlyOpen ? "10." : "9."}NÃO forneça preços de rodízio, regras, descontos por idade, itens incluídos ou disponibilidade a menos que essas informações estejam explicitamente na BASE DE CONHECIMENTO acima.
-${!ctx.isCurrentlyOpen ? "11." : "10."}Se o cliente perguntar sobre rodízio e essas informações não estiverem no contexto: responda "Vou confirmar certinho com a equipe e te passo as informações do rodízio 😊" e retorne needsHandoff=true.
+${!ctx.isCurrentlyOpen ? "6." : "5."}Se o cliente perguntar sobre categoria ou item que aparece no CARDÁPIO acima, confirme que sim (ex.: "Temos X sim 😊") e indique o link do cardápio. Não retorne needsHandoff=true para perguntas sobre existência de produtos do cardápio.
+${!ctx.isCurrentlyOpen ? "7." : "6."}Se não souber responder com certeza e não for possível redirecionar para o cardápio, retorne needsHandoff=true.
+${!ctx.isCurrentlyOpen ? "8." : "7."}Use emoji com moderação 😊.
+${!ctx.isCurrentlyOpen ? "9." : "8."}NUNCA inclua domínios Railway (crmrestaurante-production.up.railway.app ou qualquer .up.railway.app) em mensagens para clientes. Use exclusivamente os links do contexto acima.
+${!ctx.isCurrentlyOpen ? "10." : "9."}NÃO utilize seu conhecimento de treinamento sobre este restaurante específico. Use APENAS as informações fornecidas neste prompt.
+${!ctx.isCurrentlyOpen ? "11." : "10."}NÃO forneça preços de rodízio, regras, descontos por idade, itens incluídos ou disponibilidade a menos que essas informações estejam explicitamente na BASE DE CONHECIMENTO acima.
+${!ctx.isCurrentlyOpen ? "12." : "11."}Se o cliente perguntar sobre rodízio e essas informações não estiverem no contexto: responda "Vou confirmar certinho com a equipe e te passo as informações do rodízio 😊" e retorne needsHandoff=true.
 
 Responda APENAS com JSON válido: {"reply":"...","needsHandoff":false}`;
 
@@ -251,6 +265,39 @@ function buildIdentifiedPedidoUrl(
 function buildMenuList(options: MenuOption[]): string {
   if (options.length === 0) return "";
   return "\n\n" + options.map((o, i) => `${EMOJI_NUMBERS[i] ?? `${i + 1}.`} ${o.label}`).join("\n");
+}
+
+/**
+ * Checks if the customer's message mentions a known menu category.
+ * Returns a ready-to-send reply confirming the category exists + menu link,
+ * or null if no catalog match was found.
+ * Used to short-circuit GPT for simple existence questions like "Vcs tem combos?".
+ */
+function findCatalogMatch(
+  message: string,
+  catalog: { name: string; items: { name: string }[] }[],
+  pedidoUrl: string | null,
+): string | null {
+  if (catalog.length === 0) return null;
+  const norm = (s: string) =>
+    s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const msgNorm = norm(message);
+
+  for (const cat of catalog) {
+    const catNorm = norm(cat.name);
+    if (!msgNorm.includes(catNorm)) continue;
+
+    // Skip if the category name is negated right before it (e.g., "não tem combos")
+    const catIdx = msgNorm.indexOf(catNorm);
+    const before = msgNorm.slice(Math.max(0, catIdx - 20), catIdx);
+    if (/\bn[aã]o\b/.test(before)) continue;
+
+    const catDisplay = cat.name.charAt(0).toUpperCase() + cat.name.slice(1);
+    return pedidoUrl
+      ? `Temos ${catDisplay} sim 😊 Você pode ver as opções e fazer seu pedido diretamente pelo cardápio:\n${pedidoUrl}`
+      : `Temos ${catDisplay} sim 😊 É só nos perguntar mais detalhes!`;
+  }
+  return null;
 }
 
 /** Builds the reply for a specific selected menu option (by number or label). */
@@ -383,7 +430,7 @@ async function run(conversationId: string): Promise<void> {
   const { restaurantId } = conversation;
 
   // Load all config in parallel
-  const [restaurant, storeProfile, agentCfg, brandConfig, evolutionResult, businessHoursRows, lastOutbound] = await Promise.all([
+  const [restaurant, storeProfile, agentCfg, brandConfig, evolutionResult, businessHoursRows, lastOutbound, menuCatalogRaw] = await Promise.all([
     prisma.restaurant.findUnique({
       where:  { id: restaurantId },
       select: { name: true, slug: true, address: true, timezone: true, isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true },
@@ -420,6 +467,20 @@ async function run(conversationId: string): Promise<void> {
       orderBy: { sentAt: "desc" },
       select:  { sentAt: true },
     }),
+    // Menu catalog — loaded for catalog-match short-circuit and GPT context
+    prisma.menuCategory.findMany({
+      where:   { restaurantId, isActive: true, isAvailable: true, showInDelivery: true },
+      orderBy: { sortOrder: "asc" },
+      select:  {
+        name:  true,
+        items: {
+          where:   { isActive: true, isAvailable: true, showInDelivery: true },
+          select:  { name: true },
+          take:    5,
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+    }).catch(() => [] as { name: string; items: { name: string }[] }[]),
   ]);
 
   if (!evolutionResult.ok) {
@@ -531,6 +592,7 @@ async function run(conversationId: string): Promise<void> {
     handoffMessage:  agentCfg?.handoffMessage  ?? "Vou deixar nossa equipe te atender. Um momento! 👋",
     agentMode,
     menuOptions,
+    menuCatalog:     menuCatalogRaw,
     hoursText,
     isCurrentlyOpen: effectivelyOpen,
     closedMessage:   isPaused ? pauseMessage : closedMessage,
@@ -554,8 +616,8 @@ async function run(conversationId: string): Promise<void> {
   // ── Check if customer selected a numbered or named menu option ────────────
   const selectedOpt = detectSelectedOption(lastMessage.content, menuOptions);
 
-  let replyText: string;
-  let triggerHandoff: boolean;
+  let replyText: string     = ctx.handoffMessage;
+  let triggerHandoff        = false;
 
   if (selectedOpt) {
     replyText      = buildFlowReply(selectedOpt, ctx);
@@ -597,48 +659,61 @@ async function run(conversationId: string): Promise<void> {
           replyText      = "Estou aqui 😊 É só escolher uma opção ou me dizer o que precisa.";
           triggerHandoff = false;
         } else if (useGpt) {
-          // Load conversation history and knowledge items for GPT context
-          const [historyMsgs, knowledgeItems] = await Promise.all([
-            prisma.message.findMany({
-              where:   { conversationId, type: "TEXT" },
-              orderBy: { sentAt: "desc" },
-              take:    8,
-              select:  { direction: true, content: true },
-            }),
-            prisma.restaurantKnowledgeItem.findMany({
-              where:   { restaurantId, status: "ACTIVE" },
-              select:  { title: true, answer: true },
-              take:    10,
-            }).catch(() => [] as { title: string; answer: string }[]),
-          ]);
+          // For UNKNOWN in RECEPTIONIST_ONLY: check catalog before GPT to avoid false handoffs
+          let gptNeeded = true;
+          if (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED" && ctx.menuCatalog.length > 0) {
+            const catalogReply = findCatalogMatch(lastMessage.content, ctx.menuCatalog, ctx.pedidoUrl);
+            if (catalogReply) {
+              replyText      = catalogReply;
+              triggerHandoff = false;
+              gptNeeded      = false;
+            }
+          }
 
-          // Oldest first; exclude system/handoff messages
-          const conversationHistory = historyMsgs
-            .reverse()
-            .filter((m) => !m.content.startsWith("[handoff:") && !m.content.startsWith("[inactivity"))
-            .map((m) => ({
-              role:    (m.direction === "INBOUND" ? "user" : "assistant") as "user" | "assistant",
-              content: m.content,
-            }));
+          if (gptNeeded) {
+            // Load conversation history and knowledge items for GPT context
+            const [historyMsgs, knowledgeItems] = await Promise.all([
+              prisma.message.findMany({
+                where:   { conversationId, type: "TEXT" },
+                orderBy: { sentAt: "desc" },
+                take:    8,
+                select:  { direction: true, content: true },
+              }),
+              prisma.restaurantKnowledgeItem.findMany({
+                where:   { restaurantId, status: "ACTIVE" },
+                select:  { title: true, answer: true },
+                take:    10,
+              }).catch(() => [] as { title: string; answer: string }[]),
+            ]);
 
-          const gpt = await generateGptReply({
-            ctx,
-            customerName:        conversation.customer.name,
-            currentMessage:      lastMessage.content,
-            conversationHistory,
-            knowledgeItems,
-          });
+            // Oldest first; exclude system/handoff messages
+            const conversationHistory = historyMsgs
+              .reverse()
+              .filter((m) => !m.content.startsWith("[handoff:") && !m.content.startsWith("[inactivity"))
+              .map((m) => ({
+                role:    (m.direction === "INBOUND" ? "user" : "assistant") as "user" | "assistant",
+                content: m.content,
+              }));
 
-          replyText      = gpt.reply;
-          triggerHandoff = gpt.needsHandoff;
+            const gpt = await generateGptReply({
+              ctx,
+              customerName:        conversation.customer.name,
+              currentMessage:      lastMessage.content,
+              conversationHistory,
+              knowledgeItems,
+            });
 
-          // Record knowledge gap when GPT also couldn't answer confidently
-          if (gpt.needsHandoff && intent === "UNKNOWN") {
-            RestaurantKnowledgeService.createGap(
-              restaurantId,
-              lastMessage.content,
-              conversationId,
-            ).catch(() => {});
+            replyText      = gpt.reply;
+            triggerHandoff = gpt.needsHandoff;
+
+            // Record knowledge gap when GPT also couldn't answer confidently
+            if (gpt.needsHandoff && intent === "UNKNOWN") {
+              RestaurantKnowledgeService.createGap(
+                restaurantId,
+                lastMessage.content,
+                conversationId,
+              ).catch(() => {});
+            }
           }
         } else {
           // Deterministic template path

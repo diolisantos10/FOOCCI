@@ -9,7 +9,7 @@
  *   2. Find the last OUTBOUND message sent by a human team member.
  *   3. If no human reply exists AFTER the last customer message, and the
  *      customer has been waiting more than TIMEOUT_MS, trigger inactivity:
- *        a. Send a WhatsApp message to the customer.
+ *        a. Send a WhatsApp message to the customer (with menu options).
  *        b. Create a SYSTEM message (marker for idempotency + audit).
  *        c. Return conversation to AI mode.
  *   4. Already-timed-out conversations (SYSTEM inactivity marker found) are skipped.
@@ -24,16 +24,19 @@ import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { ConversationStatus } from "@prisma/client";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { buildReturnToAiMessage } from "@/lib/return-to-ai-message";
+import { getPublicMenuUrl } from "@/lib/public-url";
+import type { MenuOption } from "@/validators/whatsapp-agent";
 
 const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-const INACTIVITY_MESSAGES = [
-  "Ainda estamos verificando aqui e vou continuar tentando te ajudar! 😊 Em breve alguém da nossa equipe entra em contato.",
-  "A equipe pode estar ocupada agora, mas vou seguir te ajudando por aqui. Se precisar de algo, é só falar! 😊",
+const INACTIVITY_PREAMBLES = [
+  "Ainda estamos verificando aqui e vou continuar tentando te ajudar! 😊",
+  "A equipe pode estar ocupada agora, mas vou seguir te ajudando por aqui 😊",
 ] as const;
 
-function pickInactivityMessage(): string {
-  return INACTIVITY_MESSAGES[Math.floor(Math.random() * INACTIVITY_MESSAGES.length)]!;
+function pickPreamble(): string {
+  return INACTIVITY_PREAMBLES[Math.floor(Math.random() * INACTIVITY_PREAMBLES.length)]!;
 }
 
 export async function POST(req: NextRequest) {
@@ -43,22 +46,39 @@ export async function POST(req: NextRequest) {
 
     const { restaurantId } = ctx;
 
-    // Find all conversations currently in human mode for this restaurant
-    const humanConvs = await prisma.conversation.findMany({
-      where: {
-        restaurantId,
-        aiEnabled: false,
-        status: { in: [ConversationStatus.HUMAN, ConversationStatus.HUMANO_ASSUMIU] },
-        channel: "WHATSAPP",
-      },
-      select: {
-        id: true,
-        customerPhone: true,
-        customer: { select: { phone: true } },
-      },
-    });
+    // Load common config and human conversations in parallel
+    const [humanConvs, agentCfgData, restaurantData] = await Promise.all([
+      prisma.conversation.findMany({
+        where: {
+          restaurantId,
+          aiEnabled: false,
+          status: { in: [ConversationStatus.HUMAN, ConversationStatus.HUMANO_ASSUMIU] },
+          channel: "WHATSAPP",
+        },
+        select: {
+          id:            true,
+          customerPhone: true,
+          customer:      { select: { phone: true, name: true } },
+        },
+      }),
+      prisma.whatsAppAgentConfig.findUnique({
+        where:  { restaurantId },
+        select: { menuOptions: true, menuUrl: true },
+      }),
+      prisma.restaurant.findUnique({
+        where:  { id: restaurantId },
+        select: { slug: true },
+      }),
+    ]);
 
     if (humanConvs.length === 0) return ok({ checked: 0, timedOut: [] });
+
+    const menuOptions: MenuOption[] = Array.isArray(agentCfgData?.menuOptions)
+      ? (agentCfgData.menuOptions as unknown as MenuOption[])
+      : [];
+    const baseMenuUrl =
+      agentCfgData?.menuUrl?.trim() ||
+      (restaurantData?.slug ? getPublicMenuUrl(restaurantData.slug) : null);
 
     const now = new Date();
     const timedOutIds: string[] = [];
@@ -106,7 +126,13 @@ export async function POST(req: NextRequest) {
       const evolutionResult = await EvolutionConfigService.getSnapshot(restaurantId);
       if (!evolutionResult.ok) continue;
 
-      const inactivityText = pickInactivityMessage();
+      const inactivityText = buildReturnToAiMessage({
+        preamble:    pickPreamble(),
+        menuOptions,
+        baseMenuUrl,
+        phone:       toPhone,
+        name:        conv.customer?.name ?? null,
+      });
 
       try {
         await EvolutionClient.sendTextMessage(evolutionResult.data, toPhone, inactivityText);
