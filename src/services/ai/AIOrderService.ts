@@ -205,12 +205,20 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   });
 
   if (!v2.requiresAI) {
+    console.info("[waiter-ai]", JSON.stringify({
+      source:           "rule_based",
+      restaurantId,
+      event,
+      mode:             v2.mode,
+      userMsgPreview:   message.slice(0, 60),
+    }));
     return { reply: v2.message, cards: v2.cards, mode: v2.mode, options: v2.options, pinnedCardId: v2.pinnedCardId, memoryPatch: v2.memoryPatch };
   }
 
   // ── AI pipeline (ON_USER_MESSAGE / AFTER_CHECKOUT) ──────────
 
   // 1. Brand config
+  const aiStartMs = Date.now();
   const [brandConfig, restaurantRow] = await Promise.all([
     BrandConfigService.getOrDefault(restaurantId),
     prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
@@ -339,6 +347,18 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     finalResponse = assistantMsg.content ?? "";
     break;
   }
+
+  console.info("[waiter-ai]", JSON.stringify({
+    source:          "openai",
+    restaurantId,
+    event,
+    model:           brandConfig.aiModel,
+    hasCustomPrompt: !!(brandConfig.waiterPrompt?.trim()),
+    menuItemsCount:  catalogItems.length,
+    userMsgPreview:  message.slice(0, 60),
+    latencyMs:       Date.now() - aiStartMs,
+    replyPreview:    finalResponse.slice(0, 80),
+  }));
 
   // Fail-safe name match (backward compat only — V2 prefers aiCards)
   if (finalResponse && !suggestedItemName) {

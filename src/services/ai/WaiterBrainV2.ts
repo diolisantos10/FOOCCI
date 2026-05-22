@@ -917,10 +917,10 @@ const MENU_SYNONYM_GROUPS: Array<[RegExp, RegExp]> = [
   // "sushi" / "sushis" → all sushi-family main products.
   // Accessories are excluded separately via ACCESSORY_ITEM_RE penalty.
   [/\bsushis?\b/i, /sushi|sashimi|niguiri|nigiri|uramaki|hossomaki|hot.?roll|temaki|maki|combinado/i],
-  // Ramen / noodle family
+  // Ramen / noodle / pasta family
   [
-    /\b(l[aá]men|ramen|yakisoba|macarr|yakis)\b/i,
-    /lamen|ramen|yakisoba|macarr|noodle/i,
+    /\b(l[aá]men|ramen|yakisoba|macarr[ãa]o|yakis|massa|espaguete|lasanha|fettuc|penne)\b/i,
+    /lamen|ramen|yakisoba|macarr|noodle|massa|espaguete|lasanha|fettuc|penne/i,
   ],
   // Drinks family
   [
@@ -2554,36 +2554,11 @@ function handleUserMessage(input: V2Input): V2Output {
       break;
     }
     case "unclear": {
-      // No clear intent and AMBIGUOUS_HELP_RE didn't match → ask a discovery question.
-      // Never return random cards for unclear intent.
-      const profile = analyzeMenuProfile(catalog);
-      const isSushi = profile.cuisineSignals.includes("sushi");
-      if (isSushi) {
-        return {
-          message:     "Posso te ajudar! Você prefere algo cru, quente ou tipo temaki?",
-          cards:       [],
-          mode:        "BROWSE",
-          options:     [
-            { label: "Cru / Sushi", value: "discovery_cru_sushi" },
-            { label: "Quente",      value: "discovery_quente"    },
-            { label: "Temaki",      value: "discovery_temaki"    },
-          ],
-          requiresAI:  false,
-          aiDirective: "",
-        };
-      }
-      return {
-        message:     "Posso ajudar! Prefere algo mais leve ou completo?",
-        cards:       [],
-        mode:        "BROWSE",
-        options:     [
-          { label: "Leve",              value: "light"    },
-          { label: "Completo",          value: "complete" },
-          { label: "Para compartilhar", value: "group"    },
-        ],
-        requiresAI:  false,
-        aiDirective: "",
-      };
+      // Intent is unclear AND message had no product/category signal — let the AI
+      // answer with full menu context instead of returning a generic question.
+      // The AMBIGUOUS_HELP_RE check above already handles explicit "Não sei o que
+      // pedir" messages with deterministic discovery buttons.
+      break; // falls to AI path below
     }
     case "wants_recommendation": {
       const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 5, suggestedIds);
