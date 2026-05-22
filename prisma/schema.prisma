@@ -78,6 +78,7 @@ model Restaurant {
   productSalesAggregates ProductSalesAggregate[]
   customerDataSignals    CustomerDataSignal[]
   knowledgeItems         RestaurantKnowledgeItem[]
+  orderEditLogs          OrderEditLog[]
 
   @@map("restaurants")
 }
@@ -420,6 +421,7 @@ model Order {
   deliveryAddress Address?    @relation(fields: [deliveryAddressId], references: [id])
   items           OrderItem[]
   payment         Payment?
+  editLogs        OrderEditLog[]
 
   @@index([restaurantId])
   @@index([customerId])
@@ -489,6 +491,52 @@ model Payment {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("payments")
+}
+
+// ═══════════════════════════════════════════
+//  ORDER EDIT LOG  (audit trail for item replacements)
+// ═══════════════════════════════════════════
+
+model OrderEditLog {
+  id               String   @id @default(cuid())
+  orderId          String
+  restaurantId     String
+  userId           String?  // staff member who made the change; null = system
+
+  // What changed
+  action           String   @default("ITEM_REPLACED")
+
+  // Previous item snapshot
+  previousItemId   String?  // OrderItem.id that was removed (informational only)
+  previousItemName String
+  previousItemQty  Int
+  previousItemData Json     // { name, price, quantity, variantName, addonsJson, total }
+
+  // New item snapshot
+  newItemName      String
+  newItemQty       Int
+  newItemData      Json     // { name, price, quantity, variantName, addonsJson, total }
+
+  // Financial impact
+  previousTotal    Decimal  @db.Decimal(10, 2) // order total before change
+  newTotal         Decimal  @db.Decimal(10, 2) // order total after change
+  priceDiff        Decimal  @db.Decimal(10, 2) // newTotal − previousTotal (positive = to collect)
+
+  // Reason
+  reason           String   // CLIENTE_PEDIU | PRODUTO_INDISPONIVEL | ERRO_SABOR | ERRO_OPERACIONAL | OUTRO
+  reasonNote       String?
+
+  // Payment adjustment tracking (staff must resolve manually)
+  paymentResolved  Boolean  @default(false)  // staff marked the payment diff as handled
+
+  createdAt        DateTime @default(now())
+
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([restaurantId])
+  @@map("order_edit_logs")
 }
 
 enum PaymentMode {

@@ -8,17 +8,19 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { PrintButton } from "@/components/print/PrintButton";
 import { OrderTicket } from "@/components/print/OrderTicket";
+import { ItemReplacementButton } from "@/components/orders/ItemReplacementButton";
+import { OrderEditLogBanner } from "@/components/orders/OrderEditLogBanner";
 
 export const metadata = { title: "Pedido" };
 
 const STATUS_LABELS: Record<string, string> = {
-  PENDING: "Pendente",
-  CONFIRMED: "Confirmado",
-  PREPARING: "Preparando",
-  READY: "Pronto",
+  PENDING:          "Pendente",
+  CONFIRMED:        "Confirmado",
+  PREPARING:        "Preparando",
+  READY:            "Pronto",
   OUT_FOR_DELIVERY: "Em entrega",
-  DELIVERED: "Entregue",
-  CANCELLED: "Cancelado",
+  DELIVERED:        "Entregue",
+  CANCELLED:        "Cancelado",
 };
 
 export default async function OrderDetailPage({
@@ -32,10 +34,23 @@ export default async function OrderDetailPage({
   const order = await prisma.order.findUnique({
     where: { id: params.id },
     include: {
-      items: true,
-      payment: true,
-      customer: { select: { id: true, name: true, phone: true } },
+      items:          true,
+      payment:        true,
+      customer:       { select: { id: true, name: true, phone: true } },
       deliveryAddress: true,
+      editLogs: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id:              true,
+          createdAt:       true,
+          previousItemName: true,
+          newItemName:     true,
+          priceDiff:       true,
+          newTotal:        true,
+          reason:          true,
+          paymentResolved: true,
+        },
+      },
     },
   });
 
@@ -48,6 +63,21 @@ export default async function OrderDetailPage({
     select: { name: true },
   });
   const restaurantName = restaurant?.name ?? "Restaurante";
+
+  const canEdit = ["OWNER", "MANAGER"].includes(session.user.role);
+  const orderTotalNum = Number(order.total);
+
+  // Serialize editLogs for client components (Decimal → number)
+  const editLogsForClient = order.editLogs.map((l) => ({
+    id:               l.id,
+    createdAt:        l.createdAt.toISOString(),
+    previousItemName: l.previousItemName,
+    newItemName:      l.newItemName,
+    priceDiff:        Number(l.priceDiff),
+    newTotal:         Number(l.newTotal),
+    reason:           l.reason,
+    paymentResolved:  l.paymentResolved,
+  }));
 
   return (
     <>
@@ -120,20 +150,48 @@ export default async function OrderDetailPage({
           </dl>
         </div>
 
+        {/* Edit history banner (only if edits exist) */}
+        {editLogsForClient.length > 0 && (
+          <OrderEditLogBanner orderId={order.id} logs={editLogsForClient} />
+        )}
+
         {/* Items */}
         <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <div className="border-b border-gray-100 bg-gray-50 px-5 py-3">
+          <div className="border-b border-gray-100 bg-gray-50 px-5 py-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
               Itens
             </h2>
+            {canEdit && order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
+              <span className="text-xs text-gray-400">Clique em &ldquo;Trocar&rdquo; para alterar um item</span>
+            )}
           </div>
           <ul className="divide-y divide-gray-100">
             {order.items.map((item) => (
               <li key={item.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                <span className="text-gray-900">
-                  {item.quantity}× {item.name}
-                  {item.notes && <span className="ml-1 text-xs text-gray-400">({item.notes})</span>}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-900">
+                    {item.quantity}× {item.name}
+                    {item.variantName && (
+                      <span className="ml-1 text-xs text-gray-500">({item.variantName})</span>
+                    )}
+                    {item.notes && <span className="ml-1 text-xs text-gray-400">({item.notes})</span>}
+                  </span>
+                  <ItemReplacementButton
+                    orderId={order.id}
+                    orderTotal={orderTotalNum}
+                    orderStatus={order.status}
+                    canEdit={canEdit}
+                    item={{
+                      id:          item.id,
+                      name:        item.name,
+                      quantity:    item.quantity,
+                      price:       Number(item.price),
+                      total:       Number(item.total),
+                      variantName: item.variantName ?? null,
+                      notes:       item.notes ?? null,
+                    }}
+                  />
+                </div>
                 <span className="font-medium">R$ {Number(item.total).toFixed(2)}</span>
               </li>
             ))}

@@ -98,3 +98,45 @@ export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>;
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>;
 export type AttachPaymentInput = z.infer<typeof attachPaymentSchema>;
 export type UpdatePaymentStatusInput = z.infer<typeof updatePaymentStatusSchema>;
+
+// ─── Order item replacement ────────────────────────────────────
+
+export const replaceOrderItemSchema = z.object({
+  orderItemId: z.string().cuid(),
+  newMenuItemId: z.string().cuid(),
+  // Selected variant (optional — only when product hasVariants)
+  newVariantId:   z.string().cuid().nullable().optional(),
+  newVariantName: z.string().max(200).nullable().optional(),
+  // Selected options per option group (may be empty)
+  newOptionSelections: z
+    .array(
+      z.object({
+        groupId:      z.string().cuid(),
+        optionItemId: z.string().cuid(),
+        name:         z.string().max(200),
+      })
+    )
+    .default([]),
+  // Selected extras/add-ons (may be empty)
+  newExtras: z
+    .array(
+      z.object({
+        extraId:  z.string().cuid(),
+        name:     z.string().max(200),
+        quantity: z.number().int().positive().default(1),
+      })
+    )
+    .default([]),
+  quantity:   z.number().int().positive(),
+  notes:      z.string().max(300).nullable().optional(),
+  reason: z.enum([
+    "CLIENTE_PEDIU",
+    "PRODUTO_INDISPONIVEL",
+    "ERRO_SABOR",
+    "ERRO_OPERACIONAL",
+    "OUTRO",
+  ]),
+  reasonNote: z.string().max(500).nullable().optional(),
+});
+
+export type ReplaceOrderItemInput = z.infer<typeof replaceOrderItemSchema>;

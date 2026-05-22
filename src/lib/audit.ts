@@ -24,6 +24,7 @@ export type AuditAction =
   // Orders
   | "order.status_change"
   | "order.delete"
+  | "order.item_replaced"
   // Payments
   | "payment.status_change"
   // Conversations
