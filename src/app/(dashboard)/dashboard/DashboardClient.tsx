@@ -2,957 +2,448 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import type { OnboardingStatusData } from "@/app/api/onboarding/status/route";
 
-interface DashboardKPIs {
-  ordersToday:   number;
-  revenueToday:  number;
-  avgTicket:     number;
-  openOrders:    number;
-  totalCustomers: number;
-  revenue7Days:  number;
-  trend7Days:    Array<{ date: string; revenue: number }>;
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+interface TopProduct {
+  name:         string;
+  quantity:     number;
+  revenue:      number;
+  imageUrl:     string | null;
+  categoryName: string | null;
 }
 
-// ─── Time-filter types ────────────────────────────────────────
-type Period = "today" | "yesterday" | "7days" | "month" | "year";
+interface Campaign {
+  id:             string;
+  name:           string;
+  status:         string;
+  totalSent:      number;
+  totalResponded: number;
+  totalAudience:  number;
+}
 
-const PERIOD_OPTIONS: Array<{ id: Period; label: string }> = [
-  { id: "today",     label: "Hoje" },
-  { id: "yesterday", label: "Ontem" },
-  { id: "7days",     label: "Últ. 7 dias" },
-  { id: "month",     label: "Mês atual" },
-  { id: "year",      label: "Ano atual" },
-];
+interface DashboardData {
+  ordersToday:          number;
+  revenueToday:         number;
+  avgTicket:            number;
+  openOrders:           number;
+  totalCustomers:       number;
+  newCustomersToday:    number;
+  ordersYesterday:      number;
+  revenueYesterday:     number;
+  revenue7Days:         number;
+  trend7Days:           { date: string; revenue: number; orders: number }[];
+  pipeline: {
+    pending:        number;
+    confirmed:      number;
+    preparing:      number;
+    ready:          number;
+    outForDelivery: number;
+  };
+  delayedCount:         number;
+  pendingPaymentsCount: number;
+  topProducts:          TopProduct[];
+  hourlyOrders:         { hour: number; orders: number; revenue: number }[];
+  ordersByType:         { DELIVERY: number; PICKUP: number; DINE_IN: number };
+  activeCampaigns:      Campaign[];
+}
 
-// ─────────────────────────────────────────────────────────────
-//  Mock data — swap for real API calls when ready
-// ─────────────────────────────────────────────────────────────
-
-const MOCK_KPIS = {
-  ordersToday: 47,
-  revenueToday: 3_842.5,
-  avgTicket: 81.76,
-};
-
-// Revenue headline per period (drives the dynamic header)
-const MOCK_PERIOD_REVENUE: Record<Period, number> = {
-  today:     3_842.50,
-  yesterday: 4_210.00,
-  "7days":   27_320.00,
-  month:     104_500.00,
-  year:      1_254_600.00,
-};
-
-// KPI values per period
-const MOCK_PERIOD_KPIS: Record<
-  Period,
-  { orders: number; revenue: number; ticket: number; ordersChange: number; revenueChange: number; ticketChange: number }
-> = {
-  today:     { orders: 47,     revenue: 3_842.50,   ticket: 81.76, ordersChange: +12, revenueChange: +8,  ticketChange: -3 },
-  yesterday: { orders: 53,     revenue: 4_210.00,   ticket: 79.43, ordersChange: +5,  revenueChange: +14, ticketChange: +2 },
-  "7days":   { orders: 336,    revenue: 27_320.00,  ticket: 81.31, ordersChange: +7,  revenueChange: +11, ticketChange: +1 },
-  month:     { orders: 1_284,  revenue: 104_500.00, ticket: 81.39, ordersChange: +4,  revenueChange: +9,  ticketChange:  0 },
-  year:      { orders: 15_420, revenue: 1_254_600,  ticket: 81.36, ordersChange: +18, revenueChange: +23, ticketChange: +3 },
-};
-
-const MOCK_LIVE = {
-  preparing: 8,
-  delayed: 2,
-  cancelled: 1,
-};
-
-const MOCK_OPERATION = {
-  preparing:        8,
-  delayed:          2,
-  cancelled:        1,
-  avgPrepTime:      22,   // minutes
-  cancellationRate: 2.1,  // percent
-};
-
-const MOCK_ALERTS = [
-  {
-    id: "beverages",
-    icon: "⚠️",
-    message: "Nenhuma bebida vendida hoje",
-    cta: "Ver cardápio",
-    href: "/menu",
-  },
-  {
-    id: "lunch",
-    icon: "📉",
-    message: "Baixa conversão no horário de almoço (12h–13h)",
-    cta: null,
-    href: null,
-  },
-  {
-    id: "xburger",
-    icon: "🛑",
-    message: "X-Burguer Especial sem vendas há 2 dias",
-    cta: "Ver produto",
-    href: "/menu",
-  },
-];
-
-type InsightType = "warning" | "opportunity" | "info";
-
-const INSIGHT_STYLES: Record<
-  InsightType,
-  { bg: string; border: string; text: string }
-> = {
-  warning:     { bg: "bg-gray-50",  border: "border-l-gray-300", text: "text-gray-800" },
-  opportunity: { bg: "bg-gray-50",  border: "border-l-gray-300", text: "text-gray-800" },
-  info:        { bg: "bg-gray-50",  border: "border-l-gray-200", text: "text-gray-700" },
-};
-
-const MOCK_INSIGHTS: Array<{
-  id: string;
-  type: InsightType;
-  icon: string;
-  message: string;
-  action: string;
-  href: string;
-}> = [
-  { id: "beverages", type: "opportunity", icon: "🧃", message: "Bebidas podem aumentar seu ticket em +23% por pedido",      action: "Ativar combo agora",      href: "/settings/experience" },
-  { id: "ticket",    type: "opportunity", icon: "📈", message: "Ative upsell e recupere os 3% no ticket médio",             action: "Configurar upsell",       href: "/settings/experience" },
-  { id: "dessert",   type: "info",        icon: "🍰", message: "Sobremesas com 0 vendas — uma promoção rápida muda isso",   action: "Criar promoção",          href: "/marketing"           },
-  { id: "crm",       type: "opportunity", icon: "👥", message: "3 clientes inativos prontos para reativar",                 action: "Reativar agora",          href: "/crm"                 },
-];
-
-type QuickActionColor = { iconBg: string; iconText: string; hoverBorder: string };
-
-const QUICK_ACTIONS: Array<{
-  id: string;
-  icon: string;
-  label: string;
-  desc: string;
-  href: string;
-  color: QuickActionColor;
-}> = [
-  { id: "promo",   icon: "🎁", label: "Criar promoção",    desc: "Aumentar vendas",     href: "/marketing",           color: { iconBg: "bg-orange-100", iconText: "text-orange-600", hoverBorder: "hover:border-orange-300" } },
-  { id: "upsell",  icon: "🚀", label: "Ativar upsell",     desc: "Configurar IA",       href: "/settings/experience", color: { iconBg: "bg-violet-100",  iconText: "text-violet-600",  hoverBorder: "hover:border-violet-300"  } },
-  { id: "clients", icon: "👥", label: "Reativar clientes", desc: "Enviar mensagens",    href: "/crm",                 color: { iconBg: "bg-emerald-100", iconText: "text-emerald-600", hoverBorder: "hover:border-emerald-300" } },
-  { id: "orders",  icon: "📋", label: "Ver pedidos",       desc: "Central ao vivo",     href: "/orders",              color: { iconBg: "bg-blue-100",    iconText: "text-blue-600",    hoverBorder: "hover:border-blue-300"    } },
-];
-
-const MOCK_CHART_TODAY = [
-  { label: "08h", orders: 2, revenue: 142 },
-  { label: "09h", orders: 4, revenue: 310 },
-  { label: "10h", orders: 3, revenue: 248 },
-  { label: "11h", orders: 6, revenue: 492 },
-  { label: "12h", orders: 11, revenue: 901 },
-  { label: "13h", orders: 8, revenue: 655 },
-  { label: "14h", orders: 5, revenue: 410 },
-  { label: "15h", orders: 3, revenue: 246 },
-  { label: "16h", orders: 2, revenue: 164 },
-  { label: "17h", orders: 3, revenue: 274 },
-];
-
-const MOCK_CHART_WEEK = [
-  { label: "Seg", orders: 32, revenue: 2_100 },
-  { label: "Ter", orders: 41, revenue: 2_870 },
-  { label: "Qua", orders: 38, revenue: 2_640 },
-  { label: "Qui", orders: 45, revenue: 3_120 },
-  { label: "Sex", orders: 62, revenue: 4_380 },
-  { label: "Sáb", orders: 71, revenue: 5_120 },
-  { label: "Hoje", orders: 47, revenue: 3_842 },
-];
-
-const MOCK_TOP_ITEMS = [
-  { name: "X-Burguer Especial", sales: 18, revenue: 540 },
-  { name: "Frango Grelhado", sales: 14, revenue: 392 },
-  { name: "Combo Família", sales: 11, revenue: 660 },
-  { name: "Pizza Margherita", sales: 9, revenue: 360 },
-  { name: "Açaí 500ml", sales: 8, revenue: 200 },
-];
-
-const MOCK_WORST_ITEMS = [
-  { name: "Salada Caesar", sales: 1, revenue: 28 },
-  { name: "Suco Detox", sales: 1, revenue: 15 },
-  { name: "Sobremesa do Dia", sales: 0, revenue: 0 },
-  { name: "Prato Vegano", sales: 0, revenue: 0 },
-  { name: "Combo Kids", sales: 2, revenue: 50 },
-];
-
-const MOCK_CUSTOMERS = {
-  total: 342,
-  newToday: 12,
-  returningToday: 35,
-};
-
-const MOCK_PAYMENTS = [
-  { method: "PIX", count: 28, amount: 2_241 },
-  { method: "Cartão Crédito", count: 12, amount: 987 },
-  { method: "Cartão Débito", count: 5, amount: 432 },
-  { method: "Dinheiro", count: 2, amount: 182 },
-];
-
-type BannerVariant = "opportunity" | "warning" | "info";
-
-const BANNER_VARIANT_STYLES: Record<
-  BannerVariant,
-  { iconBg: string; iconText: string; btn: string }
-> = {
-  opportunity: {
-    iconBg:   "bg-orange-50",
-    iconText: "text-orange-500",
-    btn:      "bg-orange-500 hover:bg-orange-600 text-white",
-  },
-  warning: {
-    iconBg:   "bg-amber-50",
-    iconText: "text-amber-600",
-    btn:      "bg-amber-500 hover:bg-amber-600 text-white",
-  },
-  info: {
-    iconBg:   "bg-blue-50",
-    iconText: "text-blue-600",
-    btn:      "bg-blue-600 hover:bg-blue-700 text-white",
-  },
-};
-
-const BANNERS: Array<{
-  id: string;
-  variant: BannerVariant;
-  icon: string;
-  title: string;
-  description: string;
-  cta: string;
-  href: string;
-}> = [
-  {
-    id: "ticket",
-    variant: "opportunity",
-    icon: "🎯",
-    title: "Aumente seu ticket médio",
-    description: "Clientes que adicionam bebida gastam em média 23% a mais por pedido.",
-    cta: "Ver estratégia",
-    href: "/marketing",
-  },
-  {
-    id: "dessert",
-    variant: "warning",
-    icon: "🍰",
-    title: "Você está perdendo vendas de sobremesa",
-    description: "Nenhuma sobremesa vendida hoje. Ative uma promoção relâmpago agora.",
-    cta: "Criar promoção",
-    href: "/marketing",
-  },
-  {
-    id: "feature",
-    variant: "info",
-    icon: "✨",
-    title: "Nova funcionalidade disponível",
-    description: "Configure o comportamento da IA e personalize a experiência do cliente.",
-    cta: "Explorar",
-    href: "/settings/experience",
-  },
-];
-
-// ─────────────────────────────────────────────────────────────
-//  Utilities
-// ─────────────────────────────────────────────────────────────
+// ── Utilities ──────────────────────────────────────────────────────────────────
 
 function fmtCurrency(n: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  }).format(n);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(n);
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Shared primitives
-// ─────────────────────────────────────────────────────────────
+function fmtNum(n: number) {
+  return new Intl.NumberFormat("pt-BR").format(n);
+}
 
-function Card({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+function pctChange(current: number, previous: number): { label: string; positive: boolean } | null {
+  if (previous === 0) return null;
+  const pct      = ((current - previous) / previous) * 100;
+  const positive = pct >= 0;
+  return { label: `${positive ? "+" : ""}${pct.toFixed(0)}% vs ontem`, positive };
+}
+
+function getGreeting(): string {
+  const h = ((new Date().getUTCHours() - 3) + 24) % 24;
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+// ── Skeleton ───────────────────────────────────────────────────────────────────
+
+function Pulse({ className }: { className: string }) {
+  return <div className={`animate-pulse rounded-xl bg-gray-100 ${className}`} />;
+}
+
+function LoadingSkeleton() {
   return (
-    <div
-      className={`rounded-2xl border border-gray-100 bg-white shadow-sm ${className}`}
-    >
+    <div className="space-y-4 px-4 pb-8 pt-2">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map(i => <Pulse key={i} className="h-24" />)}
+      </div>
+      <Pulse className="h-32" />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Pulse className="h-56 lg:col-span-2" />
+        <Pulse className="h-56" />
+      </div>
+      <Pulse className="h-24" />
+      <Pulse className="h-24" />
+    </div>
+  );
+}
+
+// ── Shared primitives ──────────────────────────────────────────────────────────
+
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-2xl border border-gray-100 bg-white shadow-sm ${className}`}>
       {children}
     </div>
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
-      {children}
-    </p>
-  );
-}
-
-function ToggleGroup({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex overflow-hidden rounded-lg border border-gray-200 text-xs">
-      {children}
-    </div>
-  );
-}
-
-function ToggleBtn({
-  active,
-  onClick,
-  children,
+function SectionHeader({
+  title, sub, href, hrefLabel = "Ver tudo",
 }: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  title: string; sub?: string; href?: string; hrefLabel?: string;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 font-medium transition-colors ${
-        active ? "bg-orange-500 text-white" : "text-gray-500 hover:bg-gray-50"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-//  0. SetupCard — shown until onboarding is complete
-// ─────────────────────────────────────────────────────────────
-
-type SetupStatus = OnboardingStatusData | null;
-
-const SETUP_READINESS_STYLE: Record<
-  NonNullable<SetupStatus>["readiness"],
-  { bar: string; badge: string; badgeText: string }
-> = {
-  NAO_INICIADO:       { bar: "bg-gray-300",  badge: "bg-gray-100 text-gray-600",  badgeText: "Não iniciado" },
-  EM_CONFIGURACAO:    { bar: "bg-blue-400",  badge: "bg-blue-50 text-blue-700",   badgeText: "Em configuração" },
-  PRONTO_PARA_TESTE:  { bar: "bg-amber-400", badge: "bg-amber-50 text-amber-700", badgeText: "Pronto para teste" },
-  PRONTO_PARA_PILOTO: { bar: "bg-green-500", badge: "bg-green-50 text-green-700", badgeText: "Pronto para piloto" },
-  BLOQUEADO:          { bar: "bg-red-400",   badge: "bg-red-50 text-red-700",     badgeText: "Bloqueado" },
-};
-
-function SetupCard({ setup }: { setup: SetupStatus }) {
-  if (!setup || setup.readiness === "PRONTO_PARA_PILOTO") return null;
-
-  const stepsArr = Object.values(setup.steps);
-  const completedCount = stepsArr.filter((s) => s.status === "COMPLETE").length;
-  const pct = Math.round((completedCount / stepsArr.length) * 100);
-  const s = SETUP_READINESS_STYLE[setup.readiness];
-
-  const blockedSteps = Object.entries(setup.steps)
-    .filter(([, v]) => v.status === "BLOCKED")
-    .map(([, v]) => v.message);
-  const pendingSteps = Object.entries(setup.steps)
-    .filter(([, v]) => v.status === "PENDING")
-    .slice(0, 2)
-    .map(([, v]) => v.message);
-
-  return (
-    <div className="rounded-2xl border border-orange-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-5 py-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-xl">⚙️</div>
-          <div>
-            <p className="font-semibold text-gray-900 leading-tight">Configure seu restaurante</p>
-            <p className="text-xs text-gray-500 mt-0.5">Complete a configuração antes de receber os primeiros pedidos.</p>
-          </div>
-        </div>
-        <span className={`rounded-full px-3 py-1 text-xs font-bold ${s.badge}`}>{s.badgeText}</span>
+    <div className="mb-3 flex items-start justify-between gap-2">
+      <div>
+        <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+        {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
       </div>
-
-      {/* Progress bar */}
-      <div className="px-5 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-500 ${s.bar}`} style={{ width: `${pct}%` }} />
-          </div>
-          <span className="text-xs font-semibold text-gray-500">{completedCount}/{stepsArr.length}</span>
-        </div>
-      </div>
-
-      {/* Blockers / pending hints */}
-      {(blockedSteps.length > 0 || pendingSteps.length > 0) && (
-        <div className="px-5 pb-3 space-y-1">
-          {blockedSteps.slice(0, 2).map((msg, i) => (
-            <p key={i} className="text-xs text-red-600 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />{msg}
-            </p>
-          ))}
-          {pendingSteps.map((msg, i) => (
-            <p key={i} className="text-xs text-amber-600 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />{msg}
-            </p>
-          ))}
-        </div>
-      )}
-
-      <div className="border-t border-gray-100 px-5 py-3 bg-gray-50">
-        <Link
-          href="/onboarding"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
-        >
-          Continuar configuração →
+      {href && (
+        <Link href={href} className="shrink-0 text-xs font-medium text-orange-500 hover:underline">
+          {hrefLabel}
         </Link>
-      </div>
+      )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-//  1. BannerSection
-// ─────────────────────────────────────────────────────────────
+// ── KPI Card ───────────────────────────────────────────────────────────────────
 
-function BannerSection() {
-  return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-      {BANNERS.map((b) => {
-        const v = BANNER_VARIANT_STYLES[b.variant];
-        return (
-          <div
-            key={b.id}
-            className="flex flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
-          >
-            {/* Icon */}
-            <div
-              className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl ${v.iconBg} ${v.iconText}`}
-            >
-              {b.icon}
-            </div>
-
-            {/* Text */}
-            <p className="mt-3 font-semibold leading-snug text-gray-900">
-              {b.title}
-            </p>
-            <p className="mt-1 flex-1 text-sm leading-relaxed text-gray-500">
-              {b.description}
-            </p>
-
-            {/* CTA */}
-            <div className="mt-4">
-              <Link
-                href={b.href}
-                className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${v.btn}`}
-              >
-                {b.cta} →
-              </Link>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-//  2. KPISection
-// ─────────────────────────────────────────────────────────────
-
-function KPICard({
-  label,
-  value,
-  change,
-  accent = false,
+function KpiCard({
+  label, value, change, sub, href, accent = false,
 }: {
-  label: string;
-  value: string;
-  change?: number;
+  label:   string;
+  value:   string;
+  change?: { label: string; positive: boolean } | null;
+  sub?:    string;
+  href?:   string;
   accent?: boolean;
 }) {
-  const trendColor =
-    change === undefined ? ""
-    : change > 0  ? (accent ? "text-orange-100" : "text-green-600")
-    : change < 0  ? (accent ? "text-orange-200" : "text-red-500")
-    :               (accent ? "text-orange-200" : "text-gray-400");
-
-  return (
-    <div
-      className={`rounded-2xl p-5 ${
-        accent
-          ? "bg-orange-500 text-white shadow-sm shadow-orange-100"
-          : "border border-gray-100 bg-white shadow-sm"
-      }`}
-    >
-      <p className={`text-xs font-semibold uppercase tracking-wide ${accent ? "text-orange-100" : "text-gray-400"}`}>
-        {label}
-      </p>
-      <p className={`mt-2 text-2xl font-bold leading-none sm:text-3xl ${accent ? "text-white" : "text-gray-900"}`}>
+  const inner = (
+    <div className={`rounded-2xl border p-4 shadow-sm transition-colors
+      ${accent ? "border-orange-200 bg-orange-50" : "border-gray-100 bg-white"}
+      ${href   ? "hover:border-gray-200 cursor-pointer" : ""}`}>
+      <p className="text-xs font-medium text-gray-500">{label}</p>
+      <p className={`mt-2 text-2xl font-bold leading-none ${accent ? "text-orange-600" : "text-gray-900"}`}>
         {value}
       </p>
-      {change !== undefined && (
-        <p className={`mt-2 flex items-center gap-1 text-xs font-medium ${trendColor}`}>
-          <span>{change > 0 ? "↑" : change < 0 ? "↓" : "→"}</span>
-          <span>{change > 0 ? "+" : ""}{change}% vs anterior</span>
+      {change && (
+        <p className={`mt-1.5 text-xs font-medium ${change.positive ? "text-green-600" : "text-red-500"}`}>
+          {change.label}
         </p>
+      )}
+      {!change && sub && (
+        <p className="mt-1.5 text-xs text-gray-400">{sub}</p>
       )}
     </div>
   );
+  return href ? <Link href={href} className="block">{inner}</Link> : inner;
 }
 
-function KPISection({ period, kpis }: { period: Period; kpis: DashboardKPIs | null }) {
-  if (period === "today" && kpis) {
-    return (
-      <>
-        <KPICard label="Pedidos hoje"  value={kpis.ordersToday.toLocaleString("pt-BR")} />
-        <KPICard label="Receita hoje"  value={fmtCurrency(kpis.revenueToday)} accent />
-        <KPICard label="Ticket médio"  value={kpis.ordersToday > 0 ? fmtCurrency(kpis.avgTicket) : "—"} />
-      </>
-    );
-  }
-  if (period === "7days" && kpis) {
-    return (
-      <>
-        <KPICard label="Pedidos em aberto" value={kpis.openOrders.toLocaleString("pt-BR")} />
-        <KPICard label="Receita 7 dias"    value={fmtCurrency(kpis.revenue7Days)} accent />
-        <KPICard label="Clientes totais"   value={kpis.totalCustomers.toLocaleString("pt-BR")} />
-      </>
-    );
-  }
-  const k = MOCK_PERIOD_KPIS[period];
-  return (
-    <>
-      <KPICard label="Pedidos"     value={k.orders.toLocaleString("pt-BR")} change={k.ordersChange}  />
-      <KPICard label="Receita"     value={fmtCurrency(k.revenue)}           change={k.revenueChange} accent />
-      <KPICard label="Ticket médio" value={fmtCurrency(k.ticket)}            change={k.ticketChange}  />
-    </>
-  );
-}
+// ── Pipeline ───────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────────────────────
-//  3. LiveStatus
-// ─────────────────────────────────────────────────────────────
+const PIPELINE_STAGES = [
+  { key: "pending",        label: "Aguardando", icon: "🕐" },
+  { key: "confirmed",      label: "Confirmado",  icon: "✅" },
+  { key: "preparing",      label: "Preparando",  icon: "👨‍🍳" },
+  { key: "ready",          label: "Pronto",      icon: "🔔" },
+  { key: "outForDelivery", label: "Entregando",  icon: "🛵" },
+] as const;
 
-function LiveStatus({ openOrders }: { openOrders: number | null }) {
-  const { delayed, cancelled } = MOCK_LIVE;
-  const preparing = openOrders ?? MOCK_LIVE.preparing;
-
-  const items = [
-    {
-      dot: "bg-green-500",
-      label: "Preparando",
-      count: preparing,
-      text: "text-green-700",
-      bg: "bg-green-50",
-    },
-    {
-      dot: "bg-amber-500",
-      label: delayed > 0 ? `Atrasado${delayed > 1 ? "s" : ""}` : "Atrasados",
-      count: delayed,
-      text: delayed > 0 ? "text-amber-700" : "text-gray-400",
-      bg: delayed > 0 ? "bg-amber-50" : "bg-gray-50",
-    },
-    {
-      dot: "bg-red-500",
-      label: "Cancelados",
-      count: cancelled,
-      text: cancelled > 0 ? "text-red-700" : "text-gray-400",
-      bg: cancelled > 0 ? "bg-red-50" : "bg-gray-50",
-    },
-  ];
+function PipelineSection({
+  pipeline, delayed, pendingPayments,
+}: {
+  pipeline:        DashboardData["pipeline"];
+  delayed:         number;
+  pendingPayments: number;
+}) {
+  const total = Object.values(pipeline).reduce((s, v) => s + v, 0);
 
   return (
-    <Card className="flex divide-x divide-gray-100">
-      {items.map((item, i) => (
-        <div
-          key={i}
-          className={`flex flex-1 items-center gap-3 px-5 py-4 ${item.bg}`}
-        >
-          <span
-            className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.dot} ${
-              item.count > 0 ? "animate-pulse" : "opacity-30"
-            }`}
-          />
-          <div>
-            <p className={`text-2xl font-bold leading-none ${item.text}`}>
-              {item.count}
-            </p>
-            <p className="mt-0.5 text-xs text-gray-500">{item.label}</p>
-          </div>
-        </div>
-      ))}
-    </Card>
-  );
-}
+    <Card className="p-4">
+      <SectionHeader
+        title="Em andamento agora"
+        sub={total > 0 ? `${total} pedido${total !== 1 ? "s" : ""} ativos` : undefined}
+        href="/orders"
+        hrefLabel="Ver pedidos"
+      />
 
-// ─────────────────────────────────────────────────────────────
-//  4. Alerts
-// ─────────────────────────────────────────────────────────────
-
-function Alerts() {
-  return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {MOCK_ALERTS.map((a) => (
-        <div
-          key={a.id}
-          className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4"
-        >
-          <span className="mt-0.5 text-lg leading-none">{a.icon}</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-amber-900">{a.message}</p>
-            {a.cta && a.href && (
+      {total === 0 ? (
+        <p className="py-4 text-center text-sm text-gray-400">Nenhum pedido em andamento</p>
+      ) : (
+        <div className="grid grid-cols-5 gap-1.5">
+          {PIPELINE_STAGES.map(stage => {
+            const count = pipeline[stage.key];
+            return (
               <Link
-                href={a.href}
-                className="mt-1 inline-block text-xs font-medium text-amber-700 underline underline-offset-2 hover:text-amber-900"
+                key={stage.key}
+                href="/orders"
+                className="flex flex-col items-center rounded-xl bg-gray-50 px-1 py-2.5 text-center hover:bg-orange-50 transition-colors"
               >
-                {a.cta} →
+                <span className="text-sm">{stage.icon}</span>
+                <span className={`mt-1 text-xl font-bold leading-none ${count > 0 ? "text-gray-900" : "text-gray-300"}`}>
+                  {count}
+                </span>
+                <span className="mt-0.5 text-[9px] leading-tight text-gray-500">{stage.label}</span>
               </Link>
-            )}
-          </div>
+            );
+          })}
         </div>
-      ))}
-    </div>
-  );
-}
+      )}
 
-// ─────────────────────────────────────────────────────────────
-//  5. SalesChart
-// ─────────────────────────────────────────────────────────────
-
-type ChartPoint = { label: string; orders: number; revenue: number };
-
-function BarChart({ data }: { data: ChartPoint[] }) {
-  const maxRevenue = Math.max(...data.map((d) => d.revenue), 1);
-  const maxOrders  = Math.max(...data.map((d) => d.orders),  1);
-  const BAR_W = 28;
-  const GAP   = 8;
-  const H     = 65;
-  const totalW = data.length * (BAR_W + GAP) - GAP;
-
-  const pts = data.map((d, i) => ({
-    x: i * (BAR_W + GAP) + BAR_W / 2,
-    y: H - (d.orders / maxOrders) * H,
-  }));
-  const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-
-  return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${totalW} ${H + 24}`} className="w-full" style={{ minWidth: totalW }}>
-        {data.map((d, i) => {
-          const barH = Math.max((d.revenue / maxRevenue) * H, 2);
-          const x = i * (BAR_W + GAP);
-          const isLast = i === data.length - 1;
-          return (
-            <g key={i}>
-              <title>{d.label}: {fmtCurrency(d.revenue)} · {d.orders} pedidos</title>
-              <rect
-                x={x} y={H - barH}
-                width={BAR_W} height={barH}
-                rx={5}
-                fill={isLast ? "#f97316" : "#f3e8d8"}
-              />
-              <text x={x + BAR_W / 2} y={H + 16} textAnchor="middle" fontSize={9} fill="#9ca3af">
-                {d.label}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Orders line */}
-        <path d={linePath} stroke="#6b7280" strokeWidth={1} fill="none" strokeLinejoin="round" />
-        {pts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={2} fill="white" stroke="#6b7280" strokeWidth={1} />
-        ))}
-      </svg>
-    </div>
-  );
-}
-
-function SalesChart({ kpis }: { kpis: DashboardKPIs | null }) {
-  const [view, setView] = useState<"today" | "week">("today");
-
-  const weekData: ChartPoint[] = kpis
-    ? kpis.trend7Days.map((d) => ({
-        label:   new Date(d.date + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short" }),
-        revenue: d.revenue,
-        orders:  0,
-      }))
-    : MOCK_CHART_WEEK;
-
-  const data = view === "today" ? MOCK_CHART_TODAY : weekData;
-  const totalRevenue = data.reduce((s, d) => s + d.revenue, 0);
-  const totalOrders  = data.reduce((s, d) => s + d.orders,  0);
-
-  return (
-    <Card className="p-5">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <SectionTitle>Pedidos &amp; Receita</SectionTitle>
-          <div className="mt-1 flex items-baseline gap-3">
-            <p className="text-2xl font-bold text-gray-900">{fmtCurrency(totalRevenue)}</p>
-            <p className="text-sm text-gray-500">{totalOrders} pedidos</p>
-          </div>
+      {(delayed > 0 || pendingPayments > 0) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {delayed > 0 && (
+            <Link
+              href="/orders"
+              className="flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100"
+            >
+              ⏱ {delayed} atrasado{delayed !== 1 ? "s" : ""}
+            </Link>
+          )}
+          {pendingPayments > 0 && (
+            <Link
+              href="/orders"
+              className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100"
+            >
+              💳 {pendingPayments} aguardando pagamento
+            </Link>
+          )}
         </div>
-        <ToggleGroup>
-          <ToggleBtn active={view === "today"} onClick={() => setView("today")}>Hoje</ToggleBtn>
-          <ToggleBtn active={view === "week"}  onClick={() => setView("week")}>7 dias</ToggleBtn>
-        </ToggleGroup>
-      </div>
-
-      <BarChart data={data} />
-
-      {/* Legend */}
-      <div className="mt-3 flex items-center gap-5 text-xs text-gray-500">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-orange-200" />
-          Receita
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-px w-5 border-t border-gray-400" />
-          Pedidos
-        </span>
-      </div>
+      )}
     </Card>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-//  6. ProductPerformance
-// ─────────────────────────────────────────────────────────────
+// ── Top Products ───────────────────────────────────────────────────────────────
 
-type ProductRow = { name: string; sales: number; revenue: number };
+const RANK_ICON = ["🥇", "🥈", "🥉"] as const;
 
-function ProductPerformance() {
-  const [tab, setTab] = useState<"top" | "low">("top");
-  const items   = tab === "top" ? MOCK_TOP_ITEMS : MOCK_WORST_ITEMS;
-  const maxSales = Math.max(...items.map((i) => i.sales), 1);
-  const barColor = tab === "top" ? "bg-gray-700" : "bg-gray-300";
-
+function TopProductsSection({ products }: { products: TopProduct[] }) {
   return (
-    <Card className="flex flex-col p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <SectionTitle>Produtos</SectionTitle>
-        <div className="flex overflow-hidden rounded-lg border border-gray-200 text-[11px]">
-          <button
-            onClick={() => setTab("top")}
-            className={`px-2.5 py-1 font-semibold transition-colors ${tab === "top" ? "bg-orange-500 text-white" : "text-gray-500 hover:bg-gray-50"}`}
-          >
-            🔥 Top
-          </button>
-          <button
-            onClick={() => setTab("low")}
-            className={`px-2.5 py-1 font-semibold transition-colors ${tab === "low" ? "bg-rose-500 text-white" : "text-gray-500 hover:bg-gray-50"}`}
-          >
-            🧊 Baixos
-          </button>
-        </div>
-      </div>
+    <Card className="p-4">
+      <SectionHeader title="Mais vendidos hoje" sub="Por quantidade" href="/analytics" hrefLabel="Analytics" />
 
-      <ol className="space-y-3">
-        {items.map((item, i) => (
-          <li key={i} className="flex items-center gap-2">
-            <span className="w-4 shrink-0 text-center text-[10px] font-bold text-gray-300">
-              {i + 1}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-sm font-medium text-gray-800">{item.name}</span>
-                <div className="shrink-0 text-right">
-                  <span className="text-xs font-semibold text-gray-700">{item.sales}×</span>
-                  <span className="ml-1.5 text-xs text-gray-400">{fmtCurrency(item.revenue)}</span>
-                </div>
+      {products.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-8 text-center">
+          <span className="text-2xl">🍽</span>
+          <p className="text-sm text-gray-400">Os mais vendidos aparecerão quando houver pedidos hoje</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {products.map((p, i) => (
+            <div key={i} className="flex items-center gap-2.5 py-2.5 first:pt-0 last:pb-0">
+              <span className="w-5 shrink-0 text-center text-xs font-bold text-gray-300">
+                {i < 3 ? RANK_ICON[i] : `${i + 1}`}
+              </span>
+              {p.imageUrl ? (
+                <img src={p.imageUrl} alt={p.name} className="h-8 w-8 shrink-0 rounded-lg object-cover" loading="lazy" />
+              ) : (
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-sm">🍽</div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-gray-900">{p.name}</p>
+                {p.categoryName && <p className="text-[10px] text-gray-400">{p.categoryName}</p>}
               </div>
-              <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                  style={{ width: `${(item.sales / maxSales) * 100}%` }}
-                />
+              <div className="shrink-0 text-right">
+                <p className="text-sm font-bold text-gray-900">{p.quantity}×</p>
+                <p className="text-[11px] text-gray-500">{fmtCurrency(p.revenue)}</p>
               </div>
             </div>
-          </li>
-        ))}
-      </ol>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-//  7. CustomerSummary
-// ─────────────────────────────────────────────────────────────
+// ── Order Types ────────────────────────────────────────────────────────────────
 
-function CustomerSummary() {
-  const { total, newToday, returningToday } = MOCK_CUSTOMERS;
-  const todayTotal  = newToday + returningToday;
-  const newPct      = todayTotal > 0 ? Math.round((newToday      / todayTotal) * 100) : 50;
-  const returnPct   = todayTotal > 0 ? Math.round((returningToday / todayTotal) * 100) : 50;
+const ORDER_TYPE_META = [
+  { key: "DELIVERY", label: "Delivery", icon: "🛵", color: "bg-orange-400" },
+  { key: "PICKUP",   label: "Retirada", icon: "🛍", color: "bg-blue-400"   },
+  { key: "DINE_IN",  label: "Mesa",     icon: "🪑", color: "bg-green-400"  },
+] as const;
+
+function OrderTypesSection({ types, total }: { types: DashboardData["ordersByType"]; total: number }) {
+  return (
+    <Card className="p-4">
+      <SectionHeader title="Modalidade" sub="Pedidos de hoje por tipo" />
+
+      {total === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-6 text-center">
+          <p className="text-sm text-gray-400">Pedidos aparecerão aqui</p>
+        </div>
+      ) : (
+        <div className="space-y-3.5">
+          {ORDER_TYPE_META.map(m => {
+            const count = types[m.key];
+            const pct   = total > 0 ? Math.round((count / total) * 100) : 0;
+            return (
+              <div key={m.key} className="flex items-center gap-2.5">
+                <span className="text-base">{m.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className="font-medium text-gray-700">{m.label}</span>
+                    <span className="text-gray-500">{count} · {pct}%</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+                    <div className={`h-full rounded-full transition-all ${m.color}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ── Hourly Chart ───────────────────────────────────────────────────────────────
+
+function HourlyChart({ hourlyOrders }: { hourlyOrders: DashboardData["hourlyOrders"] }) {
+  const nowBRTHour = ((new Date().getUTCHours() - 3) + 24) % 24;
+  const endHour    = Math.min(23, Math.max(nowBRTHour, 20));
+  const display    = hourlyOrders.filter(h => h.hour >= 7 && h.hour <= endHour);
+  const maxOrders  = Math.max(1, ...display.map(h => h.orders));
+  const peakHour   = display.reduce<{ hour: number; orders: number } | null>(
+    (best, h) => best === null || h.orders > best.orders ? h : best, null
+  );
+  const hasData = display.some(h => h.orders > 0);
 
   return (
-    <Card className="p-5">
-      <SectionTitle>Clientes</SectionTitle>
-
-      {/* Total */}
-      <div className="mt-3 mb-4 flex items-end gap-2">
-        <span className="text-4xl font-bold text-gray-900">{total}</span>
-        <span className="mb-1 text-sm text-gray-400">ativos</span>
-      </div>
-
-      {/* Rows */}
-      <div className="space-y-2.5">
-        <div className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-1.5 text-gray-500">
-            <span className="h-2 w-2 rounded-full bg-gray-700" />
-            Novos hoje
-          </span>
-          <span className="font-semibold text-gray-900">{newToday}</span>
+    <Card className="p-4">
+      <SectionHeader
+        title="Ritmo do dia"
+        sub={hasData && peakHour && peakHour.orders > 0
+          ? `Pico: ${peakHour.hour}h (${peakHour.orders} pedido${peakHour.orders !== 1 ? "s" : ""})`
+          : "Pedidos por hora"}
+      />
+      {!hasData ? (
+        <div className="flex h-12 items-center justify-center text-xs text-gray-400">
+          Nenhum pedido ainda hoje
         </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-1.5 text-gray-500">
-            <span className="h-2 w-2 rounded-full bg-gray-300" />
-            Recorrentes
-          </span>
-          <span className="font-semibold text-gray-900">{returningToday}</span>
+      ) : (
+        <div className="flex items-end gap-0.5" style={{ height: 48 }}>
+          {display.map(h => {
+            const barH    = h.orders > 0 ? Math.max(4, Math.round((h.orders / maxOrders) * 40)) : 2;
+            const isPeak  = peakHour?.hour === h.hour && h.orders > 0;
+            const isCurr  = h.hour === nowBRTHour;
+            const bg      = isPeak ? "bg-orange-500" : isCurr ? "bg-orange-300" : h.orders > 0 ? "bg-orange-200" : "bg-gray-100";
+            return (
+              <div key={h.hour} className="flex flex-1 flex-col items-center gap-0.5"
+                title={`${h.hour}h: ${h.orders} pedidos · ${fmtCurrency(h.revenue)}`}>
+                <div className={`w-full rounded-t-sm ${bg}`} style={{ height: barH }} />
+                {h.hour % 3 === 0 && <span className="text-[8px] leading-none text-gray-400">{h.hour}h</span>}
+              </div>
+            );
+          })}
         </div>
-      </div>
+      )}
+    </Card>
+  );
+}
 
-      {/* Split bar */}
-      <div className="mt-4 flex h-1.5 overflow-hidden rounded-full bg-gray-100">
-        <div
-          className="h-full bg-gray-700 transition-all duration-500"
-          style={{ width: `${newPct}%` }}
-        />
-        <div className="h-full flex-1 bg-gray-200" />
-      </div>
-      <div className="mt-1.5 flex justify-between text-[10px] font-medium text-gray-400">
-        <span>Novos {newPct}%</span>
-        <span>Retorno {returnPct}%</span>
+// ── 7-Day Trend ────────────────────────────────────────────────────────────────
+
+const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
+
+function WeekTrendSection({ trend, totalRevenue }: { trend: DashboardData["trend7Days"]; totalRevenue: number }) {
+  const maxRev = Math.max(1, ...trend.map(d => d.revenue));
+
+  return (
+    <Card className="p-4">
+      <SectionHeader
+        title="Últimos 7 dias"
+        sub={`${fmtCurrency(totalRevenue)} em receita`}
+        href="/analytics"
+        hrefLabel="Analytics"
+      />
+      <div className="flex items-end gap-1" style={{ height: 56 }}>
+        {trend.map((d, i) => {
+          const isToday = i === trend.length - 1;
+          const parts   = d.date.split("-") as [string, string, string];
+          const jsDay   = new Date(+parts[0], +parts[1] - 1, +parts[2]).getDay();
+          const label   = isToday ? "Hoje" : (DAY_NAMES[jsDay] ?? "?");
+          const barH    = d.revenue > 0 ? Math.max(4, Math.round((d.revenue / maxRev) * 48)) : 2;
+
+          return (
+            <div key={d.date} className="flex flex-1 flex-col items-center gap-1"
+              title={`${label}: ${fmtCurrency(d.revenue)} · ${d.orders} pedido${d.orders !== 1 ? "s" : ""}`}>
+              <div
+                className={`w-full rounded-t-sm ${isToday ? "bg-orange-500" : "bg-gray-200"}`}
+                style={{ height: barH }}
+              />
+              <span className={`text-[9px] leading-none ${isToday ? "font-bold text-orange-500" : "text-gray-400"}`}>
+                {label}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </Card>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-//  8. PaymentMethods
-// ─────────────────────────────────────────────────────────────
+// ── Active Campaigns ───────────────────────────────────────────────────────────
 
-const PAYMENT_META: Record<string, { icon: string; bar: string }> = {
-  "PIX":            { icon: "⚡", bar: "bg-orange-400" },
-  "Cartão Crédito": { icon: "💳", bar: "bg-violet-400" },
-  "Cartão Débito":  { icon: "💳", bar: "bg-blue-400"   },
-  "Dinheiro":       { icon: "💵", bar: "bg-emerald-400" },
+const CAMP_STATUS: Record<string, { label: string; cls: string }> = {
+  ACTIVE:    { label: "Ativo",    cls: "bg-green-100 text-green-700" },
+  SCHEDULED: { label: "Agendado", cls: "bg-amber-100 text-amber-700" },
+  SENDING:   { label: "Enviando", cls: "bg-blue-100  text-blue-700"  },
 };
 
-function PaymentMethods() {
-  const sorted      = [...MOCK_PAYMENTS].sort((a, b) => b.amount - a.amount);
-  const totalAmount = sorted.reduce((s, d) => s + d.amount, 0);
+function CampaignSection({ campaigns }: { campaigns: Campaign[] }) {
+  if (campaigns.length === 0) return null;
 
   return (
-    <Card className="p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <SectionTitle>Pagamentos</SectionTitle>
-        <span className="text-sm font-semibold text-gray-800">{fmtCurrency(totalAmount)}</span>
-      </div>
-
-      <div className="space-y-3.5">
-        {sorted.map((d) => {
-          const meta = PAYMENT_META[d.method] ?? { icon: "💰", bar: "bg-gray-400" };
-          const pct  = Math.round((d.amount / totalAmount) * 100);
+    <Card className="p-4">
+      <SectionHeader
+        title="Campanhas ativas"
+        sub={`${campaigns.length} em execução`}
+        href="/crm"
+        hrefLabel="Gerenciar"
+      />
+      <div className="space-y-2.5">
+        {campaigns.map(c => {
+          const txResp   = c.totalSent > 0 ? `${((c.totalResponded / c.totalSent) * 100).toFixed(1)}%` : null;
+          const statusMeta = CAMP_STATUS[c.status] ?? { label: c.status, cls: "bg-gray-100 text-gray-600" };
           return (
-            <div key={d.method}>
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                  <span className="text-base leading-none">{meta.icon}</span>
-                  {d.method}
+            <div key={c.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className="min-w-0 truncate text-sm font-semibold text-gray-900">{c.name}</p>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${statusMeta.cls}`}>
+                  {statusMeta.label}
                 </span>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span>{d.count} pedidos</span>
-                  <span className="font-semibold text-gray-800">{fmtCurrency(d.amount)}</span>
-                  <span className="w-7 text-right font-semibold text-gray-400">{pct}%</span>
-                </div>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${meta.bar}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </Card>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-//  9. OperationSummary
-// ─────────────────────────────────────────────────────────────
-
-function OperationSummary() {
-  const { preparing, delayed, cancelled, avgPrepTime, cancellationRate } = MOCK_OPERATION;
-
-  const stats: Array<{
-    label: string;
-    value: string | number;
-    sub?: string;
-    urgent?: boolean;
-  }> = [
-    { label: "Preparando",       value: preparing,              sub: "pedidos" },
-    { label: "Atrasados",        value: delayed,                sub: "pedidos",    urgent: delayed > 0 },
-    { label: "Cancelados",       value: cancelled,              sub: "hoje"  },
-    { label: "Tempo médio",      value: `${avgPrepTime} min`,   sub: "de preparo" },
-    { label: "Taxa cancelamento", value: `${cancellationRate}%`, sub: "dos pedidos" },
-  ];
-
-  return (
-    <Card className="p-5">
-      <div className="mb-4">
-        <SectionTitle>Operação</SectionTitle>
-      </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {stats.map((s) => (
-          <div
-            key={s.label}
-            className={`rounded-xl p-3 ${s.urgent ? "bg-red-50" : "bg-gray-50"}`}
-          >
-            <div className="flex items-center gap-1.5">
-              {s.urgent && (
-                <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-red-500" />
-              )}
-              <p className={`text-xl font-bold leading-none ${s.urgent ? "text-red-600" : "text-gray-900"}`}>
-                {s.value}
-              </p>
-            </div>
-            <p className="mt-1 text-[11px] font-medium text-gray-400">{s.label}</p>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-//  10. AIInsightsPanel
-// ─────────────────────────────────────────────────────────────
-
-function AIInsightsPanel() {
-  return (
-    <Card className="flex h-full flex-col p-5">
-      <div className="mb-4">
-        <SectionTitle>Oportunidades</SectionTitle>
-      </div>
-
-      <div className="flex flex-col gap-2.5">
-        {MOCK_INSIGHTS.map((ins) => {
-          const s = INSIGHT_STYLES[ins.type];
-          return (
-            <div
-              key={ins.id}
-              className={`rounded-xl border-l-[3px] px-3 py-3 ${s.bg} ${s.border}`}
-            >
-              <div className="flex items-start gap-2.5">
-                <span className="mt-0.5 shrink-0 text-base leading-none">{ins.icon}</span>
-                <div className="min-w-0 flex-1">
-                  <p className={`text-sm font-medium leading-snug ${s.text}`}>
-                    {ins.message}
-                  </p>
-                  <Link
-                    href={ins.href}
-                    className="mt-2 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
-                  >
-                    {ins.action} →
-                  </Link>
-                </div>
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                <span>Audiência: <b className="text-gray-700">{fmtNum(c.totalAudience)}</b></span>
+                <span>Enviados: <b className="text-gray-700">{fmtNum(c.totalSent)}</b></span>
+                {c.totalResponded > 0 && (
+                  <span>
+                    Respostas: <b className="text-gray-700">{fmtNum(c.totalResponded)}</b>
+                    {txResp && <span className="font-semibold text-green-600"> ({txResp})</span>}
+                  </span>
+                )}
               </div>
             </div>
           );
@@ -962,223 +453,246 @@ function AIInsightsPanel() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-//  10. ActionCenter
-// ─────────────────────────────────────────────────────────────
+// ── CRM Section ────────────────────────────────────────────────────────────────
 
-function ActionCenter() {
-  return (
-    <div>
-      <div className="mb-3">
-        <SectionTitle>Central de ações</SectionTitle>
-      </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {QUICK_ACTIONS.map((a) => (
-          <Link
-            key={a.id}
-            href={a.href}
-            className={`group flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${a.color.hoverBorder}`}
-          >
-            <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ${a.color.iconBg} ${a.color.iconText}`}
-            >
-              {a.icon}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-gray-800 leading-tight">{a.label}</p>
-              <p className="text-xs text-gray-400">{a.desc}</p>
-            </div>
-            <span className="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5">
-              →
-            </span>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-//  Header components
-// ─────────────────────────────────────────────────────────────
-
-type StoreState = "open" | "closed" | "peak";
-
-function getStoreState(hour: number): StoreState {
-  if (hour < 10 || hour >= 23) return "closed";
-  if ((hour >= 11 && hour < 14) || (hour >= 18 && hour < 21)) return "peak";
-  return "open";
-}
-
-function StoreStatusBadge() {
-  const state = getStoreState(new Date().getHours());
-
-  const cfg: Record<StoreState, { dot: string; badge: string; text: string; label: string }> = {
-    open:   { dot: "bg-green-500",  badge: "border-green-200 bg-green-50",   text: "text-green-700",  label: "Aberto" },
-    closed: { dot: "bg-gray-400",   badge: "border-gray-200 bg-gray-50",     text: "text-gray-500",   label: "Fechado" },
-    peak:   { dot: "bg-amber-500",  badge: "border-amber-200 bg-amber-50",  text: "text-amber-700",  label: "Aberto · Pico" },
-  };
-
-  const { dot, badge, text, label } = cfg[state];
-
-  return (
-    <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 ${badge}`}>
-      <span className={`h-2 w-2 rounded-full ${dot} ${state !== "closed" ? "animate-pulse" : ""}`} />
-      <span className={`text-xs font-semibold ${text}`}>{label}</span>
-    </div>
-  );
-}
-
-function TimeFilter({
-  period,
-  onChange,
+function CrmSection({
+  totalCustomers, newToday, campaignCount,
 }: {
-  period: Period;
-  onChange: (p: Period) => void;
+  totalCustomers: number; newToday: number; campaignCount: number;
 }) {
   return (
-    <div className="flex overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 shadow-sm w-fit gap-1">
-      {PERIOD_OPTIONS.map((opt) => (
-        <button
-          key={opt.id}
-          onClick={() => onChange(opt.id)}
-          className={`rounded-lg px-4 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
-            period === opt.id
-              ? "bg-orange-500 text-white shadow-sm"
-              : "text-gray-500 hover:bg-gray-100"
-          }`}
+    <Card className="p-4">
+      <SectionHeader title="CRM" sub="Clientes e relacionamento" href="/crm" hrefLabel="Abrir CRM" />
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { icon: "👥", value: fmtNum(totalCustomers), label: "Clientes"    },
+          { icon: "✨", value: fmtNum(newToday),        label: "Novos hoje"  },
+          { icon: "📣", value: fmtNum(campaignCount),   label: "Campanhas"   },
+        ].map(item => (
+          <div key={item.label} className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
+            <span className="text-xl">{item.icon}</span>
+            <span className="mt-1 text-xl font-bold text-gray-900">{item.value}</span>
+            <span className="text-[10px] leading-tight text-gray-500">{item.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Link
+          href="/crm"
+          className="flex items-center justify-center gap-1 rounded-xl border border-gray-200 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
         >
-          {opt.label}
-        </button>
+          Ver CRM →
+        </Link>
+        <Link
+          href="/crm"
+          className="flex items-center justify-center gap-1 rounded-xl bg-orange-500 py-2 text-xs font-bold text-white transition-colors hover:bg-orange-600"
+        >
+          Criar campanha
+        </Link>
+      </div>
+    </Card>
+  );
+}
+
+// ── Quick Actions ──────────────────────────────────────────────────────────────
+
+const QUICK_ACTIONS = [
+  { label: "Pedidos",     href: "/orders",      icon: "📋", bg: "bg-blue-50   text-blue-700"   },
+  { label: "Atendimento", href: "/atendimento",  icon: "💬", bg: "bg-green-50  text-green-700"  },
+  { label: "CRM",         href: "/crm",          icon: "👥", bg: "bg-violet-50 text-violet-700" },
+  { label: "Cardápio",    href: "/menu",         icon: "🍽", bg: "bg-orange-50 text-orange-700" },
+] as const;
+
+function QuickActions() {
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-0.5 [&::-webkit-scrollbar]:hidden">
+      {QUICK_ACTIONS.map(a => (
+        <Link
+          key={a.href}
+          href={a.href}
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-75 ${a.bg}`}
+        >
+          <span>{a.icon}</span>
+          <span>{a.label}</span>
+        </Link>
       ))}
     </div>
   );
 }
 
-const PERIOD_HEADLINES: Record<Period, (r: string) => string> = {
-  today:     (r) => `Hoje seu restaurante já faturou ${r}`,
-  yesterday: (r) => `Ontem você faturou ${r} no total`,
-  "7days":   (r) => `Nos últimos 7 dias você faturou ${r}`,
-  month:     (r) => `Este mês seu restaurante faturou ${r}`,
-  year:      (r) => `Este ano o faturamento chegou a ${r}`,
-};
-
-// ─── Greeting (standalone, simple) ───────────────────────────
-
-function GreetingSection({ userName }: { userName: string }) {
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
-  return (
-    <div className="flex items-center justify-between">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-        {greeting}, {userName}
-      </p>
-      <StoreStatusBadge />
-    </div>
-  );
-}
-
-// ─── Revenue headline (below time filter) ────────────────────
-
-function RevenueHeadline({ period }: { period: Period }) {
-  const revenue      = MOCK_PERIOD_REVENUE[period];
-  const revFormatted = fmtCurrency(revenue);
-  const headline     = PERIOD_HEADLINES[period]!(revFormatted);
-  const [before, after] = headline.split(revFormatted);
-  return (
-    <div className="py-2">
-      <h2 className="text-3xl font-bold leading-tight text-[#0B0B0B] sm:text-4xl">
-        {before}
-        <span className="text-orange-500">{revFormatted}</span>
-        {after}
-      </h2>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-//  Root export
-// ─────────────────────────────────────────────────────────────
+// ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function DashboardClient({ userName }: { userName: string }) {
-  const [period, setPeriod]     = useState<Period>("today");
-  const [setup, setSetup]       = useState<SetupStatus>(null);
-  const [kpis, setKpis]         = useState<DashboardKPIs | null>(null);
+  const [data,       setData]       = useState<DashboardData | null>(null);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState(false);
+  const [dateStr,    setDateStr]    = useState("");
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    fetch("/api/onboarding/status")
-      .then((r) => r.json())
-      .then((j: { data?: OnboardingStatusData }) => { if (j.data) setSetup(j.data); })
-      .catch(() => {});
+    setDateStr(
+      new Date().toLocaleDateString("pt-BR", {
+        weekday: "long", day: "numeric", month: "long",
+        timeZone: "America/Sao_Paulo",
+      })
+    );
   }, []);
 
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((r) => r.json())
-      .then((j: { data?: DashboardKPIs }) => { if (j.data) setKpis(j.data); })
-      .catch(() => {});
-  }, []);
+    let active = true;
+    setLoading(true);
+    setError(false);
+
+    async function load() {
+      try {
+        const res  = await fetch("/api/dashboard");
+        if (!res.ok) throw new Error("api error");
+        const json = (await res.json()) as { data: DashboardData };
+        if (active) setData(json.data);
+      } catch {
+        if (active) setError(true);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void load();
+    const id = setInterval(() => { void load(); }, 120_000);
+    return () => { active = false; clearInterval(id); };
+  }, [retryCount]);
+
+  const greeting = getGreeting();
+
+  // Header always visible
+  const header = (
+    <div className="flex flex-col gap-3 p-4 pb-2 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h1 className="text-xl font-bold text-gray-900">Início</h1>
+        <p className="text-sm text-gray-500">
+          {greeting}, {userName}
+          {dateStr && <span className="mx-1.5 text-gray-300">·</span>}
+          {dateStr}
+        </p>
+      </div>
+      <QuickActions />
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div>
+        {header}
+        <LoadingSkeleton />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div>
+        {header}
+        <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+          <span className="text-4xl">⚠️</span>
+          <p className="text-sm font-semibold text-gray-700">Não foi possível carregar o resumo agora</p>
+          <button
+            type="button"
+            onClick={() => setRetryCount(c => c + 1)}
+            className="rounded-xl bg-orange-500 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-orange-600"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const revenueChange = pctChange(data.revenueToday, data.revenueYesterday);
+  const ordersChange  = pctChange(data.ordersToday,  data.ordersYesterday);
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5]">
-      <div className="mx-auto max-w-7xl px-4 py-6 pb-12 sm:px-6 space-y-6">
+    <div>
+      {header}
 
-        {/* ── 1. GREETING ── */}
-        <GreetingSection userName={userName} />
-
-        {/* ── 0. SETUP CARD — only when onboarding is incomplete ── */}
-        <SetupCard setup={setup} />
-
-        {/* ── 2. BANNERS ── */}
-        <BannerSection />
-
-        {/* ── 3. TIME FILTER — below banners ── */}
-        <TimeFilter period={period} onChange={setPeriod} />
-
-        {/* ── 4. REVENUE HEADLINE ── */}
-        <RevenueHeadline period={period} />
-
-        {/* ── 5. GRID ── */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-
-          {/* ── KPI CARDS ── */}
-          <KPISection period={period} kpis={kpis} />
-
-          {/* ── MAIN CHART (2 cols) + AI INSIGHTS PANEL (1 col) ── */}
-          <div className="lg:col-span-2">
-            <SalesChart kpis={kpis} />
-          </div>
-
-          <div className="lg:col-span-1">
-            <AIInsightsPanel />
-          </div>
-
-          {/* ── PRODUCT PERFORMANCE (1 col) ── */}
-          <div className="lg:col-span-1">
-            <ProductPerformance />
-          </div>
-
-          {/* ── CUSTOMER SUMMARY (1 col) ── */}
-          <div className="lg:col-span-1">
-            <CustomerSummary />
-          </div>
-
-          {/* ── PAYMENT METHODS (1 col) ── */}
-          <div className="lg:col-span-1">
-            <PaymentMethods />
-          </div>
-
-          {/* ── OPERATION SUMMARY (full width) ── */}
-          <div className="lg:col-span-3">
-            <OperationSummary />
-          </div>
-
-          {/* ── ACTION CENTER (full width) ── */}
-          <div className="lg:col-span-3">
-            <ActionCenter />
-          </div>
-
+      <div className="space-y-4 px-4 pb-10">
+        {/* KPI Row */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <KpiCard
+            label="Receita hoje"
+            value={fmtCurrency(data.revenueToday)}
+            change={revenueChange}
+            href="/orders"
+            accent
+          />
+          <KpiCard
+            label="Pedidos hoje"
+            value={fmtNum(data.ordersToday)}
+            change={ordersChange}
+            href="/orders"
+          />
+          <KpiCard
+            label="Ticket médio"
+            value={data.ordersToday > 0 ? fmtCurrency(data.avgTicket) : "—"}
+            sub={data.ordersToday > 0 ? "por pedido" : "sem pedidos ainda"}
+          />
+          <KpiCard
+            label="Em andamento"
+            value={fmtNum(data.openOrders)}
+            sub={data.openOrders > 0 ? "pedidos ativos agora" : "todos concluídos"}
+            href={data.openOrders > 0 ? "/orders" : undefined}
+          />
         </div>
+
+        {/* Pipeline */}
+        <PipelineSection
+          pipeline={data.pipeline}
+          delayed={data.delayedCount}
+          pendingPayments={data.pendingPaymentsCount}
+        />
+
+        {/* Products + Modality */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <TopProductsSection products={data.topProducts} />
+          </div>
+          <OrderTypesSection types={data.ordersByType} total={data.ordersToday} />
+        </div>
+
+        {/* Hourly rhythm */}
+        <HourlyChart hourlyOrders={data.hourlyOrders} />
+
+        {/* 7-day trend */}
+        <WeekTrendSection trend={data.trend7Days} totalRevenue={data.revenue7Days} />
+
+        {/* Active campaigns */}
+        <CampaignSection campaigns={data.activeCampaigns} />
+
+        {/* CRM summary */}
+        <CrmSection
+          totalCustomers={data.totalCustomers}
+          newToday={data.newCustomersToday}
+          campaignCount={data.activeCampaigns.length}
+        />
+
+        {/* Analytics link */}
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-xl">
+              🤖
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-800">Insights com IA</p>
+              <p className="text-xs text-gray-400">Análise detalhada com período comparativo e recomendações</p>
+            </div>
+            <Link
+              href="/analytics"
+              className="shrink-0 rounded-xl bg-orange-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-orange-600"
+            >
+              Ver Analytics
+            </Link>
+          </div>
+        </Card>
       </div>
     </div>
   );
