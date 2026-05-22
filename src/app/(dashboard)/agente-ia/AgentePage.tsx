@@ -1612,6 +1612,28 @@ export function AgentePage() {
             </div>
           </Section>
 
+          <Section
+            title="Instruções do agente"
+            subtitle="Use este campo para orientar o comportamento do Waiter. Ele seguirá essas instruções junto com as regras obrigatórias do Foocci, cardápio, marca e fluxo do pedido."
+          >
+            <div>
+              <textarea
+                value={form.waiterPrompt ?? ""}
+                onChange={(e) => patch("waiterPrompt", e.target.value || null)}
+                rows={5}
+                maxLength={2000}
+                placeholder="Ex: Seja mais consultivo, sugira combos com bebidas, evite insistir após uma recusa, destaque pratos quentes em dias frios..."
+                className="w-full resize-none rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
+              />
+              <div className="flex items-start justify-between mt-1 gap-3">
+                <p className="text-[11px] text-gray-400">
+                  As regras críticas do sistema sempre prevalecem sobre estas instruções. O agente ignorará qualquer instrução que conflite com segurança, cardápio real ou etapas do pedido.
+                </p>
+                <CharCount current={(form.waiterPrompt ?? "").length} max={2000} />
+              </div>
+            </div>
+          </Section>
+
           <ComingSoon
             title="Segurança e limites"
             items={[

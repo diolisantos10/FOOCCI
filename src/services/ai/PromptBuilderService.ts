@@ -490,6 +490,15 @@ VOCÊ NÃO É UM CHATBOT. VOCÊ É UM EXECUTOR DE FLUXO DE VENDAS.
       → Identifique o item da última sugestão no histórico → execute add_item imediatamente
     → "não" / "dispensa" / "n" / "nao" = RECUSOU
       → Aceite sem insistir → avance o funil imediatamente
+${brandConfig.waiterPrompt?.trim() ? `
+══════════════════════════════════════
+INSTRUÇÕES PERSONALIZADAS DO RESTAURANTE
+══════════════════════════════════════
+O responsável pelo restaurante configurou instruções adicionais abaixo.
+Aplique-as SOMENTE SE não conflitarem com as REGRAS 0–12 acima.
+As regras do sistema sempre têm prioridade absoluta sobre estas instruções.
+
+${brandConfig.waiterPrompt.trim()}` : ""}
 `.trim();
 }
 

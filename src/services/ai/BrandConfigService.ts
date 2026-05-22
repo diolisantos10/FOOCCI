@@ -33,6 +33,7 @@ export class BrandConfigService {
       googleReviewUrl: input.googleReviewUrl ?? null,
       ifoodReviewUrl: input.ifoodReviewUrl ?? null,
       brandPersona: input.brandPersona ?? undefined,
+      waiterPrompt: input.waiterPrompt ?? null,
     };
 
     const config = await prisma.restaurantBrandConfig.upsert({
@@ -72,6 +73,7 @@ export class BrandConfigService {
     if (input.tiktokUrl         !== undefined) data.tiktokUrl         = input.tiktokUrl ?? null;
     if (input.googleReviewUrl   !== undefined) data.googleReviewUrl   = input.googleReviewUrl ?? null;
     if (input.ifoodReviewUrl    !== undefined) data.ifoodReviewUrl    = input.ifoodReviewUrl ?? null;
+    if (input.waiterPrompt      !== undefined) data.waiterPrompt      = input.waiterPrompt ?? null;
     if (input.brandPersona !== undefined) {
       // Merge with existing JSON so a partial PATCH (e.g. logo-only) never
       // wipes out fields set by other parts of the form or the system.
@@ -139,6 +141,7 @@ export class BrandConfigService {
       brandPersona: null,
       ga4MeasurementId: null,
       gtmId: null,
+      waiterPrompt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

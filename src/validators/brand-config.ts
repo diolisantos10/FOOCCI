@@ -147,6 +147,9 @@ export const upsertBrandConfigSchema = z.object({
 
   // Brand Persona
   brandPersona:        brandPersonaSchema.optional(),
+
+  // Waiter custom instructions (injected after system rules, never overrides them)
+  waiterPrompt:        z.string().max(2000).nullable().optional(),
 });
 
 export type UpsertBrandConfigInput = z.infer<typeof upsertBrandConfigSchema>;
@@ -171,6 +174,7 @@ export const DEFAULT_BRAND_CONFIG: UpsertBrandConfigInput = {
   brandSecondaryColor: null,
   instagramUrl: null,
   tiktokUrl: null,
+  waiterPrompt: null,
 };
 
 // ── Personality preset → brand config mapping ─────────────────────────────────

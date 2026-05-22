@@ -1006,6 +1006,11 @@ model RestaurantBrandConfig {
   ga4MeasurementId String? // G-XXXXXXXXXX
   gtmId            String? // GTM-XXXXXXX
 
+  // ── Waiter custom instructions ────────────────────────────────
+  // Free-text instructions from the restaurant owner (AI Agents panel).
+  // Injected into the Waiter system prompt AFTER all hard rules.
+  waiterPrompt String? @db.Text
+
   // ── Brand Persona (marketing strategy) ───────────────────────
   // Stored as JSON to allow flexible evolution without migrations.
   brandPersona Json?
