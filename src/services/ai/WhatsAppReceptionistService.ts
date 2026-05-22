@@ -334,10 +334,10 @@ async function run(conversationId: string): Promise<void> {
   const { restaurantId } = conversation;
 
   // Load all config in parallel
-  const [restaurant, storeProfile, agentCfg, evolutionResult, businessHoursRows] = await Promise.all([
+  const [restaurant, storeProfile, agentCfg, evolutionResult, businessHoursRows, inboundCount] = await Promise.all([
     prisma.restaurant.findUnique({
       where:  { id: restaurantId },
-      select: { name: true, slug: true, address: true, isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true },
+      select: { name: true, slug: true, address: true, timezone: true, isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true },
     }),
     prisma.storeProfile.findUnique({
       where:  { restaurantId },
@@ -359,6 +359,10 @@ async function run(conversationId: string): Promise<void> {
       where:   { restaurantId },
       select:  { dayOfWeek: true, isOpen: true, openTime: true, closeTime: true, periodsJson: true },
       orderBy: { dayOfWeek: "asc" },
+    }),
+    // Count inbound messages to detect first-message-in-conversation (menu display control)
+    prisma.message.count({
+      where: { conversationId, direction: "INBOUND" },
     }),
   ]);
 
@@ -393,9 +397,14 @@ async function run(conversationId: string): Promise<void> {
 
   const agentMode = agentCfg?.agentMode ?? "RECEPTIONIST_ONLY";
 
-  const nowDate   = new Date();
-  const todayDow  = nowDate.getDay();
-  const nowMin    = nowDate.getHours() * 60 + nowDate.getMinutes();
+  // Use restaurant's configured timezone (fallback: America/Sao_Paulo).
+  // getDay() / getHours() on a raw `new Date()` return UTC values — wrong for Brazil.
+  // We convert to the local timezone first, then extract day-of-week and minute-of-day.
+  const tz       = restaurant?.timezone ?? "America/Sao_Paulo";
+  const nowDate  = new Date();
+  const localNow = new Date(nowDate.toLocaleString("en-US", { timeZone: tz }));
+  const todayDow = localNow.getDay();
+  const nowMin   = localNow.getHours() * 60 + localNow.getMinutes();
 
   // Emergency pause check
   const isPaused = !!(
@@ -434,6 +443,11 @@ async function run(conversationId: string): Promise<void> {
       .join("\n");
     hoursText = `${todayStatus}*Horários de funcionamento:*\n${weekLines}`;
   }
+
+  // True when this is the very first inbound message in this conversation.
+  // Used to decide whether to show the configured menu (first time) or use GPT
+  // for a more context-aware response (subsequent "oi" in same session).
+  const isFirstMessage = inboundCount <= 1;
 
   // When paused, treat as closed for all intent handling
   const effectivelyOpen = isCurrentlyOpen && !isPaused;
@@ -499,11 +513,14 @@ async function run(conversationId: string): Promise<void> {
         // Try deterministic template for data-backed intents (hours, address, menu link, etc.)
         const templateReply = buildTemplateReply(intent, ctx);
 
-        // Use GPT for GREETING (human-like warmth) and UNKNOWN (open-ended questions),
-        // and as a fallback when template data is missing.
+        // GPT is used for:
+        //   - GREETING on repeat messages in same session (avoid menu spam)
+        //   - GREETING when no menu options are configured (natural warmth)
+        //   - UNKNOWN intent in RECEPTIONIST_ONLY mode
+        //   - any data-backed intent where template data is unavailable
         const useGpt =
-          intent === "GREETING" && menuOptions.length === 0 ||
-          intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED" ||
+          (intent === "GREETING" && (!isFirstMessage || menuOptions.length === 0)) ||
+          (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED") ||
           (templateReply === null && intent !== "GREETING");
 
         if (useGpt) {
@@ -551,20 +568,18 @@ async function run(conversationId: string): Promise<void> {
             ).catch(() => {});
           }
         } else {
-          // Use GREETING template (with menu list) or data-backed template
+          // Deterministic template path
           if (intent === "GREETING") {
-            if (!ctx.isCurrentlyOpen && ctx.closedMessage) {
-              // Closed greeting: lead with closed message, offer menu for browsing
-              const menuLine = ctx.pedidoUrl
-                ? `\n\nVocê pode ver nosso cardápio à vontade (pedidos ficam pausados até reabrirmos) 😊\n${ctx.pedidoUrl}`
-                : "";
-              replyText = `Oi! 👋 ${ctx.closedMessage}${menuLine}`;
-            } else {
-              const menuList = buildMenuList(menuOptions);
-              replyText = ctx.welcomeMessage + (menuList
-                ? menuList + "\n\nResponda com o número da opção 😊"
-                : (ctx.pedidoUrl ? `\n\nCardápio: ${ctx.pedidoUrl}` : ""));
+            // First message in conversation + menu options available:
+            // ALWAYS show the configured menu first. If restaurant is currently
+            // closed, append the closed-status note AFTER the menu — never lead
+            // with "estamos fechados" on a greeting.
+            const menuList = buildMenuList(menuOptions);
+            let greet = ctx.welcomeMessage + menuList + "\n\nResponda com o número da opção 😊";
+            if (!effectivelyOpen && ctx.closedMessage) {
+              greet += `\n\n⚠️ ${ctx.closedMessage}`;
             }
+            replyText = greet;
           } else {
             replyText = templateReply ?? ctx.welcomeMessage;
           }
