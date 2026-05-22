@@ -121,6 +121,8 @@ type CampaignHistoryRow = {
   id:             string;
   name:           string;
   objective:      string | null;
+  targetSegment:  string | null;
+  channel:        string;
   status:         string;
   totalAudience:  number;
   totalSent:      number;
@@ -755,6 +757,7 @@ function ActionConfigDrawer({
   const [loadingAudience, setLoadingAudience] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [prepError, setPrepError] = useState<string | null>(null);
+  const [campaignName, setCampaignName] = useState(template.id === "custom" ? "" : template.title);
 
   const isCustom = template.id === "custom";
   const [customAudienceId, setCustomAudienceId] = useState("");
@@ -814,8 +817,13 @@ function ActionConfigDrawer({
       const scheduledAt = buildScheduledAt();
       const targetId = isCustom ? customAudienceId : template.id;
 
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const resolvedName = campaignName.trim() ||
+        `Campanha sem nome — ${pad(now.getDate())}/${pad(now.getMonth() + 1)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
       const body: Record<string, unknown> = {
-        name:            template.title,
+        name:            resolvedName,
         templateId:      targetId,
         targetSegment:   targetId,
         messageTemplate: message,
@@ -895,6 +903,24 @@ function ActionConfigDrawer({
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto flex-1">
+          {/* Campaign name */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-700">
+              Nome da campanha <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={campaignName}
+              onChange={(e) => setCampaignName(e.target.value)}
+              placeholder="Ex: Reativação frios — PROMO10"
+              maxLength={120}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
+            />
+            <p className="mt-1 text-[10px] text-gray-400">
+              Use um nome fácil para identificar depois nos relatórios.
+            </p>
+          </div>
+
           {/* Info grid */}
           <div className="grid grid-cols-2 gap-3">
             {isCustom ? (
@@ -2006,7 +2032,7 @@ function CampanhasAtivasSection({
                   </div>
                   <p className="text-sm font-bold text-gray-900">{c.name}</p>
                   <p className="text-[11px] text-gray-500 mt-0.5">
-                    WhatsApp · {displayDate}
+                    {c.targetSegment ? `${SEGMENT_LABELS[c.targetSegment] ?? c.targetSegment} · ` : ""}WhatsApp · {displayDate}
                   </p>
                 </div>
                 <div className="shrink-0 flex flex-col items-end gap-1.5">
