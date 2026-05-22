@@ -44,7 +44,13 @@ export async function POST(req: NextRequest) {
     const restaurantId = (url.searchParams.get("restaurantId") ?? body.restaurantId as string | undefined) || undefined;
     const campaignId   = (url.searchParams.get("campaignId")   ?? body.campaignId  as string | undefined) || undefined;
     const limitRaw     = url.searchParams.get("limit")         ?? body.limit;
-    const limit        = limitRaw ? Math.min(200, Math.max(1, parseInt(String(limitRaw)))) : undefined;
+
+    // Default batch cap: 5 per cron run when no explicit limit is given.
+    // Prevents runaway requests when the workflow omits the limit param.
+    const BATCH_DEFAULT = 5;
+    const limit = limitRaw
+      ? Math.min(200, Math.max(1, parseInt(String(limitRaw))))
+      : BATCH_DEFAULT;
 
     if (campaignId) {
       // Single-campaign run

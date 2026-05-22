@@ -64,6 +64,7 @@ export interface ScheduledCampaignRunSummary {
   campaignsProcessed: number;
   totalEligible:      number;
   totalSent:          number;
+  totalFailed:        number;
   totalSkipped:       number;
   results:            CampaignBatchResult[];
 }
@@ -357,6 +358,7 @@ export class ScheduledCampaignRunnerService {
       campaignsProcessed: results.length,
       totalEligible:      results.reduce((s, r) => s + r.eligible, 0),
       totalSent:          results.reduce((s, r) => s + r.sent, 0),
+      totalFailed:        results.reduce((s, r) => s + r.failed, 0),
       totalSkipped:       results.reduce((s, r) => s + r.skipped, 0),
       results,
     };
@@ -406,8 +408,9 @@ export class ScheduledCampaignRunnerService {
       })).map((c) => c.id)
     );
 
-    let sent   = 0;
-    let failed = 0;
+    let sent        = 0;
+    let failed      = 0;
+    let sendIndex   = 0; // tracks actual send attempts (for inter-send delay placement)
 
     for (const customer of customers) {
       if (optedOutIds.has(customer.id)) {
@@ -434,6 +437,17 @@ export class ScheduledCampaignRunnerService {
       }
 
       const messageText = personalizeMessage(campaign.message, customer, msgCtx);
+
+      // Inter-send delay BEFORE each message except the first.
+      // Placing delay here (not after) guarantees no sleep after the last send,
+      // which was the cause of Railway proxy timeouts (exit 56).
+      // Capped at 10 s to stay within the HTTP request budget.
+      if (sendIndex > 0 && safety) {
+        const rawDelay = randomDelayMs(safety);
+        const delayMs  = Math.min(rawDelay, 10_000);
+        if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
+      }
+      sendIndex++;
 
       try {
         const evoResult = await EvolutionClient.sendTextMessage(evoConfig, phone, messageText);
@@ -476,11 +490,6 @@ export class ScheduledCampaignRunnerService {
         ]);
 
         sent++;
-        // Gradual dispatch: random inter-send delay to avoid robotic behaviour
-        if (safety) {
-          const delayMs = randomDelayMs(safety);
-          if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
-        }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : "Erro desconhecido";
         await prisma.campaignExecution.create({

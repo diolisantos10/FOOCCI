@@ -57,16 +57,16 @@ on:
         type: string
 
       limit:
-        description: "Max recipients per batch, 1–200 (campaigns only, default 1 for safety)"
+        description: "Max recipients per batch, 1–200 (campaigns only, default 5 for scheduled)"
         required: false
-        default: "1"
+        default: "5"
         type: string
 
 jobs:
   # ── Job 1: Scheduled Campaigns ───────────────────────────────────────────────
   #
   # Fires on the */15 schedule or when workflow_dispatch targets campaigns/both.
-  # Scheduled runs: dryRun=false, no optional scoping.
+  # Scheduled runs: dryRun=false, limit=5 (keeps the request well within timeout).
   # Manual runs:    honour all inputs.
   # ─────────────────────────────────────────────────────────────────────────────
   run-campaigns:
@@ -88,9 +88,10 @@ jobs:
           echo "url=${BASE_URL}/api/cron/run-scheduled-campaigns" >> "$GITHUB_OUTPUT"
 
           if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            # Scheduled run: always live, no optional fields
-            echo 'body={"dryRun":false}' >> "$GITHUB_OUTPUT"
-            echo "dry_run=false"         >> "$GITHUB_OUTPUT"
+            # Scheduled run: always live, batch capped at 5 to prevent proxy timeouts.
+            # The runner inserts ≤10 s inter-send delays, so 5 msgs ≤ ~45 s total.
+            echo 'body={"dryRun":false,"limit":5}' >> "$GITHUB_OUTPUT"
+            echo "dry_run=false"                   >> "$GITHUB_OUTPUT"
           else
             # Manual dispatch: honour inputs
             DRY_RUN="${{ inputs.dry_run }}"
@@ -107,7 +108,7 @@ jobs:
               && BODY="${BODY},\"limit\":${LIMIT}"
 
             BODY="${BODY}}"
-            echo "body=${BODY}"     >> "$GITHUB_OUTPUT"
+            echo "body=${BODY}"       >> "$GITHUB_OUTPUT"
             echo "dry_run=${DRY_RUN}" >> "$GITHUB_OUTPUT"
           fi
 
@@ -128,17 +129,32 @@ jobs:
           # Write body to a temp file to avoid shell quoting issues
           printf '%s' "$REQUEST_BODY" > /tmp/request.json
 
-          HTTP_STATUS=$(curl -s \
+          # set +e: capture curl exit code manually instead of failing silently.
+          # Previously the step died at this line (exit 56 = RECV_ERROR) before
+          # printing HTTP status or response body — making failures undiagnosable.
+          set +e
+          curl --connect-timeout 20 --max-time 120 -sS \
             -X POST "$ENDPOINT_URL" \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
             -d @/tmp/request.json \
             -o /tmp/response.json \
-            -w "%{http_code}")
+            -w "%{http_code}" > /tmp/http_status.txt
+          CURL_EXIT=$?
+          set -e
 
+          HTTP_STATUS=$(cat /tmp/http_status.txt 2>/dev/null || echo "000")
+
+          echo "← curl exit   : $CURL_EXIT"
           echo "← HTTP Status : $HTTP_STATUS"
           echo "← Response:"
-          jq . /tmp/response.json 2>/dev/null || cat /tmp/response.json
+          jq . /tmp/response.json 2>/dev/null || cat /tmp/response.json || echo "(no response body)"
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo ""
+            echo "::error::curl failed with exit $CURL_EXIT (connection/timeout error). See response above."
+            exit "$CURL_EXIT"
+          fi
 
           if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
             echo ""
@@ -179,7 +195,7 @@ jobs:
               && BODY="${BODY},\"restaurantId\":\"${{ inputs.restaurant_id }}\""
 
             BODY="${BODY}}"
-            echo "body=${BODY}"     >> "$GITHUB_OUTPUT"
+            echo "body=${BODY}"       >> "$GITHUB_OUTPUT"
             echo "dry_run=${DRY_RUN}" >> "$GITHUB_OUTPUT"
           fi
 
@@ -197,17 +213,29 @@ jobs:
 
           printf '%s' "$REQUEST_BODY" > /tmp/request.json
 
-          HTTP_STATUS=$(curl -s \
+          set +e
+          curl --connect-timeout 20 --max-time 120 -sS \
             -X POST "$ENDPOINT_URL" \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
             -d @/tmp/request.json \
             -o /tmp/response.json \
-            -w "%{http_code}")
+            -w "%{http_code}" > /tmp/http_status.txt
+          CURL_EXIT=$?
+          set -e
 
+          HTTP_STATUS=$(cat /tmp/http_status.txt 2>/dev/null || echo "000")
+
+          echo "← curl exit   : $CURL_EXIT"
           echo "← HTTP Status : $HTTP_STATUS"
           echo "← Response:"
-          jq . /tmp/response.json 2>/dev/null || cat /tmp/response.json
+          jq . /tmp/response.json 2>/dev/null || cat /tmp/response.json || echo "(no response body)"
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo ""
+            echo "::error::curl failed with exit $CURL_EXIT (connection/timeout error). See response above."
+            exit "$CURL_EXIT"
+          fi
 
           if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
             echo ""
