@@ -86,7 +86,7 @@ export async function PATCH(
   try {
     const campaign = await prisma.campaign.findUnique({
       where:  { id: params.id },
-      select: { id: true, restaurantId: true, status: true },
+      select: { id: true, restaurantId: true, status: true, scheduleConfig: true },
     });
 
     if (!campaign || campaign.restaurantId !== ctx.restaurantId) {
@@ -101,6 +101,7 @@ export async function PATCH(
       scheduledAt?:     string | null;
       sendWindowStart?: string | null;
       sendWindowEnd?:   string | null;
+      scheduleConfig?:  Record<string, unknown> | null;
     };
 
     // ── lifecycle actions (pause / resume / cancel) ──────────────
@@ -135,23 +136,49 @@ export async function PATCH(
       return ok(updated);
     }
 
-    // ── edit draft / scheduled ────────────────────────────────────
-    if (!["DRAFT", "SCHEDULED"].includes(campaign.status)) {
-      return badRequest("Apenas rascunhos e agendamentos podem ser editados");
+    // ── edit campaign fields ──────────────────────────────────────
+    // name/message/scheduleConfig: allowed for any non-terminal status.
+    // targetSegment/scheduledAt: only for DRAFT or SCHEDULED (changing
+    // audience on a live campaign risks duplicate sends).
+    const TERMINAL = ["SENT", "COMPLETED", "CANCELLED"];
+    if (TERMINAL.includes(campaign.status)) {
+      return badRequest("Campanha finalizada — não pode ser editada");
     }
 
-    const newStatus = body.scheduledAt ? "SCHEDULED" : "DRAFT";
+    const isDraftOrScheduled = ["DRAFT", "SCHEDULED"].includes(campaign.status);
+    const updateData: Record<string, unknown> = {};
+
+    if (body.name?.trim())    updateData.name    = body.name.trim();
+    if (body.message?.trim()) updateData.message = body.message.trim();
+
+    // Merge only safe schedule subfields; preserve mode/endCondition/etc.
+    if (body.scheduleConfig !== undefined && body.scheduleConfig !== null) {
+      const existing = (campaign.scheduleConfig as Record<string, unknown> | null) ?? {};
+      const patch    = body.scheduleConfig;
+      updateData.scheduleConfig = {
+        ...existing,
+        ...(patch.weekdays   !== undefined ? { weekdays:   patch.weekdays   } : {}),
+        ...(patch.timeWindow !== undefined ? { timeWindow: patch.timeWindow } : {}),
+        ...(patch.dailyLimit !== undefined ? { dailyLimit: patch.dailyLimit } : {}),
+      };
+    }
+
+    if (isDraftOrScheduled) {
+      if (body.targetSegment?.trim()) updateData.targetSegment = body.targetSegment.trim();
+      if (body.scheduledAt !== undefined) {
+        updateData.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+        updateData.status      = body.scheduledAt ? "SCHEDULED" : "DRAFT";
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return badRequest("Nenhum campo válido fornecido para atualização");
+    }
 
     const updated = await prisma.campaign.update({
-      where: { id: params.id },
-      data: {
-        ...(body.name?.trim()          ? { name: body.name.trim() }              : {}),
-        ...(body.targetSegment?.trim() ? { targetSegment: body.targetSegment.trim() } : {}),
-        ...(body.message?.trim()       ? { message: body.message.trim() }        : {}),
-        scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
-        status:      newStatus,
-      },
-      select: { id: true, status: true, scheduledAt: true },
+      where:  { id: params.id },
+      data:   updateData as never,
+      select: { id: true, status: true, scheduledAt: true, name: true, message: true, scheduleConfig: true },
     });
 
     return ok(updated);
