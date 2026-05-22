@@ -594,9 +594,10 @@ export function AtendimentoClient({
         const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.createdAt).getTime();
         return tb - ta;
       }
-      // RECENT (default) or OLDEST: priority-based, then time
-      const pd = handlerPriority(a) - handlerPriority(b);
-      if (pd !== 0) return pd;
+      // RECENT or OLDEST: pure chronological sort by last activity.
+      // lastMessageAt is updated on every inbound/outbound message.
+      // CRM outbound-only messages intentionally do NOT bump lastMessageAt
+      // so they don't surface as fake "recent" conversations.
       const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.createdAt).getTime();
       const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.createdAt).getTime();
       return sortBy === "OLDEST" ? ta - tb : tb - ta;
