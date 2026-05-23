@@ -41,7 +41,45 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return ok(campaigns);
+    // For SENDING campaigns the denormalized totalSent/totalFailed may be stale
+    // (updated only after the batch completes, or lost if the process timed out).
+    // Compute live counts from CampaignExecution so the UI always shows real numbers.
+    const sendingIds = campaigns
+      .filter((c) => c.status === "SENDING")
+      .map((c) => c.id);
+
+    const liveCounts: Record<string, { sent: number; failed: number; pending: number }> = {};
+
+    if (sendingIds.length > 0) {
+      const execGroups = await prisma.campaignExecution.groupBy({
+        by:    ["campaignId", "status"],
+        where: { campaignId: { in: sendingIds } },
+        _count: { id: true },
+      });
+      for (const g of execGroups) {
+        if (!liveCounts[g.campaignId]) {
+          liveCounts[g.campaignId] = { sent: 0, failed: 0, pending: 0 };
+        }
+        const s = liveCounts[g.campaignId]!;
+        if (["SENT", "DELIVERED", "READ"].includes(g.status)) s.sent   += g._count.id;
+        else if (g.status === "FAILED")                        s.failed += g._count.id;
+        else if (g.status === "PENDING")                       s.pending += g._count.id;
+      }
+    }
+
+    const enriched = campaigns.map((c) => {
+      const live = liveCounts[c.id];
+      if (!live) return { ...c, pendingCount: 0 };
+      return {
+        ...c,
+        // Prefer live counts — they reflect the actual execution state
+        totalSent:   Math.max(c.totalSent,   live.sent),
+        totalFailed: Math.max(c.totalFailed, live.failed),
+        pendingCount: live.pending,
+      };
+    });
+
+    return ok(enriched);
   } catch (err) {
     console.error("[GET /api/crm/campaigns]", err);
     return serverError();

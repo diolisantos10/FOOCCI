@@ -135,6 +135,8 @@ type CampaignHistoryRow = {
   scheduleConfig: Record<string, unknown> | null;
   createdAt:      string;
   sentAt:         string | null;
+  /** Live execution count for SENDING campaigns — messages still in PENDING state. */
+  pendingCount?:  number;
 };
 
 type CampaignExecutionRow = {
@@ -2229,7 +2231,20 @@ type ScheduleCfg = {
 function getOperationalStatus(c: CampaignHistoryRow): { text: string; color: string; dot: string } {
   const cfg = c.scheduleConfig as ScheduleCfg | null;
   if (c.status === "PAUSED")  return { text: "Campanha pausada — aguardando retomada", color: "text-yellow-700", dot: "bg-yellow-400" };
-  if (c.status === "SENDING") return { text: "Enviando mensagens agora…", color: "text-blue-700", dot: "bg-blue-500" };
+  if (c.status === "SENDING") {
+    const sent    = c.totalSent;
+    const pending = c.pendingCount ?? 0;
+    const failed  = c.totalFailed;
+    const total   = sent + pending + failed;
+    if (total > 0) {
+      const parts: string[] = [];
+      if (sent > 0)    parts.push(`${sent} enviados`);
+      if (pending > 0) parts.push(`${pending} na fila`);
+      if (failed > 0)  parts.push(`${failed} falhas`);
+      return { text: parts.join(" · "), color: "text-blue-700", dot: "bg-blue-500" };
+    }
+    return { text: "Enviando mensagens agora…", color: "text-blue-700", dot: "bg-blue-500" };
+  }
   if (c.status === "SCHEDULED" && c.scheduledAt) {
     const d = new Date(c.scheduledAt);
     return { text: `Agendada para ${d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`, color: "text-amber-700", dot: "bg-amber-400" };
@@ -2303,14 +2318,16 @@ function ActiveCampaignCard({
   const daysRunning  = Math.max(0, Math.floor((Date.now() - new Date(c.createdAt).getTime()) / 86_400_000));
   const responseRate = c.totalSent > 0 ? ((c.totalResponded / c.totalSent) * 100).toFixed(1) : null;
 
+  // For SENDING campaigns, 0 is a real value (not "unknown") — show it explicitly.
+  const isSending = c.status === "SENDING";
   const kpis = [
     { label: "Audiência",  value: c.totalAudience  > 0 ? c.totalAudience  : "—", color: "text-gray-900" },
-    { label: "Enviados",   value: c.totalSent       > 0 ? c.totalSent       : "—", color: c.totalSent > 0 ? "text-blue-700" : "text-gray-400" },
+    { label: "Enviados",   value: c.totalSent > 0 ? c.totalSent : isSending ? 0 : "—", color: c.totalSent > 0 ? "text-blue-700" : isSending ? "text-blue-400" : "text-gray-400" },
     { label: "Respostas",  value: c.totalResponded  > 0 ? c.totalResponded  : "—", color: c.totalResponded > 0 ? "text-indigo-700" : "text-gray-400" },
     { label: "Tx. Resp.",  value: responseRate ? `${responseRate}%` : "—",          color: responseRate ? "text-green-700" : "text-gray-400" },
     { label: "Pedidos",    value: c.totalConverted  > 0 ? c.totalConverted  : "—", color: c.totalConverted > 0 ? "text-green-700" : "text-gray-400" },
     { label: "Receita",    value: Number(c.totalRevenue) > 0 ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—", color: Number(c.totalRevenue) > 0 ? "text-green-700" : "text-gray-400" },
-    { label: "Falhas",     value: c.totalFailed     > 0 ? c.totalFailed     : "—", color: c.totalFailed > 0 ? "text-red-600" : "text-gray-400" },
+    { label: "Falhas",     value: c.totalFailed > 0 ? c.totalFailed : isSending ? 0 : "—", color: c.totalFailed > 0 ? "text-red-600" : "text-gray-400" },
   ];
 
   return (
