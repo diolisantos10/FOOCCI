@@ -334,20 +334,44 @@ export async function POST(
     if (deliveryMethod !== "delivery") return 0;
 
     if (!deliveryCfg) {
-      // No delivery config found — log and charge 0 (safe fallback; owner must configure)
       console.warn("[finalize] delivery order but no delivery_configs row", { restaurantId });
       return 0;
     }
 
+    // Full config dump — essential for diagnosing fee discrepancies in production logs
+    console.info("[finalize] delivery config", {
+      restaurantId,
+      mode:               deliveryCfg.mode,
+      fee:                String(deliveryCfg.fee),
+      freeDeliveryAbove:  String(deliveryCfg.freeDeliveryAbove),
+      distanceBaseFee:    String(deliveryCfg.distanceBaseFee),
+      distancePricePerKm: String(deliveryCfg.distancePricePerKm),
+      distanceMinFee:     String(deliveryCfg.distanceMinFee),
+      distanceMinFeeKm:   deliveryCfg.distanceMinFeeKm,
+      distanceMaxFee:     String(deliveryCfg.distanceMaxFee),
+      clientDeliveryFeeReceived: clientDeliveryFee ?? null,
+      subtotal,
+    });
+
     const freeAbove = deliveryCfg.freeDeliveryAbove != null ? Number(deliveryCfg.freeDeliveryAbove) : null;
     const isFreeOrder = freeAbove != null && freeAbove > 0 && subtotal >= freeAbove;
     if (isFreeOrder) {
-      console.info("[finalize] free delivery applied", { restaurantId, subtotal, freeAbove });
+      const configuredFee = deliveryCfg.mode === "simple" && deliveryCfg.fee != null
+        ? Number(deliveryCfg.fee)
+        : (deliveryCfg.distanceMinFee != null ? Number(deliveryCfg.distanceMinFee) : 0);
+      if (freeAbove < 10 && configuredFee > 0) {
+        // Threshold below R$10 makes virtually ALL orders free — likely misconfiguration
+        console.error("[finalize] CRITICAL: freeDeliveryAbove is very low — almost all deliveries will be FREE", {
+          restaurantId, freeAbove, configuredFee, subtotal,
+          hint: "Set freeDeliveryAbove to a higher value (e.g. 80) or clear it if not intended",
+        });
+      } else {
+        console.info("[finalize] free delivery applied", { restaurantId, subtotal, freeAbove });
+      }
       return 0;
     }
 
     if (deliveryCfg.mode === "simple") {
-      // Simple flat fee — server uses DB value directly, ignores clientDeliveryFee
       const fee = deliveryCfg.fee != null ? Number(deliveryCfg.fee) : 0;
       console.info("[finalize] delivery fee (simple)", { restaurantId, fee, dbFee: String(deliveryCfg.fee) });
       return fee;
@@ -362,12 +386,23 @@ export async function POST(
         maxFee:     deliveryCfg.distanceMaxFee     != null ? Number(deliveryCfg.distanceMaxFee)     : null,
       };
       // Distance is unknown server-side (no geocoding); clientDeliveryFee carries the
-      // per-km total computed on the client after applying freeDeliveryAbove.
-      // Floor = baseFee/minimumFee at unknown distance — never lower than configured floor.
+      // per-km total computed on the client. Floor = baseFee/minimumFee at 0 km.
       const floorFee = calcDeliveryFeeFromConfig(cfg, null);
       const raw = (clientDeliveryFee != null && clientDeliveryFee > 0) ? clientDeliveryFee : floorFee;
       const capped = cfg.maxFee != null && cfg.maxFee > 0 ? Math.min(raw, cfg.maxFee) : raw;
       const fee = Math.max(capped, floorFee);
+
+      // Warn when per-km fee is configured but distance is unknown — it will not be applied
+      if (cfg.pricePerKm > 0 && (clientDeliveryFee == null || clientDeliveryFee <= floorFee)) {
+        console.warn("[finalize] per-km fee NOT applied — distance unknown at checkout", {
+          restaurantId,
+          distancePricePerKm: cfg.pricePerKm,
+          floorFee,
+          feeCharged: fee,
+          hint: "Set distanceMinFee to your desired total minimum (e.g. 13) so all deliveries cost at least that amount. Per-km pricing requires geocoding to compute actual distance.",
+        });
+      }
+
       console.info("[finalize] delivery fee (distance/advanced)", {
         restaurantId, mode: deliveryCfg.mode, clientDeliveryFee, floorFee, fee,
       });

@@ -1337,6 +1337,21 @@ export default function DeliveryPage() {
                     return "Fórmula: taxa = base + (km × preço/km) — com piso e teto opcionais.";
                   })()}
                 />
+
+                {/* Important operational warning for distance mode */}
+                {(toNum(form.distancePricePerKm) ?? 0) > 0 && (
+                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <p className="font-semibold">Como a taxa por km funciona no checkout</p>
+                    <p className="mt-1 text-xs leading-relaxed">
+                      A taxa por km (R$ {(toNum(form.distancePricePerKm) ?? 0).toFixed(2).replace(".", ",")}/km) só é calculada automaticamente se a distância do cliente for conhecida.
+                      Sem essa informação, o checkout exibe apenas a <strong>taxa base</strong>.
+                    </p>
+                    <p className="mt-2 text-xs leading-relaxed font-semibold">
+                      Para garantir uma taxa mínima em todos os pedidos, configure o campo &quot;Taxa mínima (R$)&quot; abaixo com o valor total mínimo desejado (ex: R$ {((toNum(form.distanceBaseFee) ?? 0) + (toNum(form.distancePricePerKm) ?? 0)).toFixed(2).replace(".", ",")}).
+                    </p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Taxa base (R$)" hint="Taxa cobrada mesmo em distância zero.">
                     <input
@@ -1382,7 +1397,7 @@ export default function DeliveryPage() {
                       placeholder="Ex: 25"
                     />
                   </Field>
-                  <Field label="Taxa mínima (R$)" hint="Piso para a taxa calculada. Opcional.">
+                  <Field label="Taxa mínima (R$)" hint="Valor mínimo garantido em todas as entregas (independente da distância). Use aqui o total mínimo que deseja cobrar.">
                     <input
                       className={INPUT}
                       type="number"
@@ -1488,20 +1503,28 @@ export default function DeliveryPage() {
                 subtitle="Incentivos e limites que se aplicam a todos os pedidos."
               />
               <div className="grid grid-cols-2 gap-4">
-                <Field
-                  label="Entrega grátis acima de (R$)"
-                  hint="Pedidos acima deste valor têm frete grátis. Deixe em branco para não usar."
-                >
-                  <input
-                    className={INPUT}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.freeDeliveryAbove}
-                    onChange={(e) => setForm((f) => ({ ...f, freeDeliveryAbove: e.target.value }))}
-                    placeholder="Ex: 80,00"
-                  />
-                </Field>
+                <div>
+                  <Field
+                    label="Entrega grátis acima de (R$)"
+                    hint="Pedidos acima deste valor têm frete grátis. Deixe em branco para não usar."
+                  >
+                    <input
+                      className={INPUT}
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.freeDeliveryAbove}
+                      onChange={(e) => setForm((f) => ({ ...f, freeDeliveryAbove: e.target.value }))}
+                      placeholder="Ex: 80,00"
+                    />
+                  </Field>
+                  {/* Warn when freeDeliveryAbove is suspiciously low — would make almost all orders free */}
+                  {(toNum(form.freeDeliveryAbove) ?? 0) > 0 && (toNum(form.freeDeliveryAbove) ?? 0) < 20 && (
+                    <p className="mt-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                      Atenção: valor muito baixo (R$ {Number(toNum(form.freeDeliveryAbove)).toFixed(2).replace(".", ",")}) — praticamente todos os pedidos terão frete grátis. Isso pode causar prejuízo.
+                    </p>
+                  )}
+                </div>
                 {(form.mode === "advanced" || form.mode === "distance") && (
                   <Field
                     label="Pedido mínimo global (R$)"
