@@ -372,6 +372,8 @@ interface Props {
   isOrderingPaused?: boolean;
   /** Reason for the emergency pause, if provided. */
   pauseReason?: string | null;
+  /** ISO timestamp until which ordering is paused; null = indefinite or not paused. */
+  pausedUntil?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1632,6 +1634,7 @@ export function PedidoClient({
   closedMessage = null,
   isOrderingPaused = false,
   pauseReason = null,
+  pausedUntil = null,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -2777,6 +2780,13 @@ export function PedidoClient({
       setAiPermState("idle");
     }
 
+    if (isOrderingPaused) {
+      const untilMsg = pausedUntil && new Date(pausedUntil) > new Date()
+        ? ` Reabrimos às ${new Date(pausedUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.`
+        : "";
+      pushAssistantMessage(`Pedidos estão pausados no momento.${untilMsg} Você pode explorar o cardápio, mas não é possível finalizar enquanto estivermos pausados ⏸`);
+      return;
+    }
     if (entryPhase !== "browsing") {
       pushAssistantMessage("Informe seu WhatsApp antes de finalizar 📱");
       return;
@@ -2795,7 +2805,7 @@ export function PedidoClient({
     // CHECKOUT_SUPPORT   → sendText auto-advances via proceedToCheckoutRef.
     checkoutPendingRef.current = true;
     sendText("", cart, "BROWSE", null, { event: "ON_CHECKOUT_STARTED", silent: true });
-  }, [cart, stage, entryPhase, sendText, pushAssistantMessage, aiPermState]);
+  }, [cart, stage, entryPhase, isOrderingPaused, pausedUntil, sendText, pushAssistantMessage, aiPermState]);
 
   const handleDeliveryMethod = useCallback(
     (type: "delivery" | "pickup") => {
@@ -3787,14 +3797,17 @@ export function PedidoClient({
 
         {header}
 
-        {/* Emergency pause banner — overrides business hours, shown in red */}
+        {/* Emergency pause banner — overrides business hours */}
         {isOrderingPaused && (
-          <div className="mx-3 mt-2 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 flex gap-2">
-            <span className="text-base shrink-0 mt-0.5">🚫</span>
+          <div className="mx-3 mt-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex gap-2">
+            <span className="text-base shrink-0 mt-0.5">⏸</span>
             <span>
               {"Pedidos pausados temporariamente."}
               {pauseReason ? ` ${pauseReason}.` : ""}
-              {" Você pode explorar o cardápio, mas pedidos estão pausados no momento."}
+              {pausedUntil && new Date(pausedUntil) > new Date()
+                ? ` Reabrimos às ${new Date(pausedUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.`
+                : ""}
+              {" Você pode explorar o cardápio enquanto isso."}
             </span>
           </div>
         )}

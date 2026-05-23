@@ -89,12 +89,16 @@ const PAUSE_REASONS = [
 ];
 
 const AUTO_RESUME_OPTIONS: { label: string; minutes: number | null }[] = [
-  { label: "Indefinido (manual)",   minutes: null },
-  { label: "15 minutos",            minutes: 15 },
-  { label: "30 minutos",            minutes: 30 },
   { label: "1 hora",                minutes: 60 },
   { label: "2 horas",               minutes: 120 },
+  { label: "3 horas",               minutes: 180 },
+  { label: "Tempo personalizado",   minutes: -1 },
+  { label: "Indefinido (manual)",   minutes: null },
 ];
+
+function fmtLocalHM(iso: string): string {
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
 
 export function TopBar({ title }: TopBarProps) {
   const router = useRouter();
@@ -115,9 +119,10 @@ export function TopBar({ title }: TopBarProps) {
   const [pauseReason, setPauseReason]   = useState<string | null>(null);
   const [pausedUntil, setPausedUntil]   = useState<string | null>(null);
   const [showPauseModal, setShowPauseModal] = useState(false);
-  const [modalReason, setModalReason]   = useState(PAUSE_REASONS[0]!);
-  const [modalResume, setModalResume]   = useState<number | null>(null);
-  const [pauseLoading, setPauseLoading] = useState(false);
+  const [modalReason, setModalReason]       = useState(PAUSE_REASONS[0]!);
+  const [modalResume, setModalResume]       = useState<number | null>(60);
+  const [modalCustomMinutes, setModalCustomMinutes] = useState(60);
+  const [pauseLoading, setPauseLoading]     = useState(false);
 
   // Hydrate read IDs from localStorage after mount
   useEffect(() => {
@@ -169,9 +174,10 @@ export function TopBar({ title }: TopBarProps) {
 
   async function handleActivatePause() {
     setPauseLoading(true);
+    const effectiveMinutes = modalResume === -1 ? modalCustomMinutes : modalResume;
     try {
-      const pauseUntil = modalResume != null
-        ? new Date(Date.now() + modalResume * 60_000).toISOString()
+      const pauseUntil = effectiveMinutes != null
+        ? new Date(Date.now() + effectiveMinutes * 60_000).toISOString()
         : null;
       const res = await fetch("/api/settings/store/pause", {
         method: "POST",
@@ -281,21 +287,31 @@ export function TopBar({ title }: TopBarProps) {
         {/* ── Emergency pause button ───────────────────────────────────── */}
         {canPause && (
           isPaused ? (
-            <button
-              type="button"
-              onClick={handleResumePause}
-              disabled={pauseLoading}
-              title={pauseReason ? `Pausado: ${pauseReason}. Clique para retomar` : "Pedidos pausados — clique para retomar"}
-              className="flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:opacity-60"
+            <div
+              title={pauseReason ? `Pausado: ${pauseReason}` : "Pedidos pausados"}
+              className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-xs"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-              <span className="hidden sm:inline">Pedidos pausados</span>
-              <span className="sm:hidden">Pausado</span>
-            </button>
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500 animate-pulse" />
+              <span className="font-semibold text-amber-800 hidden sm:inline">
+                {pausedUntil && new Date(pausedUntil) > new Date()
+                  ? `Pausado até ${fmtLocalHM(pausedUntil)}`
+                  : "Pedidos pausados"}
+              </span>
+              <span className="font-semibold text-amber-800 sm:hidden">Pausado</span>
+              <span className="text-amber-300 hidden sm:inline">·</span>
+              <button
+                type="button"
+                onClick={handleResumePause}
+                disabled={pauseLoading}
+                className="font-semibold text-amber-700 hover:text-amber-900 transition-colors disabled:opacity-60"
+              >
+                Reativar
+              </button>
+            </div>
           ) : (
             <button
               type="button"
-              onClick={() => { setModalReason(PAUSE_REASONS[0]!); setModalResume(null); setShowPauseModal(true); }}
+              onClick={() => { setModalReason(PAUSE_REASONS[0]!); setModalResume(60); setModalCustomMinutes(60); setShowPauseModal(true); }}
               title="Pausar pedidos de emergência"
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-orange-50 hover:text-orange-700 border border-transparent hover:border-orange-200"
             >
@@ -453,59 +469,94 @@ export function TopBar({ title }: TopBarProps) {
       </div>
 
       {/* ── Emergency pause modal ────────────────────────────────────────── */}
-      {showPauseModal && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowPauseModal(false); }}
-        >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl mx-4">
-            <h2 className="mb-1 text-base font-bold text-gray-900">Pausar pedidos</h2>
-            <p className="mb-4 text-xs text-gray-500">
-              Todos os canais (cardápio online, WhatsApp) vão bloquear novos pedidos imediatamente.
-            </p>
+      {showPauseModal && (() => {
+        const effectiveMinutes = modalResume === -1 ? modalCustomMinutes : modalResume;
+        const reopenAt = effectiveMinutes != null
+          ? fmtLocalHM(new Date(Date.now() + effectiveMinutes * 60_000).toISOString())
+          : null;
+        return (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowPauseModal(false); }}
+          >
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl mx-4">
+              <div className="mb-4 flex items-start gap-3">
+                <span className="text-2xl">⏸</span>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Pausar pedidos</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Todos os canais (cardápio online, WhatsApp) vão bloquear novos pedidos imediatamente.
+                  </p>
+                </div>
+              </div>
 
-            <label className="mb-1.5 block text-xs font-semibold text-gray-700">Motivo</label>
-            <select
-              value={modalReason}
-              onChange={(e) => setModalReason(e.target.value)}
-              className="mb-4 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
-            >
-              {PAUSE_REASONS.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-
-            <label className="mb-1.5 block text-xs font-semibold text-gray-700">Retomar automaticamente</label>
-            <select
-              value={modalResume ?? ""}
-              onChange={(e) => setModalResume(e.target.value === "" ? null : Number(e.target.value))}
-              className="mb-6 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
-            >
-              {AUTO_RESUME_OPTIONS.map((o) => (
-                <option key={o.label} value={o.minutes ?? ""}>{o.label}</option>
-              ))}
-            </select>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPauseModal(false)}
-                className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Motivo</label>
+              <select
+                value={modalReason}
+                onChange={(e) => setModalReason(e.target.value)}
+                className="mb-4 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
               >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleActivatePause}
-                disabled={pauseLoading}
-                className="flex-1 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+                {PAUSE_REASONS.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+
+              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Retomar automaticamente</label>
+              <select
+                value={modalResume ?? ""}
+                onChange={(e) => setModalResume(e.target.value === "" ? null : Number(e.target.value))}
+                className="mb-3 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
               >
-                {pauseLoading ? "Pausando…" : "Pausar agora"}
-              </button>
+                {AUTO_RESUME_OPTIONS.map((o) => (
+                  <option key={o.label} value={o.minutes ?? ""}>{o.label}</option>
+                ))}
+              </select>
+
+              {modalResume === -1 && (
+                <div className="mb-3 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={480}
+                    value={modalCustomMinutes}
+                    onChange={(e) => setModalCustomMinutes(Math.max(1, Math.min(480, Number(e.target.value) || 60)))}
+                    className="w-24 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
+                  />
+                  <span className="text-sm text-gray-600">minutos</span>
+                </div>
+              )}
+
+              {reopenAt !== null ? (
+                <p className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  ⏰ Reabrirá automaticamente às <strong>{reopenAt}</strong>
+                </p>
+              ) : (
+                <p className="mb-5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                  Pausa indefinida — reative manualmente quando quiser.
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPauseModal(false)}
+                  className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleActivatePause}
+                  disabled={pauseLoading}
+                  className="flex-1 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-60"
+                >
+                  {pauseLoading ? "Pausando…" : "Pausar agora"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </header>
   );
 }

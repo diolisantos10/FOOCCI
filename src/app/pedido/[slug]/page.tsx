@@ -376,6 +376,7 @@ gtag('config', '${ga4Id}');
         closedMessage={closedMessage}
         isOrderingPaused={isOrderingPaused}
         pauseReason={pauseReason}
+        pausedUntil={isOrderingPaused && pausedUntil ? pausedUntil.toISOString() : null}
       />
     </>
   );
