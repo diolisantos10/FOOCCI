@@ -265,7 +265,8 @@ function buildIdentifiedPedidoUrl(
     url.searchParams.set("waToken", token);
     url.searchParams.set("src", "whatsapp");
     return url.toString();
-  } catch {
+  } catch (err) {
+    console.error("[buildIdentifiedPedidoUrl] signWaToken failed — link will use client-side fallback", err);
     try {
       const url = new URL(baseUrl);
       url.searchParams.set("src", "whatsapp");

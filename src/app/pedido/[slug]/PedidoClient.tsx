@@ -1785,11 +1785,15 @@ export function PedidoClient({
   );
 
   // ── Entry / identification ─────────────────────────────────────────
-  const [entryPhase, setEntryPhase] = useState<"identifying" | "browsing">(() => {
+  // "wa-validating": waToken present in URL but server couldn't resolve it — show
+  //                  loading state while client validates the token via API.
+  const [entryPhase, setEntryPhase] = useState<"identifying" | "wa-validating" | "browsing">(() => {
     if (typeof window === "undefined") return "browsing";
     if (sessionStorage.getItem(`foocci-entry-${slug}`)) return "browsing";
     if (knownCustomerPhone) return "browsing";
     if (storedCustomer) return "browsing";
+    // waToken in URL but server failed — validate client-side before showing phone prompt
+    if (new URLSearchParams(window.location.search).has("waToken")) return "wa-validating";
     return "identifying";
   });
   const [identifiedName, setIdentifiedName] = useState<string | null>(
@@ -1820,6 +1824,43 @@ export function PedidoClient({
     setSessionCustomerId(undefined);
     setEntryPhase("identifying");
   }
+
+  // ── Client-side waToken validation (fallback when server couldn't resolve) ───
+  // Fires when entryPhase is "wa-validating": reads the waToken from the URL,
+  // hits the whatsapp-session endpoint, and either enters browsing with the
+  // resolved identity or falls back to the normal phone-entry prompt.
+  useEffect(() => {
+    if (entryPhase !== "wa-validating") return;
+    const token = new URLSearchParams(window.location.search).get("waToken") ?? "";
+    if (!token) { setEntryPhase("identifying"); return; }
+
+    let cancelled = false;
+    fetch(`/api/pedido/${slug}/whatsapp-session?token=${encodeURIComponent(token)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { ok: boolean; phone?: string; name?: string; customerId?: string } | null) => {
+        if (cancelled) return;
+        if (data?.ok && data.phone) {
+          if (data.customerId) setSessionCustomerId(data.customerId);
+          const firstName = data.name ?? null;
+          if (firstName) { setCustomerName(firstName); setIdentifiedName(firstName); }
+          const displayPh = formatDisplayPhone(data.phone);
+          setIdentifiedPhone(displayPh);
+          try {
+            sessionStorage.setItem(`foocci-customer-${slug}`, JSON.stringify({
+              phone: data.phone, name: firstName ?? "", customerId: data.customerId, displayPhone: displayPh,
+            }));
+          } catch { /* ignore */ }
+          sessionStorage.setItem(`foocci-entry-${slug}`, "1");
+          setEntryPhase("browsing");
+        } else {
+          setEntryPhase("identifying");
+        }
+      })
+      .catch(() => { if (!cancelled) setEntryPhase("identifying"); });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryPhase, slug]);
 
   // ── Auto-identify via known WhatsApp phone ────────────────────────
   // When knownCustomerPhone is set by the server (from waToken) but no customerId
@@ -3781,6 +3822,16 @@ export function PedidoClient({
 
         {/* Chat messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#ece5dd]">
+
+          {/* WhatsApp token validation — brief loading state before phone prompt */}
+          {entryPhase === "wa-validating" && (
+            <div className="flex justify-start">
+              <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-white px-4 py-3 shadow-sm flex items-center gap-2.5 text-sm text-gray-600">
+                <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-green-500 border-t-transparent" />
+                Identificando seu atendimento...
+              </div>
+            </div>
+          )}
 
           {/* Phone entry inside chat — doesn't block menu on desktop */}
           {entryPhase === "identifying" && (
