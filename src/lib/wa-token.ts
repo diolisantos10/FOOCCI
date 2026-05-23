@@ -20,12 +20,20 @@ export interface WaTokenPayload {
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function signingSecret(): string {
-  return process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET ?? "";
+  const s = process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET;
+  if (s) return s;
+  if (process.env.NODE_ENV !== "production") {
+    // Safe dev-only fallback so WhatsApp links work without env setup.
+    // NEVER used in production (throws below).
+    return "__dev_wa_token_fallback_set_NEXTAUTH_SECRET__";
+  }
+  return "";
 }
 
 export function signWaToken(payload: Omit<WaTokenPayload, "exp">): string {
+  if (!payload.phone?.trim()) throw new Error("wa-token: phone is required");
   const s = signingSecret();
-  if (!s) throw new Error("wa-token: NEXTAUTH_SECRET not configured");
+  if (!s) throw new Error("wa-token: NEXTAUTH_SECRET not configured — set it in Railway env");
   const full: WaTokenPayload = { ...payload, exp: Date.now() + TOKEN_TTL_MS };
   const body = Buffer.from(JSON.stringify(full)).toString("base64url");
   const sig  = createHmac("sha256", s).update(body).digest("hex");

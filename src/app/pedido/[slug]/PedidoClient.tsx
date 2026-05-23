@@ -1821,6 +1821,44 @@ export function PedidoClient({
     setEntryPhase("identifying");
   }
 
+  // ── Auto-identify via known WhatsApp phone ────────────────────────
+  // When knownCustomerPhone is set by the server (from waToken) but no customerId
+  // was resolved (customer wasn't in the DB at page-render time), silently call
+  // the identify API to create/find the customer and store the ID for checkout.
+  useEffect(() => {
+    if (!effectiveCustomerPhone) return;     // no phone context
+    if (resolvedCustomerId)       return;     // already have an ID
+    if (entryPhase !== "browsing") return;   // only run after phone-entry resolved/skipped
+    let cancelled = false;
+
+    fetch(`/api/qr/${slug}/identify`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        phone: effectiveCustomerPhone,
+        ...(customerName?.trim() ? { name: customerName.trim() } : {}),
+      }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { found?: boolean; name?: string; customerId?: string; normalizedPhone?: string } | null) => {
+        if (cancelled || !data) return;
+        if (data.customerId) setSessionCustomerId(data.customerId);
+        if (data.name && !customerName) { setCustomerName(data.name); setIdentifiedName(data.name); }
+        if (data.normalizedPhone || effectiveCustomerPhone) {
+          const phone = data.normalizedPhone ?? effectiveCustomerPhone ?? "";
+          try {
+            sessionStorage.setItem(`foocci-customer-${slug}`, JSON.stringify({
+              phone, name: data.name ?? customerName ?? "", customerId: data.customerId, displayPhone: identifiedPhone,
+            }));
+          } catch { /* ignore */ }
+        }
+      })
+      .catch(() => { /* silent — identification is best-effort */ });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, effectiveCustomerPhone, entryPhase]);
+
   // ── Stage / flow ──────────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
   const ACTIVE_ORDER_KEY = `foocci_active_order_${slug}`;

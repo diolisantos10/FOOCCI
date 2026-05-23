@@ -5,6 +5,8 @@ import Link from "next/link";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
+type PeriodKey = "today" | "7d" | "current_month" | "30d" | "custom";
+
 interface TopProduct {
   name:         string;
   quantity:     number;
@@ -23,16 +25,22 @@ interface Campaign {
 }
 
 interface DashboardData {
-  ordersToday:          number;
-  revenueToday:         number;
-  avgTicket:            number;
-  openOrders:           number;
-  totalCustomers:       number;
-  newCustomersToday:    number;
-  ordersYesterday:      number;
-  revenueYesterday:     number;
-  revenue7Days:         number;
-  trend7Days:           { date: string; revenue: number; orders: number }[];
+  // Period metadata
+  period:             PeriodKey;
+  periodLabel:        string;
+  periodDays:         number;
+
+  // Period KPIs
+  ordersPeriod:       number;
+  revenuePeriod:      number;
+  avgTicket:          number;
+  ordersPrev:         number;
+  revenuePrev:        number;
+
+  // Real-time
+  openOrders:         number;
+  totalCustomers:     number;
+  newCustomersPeriod: number;
   pipeline: {
     pending:        number;
     confirmed:      number;
@@ -42,10 +50,15 @@ interface DashboardData {
   };
   delayedCount:         number;
   pendingPaymentsCount: number;
-  topProducts:          TopProduct[];
-  hourlyOrders:         { hour: number; orders: number; revenue: number }[];
-  ordersByType:         { DELIVERY: number; PICKUP: number; DINE_IN: number };
-  activeCampaigns:      Campaign[];
+
+  // Charts
+  topProducts:   TopProduct[];
+  hourlyOrders:  { hour: number; orders: number; revenue: number }[];
+  ordersByType:  { DELIVERY: number; PICKUP: number; DINE_IN: number };
+  trendDays:     { date: string; revenue: number; orders: number }[];
+  revenueTrend:  number;
+
+  activeCampaigns: Campaign[];
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
@@ -58,11 +71,19 @@ function fmtNum(n: number) {
   return new Intl.NumberFormat("pt-BR").format(n);
 }
 
+/** Compact currency for chart labels: "R$ 120", "1,2k", "12k" */
+function fmtCompact(n: number): string {
+  if (n === 0) return "";
+  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1_000)  return `${(n / 1000).toFixed(1).replace(".", ",")}k`;
+  return `R$${Math.round(n)}`;
+}
+
 function pctChange(current: number, previous: number): { label: string; positive: boolean } | null {
   if (previous === 0) return null;
   const pct      = ((current - previous) / previous) * 100;
   const positive = pct >= 0;
-  return { label: `${positive ? "+" : ""}${pct.toFixed(0)}% vs ontem`, positive };
+  return { label: `${positive ? "+" : ""}${pct.toFixed(0)}% vs anterior`, positive };
 }
 
 function getGreeting(): string {
@@ -91,6 +112,88 @@ function LoadingSkeleton() {
       </div>
       <Pulse className="h-24" />
       <Pulse className="h-24" />
+    </div>
+  );
+}
+
+// ── Period Filter ──────────────────────────────────────────────────────────────
+
+const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
+  { key: "today",         label: "Hoje"         },
+  { key: "7d",            label: "7 dias"       },
+  { key: "current_month", label: "Mês atual"    },
+  { key: "30d",           label: "30 dias"      },
+  { key: "custom",        label: "Personalizado" },
+];
+
+function PeriodFilter({
+  period, customStart, customEnd, loading,
+  onChange, onCustomChange,
+}: {
+  period:       PeriodKey;
+  customStart:  string;
+  customEnd:    string;
+  loading:      boolean;
+  onChange:     (p: PeriodKey) => void;
+  onCustomChange: (start: string, end: string) => void;
+}) {
+  const [localStart, setLocalStart] = useState(customStart);
+  const [localEnd,   setLocalEnd]   = useState(customEnd);
+
+  // Sync outer → inner when period resets
+  useEffect(() => { setLocalStart(customStart); setLocalEnd(customEnd); }, [customStart, customEnd]);
+
+  function applyCustom() {
+    if (localStart && localEnd && localStart <= localEnd) onCustomChange(localStart, localEnd);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {PERIOD_OPTIONS.map(opt => (
+        <button
+          key={opt.key}
+          type="button"
+          onClick={() => onChange(opt.key)}
+          disabled={loading}
+          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors
+            ${period === opt.key
+              ? "bg-orange-500 text-white shadow-sm"
+              : "border border-gray-200 bg-white text-gray-600 hover:border-orange-300 hover:text-orange-600"
+            }
+            ${loading ? "opacity-60 cursor-not-allowed" : ""}`}
+        >
+          {opt.label}
+        </button>
+      ))}
+
+      {period === "custom" && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <input
+            type="date"
+            value={localStart}
+            max={localEnd || undefined}
+            onChange={e => setLocalStart(e.target.value)}
+            className="h-7 rounded-lg border border-gray-200 px-2 text-xs text-gray-700 focus:border-orange-400 focus:outline-none"
+          />
+          <span className="text-xs text-gray-400">—</span>
+          <input
+            type="date"
+            value={localEnd}
+            min={localStart || undefined}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={e => setLocalEnd(e.target.value)}
+            className="h-7 rounded-lg border border-gray-200 px-2 text-xs text-gray-700 focus:border-orange-400 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={applyCustom}
+            disabled={!localStart || !localEnd || localStart > localEnd || loading}
+            className="h-7 rounded-lg bg-orange-500 px-2.5 text-xs font-bold text-white transition-colors hover:bg-orange-600 disabled:opacity-50"
+          >
+            Aplicar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -237,15 +340,20 @@ function PipelineSection({
 
 const RANK_ICON = ["🥇", "🥈", "🥉"] as const;
 
-function TopProductsSection({ products }: { products: TopProduct[] }) {
+function TopProductsSection({ products, periodLabel }: { products: TopProduct[]; periodLabel: string }) {
   return (
     <Card className="p-4">
-      <SectionHeader title="Mais vendidos hoje" sub="Por quantidade" href="/analytics" hrefLabel="Analytics" />
+      <SectionHeader
+        title="Mais vendidos"
+        sub={`${periodLabel} · por quantidade`}
+        href="/analytics"
+        hrefLabel="Analytics"
+      />
 
       {products.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-8 text-center">
           <span className="text-2xl">🍽</span>
-          <p className="text-sm text-gray-400">Os mais vendidos aparecerão quando houver pedidos hoje</p>
+          <p className="text-sm text-gray-400">Nenhuma venda no período selecionado</p>
         </div>
       ) : (
         <div className="divide-y divide-gray-50">
@@ -283,10 +391,12 @@ const ORDER_TYPE_META = [
   { key: "DINE_IN",  label: "Mesa",     icon: "🪑", color: "bg-green-400"  },
 ] as const;
 
-function OrderTypesSection({ types, total }: { types: DashboardData["ordersByType"]; total: number }) {
+function OrderTypesSection({ types, total, periodLabel }: {
+  types: DashboardData["ordersByType"]; total: number; periodLabel: string;
+}) {
   return (
     <Card className="p-4">
-      <SectionHeader title="Modalidade" sub="Pedidos de hoje por tipo" />
+      <SectionHeader title="Modalidade" sub={`${periodLabel} · por tipo`} />
 
       {total === 0 ? (
         <div className="flex flex-col items-center gap-2 py-6 text-center">
@@ -298,16 +408,15 @@ function OrderTypesSection({ types, total }: { types: DashboardData["ordersByTyp
             const count = types[m.key];
             const pct   = total > 0 ? Math.round((count / total) * 100) : 0;
             return (
-              <div key={m.key} className="flex items-center gap-2.5">
-                <span className="text-base">{m.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium text-gray-700">{m.label}</span>
-                    <span className="text-gray-500">{count} · {pct}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-                    <div className={`h-full rounded-full transition-all ${m.color}`} style={{ width: `${pct}%` }} />
-                  </div>
+              <div key={m.key}>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-xs text-gray-600">
+                    <span>{m.icon}</span> {m.label}
+                  </span>
+                  <span className="text-xs font-semibold text-gray-800">{count} <span className="font-normal text-gray-400">({pct}%)</span></span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                  <div className={`h-full rounded-full ${m.color}`} style={{ width: `${pct}%` }} />
                 </div>
               </div>
             );
@@ -363,38 +472,71 @@ function HourlyChart({ hourlyOrders }: { hourlyOrders: DashboardData["hourlyOrde
   );
 }
 
-// ── 7-Day Trend ────────────────────────────────────────────────────────────────
+// ── Trend Chart (daily bars — works for any period length) ─────────────────────
 
 const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
 
-function WeekTrendSection({ trend, totalRevenue }: { trend: DashboardData["trend7Days"]; totalRevenue: number }) {
+function TrendChart({
+  trend, totalRevenue, periodLabel, days,
+}: {
+  trend:        DashboardData["trendDays"];
+  totalRevenue: number;
+  periodLabel:  string;
+  days:         number;
+}) {
+  if (trend.length === 0) return null;
+
   const maxRev = Math.max(1, ...trend.map(d => d.revenue));
+  // For many bars, only show label every N days so they don't overlap
+  const labelEvery = trend.length <= 7 ? 1 : trend.length <= 14 ? 2 : trend.length <= 21 ? 3 : 5;
 
   return (
     <Card className="p-4">
       <SectionHeader
-        title="Últimos 7 dias"
+        title={days <= 1 ? "Últimos 7 dias" : `Tendência · ${periodLabel}`}
         sub={`${fmtCurrency(totalRevenue)} em receita`}
         href="/analytics"
         hrefLabel="Analytics"
       />
-      <div className="flex items-end gap-1" style={{ height: 56 }}>
+      {/* Container: items-end aligns bar bottoms; extra height for value labels */}
+      <div className="flex items-end gap-px" style={{ height: 76 }}>
         {trend.map((d, i) => {
-          const isToday = i === trend.length - 1;
+          const isLast  = i === trend.length - 1;
+          const isToday = days <= 1 ? isLast : false;
           const parts   = d.date.split("-") as [string, string, string];
           const jsDay   = new Date(+parts[0], +parts[1] - 1, +parts[2]).getDay();
-          const label   = isToday ? "Hoje" : (DAY_NAMES[jsDay] ?? "?");
-          const barH    = d.revenue > 0 ? Math.max(4, Math.round((d.revenue / maxRev) * 48)) : 2;
+          const label   = isToday ? "Hoje"
+            : trend.length <= 7 ? (DAY_NAMES[jsDay] ?? "?")
+            : (i % labelEvery === 0 ? parts[2] : ""); // show day-of-month number
+          const barH    = d.revenue > 0 ? Math.max(6, Math.round((d.revenue / maxRev) * 48)) : 2;
+          const valueLabel = fmtCompact(d.revenue);
 
           return (
-            <div key={d.date} className="flex flex-1 flex-col items-center gap-1"
-              title={`${label}: ${fmtCurrency(d.revenue)} · ${d.orders} pedido${d.orders !== 1 ? "s" : ""}`}>
+            <div
+              key={d.date}
+              className="relative flex flex-1 flex-col items-center gap-0.5"
+              title={`${d.date}: ${fmtCurrency(d.revenue)} · ${d.orders} pedido${d.orders !== 1 ? "s" : ""}`}
+            >
+              {/* Value label above bar — absolutely positioned to not shift bar alignment */}
+              {d.revenue > 0 && (
+                <span
+                  className="pointer-events-none absolute left-0 right-0 text-center text-[7px] font-medium leading-none text-gray-500"
+                  style={{ bottom: barH + 16 }}
+                >
+                  {valueLabel}
+                </span>
+              )}
+              {/* Bar */}
               <div
                 className={`w-full rounded-t-sm ${isToday ? "bg-orange-500" : "bg-gray-200"}`}
                 style={{ height: barH }}
               />
-              <span className={`text-[9px] leading-none ${isToday ? "font-bold text-orange-500" : "text-gray-400"}`}>
-                {label}
+              {/* Day label below bar */}
+              <span className={`text-[8px] leading-none ${
+                isToday ? "font-bold text-orange-500" :
+                label    ? "text-gray-400"              : "text-transparent"
+              }`}>
+                {label || "·"}
               </span>
             </div>
           );
@@ -456,18 +598,18 @@ function CampaignSection({ campaigns }: { campaigns: Campaign[] }) {
 // ── CRM Section ────────────────────────────────────────────────────────────────
 
 function CrmSection({
-  totalCustomers, newToday, campaignCount,
+  totalCustomers, newPeriod, campaignCount, periodLabel,
 }: {
-  totalCustomers: number; newToday: number; campaignCount: number;
+  totalCustomers: number; newPeriod: number; campaignCount: number; periodLabel: string;
 }) {
   return (
     <Card className="p-4">
       <SectionHeader title="CRM" sub="Clientes e relacionamento" href="/crm" hrefLabel="Abrir CRM" />
       <div className="grid grid-cols-3 gap-2">
         {[
-          { icon: "👥", value: fmtNum(totalCustomers), label: "Clientes"    },
-          { icon: "✨", value: fmtNum(newToday),        label: "Novos hoje"  },
-          { icon: "📣", value: fmtNum(campaignCount),   label: "Campanhas"   },
+          { icon: "👥", value: fmtNum(totalCustomers), label: "Clientes"                      },
+          { icon: "✨", value: fmtNum(newPeriod),       label: `Novos · ${periodLabel}`        },
+          { icon: "📣", value: fmtNum(campaignCount),   label: "Campanhas"                     },
         ].map(item => (
           <div key={item.label} className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
             <span className="text-xl">{item.icon}</span>
@@ -520,14 +662,28 @@ function QuickActions() {
   );
 }
 
+// ── Real-time badge ────────────────────────────────────────────────────────────
+
+function RealtimeBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] text-gray-500">
+      <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+      Tempo real
+    </span>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function DashboardClient({ userName }: { userName: string }) {
-  const [data,       setData]       = useState<DashboardData | null>(null);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState(false);
-  const [dateStr,    setDateStr]    = useState("");
-  const [retryCount, setRetryCount] = useState(0);
+  const [data,        setData]        = useState<DashboardData | null>(null);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(false);
+  const [dateStr,     setDateStr]     = useState("");
+  const [retryCount,  setRetryCount]  = useState(0);
+  const [period,      setPeriod]      = useState<PeriodKey>("today");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd,   setCustomEnd]   = useState("");
 
   useEffect(() => {
     setDateStr(
@@ -545,7 +701,12 @@ export default function DashboardClient({ userName }: { userName: string }) {
 
     async function load() {
       try {
-        const res  = await fetch("/api/dashboard");
+        const params = new URLSearchParams({ period });
+        if (period === "custom" && customStart && customEnd) {
+          params.set("startDate", customStart);
+          params.set("endDate",   customEnd);
+        }
+        const res  = await fetch(`/api/dashboard?${params.toString()}`);
         if (!res.ok) throw new Error("api error");
         const json = (await res.json()) as { data: DashboardData };
         if (active) setData(json.data);
@@ -557,24 +718,52 @@ export default function DashboardClient({ userName }: { userName: string }) {
     }
 
     void load();
-    const id = setInterval(() => { void load(); }, 120_000);
-    return () => { active = false; clearInterval(id); };
-  }, [retryCount]);
+    // Auto-refresh only for "today" (real-time operational view)
+    const id = period === "today" ? setInterval(() => { void load(); }, 120_000) : null;
+    return () => { active = false; if (id) clearInterval(id); };
+  }, [period, customStart, customEnd, retryCount]);
+
+  function handlePeriodChange(p: PeriodKey) {
+    if (p !== "custom") {
+      setCustomStart("");
+      setCustomEnd("");
+    }
+    setPeriod(p);
+  }
+
+  function handleCustomChange(start: string, end: string) {
+    setCustomStart(start);
+    setCustomEnd(end);
+    // Trigger reload via retryCount
+    setRetryCount(c => c + 1);
+  }
 
   const greeting = getGreeting();
+  const pLabel   = data?.periodLabel ?? "Hoje";
 
   // Header always visible
   const header = (
-    <div className="flex flex-col gap-3 p-4 pb-2 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Início</h1>
-        <p className="text-sm text-gray-500">
-          {greeting}, {userName}
-          {dateStr && <span className="mx-1.5 text-gray-300">·</span>}
-          {dateStr}
-        </p>
+    <div className="space-y-2 p-4 pb-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Início</h1>
+          <p className="text-sm text-gray-500">
+            {greeting}, {userName}
+            {dateStr && <span className="mx-1.5 text-gray-300">·</span>}
+            {dateStr}
+          </p>
+        </div>
+        <QuickActions />
       </div>
-      <QuickActions />
+      {/* Period filter strip */}
+      <PeriodFilter
+        period={period}
+        customStart={customStart}
+        customEnd={customEnd}
+        loading={loading}
+        onChange={handlePeriodChange}
+        onCustomChange={handleCustomChange}
+      />
     </div>
   );
 
@@ -608,8 +797,8 @@ export default function DashboardClient({ userName }: { userName: string }) {
 
   if (!data) return null;
 
-  const revenueChange = pctChange(data.revenueToday, data.revenueYesterday);
-  const ordersChange  = pctChange(data.ordersToday,  data.ordersYesterday);
+  const revenueChange = pctChange(data.revenuePeriod, data.revenuePrev);
+  const ordersChange  = pctChange(data.ordersPeriod,  data.ordersPrev);
 
   return (
     <div>
@@ -619,22 +808,22 @@ export default function DashboardClient({ userName }: { userName: string }) {
         {/* KPI Row */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KpiCard
-            label="Receita hoje"
-            value={fmtCurrency(data.revenueToday)}
+            label={`Receita · ${pLabel}`}
+            value={fmtCurrency(data.revenuePeriod)}
             change={revenueChange}
             href="/orders"
             accent
           />
           <KpiCard
-            label="Pedidos hoje"
-            value={fmtNum(data.ordersToday)}
+            label={`Pedidos · ${pLabel}`}
+            value={fmtNum(data.ordersPeriod)}
             change={ordersChange}
             href="/orders"
           />
           <KpiCard
             label="Ticket médio"
-            value={data.ordersToday > 0 ? fmtCurrency(data.avgTicket) : "—"}
-            sub={data.ordersToday > 0 ? "por pedido" : "sem pedidos ainda"}
+            value={data.ordersPeriod > 0 ? fmtCurrency(data.avgTicket) : "—"}
+            sub={data.ordersPeriod > 0 ? "por pedido" : "sem pedidos no período"}
           />
           <KpiCard
             label="Em andamento"
@@ -643,6 +832,14 @@ export default function DashboardClient({ userName }: { userName: string }) {
             href={data.openOrders > 0 ? "/orders" : undefined}
           />
         </div>
+
+        {/* Real-time note for non-today periods */}
+        {data.period !== "today" && (
+          <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-500">
+            <RealtimeBadge />
+            <span>Pipeline, atrasados e pagamentos pendentes são sempre em tempo real.</span>
+          </div>
+        )}
 
         {/* Pipeline */}
         <PipelineSection
@@ -654,16 +851,23 @@ export default function DashboardClient({ userName }: { userName: string }) {
         {/* Products + Modality */}
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <TopProductsSection products={data.topProducts} />
+            <TopProductsSection products={data.topProducts} periodLabel={pLabel} />
           </div>
-          <OrderTypesSection types={data.ordersByType} total={data.ordersToday} />
+          <OrderTypesSection types={data.ordersByType} total={data.ordersPeriod} periodLabel={pLabel} />
         </div>
 
-        {/* Hourly rhythm */}
-        <HourlyChart hourlyOrders={data.hourlyOrders} />
+        {/* Hourly rhythm (today only) */}
+        {data.period === "today" && data.hourlyOrders.length > 0 && (
+          <HourlyChart hourlyOrders={data.hourlyOrders} />
+        )}
 
-        {/* 7-day trend */}
-        <WeekTrendSection trend={data.trend7Days} totalRevenue={data.revenue7Days} />
+        {/* Trend chart */}
+        <TrendChart
+          trend={data.trendDays}
+          totalRevenue={data.revenueTrend}
+          periodLabel={pLabel}
+          days={data.periodDays}
+        />
 
         {/* Active campaigns */}
         <CampaignSection campaigns={data.activeCampaigns} />
@@ -671,8 +875,9 @@ export default function DashboardClient({ userName }: { userName: string }) {
         {/* CRM summary */}
         <CrmSection
           totalCustomers={data.totalCustomers}
-          newToday={data.newCustomersToday}
+          newPeriod={data.newCustomersPeriod}
           campaignCount={data.activeCampaigns.length}
+          periodLabel={pLabel}
         />
 
         {/* Analytics link */}
