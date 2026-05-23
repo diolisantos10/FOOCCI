@@ -157,3 +157,38 @@ export function randomDelayMs(cfg: CRMWhatsAppSafetyConfig): number {
   const max = Math.max(min, cfg.randomDelayMaxSec);
   return (Math.floor(Math.random() * (max - min + 1)) + min) * 1000;
 }
+
+// ─── Birthday exemption ───────────────────────────────────────────────────────
+
+/**
+ * Returns true when a campaign/automation qualifies as a birthday send.
+ *
+ * Birthday messages are exempt from cross-campaign frequency cooldowns
+ * (customerCooldownHours / maxPerWeekPerCustomer / 24h duplicate guard)
+ * because birthday windows occur at most once per month per customer and
+ * must not be blocked by an earlier promotion.
+ *
+ * All other safety rules still apply:
+ *   - hasOptedOut / crmContactable / valid phone
+ *   - WhatsApp integration availability
+ *   - quiet hours and daily global cap
+ *   - per-automation 365-day dedup (prevents re-sending same birthday year)
+ */
+export function isBirthdayCampaign(campaign: {
+  templateId?:    string | null;
+  objective?:     string | null;
+  targetSegment?: string | null;
+}): boolean {
+  const tid = (campaign.templateId    ?? "").toLowerCase();
+  const obj = (campaign.objective     ?? "").toUpperCase();
+  const seg = (campaign.targetSegment ?? "").toUpperCase();
+
+  // Automation runner tags birthday campaigns with templateId = "auto:BIRTHDAY"
+  if (tid === "auto:birthday")  return true;
+  // Manual campaign using the "aniversariantes" template
+  if (tid === "aniversariantes") return true;
+  // Objective or segment explicitly identifies birthday
+  if (obj === "BIRTHDAY")        return true;
+  if (seg === "ANIVERSARIANTES" || seg === "BIRTHDAY") return true;
+  return false;
+}

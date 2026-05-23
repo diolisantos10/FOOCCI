@@ -18,6 +18,7 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { ConversationStatus } from "@prisma/client";
 import { assignConversationContext, buildConversationMetadataForCrmSend, CONTEXT_TYPE } from "@/services/agents/AgentRoutingService";
 import { getSegmentConfig, buildCutoffs } from "@/lib/crm-segments";
+import { isBirthdayCampaign } from "@/lib/crm-safety";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -410,13 +411,17 @@ export class CrmCampaignService {
   ): Promise<SendResult> {
     // Validate campaign ownership
     const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: { id: true, restaurantId: true, status: true },
+      where:  { id: campaignId },
+      select: { id: true, restaurantId: true, status: true, templateId: true, objective: true, targetSegment: true },
     });
 
     if (!campaign || campaign.restaurantId !== restaurantId) {
       throw new Error("Campaign not found");
     }
+
+    // Birthday campaigns bypass cross-campaign frequency cooldowns; they
+    // still respect opt-out, phone validation, and WhatsApp availability.
+    const isBirthday = isBirthdayCampaign(campaign);
     if (campaign.status === "SENT" || campaign.status === "SENDING") {
       throw new Error("Campaign is already sent or sending");
     }
@@ -458,9 +463,11 @@ export class CrmCampaignService {
 
     // Pre-fetch customers already successfully reached via any other campaign in the last 24 h.
     // Prevents sending the same customer a second CRM WhatsApp message on the same day.
+    // Birthday campaigns are exempt: their window occurs at most once per year per customer
+    // and must not be blocked by a recent promotion or reactivation message.
     const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const recentlySentIds = new Set(
-      customerIds.length > 0
+      !isBirthday && customerIds.length > 0
         ? (await prisma.campaignExecution.findMany({
             where: {
               restaurantId,

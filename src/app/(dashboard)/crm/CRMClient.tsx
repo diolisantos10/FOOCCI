@@ -3738,7 +3738,7 @@ const AUTOMATION_META: Record<string, {
   BIRTHDAY: {
     emoji: "🎂",
     label: "Feliz aniversário",
-    description: "Envia mensagem de aniversário no dia do cliente (requer data de nascimento cadastrada).",
+    description: "Envia mensagem de aniversário no dia do cliente (requer data de nascimento cadastrada). Mensagens de aniversário não entram na régua comum de frequência — são enviadas mesmo que o cliente tenha recebido outra campanha recentemente.",
     defaultDays: 0,
     daysLabel: "",
     showDays: false,
@@ -4297,9 +4297,9 @@ function CrmConfiguracoes() {
         <ul className="space-y-2.5">
           {[
             { icon: "🔄", text: "Reativação: enviada após o número de dias configurado em cada automação" },
-            { icon: "🎂", text: "Aniversário: enviada no dia do aniversário do cliente, dentro da janela de horário" },
+            { icon: "🎂", text: "Aniversário: enviada no dia do aniversário do cliente. Não entra na régua de cooldown — é enviada mesmo que o cliente tenha recebido outra campanha recentemente. Opt-out e segurança do WhatsApp continuam sendo respeitados." },
             { icon: "⭐", text: "Pós-pedido: enviada após o número de horas configurado na automação" },
-            { icon: "🛡️", text: "Todas as automações respeitam o cooldown por cliente e o cap diário" },
+            { icon: "🛡️", text: "Reativação e pós-pedido respeitam o cooldown por cliente e o cap diário global" },
           ].map((item) => (
             <li key={item.text} className="flex items-start gap-2.5 text-sm text-gray-700">
               <span className="shrink-0">{item.icon}</span>
@@ -4349,7 +4349,7 @@ function CrmConfiguracoes() {
             { icon: "🚫", text: "Clientes com opt-out são sempre excluídos de qualquer envio CRM" },
             { icon: "📵", text: "Clientes sem telefone válido nunca recebem mensagens" },
             { icon: "🔄", text: "Deduplicação: mesmo cliente não recebe a mesma campanha duas vezes" },
-            { icon: "⏱️", text: "Cooldown cruzado: cliente que recebeu qualquer campanha hoje aguarda cooldown" },
+            { icon: "⏱️", text: "Cooldown cruzado: cliente que recebeu qualquer campanha hoje aguarda cooldown (exceto mensagens de aniversário)" },
           ].map((item) => (
             <li key={item.text} className="flex items-start gap-2.5 text-sm text-gray-700">
               <span className="shrink-0 text-base">{item.icon}</span>

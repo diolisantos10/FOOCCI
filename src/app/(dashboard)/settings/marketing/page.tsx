@@ -257,7 +257,7 @@ export default function MarketingSettingsPage() {
             { icon: "🚫", text: "Clientes com opt-out são sempre excluídos de qualquer envio CRM" },
             { icon: "📵", text: "Clientes sem telefone válido nunca recebem mensagens" },
             { icon: "🔄", text: "Deduplicação: mesmo cliente não recebe a mesma campanha duas vezes" },
-            { icon: "⏱️", text: "Janela cruzada: cliente que recebeu qualquer campanha hoje aguarda cooldown antes de receber outra" },
+            { icon: "⏱️", text: "Janela cruzada: cliente que recebeu qualquer campanha hoje aguarda cooldown antes de receber outra (exceto mensagens de aniversário)" },
             { icon: "✅", text: "Opt-out por palavra-chave é detectado automaticamente pelo WhatsApp Webhook" },
           ].map((item) => (
             <li key={item.text} className="flex items-start gap-2.5 text-sm text-gray-700">
