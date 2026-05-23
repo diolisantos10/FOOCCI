@@ -622,7 +622,8 @@ function ProductCard({
       <button onClick={onOpen} className="h-24 w-full shrink-0 overflow-hidden">
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover object-center" />
+          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover object-center"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gray-100 text-4xl">
             {categoryEmoji(item.name)}
@@ -788,6 +789,7 @@ function ProductModal({
               src={item.imageUrl}
               alt={item.name}
               className="w-full h-full object-cover object-center"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-100 text-7xl">
@@ -1167,7 +1169,8 @@ function DesktopProductCard({
       >
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover object-center" />
+          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover object-center"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-4xl">
             {categoryEmoji(item.name)}

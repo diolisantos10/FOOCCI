@@ -366,6 +366,7 @@ function SortableItemRow({
                 src={item.imageUrl}
                 alt={item.name}
                 className="h-full w-full object-cover object-center"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
               />
             </div>
           ) : (

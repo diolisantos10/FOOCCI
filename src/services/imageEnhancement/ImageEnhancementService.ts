@@ -251,6 +251,9 @@ export async function rollbackEnhancement(
   });
   if (!job)            return { ok: false, error: "Enhancement job not found" };
   if (job.status !== "APPROVED") return { ok: false, error: "Job is not approved — nothing to roll back" };
+  if (!job.originalUrl?.trim()) {
+    return { ok: false, error: "Cannot rollback — original image URL is missing from enhancement record" };
+  }
 
   await prisma.$transaction([
     prisma.menuItem.update({

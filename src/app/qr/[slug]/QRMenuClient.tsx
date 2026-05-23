@@ -245,6 +245,7 @@ function ProductModal({
               alt={item.name}
               className="w-full h-full object-cover object-center"
               loading="lazy"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
             />
           ) : (
             <div className="w-full h-full bg-orange-50 flex items-center justify-center text-8xl">
@@ -390,6 +391,7 @@ function PromoBanner({
           alt={item.name}
           className="w-full h-52 object-cover"
           loading="lazy"
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
         />
       ) : (
         <div className="w-full h-52 flex items-center justify-center text-7xl" style={{ backgroundColor: 'var(--brand-primary)' }}>
@@ -436,6 +438,7 @@ function FeaturedCard({
             alt={item.name}
             className="w-full h-full object-cover object-center"
             loading="lazy"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-3xl">
@@ -510,6 +513,7 @@ function ProductCard({
                 alt={item.name}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-3xl">

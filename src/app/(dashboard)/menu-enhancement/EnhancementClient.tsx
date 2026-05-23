@@ -350,6 +350,13 @@ export function EnhancementClient({
   const [showBatchConfirm, setShowBatchConfirm] = useState(false);
   const toastIdRef = useRef(0);
 
+  // ── Recovery state ────────────────────────────────────────────
+  interface RecoveryItem { menuItemId: string; name: string; originalUrl: string }
+  interface RecoveryInfo { toRecover: number; items: RecoveryItem[] }
+  const [recoveryInfo, setRecoveryInfo]   = useState<RecoveryInfo | null>(null);
+  const [recoveryBusy, setRecoveryBusy]   = useState(false);
+  const [recoveryLog,  setRecoveryLog]    = useState<string | null>(null);
+
   // ── Toast helpers ─────────────────────────────────────────────────────────
 
   function showToast(message: string, type: Toast["type"] = "success") {
@@ -446,6 +453,50 @@ export function EnhancementClient({
       showToast("Erro de rede. Tente novamente.", "error");
     } finally {
       setActionBusy(null);
+    }
+  }
+
+  // ── Recovery helpers ─────────────────────────────────────────
+
+  async function checkRecovery() {
+    setRecoveryBusy(true);
+    setRecoveryLog(null);
+    try {
+      const res = await fetch(`/api/internal/image-recovery?restaurantId=${restaurant.id}`);
+      const data = await res.json() as { data?: RecoveryInfo };
+      if (!res.ok) { showToast("Erro ao verificar imagens.", "error"); return; }
+      setRecoveryInfo(data.data ?? { toRecover: 0, items: [] });
+    } catch {
+      showToast("Erro de rede ao verificar imagens.", "error");
+    } finally {
+      setRecoveryBusy(false);
+    }
+  }
+
+  async function runRecovery(dry: boolean) {
+    setRecoveryBusy(true);
+    setRecoveryLog(null);
+    try {
+      const res = await fetch("/api/internal/image-recovery", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ restaurantId: restaurant.id, dryRun: dry }),
+      });
+      const data = await res.json() as { data?: { recovered: number; skipped: number; dryRun: boolean } };
+      if (!res.ok) { showToast("Erro ao restaurar imagens.", "error"); return; }
+      const d = data.data!;
+      if (dry) {
+        setRecoveryLog(`Simulação: ${d.skipped} produto(s) seriam restaurados.`);
+      } else {
+        setRecoveryLog(`Restauradas ${d.recovered} imagem(ns) com sucesso.`);
+        setRecoveryInfo(null);
+        showToast(`${d.recovered} imagem(ns) restaurada(s).`, "success");
+        await refreshJobs();
+      }
+    } catch {
+      showToast("Erro de rede ao restaurar imagens.", "error");
+    } finally {
+      setRecoveryBusy(false);
     }
   }
 
@@ -597,6 +648,59 @@ export function EnhancementClient({
               </button>
             );
           })}
+        </div>
+
+        {/* Emergency image recovery panel */}
+        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-red-800">Recuperação de imagens</p>
+              <p className="mt-0.5 text-xs text-red-600">
+                Restaura imagens desaparecidas (imageUrl nulo) a partir do backup de URL original.
+              </p>
+              {recoveryLog && (
+                <p className="mt-1.5 text-xs font-medium text-red-700 bg-red-100 rounded px-2 py-1">{recoveryLog}</p>
+              )}
+              {recoveryInfo && recoveryInfo.toRecover > 0 && (
+                <p className="mt-1.5 text-xs text-red-700">
+                  {recoveryInfo.toRecover} produto(s) com imageUrl nulo e originalUrl disponível.
+                </p>
+              )}
+              {recoveryInfo && recoveryInfo.toRecover === 0 && (
+                <p className="mt-1.5 text-xs text-green-700 font-medium">Nenhuma imagem com problema encontrada.</p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={recoveryBusy}
+                onClick={checkRecovery}
+                className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+              >
+                {recoveryBusy ? "Verificando…" : "Verificar imagens com problema"}
+              </button>
+              {recoveryInfo && recoveryInfo.toRecover > 0 && (
+                <>
+                  <button
+                    type="button"
+                    disabled={recoveryBusy}
+                    onClick={() => runRecovery(true)}
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Simular
+                  </button>
+                  <button
+                    type="button"
+                    disabled={recoveryBusy}
+                    onClick={() => runRecovery(false)}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {recoveryBusy ? "Restaurando…" : `Restaurar ${recoveryInfo.toRecover} imagem(ns)`}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Unprocessed products notice */}
