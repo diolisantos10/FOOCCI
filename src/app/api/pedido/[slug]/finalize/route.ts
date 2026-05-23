@@ -34,7 +34,7 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
-import { getActiveProductPromotions, resolveProductPromotion } from "@/services/promotions/productPromotionResolver";
+import { getActiveMenuPromotions, resolveMenuItemPromotion } from "@/services/promotions/productPromotionResolver";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -244,9 +244,9 @@ export async function POST(
     }
   }
 
-  // Load active product promotions for server-side price guard
+  // Load active product + category promotions for server-side price guard
   const promoChannel = parsed.data.deliveryMethod === "delivery" ? "DELIVERY" : "QR_MENU";
-  const activeProductPromos = await getActiveProductPromotions(restaurantId, promoChannel);
+  const activeMenuPromos = await getActiveMenuPromotions(restaurantId, promoChannel);
 
   // Use DB prices throughout — prevents price tampering on base items AND add-ons
   const verifiedCart = cart.map((item) => {
@@ -261,7 +261,7 @@ export async function POST(
       const dbPrice = dbExtraPriceMap.get(e.extraId) ?? 0;
       return s + dbPrice * e.qty;
     }, 0);
-    const resolved = resolveProductPromotion(menuItemId, dbEntry.price, activeProductPromos);
+    const resolved = resolveMenuItemPromotion(menuItemId, dbEntry.categoryId, dbEntry.price, activeMenuPromos);
     const effectiveBasePrice = resolved?.promotionalPrice ?? dbEntry.price;
     const computedPrice = effectiveBasePrice + optionsExtra + extrasExtra;
 

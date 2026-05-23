@@ -13,7 +13,7 @@ import { phoneCandidates } from "@/lib/phone";
 import { verifyWaToken } from "@/lib/wa-token";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
-import { getActiveProductPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
+import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 
 export const dynamic = "force-dynamic";
 
@@ -243,6 +243,7 @@ export default async function PedidoPage({
           item: {
             select: {
               id: true, name: true, price: true, description: true, imageUrl: true,
+              categoryId: true,
               hasVariants: true, ingredients: true, servingSize: true, portionInfo: true,
               variants: {
                 where: { isAvailable: true },
@@ -274,7 +275,7 @@ export default async function PedidoPage({
   // Fetch active promotions + real best sellers in parallel
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const [activePromotions, topSoldRows] = await Promise.all([
-    getActiveProductPromotions(restaurant.id, "DELIVERY"),
+    getActiveMenuPromotions(restaurant.id, "DELIVERY"),
     prisma.orderItem.groupBy({
       by: ["menuItemId"],
       where: {
@@ -291,10 +292,10 @@ export default async function PedidoPage({
     }),
   ]);
 
-  // Collect all raw item IDs + prices for building the promotion map
+  // Collect all raw items with their home categoryId for building the promotion map
   const allRawItems = rawCategories.flatMap((c) => [
-    ...c.items.map((i) => ({ id: i.id, price: Number(i.price) })),
-    ...c.placements.map((p) => ({ id: p.item.id, price: Number(p.item.price) })),
+    ...c.items.map((i) => ({ id: i.id, categoryId: c.id, price: Number(i.price) })),
+    ...c.placements.map((p) => ({ id: p.item.id, categoryId: p.item.categoryId, price: Number(p.item.price) })),
   ]);
   const promoMap = buildPromotionMap(allRawItems, activePromotions);
 

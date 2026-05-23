@@ -519,6 +519,223 @@ function PromoModal({
   );
 }
 
+// ── Category Promo Modal ──────────────────────────────────────────────────────
+
+type CatPromoData = {
+  id: string; status: string; discountValue: number;
+  channel: "DELIVERY" | "DINE_IN" | "BOTH"; startsAt: string | null; endsAt: string | null;
+};
+
+type CatPromoForm = {
+  discountPercent: string;
+  channel: "DELIVERY" | "DINE_IN" | "BOTH";
+  startsAt: string;
+  endsAt: string;
+};
+
+function CategoryPromoModal({
+  category,
+  onClose,
+}: {
+  category: Category;
+  onClose: () => void;
+}) {
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [error,    setError]    = useState("");
+  const [existingStatus, setExistingStatus] = useState<"ACTIVE" | "PAUSED" | null>(null);
+  const [form, setForm] = useState<CatPromoForm>({
+    discountPercent: "", channel: "BOTH", startsAt: "", endsAt: "",
+  });
+
+  useEffect(() => {
+    setLoading(true);
+    setError("");
+    apiFetch(`/api/menu/categories/${category.id}/promotion`, "GET")
+      .then((d) => {
+        const p: CatPromoData | null = d.data?.promotion ?? null;
+        if (p) {
+          setExistingStatus(p.status as "ACTIVE" | "PAUSED");
+          setForm({
+            discountPercent: String(p.discountValue),
+            channel:  p.channel,
+            startsAt: p.startsAt ? p.startsAt.slice(0, 16) : "",
+            endsAt:   p.endsAt   ? p.endsAt.slice(0, 16)   : "",
+          });
+        }
+      })
+      .catch(() => setError("Erro ao carregar promoção."))
+      .finally(() => setLoading(false));
+  }, [category.id]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    const val = parseFloat(form.discountPercent);
+    if (isNaN(val) || val <= 0 || val >= 100) {
+      setError("Percentual deve ser entre 0% e 100% (exclusivo).");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await apiFetch(`/api/menu/categories/${category.id}/promotion`, "PUT", {
+        discountPercent: val,
+        channel: form.channel,
+        startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
+        endsAt:   form.endsAt   ? new Date(form.endsAt).toISOString()   : null,
+      });
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemove() {
+    if (!confirm("Pausar promoção da categoria?")) return;
+    setRemoving(true);
+    setError("");
+    try {
+      await apiFetch(`/api/menu/categories/${category.id}/promotion`, "DELETE");
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao remover.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="relative w-full max-w-sm rounded-xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-900">Promoção da categoria</h2>
+              {!loading && existingStatus === "ACTIVE" && (
+                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Ativa</span>
+              )}
+              {!loading && existingStatus === "PAUSED" && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Pausada</span>
+              )}
+            </div>
+            <p className="text-xs text-gray-400">{category.name}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-lg leading-none text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+
+        {loading ? (
+          <div className="px-5 py-8 text-center text-sm text-gray-400"><Spinner /></div>
+        ) : (
+          <form onSubmit={handleSave} className="px-5 py-4 space-y-4">
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Todos os produtos ativos desta categoria receberão o desconto.
+              <br />
+              <span className="text-gray-400">Produtos com promoção individual mantêm a própria promoção.</span>
+            </p>
+
+            {/* Discount percent */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Desconto (%)</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">%</span>
+                <input
+                  value={form.discountPercent}
+                  onChange={(e) => setForm((f) => ({ ...f, discountPercent: e.target.value }))}
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max="99.99"
+                  required
+                  placeholder="ex: 10"
+                  className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-400"
+                />
+              </div>
+              <p className="text-[11px] text-gray-400">Somente desconto percentual para categorias (MVP).</p>
+            </div>
+
+            {/* Channel */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Aplicar em</label>
+              <div className="flex gap-2">
+                {([["DELIVERY", "Delivery"], ["DINE_IN", "Salão"], ["BOTH", "Ambos"]] as const).map(([v, l]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, channel: v }))}
+                    className={`flex-1 rounded-lg border py-1.5 text-xs font-semibold transition-colors ${
+                      form.channel === v
+                        ? "border-green-500 bg-green-500 text-white"
+                        : "border-gray-200 text-gray-600 hover:border-green-300"
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Date range */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">Início (opcional)</label>
+                <input
+                  type="datetime-local"
+                  value={form.startsAt}
+                  onChange={(e) => setForm((f) => ({ ...f, startsAt: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-400"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">Fim (opcional)</label>
+                <input
+                  type="datetime-local"
+                  value={form.endsAt}
+                  onChange={(e) => setForm((f) => ({ ...f, endsAt: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-400"
+                />
+              </div>
+            </div>
+
+            {error && <InlineError message={error} />}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex-1 rounded-lg bg-green-500 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
+              >
+                {saving ? <Spinner /> : existingStatus ? "Atualizar promoção" : "Ativar promoção"}
+              </button>
+              {existingStatus && (
+                <button
+                  type="button"
+                  onClick={handleRemove}
+                  disabled={removing}
+                  className="rounded-lg border border-red-200 px-3 py-2 text-xs text-red-500 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {removing ? <Spinner /> : "Remover"}
+                </button>
+              )}
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Item row ──────────────────────────────────────────────────────────────────
 
 function SortableItemRow({
@@ -794,6 +1011,7 @@ function CategoryCard({
   onDelete,
   onEditItem,
   onPromoItem,
+  onPromoCategory,
 }: {
   category: Category;
   allCategories: Category[];
@@ -803,6 +1021,7 @@ function CategoryCard({
   onDelete: (id: string) => void;
   onEditItem: (item: Item, categoryId: string) => void;
   onPromoItem: (item: Item) => void;
+  onPromoCategory: (category: Category) => void;
 }) {
   const [editingCat, setEditingCat] = useState(false);
   const [catForm, setCatForm] = useState<CategoryFormState>({
@@ -1022,6 +1241,15 @@ function CategoryCard({
             </span>
             {editable && (
               <button
+                onClick={(e) => { e.stopPropagation(); onPromoCategory(category); }}
+                title="Promoção da categoria"
+                className="rounded px-2 py-1 text-xs font-medium text-green-600 hover:bg-green-50 transition-colors"
+              >
+                % Promo
+              </button>
+            )}
+            {editable && (
+              <button
                 onClick={() => {
                   setCatForm({ name: category.name, description: category.description ?? "" });
                   setEditingCat(true);
@@ -1113,7 +1341,7 @@ function CategoryCard({
 function SortableCategoryCard(
   props: Omit<React.ComponentProps<typeof CategoryCard>, "dragListeners">
 ) {
-  const { filterActive, onPromoItem, ...rest } = props;
+  const { filterActive, onPromoItem, onPromoCategory, ...rest } = props;
   const {
     attributes,
     listeners,
@@ -1137,6 +1365,7 @@ function SortableCategoryCard(
         {...rest}
         filterActive={filterActive}
         onPromoItem={onPromoItem}
+        onPromoCategory={onPromoCategory}
         dragListeners={filterActive ? undefined : listeners}
       />
     </div>
@@ -3280,6 +3509,7 @@ export function MenuManager({
     categoryId: string;
   } | null>(null);
   const [promoItem, setPromoItem] = useState<Item | null>(null);
+  const [promoCategory, setPromoCategory] = useState<Category | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -3482,6 +3712,7 @@ export function MenuManager({
                 onDelete={removeCategory}
                 onEditItem={(item, categoryId: string) => setEditingItem({ item, categoryId })}
                 onPromoItem={setPromoItem}
+                onPromoCategory={setPromoCategory}
               />
             ))}
           </div>
@@ -3532,11 +3763,19 @@ export function MenuManager({
         onDelete={handleModalDelete}
       />
 
-      {/* Promo modal */}
+      {/* Product promo modal */}
       {promoItem && (
         <PromoModal
           item={promoItem}
           onClose={() => { setPromoItem(null); refresh(); }}
+        />
+      )}
+
+      {/* Category promo modal */}
+      {promoCategory && (
+        <CategoryPromoModal
+          category={promoCategory}
+          onClose={() => { setPromoCategory(null); refresh(); }}
         />
       )}
     </div>
