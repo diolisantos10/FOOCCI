@@ -114,7 +114,10 @@ export const updateOptionGroupSchema = createOptionGroupSchema.partial();
 
 export const createOptionItemSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(100),
-  price: z.number().min(0).multipleOf(0.01).default(0),
+  price: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 0 : Number(val)),
+    z.number().min(0, "Preço não pode ser negativo").multipleOf(0.01)
+  ).default(0),
   portion: z.string().max(50).optional(),
   isAvailable: z.boolean().default(true),
   sortOrder: z.number().int().min(0).default(0),

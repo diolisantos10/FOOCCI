@@ -1113,8 +1113,8 @@ function NewItemModal({
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
         <div
-          className="relative flex flex-col w-full max-w-md rounded-xl bg-white shadow-2xl overflow-hidden"
-          style={{ maxHeight: "90vh" }}
+          className="relative flex flex-col w-full max-w-2xl rounded-xl bg-white shadow-2xl overflow-hidden"
+          style={{ maxHeight: "92vh" }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
@@ -1155,14 +1155,15 @@ function NewItemModal({
 
             {/* Description */}
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-700">Descrição</label>
+              <label className="block text-xs font-medium text-gray-700">Descrição do produto</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Descrição (opcional)"
-                rows={2}
-                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                placeholder="Descrição exibida no cardápio (opcional)"
+                rows={4}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
               />
+              <p className="text-[11px] text-gray-400">Explique o produto de forma clara para o cliente.</p>
             </div>
 
             {/* Price */}
@@ -1700,7 +1701,7 @@ function EditItemModal({
   const [groupError, setGroupError] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [addingOptionTo, setAddingOptionTo] = useState<string | null>(null);
-  const [newOption, setNewOption] = useState({ name: "", price: "0", portion: "" });
+  const [newOption, setNewOption] = useState({ name: "", price: "", portion: "" });
   const [optionBusy, setOptionBusy] = useState(false);
   const [optionError, setOptionError] = useState("");
 
@@ -1904,7 +1905,7 @@ function EditItemModal({
   }
 
   async function handleAddOption(groupId: string) {
-    const price = parseFloat(newOption.price);
+    const price = newOption.price === "" ? 0 : parseFloat(newOption.price);
     if (!newOption.name.trim()) { setOptionError("Nome da opção é obrigatório."); return; }
     if (isNaN(price) || price < 0) { setOptionError("Preço inválido."); return; }
     setOptionBusy(true);
@@ -1919,7 +1920,7 @@ function EditItemModal({
       setOptionGroups((gs) =>
         gs.map((g) => g.id === groupId ? { ...g, options: [...g.options, { ...d.data, price: Number(d.data.price) }] } : g)
       );
-      setNewOption({ name: "", price: "0", portion: "" });
+      setNewOption({ name: "", price: "", portion: "" });
       setAddingOptionTo(null);
     } catch (e: unknown) {
       setOptionError(e instanceof Error ? e.message : "Erro ao adicionar opção.");
@@ -1969,8 +1970,8 @@ function EditItemModal({
       >
         {/* Modal panel */}
         <div
-          className="relative flex w-full max-w-lg flex-col rounded-xl bg-white shadow-2xl"
-          style={{ maxHeight: "90vh" }}
+          className="relative flex w-full max-w-4xl flex-col rounded-xl bg-white shadow-2xl"
+          style={{ maxHeight: "92vh" }}
           onClick={(e) => e.stopPropagation()}
         >
         {/* Header */}
@@ -2023,14 +2024,15 @@ function EditItemModal({
             </div>
 
             <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-600">Descrição</label>
+              <label className="block text-xs font-medium text-gray-600">Descrição do produto</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Descrição curta exibida no cardápio (opcional)"
-                rows={2}
-                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                placeholder="Descrição exibida no cardápio (opcional)"
+                rows={4}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
               />
+              <p className="text-[11px] text-gray-400">Explique o produto de forma clara para o cliente.</p>
             </div>
 
             <div className="space-y-1">
@@ -2039,8 +2041,8 @@ function EditItemModal({
                 value={form.ingredients}
                 onChange={(e) => setForm((f) => ({ ...f, ingredients: e.target.value }))}
                 placeholder="Ex: frango grelhado, queijo prato, alface, tomate — usado pela IA para sugestões"
-                rows={2}
-                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                rows={3}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
               />
             </div>
 
@@ -2211,10 +2213,10 @@ function EditItemModal({
                             <input
                               value={newOption.name}
                               onChange={(e) => setNewOption((f) => ({ ...f, name: e.target.value }))}
-                              placeholder="Nome da opção"
+                              placeholder="Nome da opção (ex: Cru, Flambado)"
                               className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                             />
-                            <div className="relative w-24">
+                            <div className="relative w-28">
                               <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
                               <input
                                 value={newOption.price}
@@ -2227,6 +2229,7 @@ function EditItemModal({
                               />
                             </div>
                           </div>
+                          <p className="text-[11px] text-gray-400">Preço adicional opcional — deixe em branco se essa escolha não alterar o preço.</p>
                           <input
                             value={newOption.portion}
                             onChange={(e) => setNewOption((f) => ({ ...f, portion: e.target.value }))}
@@ -2245,7 +2248,7 @@ function EditItemModal({
                             </button>
                             <button
                               type="button"
-                              onClick={() => { setAddingOptionTo(null); setNewOption({ name: "", price: "0", portion: "" }); setOptionError(""); }}
+                              onClick={() => { setAddingOptionTo(null); setNewOption({ name: "", price: "", portion: "" }); setOptionError(""); }}
                               className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
                             >
                               Cancelar
@@ -2255,7 +2258,7 @@ function EditItemModal({
                       ) : (
                         <button
                           type="button"
-                          onClick={() => { setAddingOptionTo(group.id); setNewOption({ name: "", price: "0", portion: "" }); setOptionError(""); }}
+                          onClick={() => { setAddingOptionTo(group.id); setNewOption({ name: "", price: "", portion: "" }); setOptionError(""); }}
                           className="text-xs font-medium text-blue-500 hover:text-blue-700"
                         >
                           + Adicionar opção
