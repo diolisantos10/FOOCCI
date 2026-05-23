@@ -29,6 +29,7 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/pedido(\/.*)?$/,                 // Public AI ordering experience pages
   /^\/api\/pedido(\/.*)?$/,            // Public AI ordering experience API
   /^\/api\/payments\/stone\/webhook$/, // Stone webhook (public, verified by HMAC)
+  /^\/api\/payments\/mercadopago\/webhook$/, // Mercado Pago webhook (public — MP servers have no JWT)
   /^\/api\/integrations\/saipos\/webhook$/, // Saipos webhook (public — Saipos servers have no JWT)
   /^\/api\/media(\/.*)?$/,             // Public media (product images stored in DB)
   /^\/api\/health$/,                   // Health check (post-deploy validation)

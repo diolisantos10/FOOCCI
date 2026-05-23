@@ -157,7 +157,7 @@ interface ApiOrder {
     neighborhood: string;
   } | null;
   items: ApiOrderItem[];
-  payment: { method: string } | null;
+  payment: { method: string; providerName?: string | null; status?: string | null } | null;
   orderDraft?: { conversationId?: string | null } | null;
   // Saipos POS integration
   saiposSentAt:        string | null;
@@ -178,6 +178,12 @@ const PAYMENT_LABELS: Record<string, string> = {
   ONLINE:        "Online",
 };
 
+function resolvePaymentLabel(payment: ApiOrder["payment"]): string {
+  if (!payment) return "—";
+  if (payment.method === "ONLINE" && payment.providerName === "mercadopago") return "Pix (MP)";
+  return PAYMENT_LABELS[payment.method] ?? payment.method ?? "—";
+}
+
 function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
   const status = o.status === "AWAITING_PAYMENT"
     ? "PENDING"
@@ -197,7 +203,7 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
     type,
     createdAt:  new Date(o.createdAt),
     itemCount:  o.items.length,
-    payment:    PAYMENT_LABELS[o.payment?.method ?? ""] ?? o.payment?.method ?? "—",
+    payment:    resolvePaymentLabel(o.payment),
     address:
       type === "DELIVERY" && o.deliveryAddress
         ? [
