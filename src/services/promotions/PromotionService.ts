@@ -91,6 +91,37 @@ function serialize(p: Promotion): PromotionRow {
   };
 }
 
+// ── Metrics types ─────────────────────────────────────────────────────────────
+
+export type PromotionMetricsSummary = {
+  uses: number;
+  revenue: number;
+  discountGiven: number;
+  uniqueCustomers: number;
+  lastUsedAt: string | null;
+};
+
+export type PromotionMetricsOrder = {
+  id: string;
+  orderRef: string;
+  customerName: string | null;
+  customerPhone: string | null;
+  createdAt: string;
+  subtotal: number;
+  discount: number;
+  total: number;
+  status: string;
+  type: string;
+  paymentStatus: string | null;
+};
+
+export type PromotionMetricsDetail = PromotionMetricsSummary & {
+  promotionId: string;
+  couponCode: string | null;
+  averageTicket: number;
+  orders: PromotionMetricsOrder[];
+};
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 export class PromotionService {

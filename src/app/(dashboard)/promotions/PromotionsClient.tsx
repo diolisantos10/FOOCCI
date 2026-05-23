@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, type FormEvent } from "react";
-import type { PromotionRow } from "@/services/promotions/PromotionService";
+import type { PromotionRow, PromotionMetricsSummary, PromotionMetricsDetail } from "@/services/promotions/PromotionService";
 import type {
   PromotionType,
   PromotionChannel,
@@ -934,17 +934,269 @@ function PromotionDrawer({
   );
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function fmtBrl(n: number): string {
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// ── Promotion Metrics Drawer ───────────────────────────────────────────────────
+
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  CONFIRMED:        "Confirmado",
+  PREPARING:        "Em preparo",
+  READY:            "Pronto",
+  OUT_FOR_DELIVERY: "A caminho",
+  DELIVERED:        "Entregue",
+};
+
+const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  PAID:             "Pago",
+  PAY_ON_DELIVERY:  "Pago na entrega",
+  PAY_ON_PICKUP:    "Pago na retirada",
+};
+
+const ORDER_TYPE_LABEL: Record<string, string> = {
+  DELIVERY: "Delivery",
+  PICKUP:   "Retirada",
+  DINE_IN:  "Presencial",
+};
+
+function MetricTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className="text-xl font-bold text-gray-900 leading-tight">{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function PromotionMetricsDrawer({
+  promotion,
+  onClose,
+}: {
+  promotion: PromotionRow;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<"resumo" | "pedidos">("resumo");
+  const [data, setData] = useState<PromotionMetricsDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/promotions/${promotion.id}/metrics`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((json) => { if (!cancelled) { setData(json.data); setLoading(false); } })
+      .catch(() => { if (!cancelled) { setError("Não foi possível carregar as métricas."); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [promotion.id]);
+
+  const discountLabel = promotion.type === "PERCENTAGE"
+    ? `${promotion.discountValue}% off`
+    : promotion.type === "FIXED"
+      ? `R$ ${fmtBrl(promotion.discountValue)} off`
+      : promotion.type === "FREE_DELIVERY"
+        ? "Frete grátis"
+        : TYPE_LABELS[promotion.type] ?? promotion.type;
+
+  return (
+    <>
+      <div
+        className="fixed inset-y-0 left-0 lg:left-56 right-0 z-40 bg-black/20 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <div className="fixed inset-y-0 left-0 lg:left-56 right-0 z-50 flex flex-col bg-white shadow-2xl">
+
+        {/* Header */}
+        <div className="flex items-center gap-4 border-b border-gray-100 px-6 py-3">
+          <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => setTab("resumo")}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                tab === "resumo" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              📊 Resumo
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("pedidos")}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                tab === "pedidos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Pedidos {data && data.uses > 0 ? `(${data.uses})` : ""}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="mx-auto max-w-3xl space-y-6">
+
+            {/* Promo identity */}
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <StatusBadge status={promotion.displayStatus} />
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                  {TYPE_LABELS[promotion.type] ?? promotion.type}
+                </span>
+                {promotion.couponCode && (
+                  <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-mono font-semibold text-purple-700">
+                    {promotion.couponCode}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">{promotion.name}</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                {discountLabel} · {CHANNEL_LABELS[promotion.channel]}
+                {promotion.maxUses ? ` · Limite: ${promotion.maxUses} usos` : ""}
+                {promotion.oneTimePerUser ? " · 1× por cliente" : ""}
+              </p>
+            </div>
+
+            {loading && (
+              <div className="flex items-center justify-center py-16">
+                <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+              </div>
+            )}
+
+            {error && (
+              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            {!loading && !error && data && tab === "resumo" && (
+              <>
+                {data.uses === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-12 text-center">
+                    <p className="text-3xl mb-2">📭</p>
+                    <p className="text-sm font-semibold text-gray-600">Nenhum pedido com este cupom ainda</p>
+                    <p className="text-xs text-gray-400 mt-1">Os dados aparecerão aqui conforme o cupom for utilizado.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
+                      <MetricTile label="Usos do cupom"    value={String(data.uses)} />
+                      <MetricTile label="Receita gerada"   value={`R$ ${fmtBrl(data.revenue)}`} />
+                      <MetricTile label="Desconto concedido" value={`−R$ ${fmtBrl(data.discountGiven)}`} />
+                      <MetricTile label="Ticket médio"     value={`R$ ${fmtBrl(data.averageTicket)}`} />
+                      <MetricTile label="Clientes únicos"  value={String(data.uniqueCustomers)} />
+                      <MetricTile
+                        label="Último uso"
+                        value={data.lastUsedAt ? fmtDate(data.lastUsedAt) : "—"}
+                      />
+                    </div>
+
+                    {/* Campaign attribution note */}
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                      Este cupom ainda não está vinculado automaticamente a campanhas. Métricas acima consideram todos os pedidos que usaram o código.
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {!loading && !error && data && tab === "pedidos" && (
+              <>
+                {data.orders.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-12 text-center">
+                    <p className="text-3xl mb-2">📭</p>
+                    <p className="text-sm font-semibold text-gray-600">Nenhum pedido com este cupom ainda</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-gray-100">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100 bg-gray-50">
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Pedido</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Cliente</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Data</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Subtotal</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Desconto</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Total</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Tipo</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Pagamento</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.orders.map((o, i) => (
+                          <tr key={o.id} className={`border-b border-gray-50 ${i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}>
+                            <td className="px-4 py-2.5 font-mono text-xs text-gray-600">#{o.orderRef}</td>
+                            <td className="px-4 py-2.5">
+                              <p className="font-medium text-gray-900 truncate max-w-[120px]">{o.customerName ?? "—"}</p>
+                              {o.customerPhone && (
+                                <p className="text-xs text-gray-400">{o.customerPhone}</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                              {fmtDate(o.createdAt)}
+                            </td>
+                            <td className="px-4 py-2.5 text-right text-sm text-gray-700">R$ {fmtBrl(o.subtotal)}</td>
+                            <td className="px-4 py-2.5 text-right text-sm text-orange-600">−R$ {fmtBrl(o.discount)}</td>
+                            <td className="px-4 py-2.5 text-right text-sm font-semibold text-gray-900">R$ {fmtBrl(o.total)}</td>
+                            <td className="px-4 py-2.5 text-xs text-gray-500">{ORDER_TYPE_LABEL[o.type] ?? o.type}</td>
+                            <td className="px-4 py-2.5 text-xs">
+                              <span className={`rounded-full px-2 py-0.5 font-medium ${
+                                o.paymentStatus === "PAID"
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-gray-100 text-gray-600"
+                              }`}>
+                                {o.paymentStatus ? (PAYMENT_STATUS_LABEL[o.paymentStatus] ?? o.paymentStatus) : "—"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {data.orders.length >= 200 && (
+                      <p className="px-4 py-2 text-xs text-gray-400 border-t border-gray-100">
+                        Exibindo os 200 pedidos mais recentes.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Promotion Card ─────────────────────────────────────────────────────────────
 
 function PromotionCard({
   promotion,
+  metrics,
   onEdit,
+  onMetrics,
   onDuplicate,
   onDelete,
   onToggleStatus,
 }: {
   promotion: PromotionRow;
+  metrics?: PromotionMetricsSummary;
   onEdit: () => void;
+  onMetrics: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
   onToggleStatus: () => void;
@@ -1030,6 +1282,28 @@ function PromotionCard({
         </div>
       )}
 
+      {/* Compact metrics strip — shown when there are recorded uses */}
+      {metrics && metrics.uses > 0 && (
+        <div className="mt-3 grid grid-cols-4 gap-2 rounded-xl bg-gray-50 px-3 py-2.5">
+          <div className="text-center">
+            <p className="text-[10px] text-gray-400 leading-tight">Usos</p>
+            <p className="text-xs font-bold text-gray-900">{metrics.uses}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-gray-400 leading-tight">Receita</p>
+            <p className="text-xs font-bold text-green-700">R$&nbsp;{fmtBrl(metrics.revenue)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-gray-400 leading-tight">Desconto</p>
+            <p className="text-xs font-bold text-orange-600">−R$&nbsp;{fmtBrl(metrics.discountGiven)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-gray-400 leading-tight">Clientes</p>
+            <p className="text-xs font-bold text-gray-900">{metrics.uniqueCustomers}</p>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-50 pt-3">
         <button
@@ -1037,6 +1311,12 @@ function PromotionCard({
           className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
         >
           Editar
+        </button>
+        <button
+          onClick={onMetrics}
+          className="rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
+        >
+          📊 Métricas
         </button>
         <button
           onClick={onDuplicate}
@@ -1071,12 +1351,15 @@ function PromotionCard({
 
 export function PromotionsClient({
   initialPromotions,
+  metricsMap = {},
 }: {
   initialPromotions: PromotionRow[];
+  metricsMap?: Record<string, PromotionMetricsSummary>;
 }) {
   const [promotions, setPromotions] = useState<PromotionRow[]>(initialPromotions);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<PromotionRow | null>(null);
+  const [metricsPromo, setMetricsPromo] = useState<PromotionRow | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [deleting, setDeleting] = useState<string | null>(null);
   const [automations, setAutomations] = useState<AutomationRow[]>([]);
@@ -1215,7 +1498,9 @@ export function PromotionsClient({
             <PromotionCard
               key={p.id}
               promotion={p}
+              metrics={metricsMap[p.id]}
               onEdit={() => openEdit(p)}
+              onMetrics={() => setMetricsPromo(p)}
               onDuplicate={() => handleDuplicate(p)}
               onDelete={() => !deleting && handleDelete(p)}
               onToggleStatus={() => handleToggleStatus(p)}
@@ -1224,13 +1509,21 @@ export function PromotionsClient({
         </div>
       )}
 
-      {/* Drawer */}
+      {/* Edit / create drawer */}
       {drawerOpen && (
         <PromotionDrawer
           editing={editing}
           onClose={() => setDrawerOpen(false)}
           onSaved={handleSaved}
           automations={automations}
+        />
+      )}
+
+      {/* Metrics drawer */}
+      {metricsPromo && (
+        <PromotionMetricsDrawer
+          promotion={metricsPromo}
+          onClose={() => setMetricsPromo(null)}
         />
       )}
     </div>
