@@ -27,9 +27,10 @@ const PRIORITY_CONFIG: Record<string, { label: string; dot: string }> = {
 
 const CUSTOMER_FILTER_LABELS: Record<string, string> = {
   all:          "Todos os clientes",
+  quente:       "🔥 Quentes (≤30d)",
+  morno:        "🌡️ Mornos (31–60d)",
+  frio:         "🥶 Frios (60d+)",
   inactive:     "Inativos 30d+",
-  morno:        "Mornos (31–60d)",
-  frio:         "Frios (60d+)",
   neverOrdered: "Nunca pediu",
   vip:          "Clientes VIP",
   firstTime:    "1º pedido",
@@ -2539,12 +2540,12 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   }
 
   const summaryCards = [
-    { emoji: "🥶", label: "Frios",       count: stats.frioCustomers,  color: "bg-blue-50 border-blue-100",   textColor: "text-blue-700"   },
-    { emoji: "🌡️", label: "Mornos",      count: stats.mornoCustomers, color: "bg-amber-50 border-amber-100", textColor: "text-amber-700"  },
-    { emoji: "🆕", label: "Novos (mês)", count: stats.newCustomers,   color: "bg-green-50 border-green-100", textColor: "text-green-700"  },
-    { emoji: "👑", label: "VIP",          count: vipCount,             color: "bg-cyan-50 border-cyan-100",   textColor: "text-cyan-700"   },
-    { emoji: "🥤", label: "Bebidas",      count: null,                 color: "bg-gray-50 border-gray-100",   textColor: "text-gray-400"   },
-    { emoji: "🍰", label: "Sobremesas",   count: null,                 color: "bg-rose-50 border-rose-100",   textColor: "text-rose-400"   },
+    { emoji: "🔥", label: "Quentes",     count: stats.ativoCustomers, color: "bg-orange-50 border-orange-100", textColor: "text-orange-700" },
+    { emoji: "🌡️", label: "Mornos",      count: stats.mornoCustomers, color: "bg-amber-50 border-amber-100",   textColor: "text-amber-700"  },
+    { emoji: "🥶", label: "Frios",       count: stats.frioCustomers,  color: "bg-blue-50 border-blue-100",     textColor: "text-blue-700"   },
+    { emoji: "🆕", label: "Novos (mês)", count: stats.newCustomers,   color: "bg-green-50 border-green-100",   textColor: "text-green-700"  },
+    { emoji: "👑", label: "VIP",          count: vipCount,             color: "bg-cyan-50 border-cyan-100",     textColor: "text-cyan-700"   },
+    { emoji: "🥤", label: "Bebidas",      count: null,                 color: "bg-gray-50 border-gray-100",     textColor: "text-gray-400"   },
   ];
 
   return (
@@ -3256,7 +3257,7 @@ function WhatsAppSendModal({
 
 // ── Customers Tab ─────────────────────────────────────────────────────────────
 
-type CRMFilter = "all" | "inactive" | "morno" | "frio" | "neverOrdered" | "vip" | "firstTime" | "recent";
+type CRMFilter = "all" | "inactive" | "quente" | "morno" | "frio" | "neverOrdered" | "vip" | "firstTime" | "recent";
 
 function CustomersTab({
   initialCustomers,

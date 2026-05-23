@@ -8,7 +8,7 @@ import { isGuestIdentifier } from "@/lib/guest";
 
 export type SortCol = "totalSpend" | "totalOrders" | "lastOrderAt";
 export type SortDir = "asc" | "desc";
-export type FilterTab = "all" | "vip" | "inactive" | "morno" | "frio" | "neverOrdered" | "firstTime" | "recent";
+export type FilterTab = "all" | "vip" | "inactive" | "quente" | "morno" | "frio" | "neverOrdered" | "firstTime" | "recent";
 
 export type CustomerRow = {
   id: string;
@@ -35,6 +35,7 @@ const FILTER_TABS: { id: FilterTab; label: string }[] = [
   { id: "all",          label: "Todos"          },
   { id: "vip",          label: "VIPs"           },
   { id: "inactive",     label: "Inativos 30d+"  },
+  { id: "quente",       label: "🔥 Quentes"     },
   { id: "morno",        label: "🟡 Mornos"      },
   { id: "frio",         label: "🔴 Frios"       },
   { id: "neverOrdered", label: "Nunca pediu"    },

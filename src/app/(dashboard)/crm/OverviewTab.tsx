@@ -166,7 +166,7 @@ export function OverviewTab({
           loading={loading}
         />
         <KPICard
-          label="Ativos"
+          label="Quentes"
           value={stats.ativoCustomers}
           sub="≤ 30 dias"
           accent="green"

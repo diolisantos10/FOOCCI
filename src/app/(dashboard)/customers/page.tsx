@@ -9,7 +9,7 @@ import { NewCustomerButton } from "./NewCustomerButton";
 export const metadata = { title: "Clientes" };
 
 const VALID_SORT_COLS = new Set<SortCol>(["totalSpend", "totalOrders", "lastOrderAt"]);
-const VALID_FILTERS   = new Set<FilterTab>(["all", "vip", "inactive", "neverOrdered", "morno", "frio", "firstTime", "recent"]);
+const VALID_FILTERS   = new Set<FilterTab>(["all", "vip", "inactive", "neverOrdered", "quente", "morno", "frio", "firstTime", "recent"]);
 
 export default async function CustomersPage({
   searchParams,
@@ -44,6 +44,8 @@ export default async function CustomersPage({
         ]};
       case "inactive":
         return { isActive: true as const, lastOrderAt: { lt: thirtyDaysAgo } };
+      case "quente":
+        return { isActive: true as const, lastOrderAt: { gte: thirtyDaysAgo } };
       case "morno":
         return { isActive: true as const, lastOrderAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } };
       case "frio":

@@ -162,7 +162,7 @@ export class CRMService {
 
   static async getCustomers(
     restaurantId: string,
-    filter?: "inactive" | "neverOrdered" | "morno" | "frio" | "vip" | "recent" | "all" | "firstTime",
+    filter?: "inactive" | "neverOrdered" | "quente" | "morno" | "frio" | "vip" | "recent" | "all" | "firstTime",
     search?: string
   ): Promise<ServiceResult<CRMCustomer[]>> {
     const now = new Date();
@@ -177,6 +177,12 @@ export class CRMService {
         ...where,
         isActive: true,
         lastOrderAt: { lt: thirtyDaysAgo },
+      };
+    } else if (filter === "quente") {
+      where = {
+        ...where,
+        isActive: true,
+        lastOrderAt: { gte: thirtyDaysAgo },
       };
     } else if (filter === "morno") {
       where = {
