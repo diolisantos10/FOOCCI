@@ -32,7 +32,12 @@ const startSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  if (!checkAdminRequest(req)) return unauthorized();
+  const isAdmin = checkAdminRequest(req);
+  const ctx     = getTenantContext(req);
+
+  // Accept either admin secret OR tenant JWT (OWNER/MANAGER)
+  if (!isAdmin && !ctx) return unauthorized();
+  if (!isAdmin && ctx && !["OWNER", "MANAGER"].includes(ctx.role)) return unauthorized();
 
   let body: unknown;
   try { body = await req.json(); } catch { return badRequest("Invalid JSON body"); }
@@ -41,6 +46,9 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return badRequest(parsed.error.issues.map((i) => i.message).join("; "));
 
   const { restaurantId, productIds, dryRun = false, processMode = "enhance+upscale" } = parsed.data;
+
+  // Tenant users can only process their own restaurant
+  if (ctx && !isAdmin && ctx.restaurantId !== restaurantId) return unauthorized();
 
   // Verify restaurant exists
   const restaurant = await prisma.restaurant.findUnique({
