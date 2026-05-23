@@ -49,6 +49,7 @@ export default async function QRMenuPage({
       restaurantId: restaurant.id,
       isActive: true,
       isAvailable: true,
+      showInDineIn: true,
     },
     orderBy: { sortOrder: "asc" },
     include: {

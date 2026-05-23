@@ -205,7 +205,7 @@ export default async function PedidoPage({
     .map((b) => ({ id: b.id, name: b.name, imageUrl: b.bannerImageUrl! }));
 
   const rawCategories = await prisma.menuCategory.findMany({
-    where: { restaurantId: restaurant.id, isActive: true, isAvailable: true },
+    where: { restaurantId: restaurant.id, isActive: true, isAvailable: true, showInDelivery: true },
     orderBy: { sortOrder: "asc" },
     include: {
       items: {
