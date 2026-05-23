@@ -304,6 +304,7 @@ function PromoModal({
   const [saving,  setSaving]  = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error,   setError]   = useState("");
+  const [existingStatus, setExistingStatus] = useState<"ACTIVE" | "PAUSED" | null>(null);
   const [form, setForm] = useState<PromoForm>({
     active: true, discountType: "PERCENTAGE", value: "",
     channel: "BOTH", startsAt: "", endsAt: "",
@@ -316,6 +317,7 @@ function PromoModal({
       .then((d) => {
         const p: PromoData | null = d.data?.promotion ?? null;
         if (p) {
+          setExistingStatus(p.status as "ACTIVE" | "PAUSED");
           setForm({
             active:       p.status === "ACTIVE",
             discountType: p.discountType,
@@ -382,7 +384,15 @@ function PromoModal({
       >
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <div>
-            <h2 className="text-sm font-semibold text-gray-900">Promoção</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-900">Promoção</h2>
+              {!loading && existingStatus === "ACTIVE" && (
+                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Ativa</span>
+              )}
+              {!loading && existingStatus === "PAUSED" && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Pausada</span>
+              )}
+            </div>
             <p className="text-xs text-gray-400">{item.name}</p>
           </div>
           <button type="button" onClick={onClose} className="text-lg leading-none text-gray-400 hover:text-gray-600">✕</button>
@@ -489,16 +499,18 @@ function PromoModal({
                 disabled={saving}
                 className="flex-1 rounded-lg bg-green-500 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
               >
-                {saving ? <Spinner /> : "Salvar promoção"}
+                {saving ? <Spinner /> : existingStatus ? "Atualizar promoção" : "Salvar promoção"}
               </button>
-              <button
-                type="button"
-                onClick={handleRemove}
-                disabled={removing}
-                className="rounded-lg border border-red-200 px-3 py-2 text-xs text-red-500 hover:bg-red-50 disabled:opacity-50"
-              >
-                {removing ? <Spinner /> : "Remover"}
-              </button>
+              {existingStatus && (
+                <button
+                  type="button"
+                  onClick={handleRemove}
+                  disabled={removing}
+                  className="rounded-lg border border-red-200 px-3 py-2 text-xs text-red-500 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {removing ? <Spinner /> : "Remover"}
+                </button>
+              )}
             </div>
           </form>
         )}
