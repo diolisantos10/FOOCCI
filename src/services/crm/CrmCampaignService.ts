@@ -70,6 +70,7 @@ export interface SendResult {
 // ─── template → segment mapping ───────────────────────────────
 
 const TEMPLATE_SEGMENT_MAP: Record<string, string> = {
+  "clientes-quentes":   "QUENTE",
   "recuperar-frios":    "FRIO",
   "reativar-mornos":    "MORNO",
   "segunda-compra":     "PRIMEIRO_PEDIDO",

@@ -728,11 +728,12 @@ const READINESS_CONFIG: Record<ActionReadiness, { label: string; bg: string; tex
 // ── Action Config Drawer ───────────────────────────────────────────────────────
 
 const MANUAL_AUDIENCE_OPTIONS: Array<{ id: string; label: string; emoji: string }> = [
-  { id: "recuperar-frios",  label: "Frios — sem pedido 60d+",        emoji: "🥶" },
+  { id: "clientes-quentes", label: "Quentes — pedido ≤30d",          emoji: "🔥" },
   { id: "reativar-mornos",  label: "Mornos — sem pedido 31–60d",     emoji: "😶" },
-  { id: "clientes-vip",     label: "VIP — Ouro e Diamante",           emoji: "👑" },
+  { id: "recuperar-frios",  label: "Frios — sem pedido 60d+",        emoji: "🥶" },
   { id: "segunda-compra",   label: "Novos — somente 1 pedido",        emoji: "🌱" },
   { id: "pedido-avaliacao", label: "Recentes — pedido nos últimos 7d", emoji: "⭐" },
+  { id: "clientes-vip",     label: "VIP — Ouro e Diamante",           emoji: "👑" },
   { id: "aniversariantes",  label: "Aniversariantes do mês",          emoji: "🎂" },
   { id: "tier-bronze",      label: "Bronze",                           emoji: "🥉" },
   { id: "tier-prata",       label: "Prata",                            emoji: "🥈" },
