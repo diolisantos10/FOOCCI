@@ -264,13 +264,14 @@ model MenuItem {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  category        MenuCategory        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category        MenuCategory              @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   orderItems      OrderItem[]
   orderDraftItems OrderDraftItem[]
   variants        MenuItemVariant[]
   extras          MenuItemExtra[]
   optionGroups    OptionGroup[]
   placements      MenuItemPlacement[]
+  imageEnhancement MenuItemImageEnhancement?
 
   @@index([categoryId])
   @@map("menu_items")
@@ -1180,6 +1181,45 @@ model MediaUpload {
 
   @@index([restaurantId])
   @@map("media_uploads")
+}
+
+// ═══════════════════════════════════════════
+//  MENU IMAGE ENHANCEMENT (internal/admin)
+// ═══════════════════════════════════════════
+// TODO: Potential future feature — Menu Photo Enhancement with AI,
+//       always requiring owner approval before replacing product images.
+
+enum MenuItemEnhancementStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+  APPROVED
+  REJECTED
+  LOW_SOURCE_QUALITY
+  NEEDS_NEW_PHOTO
+}
+
+model MenuItemImageEnhancement {
+  id           String                    @id @default(cuid())
+  menuItemId   String                    @unique
+  restaurantId String
+  originalUrl  String                    // snapshot of imageUrl at enhancement time
+  enhancedUrl  String?                   // enhanced image (stored in Foocci storage)
+  status       MenuItemEnhancementStatus @default(PENDING)
+  processMode  String?                   // "enhance" | "upscale" | "enhance+upscale"
+  providerName String?                   // which provider processed this
+  errorReason  String?
+  notes        String?
+  approvedAt   DateTime?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([restaurantId, status])
+  @@map("menu_item_image_enhancements")
 }
 
 // ═══════════════════════════════════════════
