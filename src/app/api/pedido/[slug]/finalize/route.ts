@@ -135,6 +135,7 @@ export async function POST(
     return NextResponse.json({ error: "Restaurante não encontrado" }, { status: 404 });
   }
   const restaurantId = restaurant.id;
+  console.info("[finalize] restaurant resolved", { slug, restaurantId });
 
   // ── Emergency pause guard ─────────────────────────────────────
   const pauseCheck = await prisma.restaurant.findUnique({

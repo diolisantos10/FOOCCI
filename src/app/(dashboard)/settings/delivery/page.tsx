@@ -930,8 +930,32 @@ export default function DeliveryPage() {
       geoCenter:         form.geoCenter || null,
       geoRadiusKm:       toNum(form.geoRadiusKm),
     });
-    if (isOk) setSuccess("Configurações de entrega salvas.");
-    else setError(data?.error ?? "Erro ao salvar.");
+    if (isOk && data) {
+      // Reload form from the DB-confirmed response to surface any discrepancy
+      setForm({
+        enabled:          data.enabled ?? true,
+        pickupEnabled:    data.pickupEnabled ?? true,
+        mode:             data.mode ?? "simple",
+        fee:              fmtCurrency(data.fee),
+        estimatedMinutes: data.estimatedMinutes != null ? String(data.estimatedMinutes) : "",
+        areaDescription:  data.areaDescription ?? "",
+        minOrderValue:    fmtCurrency(data.minOrderValue),
+        freeDeliveryAbove: fmtCurrency(data.freeDeliveryAbove),
+        peakHoursEnabled: data.peakHoursEnabled ?? false,
+        geoCenter:        data.geoCenter ?? "",
+        geoRadiusKm:      data.geoRadiusKm != null ? String(data.geoRadiusKm) : "",
+        distanceBaseFee:       fmtCurrency(data.distanceBaseFee),
+        distancePricePerKm:    fmtCurrency(data.distancePricePerKm),
+        distanceMaxKm:         data.distanceMaxKm    != null ? String(data.distanceMaxKm)    : "",
+        distanceMinFee:        fmtCurrency(data.distanceMinFee),
+        distanceMinFeeKm:      data.distanceMinFeeKm != null ? String(data.distanceMinFeeKm) : "",
+        distanceMaxFee:        fmtCurrency(data.distanceMaxFee),
+        distanceEstimatedBase: data.distanceEstimatedBase != null ? String(data.distanceEstimatedBase) : "",
+      });
+      setSuccess("Configurações de entrega salvas.");
+    } else if (!isOk) {
+      setError(data?.error ?? "Erro ao salvar.");
+    }
     setSaving(false);
   }
 
