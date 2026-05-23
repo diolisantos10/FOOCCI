@@ -1077,6 +1077,149 @@ export function searchMenuByQuery(
   return { ids, confidence, queryTermCount: words.length };
 }
 
+// ─── Menu Retrieval Contract ──────────────────────────────────
+
+export type MenuQueryIntent =
+  | "ASK_PRODUCT_EXISTS"
+  | "ASK_CATEGORY"
+  | "ASK_RECOMMENDATION"
+  | "DIETARY_RESTRICTION"
+  | "ASK_MODIFIER"
+  | "UNKNOWN";
+
+export interface MenuIntentResult {
+  intent:              MenuQueryIntent;
+  queryTerms:          string[];
+  exactMatches:        V2CatalogItem[];
+  categoryMatches:     V2CatalogItem[];
+  alternativeProducts: V2CatalogItem[];
+  noMatch:             boolean;
+  confidence:          "high" | "medium" | "low";
+  reason:              string;
+}
+
+// Existence questions: "tem X?", "vocês têm X?", "tem X aqui?", "tem X disponível?"
+const INTENT_EXISTENCE_RE =
+  /\b(tem|t[eê]m|v[oô]c[eê]s?\s+t[eê]m|vend[eê]|serve[m]?|tem\s+no\s+card[aá]pio|dispon[ií]vel)\b/i;
+
+// Category browsing: "o que tem de X?", "quais são as X?", "me mostra as X"
+const INTENT_CATEGORY_RE =
+  /\b(o\s+que\s+(tem|h[aá])\s+de|quais?\s+s[aã]o\s+(as?|os?)|me\s+(mostra|mostre|manda|lista)\s+(as?|os?|todo))\b/i;
+
+// Recommendation request
+const INTENT_RECOMEND_RE =
+  /\b(recomend[ae]|indica[r]?|sugere|sugest[aã]o|melhor\s+(prato|op[çc][aã]o|item)|o\s+que\s+(voc[eê]\s+)?(indica|recomenda|sugere)|mais\s+pedido|mais\s+popular|mais\s+vendido)\b/i;
+
+// Dietary / allergy restriction
+const INTENT_DIETARY_RE =
+  /\b(vegetariano|vegano|sem\s+gl[uú]ten|gl[uú]ten|al[eé]rgico|intoler[aâ]nte|lactose|sem\s+lactose|low[\s-]?carb|diet[eé]tico|sem\s+a[cç][uú]car)\b/i;
+
+// Modifier / customization: "sem cebola", "extra queijo", "mais picante"
+const INTENT_MODIFIER_RE =
+  /\b(sem\s+\w{3,}|extra\s+\w{3,}|com\s+mais\s+\w{3,}|mais\s+picante|menos\s+\w{3,}|tira[r]?\s+o\s+\w{3,}|adiciona[r]?\s+\w{3,})\b/i;
+
+// Presence of a food/drink term signals menu-related query
+export const FOOD_SIGNAL_RE =
+  /\b(prato|comida|lanche|refei[çc][aã]o|hamburguer|pizza|massa|macarr[aã]o|yakisoba|lamen|ramen|sushi|temaki|uramaki|hossomaki|frango|carne|peixe|salm[aã]o|camar[aã]o|sobremesa|doce|sorvete|bebida|refrigerante|refri|suco|cerveja|limonada|combo|bandeja|salada|sanduiche|wrap|entrada|aperitivo|petisco|risoto|risotto|lasanha|fettuc|penne|espaguete|nhoque|gnocchi|acompanhamento)\b/i;
+
+// Maps broad customer query terms to catalog item/category patterns for finding real alternatives.
+const CATEGORY_PROXIMITY_MAP: Array<[RegExp, RegExp]> = [
+  [/\b(massa|macarr[aã]o|espaguete|lasanha|fettuc|penne|nhoque|gnocchi|risoto|risotto)\b/i,
+   /massa|macarr|lamen|ramen|yakisoba|noodle|espaguete|lasanha|fettuc|penne|risot/i],
+  [/\bpizza\b/i,
+   /pizza|combo|combinado/i],
+  [/\b(bebida|refrigerante|refri|suco|cerveja|limonada|guaran[aá]|[aá]gua|drink)\b/i,
+   /bebida|refri|suco|cerveja|limonada|guarana|agua|drink/i],
+  [/\b(sobremesa|doce|gelad[ao]|sorvete|brownie|pudim|mousse)\b/i,
+   /sobremesa|doce|gelad|sorvete|brownie|pudim|mousse/i],
+  [/\b(combo|combinado|festival|bandeja)\b/i,
+   /combo|combinado|festival|bandeja/i],
+  [/\b(frango|chicken|galinha)\b/i,
+   /frango|chicken|galinha/i],
+  [/\b(carne|bife|picanha|fil[eé]|filet)\b/i,
+   /carne|bife|picanha|fil[eé]/i],
+  [/\b(salm[aã]o|salmon)\b/i,
+   /salm[aã]o|salmon/i],
+  [/\b(sushi|temaki|uramaki|hossomaki|maki|sashimi|niguiri)\b/i,
+   /sushi|temaki|uramaki|hossomaki|maki|sashimi|niguiri|hot.?roll|combinado/i],
+  [/\b(lanche|hamburguer|burger|sanduiche|sandwich|wrap)\b/i,
+   /lanche|hamburguer|burger|sanduiche|wrap/i],
+  [/\bsalada\b/i, /salada/i],
+  [/\b(entrada|aperitivo|petisco)\b/i, /entrada|aperitivo|petisco/i],
+];
+
+/**
+ * Classifies the customer's menu query intent and resolves matches from the catalog.
+ * Pure function — no DB, no side-effects. Safe to call on every ON_USER_MESSAGE turn.
+ */
+export function resolveMenuIntent(
+  userMessage:  string,
+  catalogItems: V2CatalogItem[],
+  context?:     { cartItemIds?: string[] },
+): MenuIntentResult {
+  const cartIds = context?.cartItemIds ?? [];
+
+  // 1. Classify intent (order matters: dietary/modifier before existence)
+  let intent: MenuQueryIntent = "UNKNOWN";
+  if      (INTENT_DIETARY_RE.test(userMessage))   intent = "DIETARY_RESTRICTION";
+  else if (INTENT_MODIFIER_RE.test(userMessage))  intent = "ASK_MODIFIER";
+  else if (INTENT_RECOMEND_RE.test(userMessage))  intent = "ASK_RECOMMENDATION";
+  else if (INTENT_CATEGORY_RE.test(userMessage))  intent = "ASK_CATEGORY";
+  else if (INTENT_EXISTENCE_RE.test(userMessage) || FOOD_SIGNAL_RE.test(userMessage))
+                                                   intent = "ASK_PRODUCT_EXISTS";
+
+  // 2. Run base catalog search
+  const searchResult  = searchMenuByQuery(userMessage, catalogItems, cartIds, []);
+  const matchedItems  = searchResult.ids
+    .map((id) => catalogItems.find((i) => i.id === id))
+    .filter((i): i is V2CatalogItem => !!i);
+
+  // 3. Split into exact vs. category matches by confidence tier
+  const exactMatches:    V2CatalogItem[] = searchResult.confidence === "high" ? matchedItems : [];
+  const categoryMatches: V2CatalogItem[] = searchResult.confidence !== "high" ? matchedItems : [];
+
+  // 4. Determine noMatch
+  const noMatch = searchResult.queryTermCount > 0 && searchResult.ids.length === 0;
+
+  // 5. Extract meaningful query terms
+  const queryTerms = normalizeSearch(userMessage)
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !QUERY_STOPWORDS.has(w));
+
+  // 6. Find real alternatives when noMatch via proximity map
+  let alternativeProducts: V2CatalogItem[] = [];
+  if (noMatch) {
+    for (const [queryRe, itemRe] of CATEGORY_PROXIMITY_MAP) {
+      if (queryRe.test(userMessage)) {
+        alternativeProducts = catalogItems
+          .filter((item) =>
+            itemRe.test(`${item.name} ${item.categoryName} ${item.description ?? ""}`)
+          )
+          .sort((a, b) => (a.sortOrder ?? 99999) - (b.sortOrder ?? 99999))
+          .slice(0, 6);
+        if (alternativeProducts.length > 0) break;
+      }
+    }
+  }
+
+  // 7. Confidence output
+  const confidence = noMatch ? "low" : searchResult.confidence;
+
+  // 8. Reason string for observability
+  let reason: string;
+  if (noMatch && alternativeProducts.length > 0) {
+    reason = `noMatch — ${alternativeProducts.length} alternative(s) via proximity map`;
+  } else if (noMatch) {
+    reason = "noMatch — no alternatives found in catalog";
+  } else if (matchedItems.length > 0) {
+    reason = `matched ${matchedItems.length} item(s) confidence=${confidence}`;
+  } else {
+    reason = `intent=${intent}, no product terms detected`;
+  }
+
+  return { intent, queryTerms, exactMatches, categoryMatches, alternativeProducts, noMatch, confidence, reason };
+}
+
 // ─── Smart Product Selection Engine (Sprint 4C) ──────────────
 
 export interface ScoreContext {
@@ -2522,6 +2665,40 @@ function handleUserMessage(input: V2Input): V2Output {
       requiresAI:  false,
       aiDirective: "",
     };
+  }
+
+  // ── Menu Retrieval Contract: existence denial guard ───────────────────────────
+  // When the customer asks "Tem X?" and X is genuinely absent from the menu,
+  // return a safe denial with real alternatives — prevents AI hallucination.
+  {
+    const menuIntent = resolveMenuIntent(msgRaw, catalog, { cartItemIds });
+    if (menuIntent.intent === "ASK_PRODUCT_EXISTS" && menuIntent.noMatch) {
+      const termLabel = menuIntent.queryTerms[0] ?? "esse item";
+      const altIds = applyConstraints(
+        menuIntent.alternativeProducts.map((i) => i.id),
+        catalog,
+        maxBudget,
+        excludedIngredients,
+      );
+      if (altIds.length > 0) {
+        return {
+          message:     `Não temos ${termLabel} no cardápio. Que tal essas opções? 👇`,
+          cards:       altIds,
+          mode:        "SUGGESTION",
+          options:     [],
+          requiresAI:  false,
+          aiDirective: "",
+        };
+      }
+      return {
+        message:     `Não encontrei ${termLabel} no nosso cardápio. Posso ajudar com outra coisa? 😊`,
+        cards:       [],
+        mode:        "BROWSE",
+        options:     [{ label: "Ver cardápio", value: "browse_menu" }],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
   }
 
   // ── Menu search: explicit product / category queries ─────────────────────────

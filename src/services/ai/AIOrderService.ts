@@ -32,7 +32,7 @@ import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
 import { getDrinkAttemptCount, getAlreadySuggestedItems, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
 import * as WaiterBrain from "./WaiterBrain";
 import * as WaiterBrainV2 from "./WaiterBrainV2";
-import type { V2Event, V2CatalogItem, WaiterMode, WaiterOption } from "./WaiterBrainV2";
+import type { V2Event, V2CatalogItem, WaiterMode, WaiterOption, MenuIntentResult } from "./WaiterBrainV2";
 import type { UpsellSuggestion } from "./UpsellEngine";
 import type OpenAI from "openai";
 import { ConversationStatus } from "@prisma/client";
@@ -228,14 +228,21 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     return { reply: v2.message, cards: rbCards, mode: v2.mode, options: v2.options, pinnedCardId: v2.pinnedCardId, memoryPatch: v2.memoryPatch };
   }
 
-  // ── Pre-AI menu search (synchronous — prevents hallucination) ────────────
+  // ── Pre-AI menu intent resolution (synchronous — prevents hallucination) ───
   // Run BEFORE the async brand config load: pure in-memory scan of catalogItems.
-  // queryTermCount > 0 means the message had specific product/category terms.
-  // ids.length === 0 + queryTermCount > 0 = item genuinely absent from menu.
-  let menuSearchResult: { ids: string[]; confidence: "high" | "medium" | "low"; queryTermCount: number } =
-    { ids: [], confidence: "low", queryTermCount: 0 };
+  // noMatch=true + queryTermCount > 0 = item genuinely absent from menu.
+  let menuIntentResult: MenuIntentResult = {
+    intent:              "UNKNOWN",
+    queryTerms:          [],
+    exactMatches:        [],
+    categoryMatches:     [],
+    alternativeProducts: [],
+    noMatch:             false,
+    confidence:          "low",
+    reason:              "not evaluated",
+  };
   if (event === "ON_USER_MESSAGE" && message.trim()) {
-    menuSearchResult = WaiterBrainV2.searchMenuByQuery(message, catalogItems, cartItemIds, []);
+    menuIntentResult = WaiterBrainV2.resolveMenuIntent(message, catalogItems, { cartItemIds });
   }
 
   // ── AI pipeline (ON_USER_MESSAGE / AFTER_CHECKOUT) ──────────
@@ -291,12 +298,16 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     }
   }
 
-  // ── Menu search context injection (hallucination prevention) ────────────────
+  // ── Menu intent context injection (hallucination prevention) ─────────────────
   // Tells AI exactly what the catalog found so it never claims items exist that don't.
   if (event === "ON_USER_MESSAGE" && message.trim()) {
-    if (menuSearchResult.ids.length > 0) {
+    const allMatchIds = [
+      ...menuIntentResult.exactMatches.map((i) => i.id),
+      ...menuIntentResult.categoryMatches.map((i) => i.id),
+    ];
+    if (allMatchIds.length > 0) {
       // Products found — list validated candidate IDs for the AI to use
-      const candidateLines = menuSearchResult.ids
+      const candidateLines = allMatchIds
         .slice(0, 8)
         .map((id) => {
           const item = catalogItems.find((i) => i.id === id);
@@ -305,9 +316,18 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
         .filter((l): l is string => l !== null)
         .join("\n");
       sysAddendum += `\n\n━━━ PRODUTOS CANDIDATOS (busca prévia no cardápio) ━━━\n${candidateLines}\n→ Prefira estes IDs ao chamar suggest_upsell — são os mais relevantes para a consulta do cliente.`;
-    } else if (menuSearchResult.queryTermCount > 0) {
-      // Specific product/category terms in query but NOTHING matched in menu → "not found"
-      sysAddendum += `\n\n━━━ BUSCA NO CARDÁPIO ━━━\nResultado: NENHUM PRODUTO ENCONTRADO para esta consulta.\n→ OBRIGATÓRIO: Informe ao cliente que não encontrou esse item/categoria no cardápio.\n→ PROIBIDO: Afirmar que o produto existe ou chamar suggest_upsell para este item.\n→ Se quiser sugerir alternativas reais do cardápio, mencione-as APENAS usando IDs listados no CARDÁPIO COMPLETO acima.`;
+    } else if (menuIntentResult.noMatch) {
+      // Specific product/category terms in query but NOTHING matched → "not found"
+      const altLines = menuIntentResult.alternativeProducts
+        .slice(0, 4)
+        .map((i) => `  • [ID: ${i.id}] ${i.name} — R$ ${i.price.toFixed(2)}`)
+        .join("\n");
+      sysAddendum += `\n\n━━━ BUSCA NO CARDÁPIO ━━━\nResultado: NENHUM PRODUTO ENCONTRADO para esta consulta.\n→ OBRIGATÓRIO: Informe ao cliente que não encontrou esse item/categoria no cardápio.\n→ PROIBIDO: Afirmar que o produto existe ou chamar suggest_upsell para este item.`;
+      if (altLines) {
+        sysAddendum += `\n→ Alternativas reais disponíveis (use APENAS estes IDs):\n${altLines}`;
+      } else {
+        sysAddendum += `\n→ Se quiser sugerir alternativas reais do cardápio, mencione-as APENAS usando IDs listados no CARDÁPIO COMPLETO acima.`;
+      }
     }
   }
 
@@ -401,8 +421,7 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   //    Exception: if the AI response explicitly mentions alternatives the customer can browse.
   const noMenuMatch =
     event === "ON_USER_MESSAGE" &&
-    menuSearchResult.queryTermCount > 0 &&
-    menuSearchResult.ids.length === 0;
+    menuIntentResult.noMatch;
   let blockedHallucination = false;
   if (noMenuMatch && finalCards.length > 0 && !/alternativ/i.test(finalResponse)) {
     finalCards = [];
@@ -420,21 +439,25 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     userMsgPreview:      message.slice(0, 60),
     latencyMs:           Date.now() - aiStartMs,
     replyPreview:        finalResponse.slice(0, 80),
-    candidateCount:      menuSearchResult.ids.length,
+    candidateCount:      menuIntentResult.exactMatches.length + menuIntentResult.categoryMatches.length,
     blockedHallucination,
   }));
 
   console.info("[waiter-decision]", JSON.stringify({
     source:               "openai",
     userMessagePreview:   message.slice(0, 60),
-    intent:               null,
+    menuIntent:           menuIntentResult.intent,
+    queryTerms:           menuIntentResult.queryTerms,
+    exactCount:           menuIntentResult.exactMatches.length,
+    categoryCount:        menuIntentResult.categoryMatches.length,
+    alternativeCount:     menuIntentResult.alternativeProducts.length,
+    noMatch:              menuIntentResult.noMatch,
+    confidence:           menuIntentResult.confidence,
     uiAction:             finalCards.length > 0 ? "SHOW_PRODUCTS" : noMenuMatch ? "NO_MATCH" : "ASK_CLARIFYING",
-    candidateCount:       menuSearchResult.ids.length,
     selectedProductCount: finalCards.length,
-    noMatch:              noMenuMatch,
     openaiUsed:           true,
     blockedHallucination,
-    reason:               `ai_path event=${event}`,
+    reason:               menuIntentResult.reason || `ai_path event=${event}`,
   }));
 
   // Fail-safe name match (backward compat only — V2 prefers finalCards)
