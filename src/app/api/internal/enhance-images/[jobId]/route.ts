@@ -87,10 +87,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { jobId: str
 
     if (action === "regenerate") {
       const stats = await runEnhancementJob({
-        restaurantId: job.restaurantId,
-        productIds:   [job.menuItemId],
-        dryRun:       false,
+        restaurantId:   job.restaurantId,
+        productIds:     [job.menuItemId],
+        dryRun:         false,
         processMode,
+        forceReprocess: true,   // user explicitly requested regeneration
       });
       return ok({ stats });
     }

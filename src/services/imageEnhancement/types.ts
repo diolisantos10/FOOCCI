@@ -35,10 +35,11 @@ export interface ImageEnhancementProvider {
 // ── Batch job types ───────────────────────────────────────────────────────────
 
 export interface EnhancementJobOptions {
-  restaurantId: string;
-  productIds?:  string[];       // omit = process all products with images
-  dryRun?:      boolean;
-  processMode?: ProcessMode;
+  restaurantId:   string;
+  productIds?:    string[];       // omit = process all products with images
+  dryRun?:        boolean;
+  processMode?:   ProcessMode;
+  forceReprocess?: boolean;       // when true: skip only APPROVED (allow READY/REJECTED/FAILED)
 }
 
 export interface EnhancementJobItem {
@@ -53,6 +54,8 @@ export interface EnhancementJobStats {
   total:               number;
   skippedNoImage:      number;
   skippedNoProvider:   number;
+  skippedApproved:     number;  // already APPROVED — never reprocessed
+  skippedReady:        number;  // already READY — skipped in non-force mode
   migrated:            number;  // external → internal
   enqueued:            number;
   failed:              number;

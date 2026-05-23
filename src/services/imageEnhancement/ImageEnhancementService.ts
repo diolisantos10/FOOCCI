@@ -23,8 +23,9 @@ export async function runEnhancementJob(opts: EnhancementJobOptions): Promise<En
   const {
     restaurantId,
     productIds,
-    dryRun     = false,
-    processMode = "enhance+upscale",
+    dryRun          = false,
+    processMode     = "enhance+upscale",
+    forceReprocess  = false,
   } = opts;
 
   const provider = getEnhancementProvider();
@@ -48,6 +49,8 @@ export async function runEnhancementJob(opts: EnhancementJobOptions): Promise<En
     total:             products.length,
     skippedNoImage:    0,
     skippedNoProvider: 0,
+    skippedApproved:   0,
+    skippedReady:      0,
     migrated:          0,
     enqueued:          0,
     failed:            0,
@@ -112,7 +115,28 @@ export async function runEnhancementJob(opts: EnhancementJobOptions): Promise<En
       continue;
     }
 
-    // Mark as processing in DB
+    // Guard: never reprocess APPROVED items; skip READY unless forceReprocess.
+    const existingJob = await prisma.menuItemImageEnhancement.findUnique({
+      where:  { menuItemId: product.id },
+      select: { status: true },
+    });
+    if (existingJob?.status === "APPROVED") {
+      stats.skippedApproved++;
+      item.status = "skipped";
+      item.reason = "already approved — skipped to preserve approval";
+      stats.items.push(item);
+      continue;
+    }
+    if (!forceReprocess && existingJob?.status === "READY") {
+      stats.skippedReady++;
+      item.status = "skipped";
+      item.reason = "already ready for review";
+      stats.items.push(item);
+      continue;
+    }
+
+    // Mark as processing in DB (approvedAt is intentionally NOT reset here —
+    // APPROVED items are already guarded above; this is extra safety).
     await prisma.menuItemImageEnhancement.upsert({
       where:  { menuItemId: product.id },
       create: {
@@ -128,7 +152,6 @@ export async function runEnhancementJob(opts: EnhancementJobOptions): Promise<En
         processMode:  processMode as string,
         errorReason:  null,
         enhancedUrl:  null,
-        approvedAt:   null,
       },
     });
 
