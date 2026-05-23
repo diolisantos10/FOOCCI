@@ -13,6 +13,7 @@
 
 import type { ImageEnhancementProvider, EnhancementInput, EnhancementResult } from "../types";
 import { storeEnhancedImage } from "../storage";
+import { fetchImageBuffer } from "./fetchImageBuffer";
 
 const MIN_DIMENSION_PX = 200;
 
@@ -34,9 +35,10 @@ export class SharpEnhancementProvider implements ImageEnhancementProvider {
 
     const { imageUrl, restaurantId, menuItemId, processMode } = input;
 
-    // 1. Download source image
+    // 1. Download / read source image (handles /api/media/[id] internal paths)
     const src = await fetchImageBuffer(imageUrl);
     if ("error" in src) return { success: false, error: src.error };
+    if (src.buffer.byteLength < 1024) return { success: false, error: "Source image too small (< 1KB)" };
 
     // 2. Inspect metadata
     let meta: import("sharp").Metadata;
@@ -110,18 +112,3 @@ export class SharpEnhancementProvider implements ImageEnhancementProvider {
   }
 }
 
-async function fetchImageBuffer(url: string): Promise<{ buffer: Buffer } | { error: string }> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 15_000);
-  try {
-    const res = await fetch(url, { signal: ctrl.signal });
-    if (!res.ok) return { error: `HTTP ${res.status} fetching source image` };
-    const bytes = await res.arrayBuffer();
-    if (bytes.byteLength < 1024) return { error: "Source image too small (< 1KB)" };
-    return { buffer: Buffer.from(bytes) };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
-  } finally {
-    clearTimeout(timer);
-  }
-}

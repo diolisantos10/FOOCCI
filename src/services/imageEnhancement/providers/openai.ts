@@ -12,6 +12,7 @@
 
 import type { ImageEnhancementProvider, EnhancementInput, EnhancementResult } from "../types";
 import { storeEnhancedImage } from "../storage";
+import { fetchImageBuffer } from "./fetchImageBuffer";
 
 const MODEL = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
 
@@ -51,9 +52,11 @@ export class OpenAIEnhancementProvider implements ImageEnhancementProvider {
 
     const { imageUrl, restaurantId, menuItemId } = input;
 
-    // 1. Download the source image
+    // 1. Download / read source image (handles /api/media/[id] internal paths)
     const src = await fetchImageBuffer(imageUrl);
     if ("error" in src) return { success: false, error: src.error };
+    if (src.buffer.byteLength < 1024) return { success: false, error: "Image too small (< 1KB)" };
+    if (src.buffer.byteLength > 20 * 1024 * 1024) return { success: false, error: "Image too large (> 20MB) for OpenAI" };
 
     // 2. Call OpenAI image edit
     try {
@@ -109,30 +112,3 @@ export class OpenAIEnhancementProvider implements ImageEnhancementProvider {
   }
 }
 
-async function fetchImageBuffer(url: string): Promise<{ buffer: Buffer; mimeType: string } | { error: string }> {
-  const ALLOWED: Record<string, string> = {
-    "image/jpeg": "image/jpeg",
-    "image/png":  "image/png",
-    "image/webp": "image/webp",
-  };
-
-  const ctrl  = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 15_000);
-  try {
-    const res = await fetch(url, { signal: ctrl.signal });
-    if (!res.ok) return { error: `HTTP ${res.status} fetching image` };
-
-    const ct      = (res.headers.get("content-type") ?? "").split(";")[0]?.trim() ?? "";
-    const mimeType = ALLOWED[ct] ?? "image/jpeg";
-
-    const bytes = await res.arrayBuffer();
-    if (bytes.byteLength < 1024) return { error: "Image too small (< 1KB)" };
-    if (bytes.byteLength > 20 * 1024 * 1024) return { error: "Image too large (> 20MB) for OpenAI" };
-
-    return { buffer: Buffer.from(bytes), mimeType };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
-  } finally {
-    clearTimeout(timer);
-  }
-}

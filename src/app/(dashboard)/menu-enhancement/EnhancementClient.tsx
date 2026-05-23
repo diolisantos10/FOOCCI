@@ -87,6 +87,16 @@ const STABLE_TABS = [
 function mapErrorReason(raw: string | null): string {
   if (!raw) return "Erro desconhecido ao processar imagem.";
   const r = raw.toLowerCase();
+  // Internal /api/media/ resolution failures (fixed by shared fetchImageBuffer, but may appear in old jobs)
+  if (r.includes("failed to parse url") || r.includes("invalid url") || r.includes("url inválida"))
+    return "Erro ao localizar a imagem interna para processamento.";
+  if (r.includes("internal media not found"))
+    return "Imagem interna não encontrada no banco de dados.";
+  if (r.includes("failed to read internal media") || r.includes("/api/media/"))
+    return "Erro ao ler imagem interna do armazenamento.";
+  if (r.includes("relative url") || r.includes("protocolo não suportado"))
+    return "URL da imagem em formato não suportado.";
+  // Network / access errors
   if (r.includes("403") || r.includes("forbidden") || r.includes("blocked") || r.includes("access denied"))
     return "O link da imagem bloqueou o download.";
   if (r.includes("404") || r.includes("not found"))
@@ -95,12 +105,15 @@ function mapErrorReason(raw: string | null): string {
     return "O servidor da imagem limitou muitas tentativas.";
   if (r.includes("aborterror") || r.includes("aborted") || r.includes("timeout") || r.includes("timed out"))
     return "Tempo esgotado ao baixar a imagem.";
+  // Image format / quality errors
   if (r.includes("cannot decode") || r.includes("unsupported format") || r.includes("corrupt") || r.includes("invalid image"))
     return "Formato de imagem não suportado ou arquivo corrompido.";
   if (r.includes("too small") || r.includes("minimum") || r.includes("200x200") || r.includes("resolution") || r.includes("low source quality"))
     return "Imagem pequena demais para melhorar com qualidade.";
+  // Storage errors
   if (r.includes("s3") || r.includes("upload failed") || r.includes("storage"))
     return "Erro ao salvar a imagem no storage.";
+  // Provider errors
   if (r.includes("not configured") || r.includes("provider"))
     return "Provider de melhoria de imagem não configurado.";
   return "Erro ao processar imagem.";
