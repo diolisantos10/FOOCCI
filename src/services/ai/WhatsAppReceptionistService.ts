@@ -328,6 +328,17 @@ function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
       }
       return orderPreMessage + (pedidoUrl ? `\n${pedidoUrl}` : "");
     case "handoff":
+      if (!ctx.isCurrentlyOpen) {
+        const base = ctx.closedMessage ?? "No momento estamos fechados.";
+        const menuList = buildMenuList(ctx.menuOptions);
+        return (
+          base +
+          "\n\nNosso atendimento humano retorna quando estivermos abertos." +
+          (menuList
+            ? `\n\nEnquanto isso, posso te ajudar:${menuList}\n\nResponda com o número da opção 😊`
+            : "")
+        );
+      }
       return handoffMessage;
     case "menu":
       return pedidoUrl
@@ -619,6 +630,12 @@ async function run(conversationId: string): Promise<void> {
 
   // When paused, treat as closed for all intent handling
   const effectivelyOpen = isCurrentlyOpen && !isPaused;
+
+  // Strip handoff-type options while the restaurant is closed / paused so that
+  // "Falar com atendente" never appears in the menu shown to the customer.
+  const effectiveMenuOptions: MenuOption[] = effectivelyOpen
+    ? menuOptions
+    : menuOptions.filter((o) => o.flow !== "handoff");
   const pauseMessage = isPaused
     ? `Pedidos pausados temporariamente.${pauseReason ? ` ${pauseReason}.` : ""} Tente novamente em breve.`
     : null;
@@ -635,7 +652,7 @@ async function run(conversationId: string): Promise<void> {
     orderPreMessage: agentCfg?.orderPreMessage ?? "Acesse nosso cardápio e faça seu pedido diretamente:",
     handoffMessage:  agentCfg?.handoffMessage  ?? "Vou deixar nossa equipe te atender. Um momento! 👋",
     agentMode,
-    menuOptions,
+    menuOptions:     effectiveMenuOptions,
     menuCatalog:     menuCatalogRaw,
     hoursText,
     isCurrentlyOpen: effectivelyOpen,
@@ -664,7 +681,7 @@ async function run(conversationId: string): Promise<void> {
   }
 
   // ── Check if customer selected a numbered or named menu option ────────────
-  const selectedOpt = detectSelectedOption(lastMessage.content, menuOptions);
+  const selectedOpt = detectSelectedOption(lastMessage.content, effectiveMenuOptions);
 
   let replyText: string     = ctx.handoffMessage;
   let triggerHandoff        = false;
@@ -680,8 +697,23 @@ async function run(conversationId: string): Promise<void> {
 
     // Hard handoff intents — never use GPT, always escalate immediately
     if (needsHandoff(intent, agentMode)) {
-      replyText      = ctx.handoffMessage;
-      triggerHandoff = true;
+      // When closed, HUMAN_REQUEST cannot be served — inform the customer and
+      // show the reduced closed-hours menu. COMPLAINT / ORDER_STATUS are
+      // emergencies and still escalate unconditionally even when closed.
+      if (!effectivelyOpen && intent === "HUMAN_REQUEST") {
+        const base = ctx.closedMessage ?? "No momento estamos fechados.";
+        const closedMenuList = buildMenuList(effectiveMenuOptions);
+        replyText =
+          base +
+          "\n\nNosso atendimento humano retorna quando estivermos abertos." +
+          (closedMenuList
+            ? `\n\nEnquanto isso, posso te ajudar:${closedMenuList}\n\nResponda com o número da opção 😊`
+            : "");
+        triggerHandoff = false;
+      } else {
+        replyText      = ctx.handoffMessage;
+        triggerHandoff = true;
+      }
     } else {
       // Check knowledge base first (takes priority over both templates and GPT)
       const knowledgeMatch =
@@ -713,7 +745,7 @@ async function run(conversationId: string): Promise<void> {
           const shortGreet = firstName
             ? `Estou aqui, ${firstName}! 😊 Como posso te ajudar?`
             : "Estou aqui! 😊 Como posso te ajudar?";
-          const menuList = buildMenuList(menuOptions);
+          const menuList = buildMenuList(effectiveMenuOptions);
           if (menuList) {
             replyText = shortGreet + menuList + "\n\nResponda com o número da opção 😊";
           } else if (ctx.pedidoUrl) {
@@ -773,8 +805,8 @@ async function run(conversationId: string): Promise<void> {
             // If GPT gave a generic/short answer with no URL, append the menu so
             // the customer always knows their options.
             let fullMenuAppended = false;
-            if (!triggerHandoff && menuOptions.length > 0 && !replyText.includes("http")) {
-              const menuList = buildMenuList(menuOptions);
+            if (!triggerHandoff && effectiveMenuOptions.length > 0 && !replyText.includes("http")) {
+              const menuList = buildMenuList(effectiveMenuOptions);
               if (menuList) {
                 replyText += "\n\nComo posso te ajudar?" + menuList + "\n\nResponda com o número da opção 😊";
                 fullMenuAppended = true;
@@ -804,7 +836,7 @@ async function run(conversationId: string): Promise<void> {
             const greetLine = firstName
               ? `Olá, ${firstName}! Tudo bem? 😊 Como posso te ajudar hoje?`
               : ctx.welcomeMessage;
-            const menuList = buildMenuList(menuOptions);
+            const menuList = buildMenuList(effectiveMenuOptions);
             let greet = greetLine;
             if (menuList) {
               greet += menuList + "\n\nResponda com o número da opção 😊";
