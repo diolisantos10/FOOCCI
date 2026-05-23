@@ -8,6 +8,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { QRMenuClient } from "./QRMenuClient";
+import { getActiveProductPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,34 @@ export default async function QRMenuPage({
     },
   });
 
+  // Fetch active promotions + real best sellers in parallel
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const [activePromotions, topSoldRows] = await Promise.all([
+    getActiveProductPromotions(restaurant.id, "QR_MENU"),
+    prisma.orderItem.groupBy({
+      by: ["menuItemId"],
+      where: {
+        order: {
+          restaurantId: restaurant.id,
+          status: { notIn: ["CANCELLED", "AWAITING_PAYMENT"] },
+          createdAt: { gte: sevenDaysAgo },
+        },
+        menuItemId: { not: null },
+      },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: 30,
+    }),
+  ]);
+
+  // Build promo map from all raw items
+  const allRawItems = rawCategories.flatMap((c) => [
+    ...c.items.map((i) => ({ id: i.id, price: Number(i.price) })),
+    ...c.placements.map((p) => ({ id: p.item.id, price: Number(p.item.price) })),
+  ]);
+  const promoMap = buildPromotionMap(allRawItems, activePromotions);
+
   function mapQrItem(i: {
     id: string; name: string; description: string | null; price: { toNumber?: () => number } | number;
     imageUrl: string | null; isAvailable: boolean; ingredients: string | null;
@@ -109,6 +138,7 @@ export default async function QRMenuPage({
       ingredients: i.ingredients ?? null,
       servingSize: i.servingSize ?? null,
       portionInfo: i.portionInfo ?? null,
+      promotion: promoMap.get(i.id) ?? null,
       variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: Number(v.price), isAvailable: v.isAvailable })),
       extras: i.extras.map((e) => ({ id: e.id, name: e.name, quantity: e.quantity, price: Number(e.price) })),
     };
@@ -122,19 +152,20 @@ export default async function QRMenuPage({
     })
     .filter((c) => c.items.length > 0);
 
-  // Promotions category surfaces first if present
-  const isPromo = (name: string) => name.toLowerCase().includes("promo");
-  const sortedCategories = [
-    ...categories.filter((c) => isPromo(c.name)),
-    ...categories.filter((c) => !isPromo(c.name)),
-  ];
+  // Build flat item lookup for best-sellers
+  const allItemsFlat = new Map(categories.flatMap((c) => c.items.map((i) => [i.id, i])));
 
-  // Promo banner: first item of the first promotions category
-  const promoCategory = sortedCategories.find((c) => isPromo(c.name));
-  const promoBanner = promoCategory?.items[0] ?? null;
+  // Real 7-day best sellers
+  const featured = topSoldRows
+    .map((r) => (r.menuItemId ? allItemsFlat.get(r.menuItemId) : undefined))
+    .filter((i): i is Exclude<typeof i, undefined> => i !== undefined)
+    .slice(0, 10);
 
-  // Best sellers: first 10 items across all categories
-  const featured = sortedCategories.flatMap((c) => c.items).slice(0, 10);
+  // Promoted items for the "🔥 Promoções" section
+  const promotedItems = categories.flatMap((c) => c.items).filter((i) => i.promotion !== null);
+
+  // promoBanner: first promoted item with an image, or null
+  const promoBanner = promotedItems.find((i) => i.imageUrl) ?? promotedItems[0] ?? null;
 
   // Active promotion image banners from Promotions table
   const today = new Date();
@@ -168,8 +199,9 @@ export default async function QRMenuPage({
           restaurant.logoUrl ??
           null
         }}
-      categories={sortedCategories}
+      categories={categories}
       featured={featured}
+      promotedItems={promotedItems}
       promoBanner={promoBanner}
       promotionBanners={promotionBanners}
       brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}

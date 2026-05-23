@@ -251,6 +251,15 @@ interface OptionGroup {
   options: OptionItem[];
 }
 
+interface PromotionInfo {
+  promotionId: string;
+  originalPrice: number;
+  promotionalPrice: number;
+  discountAmount: number;
+  discountPercent: number;
+  badgeText: string;
+}
+
 interface MenuItem {
   id: string;
   name: string;
@@ -261,6 +270,7 @@ interface MenuItem {
   ingredients: string | null;
   servingSize: number | null;
   portionInfo: string | null;
+  promotion: PromotionInfo | null;
   variants: MenuItemVariant[];
   extras: Extra[];
   optionGroups: OptionGroup[];
@@ -633,6 +643,11 @@ function ProductCard({
 
       {/* Content zone — fills remaining height, price+button pinned to bottom */}
       <div className="flex flex-1 flex-col px-3 pb-3 pt-2">
+        {item.promotion && (
+          <span className="mb-1 self-start rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white leading-none">
+            {item.promotion.badgeText}
+          </span>
+        )}
         <p
           onClick={onOpen}
           className="cursor-pointer text-[13px] font-semibold leading-snug text-gray-900 line-clamp-2"
@@ -641,11 +656,24 @@ function ProductCard({
         </p>
 
         <div className="mt-auto flex items-center justify-between">
-          <span className="text-xs font-bold text-gray-900">
-            {item.hasVariants && item.variants.length > 0
-              ? `A partir de R$ ${itemMinPrice(item).toFixed(2).replace(".", ",")}`
-              : `R$ ${item.price.toFixed(2).replace(".", ",")}`}
-          </span>
+          <div className="flex flex-col">
+            {item.promotion && !item.hasVariants ? (
+              <>
+                <span className="text-[10px] text-gray-400 line-through leading-none">
+                  R$ {item.price.toFixed(2).replace(".", ",")}
+                </span>
+                <span className="text-xs font-bold text-red-600">
+                  R$ {item.promotion.promotionalPrice.toFixed(2).replace(".", ",")}
+                </span>
+              </>
+            ) : (
+              <span className="text-xs font-bold text-gray-900">
+                {item.hasVariants && item.variants.length > 0
+                  ? `A partir de R$ ${itemMinPrice(item).toFixed(2).replace(".", ",")}`
+                  : `R$ ${item.price.toFixed(2).replace(".", ",")}`}
+              </span>
+            )}
+          </div>
           <button
             onClick={onAdd}
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${
@@ -709,7 +737,7 @@ function ProductModal({
     .flatMap((g) => g.options)
     .reduce((s, o) => s + (optionQtys[o.id] ?? 0) * o.price, 0);
   const extrasExtra = paidExtras.reduce((s, e) => s + (extraQtys[e.id] ?? 0) * e.price, 0);
-  const finalPrice  = item.price + optionsExtra + extrasExtra;
+  const finalPrice  = (item.promotion?.promotionalPrice ?? item.price) + optionsExtra + extrasExtra;
 
   function changeOptionQty(group: OptionGroup, optionId: string, delta: number) {
     setErrors([]);
@@ -1051,9 +1079,20 @@ function ProductModal({
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Preço</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  R$ {(isNaN(finalPrice) ? item.price : finalPrice).toFixed(2).replace(".", ",")}
-                </p>
+                {item.promotion && optionsExtra === 0 && extrasExtra === 0 ? (
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-red-600">
+                      R$ {item.promotion.promotionalPrice.toFixed(2).replace(".", ",")}
+                    </p>
+                    <p className="text-sm text-gray-400 line-through">
+                      R$ {item.price.toFixed(2).replace(".", ",")}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-2xl font-bold text-gray-900">
+                    R$ {(isNaN(finalPrice) ? item.price : finalPrice).toFixed(2).replace(".", ",")}
+                  </p>
+                )}
               </div>
               <button
                 onClick={handleConfirmAdd}
@@ -1180,6 +1219,11 @@ function DesktopProductCard({
 
       {/* Content */}
       <div className="flex flex-1 flex-col p-3">
+        {item.promotion && (
+          <span className="mb-1 self-start rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white leading-none">
+            {item.promotion.badgeText}
+          </span>
+        )}
         <p
           onClick={onOpen}
           className="cursor-pointer text-sm font-bold leading-snug text-gray-900 line-clamp-2"
@@ -1190,11 +1234,24 @@ function DesktopProductCard({
           <p className="mt-1 text-xs text-gray-500 line-clamp-2">{item.description}</p>
         )}
         <div className="mt-auto flex items-center justify-between pt-3">
-          <span className="text-sm font-extrabold text-gray-900">
-            {item.hasVariants && item.variants.length > 0
-              ? `A partir de R$ ${itemMinPrice(item).toFixed(2).replace(".", ",")}`
-              : `R$ ${item.price.toFixed(2).replace(".", ",")}`}
-          </span>
+          <div className="flex flex-col">
+            {item.promotion && !item.hasVariants ? (
+              <>
+                <span className="text-[11px] text-gray-400 line-through leading-none">
+                  R$ {item.price.toFixed(2).replace(".", ",")}
+                </span>
+                <span className="text-sm font-extrabold text-red-600">
+                  R$ {item.promotion.promotionalPrice.toFixed(2).replace(".", ",")}
+                </span>
+              </>
+            ) : (
+              <span className="text-sm font-extrabold text-gray-900">
+                {item.hasVariants && item.variants.length > 0
+                  ? `A partir de R$ ${itemMinPrice(item).toFixed(2).replace(".", ",")}`
+                  : `R$ ${item.price.toFixed(2).replace(".", ",")}`}
+              </span>
+            )}
+          </div>
           <button
             onClick={onAdd}
             className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition-colors ${
@@ -2487,11 +2544,12 @@ export function PedidoClient({
   const handleItemAdd = useCallback(
     (item: MenuItem) => {
       const existing = cart.find((c) => c.id === item.id);
+      const effectivePrice = item.promotion?.promotionalPrice ?? item.price;
       const newCart = existing
         ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
-        : [...cart, { id: item.id, baseItemId: item.id, name: item.name, price: item.price, qty: 1 }];
+        : [...cart, { id: item.id, baseItemId: item.id, name: item.name, price: effectivePrice, qty: 1 }];
       setCart(newCart);
-      fireGtag("add_to_cart", { item_name: item.name, value: item.price, currency: "BRL" });
+      fireGtag("add_to_cart", { item_name: item.name, value: effectivePrice, currency: "BRL" });
       lastActivityRef.current = Date.now();
       idleFiredRef.current    = false;
       if (stage === "BROWSE") {
@@ -2528,7 +2586,7 @@ export function PedidoClient({
     (item: MenuItem, notes: string, selectedOptions: SelectedOption[], selectedExtras: SelectedExtra[]) => {
       const optionsExtra = selectedOptions.reduce((s, o) => s + o.priceAdjustment * o.qty, 0);
       const extrasExtra  = selectedExtras.reduce((s, e) => s + e.unitPrice * e.qty, 0);
-      const finalPrice   = item.price + optionsExtra + extrasExtra;
+      const finalPrice   = (item.promotion?.promotionalPrice ?? item.price) + optionsExtra + extrasExtra;
       const hasAny       = notes.trim() || selectedOptions.length > 0 || selectedExtras.length > 0;
 
       let newCart: CartItem[];

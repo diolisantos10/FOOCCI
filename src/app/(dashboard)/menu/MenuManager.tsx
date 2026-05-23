@@ -280,6 +280,233 @@ function ImageUpload({
   );
 }
 
+// ── Promo Modal ───────────────────────────────────────────────────────────────
+
+type PromoData = {
+  id: string; status: string; discountType: "PERCENTAGE" | "PRICE";
+  discountValue: number; originalPrice: number; promotionalPrice: number;
+  channel: "DELIVERY" | "DINE_IN" | "BOTH"; startsAt: string | null; endsAt: string | null;
+};
+
+type PromoForm = {
+  active: boolean; discountType: "PERCENTAGE" | "PRICE"; value: string;
+  channel: "DELIVERY" | "DINE_IN" | "BOTH"; startsAt: string; endsAt: string;
+};
+
+function PromoModal({
+  item,
+  onClose,
+}: {
+  item: Item;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [error,   setError]   = useState("");
+  const [form, setForm] = useState<PromoForm>({
+    active: true, discountType: "PERCENTAGE", value: "",
+    channel: "BOTH", startsAt: "", endsAt: "",
+  });
+
+  useEffect(() => {
+    setLoading(true);
+    setError("");
+    apiFetch(`/api/menu/items/${item.id}/promotion`, "GET")
+      .then((d) => {
+        const p: PromoData | null = d.data?.promotion ?? null;
+        if (p) {
+          setForm({
+            active:       p.status === "ACTIVE",
+            discountType: p.discountType,
+            value:        p.discountType === "PERCENTAGE"
+              ? String(p.discountValue)
+              : String(p.promotionalPrice),
+            channel:  p.channel as "DELIVERY" | "DINE_IN" | "BOTH",
+            startsAt: p.startsAt ? p.startsAt.slice(0, 16) : "",
+            endsAt:   p.endsAt   ? p.endsAt.slice(0, 16)   : "",
+          });
+        }
+      })
+      .catch(() => setError("Erro ao carregar promoção."))
+      .finally(() => setLoading(false));
+  }, [item.id]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    const val = parseFloat(form.value);
+    if (isNaN(val) || val <= 0) { setError("Valor inválido."); setSaving(false); return; }
+    try {
+      await apiFetch(`/api/menu/items/${item.id}/promotion`, "PUT", {
+        discountType: form.discountType,
+        value: val,
+        channel: form.channel,
+        startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
+        endsAt:   form.endsAt   ? new Date(form.endsAt).toISOString()   : null,
+      });
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemove() {
+    if (!confirm("Desativar promoção?")) return;
+    setRemoving(true);
+    setError("");
+    try {
+      await apiFetch(`/api/menu/items/${item.id}/promotion`, "DELETE");
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erro ao remover.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="relative w-full max-w-sm rounded-xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Promoção</h2>
+            <p className="text-xs text-gray-400">{item.name}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-lg leading-none text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+
+        {loading ? (
+          <div className="px-5 py-8 text-center text-sm text-gray-400"><Spinner /></div>
+        ) : (
+          <form onSubmit={handleSave} className="px-5 py-4 space-y-4">
+            {/* Discount type */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Tipo de desconto</label>
+              <div className="flex gap-2">
+                {(["PERCENTAGE", "PRICE"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, discountType: t, value: "" }))}
+                    className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${
+                      form.discountType === t
+                        ? "border-green-500 bg-green-500 text-white"
+                        : "border-gray-200 text-gray-600 hover:border-green-300"
+                    }`}
+                  >
+                    {t === "PERCENTAGE" ? "Percentual (%)" : "Preço fixo (R$)"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Value */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">
+                {form.discountType === "PERCENTAGE" ? "Desconto (%)" : "Preço promocional (R$)"}
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">
+                  {form.discountType === "PERCENTAGE" ? "%" : "R$"}
+                </span>
+                <input
+                  value={form.value}
+                  onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  placeholder={form.discountType === "PERCENTAGE" ? "ex: 15" : "ex: 29,90"}
+                  className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-400"
+                />
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Preço original: R$ {item.price.toFixed(2)}
+              </p>
+            </div>
+
+            {/* Channel */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-gray-600">Canal</label>
+              <div className="flex gap-2">
+                {([["DELIVERY", "Delivery"], ["DINE_IN", "Salão"], ["BOTH", "Ambos"]] as const).map(([v, l]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, channel: v }))}
+                    className={`flex-1 rounded-lg border py-1.5 text-xs font-semibold transition-colors ${
+                      form.channel === v
+                        ? "border-green-500 bg-green-500 text-white"
+                        : "border-gray-200 text-gray-600 hover:border-green-300"
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Date range */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">Início (opcional)</label>
+                <input
+                  type="datetime-local"
+                  value={form.startsAt}
+                  onChange={(e) => setForm((f) => ({ ...f, startsAt: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-400"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">Fim (opcional)</label>
+                <input
+                  type="datetime-local"
+                  value={form.endsAt}
+                  onChange={(e) => setForm((f) => ({ ...f, endsAt: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-400"
+                />
+              </div>
+            </div>
+
+            {error && <InlineError message={error} />}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex-1 rounded-lg bg-green-500 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
+              >
+                {saving ? <Spinner /> : "Salvar promoção"}
+              </button>
+              <button
+                type="button"
+                onClick={handleRemove}
+                disabled={removing}
+                className="rounded-lg border border-red-200 px-3 py-2 text-xs text-red-500 hover:bg-red-50 disabled:opacity-50"
+              >
+                {removing ? <Spinner /> : "Remover"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Item row ──────────────────────────────────────────────────────────────────
 
 function SortableItemRow({
@@ -291,6 +518,7 @@ function SortableItemRow({
   otherManualCategories,
   onSave,
   onEdit,
+  onPromo,
 }: {
   item: Item;
   categoryId: string;
@@ -307,6 +535,7 @@ function SortableItemRow({
     }>
   ) => Promise<void>;
   onEdit: (item: Item) => void;
+  onPromo: (item: Item) => void;
 }) {
   const {
     attributes,
@@ -403,6 +632,14 @@ function SortableItemRow({
                 disabled={!item.isAvailable}
                 onChange={() => onSave(item.id, { showInDineIn: !item.showInDineIn })}
               />
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onPromo(item); }}
+                className="rounded px-2 py-1 text-xs font-medium text-green-600 hover:bg-green-50 transition-colors"
+                title="Configurar promoção"
+              >
+                % Promo
+              </button>
               {otherManualCategories.length > 0 && (
                 <div className="relative" onClick={(e) => e.stopPropagation()}>
                   <button
@@ -544,6 +781,7 @@ function CategoryCard({
   onChange,
   onDelete,
   onEditItem,
+  onPromoItem,
 }: {
   category: Category;
   allCategories: Category[];
@@ -552,6 +790,7 @@ function CategoryCard({
   onChange: (updated: Category) => void;
   onDelete: (id: string) => void;
   onEditItem: (item: Item, categoryId: string) => void;
+  onPromoItem: (item: Item) => void;
 }) {
   const [editingCat, setEditingCat] = useState(false);
   const [catForm, setCatForm] = useState<CategoryFormState>({
@@ -825,6 +1064,7 @@ function CategoryCard({
                   )}
                   onSave={saveItem}
                   onEdit={(it) => onEditItem(it, category.id)}
+                  onPromo={onPromoItem}
                 />
               ))}
             </ul>
@@ -861,7 +1101,7 @@ function CategoryCard({
 function SortableCategoryCard(
   props: Omit<React.ComponentProps<typeof CategoryCard>, "dragListeners">
 ) {
-  const { filterActive, ...rest } = props;
+  const { filterActive, onPromoItem, ...rest } = props;
   const {
     attributes,
     listeners,
@@ -884,6 +1124,7 @@ function SortableCategoryCard(
       <CategoryCard
         {...rest}
         filterActive={filterActive}
+        onPromoItem={onPromoItem}
         dragListeners={filterActive ? undefined : listeners}
       />
     </div>
@@ -3008,11 +3249,13 @@ function BulkPriceModal({
 export function MenuManager({
   initialCategories,
   restaurantSlug,
+  restaurantId: _restaurantId,
   qrUrl,
   pedidoUrl,
 }: {
   initialCategories: Category[];
   restaurantSlug: string;
+  restaurantId: string;
   qrUrl: string;
   pedidoUrl: string;
 }) {
@@ -3024,6 +3267,7 @@ export function MenuManager({
     item: Item;
     categoryId: string;
   } | null>(null);
+  const [promoItem, setPromoItem] = useState<Item | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -3225,6 +3469,7 @@ export function MenuManager({
                 onChange={updateCategory}
                 onDelete={removeCategory}
                 onEditItem={(item, categoryId: string) => setEditingItem({ item, categoryId })}
+                onPromoItem={setPromoItem}
               />
             ))}
           </div>
@@ -3274,6 +3519,14 @@ export function MenuManager({
         onSave={handleModalSave}
         onDelete={handleModalDelete}
       />
+
+      {/* Promo modal */}
+      {promoItem && (
+        <PromoModal
+          item={promoItem}
+          onClose={() => { setPromoItem(null); refresh(); }}
+        />
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { phoneCandidates } from "@/lib/phone";
 import { verifyWaToken } from "@/lib/wa-token";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
+import { getActiveProductPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 
 export const dynamic = "force-dynamic";
 
@@ -270,7 +271,35 @@ export default async function PedidoPage({
     },
   });
 
+  // Fetch active promotions + real best sellers in parallel
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const [activePromotions, topSoldRows] = await Promise.all([
+    getActiveProductPromotions(restaurant.id, "DELIVERY"),
+    prisma.orderItem.groupBy({
+      by: ["menuItemId"],
+      where: {
+        order: {
+          restaurantId: restaurant.id,
+          status: { notIn: ["CANCELLED", "AWAITING_PAYMENT"] },
+          createdAt: { gte: sevenDaysAgo },
+        },
+        menuItemId: { not: null },
+      },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: 30,
+    }),
+  ]);
+
+  // Collect all raw item IDs + prices for building the promotion map
+  const allRawItems = rawCategories.flatMap((c) => [
+    ...c.items.map((i) => ({ id: i.id, price: Number(i.price) })),
+    ...c.placements.map((p) => ({ id: p.item.id, price: Number(p.item.price) })),
+  ]);
+  const promoMap = buildPromotionMap(allRawItems, activePromotions);
+
   function mapPedidoItem(i: typeof rawCategories[0]["items"][0]) {
+    const promo = promoMap.get(i.id) ?? null;
     return {
       id: i.id,
       name: i.name,
@@ -281,6 +310,7 @@ export default async function PedidoPage({
       ingredients: i.ingredients ?? null,
       servingSize: i.servingSize ?? null,
       portionInfo: i.portionInfo ?? null,
+      promotion: promo,
       variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: Number(v.price), portion: v.portion ?? null })),
       extras: i.extras.map((e) => ({ id: e.id, name: e.name, price: Number(e.price), portion: e.portion ?? null, quantity: e.quantity })),
       optionGroups: i.optionGroups.map((g) => ({
@@ -301,11 +331,27 @@ export default async function PedidoPage({
     })
     .filter((c) => c.items.length > 0);
 
-  // Inject "⭐ Mais pedidos" synthetic category as first section (top 10 items)
-  const bestSellers = categories.flatMap((c) => c.items).slice(0, 10);
-  const allCategories = bestSellers.length > 0
-    ? [{ id: "__best__", name: "⭐ Mais pedidos", description: null, imageUrl: null, items: bestSellers }, ...categories]
-    : categories;
+  // Build a flat item lookup for best-sellers + promotions virtual categories
+  const allItemsFlat = new Map(categories.flatMap((c) => c.items.map((i) => [i.id, i])));
+
+  // Real 7-day best sellers (sorted by actual order volume)
+  const bestSellers = topSoldRows
+    .map((r) => (r.menuItemId ? allItemsFlat.get(r.menuItemId) : undefined))
+    .filter((i): i is Exclude<typeof i, undefined> => i !== undefined)
+    .slice(0, 10);
+
+  // Promoted items virtual category
+  const promotedItems = categories.flatMap((c) => c.items).filter((i) => i.promotion !== null);
+
+  const virtualCategories: typeof categories = [];
+  if (promotedItems.length > 0) {
+    virtualCategories.push({ id: "__promotions__", name: "🔥 Promoções", description: null, imageUrl: null, items: promotedItems });
+  }
+  if (bestSellers.length > 0) {
+    virtualCategories.push({ id: "__best__", name: "⭐ Mais pedidos", description: null, imageUrl: null, items: bestSellers });
+  }
+
+  const allCategories = [...virtualCategories, ...categories];
 
   const ga4Id = brandConfig?.ga4MeasurementId ?? null;
   const gtmId = brandConfig?.gtmId ?? null;

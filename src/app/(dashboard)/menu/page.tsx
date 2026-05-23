@@ -99,6 +99,7 @@ export default async function MenuPage() {
         <MenuManager
           initialCategories={data}
           restaurantSlug={restaurant?.slug ?? ""}
+          restaurantId={session.user.restaurantId}
           qrUrl={`${appOrigin}/qr/${restaurant?.slug ?? ""}`}
           pedidoUrl={`${appOrigin}/pedido/${restaurant?.slug ?? ""}`}
         />

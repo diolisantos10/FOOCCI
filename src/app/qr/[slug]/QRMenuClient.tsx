@@ -19,6 +19,15 @@ type Extra = {
   price: number;
 };
 
+type PromotionInfo = {
+  promotionId: string;
+  originalPrice: number;
+  promotionalPrice: number;
+  discountAmount: number;
+  discountPercent: number;
+  badgeText: string;
+};
+
 type Item = {
   id: string;
   name: string;
@@ -29,6 +38,7 @@ type Item = {
   ingredients: string | null;
   servingSize: number | null;
   portionInfo: string | null;
+  promotion: PromotionInfo | null;
   variants: Variant[];
   extras: Extra[];
 };
@@ -47,6 +57,7 @@ type Props = {
   restaurant: { name: string; logoUrl: string | null };
   categories: Category[];
   featured: Item[];
+  promotedItems?: Item[];
   promoBanner?: Item | null;
   promotionBanners?: PromotionBanner[];
   brandPrimaryColor?: string | null;
@@ -447,12 +458,28 @@ function FeaturedCard({
         )}
       </div>
       <div className="p-2.5">
+        {item.promotion && (
+          <span className="mb-1 inline-block rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white leading-none">
+            {item.promotion.badgeText}
+          </span>
+        )}
         <p className="text-xs font-semibold text-gray-900 leading-tight line-clamp-2">
           {item.name}
         </p>
-        <p className="mt-1 text-xs font-bold" style={{ color: 'var(--brand-primary)' }}>
-          R$&nbsp;{formatPrice(item.price)}
-        </p>
+        {item.promotion ? (
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-xs font-bold text-red-600">
+              R$&nbsp;{formatPrice(item.promotion.promotionalPrice)}
+            </span>
+            <span className="text-[10px] text-gray-400 line-through">
+              R$&nbsp;{formatPrice(item.price)}
+            </span>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs font-bold" style={{ color: 'var(--brand-primary)' }}>
+            R$&nbsp;{formatPrice(item.price)}
+          </p>
+        )}
       </div>
     </button>
   );
@@ -489,6 +516,11 @@ function ProductCard({
                     Mais pedido
                   </span>
                 )}
+                {item.promotion && (
+                  <span className="shrink-0 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                    {item.promotion.badgeText}
+                  </span>
+                )}
               </div>
               {item.description && (
                 <p className="mt-2 text-sm text-gray-500 line-clamp-3 leading-relaxed">
@@ -498,9 +530,20 @@ function ProductCard({
             </div>
 
             <div className="mt-4">
-              <span className="text-lg font-bold" style={{ color: 'var(--brand-primary)' }}>
-                R$&nbsp;{formatPrice(item.price)}
-              </span>
+              {item.promotion ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-lg font-bold text-red-600">
+                    R$&nbsp;{formatPrice(item.promotion.promotionalPrice)}
+                  </span>
+                  <span className="text-sm text-gray-400 line-through">
+                    R$&nbsp;{formatPrice(item.price)}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-lg font-bold" style={{ color: 'var(--brand-primary)' }}>
+                  R$&nbsp;{formatPrice(item.price)}
+                </span>
+              )}
             </div>
           </div>
 
@@ -543,7 +586,7 @@ function PlaceholderBanner() {
 
 // ── Main Client Component ─────────────────────────────────────────────────────
 
-export function QRMenuClient({ slug, restaurant, categories, featured, promoBanner, promotionBanners = [], brandPrimaryColor, instagramUrl, tiktokUrl, restaurantPhone, googleReviewUrl }: Props) {
+export function QRMenuClient({ slug, restaurant, categories, featured, promotedItems = [], promoBanner, promotionBanners = [], brandPrimaryColor, instagramUrl, tiktokUrl, restaurantPhone, googleReviewUrl }: Props) {
   const pc = brandPrimaryColor || '#f97316';
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>(
@@ -771,6 +814,24 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promoBann
                 item={promoBanner}
                 onClick={() => setSelectedItem(promoBanner)}
               />
+            </div>
+          )}
+
+          {/* Promotions carousel */}
+          {promotedItems.length > 0 && (
+            <div className="mx-auto max-w-2xl px-4 pb-6">
+              <p className="mb-3 text-sm font-bold text-gray-700">
+                🔥 Promoções
+              </p>
+              <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-hide">
+                {promotedItems.map((item) => (
+                  <FeaturedCard
+                    key={item.id}
+                    item={item}
+                    onClick={() => setSelectedItem(item)}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
