@@ -317,7 +317,7 @@ export async function POST(
 
   const subtotal = verifiedCart.reduce((acc, item) => acc + item.price * item.qty, 0);
 
-  // ── Delivery fee from restaurant config ───────────────────────
+  // ── Delivery fee from restaurant config (server is source of truth) ──────────
   const deliveryCfg = deliveryMethod === "delivery"
     ? await prisma.deliveryConfig.findUnique({
         where: { restaurantId },
@@ -330,14 +330,26 @@ export async function POST(
     : null;
 
   const deliveryFeeAmount = (() => {
-    if (!deliveryCfg || deliveryMethod !== "delivery") return 0;
+    if (deliveryMethod !== "delivery") return 0;
+
+    if (!deliveryCfg) {
+      // No delivery config found — log and charge 0 (safe fallback; owner must configure)
+      console.warn("[finalize] delivery order but no delivery_configs row", { restaurantId });
+      return 0;
+    }
 
     const freeAbove = deliveryCfg.freeDeliveryAbove != null ? Number(deliveryCfg.freeDeliveryAbove) : null;
     const isFreeOrder = freeAbove != null && freeAbove > 0 && subtotal >= freeAbove;
-    if (isFreeOrder) return 0;
+    if (isFreeOrder) {
+      console.info("[finalize] free delivery applied", { restaurantId, subtotal, freeAbove });
+      return 0;
+    }
 
-    if (deliveryCfg.mode === "simple" && deliveryCfg.fee != null) {
-      return Number(deliveryCfg.fee);
+    if (deliveryCfg.mode === "simple") {
+      // Simple flat fee — server uses DB value directly, ignores clientDeliveryFee
+      const fee = deliveryCfg.fee != null ? Number(deliveryCfg.fee) : 0;
+      console.info("[finalize] delivery fee (simple)", { restaurantId, fee, dbFee: String(deliveryCfg.fee) });
+      return fee;
     }
 
     if (deliveryCfg.mode === "distance" || deliveryCfg.mode === "advanced") {
@@ -349,14 +361,20 @@ export async function POST(
         maxFee:     deliveryCfg.distanceMaxFee     != null ? Number(deliveryCfg.distanceMaxFee)     : null,
       };
       // Distance is unknown server-side (no geocoding); clientDeliveryFee carries the
-      // per-km total computed on the client. Floor = baseFee/minimumFee at unknown distance.
+      // per-km total computed on the client after applying freeDeliveryAbove.
+      // Floor = baseFee/minimumFee at unknown distance — never lower than configured floor.
       const floorFee = calcDeliveryFeeFromConfig(cfg, null);
       const raw = (clientDeliveryFee != null && clientDeliveryFee > 0) ? clientDeliveryFee : floorFee;
       const capped = cfg.maxFee != null && cfg.maxFee > 0 ? Math.min(raw, cfg.maxFee) : raw;
-      return Math.max(capped, floorFee);
+      const fee = Math.max(capped, floorFee);
+      console.info("[finalize] delivery fee (distance/advanced)", {
+        restaurantId, mode: deliveryCfg.mode, clientDeliveryFee, floorFee, fee,
+      });
+      return fee;
     }
 
     // manual — fee to be agreed at delivery
+    console.info("[finalize] delivery fee (manual)", { restaurantId });
     return 0;
   })();
 

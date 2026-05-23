@@ -65,7 +65,8 @@ export default async function PedidoPage({
   const deliveryConfig = await prisma.deliveryConfig.findUnique({
     where: { restaurantId: restaurant.id },
     select: {
-      mode: true, fee: true, enabled: true, estimatedMinutes: true,
+      mode: true, fee: true, enabled: true, pickupEnabled: true, estimatedMinutes: true,
+      freeDeliveryAbove: true, minOrderValue: true,
       // Distance-mode fields — needed to compute the floor fee for the checkout display
       distanceBaseFee: true, distanceMinFee: true, distanceMinFeeKm: true,
       distancePricePerKm: true, distanceMaxFee: true,
@@ -421,6 +422,7 @@ gtag('config', '${ga4Id}');
         banners={activeBanners}
         deliveryMode={deliveryConfig?.mode ?? "simple"}
         deliveryFee={checkoutDeliveryFee}
+        freeDeliveryAbove={deliveryConfig?.freeDeliveryAbove != null ? Number(deliveryConfig.freeDeliveryAbove) : null}
         deliveryEstimatedMinutes={deliveryConfig?.estimatedMinutes ?? null}
         averagePreparationMinutes={restaurant.storeProfile?.averagePreparationMinutes ?? null}
         ga4Id={ga4Id}

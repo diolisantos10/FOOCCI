@@ -361,6 +361,8 @@ interface Props {
   knownCustomerId?: string | null;
   knownDefaultAddress?: { street: string; number: string; neighborhood: string; complement: string; cep?: string; city?: string; state?: string } | null;
   deliveryFee?: number | null;
+  /** Free delivery threshold: if subtotal >= this value, delivery is free. */
+  freeDeliveryAbove?: number | null;
   deliveryMode?: string;
   deliveryEstimatedMinutes?: number | null;
   averagePreparationMinutes?: number | null;
@@ -387,6 +389,20 @@ interface Props {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the delivery fee the customer should actually pay.
+ * Applies free-delivery-above threshold: if subtotal >= freeAbove, fee is 0.
+ */
+function computeEffectiveFee(
+  subtotal: number,
+  fee: number | null | undefined,
+  freeAbove: number | null | undefined,
+): number {
+  if (fee == null) return 0;
+  if (freeAbove != null && freeAbove > 0 && subtotal >= freeAbove) return 0;
+  return fee;
+}
 
 function uid() { return Math.random().toString(36).slice(2); }
 
@@ -1687,7 +1703,7 @@ export function PedidoClient({
   instagramUrl = null, tiktokUrl = null,
   banners = [],
   brandPrimaryColor = null, brandSecondaryColor = null,
-  deliveryFee = null, deliveryMode = "simple",
+  deliveryFee = null, freeDeliveryAbove = null, deliveryMode = "simple",
   deliveryEstimatedMinutes = null, averagePreparationMinutes = null,
   ga4Id = null,
   restaurantIsOpen = true,
@@ -3036,7 +3052,11 @@ export function PedidoClient({
           paymentMode,
           paymentMethodSub,
           clientDeliveryFee: deliveryMethod === "delivery" && deliveryMode !== "manual"
-            ? (deliveryFee ?? 0)
+            ? computeEffectiveFee(
+                cart.reduce((s, i) => s + i.price * i.qty, 0),
+                deliveryFee,
+                freeDeliveryAbove,
+              )
             : undefined,
           couponCode:      appliedCoupon?.couponCode || undefined,
           trackingLinkId:  utm.tlid    || undefined,
@@ -3108,7 +3128,9 @@ export function PedidoClient({
     try {
       const sub      = cart.reduce((s, i) => s + i.price * i.qty, 0);
       const isManFee = deliveryMethod === "delivery" && deliveryMode === "manual";
-      const fee      = deliveryMethod === "delivery" && !isManFee ? (deliveryFee ?? 0) : 0;
+      const fee      = deliveryMethod === "delivery" && !isManFee
+        ? computeEffectiveFee(sub, deliveryFee, freeDeliveryAbove)
+        : 0;
       const res = await fetch(`/api/pedido/${slug}/validate-coupon`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3331,6 +3353,8 @@ export function PedidoClient({
     }
 
     if (stage === "ADDRESS_CONFIRM") {
+      const addrSubtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const effectiveFeeForAddr = computeEffectiveFee(addrSubtotal, deliveryFee, freeDeliveryAbove);
       const prepMin  = averagePreparationMinutes ?? 20;
       const etaLow   = deliveryMethod === "pickup"
         ? prepMin - 5
@@ -3360,9 +3384,9 @@ export function PedidoClient({
                   ? "A combinar"
                   : deliveryFee == null
                   ? "Calculando…"
-                  : deliveryFee === 0
+                  : effectiveFeeForAddr === 0
                   ? "Grátis"
-                  : `R$ ${deliveryFee.toFixed(2).replace(".", ",")}`}
+                  : `R$ ${effectiveFeeForAddr.toFixed(2).replace(".", ",")}`}
               </span>
             </div>
           )}
@@ -3481,7 +3505,9 @@ export function PedidoClient({
     if (stage === "REVIEW_ORDER") {
       const subtotal    = cart.reduce((s, i) => s + i.price * i.qty, 0);
       const isManualFee = deliveryMethod === "delivery" && deliveryMode === "manual";
-      const appliedFee  = deliveryMethod === "delivery" && !isManualFee ? (deliveryFee ?? 0) : 0;
+      const appliedFee  = deliveryMethod === "delivery" && !isManualFee
+        ? computeEffectiveFee(subtotal, deliveryFee, freeDeliveryAbove)
+        : 0;
       const total       = subtotal + appliedFee;
       const discount    = appliedCoupon?.discountAmount ?? 0;
       const finalTotal  = Math.max(0, Math.round((total - discount) * 100) / 100);
