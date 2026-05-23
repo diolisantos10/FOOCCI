@@ -282,9 +282,20 @@ function ProductModal({
               <h3 className="text-xl font-bold text-gray-900 leading-tight">
                 {item.name}
               </h3>
-              <span className="shrink-0 text-xl font-bold" style={{ color: 'var(--brand-primary)' }}>
-                R$&nbsp;{formatPrice(item.price)}
-              </span>
+              {item.promotion ? (
+                <div className="flex flex-col items-end shrink-0">
+                  <span className="text-xl font-bold text-red-600">
+                    R$&nbsp;{formatPrice(item.promotion.promotionalPrice)}
+                  </span>
+                  <span className="text-sm text-gray-400 line-through">
+                    R$&nbsp;{formatPrice(item.price)}
+                  </span>
+                </div>
+              ) : (
+                <span className="shrink-0 text-xl font-bold" style={{ color: 'var(--brand-primary)' }}>
+                  R$&nbsp;{formatPrice(item.price)}
+                </span>
+              )}
             </div>
 
             {item.description && (
@@ -417,9 +428,16 @@ function PromoBanner({
           Promoção do dia
         </span>
         <p className="text-lg font-bold text-white leading-tight">{item.name}</p>
-        <p className="mt-0.5 text-sm font-bold text-white/80">
-          R$&nbsp;{formatPrice(item.price)}
-        </p>
+        {item.promotion ? (
+          <p className="mt-0.5 text-sm font-bold text-white">
+            <span className="text-red-300 line-through mr-1.5">R$&nbsp;{formatPrice(item.price)}</span>
+            R$&nbsp;{formatPrice(item.promotion.promotionalPrice)}
+          </p>
+        ) : (
+          <p className="mt-0.5 text-sm font-bold text-white/80">
+            R$&nbsp;{formatPrice(item.price)}
+          </p>
+        )}
       </div>
     </button>
   );

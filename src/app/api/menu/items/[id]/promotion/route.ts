@@ -173,12 +173,12 @@ export async function DELETE(req: NextRequest, { params }: Params) {
         restaurantId: ctx.restaurantId,
         target: "PRODUCT",
         targetProductIds: { has: params.id },
-        status: "ACTIVE",
+        status: { in: ["ACTIVE", "PAUSED"] },
       },
       select: { id: true },
     });
 
-    if (!existing) return notFound("Nenhuma promoção ativa encontrada para este item");
+    if (!existing) return notFound("Nenhuma promoção encontrada para este item");
 
     await prisma.promotion.update({
       where: { id: existing.id },

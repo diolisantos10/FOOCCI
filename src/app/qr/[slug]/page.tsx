@@ -161,8 +161,13 @@ export default async function QRMenuPage({
     .filter((i): i is Exclude<typeof i, undefined> => i !== undefined)
     .slice(0, 10);
 
-  // Promoted items for the "🔥 Promoções" section
-  const promotedItems = categories.flatMap((c) => c.items).filter((i) => i.promotion !== null);
+  // Promoted items for the "🔥 Promoções" section — deduplicate across categories (placements can repeat an item)
+  const seenPromo = new Set<string>();
+  const promotedItems = categories.flatMap((c) => c.items).filter((i) => {
+    if (i.promotion === null || seenPromo.has(i.id)) return false;
+    seenPromo.add(i.id);
+    return true;
+  });
 
   // promoBanner: first promoted item with an image, or null
   const promoBanner = promotedItems.find((i) => i.imageUrl) ?? promotedItems[0] ?? null;

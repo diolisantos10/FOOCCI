@@ -340,8 +340,13 @@ export default async function PedidoPage({
     .filter((i): i is Exclude<typeof i, undefined> => i !== undefined)
     .slice(0, 10);
 
-  // Promoted items virtual category
-  const promotedItems = categories.flatMap((c) => c.items).filter((i) => i.promotion !== null);
+  // Promoted items virtual category — deduplicate across categories (placements can repeat an item)
+  const seenPromo = new Set<string>();
+  const promotedItems = categories.flatMap((c) => c.items).filter((i) => {
+    if (i.promotion === null || seenPromo.has(i.id)) return false;
+    seenPromo.add(i.id);
+    return true;
+  });
 
   const virtualCategories: typeof categories = [];
   if (promotedItems.length > 0) {
