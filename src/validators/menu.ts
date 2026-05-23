@@ -118,7 +118,7 @@ export const createOptionItemSchema = z.object({
     (val) => (val === "" || val === null || val === undefined ? 0 : Number(val)),
     z.number().min(0, "Preço não pode ser negativo").multipleOf(0.01)
   ).default(0),
-  portion: z.string().max(50).optional(),
+  portion: z.string().max(50).nullish(),
   isAvailable: z.boolean().default(true),
   sortOrder: z.number().int().min(0).default(0),
 });

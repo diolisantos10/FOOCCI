@@ -1914,7 +1914,7 @@ function EditItemModal({
       const d = await apiFetch(`/api/menu/option-groups/${groupId}/options`, "POST", {
         name:      newOption.name.trim(),
         price,
-        portion:   newOption.portion.trim() || null,
+        portion:   newOption.portion.trim() || undefined,
         sortOrder: (optionGroups.find((g) => g.id === groupId)?.options.length ?? 0),
       });
       setOptionGroups((gs) =>
