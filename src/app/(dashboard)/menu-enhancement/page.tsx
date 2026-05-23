@@ -8,7 +8,6 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { EnhancementClient } from "./EnhancementClient";
 
@@ -18,15 +17,17 @@ export default async function MenuEnhancementPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
 
-  // Require admin authentication for this internal tool
-  if (!isAdminAuthenticated()) {
+  const user = session.user as { restaurantId?: string; role?: string };
+
+  // Only OWNER and MANAGER can access this tool
+  if (!["OWNER", "MANAGER"].includes(user.role ?? "")) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="max-w-sm rounded-xl border border-red-200 bg-white p-8 text-center shadow">
           <p className="text-2xl">🔒</p>
           <p className="mt-2 font-semibold text-gray-900">Acesso restrito</p>
           <p className="mt-1 text-sm text-gray-500">
-            Esta página requer autenticação de administrador Foocci.
+            Apenas o proprietário ou gerente pode acessar esta página.
           </p>
         </div>
       </div>
@@ -34,7 +35,7 @@ export default async function MenuEnhancementPage() {
   }
 
   // Fetch restaurant for this session
-  const restaurantId = (session.user as { restaurantId?: string }).restaurantId;
+  const restaurantId = user.restaurantId;
   if (!restaurantId) redirect("/login");
 
   const restaurant = await prisma.restaurant.findUnique({

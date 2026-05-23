@@ -60,8 +60,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Plataforma",
     items: [
-      { href: "/settings",    label: "Configurações", icon: "⚙️" },
-      { href: "/integracoes", label: "Integrações",   icon: "🔌" },
+      { href: "/settings",          label: "Configurações",   icon: "⚙️" },
+      { href: "/integracoes",       label: "Integrações",     icon: "🔌" },
+      { href: "/menu-enhancement",  label: "Fotos do Cardápio", icon: "📸" },
     ],
   },
 ];
