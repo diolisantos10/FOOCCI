@@ -1314,7 +1314,6 @@ const CAMPAIGN_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 
 const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-const PILOT_MAX = 20; // safety cap for manual pilot dispatches
 
 function CampaignReviewModal({
   campaignId,
@@ -1344,6 +1343,7 @@ function CampaignReviewModal({
     randomDelayEnabled: boolean;
     randomDelayMinSec: number;
     randomDelayMaxSec: number;
+    todaySent: number;
   } | null>(null);
 
   useEffect(() => {
@@ -1353,10 +1353,11 @@ function CampaignReviewModal({
       .catch(() => {});
   }, []);
 
-  // Effective max: min(PILOT_MAX, dailyGlobalCap) — 0 dailyGlobalCap means no cap
+  // For manual sends: cap to remaining global daily capacity (dailyGlobalCap - todaySent).
+  // 0 dailyGlobalCap means no cap configured.
   const effectiveMax = safety?.dailyGlobalCap && safety.dailyGlobalCap > 0
-    ? Math.min(PILOT_MAX, safety.dailyGlobalCap)
-    : PILOT_MAX;
+    ? Math.max(0, safety.dailyGlobalCap - (safety.todaySent ?? 0))
+    : 9999;
 
   const active = initialRecipients.filter((r) => !removed.has(r.id));
 
@@ -1417,7 +1418,9 @@ function CampaignReviewModal({
             <p className={`text-xs mt-0.5 ${active.length > effectiveMax ? "text-yellow-600 font-semibold" : "text-gray-500"}`}>
               {active.length} destinatário{active.length !== 1 ? "s" : ""}
               {active.length > effectiveMax
-                ? ` · ⚠️ acima do limite (${effectiveMax})`
+                ? effectiveMax === 0
+                  ? " · ⚠️ limite diário atingido"
+                  : ` · ⚠️ acima do limite diário restante (${effectiveMax})`
                 : " · Canal: WhatsApp"}
             </p>
           </div>
@@ -1459,7 +1462,10 @@ function CampaignReviewModal({
                 <p className="text-[11px] font-semibold text-brand-700 mb-1">🛡️ Modo seguro ativo</p>
                 <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-brand-600">
                   {safety.dailyGlobalCap > 0 && (
-                    <span>Limite diário: {safety.dailyGlobalCap} msg</span>
+                    <span>
+                      Limite diário: {safety.dailyGlobalCap} msg
+                      {safety.todaySent > 0 && ` · ${Math.max(0, safety.dailyGlobalCap - safety.todaySent)} restantes hoje`}
+                    </span>
                   )}
                   {safety.quietHoursEnabled && (
                     <span>Horário quieto: {safety.quietHoursStart}–{safety.quietHoursEnd}</span>
@@ -1472,18 +1478,20 @@ function CampaignReviewModal({
               </div>
             )}
 
-            {/* Pilot cap warning */}
+            {/* Daily cap warning */}
             {active.length > effectiveMax && (
               <div className="border-b border-yellow-100 bg-yellow-50 px-5 py-3 flex items-center justify-between gap-3 shrink-0">
                 <p className="text-xs text-yellow-800">
-                  ⚠️ <strong>Limite de segurança:</strong> {active.length} destinatários — máximo permitido: {effectiveMax}. Remova manualmente ou aplique o limite automático.
+                  ⚠️ <strong>Limite diário:</strong> {active.length} destinatários — capacidade restante hoje: {effectiveMax === 0 ? "nenhuma (limite atingido)" : effectiveMax}. Remova manualmente ou aplique o limite automático.
                 </p>
-                <button
-                  onClick={applyCap}
-                  className="shrink-0 rounded-lg bg-yellow-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-yellow-700 transition-colors"
-                >
-                  Aplicar limite ({effectiveMax})
-                </button>
+                {effectiveMax > 0 && (
+                  <button
+                    onClick={applyCap}
+                    className="shrink-0 rounded-lg bg-yellow-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-yellow-700 transition-colors"
+                  >
+                    Aplicar limite ({effectiveMax})
+                  </button>
+                )}
               </div>
             )}
 
@@ -1533,14 +1541,22 @@ function CampaignReviewModal({
               <button
                 onClick={handleSend}
                 disabled={sending || active.length === 0 || active.length > effectiveMax}
-                title={active.length > effectiveMax ? `Reduza para no máximo ${effectiveMax} destinatários antes de enviar` : undefined}
+                title={
+                  effectiveMax === 0
+                    ? "Limite diário atingido. Tente novamente amanhã."
+                    : active.length > effectiveMax
+                      ? `Capacidade restante hoje: ${effectiveMax}. Reduza a lista antes de enviar.`
+                      : undefined
+                }
                 className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {sending
                   ? "Enviando…"
-                  : active.length > effectiveMax
-                    ? `Limite: reduza para ≤ ${effectiveMax}`
-                    : `Enviar ${active.length} mensagem${active.length !== 1 ? "s" : ""}`}
+                  : effectiveMax === 0
+                    ? "Limite diário atingido"
+                    : active.length > effectiveMax
+                      ? `Limite: reduza para ≤ ${effectiveMax}`
+                      : `Enviar ${active.length} mensagem${active.length !== 1 ? "s" : ""}`}
               </button>
             </div>
           </>
