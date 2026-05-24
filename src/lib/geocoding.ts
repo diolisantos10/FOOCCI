@@ -69,32 +69,48 @@ async function geocodeWithGoogleMaps(address: GeocodableAddress, apiKey: string)
 }
 
 async function geocodeWithNominatim(address: GeocodableAddress): Promise<LatLng | null> {
-  try {
-    const parts: string[] = [];
-    if (address.cep) {
-      parts.push(address.cep.replace(/\D/g, ""));
-    }
-    if (address.street && address.number) {
-      parts.push(`${address.street}, ${address.number}`);
-    } else if (address.street) {
-      parts.push(address.street);
-    }
-    if (address.neighborhood) parts.push(address.neighborhood);
-    if (address.city)         parts.push(address.city);
-    if (address.state)        parts.push(address.state);
-    if (parts.length < 2) return null;
+  const headers = { "User-Agent": "FOOCCI-Restaurant-System/1.0 (https://foocci.com.br)" };
+  const signal  = AbortSignal.timeout(6_000);
 
-    const query = parts.join(", ") + ", Brasil";
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=br`;
-    const res = await fetch(url, {
-      headers: { "User-Agent": "FOOCCI-Restaurant-System/1.0 (https://foocci.com.br)" },
-      signal:  AbortSignal.timeout(6_000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as { lat?: string; lon?: string }[];
-    const first = data[0];
+  const parseResult = (data: unknown): LatLng | null => {
+    const arr = data as { lat?: string; lon?: string }[];
+    const first = arr[0];
     if (!first?.lat || !first?.lon) return null;
     return { lat: parseFloat(first.lat), lng: parseFloat(first.lon) };
+  };
+
+  try {
+    // Strategy 1: structured search (most reliable — avoids CEP-in-free-text confusion)
+    if (address.city || address.cep) {
+      const params = new URLSearchParams({ format: "json", limit: "1", countrycodes: "br" });
+      if (address.street && address.number) params.set("street", `${address.number} ${address.street}`);
+      else if (address.street)              params.set("street", address.street);
+      if (address.city)  params.set("city", address.city);
+      if (address.state) params.set("state", address.state);
+      if (address.cep)   params.set("postalcode", address.cep.replace(/\D/g, ""));
+      params.set("country", "Brazil");
+
+      const res1 = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers, signal });
+      if (res1.ok) {
+        const r = parseResult(await res1.json());
+        if (r) return r;
+      }
+    }
+
+    // Strategy 2: CEP-only free-text fallback (works even without street/city in DB)
+    if (address.cep) {
+      const cepClean = address.cep.replace(/\D/g, "");
+      const res2 = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cepClean)}&format=json&limit=1&countrycodes=br`,
+        { headers, signal },
+      );
+      if (res2.ok) {
+        const r = parseResult(await res2.json());
+        if (r) return r;
+      }
+    }
+
+    return null;
   } catch {
     return null;
   }
