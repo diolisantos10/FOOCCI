@@ -3432,8 +3432,8 @@ export function PedidoClient({
             )}
           </div>
 
-          {/* Delivery fee — shown as soon as address is confirmed */}
-          {deliveryMethod === "delivery" && (
+          {/* Delivery fee — hidden when quote has a blocking error (out_of_range / distance_blocked) */}
+          {deliveryMethod === "delivery" && !quoteError && (
             <div className={`mb-2 flex items-center justify-between rounded-lg px-3 py-1.5 text-xs ${quoteStatus === "distance_min_fee_fallback" ? "bg-amber-50" : "bg-green-50"}`}>
               <span className="text-gray-600">🛵 Taxa de entrega</span>
               <span className="font-semibold text-gray-800">

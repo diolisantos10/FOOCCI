@@ -74,8 +74,9 @@ export default async function PedidoPage({
   });
 
   // For distance mode the simple `fee` field is null.
-  // Compute the floor fee (minimum charge when distance is unknown) so the
-  // checkout never shows "Grátis" when baseFee > 0.
+  // Use baseFee only as the page-load placeholder — distanceMinFee is the
+  // checkout-time fallback (used by the resolver when geocoding fails) and
+  // must not inflate the initial display before an address is entered.
   const checkoutDeliveryFee = (() => {
     if (!deliveryConfig?.enabled) return null;
     if (deliveryConfig.mode === "simple" && deliveryConfig.fee != null) {
@@ -85,16 +86,13 @@ export default async function PedidoPage({
       const floor = calcDeliveryFeeFromConfig(
         {
           baseFee:    deliveryConfig.distanceBaseFee   != null ? Number(deliveryConfig.distanceBaseFee)   : 0,
-          minimumFee: deliveryConfig.distanceMinFee    != null ? Number(deliveryConfig.distanceMinFee)    : null,
+          minimumFee: null, // do NOT use distanceMinFee as a display floor; it is a checkout-only fallback
           includedKm: deliveryConfig.distanceMinFeeKm  != null ? Number(deliveryConfig.distanceMinFeeKm)  : 0,
           pricePerKm: deliveryConfig.distancePricePerKm != null ? Number(deliveryConfig.distancePricePerKm) : 0,
           maxFee:     deliveryConfig.distanceMaxFee    != null ? Number(deliveryConfig.distanceMaxFee)    : null,
         },
-        null, // distance unknown at page load — baseFee/minimumFee is the safe fallback
+        null, // distance unknown at page load → returns baseFee
       );
-      if (process.env.NODE_ENV !== "production" && floor === 0 && Number(deliveryConfig.distanceBaseFee ?? 0) > 0) {
-        console.warn("[pedido/page] delivery distance missing; using base fee fallback");
-      }
       return floor;
     }
     return null; // manual/advanced mode — "A combinar" or null handled by client
