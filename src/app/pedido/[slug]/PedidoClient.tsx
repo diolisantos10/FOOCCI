@@ -2061,6 +2061,14 @@ export function PedidoClient({
   const categoryBarRef     = useRef<HTMLDivElement>(null);
   const [categoryFadeEnd, setCategoryFadeEnd] = useState(true);
 
+  // ── Delivery-quote state (distance mode) ──────────────────────────────────────
+  const [quoteDeliveryFee, setQuoteDeliveryFee] = useState<number | null>(null);
+  const [quoteStatus,      setQuoteStatus]      = useState<string | null>(null);
+  const [quoteError,       setQuoteError]       = useState<string | null>(null);
+  const [quoteLoading,     setQuoteLoading]     = useState(false);
+  // Derived: prefer the geocoded fee over the page-load floor fee
+  const resolvedDeliveryFee = quoteDeliveryFee ?? deliveryFee;
+
   // Clear coupon when delivery method changes (channel compatibility may differ)
   useEffect(() => {
     setAppliedCoupon(null);
@@ -2952,13 +2960,50 @@ export function PedidoClient({
         complement:     complement.trim(),
         referencePoint: referencePoint.trim(),
       }));
+      // Reset any previous quote so ADDRESS_CONFIRM shows fresh state
+      setQuoteDeliveryFee(null);
+      setQuoteStatus(null);
+      setQuoteError(null);
       setStage("ADDRESS_CONFIRM");
       pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_CONFIRM"]!);
     },
     [pushAssistantMessage],
   );
 
-  const handleAddressConfirm = useCallback(() => {
+  const handleAddressConfirm = useCallback(async () => {
+    // For distance-based delivery: fetch a real fee quote (geocoding) before advancing.
+    // Blocks checkout if distance cannot be calculated and no safe fallback is configured.
+    if (deliveryMethod === "delivery" && deliveryMode === "distance") {
+      setQuoteLoading(true);
+      setQuoteError(null);
+      try {
+        const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
+        const res = await fetch(`/api/pedido/${slug}/delivery-quote`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ address, subtotal: sub, deliveryType: "delivery" }),
+        });
+        const data = await res.json() as {
+          deliveryFee?: number; calculationStatus?: string; reason?: string;
+        };
+        if (data.calculationStatus === "distance_blocked") {
+          setQuoteError(
+            data.reason ??
+            "Não conseguimos calcular a entrega para esse endereço. Revise o endereço ou fale com o restaurante.",
+          );
+          setQuoteLoading(false);
+          return; // stay on ADDRESS_CONFIRM — do not advance
+        }
+        setQuoteDeliveryFee(data.deliveryFee ?? null);
+        setQuoteStatus(data.calculationStatus ?? null);
+      } catch {
+        setQuoteError("Erro ao calcular a taxa de entrega. Tente novamente.");
+        setQuoteLoading(false);
+        return;
+      }
+      setQuoteLoading(false);
+    }
+
     pushUserMessage("Endereço confirmado ✓");
     // If name + payment were already collected (e.g. customer is changing address
     // from the review screen), skip straight back to REVIEW_ORDER.
@@ -2977,7 +3022,8 @@ export function PedidoClient({
       setStage("ASK_NAME");
       pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
     }
-  }, [pushUserMessage, pushAssistantMessage, customerName, paymentMode, paymentMethodSub]);
+  }, [pushUserMessage, pushAssistantMessage, customerName, paymentMode, paymentMethodSub,
+      deliveryMethod, deliveryMode, cart, slug, address]);
 
   const handleNameInput = useCallback(
     (text: string) => {
@@ -3054,7 +3100,7 @@ export function PedidoClient({
           clientDeliveryFee: deliveryMethod === "delivery" && deliveryMode !== "manual"
             ? computeEffectiveFee(
                 cart.reduce((s, i) => s + i.price * i.qty, 0),
-                deliveryFee,
+                resolvedDeliveryFee,
                 freeDeliveryAbove,
               )
             : undefined,
@@ -3129,7 +3175,7 @@ export function PedidoClient({
       const sub      = cart.reduce((s, i) => s + i.price * i.qty, 0);
       const isManFee = deliveryMethod === "delivery" && deliveryMode === "manual";
       const fee      = deliveryMethod === "delivery" && !isManFee
-        ? computeEffectiveFee(sub, deliveryFee, freeDeliveryAbove)
+        ? computeEffectiveFee(sub, resolvedDeliveryFee, freeDeliveryAbove)
         : 0;
       const res = await fetch(`/api/pedido/${slug}/validate-coupon`, {
         method: "POST",
@@ -3164,7 +3210,7 @@ export function PedidoClient({
     } finally {
       setCouponLoading(false);
     }
-  }, [couponInput, cart, deliveryMethod, deliveryMode, deliveryFee, slug, resolvedCustomerId]);
+  }, [couponInput, cart, deliveryMethod, deliveryMode, resolvedDeliveryFee, slug, resolvedCustomerId]);
 
   const handleBackToBrowse = useCallback(() => {
     // Return to browsing without wiping checkout data.
@@ -3354,7 +3400,7 @@ export function PedidoClient({
 
     if (stage === "ADDRESS_CONFIRM") {
       const addrSubtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
-      const effectiveFeeForAddr = computeEffectiveFee(addrSubtotal, deliveryFee, freeDeliveryAbove);
+      const effectiveFeeForAddr = computeEffectiveFee(addrSubtotal, resolvedDeliveryFee, freeDeliveryAbove);
       const prepMin  = averagePreparationMinutes ?? 20;
       const etaLow   = deliveryMethod === "pickup"
         ? prepMin - 5
@@ -3380,14 +3426,23 @@ export function PedidoClient({
             <div className="mb-2 flex items-center justify-between rounded-lg bg-green-50 px-3 py-1.5 text-xs">
               <span className="text-gray-600">🛵 Taxa de entrega</span>
               <span className="font-semibold text-gray-800">
-                {deliveryMode === "manual"
+                {quoteLoading
+                  ? "Calculando…"
+                  : deliveryMode === "manual"
                   ? "A combinar"
-                  : deliveryFee == null
+                  : resolvedDeliveryFee == null
                   ? "Calculando…"
                   : effectiveFeeForAddr === 0
                   ? "Grátis"
                   : `R$ ${effectiveFeeForAddr.toFixed(2).replace(".", ",")}`}
               </span>
+            </div>
+          )}
+
+          {/* Error when distance cannot be geocoded */}
+          {quoteError && deliveryMethod === "delivery" && (
+            <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {quoteError}
             </div>
           )}
 
@@ -3398,10 +3453,11 @@ export function PedidoClient({
             <button
               data-testid="address-confirm-button"
               onClick={handleAddressConfirm}
-              className="flex-1 rounded-xl py-2 text-sm font-bold text-white hover:opacity-90"
+              disabled={quoteLoading || !!quoteError}
+              className="flex-1 rounded-xl py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >
-              Confirmar endereço
+              {quoteLoading ? "Calculando…" : "Confirmar endereço"}
             </button>
             <button
               onClick={() => {
@@ -3409,6 +3465,9 @@ export function PedidoClient({
                 // re-enters it from scratch (not auto-skipped by computeResumeStage).
                 setAddress({ cep: "", street: "", number: "", neighborhood: "", city: "", state: "", complement: "", referencePoint: "" });
                 setCepInputValue("");
+                setQuoteDeliveryFee(null);
+                setQuoteStatus(null);
+                setQuoteError(null);
                 setStage("CEP_INPUT");
               }}
               className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
@@ -3506,7 +3565,7 @@ export function PedidoClient({
       const subtotal    = cart.reduce((s, i) => s + i.price * i.qty, 0);
       const isManualFee = deliveryMethod === "delivery" && deliveryMode === "manual";
       const appliedFee  = deliveryMethod === "delivery" && !isManualFee
-        ? computeEffectiveFee(subtotal, deliveryFee, freeDeliveryAbove)
+        ? computeEffectiveFee(subtotal, resolvedDeliveryFee, freeDeliveryAbove)
         : 0;
       const total       = subtotal + appliedFee;
       const discount    = appliedCoupon?.discountAmount ?? 0;

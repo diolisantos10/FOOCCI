@@ -32,7 +32,7 @@ import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { toE164 } from "@/lib/phone";
 import { isGuestIdentifier } from "@/lib/guest";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
-import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
+import { resolveDeliveryFee } from "@/lib/delivery-fee-resolver";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { getActiveMenuPromotions, resolveMenuItemPromotion } from "@/services/promotions/productPromotionResolver";
 
@@ -129,7 +129,10 @@ export async function POST(
 
   const restaurant = await prisma.restaurant.findUnique({
     where:  { slug },
-    select: { id: true },
+    select: {
+      id: true,
+      storeProfile: { select: { latitude: true, longitude: true } },
+    },
   });
   if (!restaurant) {
     return NextResponse.json({ error: "Restaurante não encontrado" }, { status: 404 });
@@ -318,7 +321,7 @@ export async function POST(
 
   const subtotal = verifiedCart.reduce((acc, item) => acc + item.price * item.qty, 0);
 
-  // ── Delivery fee from restaurant config (server is source of truth) ──────────
+  // ── Delivery fee — server is the source of truth ─────────────────────────────
   const deliveryCfg = deliveryMethod === "delivery"
     ? await prisma.deliveryConfig.findUnique({
         where: { restaurantId },
@@ -330,15 +333,8 @@ export async function POST(
       })
     : null;
 
-  const deliveryFeeAmount = (() => {
-    if (deliveryMethod !== "delivery") return 0;
-
-    if (!deliveryCfg) {
-      console.warn("[finalize] delivery order but no delivery_configs row", { restaurantId });
-      return 0;
-    }
-
-    // Full config dump — essential for diagnosing fee discrepancies in production logs
+  // Full config dump — essential for diagnosing fee discrepancies in production logs
+  if (deliveryCfg) {
     console.info("[finalize] delivery config", {
       restaurantId,
       mode:               deliveryCfg.mode,
@@ -352,67 +348,64 @@ export async function POST(
       clientDeliveryFeeReceived: clientDeliveryFee ?? null,
       subtotal,
     });
+  }
 
-    const freeAbove = deliveryCfg.freeDeliveryAbove != null ? Number(deliveryCfg.freeDeliveryAbove) : null;
-    const isFreeOrder = freeAbove != null && freeAbove > 0 && subtotal >= freeAbove;
-    if (isFreeOrder) {
-      const configuredFee = deliveryCfg.mode === "simple" && deliveryCfg.fee != null
-        ? Number(deliveryCfg.fee)
-        : (deliveryCfg.distanceMinFee != null ? Number(deliveryCfg.distanceMinFee) : 0);
-      if (freeAbove < 10 && configuredFee > 0) {
-        // Threshold below R$10 makes virtually ALL orders free — likely misconfiguration
-        console.error("[finalize] CRITICAL: freeDeliveryAbove is very low — almost all deliveries will be FREE", {
-          restaurantId, freeAbove, configuredFee, subtotal,
-          hint: "Set freeDeliveryAbove to a higher value (e.g. 80) or clear it if not intended",
-        });
-      } else {
-        console.info("[finalize] free delivery applied", { restaurantId, subtotal, freeAbove });
-      }
-      return 0;
-    }
+  let deliveryFeeAmount = 0;
 
-    if (deliveryCfg.mode === "simple") {
-      const fee = deliveryCfg.fee != null ? Number(deliveryCfg.fee) : 0;
-      console.info("[finalize] delivery fee (simple)", { restaurantId, fee, dbFee: String(deliveryCfg.fee) });
-      return fee;
-    }
+  if (deliveryMethod === "delivery") {
+    if (!deliveryCfg) {
+      console.warn("[finalize] delivery order but no delivery_configs row — charging R$0", { restaurantId });
+    } else {
+      const restaurantCoords =
+        restaurant.storeProfile?.latitude  != null &&
+        restaurant.storeProfile?.longitude != null
+          ? {
+              lat: Number(restaurant.storeProfile.latitude),
+              lng: Number(restaurant.storeProfile.longitude),
+            }
+          : null;
 
-    if (deliveryCfg.mode === "distance" || deliveryCfg.mode === "advanced") {
-      const cfg = {
-        baseFee:    deliveryCfg.distanceBaseFee    != null ? Number(deliveryCfg.distanceBaseFee)    : 0,
-        minimumFee: deliveryCfg.distanceMinFee     != null ? Number(deliveryCfg.distanceMinFee)     : null,
-        includedKm: deliveryCfg.distanceMinFeeKm   != null ? Number(deliveryCfg.distanceMinFeeKm)   : 0,
-        pricePerKm: deliveryCfg.distancePricePerKm != null ? Number(deliveryCfg.distancePricePerKm) : 0,
-        maxFee:     deliveryCfg.distanceMaxFee     != null ? Number(deliveryCfg.distanceMaxFee)     : null,
-      };
-      // Distance is unknown server-side (no geocoding); clientDeliveryFee carries the
-      // per-km total computed on the client. Floor = baseFee/minimumFee at 0 km.
-      const floorFee = calcDeliveryFeeFromConfig(cfg, null);
-      const raw = (clientDeliveryFee != null && clientDeliveryFee > 0) ? clientDeliveryFee : floorFee;
-      const capped = cfg.maxFee != null && cfg.maxFee > 0 ? Math.min(raw, cfg.maxFee) : raw;
-      const fee = Math.max(capped, floorFee);
-
-      // Warn when per-km fee is configured but distance is unknown — it will not be applied
-      if (cfg.pricePerKm > 0 && (clientDeliveryFee == null || clientDeliveryFee <= floorFee)) {
-        console.warn("[finalize] per-km fee NOT applied — distance unknown at checkout", {
-          restaurantId,
-          distancePricePerKm: cfg.pricePerKm,
-          floorFee,
-          feeCharged: fee,
-          hint: "Set distanceMinFee to your desired total minimum (e.g. 13) so all deliveries cost at least that amount. Per-km pricing requires geocoding to compute actual distance.",
-        });
-      }
-
-      console.info("[finalize] delivery fee (distance/advanced)", {
-        restaurantId, mode: deliveryCfg.mode, clientDeliveryFee, floorFee, fee,
+      const feeResult = await resolveDeliveryFee({
+        mode:         deliveryCfg.mode ?? "simple",
+        deliveryType: "delivery",
+        subtotal,
+        address: {
+          street:       address.street,
+          number:       address.number,
+          neighborhood: address.neighborhood,
+          city:         address.city,
+          state:        address.state,
+          cep:          address.cep,
+        },
+        restaurantCoords,
+        deliveryConfig: {
+          fee:                deliveryCfg.fee               != null ? Number(deliveryCfg.fee)               : null,
+          freeDeliveryAbove:  deliveryCfg.freeDeliveryAbove != null ? Number(deliveryCfg.freeDeliveryAbove) : null,
+          distanceBaseFee:    deliveryCfg.distanceBaseFee   != null ? Number(deliveryCfg.distanceBaseFee)   : null,
+          distancePricePerKm: deliveryCfg.distancePricePerKm != null ? Number(deliveryCfg.distancePricePerKm) : null,
+          distanceMinFee:     deliveryCfg.distanceMinFee    != null ? Number(deliveryCfg.distanceMinFee)    : null,
+          distanceMinFeeKm:   deliveryCfg.distanceMinFeeKm  != null ? Number(deliveryCfg.distanceMinFeeKm)  : null,
+          distanceMaxFee:     deliveryCfg.distanceMaxFee    != null ? Number(deliveryCfg.distanceMaxFee)    : null,
+        },
       });
-      return fee;
-    }
 
-    // manual — fee to be agreed at delivery
-    console.info("[finalize] delivery fee (manual)", { restaurantId });
-    return 0;
-  })();
+      if (feeResult.calculationStatus === "distance_blocked") {
+        console.error("[finalize] BLOCKED: distance mode, distance unavailable, no distanceMinFee", {
+          restaurantId, addressCity: address.city, reason: feeResult.reason,
+        });
+        return NextResponse.json({ error: feeResult.reason }, { status: 422 });
+      }
+
+      deliveryFeeAmount = feeResult.deliveryFee;
+      console.info("[finalize] delivery fee resolved", {
+        restaurantId,
+        status: feeResult.calculationStatus,
+        fee:    deliveryFeeAmount,
+        distanceKm: feeResult.distanceKm,
+        reason: feeResult.reason,
+      });
+    }
+  }
 
   const orderTotal = subtotal + deliveryFeeAmount;
 

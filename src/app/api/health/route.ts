@@ -24,7 +24,9 @@ export async function GET() {
   return NextResponse.json(
     {
       ok: true,
-      version: process.env.NEXT_PUBLIC_APP_VERSION ?? "dev",
+      version:   process.env.NEXT_PUBLIC_APP_VERSION ?? "dev",
+      commitSha: process.env.RAILWAY_GIT_COMMIT_SHA  ?? "unknown",
+      branch:    process.env.RAILWAY_GIT_BRANCH      ?? "unknown",
       env: process.env.NODE_ENV,
       uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
       db: dbOk ? "ok" : "unreachable",
