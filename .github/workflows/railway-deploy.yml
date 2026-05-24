@@ -10,29 +10,79 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Validate RAILWAY_TOKEN
+      # ── Secrets preflight ───────────────────────────────────────────────────
+      - name: Validate required secrets
         run: |
-          if [ -z "${{ secrets.RAILWAY_TOKEN }}" ]; then
-            echo "::error::RAILWAY_TOKEN secret is not set."
+          MISSING=()
+          [ -z "${{ secrets.RAILWAY_TOKEN }}" ]      && MISSING+=("RAILWAY_TOKEN")
+          [ -z "${{ secrets.RAILWAY_PROJECT_ID }}" ] && MISSING+=("RAILWAY_PROJECT_ID")
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::error::Missing required GitHub secrets: ${MISSING[*]}"
+            echo "  Go to: Settings → Secrets and variables → Actions → New repository secret"
             exit 1
           fi
+          echo "All required secrets present."
 
+      # ── Source checkout ─────────────────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log deploy context
-        run: |
-          echo "Branch : ${{ github.ref_name }}"
-          echo "Commit : ${{ github.sha }}"
-          echo "Actor  : ${{ github.actor }}"
-
+      # ── Install Railway CLI ─────────────────────────────────────────────────
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Deploy to Railway
-        run: |
-          echo "Deploying to Railway..."
-          railway up --service CRM_RESTURANTE --detach
-          echo "Deploy triggered successfully."
+      # ── Deploy context diagnostics (no secrets printed) ────────────────────
+      - name: Log deploy context
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: |
+          echo "=================================================="
+          echo "FOOCCI Deploy — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "=================================================="
+          echo "Branch          : ${{ github.ref_name }}"
+          echo "Commit          : ${{ github.sha }}"
+          echo "Actor           : ${{ github.actor }}"
+          echo "Railway CLI     : $(railway --version)"
+          echo "Service target  : FOOCCI"
+          echo "Environment     : production"
+          # Print only first 8 chars of IDs — enough to verify, not enough to misuse
+          echo "Project ID      : ${RAILWAY_PROJECT_ID:0:8}..."
+          echo "=================================================="
+
+      # ── Deploy ──────────────────────────────────────────────────────────────
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN:      ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: |
+          echo "Deploying commit ${{ github.sha }} → service FOOCCI (production)..."
+          railway up \
+            --service     FOOCCI \
+            --environment production \
+            --detach
+          echo "Deploy command accepted by Railway."
+
+      # ── Post-deploy health check ─────────────────────────────────────────────
+      - name: Post-deploy health check
+        run: |
+          echo "Waiting 30 s for Railway to start the new deployment..."
+          sleep 30
+
+          echo "Calling /api/health on foocci.com.br..."
+          for attempt in 1 2 3; do
+            STATUS=$(curl -s -o /tmp/health.json -w "%{http_code}" \
+              --max-time 15 https://foocci.com.br/api/health || echo "000")
+            echo "Attempt $attempt — HTTP $STATUS"
+            cat /tmp/health.json 2>/dev/null || true
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed."
+              exit 0
+            fi
+            sleep 15
+          done
+
+          echo "::warning::Health check did not return 200 after 3 attempts."
+          echo "  Service may still be starting. Check Railway dashboard."
+          # Do NOT fail the job — deployment was already triggered successfully.
+          exit 0
