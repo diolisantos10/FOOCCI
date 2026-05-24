@@ -2951,37 +2951,23 @@ export function PedidoClient({
     [pushUserMessage, pushAssistantMessage],
   );
 
-  const handleAddressComplete = useCallback(
-    (num: string, complement: string, referencePoint: string) => {
-      if (!num.trim()) return;
-      setAddress((prev) => ({
-        ...prev,
-        number:         num.trim(),
-        complement:     complement.trim(),
-        referencePoint: referencePoint.trim(),
-      }));
-      // Reset any previous quote so ADDRESS_CONFIRM shows fresh state
+  // ── Delivery quote runner ─────────────────────────────────────────────────────
+  // Accepts the final address directly so it is never stale from React state.
+  // Called automatically when ADDRESS_CONFIRM is entered so the customer never
+  // sees a placeholder fee — only a loading state or the real geocoded result.
+  const runDeliveryQuote = useCallback(
+    async (quoteAddress: Address) => {
+      if (deliveryMethod !== "delivery" || deliveryMode !== "distance") return;
+      setQuoteLoading(true);
       setQuoteDeliveryFee(null);
       setQuoteStatus(null);
-      setQuoteError(null);
-      setStage("ADDRESS_CONFIRM");
-      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_CONFIRM"]!);
-    },
-    [pushAssistantMessage],
-  );
-
-  const handleAddressConfirm = useCallback(async () => {
-    // For distance-based delivery: fetch a real fee quote (geocoding) before advancing.
-    // Blocks checkout if distance cannot be calculated and no safe fallback is configured.
-    if (deliveryMethod === "delivery" && deliveryMode === "distance") {
-      setQuoteLoading(true);
       setQuoteError(null);
       try {
         const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
         const res = await fetch(`/api/pedido/${slug}/delivery-quote`, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ address, subtotal: sub, deliveryType: "delivery" }),
+          body:    JSON.stringify({ address: quoteAddress, subtotal: sub, deliveryType: "delivery" }),
         });
         const data = await res.json() as {
           deliveryFee?: number; distanceKm?: number | null;
@@ -2992,29 +2978,46 @@ export function PedidoClient({
             data.reason ??
             "Não conseguimos calcular a entrega para esse endereço. Revise o endereço ou fale com o restaurante.",
           );
-          setQuoteLoading(false);
-          return; // stay on ADDRESS_CONFIRM — do not advance
-        }
-        if (data.calculationStatus === "out_of_range") {
+        } else if (data.calculationStatus === "out_of_range") {
           const distPart = data.distanceKm != null
             ? ` Distância estimada: ${data.distanceKm.toFixed(1).replace(".", ",")} km.`
             : "";
-          setQuoteError(
-            `Esse endereço está fora da área de entrega.${distPart}`,
-          );
-          setQuoteLoading(false);
-          return; // stay on ADDRESS_CONFIRM — do not advance
+          setQuoteError(`Esse endereço está fora da área de entrega.${distPart}`);
+        } else {
+          setQuoteDeliveryFee(data.deliveryFee ?? null);
+          setQuoteStatus(data.calculationStatus ?? null);
         }
-        setQuoteDeliveryFee(data.deliveryFee ?? null);
-        setQuoteStatus(data.calculationStatus ?? null);
       } catch {
         setQuoteError("Erro ao calcular a taxa de entrega. Tente novamente.");
-        setQuoteLoading(false);
-        return;
       }
       setQuoteLoading(false);
-    }
+    },
+    [deliveryMethod, deliveryMode, cart, slug],
+  );
 
+  const handleAddressComplete = useCallback(
+    (num: string, complement: string, referencePoint: string) => {
+      if (!num.trim()) return;
+      // Build final address as a local variable — passed directly to runDeliveryQuote
+      // so the quote fires with the correct address even before React flushes setAddress.
+      const finalAddress: Address = {
+        ...address,
+        number:         num.trim(),
+        complement:     complement.trim(),
+        referencePoint: referencePoint.trim(),
+      };
+      setAddress(finalAddress);
+      setStage("ADDRESS_CONFIRM");
+      pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ADDRESS_CONFIRM"]!);
+      // Auto-fire the delivery quote immediately — customer sees loading, not a stale fee.
+      void runDeliveryQuote(finalAddress);
+    },
+    [pushAssistantMessage, address, runDeliveryQuote],
+  );
+
+  // Quote already ran automatically on ADDRESS_CONFIRM entry.
+  // This handler just advances the stage — no fetch needed here.
+  const handleAddressConfirm = useCallback(() => {
     pushUserMessage("Endereço confirmado ✓");
     // If name + payment were already collected (e.g. customer is changing address
     // from the review screen), skip straight back to REVIEW_ORDER.
@@ -3026,15 +3029,13 @@ export function PedidoClient({
       setStage("REVIEW_ORDER");
       pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["REVIEW_ORDER"]!);
     } else if (customerName.trim()) {
-      // Name already known — skip ASK_NAME
       setStage("PAYMENT");
       pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT"]!);
     } else {
       setStage("ASK_NAME");
       pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ASK_NAME"]!);
     }
-  }, [pushUserMessage, pushAssistantMessage, customerName, paymentMode, paymentMethodSub,
-      deliveryMethod, deliveryMode, cart, slug, address]);
+  }, [pushUserMessage, pushAssistantMessage, customerName, paymentMode, paymentMethodSub]);
 
   const handleNameInput = useCallback(
     (text: string) => {
@@ -3432,36 +3433,59 @@ export function PedidoClient({
             )}
           </div>
 
-          {/* Delivery fee — hidden when quote has a blocking error (out_of_range / distance_blocked) */}
-          {deliveryMethod === "delivery" && !quoteError && (
-            <div className={`mb-2 flex items-center justify-between rounded-lg px-3 py-1.5 text-xs ${quoteStatus === "distance_min_fee_fallback" ? "bg-amber-50" : "bg-green-50"}`}>
-              <span className="text-gray-600">🛵 Taxa de entrega</span>
-              <span className="font-semibold text-gray-800">
-                {quoteLoading
-                  ? "Calculando…"
-                  : deliveryMode === "manual"
-                  ? "A combinar"
-                  : resolvedDeliveryFee == null
-                  ? "Calculando…"
-                  : effectiveFeeForAddr === 0
-                  ? "Grátis"
-                  : `R$ ${effectiveFeeForAddr.toFixed(2).replace(".", ",")}`}
-              </span>
-            </div>
-          )}
+          {/* ── Delivery fee section ─────────────────────────────────────────────── */}
+          {deliveryMethod === "delivery" && (
+            <>
+              {/* Distance mode — loading: quote is running, never show a placeholder amount */}
+              {deliveryMode === "distance" && quoteLoading && (
+                <div className="mb-2 flex items-center justify-between rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-500">
+                  <span>🛵 Taxa de entrega</span>
+                  <span>Calculando…</span>
+                </div>
+              )}
 
-          {/* Warning when fallback safe fee is applied (distance unknown) */}
-          {quoteStatus === "distance_min_fee_fallback" && deliveryMethod === "delivery" && !quoteError && (
-            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Taxa estimada — não conseguimos calcular a distância exata. O restaurante poderá ajustar na entrega.
-            </div>
-          )}
+              {/* Distance mode — quote confirmed: show real fee (calculated or fallback) */}
+              {deliveryMode === "distance" && !quoteLoading && !quoteError && !!quoteStatus && (
+                <div className={`mb-2 flex items-center justify-between rounded-lg px-3 py-1.5 text-xs ${quoteStatus === "distance_min_fee_fallback" ? "bg-amber-50" : "bg-green-50"}`}>
+                  <span className="text-gray-600">🛵 Taxa de entrega</span>
+                  <span className="font-semibold text-gray-800">
+                    {effectiveFeeForAddr === 0
+                      ? "Grátis"
+                      : `R$ ${effectiveFeeForAddr.toFixed(2).replace(".", ",")}`}
+                  </span>
+                </div>
+              )}
 
-          {/* Error when distance cannot be geocoded */}
-          {quoteError && deliveryMethod === "delivery" && (
-            <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-              {quoteError}
-            </div>
+              {/* Non-distance modes (simple / manual): show immediately, no quote needed */}
+              {deliveryMode !== "distance" && (
+                <div className="mb-2 flex items-center justify-between rounded-lg bg-green-50 px-3 py-1.5 text-xs">
+                  <span className="text-gray-600">🛵 Taxa de entrega</span>
+                  <span className="font-semibold text-gray-800">
+                    {deliveryMode === "manual"
+                      ? "A combinar"
+                      : resolvedDeliveryFee == null
+                      ? "—"
+                      : effectiveFeeForAddr === 0
+                      ? "Grátis"
+                      : `R$ ${effectiveFeeForAddr.toFixed(2).replace(".", ",")}`}
+                  </span>
+                </div>
+              )}
+
+              {/* Fallback amber warning: distance unknown, estimated fee applied */}
+              {quoteStatus === "distance_min_fee_fallback" && !quoteError && (
+                <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Taxa estimada — não conseguimos calcular a distância exata. O restaurante poderá ajustar na entrega.
+                </div>
+              )}
+
+              {/* Error: out_of_range or distance_blocked — fee chip is hidden above */}
+              {!!quoteError && (
+                <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {quoteError}
+                </div>
+              )}
+            </>
           )}
 
           <p className="mb-2 text-xs text-gray-500">
@@ -3471,7 +3495,11 @@ export function PedidoClient({
             <button
               data-testid="address-confirm-button"
               onClick={handleAddressConfirm}
-              disabled={quoteLoading || !!quoteError}
+              disabled={
+                quoteLoading ||
+                !!quoteError ||
+                (deliveryMethod === "delivery" && deliveryMode === "distance" && !quoteStatus)
+              }
               className="flex-1 rounded-xl py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >
