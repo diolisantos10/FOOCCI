@@ -1,14 +1,21 @@
 /**
  * Central delivery fee resolver.
  *
- * Single source of truth for delivery fee calculation used by both the
- * delivery-quote endpoint and the finalize route. Handles all delivery modes.
+ * Single source of truth for delivery fee calculation used by the
+ * delivery-quote endpoint and the finalize route.
  *
- * Distance mode: attempts geocoding via Nominatim (free) or Google Maps
- * (GOOGLE_MAPS_API_KEY). If distance cannot be computed:
- *   - Uses distanceMinFee as a safe fallback when configured.
- *   - Returns calculationStatus="distance_blocked" (checkout must be rejected)
- *     when no safe fallback is available.
+ * Distance mode formula:
+ *   if distanceKm <= includedKm:  fee = baseFee (flat rate for included range)
+ *   else:                         fee = baseFee + (distanceKm - includedKm) × pricePerKm
+ *
+ * DB field mapping for distance mode (owner-facing labels → DB columns):
+ *   "Até X km: R$ Y"        → distanceBaseFee (Y)  +  distanceMinFeeKm (X)
+ *   "Depois R$ Z/km"        → distancePricePerKm
+ *   "Máximo de W km"        → distanceMaxKm
+ *   "Taxa segura fallback"  → distanceMinFee  (ONLY used when distance is unknown)
+ *
+ * distanceMinFee is NOT a formula floor — it is exclusively the safe fallback
+ * fee charged when the customer's distance cannot be geocoded.
  */
 
 import { calcDeliveryFeeFromConfig, type DeliveryDistanceConfig } from "./delivery";
@@ -22,7 +29,7 @@ export type DeliveryCalculationStatus =
   | "simple"                    // flat fee
   | "free_delivery"             // free-delivery threshold applied
   | "distance_calculated"       // per-km formula applied with known distance
-  | "distance_min_fee_fallback" // distance unknown; distanceMinFee used as floor
+  | "distance_min_fee_fallback" // distance unknown; fallback safe fee used
   | "distance_blocked"          // distance unknown AND no safe fallback → block
   | "error";                    // unexpected / unknown mode
 
@@ -51,8 +58,8 @@ export interface DeliveryResolverInput {
     freeDeliveryAbove?: number | null;
     distanceBaseFee?:   number | null;
     distancePricePerKm?: number | null;
-    distanceMinFee?:    number | null;
-    distanceMinFeeKm?:  number | null;
+    distanceMinFee?:    number | null; // fallback safe fee (NOT a formula floor)
+    distanceMinFeeKm?:  number | null; // km covered by the flat rate
     distanceMaxFee?:    number | null;
   };
 }
@@ -87,18 +94,20 @@ export async function resolveDeliveryFee(input: DeliveryResolverInput): Promise<
 
   // Distance-based fee
   if (mode === "distance") {
+    const baseFee    = deliveryConfig.distanceBaseFee    != null ? Number(deliveryConfig.distanceBaseFee)    : 0;
+    const pricePerKm = deliveryConfig.distancePricePerKm != null ? Number(deliveryConfig.distancePricePerKm) : 0;
+    const includedKm = deliveryConfig.distanceMinFeeKm   != null ? Number(deliveryConfig.distanceMinFeeKm)   : 0;
+    const maxFee     = deliveryConfig.distanceMaxFee     != null ? Number(deliveryConfig.distanceMaxFee)     : null;
+    // fallbackSafeFee: used ONLY when distance cannot be calculated — never a formula floor
+    const fallbackSafeFee = deliveryConfig.distanceMinFee != null ? Number(deliveryConfig.distanceMinFee) : null;
+
     const cfg: DeliveryDistanceConfig = {
-      baseFee:    deliveryConfig.distanceBaseFee    != null ? Number(deliveryConfig.distanceBaseFee)    : 0,
-      minimumFee: deliveryConfig.distanceMinFee     != null ? Number(deliveryConfig.distanceMinFee)     : null,
-      includedKm: deliveryConfig.distanceMinFeeKm   != null ? Number(deliveryConfig.distanceMinFeeKm)   : 0,
-      pricePerKm: deliveryConfig.distancePricePerKm != null ? Number(deliveryConfig.distancePricePerKm) : 0,
-      maxFee:     deliveryConfig.distanceMaxFee     != null ? Number(deliveryConfig.distanceMaxFee)     : null,
+      baseFee,
+      minimumFee: null, // intentionally null — distanceMinFee is fallback only, not formula floor
+      includedKm,
+      pricePerKm,
+      maxFee,
     };
-    const baseFee    = Number(cfg.baseFee    ?? 0);
-    const includedKm = Number(cfg.includedKm ?? 0);
-    const pricePerKm = Number(cfg.pricePerKm ?? 0);
-    const minFee     = cfg.minimumFee != null ? Number(cfg.minimumFee) : null;
-    const maxFee     = cfg.maxFee     != null ? Number(cfg.maxFee)     : null;
 
     // Attempt distance calculation
     let distanceKm: number | null = null;
@@ -114,27 +123,26 @@ export async function resolveDeliveryFee(input: DeliveryResolverInput): Promise<
     if (distanceKm != null) {
       const fee = calcDeliveryFeeFromConfig(cfg, distanceKm);
       console.info("[delivery-fee] distance calculated", { baseFee, includedKm, pricePerKm, distanceKm, fee });
-      return mkResult(fee, mode, distanceKm, baseFee, includedKm, pricePerKm, minFee, maxFee, false,
+      return mkResult(fee, mode, distanceKm, baseFee, includedKm, pricePerKm, fallbackSafeFee, maxFee, false,
         "distance_calculated",
-        `${distanceKm.toFixed(1)} km → R$ ${baseFee} + max(0, ${distanceKm}−${includedKm}) × ${pricePerKm} = R$ ${fee.toFixed(2)}`);
+        `${distanceKm.toFixed(1)} km → R$ ${fee.toFixed(2)}`);
     }
 
-    // Distance unknown — use distanceMinFee as guaranteed fallback
-    if (minFee != null && minFee > 0) {
-      console.warn("[delivery-fee] distance unavailable — applying distanceMinFee fallback", { baseFee, minFee, pricePerKm });
-      return mkResult(minFee, mode, null, baseFee, includedKm, pricePerKm, minFee, maxFee, false,
+    // Distance unknown — use fallbackSafeFee if configured
+    if (fallbackSafeFee != null && fallbackSafeFee > 0) {
+      console.warn("[delivery-fee] distance unavailable — applying fallback safe fee", { baseFee, fallbackSafeFee, pricePerKm });
+      return mkResult(fallbackSafeFee, mode, null, baseFee, includedKm, pricePerKm, fallbackSafeFee, maxFee, false,
         "distance_min_fee_fallback",
-        `Distância não calculada — taxa mínima de R$ ${minFee.toFixed(2)} aplicada`);
+        `Distância não calculada — taxa segura de R$ ${fallbackSafeFee.toFixed(2)} aplicada`);
     }
 
-    // Distance unknown AND no minFee → must block
-    console.error("[delivery-fee] BLOCKED: distance mode, distance unavailable, no distanceMinFee configured", {
+    // Distance unknown AND no fallback → must block
+    console.error("[delivery-fee] BLOCKED: distance mode, distance unavailable, no fallback safe fee configured", {
       baseFee, pricePerKm, address: address?.city,
-      hint: "Configure distanceMinFee to avoid blocking orders when distance cannot be calculated",
     });
     return mkResult(0, mode, null, baseFee, includedKm, pricePerKm, null, maxFee, false,
       "distance_blocked",
-      "Não foi possível calcular a distância para esse endereço. Verifique o endereço ou entre em contato com o restaurante.");
+      "Não conseguimos calcular a entrega para esse endereço. Confira o endereço ou fale com o restaurante.");
   }
 
   // Unknown / advanced mode

@@ -62,19 +62,11 @@ function fmtCurrency(v: string | number | null): string {
   return String(Number(v));
 }
 
-// Thin adapter so call-sites keep the same signature (baseFee + minFee + minFeeKm).
-// Delegates to calcDeliveryFeeFromConfig — the same canonical formula used in
-// the ordering page checkout and order finalization.
-function calcDistanceFee(
-  km:       number,
-  baseFee:  number,
-  perKm:    number,
-  minFee:   number | null,
-  minFeeKm: number | null,
-  maxFee:   number | null,
-): number {
+// Formula: baseFee for up to includedKm, then baseFee + extra × pricePerKm.
+// distanceMinFee (fallbackSafeFee) is NOT used here — only when distance unknown.
+function calcDistanceFee(km: number, baseFee: number, perKm: number, includedKm: number): number {
   return calcDeliveryFeeFromConfig(
-    { baseFee, minimumFee: minFee, includedKm: minFeeKm, pricePerKm: perKm, maxFee },
+    { baseFee, minimumFee: null, includedKm, pricePerKm: perKm, maxFee: null },
     km,
   );
 }
@@ -154,16 +146,14 @@ function CoverageOverview({
 
   // Distance mode
   if (mode === "distance") {
-    const baseFee    = toNum(form.distanceBaseFee);
-    const perKm      = toNum(form.distancePricePerKm);
-    const maxKm      = toNum(form.distanceMaxKm);
-    const minFee     = toNum(form.distanceMinFee);
-    const minFeeKm   = toNum(form.distanceMinFeeKm);
-    const maxFee     = toNum(form.distanceMaxFee);
-    const estBase    = form.distanceEstimatedBase ? parseInt(form.distanceEstimatedBase, 10) : null;
+    const baseFee  = toNum(form.distanceBaseFee);
+    const perKm    = toNum(form.distancePricePerKm);
+    const maxKm    = toNum(form.distanceMaxKm);
+    const inclKm   = toNum(form.distanceMinFeeKm);
+    const estBase  = form.distanceEstimatedBase ? parseInt(form.distanceEstimatedBase, 10) : null;
 
     const feeAt = (km: number) => {
-      return calcDistanceFee(km, baseFee ?? 0, perKm ?? 0, minFee, minFeeKm, maxFee);
+      return calcDistanceFee(km, baseFee ?? 0, perKm ?? 0, inclKm ?? 0);
     };
 
     const exampleKm = maxKm != null ? Math.round(maxKm / 2 * 10) / 10 : null;
@@ -172,40 +162,33 @@ function CoverageOverview({
       <PageCard>
         <SectionHeading
           title="Visão da cobertura"
-          subtitle="Preço por distância com limites configuráveis."
+          subtitle="Prévia das taxas que o cliente verá no checkout."
         />
         <div className="rounded-xl border border-orange-100 bg-orange-50 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-semibold text-orange-900">Cobertura por distância</span>
+            <span className="text-sm font-semibold text-orange-900">Frete por distância</span>
             {maxKm != null && (
               <span className="text-sm font-bold text-orange-700">até {maxKm} km</span>
             )}
           </div>
-          {/* Gradient bar representing escalating fee */}
           <div className="h-2 w-full overflow-hidden rounded-full bg-orange-100">
             <div className="h-2 w-full rounded-full bg-gradient-to-r from-orange-300 to-orange-600" />
           </div>
           <div className="mt-3 flex flex-wrap gap-3">
-            {baseFee != null && (
+            {baseFee != null && inclKm != null && inclKm > 0 && (
               <Chip color="indigo">
-                Base R$ {baseFee.toFixed(2).replace(".", ",")}
+                Até {inclKm} km → R$ {baseFee.toFixed(2).replace(".", ",")}
               </Chip>
             )}
-            {perKm != null && (
+            {perKm != null && perKm > 0 && (
               <Chip color="indigo">
-                + R$ {perKm.toFixed(2).replace(".", ",")} / km
+                + R$ {perKm.toFixed(2).replace(".", ",")} / km extra
               </Chip>
             )}
-            {exampleKm != null && (
+            {exampleKm != null && exampleKm > (inclKm ?? 0) && (
               <Chip color="gray">
                 Ex: {exampleKm} km → R$ {feeAt(exampleKm).toFixed(2).replace(".", ",")}
               </Chip>
-            )}
-            {minFee != null && minFee > 0 && (
-              <Chip color="amber">Mín. R$ {minFee.toFixed(2).replace(".", ",")}</Chip>
-            )}
-            {maxFee != null && maxFee > 0 && (
-              <Chip color="amber">Máx. R$ {maxFee.toFixed(2).replace(".", ",")}</Chip>
             )}
             {estBase != null && estBase > 0 && (
               <Chip color="indigo">⏱ ~{estBase} min (base)</Chip>
@@ -313,24 +296,15 @@ function CommercialSummary({
     const baseFee  = toNum(form.distanceBaseFee);
     const perKm    = toNum(form.distancePricePerKm);
     const maxKm    = toNum(form.distanceMaxKm);
-    const minFee   = toNum(form.distanceMinFee);
-    const minFeeKm = toNum(form.distanceMinFeeKm);
-    const maxFee   = toNum(form.distanceMaxFee);
-    if (perKm != null) {
-      if (minFee != null && minFee > 0 && minFeeKm != null && minFeeKm > 0) {
-        chips.push({ label: `R$ ${minFee.toFixed(2).replace(".", ",")} até ${minFeeKm} km. Após isso, R$ ${perKm.toFixed(2).replace(".", ",")}/km adicional.`, color: "indigo" });
-      } else {
-        chips.push({ label: `R$ ${(baseFee ?? 0).toFixed(2).replace(".", ",")} + R$ ${perKm.toFixed(2).replace(".", ",")}/km`, color: "indigo" });
-      }
+    const inclKm   = toNum(form.distanceMinFeeKm);
+    if (baseFee != null && inclKm != null) {
+      chips.push({ label: `R$ ${baseFee.toFixed(2).replace(".", ",")} até ${inclKm} km`, color: "indigo" });
+    }
+    if (perKm != null && perKm > 0) {
+      chips.push({ label: `+ R$ ${perKm.toFixed(2).replace(".", ",")}/km extra`, color: "indigo" });
     }
     if (maxKm != null) {
       chips.push({ label: `Máx. ${maxKm} km`, color: "gray" });
-    }
-    if (minFee != null && minFee > 0) {
-      chips.push({ label: `Frete mín. R$ ${minFee.toFixed(2).replace(".", ",")}`, color: "amber" });
-    }
-    if (maxFee != null && maxFee > 0) {
-      chips.push({ label: `Frete máx. R$ ${maxFee.toFixed(2).replace(".", ",")}`, color: "amber" });
     }
     if (globalMin != null && globalMin > 0) {
       chips.push({ label: `Pedido mínimo R$ ${globalMin.toFixed(2).replace(".", ",")}`, color: "amber" });
@@ -428,21 +402,19 @@ function simulateDelivery(
     const baseFee   = toNum(form.distanceBaseFee) ?? 0;
     const perKm     = toNum(form.distancePricePerKm) ?? 0;
     const maxKm     = toNum(form.distanceMaxKm);
-    const minFee    = toNum(form.distanceMinFee);
-    const minFeeKm  = toNum(form.distanceMinFeeKm);
-    const maxFee    = toNum(form.distanceMaxFee);
+    const inclKm    = toNum(form.distanceMinFeeKm) ?? 0;
     const estBase   = form.distanceEstimatedBase ? parseInt(form.distanceEstimatedBase, 10) : undefined;
     const globalMin = toNum(form.minOrderValue) ?? 0;
 
     if (maxKm != null && distanceKm > maxKm) {
-      return { allowed: false, blockedReason: `${distanceKm} km está fora da cobertura (máx. ${maxKm} km).`, fee: 0, effectiveFee: 0, freeDeliveryApplied: false, minOrderBlocked: false };
+      return { allowed: false, blockedReason: `${distanceKm} km está fora da área de entrega (máx. ${maxKm} km).`, fee: 0, effectiveFee: 0, freeDeliveryApplied: false, minOrderBlocked: false };
     }
 
     if (globalMin > 0 && orderValue < globalMin) {
       return { allowed: false, blockedReason: `Pedido mínimo não atingido.`, fee: 0, effectiveFee: 0, estimatedMinutes: estBase, freeDeliveryApplied: false, minOrderBlocked: true, minOrderRequired: globalMin };
     }
 
-    const fee = calcDistanceFee(distanceKm, baseFee, perKm, minFee, minFeeKm, maxFee);
+    const fee = calcDistanceFee(distanceKm, baseFee, perKm, inclKm);
     const freeDeliveryApplied = freeAbove != null && freeAbove > 0 && orderValue >= freeAbove;
     return { allowed: true, zoneName: "Por distância", fee, effectiveFee: freeDeliveryApplied ? 0 : fee, estimatedMinutes: estBase, freeDeliveryApplied, minOrderBlocked: false };
   }
@@ -874,20 +846,6 @@ export default function DeliveryPage() {
   const [showZoneEditor, setShowZoneEditor] = useState(false);
   const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null);
 
-  // Geocode readiness state — only relevant for distance mode
-  const [geoStatus, setGeoStatus] = useState<{ hasCoords: boolean; hasAddress: boolean } | null>(null);
-  const [geoRetrying, setGeoRetrying] = useState(false);
-
-  async function retryGeocode() {
-    setGeoRetrying(true);
-    const { ok: isOk } = await apiFetch("/api/settings/store/geocode", "POST", {});
-    if (isOk) {
-      const { ok: statusOk, data } = await apiFetch("/api/settings/store/geocode-status");
-      if (statusOk) setGeoStatus(data);
-    }
-    setGeoRetrying(false);
-  }
-
   // Load config + zones
   useEffect(() => {
     apiFetch("/api/settings/delivery").then(({ ok: isOk, data }) => {
@@ -913,11 +871,6 @@ export default function DeliveryPage() {
           distanceEstimatedBase: data.distanceEstimatedBase != null ? String(data.distanceEstimatedBase) : "",
         });
         setZones(data.zones ?? []);
-        if ((data.mode ?? "simple") === "distance") {
-          apiFetch("/api/settings/store/geocode-status").then(({ ok: gs, data: gd }) => {
-            if (gs) setGeoStatus(gd);
-          });
-        }
       }
       setLoading(false);
     });
@@ -1111,31 +1064,28 @@ export default function DeliveryPage() {
             <div className="mt-4 border-t border-gray-100 pt-4">
               <div className="flex flex-wrap gap-2">
                 {form.mode === "simple" && toNum(form.fee) === 0 && (
-                  <Chip color="green">Frete grátis</Chip>
+                  <Chip color="green">Frete grátis (taxa fixa)</Chip>
                 )}
                 {form.mode === "simple" && (toNum(form.fee) ?? 0) > 0 && (
-                  <Chip color="indigo">Frete R$ {Number(toNum(form.fee)).toFixed(2).replace(".", ",")}</Chip>
+                  <Chip color="indigo">Taxa fixa R$ {Number(toNum(form.fee)).toFixed(2).replace(".", ",")}</Chip>
                 )}
                 {form.mode === "advanced" && (
                   <Chip color="indigo">
                     {zones.filter(z => z.isActive).length} zona{zones.filter(z => z.isActive).length !== 1 ? "s" : ""} ativa{zones.filter(z => z.isActive).length !== 1 ? "s" : ""}
                   </Chip>
                 )}
-                {form.mode === "distance" && toNum(form.distancePricePerKm) != null && (
+                {form.mode === "distance" && (toNum(form.distanceBaseFee) != null || toNum(form.distancePricePerKm) != null) && (
                   <Chip color="indigo">
                     {(() => {
-                      const minF   = toNum(form.distanceMinFee);
-                      const minFKm = toNum(form.distanceMinFeeKm);
-                      const perK   = toNum(form.distancePricePerKm) ?? 0;
-                      if (minF != null && minF > 0 && minFKm != null && minFKm > 0) {
-                        return `R$ ${minF.toFixed(2).replace(".", ",")} até ${minFKm} km. Depois R$ ${perK.toFixed(2).replace(".", ",")}/km.`;
-                      }
-                      return `R$ ${(toNum(form.distanceBaseFee) ?? 0).toFixed(2).replace(".", ",")} + R$ ${perK.toFixed(2).replace(".", ",")}/km`;
+                      const base  = toNum(form.distanceBaseFee) ?? 0;
+                      const inclK = toNum(form.distanceMinFeeKm) ?? 0;
+                      const perK  = toNum(form.distancePricePerKm) ?? 0;
+                      return `R$ ${base.toFixed(2).replace(".", ",")} até ${inclK} km + R$ ${perK.toFixed(2).replace(".", ",")}/km`;
                     })()}
                   </Chip>
                 )}
                 {form.mode === "distance" && toNum(form.distanceMaxKm) != null && (
-                  <Chip color="gray">até {toNum(form.distanceMaxKm)} km</Chip>
+                  <Chip color="gray">máx. {toNum(form.distanceMaxKm)} km</Chip>
                 )}
                 {form.estimatedMinutes && form.mode === "simple" && (
                   <Chip color="gray">~{form.estimatedMinutes} min</Chip>
@@ -1166,9 +1116,9 @@ export default function DeliveryPage() {
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-gray-900">Simples</p>
+                  <p className="text-sm font-semibold text-gray-900">Taxa fixa</p>
                   <p className="mt-0.5 text-xs text-gray-500">
-                    Taxa única para toda a área de entrega.
+                    Cobrar sempre o mesmo valor de entrega.
                   </p>
                 </button>
                 <button
@@ -1187,14 +1137,7 @@ export default function DeliveryPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setForm((f) => ({ ...f, mode: "distance" }));
-                    if (!geoStatus) {
-                      apiFetch("/api/settings/store/geocode-status").then(({ ok: gs, data: gd }) => {
-                        if (gs) setGeoStatus(gd);
-                      });
-                    }
-                  }}
+                  onClick={() => setForm((f) => ({ ...f, mode: "distance" }))}
                   className={`rounded-xl border p-4 text-left transition ${
                     form.mode === "distance"
                       ? "border-brand-400 bg-brand-50 ring-1 ring-brand-300"
@@ -1352,185 +1295,152 @@ export default function DeliveryPage() {
             {form.mode === "distance" && (
               <PageCard>
                 <SectionHeading
-                  title="Configuração por distância"
-                  subtitle={(() => {
-                    const minF   = toNum(form.distanceMinFee);
-                    const minFKm = toNum(form.distanceMinFeeKm);
-                    const perK   = toNum(form.distancePricePerKm);
-                    if (minF != null && minF > 0 && minFKm != null && minFKm > 0) {
-                      return `Taxa mínima R$ ${minF.toFixed(2).replace(".", ",")} até ${minFKm} km; depois soma R$ ${(perK ?? 0).toFixed(2).replace(".", ",")}/km adicional.`;
-                    }
-                    return "Fórmula: taxa = base + (km × preço/km) — com piso e teto opcionais.";
-                  })()}
+                  title="Como você quer cobrar a entrega?"
+                  subtitle="Configure o valor cobrado com base na distância do cliente."
                 />
 
-                {/* Readiness status box — shows store geocode state */}
-                {geoStatus && (
-                  <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
-                    !geoStatus.hasAddress
-                      ? "border-red-200 bg-red-50 text-red-800"
-                      : geoStatus.hasCoords
-                      ? "border-green-200 bg-green-50 text-green-800"
-                      : "border-amber-200 bg-amber-50 text-amber-800"
-                  }`}>
-                    {!geoStatus.hasAddress && (
-                      <>
-                        <p className="font-semibold">Endereço da loja não cadastrado</p>
-                        <p className="mt-1 text-xs leading-relaxed">
-                          Cadastre o endereço completo da loja em <strong>Configurações → Loja</strong> para usar frete por distância.
-                        </p>
-                      </>
-                    )}
-                    {geoStatus.hasAddress && !geoStatus.hasCoords && (
-                      <>
-                        <p className="font-semibold">Localização da loja não calculada</p>
-                        <p className="mt-1 text-xs leading-relaxed">
-                          O endereço está cadastrado. Clique em &quot;Recalcular localização&quot; para ativar o cálculo de distância — ou salve novamente o endereço em <strong>Configurações → Loja</strong>.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={retryGeocode}
-                          disabled={geoRetrying}
-                          className="mt-2 rounded-lg border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 disabled:opacity-50 transition"
-                        >
-                          {geoRetrying ? "Calculando…" : "Recalcular localização"}
-                        </button>
-                      </>
-                    )}
-                    {geoStatus.hasCoords && (
-                      <p className="font-semibold">Frete por distância ativo — localização da loja calculada ✓</p>
-                    )}
+                {/* Main fields: intuitive sentence layout */}
+                <div className="space-y-5">
+                  {/* "Até X km: R$ Y" */}
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <p className="mb-3 text-sm font-semibold text-gray-700">Entregas até</p>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="w-28">
+                        <Field label="Distância (km)">
+                          <input
+                            className={INPUT}
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={form.distanceMinFeeKm}
+                            onChange={(e) => setForm((f) => ({ ...f, distanceMinFeeKm: e.target.value }))}
+                            placeholder="3"
+                          />
+                        </Field>
+                      </div>
+                      <p className="mb-2 text-sm text-gray-500">km custam</p>
+                      <div className="w-32">
+                        <Field label="Taxa (R$)">
+                          <input
+                            className={INPUT}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={form.distanceBaseFee}
+                            onChange={(e) => setForm((f) => ({ ...f, distanceBaseFee: e.target.value }))}
+                            placeholder="5,00"
+                          />
+                        </Field>
+                      </div>
+                    </div>
                   </div>
-                )}
 
-                {/* Warn about missing distanceMinFee when coords OK */}
-                {geoStatus?.hasCoords && !(toNum(form.distanceMinFee) ?? 0) && (
-                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    <p className="font-semibold">Configure uma taxa mínima segura</p>
-                    <p className="mt-1 text-xs leading-relaxed">
-                      Se a localização de um cliente não puder ser calculada (endereço incompleto, CEP inválido), o checkout será bloqueado.
-                      Configure <strong>&quot;Taxa mínima (R$)&quot;</strong> abaixo para permitir que esses pedidos prossigam com a taxa mínima garantida.
-                    </p>
+                  {/* "+ R$ X por km adicional" */}
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <p className="mb-3 text-sm font-semibold text-gray-700">Cada km extra além disso</p>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="w-32">
+                        <Field label="Valor por km (R$)">
+                          <input
+                            className={INPUT}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={form.distancePricePerKm}
+                            onChange={(e) => setForm((f) => ({ ...f, distancePricePerKm: e.target.value }))}
+                            placeholder="1,80"
+                          />
+                        </Field>
+                      </div>
+                      <p className="mb-2 text-sm text-gray-500">/ km</p>
+                    </div>
                   </div>
-                )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="Taxa base (R$)" hint="Taxa cobrada mesmo em distância zero.">
-                    <input
-                      className={INPUT}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.distanceBaseFee}
-                      onChange={(e) => setForm((f) => ({ ...f, distanceBaseFee: e.target.value }))}
-                      placeholder="Ex: 3,00"
-                    />
-                  </Field>
-                  <Field label="Preço por km (R$/km)" hint="Valor adicional por quilômetro rodado.">
-                    <input
-                      className={INPUT}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.distancePricePerKm}
-                      onChange={(e) => setForm((f) => ({ ...f, distancePricePerKm: e.target.value }))}
-                      placeholder="Ex: 1,50"
-                    />
-                  </Field>
-                  <Field label="Distância máxima (km)" hint="Entregas além desse raio não são aceitas.">
-                    <input
-                      className={INPUT}
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      value={form.distanceMaxKm}
-                      onChange={(e) => setForm((f) => ({ ...f, distanceMaxKm: e.target.value }))}
-                      placeholder="Ex: 10"
-                    />
-                  </Field>
-                  <Field label="Tempo estimado base (min)" hint="Tempo mínimo de entrega para qualquer distância.">
-                    <input
-                      className={INPUT}
-                      type="number"
-                      min="1"
-                      max="300"
-                      value={form.distanceEstimatedBase}
-                      onChange={(e) => setForm((f) => ({ ...f, distanceEstimatedBase: e.target.value }))}
-                      placeholder="Ex: 25"
-                    />
-                  </Field>
-                  <Field label="Taxa mínima (R$)" hint="Valor mínimo garantido em todas as entregas (independente da distância). Use aqui o total mínimo que deseja cobrar.">
-                    <input
-                      className={INPUT}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.distanceMinFee}
-                      onChange={(e) => setForm((f) => ({ ...f, distanceMinFee: e.target.value }))}
-                      placeholder="Ex: 5,00"
-                    />
-                  </Field>
-                  <Field
-                    label="Km incluídos na taxa mínima"
-                    hint="Até essa distância, será cobrada apenas a taxa mínima."
-                  >
-                    <input
-                      className={INPUT}
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={form.distanceMinFeeKm}
-                      onChange={(e) => setForm((f) => ({ ...f, distanceMinFeeKm: e.target.value }))}
-                      placeholder="Ex: 3"
-                    />
-                  </Field>
-                  <Field label="Taxa máxima (R$)" hint="Teto para a taxa calculada. Opcional.">
-                    <input
-                      className={INPUT}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.distanceMaxFee}
-                      onChange={(e) => setForm((f) => ({ ...f, distanceMaxFee: e.target.value }))}
-                      placeholder="Ex: 20,00"
-                    />
-                  </Field>
+                  {/* Max distance */}
+                  <div className="w-48">
+                    <Field label="Distância máxima de entrega (km)" hint="Endereços além desse limite não são aceitos.">
+                      <input
+                        className={INPUT}
+                        type="number"
+                        step="0.5"
+                        min="0.5"
+                        value={form.distanceMaxKm}
+                        onChange={(e) => setForm((f) => ({ ...f, distanceMaxKm: e.target.value }))}
+                        placeholder="10"
+                      />
+                    </Field>
+                  </div>
                 </div>
 
-                {/* Live formula preview */}
-                {(toNum(form.distancePricePerKm) != null) && (
-                  <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3">
-                    <p className="text-xs font-semibold text-orange-700 mb-1.5">Prévia da fórmula</p>
-                    <div className="flex flex-wrap gap-3 text-xs text-orange-800">
-                      {[1, 3, 5, 10].filter((km) => toNum(form.distanceMaxKm) == null || km <= (toNum(form.distanceMaxKm) ?? 0)).map((km) => {
-                        const base   = toNum(form.distanceBaseFee) ?? 0;
-                        const perK   = toNum(form.distancePricePerKm) ?? 0;
-                        const minF   = toNum(form.distanceMinFee);
-                        const minFKm = toNum(form.distanceMinFeeKm);
-                        const maxF   = toNum(form.distanceMaxFee);
-                        const fee    = calcDistanceFee(km, base, perK, minF, minFKm, maxF);
+                {/* Live preview chips */}
+                {(toNum(form.distanceBaseFee) != null || toNum(form.distancePricePerKm) != null) && (
+                  <div className="mt-5 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3">
+                    <p className="text-xs font-semibold text-orange-700 mb-2">Prévia de preços</p>
+                    <div className="flex flex-wrap gap-2 text-xs text-orange-800">
+                      {[1, 3, 5, 7, 10].filter((km) => toNum(form.distanceMaxKm) == null || km <= (toNum(form.distanceMaxKm) ?? 99)).map((km) => {
+                        const base  = toNum(form.distanceBaseFee) ?? 0;
+                        const perK  = toNum(form.distancePricePerKm) ?? 0;
+                        const inclK = toNum(form.distanceMinFeeKm) ?? 0;
+                        const fee   = calcDistanceFee(km, base, perK, inclK);
                         return (
-                          <span key={km} className="rounded-full bg-orange-100 px-2.5 py-0.5 font-medium">
+                          <span key={km} className="rounded-full bg-orange-100 px-2.5 py-1 font-medium">
                             {km} km → R$ {fee.toFixed(2).replace(".", ",")}
                           </span>
                         );
                       })}
+                      {toNum(form.distanceMaxKm) != null && (
+                        <span className="rounded-full bg-red-100 px-2.5 py-1 font-medium text-red-700">
+                          acima de {toNum(form.distanceMaxKm)} km → bloqueado
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
 
-                <div className="mt-4">
-                  <Field label="Área de cobertura" hint="Descrição textual para o agente de IA.">
-                    <textarea
-                      className={INPUT + " resize-none"}
-                      rows={2}
-                      maxLength={500}
-                      value={form.areaDescription}
-                      onChange={(e) => setForm((f) => ({ ...f, areaDescription: e.target.value }))}
-                      placeholder="Ex: Entregamos em toda a cidade num raio de 10 km do restaurante."
-                    />
-                  </Field>
-                </div>
+                {/* Advanced settings — collapsed by default */}
+                <details className="mt-5 group">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-700">
+                    <span className="transition-transform group-open:rotate-90">▶</span>
+                    Configurações avançadas
+                  </summary>
+                  <div className="mt-4 space-y-4 pl-4 border-l-2 border-gray-100">
+                    <Field
+                      label="Se não conseguirmos calcular a distância: cobrar R$"
+                      hint="Taxa usada quando o endereço do cliente não pode ser verificado. Deixe em branco para bloquear o pedido nesses casos."
+                    >
+                      <input
+                        className={INPUT}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={form.distanceMinFee}
+                        onChange={(e) => setForm((f) => ({ ...f, distanceMinFee: e.target.value }))}
+                        placeholder="Ex: 8,00 — ou deixe em branco para bloquear"
+                      />
+                    </Field>
+                    <Field label="Tempo estimado base (min)" hint="Prazo base de entrega exibido ao cliente.">
+                      <input
+                        className={INPUT}
+                        type="number"
+                        min="1"
+                        max="300"
+                        value={form.distanceEstimatedBase}
+                        onChange={(e) => setForm((f) => ({ ...f, distanceEstimatedBase: e.target.value }))}
+                        placeholder="Ex: 30"
+                      />
+                    </Field>
+                    <Field label="Área de cobertura (descrição)" hint="Texto para o assistente de IA descrever sua área.">
+                      <textarea
+                        className={INPUT + " resize-none"}
+                        rows={2}
+                        maxLength={500}
+                        value={form.areaDescription}
+                        onChange={(e) => setForm((f) => ({ ...f, areaDescription: e.target.value }))}
+                        placeholder="Ex: Entregamos em toda a cidade num raio de 10 km."
+                      />
+                    </Field>
+                  </div>
+                </details>
               </PageCard>
             )}
 
