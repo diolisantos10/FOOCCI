@@ -1252,7 +1252,7 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
     }
   }
 
-  const canConfirm = ["PENDING", "AWAITING_PAYMENT"].includes(status);
+  const canConfirm = status === "PENDING";
   const canReady   = ["CONFIRMED", "PREPARING"].includes(status);
   const canCancel  = !["READY", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"].includes(status);
   const isTerminal = ["DELIVERED", "CANCELLED"].includes(status);
@@ -1310,6 +1310,12 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
           R$ {total.toFixed(2).replace(".", ",")}
         </p>
       </div>
+
+      {status === "AWAITING_PAYMENT" && (
+        <p className="border-t border-yellow-100 bg-yellow-50 px-3 py-2 text-[11px] font-semibold text-yellow-800">
+          ⏳ Pix ainda não aprovado — aguardando confirmação do pagamento
+        </p>
+      )}
 
       {!isTerminal && (
         <div className="flex gap-1.5 flex-wrap border-t border-gray-100 bg-gray-50 px-3 py-2">

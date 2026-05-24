@@ -53,14 +53,9 @@ export class OrderService {
 
     const where = {
       restaurantId,
-      // Hide unpaid Mercado Pago Pix orders: they are not operational yet.
-      // Only becomes visible after the MP webhook confirms payment (status → CONFIRMED).
-      NOT: {
-        AND: [
-          { status: "AWAITING_PAYMENT" as const },
-          { payment: { providerName: "mercadopago", status: "LINK_SENT" as const } },
-        ],
-      },
+      // AWAITING_PAYMENT orders are not operational — payment not confirmed.
+      // Excluded regardless of provider. A future endpoint exposes them separately.
+      NOT: { status: "AWAITING_PAYMENT" as const },
       ...(status && { status }),
       ...(customerId && { customerId }),
       ...(from || to

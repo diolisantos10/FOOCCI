@@ -47,6 +47,7 @@ const MANAGER_INTEGRATION_DISPLAY_NAME = "Saipos";
 
 type OrderStatus =
   | "PENDING"
+  | "AWAITING_PAYMENT"
   | "CONFIRMED"
   | "PREPARING"
   | "READY"
@@ -110,7 +111,9 @@ interface MockOrder {
   type: "DELIVERY" | "PICKUP" | "TABLE";
   createdAt: Date;
   itemCount: number;
-  payment: string;
+  payment:              string;
+  paymentProviderName?: string | null;
+  paymentStatus?:       string | null;
   address: string;
   items: OrderItem[];
   profile?: CustomerProfile;
@@ -185,9 +188,7 @@ function resolvePaymentLabel(payment: ApiOrder["payment"]): string {
 }
 
 function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
-  const status = o.status === "AWAITING_PAYMENT"
-    ? "PENDING"
-    : (o.status as OrderStatus);
+  const status = o.status as OrderStatus;
   const type = o.type === "DINE_IN" ? "TABLE" : (o.type as MockOrder["type"]);
   return {
     id:         o.id,
@@ -203,7 +204,9 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
     type,
     createdAt:  new Date(o.createdAt),
     itemCount:  o.items.length,
-    payment:    resolvePaymentLabel(o.payment),
+    payment:             resolvePaymentLabel(o.payment),
+    paymentProviderName: o.payment?.providerName ?? null,
+    paymentStatus:       o.payment?.status       ?? null,
     address:
       type === "DELIVERY" && o.deliveryAddress
         ? [
@@ -255,13 +258,14 @@ const DELAY_THRESHOLD = 20;
 
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; border: string; badge: string }> = {
-  PENDING:          { label: "Novo",       border: "border-l-amber-400",  badge: "bg-amber-100 text-amber-800"   },
-  CONFIRMED:        { label: "Confirmado", border: "border-l-blue-400",   badge: "bg-blue-100 text-blue-800"     },
-  PREPARING:        { label: "Preparando", border: "border-l-orange-400", badge: "bg-orange-100 text-orange-800" },
-  READY:            { label: "Pronto",     border: "border-l-teal-400",   badge: "bg-teal-100 text-teal-800"     },
-  OUT_FOR_DELIVERY: { label: "Em entrega", border: "border-l-purple-400", badge: "bg-purple-100 text-purple-800" },
-  DELIVERED:        { label: "Entregue",   border: "border-l-green-400",  badge: "bg-green-100 text-green-800"   },
-  CANCELLED:        { label: "Cancelado",  border: "border-l-gray-300",   badge: "bg-gray-100 text-gray-500"     },
+  PENDING:          { label: "Novo",              border: "border-l-amber-400",  badge: "bg-amber-100 text-amber-800"   },
+  AWAITING_PAYMENT: { label: "Aguardando Pix",   border: "border-l-yellow-400", badge: "bg-yellow-100 text-yellow-800" },
+  CONFIRMED:        { label: "Confirmado",        border: "border-l-blue-400",   badge: "bg-blue-100 text-blue-800"     },
+  PREPARING:        { label: "Preparando",        border: "border-l-orange-400", badge: "bg-orange-100 text-orange-800" },
+  READY:            { label: "Pronto",            border: "border-l-teal-400",   badge: "bg-teal-100 text-teal-800"     },
+  OUT_FOR_DELIVERY: { label: "Em entrega",        border: "border-l-purple-400", badge: "bg-purple-100 text-purple-800" },
+  DELIVERED:        { label: "Entregue",          border: "border-l-green-400",  badge: "bg-green-100 text-green-800"   },
+  CANCELLED:        { label: "Cancelado",         border: "border-l-gray-300",   badge: "bg-gray-100 text-gray-500"     },
 };
 
 const NEXT_ACTION: Partial<Record<OrderStatus, { label: string; next: OrderStatus }>> = {
@@ -435,6 +439,15 @@ function isDelayed(order: MockOrder): boolean {
   return minutesSince(order.createdAt) > DELAY_THRESHOLD;
 }
 
+function isPaymentPendingOrder(order: MockOrder): boolean {
+  if (order.status === "AWAITING_PAYMENT") return true;
+  if (
+    order.paymentProviderName === "mercadopago" &&
+    (order.paymentStatus === "LINK_SENT" || order.paymentStatus === "PENDING")
+  ) return true;
+  return false;
+}
+
 // ─── Customer context helpers ─────────────────────────────────
 
 function customerSpendTier(spend: number): { label: string; icon: string; color: string } {
@@ -461,7 +474,7 @@ function customerTemperature(lastOrderAt: string | null | undefined): { label: s
 function priorityScore(order: MockOrder): number {
   if (isDelayed(order)) return 0;
   const scores: Record<OrderStatus, number> = {
-    PENDING: 1, CONFIRMED: 2, PREPARING: 3, READY: 4,
+    PENDING: 1, AWAITING_PAYMENT: 0, CONFIRMED: 2, PREPARING: 3, READY: 4,
     OUT_FOR_DELIVERY: 5, DELIVERED: 6, CANCELLED: 7,
   };
   return scores[order.status];
@@ -717,11 +730,12 @@ function OrderCard({
   onCancel: (id: string) => void;
   onCheck: (id: string, v: boolean) => void;
 }) {
-  const delayed    = isDelayed(order);
-  const cfg        = STATUS_CONFIG[order.status];
-  const nextAction = NEXT_ACTION[order.status];
-  const isTerminal = TERMINAL.includes(order.status);
-  const border     = delayed ? "border-l-red-500" : cfg.border;
+  const delayed         = isDelayed(order);
+  const isPaymentPending = isPaymentPendingOrder(order);
+  const cfg             = STATUS_CONFIG[order.status];
+  const nextAction      = NEXT_ACTION[order.status];
+  const isTerminal      = TERMINAL.includes(order.status);
+  const border          = delayed ? "border-l-red-500" : cfg.border;
   const mins       = minutesSince(order.createdAt);
 
   // Single badge: if delayed, show "Atrasado" — not the status label
@@ -847,7 +861,12 @@ function OrderCard({
 
         {/* Row 4: actions */}
         <div className="mt-2 flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
-          {!isTerminal && nextAction && (
+          {isPaymentPending && (
+            <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-semibold text-yellow-800">
+              ⏳ Aguardando Pix
+            </span>
+          )}
+          {!isTerminal && !isPaymentPending && nextAction && (
             <button
               onClick={() => onAction(order.id, nextAction.next)}
               className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600"
@@ -855,7 +874,7 @@ function OrderCard({
               {nextAction.label}
             </button>
           )}
-          {!isTerminal && (
+          {!isTerminal && !isPaymentPending && (
             <button
               onClick={() => onCancel(order.id)}
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50"
@@ -863,12 +882,14 @@ function OrderCard({
               Cancelar
             </button>
           )}
-          <button
-            onClick={(e) => { e.stopPropagation(); printOrder(order.id); }}
-            className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-          >
-            🖨️ Imprimir
-          </button>
+          {!isPaymentPending && (
+            <button
+              onClick={(e) => { e.stopPropagation(); printOrder(order.id); }}
+              className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+            >
+              🖨️ Imprimir
+            </button>
+          )}
           {order.conversationId && (
             <a
               href={`/atendimento?conv=${order.conversationId}`}
@@ -1749,7 +1770,9 @@ export default function OrdersClient({ isOwner }: { isOwner?: boolean } = {}) {
           // Immediate alert on new order arrival (interval handles repeat)
           if (hasFetched.current) {
             const newOnes = incoming.filter((o) => !knownIds.current.has(o.id));
-            if (newOnes.length > 0 && soundEnabled) {
+            // No sound for AWAITING_PAYMENT — payment not confirmed, not yet operational.
+            const actionableNew = newOnes.filter((o) => !isPaymentPendingOrder(o));
+            if (actionableNew.length > 0 && soundEnabled) {
               const audio = alertAudioRef.current;
               if (audio) {
                 audio.pause();
