@@ -34,6 +34,7 @@ type Form = {
   state: string;
   country: string;
   referencePoint: string;
+  // lat/lng are read-only — auto-geocoded by the server, never entered manually
   latitude: string;
   longitude: string;
   // Contatos
@@ -145,7 +146,7 @@ function toPayload(f: Form) {
     cep: n(f.cep), street: n(f.street), streetNumber: n(f.streetNumber),
     complement: n(f.complement), neighborhood: n(f.neighborhood), city: n(f.city),
     state: n(f.state), country: n(f.country), referencePoint: n(f.referencePoint),
-    latitude: num(f.latitude), longitude: num(f.longitude),
+    // lat/lng intentionally omitted — server auto-geocodes from address
     mainPhone: n(f.mainPhone), whatsappPhone: n(f.whatsappPhone),
     secondaryPhone: n(f.secondaryPhone), secondaryWhatsapp: n(f.secondaryWhatsapp),
     mainEmail: n(f.mainEmail), financeEmail: n(f.financeEmail), supportEmail: n(f.supportEmail),
@@ -168,6 +169,10 @@ export default function StorePage() {
   const [saving,  setSaving]  = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error,   setError]   = useState<string | null>(null);
+
+  // Geocode status — updated after save or manual retry
+  const [geocodeStatus,  setGeocodeStatus]  = useState<"ok" | "failed" | "skipped" | null>(null);
+  const [geocodeLoading, setGeocodeLoading] = useState(false);
 
   // CEP lookup state
   const [cepLoading, setCepLoading] = useState(false);
@@ -219,10 +224,47 @@ export default function StorePage() {
     setSaving(true);
     setSuccess(null);
     setError(null);
-    const { ok, data } = await apiFetch("/api/settings/store", "PUT", toPayload(form));
-    if (ok) setSuccess("Dados da loja salvos com sucesso.");
-    else    setError(data?.error ?? "Erro ao salvar.");
+    const { ok: isOk, data } = await apiFetch("/api/settings/store", "PUT", toPayload(form));
+    if (isOk) {
+      const gs = (data?.geocodeStatus ?? null) as "ok" | "failed" | "skipped" | null;
+      setGeocodeStatus(gs);
+      // Refresh lat/lng in form from server response
+      const sp = data?.storeProfile as Record<string, unknown> | null | undefined;
+      if (sp) {
+        setForm((f) => ({
+          ...f,
+          latitude:  sp.latitude  != null ? String(sp.latitude)  : "",
+          longitude: sp.longitude != null ? String(sp.longitude) : "",
+        }));
+      }
+      if (gs === "failed") {
+        setSuccess("Dados salvos. Endereço salvo, mas não conseguimos calcular a localização automaticamente.");
+      } else {
+        setSuccess("Dados da loja salvos com sucesso.");
+      }
+    } else {
+      setError(data?.error ?? "Erro ao salvar.");
+    }
     setSaving(false);
+  }
+
+  async function handleRecalculateLocation() {
+    setGeocodeLoading(true);
+    setGeocodeStatus(null);
+    const { ok: isOk, data } = await apiFetch("/api/settings/store/geocode", "POST", {});
+    if (isOk) {
+      setGeocodeStatus(data?.success ? "ok" : "failed");
+      if (data?.success) {
+        setForm((f) => ({
+          ...f,
+          latitude:  data.lat  != null ? String(data.lat)  : f.latitude,
+          longitude: data.lng  != null ? String(data.lng)  : f.longitude,
+        }));
+      }
+    } else {
+      setGeocodeStatus("failed");
+    }
+    setGeocodeLoading(false);
   }
 
   if (loading) return <p className="py-8 text-sm text-gray-400">Carregando…</p>;
@@ -390,15 +432,42 @@ export default function StorePage() {
             </Field>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Latitude" hint="Opcional — para integração com mapas.">
-              <input className={INPUT} value={form.latitude} onChange={set("latitude")}
-                placeholder="-23.5505" type="text" inputMode="decimal" />
-            </Field>
-            <Field label="Longitude">
-              <input className={INPUT} value={form.longitude} onChange={set("longitude")}
-                placeholder="-46.6333" type="text" inputMode="decimal" />
-            </Field>
+          {/* Geocode status — auto-managed by Foocci, not manually entered */}
+          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-700">Localização da loja</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {form.latitude && form.longitude
+                    ? "Calculada automaticamente com base no endereço."
+                    : "Será calculada automaticamente ao salvar o endereço."}
+                </p>
+                {geocodeStatus === "failed" && (
+                  <p className="mt-1 text-xs font-medium text-amber-700">
+                    Não foi possível calcular a localização. Verifique o endereço e tente novamente.
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {form.latitude && form.longitude ? (
+                  <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+                    Localização calculada ✓
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                    Localização pendente
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRecalculateLocation}
+                  disabled={geocodeLoading}
+                  className="rounded-xl border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50 transition"
+                >
+                  {geocodeLoading ? "Calculando…" : "Recalcular localização"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </PageCard>

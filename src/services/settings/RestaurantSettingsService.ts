@@ -1,6 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { geocodeAddress } from "@/lib/geocoding";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
 import type {
   UpsertStoreInput,
@@ -49,118 +50,151 @@ export class RestaurantSettingsService {
   }
 
   static async updateStore(restaurantId: string, input: UpsertStoreInput) {
-    // Build structured address summary for backward-compat restaurant.address field
+    // Load current profile to detect address changes and existing coords
+    const currentProfile = await prisma.storeProfile.findUnique({
+      where: { restaurantId },
+      select: { cep: true, street: true, streetNumber: true, neighborhood: true, city: true, state: true, latitude: true, longitude: true },
+    });
+
+    const oldFp = [currentProfile?.cep, currentProfile?.street, currentProfile?.streetNumber, currentProfile?.neighborhood, currentProfile?.city, currentProfile?.state].join("|");
+    const newFp = [input.cep, input.street, input.streetNumber, input.neighborhood, input.city, input.state].join("|");
+    const addressChanged   = oldFp !== newFp;
+    const hasExistingCoords = currentProfile?.latitude != null && currentProfile?.longitude != null;
+    const needsGeocode     = addressChanged || !hasExistingCoords;
+
     const parts = [input.street, input.streetNumber, input.neighborhood, input.city, input.state]
       .filter(Boolean).join(", ");
     const addressSummary = parts || null;
-
-    // Keep restaurant.phone in sync with whatsappPhone (primary contact)
     const syncedPhone = input.whatsappPhone ?? input.mainPhone ?? null;
+
+    // Shared non-coordinate profile fields
+    const profileFields = {
+      tradeName:    input.tradeName    ?? null,
+      legalName:    input.legalName    ?? null,
+      cuisineType:  input.cuisineType  ?? null,
+      cnpj:                  input.cnpj                  ?? null,
+      stateRegistration:     input.stateRegistration     ?? null,
+      municipalRegistration: input.municipalRegistration ?? null,
+      taxRegime:             input.taxRegime             ?? null,
+      legalResponsibleName:  input.legalResponsibleName  ?? null,
+      legalResponsibleCpf:   input.legalResponsibleCpf   ?? null,
+      cep:            input.cep            ?? null,
+      street:         input.street         ?? null,
+      streetNumber:   input.streetNumber   ?? null,
+      complement:     input.complement     ?? null,
+      neighborhood:   input.neighborhood   ?? null,
+      city:           input.city           ?? null,
+      state:          input.state          ?? null,
+      country:        input.country        ?? null,
+      referencePoint: input.referencePoint ?? null,
+      mainPhone:         input.mainPhone         ?? null,
+      whatsappPhone:     input.whatsappPhone     ?? null,
+      secondaryPhone:    input.secondaryPhone    ?? null,
+      secondaryWhatsapp: input.secondaryWhatsapp ?? null,
+      mainEmail:         input.mainEmail         ?? null,
+      financeEmail:      input.financeEmail       ?? null,
+      supportEmail:      input.supportEmail       ?? null,
+      ownerName:       input.ownerName       ?? null,
+      ownerRole:       input.ownerRole       ?? null,
+      ownerPhone:      input.ownerPhone      ?? null,
+      ownerWhatsapp:   input.ownerWhatsapp   ?? null,
+      ownerEmail:      input.ownerEmail      ?? null,
+      managerName:     input.managerName     ?? null,
+      managerRole:     input.managerRole     ?? null,
+      managerPhone:    input.managerPhone    ?? null,
+      managerWhatsapp: input.managerWhatsapp ?? null,
+      managerEmail:    input.managerEmail    ?? null,
+      averagePreparationMinutes: input.averagePreparationMinutes ?? null,
+    };
+
+    // When address changes, clear stale coords so delivery is blocked (not silently wrong)
+    const coordsOnCreate = { latitude: null as number | null, longitude: null as number | null };
+    const coordsOnUpdate = addressChanged ? { latitude: null, longitude: null } : {};
 
     await prisma.$transaction([
       prisma.restaurant.update({
         where: { id: restaurantId },
-        data: {
-          name:        input.name,
-          description: input.description ?? null,
-          address:     addressSummary,
-          phone:       syncedPhone,
-          timezone:    input.timezone    ?? undefined,
-        },
+        data: { name: input.name, description: input.description ?? null, address: addressSummary, phone: syncedPhone, timezone: input.timezone ?? undefined },
       }),
       prisma.storeProfile.upsert({
         where:  { restaurantId },
-        create: {
-          restaurantId,
-          tradeName:    input.tradeName    ?? null,
-          legalName:    input.legalName    ?? null,
-          cuisineType:  input.cuisineType  ?? null,
-          cnpj:                  input.cnpj                  ?? null,
-          stateRegistration:     input.stateRegistration     ?? null,
-          municipalRegistration: input.municipalRegistration ?? null,
-          taxRegime:             input.taxRegime             ?? null,
-          legalResponsibleName:  input.legalResponsibleName  ?? null,
-          legalResponsibleCpf:   input.legalResponsibleCpf   ?? null,
-          cep:            input.cep            ?? null,
-          street:         input.street         ?? null,
-          streetNumber:   input.streetNumber   ?? null,
-          complement:     input.complement     ?? null,
-          neighborhood:   input.neighborhood   ?? null,
-          city:           input.city           ?? null,
-          state:          input.state          ?? null,
-          country:        input.country        ?? null,
-          referencePoint: input.referencePoint ?? null,
-          latitude:       input.latitude       ?? null,
-          longitude:      input.longitude      ?? null,
-          mainPhone:         input.mainPhone         ?? null,
-          whatsappPhone:     input.whatsappPhone     ?? null,
-          secondaryPhone:    input.secondaryPhone    ?? null,
-          secondaryWhatsapp: input.secondaryWhatsapp ?? null,
-          mainEmail:         input.mainEmail         ?? null,
-          financeEmail:      input.financeEmail       ?? null,
-          supportEmail:      input.supportEmail       ?? null,
-          ownerName:       input.ownerName       ?? null,
-          ownerRole:       input.ownerRole       ?? null,
-          ownerPhone:      input.ownerPhone      ?? null,
-          ownerWhatsapp:   input.ownerWhatsapp   ?? null,
-          ownerEmail:      input.ownerEmail      ?? null,
-          managerName:     input.managerName     ?? null,
-          managerRole:     input.managerRole     ?? null,
-          managerPhone:    input.managerPhone    ?? null,
-          managerWhatsapp: input.managerWhatsapp ?? null,
-          managerEmail:    input.managerEmail    ?? null,
-          deliveryEnabled: input.deliveryEnabled ?? true,
-          pickupEnabled:   input.pickupEnabled   ?? true,
-          dineInEnabled:   input.dineInEnabled   ?? true,
-          averagePreparationMinutes: input.averagePreparationMinutes ?? null,
-        },
+        create: { restaurantId, ...profileFields, ...coordsOnCreate, deliveryEnabled: input.deliveryEnabled ?? true, pickupEnabled: input.pickupEnabled ?? true, dineInEnabled: input.dineInEnabled ?? true },
         update: {
-          tradeName:    input.tradeName    ?? null,
-          legalName:    input.legalName    ?? null,
-          cuisineType:  input.cuisineType  ?? null,
-          cnpj:                  input.cnpj                  ?? null,
-          stateRegistration:     input.stateRegistration     ?? null,
-          municipalRegistration: input.municipalRegistration ?? null,
-          taxRegime:             input.taxRegime             ?? null,
-          legalResponsibleName:  input.legalResponsibleName  ?? null,
-          legalResponsibleCpf:   input.legalResponsibleCpf   ?? null,
-          cep:            input.cep            ?? null,
-          street:         input.street         ?? null,
-          streetNumber:   input.streetNumber   ?? null,
-          complement:     input.complement     ?? null,
-          neighborhood:   input.neighborhood   ?? null,
-          city:           input.city           ?? null,
-          state:          input.state          ?? null,
-          country:        input.country        ?? null,
-          referencePoint: input.referencePoint ?? null,
-          latitude:       input.latitude       ?? null,
-          longitude:      input.longitude      ?? null,
-          mainPhone:         input.mainPhone         ?? null,
-          whatsappPhone:     input.whatsappPhone     ?? null,
-          secondaryPhone:    input.secondaryPhone    ?? null,
-          secondaryWhatsapp: input.secondaryWhatsapp ?? null,
-          mainEmail:         input.mainEmail         ?? null,
-          financeEmail:      input.financeEmail       ?? null,
-          supportEmail:      input.supportEmail       ?? null,
-          ownerName:       input.ownerName       ?? null,
-          ownerRole:       input.ownerRole       ?? null,
-          ownerPhone:      input.ownerPhone      ?? null,
-          ownerWhatsapp:   input.ownerWhatsapp   ?? null,
-          ownerEmail:      input.ownerEmail      ?? null,
-          managerName:     input.managerName     ?? null,
-          managerRole:     input.managerRole     ?? null,
-          managerPhone:    input.managerPhone    ?? null,
-          managerWhatsapp: input.managerWhatsapp ?? null,
-          managerEmail:    input.managerEmail    ?? null,
+          ...profileFields,
+          ...coordsOnUpdate,
           ...(input.deliveryEnabled !== undefined ? { deliveryEnabled: input.deliveryEnabled } : {}),
           ...(input.pickupEnabled   !== undefined ? { pickupEnabled:   input.pickupEnabled   } : {}),
           ...(input.dineInEnabled   !== undefined ? { dineInEnabled:   input.dineInEnabled   } : {}),
-          averagePreparationMinutes: input.averagePreparationMinutes ?? null,
         },
       }),
     ]);
 
-    return RestaurantSettingsService.getStore(restaurantId);
+    // Auto-geocode restaurant address backstage — owners never enter lat/lng manually
+    let geocodeStatus: "ok" | "failed" | "skipped" = "skipped";
+    if (needsGeocode) {
+      const hasAddress = !!(input.city && (input.cep || input.street));
+      if (hasAddress) {
+        console.info("[store-geocode] attempting", { restaurantId });
+        const coords = await geocodeAddress({
+          cep:          input.cep          ?? undefined,
+          street:       input.street       ?? undefined,
+          number:       input.streetNumber ?? undefined,
+          neighborhood: input.neighborhood ?? undefined,
+          city:         input.city         ?? undefined,
+          state:        input.state        ?? undefined,
+        });
+        if (coords) {
+          await prisma.storeProfile.update({
+            where: { restaurantId },
+            data:  { latitude: coords.lat, longitude: coords.lng },
+          });
+          console.info("[store-geocode] success", { restaurantId });
+          geocodeStatus = "ok";
+        } else {
+          console.warn("[store-geocode] failed", { restaurantId });
+          geocodeStatus = "failed";
+        }
+      }
+    }
+
+    const result = await RestaurantSettingsService.getStore(restaurantId);
+    if (!result.ok) return result;
+    return serviceOk({ ...result.data, geocodeStatus });
+  }
+
+  // Geocode the restaurant's stored address and persist the result.
+  // Used by the manual "Recalcular localização" action and the repair endpoint.
+  static async geocodeStoreAddress(restaurantId: string): Promise<{ ok: boolean; lat?: number; lng?: number }> {
+    const profile = await prisma.storeProfile.findUnique({
+      where: { restaurantId },
+      select: { cep: true, street: true, streetNumber: true, neighborhood: true, city: true, state: true },
+    });
+    if (!profile) return { ok: false };
+
+    const hasAddress = !!(profile.city && (profile.cep || profile.street));
+    if (!hasAddress) return { ok: false };
+
+    console.info("[store-geocode] attempting", { restaurantId });
+    const coords = await geocodeAddress({
+      cep:          profile.cep          ?? undefined,
+      street:       profile.street       ?? undefined,
+      number:       profile.streetNumber ?? undefined,
+      neighborhood: profile.neighborhood ?? undefined,
+      city:         profile.city         ?? undefined,
+      state:        profile.state        ?? undefined,
+    });
+
+    if (!coords) {
+      console.warn("[store-geocode] failed", { restaurantId });
+      return { ok: false };
+    }
+
+    await prisma.storeProfile.update({
+      where: { restaurantId },
+      data:  { latitude: coords.lat, longitude: coords.lng },
+    });
+    console.info("[store-geocode] success", { restaurantId });
+    return { ok: true, lat: coords.lat, lng: coords.lng };
   }
 
   // ── Delivery ─────────────────────────────────────────────────────────────────

@@ -874,6 +874,20 @@ export default function DeliveryPage() {
   const [showZoneEditor, setShowZoneEditor] = useState(false);
   const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null);
 
+  // Geocode readiness state — only relevant for distance mode
+  const [geoStatus, setGeoStatus] = useState<{ hasCoords: boolean; hasAddress: boolean } | null>(null);
+  const [geoRetrying, setGeoRetrying] = useState(false);
+
+  async function retryGeocode() {
+    setGeoRetrying(true);
+    const { ok: isOk } = await apiFetch("/api/settings/store/geocode", "POST", {});
+    if (isOk) {
+      const { ok: statusOk, data } = await apiFetch("/api/settings/store/geocode-status");
+      if (statusOk) setGeoStatus(data);
+    }
+    setGeoRetrying(false);
+  }
+
   // Load config + zones
   useEffect(() => {
     apiFetch("/api/settings/delivery").then(({ ok: isOk, data }) => {
@@ -899,6 +913,11 @@ export default function DeliveryPage() {
           distanceEstimatedBase: data.distanceEstimatedBase != null ? String(data.distanceEstimatedBase) : "",
         });
         setZones(data.zones ?? []);
+        if ((data.mode ?? "simple") === "distance") {
+          apiFetch("/api/settings/store/geocode-status").then(({ ok: gs, data: gd }) => {
+            if (gs) setGeoStatus(gd);
+          });
+        }
       }
       setLoading(false);
     });
@@ -1168,7 +1187,14 @@ export default function DeliveryPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setForm((f) => ({ ...f, mode: "distance" }))}
+                  onClick={() => {
+                    setForm((f) => ({ ...f, mode: "distance" }));
+                    if (!geoStatus) {
+                      apiFetch("/api/settings/store/geocode-status").then(({ ok: gs, data: gd }) => {
+                        if (gs) setGeoStatus(gd);
+                      });
+                    }
+                  }}
                   className={`rounded-xl border p-4 text-left transition ${
                     form.mode === "distance"
                       ? "border-brand-400 bg-brand-50 ring-1 ring-brand-300"
@@ -1338,16 +1364,52 @@ export default function DeliveryPage() {
                   })()}
                 />
 
-                {/* Important operational warning for distance mode */}
-                {(toNum(form.distancePricePerKm) ?? 0) > 0 && (
+                {/* Readiness status box — shows store geocode state */}
+                {geoStatus && (
+                  <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+                    !geoStatus.hasAddress
+                      ? "border-red-200 bg-red-50 text-red-800"
+                      : geoStatus.hasCoords
+                      ? "border-green-200 bg-green-50 text-green-800"
+                      : "border-amber-200 bg-amber-50 text-amber-800"
+                  }`}>
+                    {!geoStatus.hasAddress && (
+                      <>
+                        <p className="font-semibold">Endereço da loja não cadastrado</p>
+                        <p className="mt-1 text-xs leading-relaxed">
+                          Cadastre o endereço completo da loja em <strong>Configurações → Loja</strong> para usar frete por distância.
+                        </p>
+                      </>
+                    )}
+                    {geoStatus.hasAddress && !geoStatus.hasCoords && (
+                      <>
+                        <p className="font-semibold">Localização da loja não calculada</p>
+                        <p className="mt-1 text-xs leading-relaxed">
+                          O endereço está cadastrado. Clique em &quot;Recalcular localização&quot; para ativar o cálculo de distância — ou salve novamente o endereço em <strong>Configurações → Loja</strong>.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={retryGeocode}
+                          disabled={geoRetrying}
+                          className="mt-2 rounded-lg border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 disabled:opacity-50 transition"
+                        >
+                          {geoRetrying ? "Calculando…" : "Recalcular localização"}
+                        </button>
+                      </>
+                    )}
+                    {geoStatus.hasCoords && (
+                      <p className="font-semibold">Frete por distância ativo — localização da loja calculada ✓</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Warn about missing distanceMinFee when coords OK */}
+                {geoStatus?.hasCoords && !(toNum(form.distanceMinFee) ?? 0) && (
                   <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    <p className="font-semibold">Como a taxa por km funciona no checkout</p>
+                    <p className="font-semibold">Configure uma taxa mínima segura</p>
                     <p className="mt-1 text-xs leading-relaxed">
-                      A taxa por km (R$ {(toNum(form.distancePricePerKm) ?? 0).toFixed(2).replace(".", ",")}/km) só é calculada automaticamente se a distância do cliente for conhecida.
-                      Sem essa informação, o checkout exibe apenas a <strong>taxa base</strong>.
-                    </p>
-                    <p className="mt-2 text-xs leading-relaxed font-semibold">
-                      Para garantir uma taxa mínima em todos os pedidos, configure o campo &quot;Taxa mínima (R$)&quot; abaixo com o valor total mínimo desejado (ex: R$ {((toNum(form.distanceBaseFee) ?? 0) + (toNum(form.distancePricePerKm) ?? 0)).toFixed(2).replace(".", ",")}).
+                      Se a localização de um cliente não puder ser calculada (endereço incompleto, CEP inválido), o checkout será bloqueado.
+                      Configure <strong>&quot;Taxa mínima (R$)&quot;</strong> abaixo para permitir que esses pedidos prossigam com a taxa mínima garantida.
                     </p>
                   </div>
                 )}
