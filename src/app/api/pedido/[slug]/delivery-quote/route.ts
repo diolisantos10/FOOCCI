@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resolveDeliveryFee } from "@/lib/delivery-fee-resolver";
+import { geocodeAddress, type LatLng } from "@/lib/geocoding";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 const bodySchema = z.object({
@@ -41,7 +42,13 @@ export async function POST(
     where:  { slug },
     select: {
       id: true,
-      storeProfile: { select: { latitude: true, longitude: true } },
+      storeProfile: {
+        select: {
+          latitude: true, longitude: true,
+          cep: true, street: true, streetNumber: true,
+          neighborhood: true, city: true, state: true,
+        },
+      },
     },
   });
   if (!restaurant) {
@@ -65,19 +72,37 @@ export async function POST(
     },
   });
 
+  // Resolve restaurant coordinates — geocode on the fly when missing so distance
+  // mode works even for restaurants that were registered before auto-geocoding.
+  let restaurantCoords: LatLng | null = null;
+  const sp = restaurant.storeProfile;
+  if (sp?.latitude != null && sp?.longitude != null) {
+    restaurantCoords = { lat: Number(sp.latitude), lng: Number(sp.longitude) };
+  } else if (deliveryCfg?.mode === "distance" && sp?.city) {
+    const coords = await geocodeAddress({
+      cep:          sp.cep          ?? undefined,
+      street:       sp.street       ?? undefined,
+      number:       sp.streetNumber ?? undefined,
+      neighborhood: sp.neighborhood ?? undefined,
+      city:         sp.city         ?? undefined,
+      state:        sp.state        ?? undefined,
+    });
+    if (coords) {
+      restaurantCoords = coords;
+      // Save coords to DB so subsequent requests don't need to geocode again.
+      prisma.storeProfile.update({
+        where: { restaurantId: restaurant.id },
+        data:  { latitude: coords.lat, longitude: coords.lng },
+      }).catch((err: unknown) => console.error("[delivery-quote] failed to persist geocode", err));
+    }
+  }
+
   const result = await resolveDeliveryFee({
     mode:         deliveryCfg?.mode ?? "simple",
     deliveryType,
     subtotal,
     address:      address ?? null,
-    restaurantCoords:
-      restaurant.storeProfile?.latitude  != null &&
-      restaurant.storeProfile?.longitude != null
-        ? {
-            lat: Number(restaurant.storeProfile.latitude),
-            lng: Number(restaurant.storeProfile.longitude),
-          }
-        : null,
+    restaurantCoords,
     deliveryConfig: deliveryCfg
       ? {
           fee:                deliveryCfg.fee               != null ? Number(deliveryCfg.fee)               : null,

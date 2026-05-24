@@ -3423,7 +3423,7 @@ export function PedidoClient({
 
           {/* Delivery fee — shown as soon as address is confirmed */}
           {deliveryMethod === "delivery" && (
-            <div className="mb-2 flex items-center justify-between rounded-lg bg-green-50 px-3 py-1.5 text-xs">
+            <div className={`mb-2 flex items-center justify-between rounded-lg px-3 py-1.5 text-xs ${quoteStatus === "distance_min_fee_fallback" ? "bg-amber-50" : "bg-green-50"}`}>
               <span className="text-gray-600">🛵 Taxa de entrega</span>
               <span className="font-semibold text-gray-800">
                 {quoteLoading
@@ -3436,6 +3436,13 @@ export function PedidoClient({
                   ? "Grátis"
                   : `R$ ${effectiveFeeForAddr.toFixed(2).replace(".", ",")}`}
               </span>
+            </div>
+          )}
+
+          {/* Warning when fallback safe fee is applied (distance unknown) */}
+          {quoteStatus === "distance_min_fee_fallback" && deliveryMethod === "delivery" && !quoteError && (
+            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Taxa estimada — não conseguimos calcular a distância exata. O restaurante poderá ajustar na entrega.
             </div>
           )}
 
