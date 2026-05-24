@@ -665,6 +665,290 @@ function ChapterDetail({
   );
 }
 
+// ── Import Manual v0.1 Panel ──────────────────────────────────────────────────
+
+interface ImportChapterResult {
+  slug:             string;
+  title:            string;
+  action:           "UPDATED" | "NO_CHANGE" | "MISSING" | "SKIPPED";
+  changes?:         string[];
+  revisionCreated?: boolean;
+  warning?:         string;
+}
+
+interface ImportSummary {
+  dryRun:           boolean;
+  source:           string;
+  payloadCount:     number;
+  validationErrors: string[];
+  results:          ImportChapterResult[];
+  countUpdated:     number;
+  countNoChange:    number;
+  countMissing:     number;
+  countSkipped:     number;
+  countRevisions:   number;
+  countPublished:   number;
+}
+
+function ImportResultCard({ result, isPublish = false }: { result: ImportSummary; isPublish?: boolean }) {
+  if (result.validationErrors.length > 0) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm space-y-2">
+        <p className="font-semibold text-red-800">❌ Payload inválido</p>
+        <ul className="list-disc list-inside space-y-0.5 text-red-700">
+          {result.validationErrors.map((e, i) => <li key={i}>{e}</li>)}
+        </ul>
+      </div>
+    );
+  }
+
+  const hasProblems = result.countMissing > 0;
+
+  return (
+    <div className={`rounded-xl border p-4 text-sm space-y-3 ${
+      isPublish ? "border-green-200 bg-green-50" :
+      hasProblems ? "border-orange-200 bg-orange-50" :
+      "border-blue-200 bg-blue-50"
+    }`}>
+      <p className="font-semibold text-gray-900">
+        {isPublish ? "✅ Publicação concluída" : "🔍 Resultado da simulação"}
+      </p>
+
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {[
+          { label: "Atualizados",  value: result.countUpdated,   color: "text-blue-700"   },
+          { label: "Publicados",   value: result.countPublished,  color: "text-green-700"  },
+          { label: "Sem mudança",  value: result.countNoChange,   color: "text-gray-500"   },
+          { label: "Pulados",      value: result.countSkipped,    color: "text-yellow-700" },
+          { label: "Faltando",     value: result.countMissing,    color: result.countMissing > 0 ? "text-red-700" : "text-gray-400" },
+          { label: "Revisões",     value: result.countRevisions,  color: "text-purple-700" },
+        ].map(s => (
+          <div key={s.label} className="rounded-lg bg-white/60 px-2 py-2">
+            <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wide">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {result.countMissing > 0 && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 space-y-1">
+          <p className="font-semibold text-red-800 text-xs">
+            ⚠️ {result.countMissing} capítulo(s) não encontrado(s) no banco.
+          </p>
+          <p className="text-[11px] text-red-700">
+            Execute o seed primeiro para criar a estrutura de capítulos:
+          </p>
+          <p className="text-[11px] font-mono text-red-700">node scripts/seed-manual.mjs</p>
+          <ul className="mt-1 list-disc list-inside text-[11px] text-red-600">
+            {result.results.filter(r => r.action === "MISSING").map(r => (
+              <li key={r.slug}>{r.slug}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {result.results.length > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer select-none text-gray-500 hover:text-gray-700">
+            Ver detalhes dos capítulos ({result.results.length})
+          </summary>
+          <div className="mt-2 space-y-1">
+            {result.results.map(r => (
+              <div key={r.slug} className="flex items-start gap-2 leading-snug">
+                <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold ${
+                  r.action === "UPDATED"   ? "bg-blue-100 text-blue-700"   :
+                  r.action === "NO_CHANGE" ? "bg-gray-100 text-gray-500"   :
+                  r.action === "MISSING"   ? "bg-red-100 text-red-700"     :
+                                             "bg-yellow-100 text-yellow-700"
+                }`}>{r.action}</span>
+                <span className="text-gray-700">{r.title}</span>
+                {r.changes && r.changes.length > 0 && (
+                  <span className="text-gray-400 text-[10px]">({r.changes.join(", ")})</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {result.dryRun && (
+        <p className="text-[11px] text-gray-400 italic">
+          Simulação apenas — nenhum dado foi gravado no banco.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ImportManualV01Panel({ onClose }: { onClose: () => void }) {
+  const [dryRunResult,  setDryRunResult]  = useState<ImportSummary | null>(null);
+  const [publishResult, setPublishResult] = useState<ImportSummary | null>(null);
+  const [loading,       setLoading]       = useState<"dry-run" | "publish" | null>(null);
+  const [error,         setError]         = useState<string | null>(null);
+  const [confirmation,  setConfirmation]  = useState("");
+
+  async function runDryRun() {
+    setLoading("dry-run"); setError(null); setDryRunResult(null);
+    try {
+      const res = await fetch("/api/admin/manual/import-v01", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "dry-run" }),
+      });
+      const data = await res.json() as { result?: ImportSummary; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Erro na simulação.");
+      setDryRunResult(data.result!);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro desconhecido.");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function runPublish() {
+    setLoading("publish"); setError(null); setPublishResult(null);
+    try {
+      const res = await fetch("/api/admin/manual/import-v01", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "publish", confirmation }),
+      });
+      const data = await res.json() as { result?: ImportSummary; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Erro na publicação.");
+      setPublishResult(data.result!);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro desconhecido.");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  const dryRunOk =
+    dryRunResult !== null &&
+    dryRunResult.validationErrors.length === 0 &&
+    dryRunResult.countMissing === 0;
+
+  const canPublish = dryRunOk && !publishResult && loading === null && confirmation === "IMPORT_MANUAL_V01";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl">
+
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">📥 Importar Manual v0.1</h3>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Publica a primeira versão aprovada do Manual Operacional (ChatGPT seed).
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+
+          {/* Safety notice */}
+          <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800 space-y-1.5">
+            <p className="font-semibold">⚠️ Ação interna — leia antes de prosseguir</p>
+            <ul className="list-disc list-inside space-y-0.5 text-yellow-700 text-xs">
+              <li>Importa e publica os 14 capítulos do Manual v0.1 aprovado.</li>
+              <li>Cria snapshots de revisão antes de sobrescrever conteúdo existente.</li>
+              <li><strong>Não conecta agentes de IA.</strong></li>
+              <li><strong>Não adiciona RAG/embeddings.</strong></li>
+              <li><strong>Não expõe conteúdo a usuários de restaurante.</strong></li>
+              <li>Capítulos faltando no banco não são criados — use o seed separadamente.</li>
+            </ul>
+          </div>
+
+          {/* Step 1 — Dry-run */}
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Passo 1 — Simular importação</p>
+                <p className="text-xs text-gray-500">
+                  Verifica o payload sem gravar nada no banco. Obrigatório antes de publicar.
+                </p>
+              </div>
+              <button
+                onClick={runDryRun}
+                disabled={loading !== null || !!publishResult}
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading === "dry-run" && <Spinner />}
+                Simular importação
+              </button>
+            </div>
+
+            {dryRunResult && <ImportResultCard result={dryRunResult} />}
+          </div>
+
+          {/* Step 2 — Publish */}
+          <div className="space-y-3 border-t border-gray-100 pt-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Passo 2 — Publicar Manual v0.1</p>
+              <p className="text-xs text-gray-500">
+                Só habilitado após simulação bem-sucedida (sem erros e sem capítulos faltando).
+              </p>
+            </div>
+
+            {!publishResult ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">
+                    Digite{" "}
+                    <code className="rounded bg-gray-100 px-1 text-gray-800">IMPORT_MANUAL_V01</code>
+                    {" "}para confirmar a publicação:
+                  </label>
+                  <input
+                    type="text"
+                    value={confirmation}
+                    onChange={e => setConfirmation(e.target.value)}
+                    disabled={!dryRunOk || loading !== null}
+                    placeholder="IMPORT_MANUAL_V01"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-sm text-gray-900 placeholder-gray-300 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+                <button
+                  onClick={runPublish}
+                  disabled={!canPublish}
+                  className="flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loading === "publish" && <Spinner />}
+                  Publicar Manual v0.1
+                </button>
+              </div>
+            ) : (
+              <ImportResultCard result={publishResult} isPublish />
+            )}
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end border-t border-gray-100 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            {publishResult ? "Fechar" : "Cancelar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ManualOperacionalPage() {
@@ -691,6 +975,9 @@ export default function ManualOperacionalPage() {
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [decisionsLoading, setDecisionsLoading] = useState(false);
   const [showNewDecision, setShowNewDecision] = useState(false);
+
+  // Import v0.1 panel
+  const [showImportPanel, setShowImportPanel] = useState(false);
 
   // ── Fetch helpers ────────────────────────────────────────────────────────────
 
@@ -804,6 +1091,13 @@ export default function ManualOperacionalPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowImportPanel(true)}
+              className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100"
+              title="Importar e publicar Manual Operacional v0.1"
+            >
+              📥 Importar v0.1
+            </button>
             <button
               onClick={() => { setTab("chapters"); setShowNewRequest(true); }}
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -1082,6 +1376,11 @@ export default function ManualOperacionalPage() {
       )}
 
       {/* ── Modals ── */}
+      {showImportPanel && (
+        <ImportManualV01Panel
+          onClose={() => { setShowImportPanel(false); fetchChapters(); }}
+        />
+      )}
       {showNewChapter && (
         <NewChapterModal
           onClose={() => setShowNewChapter(false)}
