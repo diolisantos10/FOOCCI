@@ -17,12 +17,14 @@ export interface DateRange {
 }
 
 export interface KpiOverview {
-  revenue:          number;
-  orders:           number;
-  avgTicket:        number;
-  newCustomers:     number;
-  cancelledOrders:  number;
-  cancellationRate: number; // %
+  revenue:               number;
+  orders:                number;
+  avgTicket:             number;
+  newCustomers:          number;
+  cancelledOrders:       number;
+  cancellationRate:      number; // %
+  awaitingPaymentCount:  number;
+  awaitingPaymentTotal:  number;
 }
 
 export interface DailyPoint {
@@ -206,14 +208,18 @@ export class AnalyticsService {
   ): Promise<KpiOverview> {
     const [orderRows, newCustomers] = await Promise.all([
       prisma.$queryRaw<Array<{
-        total_revenue: string;
-        order_count:   RawBigint;
-        cancelled:     RawBigint;
+        total_revenue:          string;
+        order_count:            RawBigint;
+        cancelled:              RawBigint;
+        awaiting_payment_count: RawBigint;
+        awaiting_payment_total: string;
       }>>`
         SELECT
-          COALESCE(SUM(CASE WHEN status != 'CANCELLED' THEN total ELSE 0 END), 0)::text AS total_revenue,
-          COUNT(*) FILTER (WHERE status != 'CANCELLED')                                  AS order_count,
-          COUNT(*) FILTER (WHERE status  = 'CANCELLED')                                  AS cancelled
+          COALESCE(SUM(CASE WHEN status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED') THEN total ELSE 0 END), 0)::text AS total_revenue,
+          COUNT(*) FILTER (WHERE status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED'))                                 AS order_count,
+          COUNT(*) FILTER (WHERE status  = 'CANCELLED')                                                                                      AS cancelled,
+          COUNT(*) FILTER (WHERE status  = 'AWAITING_PAYMENT')                                                                               AS awaiting_payment_count,
+          COALESCE(SUM(CASE WHEN status = 'AWAITING_PAYMENT' THEN total ELSE 0 END), 0)::text                                                AS awaiting_payment_total
         FROM orders
         WHERE "restaurantId" = ${restaurantId}
           AND COALESCE("importedAt", "createdAt") >= ${from}
@@ -239,10 +245,12 @@ export class AnalyticsService {
     return {
       revenue,
       orders,
-      avgTicket:        orders > 0 ? revenue / orders : 0,
-      newCustomers:     newCust,
-      cancelledOrders:  cancelled,
-      cancellationRate: total > 0 ? (cancelled / total) * 100 : 0,
+      avgTicket:            orders > 0 ? revenue / orders : 0,
+      newCustomers:         newCust,
+      cancelledOrders:      cancelled,
+      cancellationRate:     total > 0 ? (cancelled / total) * 100 : 0,
+      awaitingPaymentCount: toNum(row.awaiting_payment_count),
+      awaitingPaymentTotal: toNum(row.awaiting_payment_total as unknown as string),
     };
   }
 
@@ -264,7 +272,7 @@ export class AnalyticsService {
         COUNT(*)                       AS cnt
       FROM orders
       WHERE "restaurantId" = ${restaurantId}
-        AND status != 'CANCELLED'
+        AND status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
         AND COALESCE("importedAt", "createdAt") >= ${from}
         AND COALESCE("importedAt", "createdAt") <  ${to}
       GROUP BY 1
@@ -302,7 +310,7 @@ export class AnalyticsService {
       FROM order_items oi
       JOIN orders o ON o.id = oi."orderId"
       WHERE o."restaurantId" = ${restaurantId}
-        AND o.status != 'CANCELLED'
+        AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
         AND COALESCE(o."importedAt", o."createdAt") >= ${from}
         AND COALESCE(o."importedAt", o."createdAt") <  ${to}
       GROUP BY oi.name, oi."categoryName"
@@ -340,7 +348,7 @@ export class AnalyticsService {
       FROM order_items oi
       JOIN orders o ON o.id = oi."orderId"
       WHERE o."restaurantId" = ${restaurantId}
-        AND o.status != 'CANCELLED'
+        AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
         AND COALESCE(o."importedAt", o."createdAt") >= ${from}
         AND COALESCE(o."importedAt", o."createdAt") <  ${to}
       GROUP BY 1
@@ -376,7 +384,7 @@ export class AnalyticsService {
       SELECT COUNT(*) AS cnt
       FROM orders
       WHERE "restaurantId" = ${restaurantId}
-        AND status != 'CANCELLED'
+        AND status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
         AND COALESCE("importedAt", "createdAt") >= ${from}
         AND COALESCE("importedAt", "createdAt") <  ${to}
     `;
@@ -400,7 +408,7 @@ export class AnalyticsService {
         FROM order_items oi
         JOIN orders o ON o.id = oi."orderId"
         WHERE o."restaurantId" = ${restaurantId}
-          AND o.status != 'CANCELLED'
+          AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
           AND COALESCE(o."importedAt", o."createdAt") >= ${from}
           AND COALESCE(o."importedAt", o."createdAt") <  ${to}
           AND (${whereClause})
@@ -450,7 +458,7 @@ export class AnalyticsService {
       JOIN orders o ON o."customerId" = c.id
       WHERE c."restaurantId" = ${restaurantId}
         AND c."isGuest" = false
-        AND o.status != 'CANCELLED'
+        AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
         AND COALESCE(o."importedAt", o."createdAt") >= ${from}
         AND COALESCE(o."importedAt", o."createdAt") <  ${to}
       GROUP BY c.id, c.name, c.phone, c.tier, c.segment
@@ -529,7 +537,7 @@ export class AnalyticsService {
         COALESCE(SUM(total), 0)::text     AS revenue
       FROM orders
       WHERE "restaurantId" = ${restaurantId}
-        AND status != 'CANCELLED'
+        AND status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
         AND COALESCE("importedAt", "createdAt") >= ${from}
         AND COALESCE("importedAt", "createdAt") <  ${to}
       GROUP BY 1
