@@ -234,7 +234,7 @@ function ImageUpload({
       {value && (
         <div className="relative inline-block">
           {/* Square preview — image is center-cropped into a fixed square frame */}
-          <div className="h-16 w-16 overflow-hidden rounded border border-gray-200">
+          <div className="h-40 w-40 overflow-hidden rounded-lg border border-gray-200">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={value}
@@ -245,7 +245,7 @@ function ImageUpload({
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white hover:bg-red-600"
+            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white hover:bg-red-600"
           >
             ×
           </button>
@@ -273,7 +273,7 @@ function ImageUpload({
         </button>
       </div>
       <p className="text-[11px] text-gray-400">
-        A imagem será centralizada automaticamente em formato quadrado.
+        Recomendado: imagem quadrada (1:1). O recorte é automático.
       </p>
       {error && <InlineError message={error} />}
     </div>
@@ -1472,6 +1472,8 @@ type NewItemForm = {
   description: string;
   price: string;
   imageUrl: string | null;
+  showInDelivery: boolean;
+  showInDineIn: boolean;
   servingSize: number | null;
   portionInfo: string;
   tagFunil:             string;
@@ -1499,6 +1501,8 @@ function NewItemModal({
     description: "",
     price: "",
     imageUrl: null,
+    showInDelivery: true,
+    showInDineIn: true,
     servingSize: null,
     portionInfo: "",
     tagFunil:             "",
@@ -1518,6 +1522,8 @@ function NewItemModal({
       description: "",
       price: "",
       imageUrl: null,
+      showInDelivery: true,
+      showInDineIn: true,
       servingSize: null,
       portionInfo: "",
       tagFunil:             "",
@@ -1560,6 +1566,8 @@ function NewItemModal({
           description: form.description.trim() || undefined,
           price,
           imageUrl: form.imageUrl || undefined,
+          showInDelivery: form.showInDelivery,
+          showInDineIn: form.showInDineIn,
           servingSize: form.servingSize ?? undefined,
           portionInfo: form.portionInfo.trim() || undefined,
           tagFunil:             form.tagFunil.trim()             || undefined,
@@ -1596,190 +1604,229 @@ function NewItemModal({
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
         <div
-          className="relative flex flex-col w-full max-w-2xl rounded-xl bg-white shadow-2xl overflow-hidden"
+          className="relative flex flex-col w-full max-w-5xl rounded-xl bg-white shadow-2xl overflow-hidden"
           style={{ maxHeight: "92vh" }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Header */}
           <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
             <h2 className="text-sm font-semibold text-gray-900">Novo Produto</h2>
             <button type="button" onClick={onClose} className="text-lg leading-none text-gray-400 hover:text-gray-600" aria-label="Fechar">✕</button>
           </div>
 
-          <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
-            {/* Category */}
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-700">Categoria <span className="text-red-500">*</span></label>
-              {manualCategories.length === 0 ? (
-                <p className="text-xs text-red-500">Crie uma categoria antes de adicionar produtos.</p>
-              ) : (
-                <select
-                  value={form.categoryId}
-                  onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                >
-                  {manualCategories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
+          {/* Body + footer in a form so submit button outside scroll area still works */}
+          <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="flex flex-col lg:flex-row min-h-full">
 
-            {/* Name */}
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-700">Nome <span className="text-red-500">*</span></label>
-              <input
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Nome do produto"
-                required
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-              />
-            </div>
+                {/* ── Left sidebar ──────────────────────────────────────── */}
+                <div className="w-full lg:w-72 shrink-0 border-b border-gray-100 lg:border-b-0 lg:border-r p-5 space-y-5">
 
-            {/* Description */}
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-700">Descrição do produto</label>
-              <textarea
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Descrição exibida no cardápio (opcional)"
-                rows={4}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-              />
-              <p className="text-[11px] text-gray-400">Explique o produto de forma clara para o cliente.</p>
-            </div>
+                  {/* Image */}
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium text-gray-700">Imagem</label>
+                    <ImageUpload value={form.imageUrl} onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))} />
+                  </div>
 
-            {/* Price */}
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-700">Preço <span className="text-red-500">*</span></label>
-              <input
-                value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                placeholder="0,00"
-                type="number"
-                step="0.01"
-                min="0.01"
-                required
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-              />
-            </div>
+                  {/* Canais de venda */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-gray-700">Canais de venda</label>
+                    <div className="flex flex-col gap-2.5">
+                      <ToggleSwitch
+                        label="Delivery"
+                        checked={form.showInDelivery}
+                        onChange={() => setForm((f) => ({ ...f, showInDelivery: !f.showInDelivery }))}
+                      />
+                      <ToggleSwitch
+                        label="QR Salão"
+                        checked={form.showInDineIn}
+                        onChange={() => setForm((f) => ({ ...f, showInDineIn: !f.showInDineIn }))}
+                      />
+                    </div>
+                  </div>
 
-            {/* Serving size + portion info */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-700">Serve (pessoas)</label>
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, servingSize: f.servingSize === n ? null : n }))}
-                      className={`flex-1 rounded border py-1.5 text-xs font-medium transition-colors ${
-                        form.servingSize === n
-                          ? "border-orange-500 bg-orange-500 text-white"
-                          : "border-gray-300 text-gray-600 hover:border-orange-300"
-                      }`}
-                    >
-                      {n === 4 ? "4+" : n}
-                    </button>
-                  ))}
+                </div>
+
+                {/* ── Main content ───────────────────────────────────────── */}
+                <div className="flex-1 min-w-0 px-5 py-4 space-y-4">
+
+                  {/* Category */}
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium text-gray-700">Categoria <span className="text-red-500">*</span></label>
+                    {manualCategories.length === 0 ? (
+                      <p className="text-xs text-red-500">Crie uma categoria antes de adicionar produtos.</p>
+                    ) : (
+                      <select
+                        value={form.categoryId}
+                        onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      >
+                        {manualCategories.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Name */}
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium text-gray-700">Nome <span className="text-red-500">*</span></label>
+                    <input
+                      value={form.name}
+                      onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Nome do produto"
+                      required
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium text-gray-700">Descrição do produto</label>
+                    <textarea
+                      value={form.description}
+                      onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                      placeholder="Descrição exibida no cardápio (opcional)"
+                      rows={4}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    />
+                    <p className="text-[11px] text-gray-400">Explique o produto de forma clara para o cliente.</p>
+                  </div>
+
+                  {/* Price */}
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium text-gray-700">Preço <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">R$</span>
+                      <input
+                        value={form.price}
+                        onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                        placeholder="0,00"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        required
+                        className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Serving size + portion info */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-gray-700">Serve (pessoas)</label>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setForm((f) => ({ ...f, servingSize: f.servingSize === n ? null : n }))}
+                            className={`flex-1 rounded border py-1.5 text-xs font-medium transition-colors ${
+                              form.servingSize === n
+                                ? "border-orange-500 bg-orange-500 text-white"
+                                : "border-gray-300 text-gray-600 hover:border-orange-300"
+                            }`}
+                          >
+                            {n === 4 ? "4+" : n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-gray-700">Porção</label>
+                      <input
+                        value={form.portionInfo}
+                        onChange={(e) => setForm((f) => ({ ...f, portionInfo: e.target.value }))}
+                        placeholder="ex: 300g, 500ml"
+                        maxLength={50}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* IA / Enriquecimento */}
+                  <div className="space-y-3 border-t border-gray-100 pt-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Inteligência / IA</p>
+
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-gray-700">Etapa do funil</label>
+                      <select
+                        value={form.tagFunil}
+                        onChange={(e) => setForm((f) => ({ ...f, tagFunil: e.target.value }))}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                      >
+                        <option value="">— Não definido —</option>
+                        <option value="Entrada">Entrada</option>
+                        <option value="Prato Principal">Prato Principal</option>
+                        <option value="Bebida">Bebida</option>
+                        <option value="Sobremesa">Sobremesa</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-gray-700">Perfil de paladar</label>
+                      <input
+                        value={form.perfilPaladar}
+                        onChange={(e) => setForm((f) => ({ ...f, perfilPaladar: e.target.value }))}
+                        placeholder="ex: umami, cremoso, cítrico"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-gray-700">Harmonização sugerida</label>
+                      <input
+                        value={form.harmonizacaoSugerida}
+                        onChange={(e) => setForm((f) => ({ ...f, harmonizacaoSugerida: e.target.value }))}
+                        placeholder="ex: Água Tônica, Cerveja Heineken"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-gray-700">Alérgenos detalhados</label>
+                      <input
+                        value={form.alergenosDetalhados}
+                        onChange={(e) => setForm((f) => ({ ...f, alergenosDetalhados: e.target.value }))}
+                        placeholder="ex: glúten, lactose, frutos do mar"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-gray-700">Storytelling IA</label>
+                      <textarea
+                        rows={3}
+                        value={form.storytellingIA}
+                        onChange={(e) => setForm((f) => ({ ...f, storytellingIA: e.target.value }))}
+                        placeholder="Narrativa usada pela IA quando o cliente pede uma recomendação especial"
+                        className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                      />
+                    </div>
+                  </div>
+
+                  {error && <InlineError message={error} />}
+
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-700">Porção</label>
-                <input
-                  value={form.portionInfo}
-                  onChange={(e) => setForm((f) => ({ ...f, portionInfo: e.target.value }))}
-                  placeholder="ex: 300g, 500ml"
-                  maxLength={50}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                />
-              </div>
             </div>
 
-            {/* Image */}
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-700">Imagem</label>
-              <ImageUpload value={form.imageUrl} onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))} />
-            </div>
-
-            {/* IA / Enriquecimento */}
-            <div className="space-y-3 border-t border-gray-100 pt-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Inteligência / IA</p>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-700">Etapa do funil</label>
-                <select
-                  value={form.tagFunil}
-                  onChange={(e) => setForm((f) => ({ ...f, tagFunil: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                >
-                  <option value="">— Não definido —</option>
-                  <option value="Entrada">Entrada</option>
-                  <option value="Prato Principal">Prato Principal</option>
-                  <option value="Bebida">Bebida</option>
-                  <option value="Sobremesa">Sobremesa</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-700">Perfil de paladar</label>
-                <input
-                  value={form.perfilPaladar}
-                  onChange={(e) => setForm((f) => ({ ...f, perfilPaladar: e.target.value }))}
-                  placeholder="ex: umami, cremoso, cítrico"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-700">Harmonização sugerida</label>
-                <input
-                  value={form.harmonizacaoSugerida}
-                  onChange={(e) => setForm((f) => ({ ...f, harmonizacaoSugerida: e.target.value }))}
-                  placeholder="ex: Água Tônica, Cerveja Heineken"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-700">Alérgenos detalhados</label>
-                <input
-                  value={form.alergenosDetalhados}
-                  onChange={(e) => setForm((f) => ({ ...f, alergenosDetalhados: e.target.value }))}
-                  placeholder="ex: glúten, lactose, frutos do mar"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-700">Storytelling IA</label>
-                <textarea
-                  rows={3}
-                  value={form.storytellingIA}
-                  onChange={(e) => setForm((f) => ({ ...f, storytellingIA: e.target.value }))}
-                  placeholder="Narrativa usada pela IA quando o cliente pede uma recomendação especial"
-                  className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                />
-              </div>
-            </div>
-
-            {error && <InlineError message={error} />}
-
-            <div className="flex gap-2 pt-1">
-              <button
-                type="submit"
-                disabled={busy || manualCategories.length === 0}
-                className="flex-1 rounded-lg bg-orange-500 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-              >
-                {busy ? <Spinner /> : "Criar produto"}
-              </button>
+            {/* Sticky footer */}
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-gray-100 px-5 py-4">
               <button
                 type="button"
                 onClick={onClose}
                 className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
               >
                 Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={busy || manualCategories.length === 0}
+                className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+              >
+                {busy ? <Spinner /> : "Criar produto"}
               </button>
             </div>
           </form>
@@ -2453,12 +2500,12 @@ function EditItemModal({
       >
         {/* Modal panel */}
         <div
-          className="relative flex w-full max-w-4xl flex-col rounded-xl bg-white shadow-2xl"
+          className="relative flex w-full max-w-5xl flex-col rounded-xl bg-white shadow-2xl"
           style={{ maxHeight: "92vh" }}
           onClick={(e) => e.stopPropagation()}
         >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
           <h2 className="text-sm font-semibold text-gray-900">Editar item</h2>
           <button
             type="button"
@@ -2471,7 +2518,53 @@ function EditItemModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+        <div className="flex-1 overflow-y-auto">
+          <div className="flex flex-col lg:flex-row min-h-full">
+
+            {/* ── Left sidebar ─────────────────────────────────────────── */}
+            <div className="w-full lg:w-72 shrink-0 border-b border-gray-100 lg:border-b-0 lg:border-r p-5 space-y-5">
+
+              {/* Image */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">Imagem</label>
+                <ImageUpload
+                  value={form.imageUrl}
+                  onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+                />
+              </div>
+
+              {/* Canais de venda */}
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-gray-600">Canais de venda</label>
+                <div className="flex flex-col gap-2.5">
+                  <ToggleSwitch
+                    label="Delivery"
+                    checked={form.showInDelivery}
+                    onChange={() => setForm((f) => ({ ...f, showInDelivery: !f.showInDelivery }))}
+                  />
+                  <ToggleSwitch
+                    label="QR Salão"
+                    checked={form.showInDineIn}
+                    onChange={() => setForm((f) => ({ ...f, showInDineIn: !f.showInDineIn }))}
+                  />
+                </div>
+              </div>
+
+              {/* Código interno */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">Código interno</label>
+                <input
+                  value={form.code}
+                  onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                  placeholder="Código do produto (opcional)"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                />
+              </div>
+
+            </div>
+
+            {/* ── Main content ─────────────────────────────────────────── */}
+            <div className="flex-1 min-w-0 divide-y divide-gray-100">
 
           {/* ── Informações básicas ───────────────────────────────────── */}
           <div className="px-5 py-4 space-y-3">
@@ -2529,13 +2622,6 @@ function EditItemModal({
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-600">Imagem</label>
-              <ImageUpload
-                value={form.imageUrl}
-                onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
-              />
-            </div>
           </div>
 
           {/* ── Preço e porção ────────────────────────────────────────── */}
@@ -3050,41 +3136,8 @@ function EditItemModal({
             )}
           </div>
 
-          {/* ── Configurações ─────────────────────────────────────────── */}
-          <div className="px-5 py-4 space-y-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-              Configurações
-            </p>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-600">Canais de venda</label>
-              <div className="flex gap-4 pt-0.5">
-                <ToggleSwitch
-                  label="Delivery"
-                  checked={form.showInDelivery}
-                  onChange={() => setForm((f) => ({ ...f, showInDelivery: !f.showInDelivery }))}
-                />
-                <ToggleSwitch
-                  label="Salão"
-                  checked={form.showInDineIn}
-                  onChange={() => setForm((f) => ({ ...f, showInDineIn: !f.showInDineIn }))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-600">Código interno</label>
-              <input
-                value={form.code}
-                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                placeholder="Código do produto (opcional)"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-              />
-            </div>
-          </div>
-
           {/* ── IA / Enriquecimento ─────────────────────────────── */}
-          <div className="space-y-4 border-t border-gray-100 px-5 py-4">
+          <div className="px-5 py-4 space-y-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Inteligência / IA</p>
 
             <div className="space-y-1">
@@ -3149,10 +3202,13 @@ function EditItemModal({
               <InlineError message={error} />
             </div>
           )}
-        </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-2 border-t border-gray-100 px-5 py-4">
+            </div>{/* end main content */}
+          </div>{/* end two-column flex */}
+        </div>{/* end body */}
+
+        {/* Footer — sticky because it is outside the overflow-y-auto body */}
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-gray-100 px-5 py-4">
           <button
             type="button"
             onClick={handleDelete}
@@ -3168,7 +3224,7 @@ function EditItemModal({
               disabled={busy}
               className="rounded-lg bg-orange-500 px-5 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
             >
-              {busy ? <Spinner /> : "Salvar"}
+              {busy ? <Spinner /> : "Salvar alterações"}
             </button>
             <button
               type="button"
