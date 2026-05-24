@@ -1857,3 +1857,154 @@ model RestaurantKnowledgeItem {
   @@index([restaurantId, category])
   @@map("restaurant_knowledge_items")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MANUAL OPERACIONAL DO FOOCCI (INTERNAL — Admin/Master only)
+//
+//  This is the internal "operational bible" for Foocci/Fute.
+//  It documents product rules, AI agent behaviour, flows, integrations,
+//  UI rules, CRM rules, WhatsApp rules, checkout rules, and operational
+//  decisions.
+//
+//  Phase 1: database structure + admin APIs + admin UI + version/publish flow.
+//  Agents do NOT query this manual yet. RAG/embeddings come in a later phase.
+//  Only content with isPublished=true and agentVisibility=true will be surfaced
+//  to agents — but that gate is not open yet.
+//
+//  Change requests MUST be approved before any chapter is published.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Module area / domain that a chapter or decision belongs to.
+enum ManualArea {
+  GENERAL
+  WAITER_AGENT
+  CRM
+  WHATSAPP
+  UI_UX
+  BRANDING
+  INTEGRATIONS
+  CHECKOUT
+  PAYMENTS
+  ANALYTICS
+  SECURITY
+  BACKLOG
+}
+
+/// Lifecycle status of a chapter or decision.
+enum ManualRuleStatus {
+  IMPLEMENTED
+  PARTIAL
+  DECIDED
+  BACKLOG
+}
+
+/// Workflow status for a pending change request.
+enum ManualChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Where a change or decision originated.
+enum ManualSourceType {
+  CHATGPT
+  CLAUDE_AUDIT
+  CODE_AUDIT
+  MANUAL
+  DEPLOY
+  BUGFIX
+  PRODUCT_DECISION
+}
+
+/// A chapter in the Foocci Operational Manual.
+/// Each chapter has a versioned content body, a lifecycle status, and an
+/// optional flag for future agent visibility.
+model OperationalManualChapter {
+  id              String           @id @default(cuid())
+  slug            String           @unique
+  title           String
+  area            ManualArea       @default(GENERAL)
+  description     String?
+  content         String           @db.Text
+  status          ManualRuleStatus @default(BACKLOG)
+  version         String           @default("0.1")
+  isPublished     Boolean          @default(false)
+  /// When true, agents may read this chapter (gate not yet open — Phase 2+).
+  agentVisibility Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  publishedAt     DateTime?
+  createdBy       String?
+  updatedBy       String?
+  approvedBy      String?
+
+  revisions      OperationalManualRevision[]
+  changeRequests OperationalManualChangeRequest[]
+
+  @@index([area])
+  @@index([status])
+  @@index([isPublished])
+  @@map("operational_manual_chapters")
+}
+
+/// Immutable snapshot of a chapter at a specific version.
+/// Created automatically on every publish action.
+model OperationalManualRevision {
+  id              String           @id @default(cuid())
+  chapterId       String
+  version         String
+  content         String           @db.Text
+  changeSummary   String?
+  sourceType      ManualSourceType @default(MANUAL)
+  sourceReference String?
+  createdAt       DateTime         @default(now())
+  createdBy       String?
+
+  chapter OperationalManualChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@index([chapterId])
+  @@map("operational_manual_revisions")
+}
+
+/// A proposed change to one or more chapters, waiting for admin approval.
+/// Nothing becomes official content without an APPROVED change request.
+model OperationalManualChangeRequest {
+  id              String             @id @default(cuid())
+  chapterId       String?
+  title           String
+  proposedContent String             @db.Text
+  proposedDiff    String?            @db.Text
+  reason          String
+  impactAreas     String?
+  status          ManualChangeStatus @default(PENDING)
+  sourceType      ManualSourceType   @default(MANUAL)
+  sourceReference String?
+  createdAt       DateTime           @default(now())
+  reviewedAt      DateTime?
+  createdBy       String?
+  reviewedBy      String?
+
+  chapter OperationalManualChapter? @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+
+  @@index([chapterId])
+  @@index([status])
+  @@map("operational_manual_change_requests")
+}
+
+/// Permanent log of product and operational decisions, independently of chapters.
+/// Useful for answering "why did we decide X?" without editing live chapter content.
+model OperationalManualDecisionLog {
+  id              String           @id @default(cuid())
+  title           String
+  description     String           @db.Text
+  area            ManualArea       @default(GENERAL)
+  status          ManualRuleStatus @default(DECIDED)
+  sourceType      ManualSourceType @default(PRODUCT_DECISION)
+  sourceReference String?
+  createdAt       DateTime         @default(now())
+  createdBy       String?
+
+  @@index([area])
+  @@index([status])
+  @@map("operational_manual_decision_logs")
+}
