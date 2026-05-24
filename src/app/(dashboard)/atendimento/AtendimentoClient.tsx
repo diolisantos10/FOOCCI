@@ -59,19 +59,20 @@ interface ActiveDraft {
 }
 
 interface ConvSummary {
-  id:               string;
-  status:           ConvStatus;
-  channel:          Channel;
-  aiEnabled:        boolean;
-  assignedTo:       string | null;
-  unreadCount:      number;
-  lastMessageAt:    string | null;
-  createdAt:        string;
-  customerName:     string | null;
-  customerPhone:    string | null;
-  contextType:      string | null;
-  customer:         { name: string; phone: string } | null;
-  messages:         { content: string; direction: string; senderType: string | null; type: string }[];
+  id:                  string;
+  status:              ConvStatus;
+  channel:             Channel;
+  aiEnabled:           boolean;
+  assignedTo:          string | null;
+  unreadCount:         number;
+  lastMessageAt:       string | null;
+  createdAt:           string;
+  customerName:        string | null;
+  customerPhone:       string | null;
+  contextType:         string | null;
+  hasCustomerReplied?: boolean;
+  customer:            { name: string; phone: string } | null;
+  messages:            { content: string; direction: string; senderType: string | null; type: string }[];
 }
 
 interface Message {
@@ -140,15 +141,30 @@ const SORT_OPTIONS: { id: SortOption; label: string }[] = [
   { id: "CHANNEL", label: "Canal"         },
 ];
 
+// ── CRM / customer-reply helpers ─────────────────────────────────────────────
+
+// Whether the conversation has at least one customer (inbound) message.
+// Uses the backend-computed hasCustomerReplied field when available (reliable
+// even when the latest message is an outbound CRM follow-up). Falls back to
+// checking the loaded messages array — messages[0] is the most recent, but we
+// scan all loaded messages with .some() to handle CRM follow-up edge cases.
+function convHasCustomerReply(c: ConvSummary): boolean {
+  if (c.hasCustomerReplied === true) return true;
+  return (c.messages ?? []).some(
+    (m) => m.direction === "INBOUND" || m.senderType === "CUSTOMER",
+  );
+}
+
 // ── Priority helpers ──────────────────────────────────────────────────────────
 
 type PriorityLevel = "critical" | "attention" | "ok";
 
 function handlerPriority(c: ConvSummary): number {
-  // CRM outbound-only (no customer reply) sorts below everything else
+  // CRM outbound-only (no customer reply) sorts below everything else.
+  // Uses convHasCustomerReply so that CRM conversations where the customer
+  // replied but the latest message is outbound (follow-up) are NOT demoted.
   const isCrm = c.contextType === "CRM_CAMPAIGN" || c.contextType === "CRM_AUTOMATION";
-  const lastMsg = (c.messages ?? [])[0];
-  if (isCrm && lastMsg?.direction !== "INBOUND") return 5;
+  if (isCrm && !convHasCustomerReply(c)) return 5;
 
   if (c.status === "OPEN" && c.unreadCount > 0)              return 0;
   if (c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU") return 1;
@@ -184,10 +200,8 @@ const CONTEXT_BADGE: Record<string, { label: string; cls: string }> = {
 
 function getCrmBadge(c: ConvSummary): { label: string; cls: string } | null {
   if (c.contextType !== "CRM_CAMPAIGN" && c.contextType !== "CRM_AUTOMATION") return null;
-  const lastMsg   = (c.messages ?? [])[0];
-  const hasReply  = lastMsg?.direction === "INBOUND";
-  const isAuto    = c.contextType === "CRM_AUTOMATION";
-  if (hasReply) {
+  const isAuto = c.contextType === "CRM_AUTOMATION";
+  if (convHasCustomerReply(c)) {
     return { label: "Resposta CRM", cls: "bg-amber-100 text-amber-700 border-amber-200" };
   }
   return {
@@ -540,24 +554,23 @@ export function AtendimentoClient({
       });
     }
 
-    // CRM context helpers
+    // CRM context helpers — convHasCustomerReply defined at module level.
     const isCrmOrigin = (c: ConvSummary) =>
       c.contextType === "CRM_CAMPAIGN" || c.contextType === "CRM_AUTOMATION";
-    const hasCustomerReply = (c: ConvSummary) =>
-      ((c.messages ?? [])[0])?.direction === "INBOUND";
 
     // Status filter (client-side for non-RESOLVED)
     if (statusFilter === "CRM_SENT") {
-      // Show only CRM outbound-only conversations (customer hasn't replied)
-      items = items.filter((c) => isCrmOrigin(c) && !hasCustomerReply(c));
+      // Show only CRM outbound-only conversations (customer hasn't replied).
+      items = items.filter((c) => isCrmOrigin(c) && !convHasCustomerReply(c));
     } else if (statusFilter === "CRM_REPLIED") {
-      // Show only CRM conversations where customer replied
-      items = items.filter((c) => isCrmOrigin(c) && hasCustomerReply(c));
+      // Show only CRM conversations where customer replied.
+      items = items.filter((c) => isCrmOrigin(c) && convHasCustomerReply(c));
     } else if (statusFilter !== "RESOLVED") {
-      // Default "Todas": hide CRM outbound-only — they don't need human attention
-      // and must not drown real support conversations.
+      // Default "Todas": hide CRM outbound-only — they don't need human attention.
+      // Conversations where the customer replied (hasCustomerReplied=true OR any
+      // loaded INBOUND message) remain visible even if the latest msg is outbound.
       if (statusFilter === "ALL") {
-        items = items.filter((c) => !isCrmOrigin(c) || hasCustomerReply(c));
+        items = items.filter((c) => !isCrmOrigin(c) || convHasCustomerReply(c));
       }
       if (statusFilter === "AI_ON") {
         items = items.filter((c) => c.aiEnabled && c.status !== "RESOLVED");
@@ -596,8 +609,10 @@ export function AtendimentoClient({
       }
       // RECENT or OLDEST: pure chronological sort by last activity.
       // lastMessageAt is updated on every inbound/outbound message.
-      // CRM outbound-only messages intentionally do NOT bump lastMessageAt
-      // so they don't surface as fake "recent" conversations.
+      // CRM outbound-only conversations leave lastMessageAt=null; the backend
+      // now sorts them last (NULLS LAST) so they don't surface as fake "recent".
+      // P2 TODO: evaluate WhatsApp-like priority sorting — surface OPEN+unread
+      // conversations above purely chronological order using handlerPriority().
       const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.createdAt).getTime();
       const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.createdAt).getTime();
       return sortBy === "OLDEST" ? ta - tb : tb - ta;
