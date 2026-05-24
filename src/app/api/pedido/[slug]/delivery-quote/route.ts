@@ -68,7 +68,7 @@ export async function POST(
     select: {
       mode: true, fee: true, freeDeliveryAbove: true,
       distanceBaseFee: true, distancePricePerKm: true,
-      distanceMinFee: true, distanceMinFeeKm: true, distanceMaxFee: true,
+      distanceMinFee: true, distanceMinFeeKm: true, distanceMaxKm: true, distanceMaxFee: true,
     },
   });
 
@@ -111,6 +111,7 @@ export async function POST(
           distancePricePerKm: deliveryCfg.distancePricePerKm != null ? Number(deliveryCfg.distancePricePerKm) : null,
           distanceMinFee:     deliveryCfg.distanceMinFee    != null ? Number(deliveryCfg.distanceMinFee)    : null,
           distanceMinFeeKm:   deliveryCfg.distanceMinFeeKm  != null ? Number(deliveryCfg.distanceMinFeeKm)  : null,
+          distanceMaxKm:      deliveryCfg.distanceMaxKm     != null ? Number(deliveryCfg.distanceMaxKm)     : null,
           distanceMaxFee:     deliveryCfg.distanceMaxFee    != null ? Number(deliveryCfg.distanceMaxFee)    : null,
         }
       : {},
@@ -119,6 +120,7 @@ export async function POST(
   return NextResponse.json({
     deliveryFee:       result.deliveryFee,
     distanceKm:        result.distanceKm,
+    maxDistanceKm:     result.maxDistanceKm,
     calculationStatus: result.calculationStatus,
     reason:            result.reason,
     totalPreview:      subtotal + result.deliveryFee,

@@ -2984,12 +2984,23 @@ export function PedidoClient({
           body:    JSON.stringify({ address, subtotal: sub, deliveryType: "delivery" }),
         });
         const data = await res.json() as {
-          deliveryFee?: number; calculationStatus?: string; reason?: string;
+          deliveryFee?: number; distanceKm?: number | null;
+          maxDistanceKm?: number | null; calculationStatus?: string; reason?: string;
         };
         if (data.calculationStatus === "distance_blocked") {
           setQuoteError(
             data.reason ??
             "Não conseguimos calcular a entrega para esse endereço. Revise o endereço ou fale com o restaurante.",
+          );
+          setQuoteLoading(false);
+          return; // stay on ADDRESS_CONFIRM — do not advance
+        }
+        if (data.calculationStatus === "out_of_range") {
+          const distPart = data.distanceKm != null
+            ? ` Distância estimada: ${data.distanceKm.toFixed(1).replace(".", ",")} km.`
+            : "";
+          setQuoteError(
+            `Esse endereço está fora da área de entrega.${distPart}`,
           );
           setQuoteLoading(false);
           return; // stay on ADDRESS_CONFIRM — do not advance
