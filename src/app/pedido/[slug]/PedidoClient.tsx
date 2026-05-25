@@ -1664,6 +1664,7 @@ function AddressCompletePanel({
           onChange={(e) => setNum(e.target.value)}
           placeholder="Número *"
           autoFocus
+          style={{ fontSize: "16px" }}
           className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <input
@@ -1671,6 +1672,7 @@ function AddressCompletePanel({
           value={comp}
           onChange={(e) => setComp(e.target.value)}
           placeholder="Complemento (apto, bloco…)"
+          style={{ fontSize: "16px" }}
           className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <input
@@ -1678,6 +1680,7 @@ function AddressCompletePanel({
           value={ref}
           onChange={(e) => setRef(e.target.value)}
           placeholder="Ponto de referência (opcional)"
+          style={{ fontSize: "16px" }}
           className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
       </div>
@@ -3366,7 +3369,7 @@ export function PedidoClient({
               disabled={cepLoading}
               autoFocus
               className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:opacity-50"
-              style={{ "--tw-ring-color": "var(--brand-primary)" } as React.CSSProperties}
+              style={{ "--tw-ring-color": "var(--brand-primary)", fontSize: "16px" } as React.CSSProperties}
             />
             <button
               type="button"
@@ -3690,6 +3693,7 @@ export function PedidoClient({
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleApplyCoupon(); } }}
                   placeholder="Cupom de desconto"
                   maxLength={30}
+                  style={{ fontSize: "16px" }}
                   className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-gray-300"
                 />
                 <button

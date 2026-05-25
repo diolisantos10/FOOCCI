@@ -666,7 +666,9 @@ export async function POST(
 
     if (mpToken) {
       // Backend guard: MP is always pix_only — reject if somehow called for non-Pix
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+      // Prefer NEXT_PUBLIC_APP_URL env var; fall back to request origin so webhook delivery
+      // works even when the env var is not configured in the deployment environment.
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
       try {
         const pixResult = await createPixPayment(mpToken, {
           orderId,

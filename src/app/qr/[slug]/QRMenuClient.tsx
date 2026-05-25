@@ -697,7 +697,7 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promotedI
   }
 
   return (
-    <>
+    <div style={{ '--brand-primary': pc } as React.CSSProperties}>
       {showWelcome && (
         <WelcomeModal slug={slug} onClose={handleWelcomeClose} />
       )}
@@ -709,7 +709,7 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promotedI
         />
       )}
 
-      <div className="min-h-screen bg-[#fafaf9]" style={{ '--brand-primary': pc } as React.CSSProperties}>
+      <div className="min-h-screen bg-[#fafaf9]">
 
         {/* ── HERO ──────────────────────────────────────────────── */}
         <div ref={heroRef} id="hero" className="bg-white border-b border-gray-100">
@@ -944,6 +944,6 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promotedI
           Cardápio gerado por Foocci
         </footer>
       </div>
-    </>
+    </div>
   );
 }

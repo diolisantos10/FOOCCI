@@ -78,12 +78,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Create direct Pix payment (pix_only mode enforced here)
+  const notificationUrl = `${process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin}/api/payments/mercadopago/webhook`;
   let pixResult;
   try {
     pixResult = await createPixPayment(accessToken, {
       orderId,
       amount: Number(order.total),
       description: `Pedido #${orderId.slice(-6).toUpperCase()}`,
+      notificationUrl,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "MP error";
