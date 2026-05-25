@@ -526,6 +526,7 @@ function SearchBar({
   onDateFromChange,
   onDateToChange,
   onClear,
+  onManualOrder,
 }: {
   searchQuery: string;
   dateFrom: string;
@@ -534,6 +535,7 @@ function SearchBar({
   onDateFromChange: (v: string) => void;
   onDateToChange: (v: string) => void;
   onClear: () => void;
+  onManualOrder?: () => void;
 }) {
   return (
     <div className="shrink-0 border-b border-[#E5E5E5] bg-white px-4 py-2.5">
@@ -572,6 +574,14 @@ function SearchBar({
           >
             Limpar
           </button>
+          {onManualOrder && (
+            <button
+              onClick={onManualOrder}
+              className="flex-1 rounded-lg border border-blue-300 bg-white px-4 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50 sm:flex-none"
+            >
+              + Pedido manual
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -721,6 +731,7 @@ function OrderCard({
   onAction,
   onCancel,
   onCheck,
+  onManualConfirm,
 }: {
   order: MockOrder;
   active: boolean;
@@ -729,6 +740,7 @@ function OrderCard({
   onAction: (id: string, next: OrderStatus) => void;
   onCancel: (id: string) => void;
   onCheck: (id: string, v: boolean) => void;
+  onManualConfirm?: (id: string) => void;
 }) {
   const delayed         = isDelayed(order);
   const isPaymentPending = isPaymentPendingOrder(order);
@@ -866,6 +878,14 @@ function OrderCard({
               ⏳ Aguardando Pix
             </span>
           )}
+          {isPaymentPending && onManualConfirm && (
+            <button
+              onClick={() => onManualConfirm(order.id)}
+              className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
+            >
+              Confirmar pagamento
+            </button>
+          )}
           {!isTerminal && !isPaymentPending && nextAction && (
             <button
               onClick={() => onAction(order.id, nextAction.next)}
@@ -960,6 +980,7 @@ function OrderListPane({
   onBulkConfirm,
   onBulkDispatch,
   onBulkClear,
+  onManualConfirm,
 }: {
   orders: MockOrder[];
   selectedId: string | null;
@@ -971,6 +992,7 @@ function OrderListPane({
   onBulkConfirm: () => void;
   onBulkDispatch: () => void;
   onBulkClear: () => void;
+  onManualConfirm?: (id: string) => void;
 }) {
   const selectedOrders = orders.filter((o) => checkedIds.has(o.id));
 
@@ -1003,6 +1025,7 @@ function OrderListPane({
               onAction={onAction}
               onCancel={onCancel}
               onCheck={onCheck}
+              onManualConfirm={onManualConfirm}
             />
           ))
         )}
@@ -1638,7 +1661,7 @@ function NewOrderModal({
 
 // ─── Root ─────────────────────────────────────────────────────
 
-export default function OrdersClient({ isOwner }: { isOwner?: boolean } = {}) {
+export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: boolean; isManagerOrOwner?: boolean } = {}) {
   const [orders,       setOrders]       = useState<MockOrder[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
@@ -1668,6 +1691,27 @@ export default function OrdersClient({ isOwner }: { isOwner?: boolean } = {}) {
     if (typeof window === "undefined") return true;
     const saved = localStorage.getItem("foocci_autoprint_on_accept");
     return saved === null ? true : saved === "true";
+  });
+
+  // Manual payment confirm dialog
+  const [manualConfirmDialog, setManualConfirmDialog] = useState<{ id: string; total: number } | null>(null);
+  const [manualConfirmChecked, setManualConfirmChecked] = useState(false);
+  const [manualConfirmReason,  setManualConfirmReason]  = useState("");
+  const [manualConfirming,     setManualConfirming]     = useState(false);
+  const [manualConfirmError,   setManualConfirmError]   = useState<string | null>(null);
+
+  // Manual order creation dialog
+  const [manualOrderOpen,   setManualOrderOpen]   = useState(false);
+  const [manualOrderSubmitting, setManualOrderSubmitting] = useState(false);
+  const [manualOrderError,  setManualOrderError]  = useState<string | null>(null);
+  const [manualOrderForm,   setManualOrderForm]   = useState({
+    customerName:  "",
+    customerPhone: "",
+    notes:         "",
+    total:         "",
+    deliveryFee:   "",
+    type:          "DELIVERY" as "DELIVERY" | "PICKUP",
+    paymentMethod: "PIX" as "CASH" | "PIX" | "CREDIT_CARD" | "DEBIT_CARD" | "CARD_MACHINE",
   });
 
   const modalOrder = modalQueue[0] ?? null;
@@ -1951,6 +1995,85 @@ export default function OrdersClient({ isOwner }: { isOwner?: boolean } = {}) {
     }
   }
 
+  function handleOpenManualConfirm(id: string) {
+    const order = orders.find((o) => o.id === id);
+    setManualConfirmDialog({ id, total: order?.total ?? 0 });
+    setManualConfirmChecked(false);
+    setManualConfirmReason("");
+    setManualConfirmError(null);
+  }
+
+  async function handleConfirmManualPayment() {
+    if (!manualConfirmDialog || !manualConfirmChecked || !manualConfirmReason.trim()) return;
+    setManualConfirming(true);
+    setManualConfirmError(null);
+    try {
+      const res  = await fetch(`/api/orders/${manualConfirmDialog.id}/confirm-manual-payment`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ reason: manualConfirmReason.trim() }),
+      });
+      const json = await res.json() as { success?: boolean; error?: string };
+      if (json.success) {
+        setOrders((prev) =>
+          prev.map((o) => o.id === manualConfirmDialog.id ? { ...o, status: "CONFIRMED" as OrderStatus, paymentStatus: "PAID" } : o)
+        );
+        setManualConfirmDialog(null);
+      } else {
+        setManualConfirmError(json.error ?? "Erro ao confirmar");
+      }
+    } catch {
+      setManualConfirmError("Falha de rede");
+    } finally {
+      setManualConfirming(false);
+    }
+  }
+
+  async function handleCreateManualOrder() {
+    const { customerName, notes, total, deliveryFee, type, paymentMethod, customerPhone } = manualOrderForm;
+    if (!customerName.trim() || !notes.trim() || !total) {
+      setManualOrderError("Nome do cliente, descrição e valor total são obrigatórios.");
+      return;
+    }
+    const totalNum = parseFloat(total.replace(",", "."));
+    const feeNum   = parseFloat((deliveryFee || "0").replace(",", ".")) || 0;
+    if (isNaN(totalNum) || totalNum <= 0) {
+      setManualOrderError("Valor total inválido.");
+      return;
+    }
+
+    setManualOrderSubmitting(true);
+    setManualOrderError(null);
+    try {
+      const res  = await fetch("/api/orders/manual", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          customerName: customerName.trim(),
+          customerPhone: customerPhone.trim() || undefined,
+          notes: notes.trim(),
+          total: totalNum,
+          deliveryFee: feeNum,
+          type,
+          paymentMethod,
+        }),
+      });
+      const json = await res.json() as { success?: boolean; orderId?: string; error?: string };
+      if (json.success) {
+        setManualOrderOpen(false);
+        setManualOrderForm({ customerName: "", customerPhone: "", notes: "", total: "", deliveryFee: "", type: "DELIVERY", paymentMethod: "PIX" });
+        // Refresh order list
+        fetchOrders();
+      } else {
+        setManualOrderError(json.error ?? "Erro ao criar pedido");
+      }
+    } catch {
+      setManualOrderError("Falha de rede");
+    } finally {
+      setManualOrderSubmitting(false);
+    }
+  }
+
   return (
     <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "calc(100vh - 56px)" }}>
 
@@ -2016,6 +2139,7 @@ export default function OrdersClient({ isOwner }: { isOwner?: boolean } = {}) {
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
         onClear={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); }}
+        onManualOrder={isManagerOrOwner ? () => { setManualOrderOpen(true); setManualOrderError(null); } : undefined}
       />
 
       <StatusRow
@@ -2038,6 +2162,7 @@ export default function OrdersClient({ isOwner }: { isOwner?: boolean } = {}) {
           onBulkConfirm={handleBulkConfirm}
           onBulkDispatch={handleBulkDispatch}
           onBulkClear={() => setCheckedIds(new Set())}
+          onManualConfirm={isManagerOrOwner ? handleOpenManualConfirm : undefined}
         />
         <DetailPanel
           order={selectedOrder}
@@ -2122,6 +2247,172 @@ export default function OrdersClient({ isOwner }: { isOwner?: boolean } = {}) {
           audioBlocked={audioBlocked}
           onUnlockAudio={unlockAudio}
         />
+      )}
+
+      {/* Manual payment confirmation dialog */}
+      {manualConfirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">Confirmar pagamento manualmente?</h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Use apenas se você verificou o pagamento no painel do Mercado Pago.
+              Esta ação marca o pedido como pago e o envia para produção.
+            </p>
+            <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+              Pedido #{manualConfirmDialog.id.slice(-6).toUpperCase()} · R$ {manualConfirmDialog.total.toFixed(2).replace(".", ",")}
+            </div>
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-semibold text-gray-700">
+              <input
+                type="checkbox"
+                checked={manualConfirmChecked}
+                onChange={(e) => setManualConfirmChecked(e.target.checked)}
+                className="h-4 w-4 accent-amber-500"
+              />
+              Confirmei o pagamento no painel do Mercado Pago
+            </label>
+            <textarea
+              value={manualConfirmReason}
+              onChange={(e) => setManualConfirmReason(e.target.value)}
+              placeholder="Ex: Pagamento confirmado manualmente no painel Mercado Pago às 19:42."
+              rows={2}
+              className="mt-2 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-100"
+            />
+            {manualConfirmError && (
+              <p className="mt-1 text-xs text-red-600">{manualConfirmError}</p>
+            )}
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => setManualConfirmDialog(null)}
+                disabled={manualConfirming}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={handleConfirmManualPayment}
+                disabled={manualConfirming || !manualConfirmChecked || !manualConfirmReason.trim()}
+                className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-40 transition-colors"
+              >
+                {manualConfirming ? "Confirmando…" : "Confirmar pagamento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual order creation dialog */}
+      {manualOrderOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">Criar pedido manual</h3>
+            <p className="mt-1 text-xs text-gray-500">Para pedidos por telefone ou balcão.</p>
+
+            <div className="mt-3 space-y-2.5">
+              <div>
+                <label className="text-xs font-semibold text-gray-700">Nome do cliente *</label>
+                <input
+                  type="text"
+                  value={manualOrderForm.customerName}
+                  onChange={(e) => setManualOrderForm((f) => ({ ...f, customerName: e.target.value }))}
+                  placeholder="Ex: Maria Silva"
+                  className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700">Telefone (opcional)</label>
+                <input
+                  type="tel"
+                  value={manualOrderForm.customerPhone}
+                  onChange={(e) => setManualOrderForm((f) => ({ ...f, customerPhone: e.target.value }))}
+                  placeholder="(11) 99999-9999"
+                  className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700">Itens / descrição do pedido *</label>
+                <textarea
+                  value={manualOrderForm.notes}
+                  onChange={(e) => setManualOrderForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="Ex: 1x X-Burguer, 2x Fritas, 1x Coca-Cola"
+                  rows={2}
+                  className="mt-0.5 w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-700">Total (R$) *</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={manualOrderForm.total}
+                    onChange={(e) => setManualOrderForm((f) => ({ ...f, total: e.target.value }))}
+                    placeholder="0,00"
+                    className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-700">Taxa entrega</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={manualOrderForm.deliveryFee}
+                    onChange={(e) => setManualOrderForm((f) => ({ ...f, deliveryFee: e.target.value }))}
+                    placeholder="0,00"
+                    className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-700">Tipo</label>
+                  <select
+                    value={manualOrderForm.type}
+                    onChange={(e) => setManualOrderForm((f) => ({ ...f, type: e.target.value as "DELIVERY" | "PICKUP" }))}
+                    className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="DELIVERY">Delivery</option>
+                    <option value="PICKUP">Retirada</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-700">Pagamento</label>
+                  <select
+                    value={manualOrderForm.paymentMethod}
+                    onChange={(e) => setManualOrderForm((f) => ({ ...f, paymentMethod: e.target.value as typeof manualOrderForm.paymentMethod }))}
+                    className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="PIX">Pix</option>
+                    <option value="CASH">Dinheiro</option>
+                    <option value="CREDIT_CARD">Cartão crédito</option>
+                    <option value="DEBIT_CARD">Cartão débito</option>
+                    <option value="CARD_MACHINE">Maquininha</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {manualOrderError && (
+              <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{manualOrderError}</p>
+            )}
+
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => { setManualOrderOpen(false); setManualOrderError(null); }}
+                disabled={manualOrderSubmitting}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateManualOrder}
+                disabled={manualOrderSubmitting}
+                className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+              >
+                {manualOrderSubmitting ? "Criando…" : "Criar pedido"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

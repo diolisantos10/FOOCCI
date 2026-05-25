@@ -298,10 +298,12 @@ export function AtendimentoClient({
   userId,
   initialConvId,
   isOwner,
+  isManagerOrOwner,
 }: {
-  userId:         string;
-  initialConvId?: string;
-  isOwner?:       boolean;
+  userId:             string;
+  initialConvId?:     string;
+  isOwner?:           boolean;
+  isManagerOrOwner?:  boolean;
 }) {
   // ── State ──────────────────────────────────────────────────────────────────
   const [conversations, setConversations] = useState<ConvSummary[]>([]);
@@ -1118,6 +1120,7 @@ export function AtendimentoClient({
             onAttachmentClear={handleAttachmentClear}
             uploading={uploading}
             isOwner={isOwner}
+            isManagerOrOwner={isManagerOrOwner}
             onDeleteConversation={() => { setDeleteConvOpen(true); setDeleteConvError(null); }}
           />
         ) : null}
@@ -1149,6 +1152,7 @@ interface ThreadPanelProps {
   onAttachmentClear:       () => void;
   uploading:               boolean;
   isOwner?:                boolean;
+  isManagerOrOwner?:       boolean;
   onDeleteConversation?:   () => void;
 }
 
@@ -1233,10 +1237,42 @@ function orderPriorityLevel(status: string, createdAt: string): PriorityLevel {
   return "ok";
 }
 
-function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
+function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isManagerOrOwner?: boolean }) {
   const [status,   setStatus]   = useState(order.status);
   const [updating, setUpdating] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [manualConfirmOpen,    setManualConfirmOpen]    = useState(false);
+  const [manualConfirmChecked, setManualConfirmChecked] = useState(false);
+  const [manualConfirmReason,  setManualConfirmReason]  = useState("");
+  const [manualConfirming,     setManualConfirming]     = useState(false);
+  const [manualConfirmError,   setManualConfirmError]   = useState<string | null>(null);
+
+  async function handleManualConfirm() {
+    if (!manualConfirmChecked || !manualConfirmReason.trim()) return;
+    setManualConfirming(true);
+    setManualConfirmError(null);
+    try {
+      const res  = await fetch(`/api/orders/${order.id}/confirm-manual-payment`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ reason: manualConfirmReason.trim() }),
+      });
+      const json = await res.json() as { success?: boolean; error?: string };
+      if (json.success) {
+        setStatus("CONFIRMED");
+        setManualConfirmOpen(false);
+        setManualConfirmChecked(false);
+        setManualConfirmReason("");
+      } else {
+        setManualConfirmError(json.error ?? "Erro ao confirmar");
+      }
+    } catch {
+      setManualConfirmError("Falha de rede");
+    } finally {
+      setManualConfirming(false);
+    }
+  }
 
   const total    = parseFloat(order.total);
   const items    = order.items.slice(0, 3);
@@ -1327,9 +1363,19 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
       </div>
 
       {status === "AWAITING_PAYMENT" && (
-        <p className="border-t border-yellow-100 bg-yellow-50 px-3 py-2 text-[11px] font-semibold text-yellow-800">
-          ⏳ Pix ainda não aprovado — aguardando confirmação do pagamento
-        </p>
+        <div className="border-t border-yellow-100 bg-yellow-50 px-3 py-2">
+          <p className="text-[11px] font-semibold text-yellow-800">
+            ⏳ Pix ainda não aprovado — aguardando confirmação do pagamento
+          </p>
+          {isManagerOrOwner && (
+            <button
+              onClick={() => setManualConfirmOpen(true)}
+              className="mt-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
+            >
+              Confirmar pagamento manualmente
+            </button>
+          )}
+        </div>
       )}
 
       {!isTerminal && (
@@ -1369,6 +1415,56 @@ function ActiveOrderPanel({ order }: { order: ActiveOrder }) {
           {errorMsg}
         </p>
       )}
+
+      {manualConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-bold text-gray-900">Confirmar pagamento manualmente?</h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Use apenas se você verificou o pagamento no painel do Mercado Pago.
+              Esta ação marca o pedido como pago e o envia para produção.
+            </p>
+            <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+              Pedido #{order.id.slice(-6).toUpperCase()} · R$ {parseFloat(order.total).toFixed(2).replace(".", ",")}
+            </div>
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-semibold text-gray-700">
+              <input
+                type="checkbox"
+                checked={manualConfirmChecked}
+                onChange={(e) => setManualConfirmChecked(e.target.checked)}
+                className="h-4 w-4 accent-amber-500"
+              />
+              Confirmei o pagamento no painel do Mercado Pago
+            </label>
+            <textarea
+              value={manualConfirmReason}
+              onChange={(e) => setManualConfirmReason(e.target.value)}
+              placeholder="Ex: Pagamento confirmado manualmente no painel Mercado Pago às 19:42."
+              rows={2}
+              className="mt-2 w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-100"
+            />
+            {manualConfirmError && (
+              <p className="mt-1 text-xs text-red-600">{manualConfirmError}</p>
+            )}
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => { setManualConfirmOpen(false); setManualConfirmChecked(false); setManualConfirmReason(""); setManualConfirmError(null); }}
+                disabled={manualConfirming}
+                className="flex-1 rounded-xl border border-gray-200 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={handleManualConfirm}
+                disabled={manualConfirming || !manualConfirmChecked || !manualConfirmReason.trim()}
+                className="flex-1 rounded-xl bg-amber-500 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-40 transition-colors"
+              >
+                {manualConfirming ? "Confirmando…" : "Confirmar pagamento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1395,6 +1491,7 @@ function ThreadPanel({
   onAttachmentClear,
   uploading,
   isOwner,
+  isManagerOrOwner,
   onDeleteConversation,
 }: ThreadPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1505,7 +1602,7 @@ function ThreadPanel({
         </div>
 
         {/* Row 3: active order / draft */}
-        {activeOrder && <ActiveOrderPanel order={activeOrder} />}
+        {activeOrder && <ActiveOrderPanel order={activeOrder} isManagerOrOwner={isManagerOrOwner} />}
         {!activeOrder && activeDraft && <ActiveDraftPanel draft={activeDraft} />}
       </div>
 

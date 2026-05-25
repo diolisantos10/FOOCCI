@@ -15,6 +15,7 @@ export default async function AtendimentoPage({
   if (!session) redirect("/login");
 
   const isOwner = session.user.role === "OWNER";
+  const isManagerOrOwner = ["OWNER", "MANAGER"].includes(session.user.role ?? "");
 
   return (
     <>
@@ -23,6 +24,7 @@ export default async function AtendimentoPage({
         userId={session.user.id}
         initialConvId={searchParams.conv}
         isOwner={isOwner}
+        isManagerOrOwner={isManagerOrOwner}
       />
     </>
   );

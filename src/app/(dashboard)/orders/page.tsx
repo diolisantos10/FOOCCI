@@ -11,11 +11,12 @@ export default async function OrdersPage() {
   if (!session) redirect("/login");
 
   const isOwner = session.user.role === "OWNER";
+  const isManagerOrOwner = ["OWNER", "MANAGER"].includes(session.user.role ?? "");
 
   return (
     <>
       <TopBar title="Pedidos" />
-      <OrdersClient isOwner={isOwner} />
+      <OrdersClient isOwner={isOwner} isManagerOrOwner={isManagerOrOwner} />
     </>
   );
 }
