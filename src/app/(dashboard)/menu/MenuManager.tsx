@@ -1513,6 +1513,10 @@ function NewItemModal({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [aiExpanded, setAiExpanded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("foocci_menu_ai_expanded") === "true";
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -1746,64 +1750,85 @@ function NewItemModal({
                   </div>
 
                   {/* IA / Enriquecimento */}
-                  <div className="space-y-3 border-t border-gray-100 pt-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Inteligência / IA</p>
+                  <div className="border-t border-gray-100 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setAiExpanded((v) => {
+                        const n = !v;
+                        if (typeof window !== "undefined") localStorage.setItem("foocci_menu_ai_expanded", String(n));
+                        return n;
+                      })}
+                      className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-purple-600 hover:text-purple-800 transition-colors"
+                    >
+                      <span>Avançado / IA</span>
+                      <svg className={`h-3 w-3 transition-transform ${aiExpanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                    {!aiExpanded && (
+                      <p className="mt-1 text-[11px] text-gray-400">
+                        Campos usados pela inteligência do Foocci. Preencha apenas se quiser personalizar recomendações e descrições comerciais.
+                      </p>
+                    )}
+                    {aiExpanded && (
+                      <div className="mt-3 space-y-3">
+                        <div className="space-y-1">
+                          <label className="block text-xs font-medium text-gray-700">Etapa do funil</label>
+                          <select
+                            value={form.tagFunil}
+                            onChange={(e) => setForm((f) => ({ ...f, tagFunil: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          >
+                            <option value="">— Não definido —</option>
+                            <option value="Entrada">Entrada</option>
+                            <option value="Prato Principal">Prato Principal</option>
+                            <option value="Bebida">Bebida</option>
+                            <option value="Sobremesa">Sobremesa</option>
+                          </select>
+                        </div>
 
-                    <div className="space-y-1">
-                      <label className="block text-xs font-medium text-gray-700">Etapa do funil</label>
-                      <select
-                        value={form.tagFunil}
-                        onChange={(e) => setForm((f) => ({ ...f, tagFunil: e.target.value }))}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                      >
-                        <option value="">— Não definido —</option>
-                        <option value="Entrada">Entrada</option>
-                        <option value="Prato Principal">Prato Principal</option>
-                        <option value="Bebida">Bebida</option>
-                        <option value="Sobremesa">Sobremesa</option>
-                      </select>
-                    </div>
+                        <div className="space-y-1">
+                          <label className="block text-xs font-medium text-gray-700">Perfil de paladar</label>
+                          <input
+                            value={form.perfilPaladar}
+                            onChange={(e) => setForm((f) => ({ ...f, perfilPaladar: e.target.value }))}
+                            placeholder="ex: umami, cremoso, cítrico"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
 
-                    <div className="space-y-1">
-                      <label className="block text-xs font-medium text-gray-700">Perfil de paladar</label>
-                      <input
-                        value={form.perfilPaladar}
-                        onChange={(e) => setForm((f) => ({ ...f, perfilPaladar: e.target.value }))}
-                        placeholder="ex: umami, cremoso, cítrico"
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                      />
-                    </div>
+                        <div className="space-y-1">
+                          <label className="block text-xs font-medium text-gray-700">Harmonização sugerida</label>
+                          <input
+                            value={form.harmonizacaoSugerida}
+                            onChange={(e) => setForm((f) => ({ ...f, harmonizacaoSugerida: e.target.value }))}
+                            placeholder="ex: Água Tônica, Cerveja Heineken"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
 
-                    <div className="space-y-1">
-                      <label className="block text-xs font-medium text-gray-700">Harmonização sugerida</label>
-                      <input
-                        value={form.harmonizacaoSugerida}
-                        onChange={(e) => setForm((f) => ({ ...f, harmonizacaoSugerida: e.target.value }))}
-                        placeholder="ex: Água Tônica, Cerveja Heineken"
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                      />
-                    </div>
+                        <div className="space-y-1">
+                          <label className="block text-xs font-medium text-gray-700">Alérgenos detalhados</label>
+                          <input
+                            value={form.alergenosDetalhados}
+                            onChange={(e) => setForm((f) => ({ ...f, alergenosDetalhados: e.target.value }))}
+                            placeholder="ex: glúten, lactose, frutos do mar"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
 
-                    <div className="space-y-1">
-                      <label className="block text-xs font-medium text-gray-700">Alérgenos detalhados</label>
-                      <input
-                        value={form.alergenosDetalhados}
-                        onChange={(e) => setForm((f) => ({ ...f, alergenosDetalhados: e.target.value }))}
-                        placeholder="ex: glúten, lactose, frutos do mar"
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-xs font-medium text-gray-700">Storytelling IA</label>
-                      <textarea
-                        rows={3}
-                        value={form.storytellingIA}
-                        onChange={(e) => setForm((f) => ({ ...f, storytellingIA: e.target.value }))}
-                        placeholder="Narrativa usada pela IA quando o cliente pede uma recomendação especial"
-                        className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                      />
-                    </div>
+                        <div className="space-y-1">
+                          <label className="block text-xs font-medium text-gray-700">Storytelling IA</label>
+                          <textarea
+                            rows={3}
+                            value={form.storytellingIA}
+                            onChange={(e) => setForm((f) => ({ ...f, storytellingIA: e.target.value }))}
+                            placeholder="Narrativa usada pela IA quando o cliente pede uma recomendação especial"
+                            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {error && <InlineError message={error} />}
@@ -2177,6 +2202,7 @@ function EditItemModal({
   onClose,
   onSave,
   onDelete,
+  onOpenPromo,
 }: {
   item: Item | null;
   categories: Category[];
@@ -2184,6 +2210,7 @@ function EditItemModal({
   onClose: () => void;
   onSave: (patch: EditModalForm) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onOpenPromo?: () => void;
 }) {
   const manualCategories = categories.filter((c) => c.source === "MANUAL");
   const [form, setForm] = useState<EditModalForm>({
@@ -2207,6 +2234,10 @@ function EditItemModal({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [aiExpanded, setAiExpanded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("foocci_menu_ai_expanded") === "true";
+  });
 
   // Variants state — initialised from item.variants when modal opens
   const [variants, setVariants] = useState<Variant[]>([]);
@@ -2561,6 +2592,21 @@ function EditItemModal({
                 />
               </div>
 
+              {/* Promoção shortcut */}
+              {onOpenPromo && (
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">Promoção</label>
+                  <button
+                    type="button"
+                    onClick={onOpenPromo}
+                    className="flex w-full items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                  >
+                    <span>Editar promoção</span>
+                    <span className="text-sm">%</span>
+                  </button>
+                </div>
+              )}
+
             </div>
 
             {/* ── Main content ─────────────────────────────────────────── */}
@@ -2781,16 +2827,16 @@ function EditItemModal({
                           <div className="flex gap-2">
                             <input
                               value={newOption.name}
-                              onChange={(e) => setNewOption((f) => ({ ...f, name: e.target.value }))}
+                              onChange={(e) => { setOptionError(""); setNewOption((f) => ({ ...f, name: e.target.value })); }}
                               placeholder="Nome da opção (ex: Cru, Flambado)"
-                              className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              className={`flex-1 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 ${optionError && !newOption.name.trim() ? "border-red-400" : "border-gray-300"}`}
                             />
                             <div className="relative w-28">
                               <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
                               <input
                                 value={newOption.price}
                                 onChange={(e) => setNewOption((f) => ({ ...f, price: e.target.value }))}
-                                placeholder="0,00"
+                                placeholder="Grátis"
                                 type="number"
                                 step="0.01"
                                 min="0"
@@ -2967,9 +3013,9 @@ function EditItemModal({
                 <div className="flex gap-2">
                   <input
                     value={newExtra.name}
-                    onChange={(e) => setNewExtra((f) => ({ ...f, name: e.target.value }))}
+                    onChange={(e) => { setExtraAddError(""); setNewExtra((f) => ({ ...f, name: e.target.value })); }}
                     placeholder="Nome (ex: Queijo extra)"
-                    className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className={`flex-1 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400 ${extraAddError && !newExtra.name.trim() ? "border-red-400" : "border-gray-300"}`}
                   />
                   <input
                     value={newExtra.quantity}
@@ -2985,7 +3031,7 @@ function EditItemModal({
                     <input
                       value={newExtra.price}
                       onChange={(e) => setNewExtra((f) => ({ ...f, price: e.target.value }))}
-                      placeholder="0,00"
+                      placeholder="Grátis"
                       type="number"
                       step="0.01"
                       min="0"
@@ -3083,9 +3129,9 @@ function EditItemModal({
                     <div className="flex gap-2">
                       <input
                         value={newVariant.name}
-                        onChange={(e) => setNewVariant((f) => ({ ...f, name: e.target.value }))}
+                        onChange={(e) => { setAddError(""); setNewVariant((f) => ({ ...f, name: e.target.value })); }}
                         placeholder="Nome (ex: 350ml, Grande)"
-                        className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        className={`flex-1 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400 ${addError && !newVariant.name.trim() ? "border-red-400" : "border-gray-300"}`}
                       />
                       <div className="relative w-24">
                         <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-gray-400">R$</span>
@@ -3136,65 +3182,86 @@ function EditItemModal({
             )}
           </div>
 
-          {/* ── IA / Enriquecimento ─────────────────────────────── */}
-          <div className="px-5 py-4 space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Inteligência / IA</p>
+          {/* ── Avançado / IA ─────────────────────────────── */}
+          <div className="px-5 py-4">
+            <button
+              type="button"
+              onClick={() => setAiExpanded((v) => {
+                const n = !v;
+                if (typeof window !== "undefined") localStorage.setItem("foocci_menu_ai_expanded", String(n));
+                return n;
+              })}
+              className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-purple-600 hover:text-purple-800 transition-colors"
+            >
+              <span>Avançado / IA</span>
+              <svg className={`h-3 w-3 transition-transform ${aiExpanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </button>
+            {!aiExpanded && (
+              <p className="mt-1 text-[11px] text-gray-400">
+                Campos usados pela inteligência do Foocci. Preencha apenas se quiser personalizar recomendações e descrições comerciais.
+              </p>
+            )}
+            {aiExpanded && (
+              <div className="mt-3 space-y-4">
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">Etapa do funil</label>
+                  <select
+                    value={form.tagFunil}
+                    onChange={(e) => setForm((f) => ({ ...f, tagFunil: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                  >
+                    <option value="">— Não definido —</option>
+                    <option value="Entrada">Entrada</option>
+                    <option value="Prato Principal">Prato Principal</option>
+                    <option value="Bebida">Bebida</option>
+                    <option value="Sobremesa">Sobremesa</option>
+                  </select>
+                </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-600">Etapa do funil</label>
-              <select
-                value={form.tagFunil}
-                onChange={(e) => setForm((f) => ({ ...f, tagFunil: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-              >
-                <option value="">— Não definido —</option>
-                <option value="Entrada">Entrada</option>
-                <option value="Prato Principal">Prato Principal</option>
-                <option value="Bebida">Bebida</option>
-                <option value="Sobremesa">Sobremesa</option>
-              </select>
-            </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">Perfil de paladar</label>
+                  <input
+                    value={form.perfilPaladar}
+                    onChange={(e) => setForm((f) => ({ ...f, perfilPaladar: e.target.value }))}
+                    placeholder="ex: umami, cremoso, cítrico, levemente picante"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                  />
+                </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-600">Perfil de paladar</label>
-              <input
-                value={form.perfilPaladar}
-                onChange={(e) => setForm((f) => ({ ...f, perfilPaladar: e.target.value }))}
-                placeholder="ex: umami, cremoso, cítrico, levemente picante"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-              />
-            </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">Harmonização sugerida</label>
+                  <input
+                    value={form.harmonizacaoSugerida}
+                    onChange={(e) => setForm((f) => ({ ...f, harmonizacaoSugerida: e.target.value }))}
+                    placeholder="ex: Água Tônica, Cerveja Heineken"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                  />
+                </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-600">Harmonização sugerida</label>
-              <input
-                value={form.harmonizacaoSugerida}
-                onChange={(e) => setForm((f) => ({ ...f, harmonizacaoSugerida: e.target.value }))}
-                placeholder="ex: Água Tônica, Cerveja Heineken"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-              />
-            </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">Alérgenos detalhados</label>
+                  <input
+                    value={form.alergenosDetalhados}
+                    onChange={(e) => setForm((f) => ({ ...f, alergenosDetalhados: e.target.value }))}
+                    placeholder="ex: glúten, lactose, frutos do mar, amendoim"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                  />
+                </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-600">Alérgenos detalhados</label>
-              <input
-                value={form.alergenosDetalhados}
-                onChange={(e) => setForm((f) => ({ ...f, alergenosDetalhados: e.target.value }))}
-                placeholder="ex: glúten, lactose, frutos do mar, amendoim"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-gray-600">Storytelling IA</label>
-              <textarea
-                rows={3}
-                value={form.storytellingIA}
-                onChange={(e) => setForm((f) => ({ ...f, storytellingIA: e.target.value }))}
-                placeholder="Narrativa usada pela IA quando o cliente pede uma recomendação especial"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400 resize-none"
-              />
-            </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">Storytelling IA</label>
+                  <textarea
+                    rows={3}
+                    value={form.storytellingIA}
+                    onChange={(e) => setForm((f) => ({ ...f, storytellingIA: e.target.value }))}
+                    placeholder="Narrativa usada pela IA quando o cliente pede uma recomendação especial"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400 resize-none"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {error && (
@@ -3817,6 +3884,7 @@ export function MenuManager({
         onClose={() => { setEditingItem(null); refresh(); }}
         onSave={handleModalSave}
         onDelete={handleModalDelete}
+        onOpenPromo={editingItem ? () => setPromoItem(editingItem.item) : undefined}
       />
 
       {/* Product promo modal */}

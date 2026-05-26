@@ -822,11 +822,11 @@ function ProductModal({
         if (Math.abs(dx) > 80 && Math.abs(dx) > dy * 1.5) onClose();
       }}
     >
-      {/* Card — full-screen on mobile (natural scroll), 92vh flex-col on desktop */}
-      <div className="w-full h-full overflow-y-auto sm:overflow-hidden sm:max-w-md sm:h-[92vh] sm:flex sm:flex-col sm:rounded-2xl sm:shadow-2xl bg-white">
+      {/* Card — flex column on both mobile and desktop for true sticky footer */}
+      <div className="w-full h-full flex flex-col sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:shadow-2xl bg-white">
 
-        {/* ── Image — scrolls naturally on mobile, capped at 50 vh on desktop ── */}
-        <div className="relative w-full bg-gray-100 overflow-hidden sm:shrink-0" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
+        {/* ── Image — fixed at top, never scrolls away ── */}
+        <div className="relative w-full bg-gray-100 overflow-hidden shrink-0" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -850,8 +850,9 @@ function ProductModal({
           </button>
         </div>
 
-        {/* ── Content ── */}
-        <div className="px-6 pt-5 pb-2 sm:flex-1 sm:overflow-y-auto">
+        {/* ── Content — scrollable, fills remaining space ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="px-6 pt-5 pb-4">
           <h2 className="text-xl font-bold leading-snug text-gray-900">{item.name}</h2>
 
           {item.description && (
@@ -1079,9 +1080,10 @@ function ProductModal({
             </div>
           )}
         </div>
+        </div>{/* end scrollable content */}
 
-        {/* ── Footer — sticky on mobile, pinned at bottom on desktop ── */}
-        <div className="sticky bottom-0 z-10 px-6 pb-8 pt-4 border-t border-gray-100 bg-white sm:shrink-0 sm:static">
+        {/* ── Footer — always visible (shrink-0 in flex column) ── */}
+        <div className="shrink-0 px-6 pb-8 pt-4 border-t border-gray-100 bg-white">
           {/* Validation errors */}
           {errors.length > 0 && (
             <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 space-y-0.5">
