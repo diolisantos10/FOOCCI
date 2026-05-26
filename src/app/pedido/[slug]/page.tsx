@@ -113,7 +113,7 @@ export default async function PedidoPage({
   let knownCustomerPhone: string | null = null;
   let knownCustomerName: string | null = null;
   let knownCustomerId: string | null = null;
-  let knownDefaultAddress: { street: string; number: string; neighborhood: string; complement: string } | null = null;
+  let knownDefaultAddress: { street: string; number: string; neighborhood: string; complement: string; cep?: string; city?: string; state?: string } | null = null;
 
   if (resolvedPhone) {
     const candidates = phoneCandidates(resolvedPhone);
@@ -126,7 +126,7 @@ export default async function PedidoPage({
           phone: true,
           addresses: {
             where: { isDefault: true },
-            select: { street: true, number: true, neighborhood: true, complement: true },
+            select: { street: true, number: true, neighborhood: true, complement: true, zipCode: true, city: true, state: true },
             take: 1,
           },
         },
@@ -138,10 +138,13 @@ export default async function PedidoPage({
         const addr = customer.addresses[0];
         if (addr) {
           knownDefaultAddress = {
-            street: addr.street,
-            number: addr.number,
+            street:       addr.street,
+            number:       addr.number,
             neighborhood: addr.neighborhood,
-            complement: addr.complement ?? "",
+            complement:   addr.complement ?? "",
+            cep:          addr.zipCode,
+            city:         addr.city,
+            state:        addr.state,
           };
         }
       } else {

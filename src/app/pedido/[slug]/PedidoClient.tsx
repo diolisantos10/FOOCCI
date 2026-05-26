@@ -1883,6 +1883,12 @@ export function PedidoClient({
   const [identifiedName, setIdentifiedName] = useState<string | null>(
     knownCustomerName ?? storedCustomer?.name ?? null,
   );
+  // True when the customer arrived via a WhatsApp link (src=whatsapp in URL).
+  // Used to personalise the greeting and skip re-identification prompts.
+  const [isWaEntry] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("src") === "whatsapp",
+  );
+
   function enterBrowsing(name?: string | null) {
     sessionStorage.setItem(`foocci-entry-${slug}`, "1");
     if (name) { setIdentifiedName(name); setCustomerName(name); }
@@ -1908,6 +1914,29 @@ export function PedidoClient({
     setSessionCustomerId(undefined);
     setEntryPhase("identifying");
   }
+
+  // ── Persist SSR-resolved WhatsApp identity to sessionStorage ────────────────
+  // When knownCustomerPhone is set by the server (from waToken), enterBrowsing()
+  // is never called, so foocci-entry-{slug} and foocci-customer-{slug} are never
+  // written.  This effect fills that gap so same-tab navigation without the token
+  // in the URL correctly skips the phone prompt.
+  useEffect(() => {
+    if (entryPhase !== "browsing" || !knownCustomerPhone) return;
+    try {
+      if (!sessionStorage.getItem(`foocci-entry-${slug}`)) {
+        sessionStorage.setItem(`foocci-entry-${slug}`, "1");
+      }
+      if (knownCustomerId && !sessionStorage.getItem(`foocci-customer-${slug}`)) {
+        sessionStorage.setItem(`foocci-customer-${slug}`, JSON.stringify({
+          phone:        knownCustomerPhone,
+          name:         knownCustomerName ?? "",
+          customerId:   knownCustomerId,
+          displayPhone: formatDisplayPhone(knownCustomerPhone),
+        }));
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryPhase]);
 
   // ── Client-side waToken validation (fallback when server couldn't resolve) ───
   // Fires when entryPhase is "wa-validating": reads the waToken from the URL,
@@ -2466,7 +2495,9 @@ export function PedidoClient({
     fireGtag("view_menu", { restaurant: restaurantName, ...getUtm() });
     const name = identifiedName;
     const base = name
-      ? `Bem-vindo, ${name}! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`
+      ? isWaEntry
+        ? `Olá, ${name}! 👋 Nosso cardápio está aberto aqui pra você 😊\nSe quiser algo específico, é só me falar que eu te ajudo!`
+        : `Bem-vindo, ${name}! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`
       : `Bem-vindo! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`;
     const greeting = phone
       ? `${base}\n\nSe preferir falar direto com a loja, toque no ícone do WhatsApp no topo da tela.`
