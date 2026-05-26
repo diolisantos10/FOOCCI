@@ -2394,7 +2394,7 @@ function EditItemModal({
   async function handleAddExtra() {
     if (!item) return;
     const qty = parseInt(newExtra.quantity, 10);
-    const price = parseFloat(newExtra.price);
+    const price = newExtra.price === "" ? 0 : parseFloat(newExtra.price);
     if (!newExtra.name.trim() || isNaN(qty) || qty < 1 || isNaN(price) || price < 0) {
       setExtraAddError("Nome, quantidade (≥1) e preço (≥0) são obrigatórios.");
       return;
