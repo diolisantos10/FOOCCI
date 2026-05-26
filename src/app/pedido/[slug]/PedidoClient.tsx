@@ -823,7 +823,7 @@ function ProductModal({
       }}
     >
       {/* Card — flex column on both mobile and desktop for true sticky footer */}
-      <div className="w-full h-full flex flex-col sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:shadow-2xl bg-white">
+      <div className="w-full h-full flex flex-col overflow-hidden sm:max-w-md sm:h-[92vh] sm:rounded-2xl sm:shadow-2xl bg-white">
 
         {/* ── Image — fixed at top, never scrolls away ── */}
         <div className="relative w-full bg-gray-100 overflow-hidden shrink-0" style={{ aspectRatio: "1 / 1", maxHeight: "50vh" }}>
