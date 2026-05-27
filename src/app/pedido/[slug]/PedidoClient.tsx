@@ -2013,6 +2013,51 @@ export function PedidoClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, effectiveCustomerPhone, entryPhase]);
 
+  // ── Cart draft sync (Phase 1 abandoned-cart capture) ─────────────────────
+  // Debounced, fire-and-forget. Persists an identified customer's cart to
+  // OrderDraft so Phase 2/3 can detect abandonment and (eventually) recover it.
+  // Never blocks the UI; failures are silently dropped.
+  const draftSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (entryPhase !== "browsing")                        return;
+    if (!resolvedCustomerId && !effectiveCustomerPhone)   return;
+    if (cart.length === 0)                                return;
+
+    if (draftSyncTimerRef.current) clearTimeout(draftSyncTimerRef.current);
+    draftSyncTimerRef.current = setTimeout(() => {
+      const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      void fetch(`/api/pedido/${slug}/draft`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          customerId: resolvedCustomerId,
+          phone:      effectiveCustomerPhone,
+          items: cart.map((i) => ({
+            menuItemId: i.baseItemId,
+            quantity:   i.qty,
+            unitPrice:  i.price,
+            notes:      i.notes,
+          })),
+          subtotal,
+          deliveryFee:     0,
+          fulfillmentType: "DELIVERY",
+        }),
+      })
+        .then((r) => r.json())
+        .then((res: { ok?: boolean; draftId?: string }) => {
+          if (res.ok && res.draftId) {
+            try { sessionStorage.setItem(`foocci-draft-${slug}`, res.draftId); } catch { /* ignore */ }
+          }
+        })
+        .catch(() => {});
+    }, 1200);
+
+    return () => {
+      if (draftSyncTimerRef.current) clearTimeout(draftSyncTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, entryPhase, resolvedCustomerId, effectiveCustomerPhone]);
+
   // ── Stage / flow ──────────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
   const ACTIVE_ORDER_KEY = `foocci_active_order_${slug}`;

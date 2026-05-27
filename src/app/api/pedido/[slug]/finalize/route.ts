@@ -626,6 +626,14 @@ export async function POST(
     return NextResponse.json({ error: "Erro ao criar pedido." }, { status: 500 });
   }
 
+  // ── Close open draft for this customer (fire-and-forget) ──────────────────
+  // Marks any OPEN OrderDraft as CONFIRMED so it's excluded from future
+  // abandonment detection. Never blocks the response.
+  void prisma.orderDraft.updateMany({
+    where: { restaurantId, customerId, status: "OPEN" },
+    data:  { status: "CONFIRMED", confirmedAt: new Date() },
+  }).catch(() => {});
+
   // ── pay_now: generate online payment link ──────────────────────
   if (paymentMode === "pay_now") {
     const mpCfg = await prisma.integrationConfig.findUnique({
