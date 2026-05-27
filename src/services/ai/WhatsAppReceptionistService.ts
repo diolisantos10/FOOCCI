@@ -739,21 +739,14 @@ async function run(conversationId: string): Promise<void> {
           (intent === "UNKNOWN" && agentMode !== "HUMAN_ASSISTED") ||
           (templateReply === null && intent !== "GREETING");
 
-        // Within the 30-min session: shorter opening, but ALWAYS show the menu.
-        // Never send "escolha uma opção" without actually listing the options.
+        // Within the 30-min session: short re-engagement only — menu already visible,
+        // no need to repeat the numbered list. Compact footer keeps the escape hatch.
         if (intent === "GREETING" && menuSentRecently) {
           const firstName = ctx.customerName?.split(" ")[0]?.trim() ?? null;
           const shortGreet = firstName
             ? `Estou aqui, ${firstName}! 😊 Como posso te ajudar?`
             : "Estou aqui! 😊 Como posso te ajudar?";
-          const menuList = buildMenuList(effectiveMenuOptions);
-          if (menuList) {
-            replyText = shortGreet + menuList + "\n\nResponda com o número da opção 😊";
-          } else if (ctx.pedidoUrl) {
-            replyText = shortGreet + `\n\nCardápio: ${ctx.pedidoUrl}`;
-          } else {
-            replyText = shortGreet;
-          }
+          replyText      = shortGreet + BACK_TO_MENU_FOOTER;
           triggerHandoff = false;
         } else if (useGpt) {
           // For UNKNOWN in RECEPTIONIST_ONLY: check catalog before GPT to avoid false handoffs
@@ -804,9 +797,11 @@ async function run(conversationId: string): Promise<void> {
             triggerHandoff = gpt.needsHandoff;
 
             // If GPT gave a generic/short answer with no URL, append the menu so
-            // the customer always knows their options.
+            // the customer always knows their options — but only if the full menu
+            // hasn't been shown recently (prevents spamming the numbered list after
+            // every unknown message within the same 30-min session).
             let fullMenuAppended = false;
-            if (!triggerHandoff && effectiveMenuOptions.length > 0 && !replyText.includes("http")) {
+            if (!triggerHandoff && effectiveMenuOptions.length > 0 && !replyText.includes("http") && !menuSentRecently) {
               const menuList = buildMenuList(effectiveMenuOptions);
               if (menuList) {
                 replyText += "\n\nComo posso te ajudar?" + menuList + "\n\nResponda com o número da opção 😊";
