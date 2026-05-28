@@ -146,6 +146,16 @@ function KV({ label, value, mono = false, valueClass }: {
   );
 }
 
+// ── Reset state per draft ─────────────────────────────────────────────────────
+
+interface ResetResult {
+  loading: boolean;
+  ok?:     boolean;
+  before?: { recoveryAttempts: number; lastRecoveryAt: string | null };
+  after?:  { recoveryAttempts: number; lastRecoveryAt: string | null };
+  error?:  string;
+}
+
 // ── Main page ───────────────────────────────────────────────────────────────────
 
 export default function RestaurantMismatchDiagPage() {
@@ -154,8 +164,33 @@ export default function RestaurantMismatchDiagPage() {
   const [mismatch,     setMismatch]     = useState<MismatchResponse | null>(null);
   const [draftsResult, setDraftsResult] = useState<DraftsResponse | null>(null);
   const [error,        setError]        = useState<string | null>(null);
+  const [resetStates,  setResetStates]  = useState<Record<string, ResetResult>>({});
+
+  const resetDraft = useCallback(async (draftId: string) => {
+    setResetStates((prev) => ({ ...prev, [draftId]: { loading: true } }));
+    try {
+      const res  = await fetch("/api/admin/diagnostics/reset-draft-recovery", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ draftId }),
+      });
+      const json = await res.json() as {
+        ok?: boolean; error?: string;
+        before?: { recoveryAttempts: number; lastRecoveryAt: string | null };
+        after?:  { recoveryAttempts: number; lastRecoveryAt: string | null };
+      };
+      if (!res.ok || !json.ok) {
+        setResetStates((prev) => ({ ...prev, [draftId]: { loading: false, ok: false, error: json.error ?? `HTTP ${res.status}` } }));
+      } else {
+        setResetStates((prev) => ({ ...prev, [draftId]: { loading: false, ok: true, before: json.before, after: json.after } }));
+      }
+    } catch (e) {
+      setResetStates((prev) => ({ ...prev, [draftId]: { loading: false, ok: false, error: e instanceof Error ? e.message : String(e) } }));
+    }
+  }, []);
 
   const run = useCallback(async () => {
+    setResetStates({});
     setLoading(true);
     setError(null);
     setMismatch(null);
@@ -404,7 +439,7 @@ export default function RestaurantMismatchDiagPage() {
                     <thead className="bg-gray-900/50 text-gray-400">
                       <tr>
                         {["Draft ID", "Cliente", "Telefone (masked)", "Fone OK?",
-                          "Status", "Itens", "updatedAt", "Tentativas", "Elegível?", "Skip reason",
+                          "Status", "Itens", "updatedAt", "Tentativas", "Elegível?", "Skip reason", "Ação",
                         ].map((h) => (
                           <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
                         ))}
@@ -450,6 +485,36 @@ export default function RestaurantMismatchDiagPage() {
                               ? <code className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-red-300">{d.skipReason}</code>
                               : <span className="text-gray-600">—</span>
                             }
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {(() => {
+                              const rs = resetStates[d.draftId];
+                              if (d.skipReason !== "already_attempted" && !rs) {
+                                return <span className="text-gray-700">—</span>;
+                              }
+                              if (rs?.loading) {
+                                return <span className="text-gray-400 text-[10px]">Resetando…</span>;
+                              }
+                              if (rs?.ok) {
+                                return (
+                                  <span className="text-green-400 text-[10px]">
+                                    ✓ Reset: {rs.before?.recoveryAttempts}→{rs.after?.recoveryAttempts}
+                                  </span>
+                                );
+                              }
+                              if (rs?.error) {
+                                return <span className="text-red-400 text-[10px]">✗ {rs.error}</span>;
+                              }
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => void resetDraft(d.draftId)}
+                                  className="rounded px-2 py-0.5 text-[10px] font-semibold bg-amber-900/60 border border-amber-700 text-amber-300 hover:bg-amber-800/60 transition-colors"
+                                >
+                                  Resetar
+                                </button>
+                              );
+                            })()}
                           </td>
                         </tr>
                       ))}
