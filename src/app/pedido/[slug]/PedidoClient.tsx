@@ -2058,6 +2058,46 @@ export function PedidoClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, entryPhase, resolvedCustomerId, effectiveCustomerPhone]);
 
+  // ── Exit signal: flush cart to draft immediately on page hide ────────────
+  // Fires sendBeacon so the server receives the latest cart snapshot even if
+  // the user closes the tab before the 1200 ms debounce fires.
+  useEffect(() => {
+    const flush = () => {
+      if (entryPhase !== "browsing")                      return;
+      if (!resolvedCustomerId && !effectiveCustomerPhone) return;
+      if (cart.length === 0)                              return;
+      const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const payload  = JSON.stringify({
+        customerId: resolvedCustomerId,
+        phone:      effectiveCustomerPhone,
+        items: cart.map((i) => ({
+          menuItemId: i.baseItemId,
+          quantity:   i.qty,
+          unitPrice:  i.price,
+          notes:      i.notes,
+        })),
+        subtotal,
+        deliveryFee:     0,
+        fulfillmentType: "DELIVERY",
+      });
+      try {
+        navigator.sendBeacon(
+          `/api/pedido/${slug}/draft`,
+          new Blob([payload], { type: "application/json" }),
+        );
+      } catch { /* sendBeacon unavailable — silent fail */ }
+    };
+
+    const onVisibility = () => { if (document.visibilityState === "hidden") flush(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, entryPhase, resolvedCustomerId, effectiveCustomerPhone, slug]);
+
   // ── Stage / flow ──────────────────────────────────────────────────
   const [stage, setStage] = useState<Stage>("BROWSE");
   const ACTIVE_ORDER_KEY = `foocci_active_order_${slug}`;

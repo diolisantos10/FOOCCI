@@ -328,6 +328,8 @@ model OrderDraft {
   aiSummary         String? // Phase 3: AI-generated order summary
   confirmedAt       DateTime?
   abandonedAt       DateTime?
+  recoveryAttempts  Int              @default(0)
+  lastRecoveryAt    DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
