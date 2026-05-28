@@ -15,17 +15,28 @@
  *    _tlid, returns 302 redirect.
  *
  * If code is unknown or link is inactive, redirects to "/" safely.
+ *
+ * IMPORTANT: req.nextUrl.origin / req.url must NOT be used to build destination
+ * URLs.  In Railway, Next.js runs on http://localhost:3000 internally; using the
+ * request origin would send customers to localhost.  All destinations are built
+ * with getPublicSiteUrl() which reads NEXT_PUBLIC_SITE_URL → NEXTAUTH_URL →
+ * NEXT_PUBLIC_APP_URL → https://foocci.com.br and guards against localhost in
+ * production.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyRecoveryToken } from "@/lib/recovery-token";
 import { signWaToken } from "@/lib/wa-token";
+import { getPublicSiteUrl } from "@/lib/public-url";
 
 type Params = { params: Promise<{ code: string }> };
 
 export async function GET(req: NextRequest, { params }: Params) {
   const { code } = await params;
+
+  // Canonical public origin — never localhost in production.
+  const siteUrl = getPublicSiteUrl();
 
   // ── 1. Try recovery token (in-memory, no DB) ──────────────────────────────
   const recovery = verifyRecoveryToken(code);
@@ -42,7 +53,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 
       if (customer?.phone && restaurant?.slug) {
         const waToken = signWaToken({ phone: customer.phone, name: customer.name ?? undefined });
-        const dest = new URL(`/pedido/${restaurant.slug}`, req.nextUrl.origin);
+        const dest = new URL(`${siteUrl}/pedido/${restaurant.slug}`);
         dest.searchParams.set("waToken", waToken);
         dest.searchParams.set("src", "recovery");
         return NextResponse.redirect(dest, 302);
@@ -50,7 +61,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     } catch {
       // Fall through to safe home redirect on any unexpected error
     }
-    return NextResponse.redirect(new URL("/", req.url), 302);
+    return NextResponse.redirect(`${siteUrl}/`, 302);
   }
 
   // ── 2. Tracking link lookup ───────────────────────────────────────────────
@@ -62,9 +73,9 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (!link || !link.isActive) {
     // If we have the restaurant slug, fall back to its menu; otherwise home
     const fallback = link?.restaurant?.slug
-      ? `/pedido/${link.restaurant.slug}`
-      : "/";
-    return NextResponse.redirect(new URL(fallback, req.url), 302);
+      ? `${siteUrl}/pedido/${link.restaurant.slug}`
+      : `${siteUrl}/`;
+    return NextResponse.redirect(fallback, 302);
   }
 
   // Increment clickCount — fire-and-forget (same as long redirect)
@@ -77,12 +88,11 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   // Build destination URL — same logic as /l/[restaurantSlug]/[trackingSlug]
   const restaurantSlug = link.restaurant.slug;
-  const base     = req.nextUrl.origin;
   const destPath = link.destinationType === "QR"
     ? `/qr/${restaurantSlug}`
     : `/pedido/${restaurantSlug}`;
 
-  const dest = new URL(destPath, base);
+  const dest = new URL(`${siteUrl}${destPath}`);
   if (link.source)   dest.searchParams.set("utm_source",   link.source);
   if (link.medium)   dest.searchParams.set("utm_medium",   link.medium);
   if (link.campaign) dest.searchParams.set("utm_campaign", link.campaign);
