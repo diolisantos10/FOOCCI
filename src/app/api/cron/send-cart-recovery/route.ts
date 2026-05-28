@@ -16,7 +16,11 @@
  * Response:
  *   { ok, dryRun, checked, eligible, sent, skippedNoPhone,
  *     skippedAlreadySent, skippedDailyLimit, skippedOrderedAfter,
- *     skippedPendingPayment, failed, inactivityMinutes, durationMs }
+ *     skippedPendingPayment, skippedNoConfig, failed, inactivityMinutes, durationMs }
+ *
+ *   skippedNoConfig: drafts from restaurants with no Evolution/WhatsApp integration.
+ *                    These are NOT failures — they are expected skips.
+ *   failed:          Evolution API was called but returned a non-2xx error.
  *
  * Idempotent: a draft with recoveryAttempts > 0 is never re-processed.
  * A customer who already received a recovery today is skipped.

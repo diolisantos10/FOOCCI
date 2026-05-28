@@ -58,7 +58,8 @@ export interface RecoverySendResult {
   skippedDailyLimit:     number;
   skippedOrderedAfter:   number;
   skippedPendingPayment: number;
-  failed:                number;
+  skippedNoConfig:       number; // restaurant has no Evolution/WhatsApp integration configured
+  failed:                number; // Evolution API was called but returned an error
   dryRun:                boolean;
   inactivityMinutes:     number;
   durationMs:            number;
@@ -198,7 +199,7 @@ export class OrderDraftRecoverySendService {
       return {
         checked: 0, eligible: 0, sent: 0,
         skippedNoPhone: 0, skippedAlreadySent: 0, skippedDailyLimit: 0,
-        skippedOrderedAfter: 0, skippedPendingPayment: 0, failed: 0,
+        skippedOrderedAfter: 0, skippedPendingPayment: 0, skippedNoConfig: 0, failed: 0,
         dryRun, inactivityMinutes,
         durationMs: Date.now() - startMs,
       };
@@ -241,6 +242,7 @@ export class OrderDraftRecoverySendService {
     let skippedDailyLimit     = 0;
     let skippedOrderedAfter   = 0;
     let skippedPendingPayment = 0;
+    let skippedNoConfig       = 0;
     let failed                = 0;
 
     for (const draft of candidates) {
@@ -300,12 +302,12 @@ export class OrderDraftRecoverySendService {
       try {
         const configResult = await EvolutionConfigService.getSnapshot(draft.restaurantId);
         if (!configResult.ok) {
-          console.warn(`[OrderDraftRecoverySendService] no evolution config`, {
+          console.info(`[OrderDraftRecoverySendService] skipped no evolution config`, {
             draftId:      draft.id,
             restaurantId: draft.restaurantId,
-            reason:       configResult.error ?? "config not found",
+            slug:         draft.restaurant.slug,
           });
-          failed++;
+          skippedNoConfig++;
           continue;
         }
         const config           = configResult.data;
@@ -381,6 +383,7 @@ export class OrderDraftRecoverySendService {
       skippedDailyLimit,
       skippedOrderedAfter,
       skippedPendingPayment,
+      skippedNoConfig,
       failed,
       dryRun,
       inactivityMinutes,
