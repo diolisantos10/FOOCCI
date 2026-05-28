@@ -36,12 +36,18 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { signRecoveryToken } from "@/lib/recovery-token";
 import { isGuestIdentifier } from "@/lib/guest";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { ConversationStatus } from "@prisma/client";
+
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 4) return "****";
+  return `****${digits.slice(-4)}`;
+}
 
 export interface RecoverySendResult {
   checked:               number;
@@ -246,9 +252,11 @@ export class OrderDraftRecoverySendService {
         skippedNoPhone++;
         continue;
       }
-      // Normalize phone for Evolution (expects digits without leading "+")
-      const toPhone = customer.phone.replace(/^\+/, "");
-      if (toPhone.length < 8) {
+      // Normalize phone for Evolution: digits only, no leading "+", no spaces/dashes.
+      // E.164 phones from /pedido are stored as "+5511999990000"; webhook phones as "+5511999990000".
+      // Full digit-strip matches the proven pattern in OrderNotificationService.
+      const toPhone = customer.phone.replace(/\D/g, "");
+      if (!toPhone.match(/^\d{10,15}$/)) {
         skippedNoPhone++;
         continue;
       }
@@ -292,15 +300,25 @@ export class OrderDraftRecoverySendService {
       try {
         const configResult = await EvolutionConfigService.getSnapshot(draft.restaurantId);
         if (!configResult.ok) {
-          console.warn(
-            `[OrderDraftRecoverySendService] no evolution config for restaurant=${draft.restaurantId}, skipping draft=${draft.id}`,
-          );
+          console.warn(`[OrderDraftRecoverySendService] no evolution config`, {
+            draftId:      draft.id,
+            restaurantId: draft.restaurantId,
+            reason:       configResult.error ?? "config not found",
+          });
           failed++;
           continue;
         }
         const config           = configResult.data;
         const shortRecoveryUrl = buildShortRecoveryUrl(draft.id, draft.customerId, draft.restaurantId);
         const message          = buildRecoveryMessage(customer.name, shortRecoveryUrl);
+
+        console.info(`[OrderDraftRecoverySendService] sending recovery`, {
+          draftId:      draft.id,
+          customerId:   customer.id,
+          restaurantId: draft.restaurantId,
+          phoneMasked:  maskPhone(customer.phone),
+          instanceName: config.instanceName,
+        });
 
         await EvolutionClient.sendTextMessage(config, toPhone, message);
 
@@ -340,12 +358,15 @@ export class OrderDraftRecoverySendService {
         });
         sent++;
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        const isApiErr = err instanceof EvolutionApiError;
         console.error(`[OrderDraftRecoverySendService] send failed`, {
           draftId:      draft.id,
-          customerId:   customer.id,
           restaurantId: draft.restaurantId,
-          error:        errorMessage,
+          phoneMasked:  maskPhone(customer.phone),
+          errorMessage: err instanceof Error ? err.message : String(err),
+          ...(isApiErr
+            ? { statusCode: (err as EvolutionApiError).status, responseBody: (err as EvolutionApiError).body }
+            : {}),
         });
         failed++;
       }
