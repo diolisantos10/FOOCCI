@@ -1,20 +1,14 @@
 /**
  * POST /api/atendimento/handoff/check-timeouts
  *
- * MVP inactivity-timeout runner for human-assigned WhatsApp conversations.
- * Called periodically by the /atendimento client (every ~60 s when the page is open).
+ * Previously auto-returned conversations to AI after 5 min of human inactivity.
  *
- * Logic per conversation (aiEnabled=false, status HUMAN/HUMANO_ASSUMIU):
- *   1. Find the last INBOUND message from the customer.
- *   2. Find the last OUTBOUND message sent by a human team member.
- *   3. If no human reply exists AFTER the last customer message, and the
- *      customer has been waiting more than TIMEOUT_MS, trigger inactivity:
- *        a. Send a WhatsApp message to the customer (with menu options).
- *        b. Create a SYSTEM message (marker for idempotency + audit).
- *        c. Return conversation to AI mode.
- *   4. Already-timed-out conversations (SYSTEM inactivity marker found) are skipped.
+ * PRODUCT DECISION (2026-05-28): Human handoff is now persistent.
+ * IA returns ONLY by explicit staff action via the Atendimento UI ("Devolver para IA").
+ * Auto-resume on timeout has been permanently removed.
  *
- * No schema changes required — uses Message.metadata for idempotency markers.
+ * Endpoint kept for backwards compatibility — the /atendimento client polls it every ~60 s.
+ * It is now a safe no-op that reports how many conversations are in human mode.
  */
 
 import { NextRequest } from "next/server";
@@ -22,22 +16,6 @@ import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { ConversationStatus } from "@prisma/client";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
-import { buildReturnToAiMessage } from "@/lib/return-to-ai-message";
-import { getPublicMenuUrl } from "@/lib/public-url";
-import type { MenuOption } from "@/validators/whatsapp-agent";
-
-const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-const INACTIVITY_PREAMBLES = [
-  "Ainda estamos verificando aqui e vou continuar tentando te ajudar! 😊",
-  "A equipe pode estar ocupada agora, mas vou seguir te ajudando por aqui 😊",
-] as const;
-
-function pickPreamble(): string {
-  return INACTIVITY_PREAMBLES[Math.floor(Math.random() * INACTIVITY_PREAMBLES.length)]!;
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,130 +24,17 @@ export async function POST(req: NextRequest) {
 
     const { restaurantId } = ctx;
 
-    // Load common config and human conversations in parallel
-    const [humanConvs, agentCfgData, restaurantData] = await Promise.all([
-      prisma.conversation.findMany({
-        where: {
-          restaurantId,
-          aiEnabled: false,
-          status: { in: [ConversationStatus.HUMAN, ConversationStatus.HUMANO_ASSUMIU] },
-          channel: "WHATSAPP",
-        },
-        select: {
-          id:            true,
-          customerPhone: true,
-          customer:      { select: { phone: true, name: true } },
-        },
-      }),
-      prisma.whatsAppAgentConfig.findUnique({
-        where:  { restaurantId },
-        select: { menuOptions: true, menuUrl: true },
-      }),
-      prisma.restaurant.findUnique({
-        where:  { id: restaurantId },
-        select: { slug: true },
-      }),
-    ]);
+    const checked = await prisma.conversation.count({
+      where: {
+        restaurantId,
+        aiEnabled: false,
+        status: { in: [ConversationStatus.HUMAN, ConversationStatus.HUMANO_ASSUMIU] },
+        channel: "WHATSAPP",
+      },
+    });
 
-    if (humanConvs.length === 0) return ok({ checked: 0, timedOut: [] });
-
-    const menuOptions: MenuOption[] = Array.isArray(agentCfgData?.menuOptions)
-      ? (agentCfgData.menuOptions as unknown as MenuOption[])
-      : [];
-    const baseMenuUrl =
-      agentCfgData?.menuUrl?.trim() ||
-      (restaurantData?.slug ? getPublicMenuUrl(restaurantData.slug) : null);
-
-    const now = new Date();
-    const timedOutIds: string[] = [];
-
-    for (const conv of humanConvs) {
-      const toPhone = (conv.customer?.phone ?? conv.customerPhone ?? "").replace(/^\+/, "");
-      if (!toPhone) continue;
-
-      // Load the last 20 messages (enough to determine inactivity)
-      const msgs = await prisma.message.findMany({
-        where:   { conversationId: conv.id },
-        orderBy: { sentAt: "desc" },
-        take:    20,
-        select:  { direction: true, senderType: true, sentAt: true, content: true, metadata: true },
-      });
-
-      // Find last customer message
-      const lastCustomerMsg = msgs.find((m) => m.direction === "INBOUND");
-      if (!lastCustomerMsg) continue;
-
-      const customerWaitingSince = new Date(lastCustomerMsg.sentAt);
-
-      // Check if a human team member replied AFTER the customer's last message
-      const humanReplied = msgs.some(
-        (m) =>
-          m.direction === "OUTBOUND" &&
-          m.senderType === "HUMAN" &&
-          new Date(m.sentAt) > customerWaitingSince,
-      );
-      if (humanReplied) continue;
-
-      // Check if we already sent an inactivity message after the customer's last message
-      const alreadyTimedOut = msgs.some((m) => {
-        if (m.direction !== "OUTBOUND" || m.senderType !== "SYSTEM") return false;
-        if (new Date(m.sentAt) <= customerWaitingSince) return false;
-        const meta = m.metadata as Record<string, unknown> | null;
-        return meta?.isInactivityMessage === true;
-      });
-      if (alreadyTimedOut) continue;
-
-      // Check timeout threshold
-      if (now.getTime() - customerWaitingSince.getTime() < TIMEOUT_MS) continue;
-
-      // ── Trigger inactivity ──────────────────────────────────────────────────
-      const evolutionResult = await EvolutionConfigService.getSnapshot(restaurantId);
-      if (!evolutionResult.ok) continue;
-
-      const inactivityText = buildReturnToAiMessage({
-        preamble:    pickPreamble(),
-        menuOptions,
-        baseMenuUrl,
-        phone:       toPhone,
-        name:        conv.customer?.name ?? null,
-      });
-
-      try {
-        await EvolutionClient.sendTextMessage(evolutionResult.data, toPhone, inactivityText);
-      } catch (err) {
-        console.error(`[check-timeouts] Failed to send inactivity message to conv ${conv.id}:`, err);
-        continue;
-      }
-
-      // Persist system marker + return to AI atomically
-      await prisma.$transaction([
-        prisma.message.create({
-          data: {
-            conversationId: conv.id,
-            direction:      "OUTBOUND",
-            senderType:     "SYSTEM",
-            content:        inactivityText,
-            type:           "TEXT",
-            sentAt:         now,
-            metadata:       { isInactivityMessage: true, triggeredAt: now.toISOString() },
-          },
-        }),
-        prisma.conversation.update({
-          where: { id: conv.id },
-          data: {
-            aiEnabled:    true,
-            status:       ConversationStatus.AI_ATENDENDO,
-            assignedTo:   null,
-            lastMessageAt: now,
-          },
-        }),
-      ]);
-
-      timedOutIds.push(conv.id);
-      console.info(`[check-timeouts] Conversation ${conv.id} returned to AI after inactivity`);
-    }
-
-    return ok({ checked: humanConvs.length, timedOut: timedOutIds });
+    // Human handoff is persistent; IA returns only by explicit staff action.
+    return ok({ checked, timedOut: [] });
   } catch (err) {
     console.error("[POST /api/atendimento/handoff/check-timeouts]", err);
     return serverError();
