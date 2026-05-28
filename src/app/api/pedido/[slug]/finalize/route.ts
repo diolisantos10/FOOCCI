@@ -35,6 +35,7 @@ import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncSe
 import { resolveDeliveryFee } from "@/lib/delivery-fee-resolver";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { getActiveMenuPromotions, resolveMenuItemPromotion } from "@/services/promotions/productPromotionResolver";
+import { getPublicSiteUrl } from "@/lib/public-url";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -674,9 +675,7 @@ export async function POST(
 
     if (mpToken) {
       // Backend guard: MP is always pix_only — reject if somehow called for non-Pix
-      // Prefer NEXT_PUBLIC_APP_URL env var; fall back to request origin so webhook delivery
-      // works even when the env var is not configured in the deployment environment.
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+      const appUrl = getPublicSiteUrl();
       try {
         const pixResult = await createPixPayment(mpToken, {
           orderId,
