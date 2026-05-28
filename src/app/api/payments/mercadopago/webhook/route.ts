@@ -43,6 +43,7 @@ export async function confirmMpPayment(
   mpPaymentData: Record<string, unknown>,
 ): Promise<"confirmed" | "already_paid" | "skipped"> {
   if (!paymentRecord.order) return "skipped";
+  const order = paymentRecord.order;
 
   if (paymentRecord.status === "PAID") {
     console.info(LOG, "already paid — idempotent", { orderId: order.id });
@@ -52,9 +53,6 @@ export async function confirmMpPayment(
   if (mpPaymentData.status !== "approved") {
     return "skipped";
   }
-
-  // Capture order ref so TypeScript retains non-null narrowing inside the async tx callback.
-  const order = paymentRecord.order;
 
   // Only advance order to CONFIRMED if it's still waiting for payment.
   // Do NOT downgrade an order already in the operational flow (PREPARING, READY, etc.)
