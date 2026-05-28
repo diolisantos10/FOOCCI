@@ -762,6 +762,8 @@ function OrderCard({
   onCancel,
   onCheck,
   onManualConfirm,
+  onVerifyPix,
+  verifyingPix,
 }: {
   order: MockOrder;
   active: boolean;
@@ -771,6 +773,8 @@ function OrderCard({
   onCancel: (id: string) => void;
   onCheck: (id: string, v: boolean) => void;
   onManualConfirm?: (id: string) => void;
+  onVerifyPix?: (id: string) => void;
+  verifyingPix?: boolean;
 }) {
   const delayed         = isDelayed(order);
   const isPaymentPending = isPaymentPendingOrder(order);
@@ -916,6 +920,15 @@ function OrderCard({
               Confirmar pagamento
             </button>
           )}
+          {isPaymentPending && order.paymentProviderName === "mercadopago" && onVerifyPix && (
+            <button
+              onClick={() => onVerifyPix(order.id)}
+              disabled={verifyingPix}
+              className="rounded-lg border border-blue-300 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50"
+            >
+              {verifyingPix ? "Verificando…" : "Verificar Pix"}
+            </button>
+          )}
           {!isTerminal && !isPaymentPending && nextAction && (
             <button
               onClick={() => onAction(order.id, nextAction.next)}
@@ -1011,6 +1024,8 @@ function OrderListPane({
   onBulkDispatch,
   onBulkClear,
   onManualConfirm,
+  onVerifyPix,
+  verifyingPixIds,
 }: {
   orders: MockOrder[];
   selectedId: string | null;
@@ -1023,6 +1038,8 @@ function OrderListPane({
   onBulkDispatch: () => void;
   onBulkClear: () => void;
   onManualConfirm?: (id: string) => void;
+  onVerifyPix?: (id: string) => void;
+  verifyingPixIds?: Set<string>;
 }) {
   const selectedOrders = orders.filter((o) => checkedIds.has(o.id));
 
@@ -1056,6 +1073,8 @@ function OrderListPane({
               onCancel={onCancel}
               onCheck={onCheck}
               onManualConfirm={onManualConfirm}
+              onVerifyPix={onVerifyPix}
+              verifyingPix={verifyingPixIds?.has(order.id)}
             />
           ))
         )}
@@ -2186,6 +2205,53 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     }
   }
 
+  const [verifyingPixIds, setVerifyingPixIds] = useState<Set<string>>(new Set());
+
+  async function handleVerifyPix(orderId: string) {
+    setVerifyingPixIds((prev) => new Set(prev).add(orderId));
+    setReconcileToast(null);
+    try {
+      const res  = await fetch("/api/payments/mercadopago/reconcile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+      const json = await res.json() as { success?: boolean; result?: { confirmed: number; alreadyPaid: number; pending: number }; error?: string };
+      if (json.success && json.result) {
+        const { confirmed, alreadyPaid, pending } = json.result;
+        if (confirmed > 0) {
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === orderId
+                ? {
+                    ...o,
+                    paymentStatus: "PAID",
+                    status: (["PENDING", "AWAITING_PAYMENT"] as OrderStatus[]).includes(o.status)
+                      ? "CONFIRMED"
+                      : o.status,
+                  }
+                : o
+            )
+          );
+          setReconcileToast("✅ Pagamento Pix confirmado automaticamente.");
+        } else if (alreadyPaid > 0) {
+          setReconcileToast("Pagamento já estava confirmado.");
+        } else if (pending > 0) {
+          setReconcileToast("Pix ainda não pago no Mercado Pago.");
+        } else {
+          setReconcileToast("Nenhum pagamento encontrado para este pedido.");
+        }
+      } else {
+        setReconcileToast(json.error ?? "Erro ao verificar Pix.");
+      }
+    } catch {
+      setReconcileToast("Falha de rede ao verificar Pix.");
+    } finally {
+      setVerifyingPixIds((prev) => { const s = new Set(prev); s.delete(orderId); return s; });
+      setTimeout(() => setReconcileToast(null), 6000);
+    }
+  }
+
   // Derived: subtotal of manual order cart
   const orderItemsSubtotal = orderItemLines.reduce((s, i) => s + i.price * i.quantity, 0);
   const manualOrderTotal   = orderItemsSubtotal + (parseFloat((manualOrderForm.deliveryFee || "0").replace(",", ".")) || 0);
@@ -2296,6 +2362,8 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
           onBulkDispatch={handleBulkDispatch}
           onBulkClear={() => setCheckedIds(new Set())}
           onManualConfirm={isManagerOrOwner ? handleOpenManualConfirm : undefined}
+          onVerifyPix={isManagerOrOwner ? handleVerifyPix : undefined}
+          verifyingPixIds={verifyingPixIds}
         />
         <DetailPanel
           order={selectedOrder}
