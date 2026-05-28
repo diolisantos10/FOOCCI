@@ -364,7 +364,8 @@ function appendBackToMainMenu(text: string): string {
 function renderMainMenu(ctx: ReplyContext): string {
   const menuList = buildMenuList(ctx.menuOptions);
   if (!menuList) return ctx.welcomeMessage;
-  return "Claro 😊 Voltando ao menu principal:" + menuList + "\n\nResponda com o número da opção 😊";
+  const base = "Claro 😊 Voltando ao menu principal:" + menuList + "\n\nResponda com o número da opção 😊";
+  return ctx.pedidoUrl ? base + `\n\n👉 Fazer pedido: ${ctx.pedidoUrl}` : base;
 }
 
 function buildTemplateReply(intent: Intent, ctx: ReplyContext): string | null {
@@ -836,6 +837,9 @@ async function run(conversationId: string): Promise<void> {
             let greet = greetLine;
             if (menuList) {
               greet += menuList + "\n\nResponda com o número da opção 😊";
+              if (ctx.pedidoUrl) {
+                greet += `\n\n👉 Fazer pedido: ${ctx.pedidoUrl}`;
+              }
             } else if (ctx.pedidoUrl) {
               greet += `\n\nCardápio: ${ctx.pedidoUrl}`;
             }

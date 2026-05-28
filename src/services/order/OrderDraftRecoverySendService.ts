@@ -183,6 +183,12 @@ export class OrderDraftRecoverySendService {
         skippedNoPhone++;
         continue;
       }
+      // Normalize phone for Evolution (expects digits without leading "+")
+      const toPhone = customer.phone.replace(/^\+/, "");
+      if (toPhone.length < 8) {
+        skippedNoPhone++;
+        continue;
+      }
 
       // Rule 5: defensive check — DB query already filters recoveryAttempts=0
       // but handle edge case of concurrent cron runs
@@ -233,7 +239,7 @@ export class OrderDraftRecoverySendService {
         const pedidoUrl = buildIdentifiedPedidoUrl(draft.restaurant.slug, customer.phone, customer.name);
         const message   = buildRecoveryMessage(customer.name, pedidoUrl);
 
-        await EvolutionClient.sendTextMessage(config, customer.phone, message);
+        await EvolutionClient.sendTextMessage(config, toPhone, message);
 
         // Atomic: stamp draft so it never fires again; add to daily-limit set
         await prisma.orderDraft.update({
@@ -245,12 +251,20 @@ export class OrderDraftRecoverySendService {
         });
 
         dailyLimitSet.add(draft.customerId); // guard remaining iterations
+        console.info(`[OrderDraftRecoverySendService] recovery sent`, {
+          draftId:      draft.id,
+          customerId:   customer.id,
+          restaurantId: draft.restaurantId,
+        });
         sent++;
       } catch (err) {
-        console.error(
-          `[OrderDraftRecoverySendService] send failed draft=${draft.id}`,
-          err,
-        );
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error(`[OrderDraftRecoverySendService] send failed`, {
+          draftId:      draft.id,
+          customerId:   customer.id,
+          restaurantId: draft.restaurantId,
+          error:        errorMessage,
+        });
         failed++;
       }
     }
