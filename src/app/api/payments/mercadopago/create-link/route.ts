@@ -12,6 +12,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { createPixPayment } from "@/lib/mercadopago";
 import { decrypt } from "@/lib/crypto";
 import { Decimal } from "@prisma/client/runtime/library";
+import { getPublicSiteUrl } from "@/lib/public-url";
 
 const bodySchema = z.object({ orderId: z.string().min(1) });
 
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Create direct Pix payment (pix_only mode enforced here)
-  const notificationUrl = `${process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin}/api/payments/mercadopago/webhook`;
+  const notificationUrl = `${getPublicSiteUrl()}/api/payments/mercadopago/webhook`;
   let pixResult;
   try {
     pixResult = await createPixPayment(accessToken, {

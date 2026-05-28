@@ -48,7 +48,9 @@ export async function POST(
 
   if (!order) return NextResponse.json({ error: "Pedido não encontrado" }, { status: 404 });
 
-  if (!["PENDING", "AWAITING_PAYMENT"].includes(order.status)) {
+  // Allow manual payment confirmation even if the kitchen already started preparing
+  // (operator may have moved the card before the webhook arrived).
+  if (!["PENDING", "AWAITING_PAYMENT", "PREPARING"].includes(order.status)) {
     return NextResponse.json(
       { error: `Pedido está ${order.status} — confirmação manual não aplicável` },
       { status: 400 }
@@ -83,10 +85,11 @@ export async function POST(
       });
     }
 
+    // Only advance to CONFIRMED if still waiting; PREPARING stays PREPARING (payment reconciled only).
     await tx.order.update({
       where: { id: orderId },
       data: {
-        status: "CONFIRMED",
+        status: ["PENDING", "AWAITING_PAYMENT"].includes(order.status) ? "CONFIRMED" : order.status,
         notes: order.notes ? `${order.notes}\n${noteAppend}` : noteAppend,
       },
     });

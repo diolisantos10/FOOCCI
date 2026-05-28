@@ -53,7 +53,12 @@ export async function confirmMpPayment(
     return "skipped";
   }
 
-  await prisma.$transaction([
+  // Only advance order to CONFIRMED if it's still waiting for payment.
+  // Do NOT downgrade an order already in the operational flow (PREPARING, READY, etc.)
+  // — the payment reconciliation is safe even if the kitchen started preparing early.
+  const orderNeedsStatusAdvance = ["PENDING", "AWAITING_PAYMENT"].includes(paymentRecord.order.status);
+
+  const txOps: Parameters<typeof prisma.$transaction>[0] = [
     prisma.payment.update({
       where: { id: paymentRecord.id },
       data: {
@@ -64,11 +69,17 @@ export async function confirmMpPayment(
         ),
       },
     }),
-    prisma.order.update({
-      where: { id: paymentRecord.order.id },
-      data: { status: "CONFIRMED" },
-    }),
-  ]);
+  ];
+  if (orderNeedsStatusAdvance) {
+    txOps.push(
+      prisma.order.update({
+        where: { id: paymentRecord.order.id },
+        data: { status: "CONFIRMED" },
+      })
+    );
+  }
+
+  await prisma.$transaction(txOps);
 
   console.info(LOG, "order confirmed", { orderId: paymentRecord.order.id });
 
