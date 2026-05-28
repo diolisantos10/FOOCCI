@@ -23,10 +23,14 @@
  * a successful send; re-running within the same window sends nothing extra.
  *
  * Message template (Portuguese):
- *   "Oi, {firstName}! Seu pedido ficou quase pronto por aqui 😊
- *    Quer que eu te ajude a finalizar?
+ *   "Oi, {firstName}! Percebi que seu pedido não foi finalizado 😊
  *
- *    👉 {pedidoUrl}"
+ *    Você precisa de alguma ajuda para concluir?
+ *
+ *    👉 Retomar pedido: {shortRecoveryUrl}"
+ *
+ * {shortRecoveryUrl} is a short HMAC-signed /r/{token} redirect that signs a
+ * fresh waToken server-side and bounces to /pedido/[slug]?waToken=...&src=recovery.
  *
  * Recommended cron schedule: every 1 minute.
  */
@@ -34,9 +38,10 @@
 import { prisma } from "@/lib/prisma";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { signWaToken } from "@/lib/wa-token";
+import { signRecoveryToken } from "@/lib/recovery-token";
 import { isGuestIdentifier } from "@/lib/guest";
-import { getPublicMenuUrl } from "@/lib/public-url";
+import { getPublicSiteUrl } from "@/lib/public-url";
+import { ConversationStatus } from "@prisma/client";
 
 export interface RecoverySendResult {
   checked:               number;
@@ -53,31 +58,89 @@ export interface RecoverySendResult {
   durationMs:            number;
 }
 
-function buildIdentifiedPedidoUrl(slug: string, phone: string, name: string | null): string {
-  const base = getPublicMenuUrl(slug);
-  try {
-    const token = signWaToken({
-      phone,
-      ...(name ? { name: name.trim().split(/\s+/)[0] } : {}),
-    });
-    const url = new URL(base);
-    url.searchParams.set("waToken", token);
-    url.searchParams.set("src", "recovery");
-    return url.toString();
-  } catch {
-    const url = new URL(base);
-    url.searchParams.set("src", "recovery");
-    return url.toString();
-  }
+function buildShortRecoveryUrl(
+  draftId: string,
+  customerId: string,
+  restaurantId: string,
+): string {
+  const token = signRecoveryToken({ draftId, customerId, restaurantId });
+  return `${getPublicSiteUrl()}/r/${token}`;
 }
 
-function buildRecoveryMessage(name: string | null, pedidoUrl: string): string {
+function buildRecoveryMessage(name: string | null, shortRecoveryUrl: string): string {
   const firstName = name?.trim().split(/\s+/)[0] ?? "você";
   return (
-    `Oi, ${firstName}! Seu pedido ficou quase pronto por aqui 😊\n` +
-    `Quer que eu te ajude a finalizar?\n\n` +
-    `👉 ${pedidoUrl}`
+    `Oi, ${firstName}! Percebi que seu pedido não foi finalizado 😊\n\n` +
+    `Você precisa de alguma ajuda para concluir?\n\n` +
+    `👉 Retomar pedido: ${shortRecoveryUrl}`
   );
+}
+
+const ACTIVE_CONV_STATUSES = [
+  ConversationStatus.OPEN,
+  ConversationStatus.HUMAN,
+  ConversationStatus.BOT,
+  ConversationStatus.AI_ATENDENDO,
+] as const;
+
+/**
+ * Finds (or creates) the WhatsApp conversation for a customer, logs the
+ * recovery message as an outbound AI message, and sets contextType to
+ * "CART_RECOVERY" so that the next inbound reply triggers human handoff.
+ * This is fire-and-forget from the caller's perspective.
+ */
+async function logRecoveryToConversation(
+  restaurantId: string,
+  customerId:   string,
+  customerPhone: string,
+  customerName:  string | null,
+  messageContent: string,
+  draftId: string,
+  sentAt: Date,
+): Promise<void> {
+  let conversation = await prisma.conversation.findFirst({
+    where: {
+      restaurantId,
+      customerId,
+      status: { in: [...ACTIVE_CONV_STATUSES] },
+      channel: "WHATSAPP",
+    },
+    orderBy: { lastMessageAt: "desc" },
+    select: { id: true },
+  });
+
+  if (!conversation) {
+    conversation = await prisma.conversation.create({
+      data: {
+        restaurantId,
+        customerId,
+        channel:      "WHATSAPP",
+        status:       ConversationStatus.OPEN,
+        customerPhone,
+        customerName:  customerName ?? undefined,
+        contextType:  "CART_RECOVERY",
+      },
+      select: { id: true },
+    });
+  }
+
+  await prisma.$transaction([
+    prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction:      "OUTBOUND",
+        senderType:     "AI",
+        content:        messageContent,
+        type:           "TEXT",
+        sentAt,
+        metadata:       { source: "CART_RECOVERY", draftId },
+      },
+    }),
+    prisma.conversation.update({
+      where: { id: conversation.id },
+      data:  { lastMessageAt: sentAt, contextType: "CART_RECOVERY" },
+    }),
+  ]);
 }
 
 export class OrderDraftRecoverySendService {
@@ -235,22 +298,41 @@ export class OrderDraftRecoverySendService {
           failed++;
           continue;
         }
-        const config    = configResult.data;
-        const pedidoUrl = buildIdentifiedPedidoUrl(draft.restaurant.slug, customer.phone, customer.name);
-        const message   = buildRecoveryMessage(customer.name, pedidoUrl);
+        const config           = configResult.data;
+        const shortRecoveryUrl = buildShortRecoveryUrl(draft.id, draft.customerId, draft.restaurantId);
+        const message          = buildRecoveryMessage(customer.name, shortRecoveryUrl);
 
         await EvolutionClient.sendTextMessage(config, toPhone, message);
 
-        // Atomic: stamp draft so it never fires again; add to daily-limit set
+        // Atomic: stamp draft so it never fires again
+        const now = new Date();
         await prisma.orderDraft.update({
           where: { id: draft.id },
           data: {
             recoveryAttempts: { increment: 1 },
-            lastRecoveryAt:   new Date(),
+            lastRecoveryAt:   now,
           },
         });
 
         dailyLimitSet.add(draft.customerId); // guard remaining iterations
+
+        // Log outbound message to conversation so Atendimento shows it and
+        // so that a customer reply triggers human handoff (contextType guard).
+        logRecoveryToConversation(
+          draft.restaurantId,
+          draft.customerId,
+          customer.phone,
+          customer.name,
+          message,
+          draft.id,
+          now,
+        ).catch((err) =>
+          console.warn(`[OrderDraftRecoverySendService] conversation log failed`, {
+            draftId: draft.id,
+            error:   err instanceof Error ? err.message : String(err),
+          }),
+        );
+
         console.info(`[OrderDraftRecoverySendService] recovery sent`, {
           draftId:      draft.id,
           customerId:   customer.id,

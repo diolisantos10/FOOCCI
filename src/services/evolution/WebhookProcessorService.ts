@@ -30,6 +30,7 @@ import { ConversationStatus, MessageType } from "@prisma/client";
 // Phase 4: lazy import to avoid circular dependency issues at module load time
 import type { AIOrderService as AIOrderServiceType } from "@/services/ai/AIOrderService";
 import { markCrmReplyIfApplicable } from "@/services/agents/AgentRoutingService";
+import { markConversationNeedsHuman } from "@/lib/handoff";
 
 // Resolved conversations older than this are treated as new threads.
 const REOPEN_WINDOW_HOURS = 24;
@@ -132,6 +133,17 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   //     Fire-and-forget — never block the webhook hot path.
   markCrmReplyIfApplicable(conversation.id).catch(() => {});
 
+  // 7b. Cart recovery handoff: if the customer replies to a cart recovery
+  //     message, escalate immediately to human. AI should never intercept
+  //     these replies — the customer is likely asking for help or expressing
+  //     intent, and a human touch is more appropriate than an AI greeting.
+  const isCartRecovery = conversation.contextType === "CART_RECOVERY";
+  if (isCartRecovery) {
+    markConversationNeedsHuman(conversation.id, "CART_RECOVERY").catch((err) =>
+      console.error("[WebhookProcessor] Cart recovery handoff failed:", err),
+    );
+  }
+
   // 7. Route to the correct agent based on WhatsApp mode.
   //    HUMAN / RESOLVED conversations are never touched by AI.
   //
@@ -141,10 +153,9 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   //      AI_ORDERING_EXPERIMENTAL — full AIOrderService sales agent (opt-in)
   //
   // Guard: never auto-trigger the WhatsApp Receptionist for conversations that
-  // originated from a CRM campaign or automation.  CRM replies must go to human
-  // staff first; operators can manually release AI via the Atendimento panel.
-  // This prevents the receptionist from sending greeting / business-hours messages
-  // to customers who simply acknowledged a promotional broadcast.
+  // originated from a CRM campaign, automation, or cart recovery message.
+  // These replies must go to human staff first; operators can manually release
+  // AI via the Atendimento panel.
   const isCrmOrigin =
     conversation.contextType === "CRM_CAMPAIGN" ||
     conversation.contextType === "CRM_AUTOMATION";
@@ -152,6 +163,7 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   const shouldRespond =
     conversation.aiEnabled &&
     !isCrmOrigin &&
+    !isCartRecovery &&
     (conversation.status === ConversationStatus.OPEN ||
      conversation.status === ConversationStatus.BOT ||
      conversation.status === ConversationStatus.AI_ATENDENDO);

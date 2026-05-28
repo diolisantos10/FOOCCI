@@ -7,6 +7,7 @@ export type HandoffReason =
   | "WAITER_ESCALATION"
   | "CUSTOMER_REQUEST"
   | "COMPLAINT"
+  | "CART_RECOVERY"
   | "UNKNOWN";
 
 /**
