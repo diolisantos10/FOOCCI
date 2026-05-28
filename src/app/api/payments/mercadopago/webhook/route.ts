@@ -58,8 +58,8 @@ export async function confirmMpPayment(
   // — the payment reconciliation is safe even if the kitchen started preparing early.
   const orderNeedsStatusAdvance = ["PENDING", "AWAITING_PAYMENT"].includes(paymentRecord.order.status);
 
-  const txOps: Parameters<typeof prisma.$transaction>[0] = [
-    prisma.payment.update({
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.update({
       where: { id: paymentRecord.id },
       data: {
         status: "PAID",
@@ -68,18 +68,14 @@ export async function confirmMpPayment(
           (mpPaymentData.transaction_amount as number) ?? Number(paymentRecord.amount)
         ),
       },
-    }),
-  ];
-  if (orderNeedsStatusAdvance) {
-    txOps.push(
-      prisma.order.update({
+    });
+    if (orderNeedsStatusAdvance) {
+      await tx.order.update({
         where: { id: paymentRecord.order.id },
         data: { status: "CONFIRMED" },
-      })
-    );
-  }
-
-  await prisma.$transaction(txOps);
+      });
+    }
+  });
 
   console.info(LOG, "order confirmed", { orderId: paymentRecord.order.id });
 
