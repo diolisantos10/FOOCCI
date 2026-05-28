@@ -27,6 +27,9 @@ on:
     - cron: "*/15 * * * *"
     # Job: run-automations — daily at 11:00 UTC = 08:00 America/Sao_Paulo
     - cron: "0 11 * * *"
+    # Job: send-cart-recovery — every 5 minutes (GitHub Actions minimum; for
+    # true 1-min frequency configure a Railway cron job in the dashboard)
+    - cron: "*/5 * * * *"
 
   workflow_dispatch:
     inputs:
@@ -39,6 +42,7 @@ on:
           - campaigns
           - automations
           - both
+          - cart-recovery
 
       dry_run:
         description: "Dry run — preview only, no messages sent"
@@ -234,6 +238,83 @@ jobs:
           if [ "$CURL_EXIT" -ne 0 ]; then
             echo ""
             echo "::error::curl failed with exit $CURL_EXIT (connection/timeout error). See response above."
+            exit "$CURL_EXIT"
+          fi
+
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            echo ""
+            echo "::error::Endpoint returned non-2xx status ($HTTP_STATUS). Check response above."
+            exit 1
+          fi
+
+  # ── Job 3: Cart Recovery ─────────────────────────────────────────────────────
+  #
+  # Fires every 5 minutes (GitHub Actions minimum) or on workflow_dispatch.
+  # Sends one WhatsApp recovery message per eligible OPEN OrderDraft that has
+  # been inactive for ≥ 2 minutes and has never received a recovery message.
+  # Anti-spam: max 1 per draft, max 1 per customer per day.
+  # ─────────────────────────────────────────────────────────────────────────────
+  send-cart-recovery:
+    name: "Cart Recovery"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      github.event.schedule == '*/5 * * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.target == 'cart-recovery'))
+
+    steps:
+      - name: Build request parameters
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/send-cart-recovery" >> "$GITHUB_OUTPUT"
+
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo 'body={"dryRun":false,"inactivityMinutes":2,"limit":50}' >> "$GITHUB_OUTPUT"
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"
+          else
+            DRY_RUN="${{ inputs.dry_run }}"
+            echo "body={\"dryRun\":${DRY_RUN},\"inactivityMinutes\":2,\"limit\":50}" >> "$GITHUB_OUTPUT"
+            echo "dry_run=${DRY_RUN}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: "POST /api/cron/send-cart-recovery"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          REQUEST_BODY: ${{ steps.params.outputs.body }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "────────────────────────────────────"
+          echo "→ Endpoint : $ENDPOINT_URL"
+          echo "→ dryRun   : ${{ steps.params.outputs.dry_run }}"
+          echo "→ Body     : $REQUEST_BODY"
+          echo "────────────────────────────────────"
+
+          printf '%s' "$REQUEST_BODY" > /tmp/request.json
+
+          set +e
+          curl --connect-timeout 20 --max-time 60 -sS \
+            -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/request.json \
+            -o /tmp/response.json \
+            -w "%{http_code}" > /tmp/http_status.txt
+          CURL_EXIT=$?
+          set -e
+
+          HTTP_STATUS=$(cat /tmp/http_status.txt 2>/dev/null || echo "000")
+
+          echo "← curl exit   : $CURL_EXIT"
+          echo "← HTTP Status : $HTTP_STATUS"
+          echo "← Response:"
+          jq . /tmp/response.json 2>/dev/null || cat /tmp/response.json || echo "(no response body)"
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo ""
+            echo "::error::curl failed with exit $CURL_EXIT. See response above."
             exit "$CURL_EXIT"
           fi
 
