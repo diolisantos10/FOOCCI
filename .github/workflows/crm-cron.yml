@@ -45,10 +45,19 @@ on:
           - cart-recovery
 
       dry_run:
-        description: "Dry run — preview only, no messages sent"
+        description: "Dry run — preview only, no messages sent (campaigns / automations)"
         required: false
         default: true
         type: boolean
+
+      cart_recovery_dry_run:
+        description: "Cart Recovery — dry-run mode? (true = preview only, false = send WhatsApp)"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
       campaign_id:
         description: "Scope to one campaign ID (campaigns only, optional)"
@@ -275,7 +284,7 @@ jobs:
             echo 'body={"dryRun":false,"inactivityMinutes":2,"limit":50}' >> "$GITHUB_OUTPUT"
             echo "dry_run=false" >> "$GITHUB_OUTPUT"
           else
-            DRY_RUN="${{ inputs.dry_run }}"
+            DRY_RUN="${{ inputs.cart_recovery_dry_run }}"
             echo "body={\"dryRun\":${DRY_RUN},\"inactivityMinutes\":2,\"limit\":50}" >> "$GITHUB_OUTPUT"
             echo "dry_run=${DRY_RUN}" >> "$GITHUB_OUTPUT"
           fi
