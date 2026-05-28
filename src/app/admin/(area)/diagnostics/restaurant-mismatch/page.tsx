@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 
-// ── Types (mirror API response) ───────────────────────────────────────────────
+// ── Types: restaurant-mismatch endpoint ──────────────────────────────────────────
 
 type RestaurantRole =
   | "CANONICAL_WHATSAPP_ACTIVE"
@@ -44,7 +44,7 @@ interface Diagnosis {
   slugSwapSQL:                 string | null;
 }
 
-interface DiagResponse {
+interface MismatchResponse {
   ok:             true;
   queriedAt:      string;
   diagTable:      DiagRow[];
@@ -52,7 +52,45 @@ interface DiagResponse {
   diagnosis:      Diagnosis;
 }
 
-// ── Role badge ──────────────────────────────────────────────────────────────────
+// ── Types: cart-drafts endpoint ───────────────────────────────────────────────
+
+interface DraftRow {
+  draftId:             string;
+  restaurantId:        string;
+  customerId:          string | null;
+  customerName:        string | null;
+  customerPhoneMasked: string;
+  phoneExists:         boolean;
+  phoneIsGuest:        boolean;
+  phoneValid:          boolean;
+  status:              string;
+  itemCount:           number;
+  updatedAt:           string;
+  recoveryAttempts:    number;
+  lastRecoveryAt:      string | null;
+  recoveryEligible:    boolean;
+  skipReason:          string | null;
+}
+
+interface RestaurantDrafts {
+  restaurantId:       string;
+  slug:               string;
+  name:               string;
+  hasEvolutionConfig: boolean;
+  evoActive:          boolean | null;
+  instanceName:       string | null;
+  drafts:             DraftRow[];
+}
+
+interface DraftsResponse {
+  ok:          true;
+  queriedAt:   string;
+  slugFilter:  string;
+  restaurants: RestaurantDrafts[];
+  rootCause:   string;
+}
+
+// ── Role badge ────────────────────────────────────────────────────────────────────
 
 const ROLE_STYLES: Record<RestaurantRole, string> = {
   CANONICAL_WHATSAPP_ACTIVE: "bg-green-900/50 text-green-300 border border-green-700",
@@ -71,8 +109,6 @@ function RoleBadge({ role }: { role: RestaurantRole }) {
   );
 }
 
-// ── Bool cell ────────────────────────────────────────────────────────────────────
-
 function Bool({ v }: { v: boolean | null }) {
   if (v === null) return <span className="text-gray-600">—</span>;
   return v
@@ -80,19 +116,16 @@ function Bool({ v }: { v: boolean | null }) {
     : <span className="text-red-400">✗</span>;
 }
 
-// ── Copy button ─────────────────────────────────────────────────────────────────
-
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
-  const copy = () => {
-    void navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
   return (
     <button
       type="button"
-      onClick={copy}
+      onClick={() => {
+        void navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
       className="ml-2 rounded px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
     >
       {copied ? "Copiado!" : "Copiar"}
@@ -100,32 +133,55 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function KV({ label, value, mono = false, valueClass }: {
+  label: string; value: string; mono?: boolean; valueClass?: string;
+}) {
+  return (
+    <div>
+      <span className="text-gray-500">{label}: </span>
+      <span className={`${mono ? "font-mono text-xs" : ""} ${valueClass ?? "text-gray-200"}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 // ── Main page ───────────────────────────────────────────────────────────────────
 
 export default function RestaurantMismatchDiagPage() {
-  const [slug,    setSlug]    = useState("sushi-cazza");
-  const [loading, setLoading] = useState(false);
-  const [result,  setResult]  = useState<DiagResponse | null>(null);
-  const [error,   setError]   = useState<string | null>(null);
+  const [slug,         setSlug]         = useState("sushi-cazza");
+  const [loading,      setLoading]      = useState(false);
+  const [mismatch,     setMismatch]     = useState<MismatchResponse | null>(null);
+  const [draftsResult, setDraftsResult] = useState<DraftsResponse | null>(null);
+  const [error,        setError]        = useState<string | null>(null);
 
   const run = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setResult(null);
+    setMismatch(null);
+    setDraftsResult(null);
     try {
-      const res = await fetch(
-        `/api/admin/diagnostics/restaurant-mismatch?slug=${encodeURIComponent(slug.trim())}`,
-      );
-      if (res.status === 401 || res.status === 403) {
+      const enc = encodeURIComponent(slug.trim());
+      const [r1, r2] = await Promise.all([
+        fetch(`/api/admin/diagnostics/restaurant-mismatch?slug=${enc}`),
+        fetch(`/api/admin/diagnostics/cart-drafts?slug=${enc}&limit=10`),
+      ]);
+
+      if (r1.status === 401 || r1.status === 403) {
         setError("Sessão expirada — faça login novamente.");
         return;
       }
-      const json = await res.json() as DiagResponse & { error?: string };
-      if (!res.ok || json.error) {
-        setError(json.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      setResult(json);
+
+      const [j1, j2] = await Promise.all([r1.json(), r2.json()]) as [
+        MismatchResponse & { error?: string },
+        DraftsResponse  & { error?: string },
+      ];
+
+      if (!r1.ok || j1.error) { setError(j1.error ?? `Mismatch HTTP ${r1.status}`); return; }
+      if (!r2.ok || j2.error) { setError(j2.error ?? `Drafts HTTP ${r2.status}`);   return; }
+
+      setMismatch(j1);
+      setDraftsResult(j2);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -133,7 +189,7 @@ export default function RestaurantMismatchDiagPage() {
     }
   }, [slug]);
 
-  const { diagTable, slugResolution, diagnosis } = result ?? {};
+  const { diagTable, slugResolution, diagnosis } = mismatch ?? {};
 
   return (
     <div className="p-6 space-y-6 max-w-6xl">
@@ -142,7 +198,8 @@ export default function RestaurantMismatchDiagPage() {
       <div>
         <h1 className="text-xl font-bold text-white">Diagnóstico de Restaurante</h1>
         <p className="mt-1 text-sm text-gray-400">
-          Detecta registros duplicados / Evolution config no restaurantId errado.
+          Detecta registros duplicados, Evolution config no restaurantId errado,
+          e por que drafts de carrinho abandonado não se tornam recuperáveis.
           Somente leitura — nenhum dado é alterado.
         </p>
       </div>
@@ -173,20 +230,19 @@ export default function RestaurantMismatchDiagPage() {
         </button>
       </div>
 
-      {/* Error */}
       {error && (
         <div className="rounded-lg border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-300">
           {error}
         </div>
       )}
 
-      {result && (
+      {mismatch && (
         <>
           <p className="text-xs text-gray-600">
-            Consultado em {new Date(result.queriedAt).toLocaleString("pt-BR")}
+            Consultado em {new Date(mismatch.queriedAt).toLocaleString("pt-BR")}
           </p>
 
-          {/* ── diagTable ─────────────────────────────────────────────────────────────────── */}
+          {/* ── diagTable ──────────────────────────────────────────────────────────────────────── */}
           <section className="space-y-2">
             <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
               Tabela diagnóstica
@@ -196,13 +252,10 @@ export default function RestaurantMismatchDiagPage() {
                 <table className="w-full text-xs">
                   <thead className="bg-gray-900 text-gray-400">
                     <tr>
-                      {[
-                        "Slug", "Nome", "Ativo", "Evo?", "Evo ativo", "Instância",
+                      {["Slug", "Nome", "Ativo", "Evo?", "Evo ativo", "Instância",
                         "Convs 90d", "Drafts abertos", "Itens menu", "Pedidos 30d", "Role",
                       ].map((h) => (
-                        <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">
-                          {h}
-                        </th>
+                        <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -263,9 +316,7 @@ export default function RestaurantMismatchDiagPage() {
               <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
                 Diagnóstico
               </h2>
-
               <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-4 space-y-3 text-sm">
-
                 <div className="flex items-center gap-3">
                   <span className="text-gray-500 w-40 shrink-0">Slug-swap seguro?</span>
                   {diagnosis.slugSwapSafe
@@ -273,14 +324,12 @@ export default function RestaurantMismatchDiagPage() {
                     : <span className="rounded bg-red-900/40 border border-red-800 px-2 py-0.5 text-red-300 font-semibold text-xs">✗ NÃO — não fazer swap</span>
                   }
                 </div>
-
                 <div>
                   <p className="text-gray-500 mb-1">ID canônico (tem Evolution)</p>
                   <code className="text-violet-300 text-xs font-mono">
                     {diagnosis.likelyCanonicalRestaurantId ?? "(nenhum)"}
                   </code>
                 </div>
-
                 {diagnosis.likelyLegacyRestaurantIds.length > 0 && (
                   <div>
                     <p className="text-gray-500 mb-1">IDs legados (sem Evolution)</p>
@@ -289,19 +338,16 @@ export default function RestaurantMismatchDiagPage() {
                     ))}
                   </div>
                 )}
-
                 <div>
                   <p className="text-gray-500 mb-1">Causa raiz</p>
                   <p className="text-gray-200 leading-relaxed">{diagnosis.likelyRootCause}</p>
                 </div>
-
                 <div>
                   <p className="text-gray-500 mb-1">Recomendação</p>
                   <p className={`leading-relaxed ${diagnosis.slugSwapSafe ? "text-green-200" : "text-yellow-200"}`}>
                     {diagnosis.safeRecommendation}
                   </p>
                 </div>
-
                 {diagnosis.slugSwapSQL && (
                   <div>
                     <div className="flex items-center gap-2 mb-2">
@@ -318,29 +364,103 @@ export default function RestaurantMismatchDiagPage() {
           )}
         </>
       )}
-    </div>
-  );
-}
 
-// ── Key-value helper ─────────────────────────────────────────────────────────────────
+      {/* ── Draft inspection (cart recovery path) ────────────────────────────────── */}
+      {draftsResult && (
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
+            Inspeção de drafts — por que o carrinho não vira recuperável
+          </h2>
 
-function KV({
-  label,
-  value,
-  mono = false,
-  valueClass,
-}: {
-  label:       string;
-  value:       string;
-  mono?:       boolean;
-  valueClass?: string;
-}) {
-  return (
-    <div>
-      <span className="text-gray-500">{label}: </span>
-      <span className={`${mono ? "font-mono text-xs" : ""} ${valueClass ?? "text-gray-200"}`}>
-        {value}
-      </span>
+          {/* Root cause box */}
+          <div className="rounded-lg border border-amber-700 bg-amber-950/40 px-4 py-3 text-sm text-amber-200 leading-relaxed">
+            <span className="font-semibold text-amber-300">Causa raiz: </span>
+            {draftsResult.rootCause}
+          </div>
+
+          {draftsResult.restaurants.map((r) => (
+            <div key={r.restaurantId} className="rounded-lg border border-gray-800 overflow-hidden">
+              {/* Restaurant header */}
+              <div className="bg-gray-900 px-4 py-2 flex items-center gap-3 flex-wrap">
+                <code className="text-xs text-gray-400 font-mono">{r.slug}</code>
+                <span className="text-sm text-gray-200 font-medium">{r.name}</span>
+                {r.hasEvolutionConfig
+                  ? <span className="text-[10px] rounded border border-green-700 bg-green-900/40 px-1.5 py-0.5 text-green-300 font-semibold">✓ EVOLUTION</span>
+                  : <span className="text-[10px] rounded border border-red-800 bg-red-900/30 px-1.5 py-0.5 text-red-400 font-semibold">✗ SEM EVOLUTION</span>
+                }
+                {r.instanceName && (
+                  <span className="text-xs text-gray-500 font-mono">{r.instanceName}</span>
+                )}
+                <span className="ml-auto text-xs text-gray-500">{r.drafts.length} draft(s)</span>
+              </div>
+
+              {r.drafts.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-gray-600 italic">
+                  Nenhum draft encontrado para este restaurante.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-900/50 text-gray-400">
+                      <tr>
+                        {["Draft ID", "Cliente", "Telefone (masked)", "Fone OK?",
+                          "Status", "Itens", "updatedAt", "Tentativas", "Elegível?", "Skip reason",
+                        ].map((h) => (
+                          <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800">
+                      {r.drafts.map((d) => (
+                        <tr key={d.draftId} className={d.recoveryEligible ? "bg-green-950/20" : "hover:bg-gray-900/30"}>
+                          <td className="px-3 py-2 font-mono text-gray-500 whitespace-nowrap text-[10px]">
+                            {d.draftId.slice(0, 12)}…
+                          </td>
+                          <td className="px-3 py-2 text-gray-300 whitespace-nowrap">
+                            {d.customerName ?? <span className="text-gray-600 italic">sem nome</span>}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-gray-400 whitespace-nowrap">
+                            {d.customerPhoneMasked}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <Bool v={d.phoneValid} />
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                              d.status === "OPEN"     ? "bg-blue-900/40 text-blue-300 border border-blue-800" :
+                              d.status === "ABANDONED"? "bg-gray-800 text-gray-400 border border-gray-700" :
+                              "bg-gray-800 text-gray-500 border border-gray-700"
+                            }`}>
+                              {d.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-center text-gray-200">{d.itemCount}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-gray-500">
+                            {new Date(d.updatedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                          </td>
+                          <td className="px-3 py-2 text-center text-gray-200">{d.recoveryAttempts}</td>
+                          <td className="px-3 py-2 text-center">
+                            {d.recoveryEligible
+                              ? <span className="text-green-400 font-semibold">✓</span>
+                              : <span className="text-red-400">✗</span>
+                            }
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {d.skipReason
+                              ? <code className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-red-300">{d.skipReason}</code>
+                              : <span className="text-gray-600">—</span>
+                            }
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
     </div>
   );
 }
