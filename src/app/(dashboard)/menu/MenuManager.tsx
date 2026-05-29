@@ -749,6 +749,7 @@ function SortableItemRow({
   onSave,
   onEdit,
   onPromo,
+  onDuplicated,
 }: {
   item: Item;
   categoryId: string;
@@ -766,6 +767,7 @@ function SortableItemRow({
   ) => Promise<void>;
   onEdit: (item: Item) => void;
   onPromo: (item: Item) => void;
+  onDuplicated: (newItem: Item, toCategoryId: string) => void;
 }) {
   const {
     attributes,
@@ -790,7 +792,32 @@ function SortableItemRow({
     if (placingIn) return;
     setPlacingIn(targetCategoryId);
     try {
-      await apiFetch(`/api/menu/items/${item.id}/placements`, "POST", { categoryId: targetCategoryId });
+      const data = await apiFetch(
+        `/api/menu/categories/${targetCategoryId}/items`,
+        "POST",
+        {
+          name:           item.name,
+          description:    item.description    || undefined,
+          ingredients:    item.ingredients    || undefined,
+          price:          item.price,
+          imageUrl:       item.imageUrl       || undefined,
+          showInDelivery: item.showInDelivery,
+          showInDineIn:   item.showInDineIn,
+          hasVariants:    item.hasVariants,
+          code:           item.code           || undefined,
+          servingSize:    item.servingSize    ?? undefined,
+          portionInfo:    item.portionInfo    || undefined,
+        }
+      );
+      const newItem: Item = {
+        ...item,
+        id:            data.data.id,
+        sortOrder:     data.data.sortOrder ?? 0,
+        hasActivePromo: false,
+        variants:      [],
+        extras:        [],
+      };
+      onDuplicated(newItem, targetCategoryId);
     } catch { /* ignore */ }
     setPlacingIn(null);
     setDuplicateOpen(false);
@@ -876,37 +903,52 @@ function SortableItemRow({
                 % Promo
               </button>
               {otherManualCategories.length > 0 && (
-                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                <div onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
                     onClick={() => setDuplicateOpen((o) => !o)}
                     className="rounded px-2 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 transition-colors"
-                    title="Adicionar em outra categoria"
+                    title="Duplicar para outra categoria"
                   >
                     + Duplicar
                   </button>
                   {duplicateOpen && (
-                    <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
-                      <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                        Adicionar em categoria
-                      </p>
-                      <div className="max-h-64 overflow-y-auto">
-                      {otherManualCategories.map((cat) => (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          disabled={!!placingIn}
-                          onClick={() => handleDuplicate(cat.id)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          {placingIn === cat.id ? (
-                            <span className="h-3 w-3 animate-spin rounded-full border-2 border-orange-400 border-t-transparent" />
-                          ) : (
-                            <span className="h-3 w-3 rounded-full bg-orange-200" />
-                          )}
-                          {cat.name}
-                        </button>
-                      ))}
+                    <div
+                      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+                      onClick={() => setDuplicateOpen(false)}
+                    >
+                      <div
+                        className="w-full max-w-xs rounded-2xl bg-white p-4 shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="mb-3 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">Duplicar produto</p>
+                            <p className="mt-0.5 text-xs text-gray-500 truncate max-w-[200px]">{item.name}</p>
+                          </div>
+                          <button onClick={() => setDuplicateOpen(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+                        </div>
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                          Selecione a categoria de destino
+                        </p>
+                        <div className="max-h-64 overflow-y-auto space-y-0.5">
+                          {otherManualCategories.map((cat) => (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              disabled={!!placingIn}
+                              onClick={() => handleDuplicate(cat.id)}
+                              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-orange-50 disabled:opacity-50 transition-colors"
+                            >
+                              {placingIn === cat.id ? (
+                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-orange-400 border-t-transparent shrink-0" />
+                              ) : (
+                                <span className="h-2.5 w-2.5 rounded-full bg-orange-300 shrink-0" />
+                              )}
+                              {cat.name}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1018,6 +1060,7 @@ function CategoryCard({
   onEditItem,
   onPromoItem,
   onPromoCategory,
+  onDuplicated,
 }: {
   category: Category;
   allCategories: Category[];
@@ -1028,6 +1071,7 @@ function CategoryCard({
   onEditItem: (item: Item, categoryId: string) => void;
   onPromoItem: (item: Item) => void;
   onPromoCategory: (category: Category) => void;
+  onDuplicated: (newItem: Item, toCategoryId: string) => void;
 }) {
   const [editingCat, setEditingCat] = useState(false);
   const [catForm, setCatForm] = useState<CategoryFormState>({
@@ -1311,6 +1355,7 @@ function CategoryCard({
                   onSave={saveItem}
                   onEdit={(it) => onEditItem(it, category.id)}
                   onPromo={onPromoItem}
+                  onDuplicated={onDuplicated}
                 />
               ))}
             </ul>
@@ -2607,7 +2652,12 @@ function EditItemModal({
                     onClick={onOpenPromo}
                     className="flex w-full items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors"
                   >
-                    <span>Editar promoção</span>
+                    <span className="flex items-center gap-1.5">
+                      {item?.hasActivePromo && (
+                        <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
+                      )}
+                      {item?.hasActivePromo ? "Promo ativa — editar" : "Configurar promoção"}
+                    </span>
                     <span className="text-sm">%</span>
                   </button>
                 </div>
@@ -3672,6 +3722,15 @@ export function MenuManager({
     refresh();
   }
 
+  function handleDuplicated(newItem: Item, toCategoryId: string) {
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === toCategoryId ? { ...c, items: [...c.items, newItem] } : c
+      )
+    );
+    refresh();
+  }
+
   async function handleModalSave(patch: EditModalForm) {
     if (!editingItem) return;
     const { item, categoryId: oldCategoryId } = editingItem;
@@ -3842,6 +3901,7 @@ export function MenuManager({
                 onEditItem={(item, categoryId: string) => setEditingItem({ item, categoryId })}
                 onPromoItem={setPromoItem}
                 onPromoCategory={setPromoCategory}
+                onDuplicated={handleDuplicated}
               />
             ))}
           </div>
