@@ -93,6 +93,7 @@ interface CustomerProfile {
   totalSpend: number;
   lastOrderAt?: string | null;
   note?: string;
+  tier?: string;
 }
 
 // Menu item option for the manual-order product picker
@@ -168,7 +169,7 @@ interface ApiOrder {
   total: string;
   notes?: string | null;
   createdAt: string;
-  customer: { id?: string; name: string; phone: string; totalOrders: number; totalSpend: string; lastOrderAt: string | null };
+  customer: { id?: string; name: string; phone: string; totalOrders: number; totalSpend: string; lastOrderAt: string | null; tier: string };
   deliveryAddress: {
     street: string;
     number: string;
@@ -256,6 +257,7 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
       totalOrders: o.customer.totalOrders,
       totalSpend:  parseFloat(o.customer.totalSpend),
       lastOrderAt: o.customer.lastOrderAt ?? null,
+      tier:        o.customer.tier ?? "BRONZE",
     },
     conversationId: o.orderDraft?.conversationId ?? null,
     notes:               o.notes               ?? null,
@@ -466,11 +468,13 @@ function isPaymentPendingOrder(order: MockOrder): boolean {
 
 // ─── Customer context helpers ─────────────────────────────────
 
-function customerSpendTier(spend: number): { label: string; icon: string; color: string } {
-  if (spend >= 2000) return { label: "Diamond", icon: "💎", color: "text-cyan-700 bg-cyan-50 border border-cyan-200"     };
-  if (spend >= 800)  return { label: "Gold",    icon: "🥇", color: "text-amber-700 bg-amber-50 border border-amber-200"  };
-  if (spend >= 300)  return { label: "Silver",  icon: "🥈", color: "text-gray-600 bg-gray-100 border border-gray-200"    };
-  return                    { label: "Bronze",  icon: "🥉", color: "text-orange-700 bg-orange-50 border border-orange-200" };
+function customerTierDisplay(tier: string): { label: string; icon: string; color: string } {
+  switch (tier) {
+    case "DIAMANTE": return { label: "Diamante", icon: "💎", color: "text-cyan-700 bg-cyan-50 border border-cyan-200"      };
+    case "OURO":     return { label: "Ouro",     icon: "🥇", color: "text-amber-700 bg-amber-50 border border-amber-200"   };
+    case "PRATA":    return { label: "Prata",    icon: "🥈", color: "text-gray-600 bg-gray-100 border border-gray-200"     };
+    default:         return { label: "Bronze",   icon: "🥉", color: "text-orange-700 bg-orange-50 border border-orange-200" };
+  }
 }
 
 function customerTag(totalOrders: number, spend: number): { label: string; color: string } {
@@ -811,7 +815,7 @@ function OrderCard({
             className="h-3.5 w-3.5 shrink-0 accent-orange-500"
           />
           <span className="font-mono text-sm font-bold text-gray-700">
-            #{String(order.num).padStart(3, "0")}
+            #{order.id.slice(-6).toUpperCase()}
           </span>
           {badge}
           <span className={`ml-auto text-xs font-semibold tabular-nums ${delayed ? "text-red-600" : "text-gray-400"}`}>
@@ -829,8 +833,8 @@ function OrderCard({
                 <span className="text-base font-bold text-gray-900 leading-tight">{order.customer}</span>
               )}
               {order.profile && (() => {
-                const { totalOrders, totalSpend, lastOrderAt } = order.profile!;
-                const tier = customerSpendTier(totalSpend);
+                const { totalOrders, totalSpend, lastOrderAt, tier: storedTier } = order.profile!;
+                const tier = customerTierDisplay(storedTier ?? "BRONZE");
                 const tag  = customerTag(totalOrders, totalSpend);
                 const temp = customerTemperature(lastOrderAt);
                 return (
@@ -1298,7 +1302,7 @@ function DetailPanel({
           ← Voltar
         </button>
         <span className="font-mono text-xs text-gray-400">
-          Pedido #{String(order.num).padStart(3, "0")}
+          Pedido #{order.id.slice(-6).toUpperCase()}
         </span>
         <button
           onClick={() => printOrder(order.id)}
@@ -1312,7 +1316,7 @@ function DetailPanel({
       <div className="hidden items-start justify-between border-b border-gray-100 px-5 py-4 lg:flex">
         <div>
           <p className="font-mono text-xs text-gray-400">
-            Pedido #{String(order.num).padStart(3, "0")}
+            Pedido #{order.id.slice(-6).toUpperCase()}
           </p>
           <h3 className="mt-0.5 text-base font-bold text-gray-900">
             {order.customerId ? (
@@ -1581,7 +1585,7 @@ function NewOrderModal({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-mono text-xs text-gray-400">
-                Pedido #{String(order.num).padStart(3, "0")}
+                Pedido #{order.id.slice(-6).toUpperCase()}
               </p>
               <h3 className="mt-0.5 text-xl font-bold text-gray-900 leading-tight">
                 {order.customerId ? (
@@ -1942,7 +1946,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
       const q = searchQuery.toLowerCase();
       result = result.filter((o) =>
         o.customer.toLowerCase().includes(q) ||
-        String(o.num).includes(q)
+        o.id.slice(-6).toLowerCase().includes(q)
       );
     }
     return result;
