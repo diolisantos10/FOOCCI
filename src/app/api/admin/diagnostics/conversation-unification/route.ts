@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
         createdAt:     true,
         aiEnabled:     true,
         messages: {
-          select: { senderType: true, direction: true, sentAt: true },
+          select: { senderType: true, direction: true, sentAt: true, content: true, metadata: true },
           orderBy: { sentAt: "desc" },
           take: 5,
         },
@@ -122,6 +122,9 @@ export async function GET(req: NextRequest) {
       const hasWhatsApp        = c.messages.some((m) => m.senderType === "CUSTOMER");
       const hasCardapio        = c.messages.some((m) => m.senderType === "CUSTOMER_CARDAPIO");
       const hasWhatsAppExterno = c.messages.some((m) => m.senderType === "HUMAN_EXTERNAL");
+      const hasAiCardapio      = c.messages.some(
+        (m) => m.senderType === "AI" && (m.metadata as Record<string, unknown> | null)?.source === "CARDAPIO",
+      );
       const isActive           = ACTIVE_STATUSES.includes(c.status);
 
       return {
@@ -136,7 +139,15 @@ export async function GET(req: NextRequest) {
         recentMessagesBySender: msgCountBySender,
         hasWhatsApp,
         hasCardapio,
+        hasAiCardapio,
         hasWhatsAppExterno,
+        recentMessages: c.messages.map((m) => ({
+          senderType: m.senderType,
+          direction:  m.direction,
+          sentAt:     m.sentAt.toISOString(),
+          source:     (m.metadata as Record<string, unknown> | null)?.source ?? null,
+          preview:    m.content.slice(0, 80),
+        })),
       };
     });
 

@@ -543,7 +543,9 @@ async function run(conversationId: string): Promise<void> {
   }
 
   const rawMenuUrl = agentCfg?.menuUrl?.trim() || (restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : null);
-  const basePedidoUrl = rawMenuUrl ? sanitizeCustomerUrl(rawMenuUrl) : null;
+  // waToken is only handled by /pedido/ — remap /qr/ URLs so identity is not lost
+  const fixedMenuUrl = rawMenuUrl?.replace(/\/qr\/([^/?]+)/, "/pedido/$1") ?? rawMenuUrl;
+  const basePedidoUrl = fixedMenuUrl ? sanitizeCustomerUrl(fixedMenuUrl) : null;
   // Build customer-identified URL so /pedido can skip the phone-entry step
   const pedidoUrl = buildIdentifiedPedidoUrl(
     basePedidoUrl,

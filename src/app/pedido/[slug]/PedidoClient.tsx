@@ -1923,20 +1923,16 @@ export function PedidoClient({
   useEffect(() => {
     if (entryPhase !== "browsing" || !knownCustomerPhone) return;
     try {
-      if (!sessionStorage.getItem(`foocci-entry-${slug}`)) {
-        sessionStorage.setItem(`foocci-entry-${slug}`, "1");
-      }
-      if (!sessionStorage.getItem(`foocci-customer-${slug}`)) {
-        // Always write phone (and customerId when available) so same-tab navigation
-        // without the waToken in the URL retains identity and skips auto-identify.
-        const entry: Record<string, string | undefined> = {
-          phone:        knownCustomerPhone,
-          name:         knownCustomerName ?? "",
-          displayPhone: formatDisplayPhone(knownCustomerPhone),
-        };
-        if (knownCustomerId) entry.customerId = knownCustomerId;
-        sessionStorage.setItem(`foocci-customer-${slug}`, JSON.stringify(entry));
-      }
+      sessionStorage.setItem(`foocci-entry-${slug}`, "1");
+      // Always overwrite — SSR-confirmed identity must upgrade any stale anonymous entry
+      // from a prior visit so the phone prompt is skipped and auto-identify fires correctly.
+      const entry: Record<string, string | undefined> = {
+        phone:        knownCustomerPhone,
+        name:         knownCustomerName ?? "",
+        displayPhone: formatDisplayPhone(knownCustomerPhone),
+      };
+      if (knownCustomerId) entry.customerId = knownCustomerId;
+      sessionStorage.setItem(`foocci-customer-${slug}`, JSON.stringify(entry));
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryPhase]);

@@ -149,11 +149,11 @@ export async function POST(
     if (!Array.isArray(history)) return badRequest("history must be an array.");
 
     // ── Chat Inbox: conversation logging ─────────────────────────────────────
-    // Only log real user messages (ON_USER_MESSAGE with non-empty content).
+    // Conversation is ensured on ON_ENTRY (greeting) and ON_USER_MESSAGE (chat).
     // All errors are caught so ordering never breaks due to logging failures.
     let conversationId: string | null = reqConvId ?? null;
 
-    if (event === "ON_USER_MESSAGE" && message?.trim() && sessionId) {
+    if (sessionId && (event === "ON_USER_MESSAGE" || event === "ON_ENTRY")) {
       try {
         conversationId = await ConversationLogService.ensureConversation({
           restaurantId:  restaurant.id,
@@ -164,27 +164,29 @@ export async function POST(
           channel:       Channel.QR_AGENT,
         });
 
-        // Log customer message
-        await ConversationLogService.logMessage({
-          conversationId,
-          restaurantId: restaurant.id,
-          senderType:   "CUSTOMER_CARDAPIO",
-          content:      message.trim(),
-        });
-
-        // Check if AI is suppressed for this conversation
-        const aiEnabled = await ConversationLogService.isAiEnabled(conversationId, restaurant.id);
-        if (!aiEnabled) {
-          return ok({
-            reply:             "Um atendente da loja assumiu essa conversa. Aguarde um momento.",
-            cards:             [],
-            mode:              "BROWSE",
-            options:           [],
-            suggestedItemName: null,
-            pinnedCardId:      null,
-            memoryPatch:       null,
+        if (event === "ON_USER_MESSAGE" && message?.trim()) {
+          // Log customer message
+          await ConversationLogService.logMessage({
             conversationId,
+            restaurantId: restaurant.id,
+            senderType:   "CUSTOMER_CARDAPIO",
+            content:      message.trim(),
           });
+
+          // Check if AI is suppressed for this conversation
+          const aiEnabled = await ConversationLogService.isAiEnabled(conversationId, restaurant.id);
+          if (!aiEnabled) {
+            return ok({
+              reply:             "Um atendente da loja assumiu essa conversa. Aguarde um momento.",
+              cards:             [],
+              mode:              "BROWSE",
+              options:           [],
+              suggestedItemName: null,
+              pinnedCardId:      null,
+              memoryPatch:       null,
+              conversationId,
+            });
+          }
         }
       } catch (logErr) {
         console.error("[waiter] conversation logging failed (non-fatal)", logErr);
@@ -244,13 +246,14 @@ export async function POST(
       options: (options ?? []).length,
     }));
 
-    // Log AI reply (fire-and-forget)
-    if (conversationId && reply && event === "ON_USER_MESSAGE") {
+    // Log AI reply for any event that produced a visible reply (fire-and-forget)
+    if (conversationId && reply) {
       ConversationLogService.logMessage({
         conversationId,
         restaurantId: restaurant.id,
         senderType:   "AI",
         content:      reply,
+        metadata:     { source: "CARDAPIO" },
       }).catch((e) => console.error("[waiter] AI reply logging failed (non-fatal)", e));
     }
 

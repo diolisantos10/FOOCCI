@@ -84,6 +84,7 @@ interface Message {
   mediaUrl:       string | null;
   sentAt:         string;
   externalStatus: string | null;
+  metadata?:      Record<string, unknown> | null;
 }
 
 interface AttachmentState {
@@ -1815,6 +1816,8 @@ function ThreadPanel({
   const isResolved     = thread.status === "RESOLVED";
   const isAIActive     = thread.aiEnabled && !isResolved;
   const isHumanHandling = !thread.aiEnabled && !isResolved;
+  const isMultichannel = thread.channel === "WHATSAPP" &&
+    thread.messages.some((m) => m.senderType === "CUSTOMER_CARDAPIO");
 
   const [manualOrderOpen, setManualOrderOpen] = useState(false);
   const [orderCreatedId,  setOrderCreatedId]  = useState<string | null>(null);
@@ -1855,10 +1858,17 @@ function ThreadPanel({
           </div>
 
           <div className="hidden items-center gap-1.5 sm:flex">
-            <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-              <span>{channel.icon}</span>
-              <span className="hidden md:inline">{channel.label}</span>
-            </span>
+            {isMultichannel ? (
+              <span className="flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs font-medium text-blue-700">
+                <span>📱📋</span>
+                <span className="hidden md:inline">Multicanal</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                <span>{channel.icon}</span>
+                <span className="hidden md:inline">{channel.label}</span>
+              </span>
+            )}
             <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${badge.cls}`}>
               {badge.label}
             </span>
@@ -2293,9 +2303,10 @@ function MessageBubble({
   const isOutbound  = msg.direction === "OUTBOUND";
   const isHumanMsg  = isOutbound && (msg.senderType === "HUMAN" || msg.senderType === "HUMAN_EXTERNAL");
   const senderLabel = isOutbound
-    ? (msg.senderType === "AI" ? "IA"
-      : msg.senderType === "HUMAN_EXTERNAL" ? "WhatsApp externo"
-      : "Equipe")
+    ? (msg.senderType === "AI"
+        ? (msg.metadata?.source === "CARDAPIO" ? "IA · Cardápio" : "IA")
+        : msg.senderType === "HUMAN_EXTERNAL" ? "WhatsApp externo"
+        : "Equipe")
     : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : customerName);
 
   // Find the most recent customer message before this human reply
