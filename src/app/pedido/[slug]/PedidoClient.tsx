@@ -3299,6 +3299,23 @@ export function PedidoClient({
     setStage("REVIEW_ORDER");
   }, []);
 
+  // Returns customer to payment-mode selection so they can choose a different method
+  // (e.g. pay on delivery instead of Pix). Resets payment selections so the PAYMENT
+  // stage renders fresh options. The pending Pix order stays AWAITING_PAYMENT in the
+  // DB — it will only enter operations if the Pix is actually paid via webhook.
+  const handleChangePaymentMethod = useCallback(() => {
+    setPixCopyPaste(null);
+    setPixQrCodeBase64(null);
+    setPixCopied(false);
+    setPaymentUrl(null);
+    setOrderId(null);
+    try { localStorage.removeItem(ACTIVE_ORDER_KEY); } catch { /* ignore */ }
+    setPaymentMode(null);
+    setPaymentMethodSub(null);
+    setStage("PAYMENT");
+    pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["PAYMENT"]!);
+  }, [pushAssistantMessage]);
+
   const handleApplyCoupon = useCallback(async () => {
     if (!couponInput.trim()) return;
     setCouponLoading(true);
@@ -3901,7 +3918,7 @@ export function PedidoClient({
           <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-4" data-testid="checkout-area">
             <p className="text-sm font-semibold text-gray-800">Aguardando pagamento Pix</p>
             <p className="mt-1 text-xs text-gray-500">
-              Seu pedido será enviado ao restaurante assim que o pagamento for confirmado.
+              Escaneie o QR Code ou use o código copia e cola abaixo.
             </p>
 
             {pixQrCodeBase64 ? (
@@ -3943,13 +3960,26 @@ export function PedidoClient({
               ⏳ Aguardando confirmação do pagamento…
             </p>
 
+            <p className="mt-2 text-center text-[10px] text-gray-400">
+              Seu pedido só será enviado ao restaurante após a confirmação do pagamento.
+            </p>
+
             <button
-              data-testid="cancel-pix-btn"
+              data-testid="change-payment-btn"
+              type="button"
+              onClick={handleChangePaymentMethod}
+              className="mt-3 w-full rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-700 hover:bg-orange-100 active:scale-95 transition-all"
+            >
+              Trocar forma de pagamento
+            </button>
+
+            <button
+              data-testid="back-to-review-btn"
               type="button"
               onClick={handleCancelPix}
-              className="mt-3 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50 active:scale-95 transition-all"
+              className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50 active:scale-95 transition-all"
             >
-              Cancelar pagamento e voltar
+              Voltar para revisar pedido
             </button>
           </div>
         );
@@ -3973,10 +4003,29 @@ export function PedidoClient({
                 Ir para o pagamento →
               </a>
               <p className="mt-2 text-[10px] text-gray-400 text-center animate-pulse">⏳ Aguardando confirmação do pagamento…</p>
+              <p className="mt-1 text-center text-[10px] text-gray-400">
+                Seu pedido só será enviado ao restaurante após a confirmação do pagamento.
+              </p>
             </>
           ) : (
             <p className="mt-2 text-xs text-red-500">Link expirado ou erro. Recarregue a página para tentar novamente.</p>
           )}
+          <button
+            data-testid="change-payment-btn"
+            type="button"
+            onClick={handleChangePaymentMethod}
+            className="mt-3 w-full rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-700 hover:bg-orange-100 active:scale-95 transition-all"
+          >
+            Trocar forma de pagamento
+          </button>
+          <button
+            data-testid="back-to-review-btn"
+            type="button"
+            onClick={handleCancelPix}
+            className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50 active:scale-95 transition-all"
+          >
+            Voltar para revisar pedido
+          </button>
         </div>
       );
     }
