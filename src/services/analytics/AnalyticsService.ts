@@ -134,6 +134,13 @@ export interface ImportedBaseline {
   semClassificacaoCount: number; // rows without a standard category classification
 }
 
+export interface UpsellRevenue {
+  revenue:           number; // sum of upsell item totals in completed orders
+  revenueShare:      number; // upsell revenue as % of total revenue (0–100)
+  ordersWithUpsell:  number; // distinct orders with at least one upsell item
+  avgPerOrder:       number; // average upsell revenue per order-with-upsell
+}
+
 export interface AnalyticsOverview {
   range:                    DateRange;
   kpi:                      KpiOverview;
@@ -151,6 +158,7 @@ export interface AnalyticsOverview {
   importedTopByOrders:      ImportedCustomerRow[]; // top 20 by importedOrderCount
   importedSemTelefoneCount: number;               // customers with importedTotalSpent>0 but no phone
   zeroSalesProducts:        ZeroSalesProduct[];   // active menu items with no sales in the period
+  upsellRevenue:            UpsellRevenue;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -189,6 +197,7 @@ export class AnalyticsService {
       importedTopByOrders,
       importedSemTelefoneCount,
       zeroSalesProducts,
+      upsellRevenue,
     ] = await Promise.all([
       this.getKpis(restaurantId, from, to),
       this.getSalesByDay(restaurantId, from, to),
@@ -204,11 +213,12 @@ export class AnalyticsService {
       this.getImportedTopByOrders(restaurantId),
       this.getImportedSemTelefoneCount(restaurantId),
       this.getZeroSalesProducts(restaurantId, from, to),
+      this.getUpsellRevenue(restaurantId, from, to),
     ]);
 
     const insights = this.buildInsights({ kpi, topProducts, categories, attachRates, channels });
 
-    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, importedBaseline, importedTopCustomers, importedTopByOrders, importedSemTelefoneCount, zeroSalesProducts };
+    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, importedBaseline, importedTopCustomers, importedTopByOrders, importedSemTelefoneCount, zeroSalesProducts, upsellRevenue };
   }
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
@@ -756,6 +766,38 @@ export class AnalyticsService {
   // ── Zero-sales products ────────────────────────────────────────────────────
   // Active menu items that had no confirmed order_items in the given date range.
   // Uses a CTE to collect sold menuItemIds, then LEFT JOIN to find the gap.
+
+  private static async getUpsellRevenue(
+    restaurantId: string,
+    from: Date,
+    to: Date,
+  ): Promise<UpsellRevenue> {
+    const rows = await prisma.$queryRaw<Array<{
+      upsell_revenue:   string;
+      orders_with_upsell: RawBigint;
+      total_revenue:    string;
+    }>>`
+      SELECT
+        COALESCE(SUM(oi.total) FILTER (WHERE oi."isUpsell" = true), 0)::text  AS upsell_revenue,
+        COUNT(DISTINCT o.id) FILTER (WHERE oi."isUpsell" = true)              AS orders_with_upsell,
+        COALESCE(SUM(oi.total), 0)::text                                      AS total_revenue
+      FROM order_items oi
+      JOIN orders o ON o.id = oi."orderId"
+      WHERE o."restaurantId" = ${restaurantId}
+        AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
+        AND COALESCE(o."importedAt", o."createdAt") >= ${from}
+        AND COALESCE(o."importedAt", o."createdAt") <  ${to}
+    `;
+
+    const row             = rows[0];
+    const revenue         = toNum(row?.upsell_revenue);
+    const totalRevenue    = toNum(row?.total_revenue);
+    const ordersWithUpsell = toNum(row?.orders_with_upsell);
+    const revenueShare    = totalRevenue > 0 ? Math.round((revenue / totalRevenue) * 1000) / 10 : 0;
+    const avgPerOrder     = ordersWithUpsell > 0 ? Math.round((revenue / ordersWithUpsell) * 100) / 100 : 0;
+
+    return { revenue, revenueShare, ordersWithUpsell, avgPerOrder };
+  }
 
   private static async getZeroSalesProducts(
     restaurantId: string,

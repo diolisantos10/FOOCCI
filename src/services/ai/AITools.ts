@@ -461,6 +461,7 @@ async function execConfirmOrder(
             quantity: di.quantity,
             notes: di.notes,
             total: Number(di.unitPrice) * di.quantity,
+            isUpsell: di.isUpsell,
           })),
         },
       },

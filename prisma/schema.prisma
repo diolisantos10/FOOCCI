@@ -446,6 +446,7 @@ model OrderItem {
   categoryName String? // name snapshot at order time — stays even if category is renamed
   variantName  String? // selected variant name snapshot if applicable
   addonsJson   Json? // JSON snapshot of selected add-ons / options / customizations
+  isUpsell     Boolean @default(false) // true when item was added after a Foocci upsell suggestion
 
   order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItem MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)

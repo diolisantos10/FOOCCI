@@ -16,6 +16,7 @@ import type {
   ImportedBaseline,
   ImportedCustomerRow,
   ZeroSalesProduct,
+  UpsellRevenue,
 } from "@/services/analytics/AnalyticsService";
 
 // ─── Analytics Agent types ────────────────────────────────────────────────────
@@ -958,6 +959,49 @@ function AgentPanel({ data, loading }: { data: AgentReport | null; loading: bool
   );
 }
 
+// ─── Foocci Incremental Revenue Card ─────────────────────────────────────────
+
+function UpsellRevenueCard({ upsell }: { upsell: UpsellRevenue | undefined }) {
+  const revenue    = upsell?.revenue         ?? 0;
+  const share      = upsell?.revenueShare    ?? 0;
+  const orders     = upsell?.ordersWithUpsell ?? 0;
+  const avgPerOrder = upsell?.avgPerOrder    ?? 0;
+
+  return (
+    <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-5">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-base select-none">
+          ✨
+        </div>
+        <div>
+          <p className="text-sm font-bold text-emerald-900">Receita incremental Foocci</p>
+          <p className="text-xs text-emerald-700 mt-0.5">
+            Valor estimado de vendas adicionadas após sugestões do Foocci.
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Receita adicional",        val: fmtBRL(revenue) },
+          { label: "% da receita total",       val: fmtPct(share) },
+          { label: "Pedidos com upsell",       val: fmtNum(orders) },
+          { label: "Média por pedido",         val: fmtBRL(avgPerOrder) },
+        ].map((item) => (
+          <div key={item.label} className="rounded-xl bg-white px-3 py-2.5 shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{item.label}</p>
+            <p className="mt-0.5 text-base font-bold text-gray-900">{item.val}</p>
+          </div>
+        ))}
+      </div>
+      {revenue === 0 && (
+        <p className="mt-3 text-xs text-emerald-700">
+          Nenhum upsell convertido neste período. Ative o agente IA para começar a gerar receita incremental.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Tab: Visão Geral ─────────────────────────────────────────────────────────
 
 function TabVisaoGeral({
@@ -992,6 +1036,9 @@ function TabVisaoGeral({
           <KpiCard label="Cancelamento %" value={kpi ? fmtPct(kpi.cancellationRate) : "—"} />
         </div>
       </div>
+
+      {/* Foocci incremental revenue — shown when there are real orders */}
+      {!loading && hasRealOrders && <UpsellRevenueCard upsell={data?.upsellRevenue} />}
 
       {/* Imported baseline summary card — always shown when data exists; more prominent in "all" mode */}
       {!loading && hasImported && (
