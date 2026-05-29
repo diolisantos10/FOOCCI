@@ -3529,6 +3529,18 @@ export function PedidoClient({
               Consultar nos Correios
             </a>
           </p>
+          <button
+            type="button"
+            onClick={() => {
+              setDeliveryMethod(null);
+              setCepInputValue("");
+              setCepError(null);
+              setStage("DELIVERY_TYPE");
+            }}
+            className="mt-2 w-full rounded-xl border border-gray-200 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50"
+          >
+            ← Voltar para entrega/retirada
+          </button>
         </div>
       );
     }
@@ -3658,6 +3670,23 @@ export function PedidoClient({
               Editar
             </button>
           </div>
+          <div className="mt-2 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setDeliveryMethod(null);
+                setAddress({ cep: "", street: "", number: "", neighborhood: "", city: "", state: "", complement: "", referencePoint: "" });
+                setCepInputValue("");
+                setQuoteDeliveryFee(null);
+                setQuoteStatus(null);
+                setQuoteError(null);
+                setStage("DELIVERY_TYPE");
+              }}
+              className="text-xs text-gray-400 underline hover:text-gray-600"
+            >
+              ← Trocar entrega/retirada
+            </button>
+          </div>
         </div>
       );
     }
@@ -3683,6 +3712,22 @@ export function PedidoClient({
               </button>
             )}
           </div>
+          <div className="mt-2 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                if (deliveryMethod === "delivery") {
+                  setStage("ADDRESS_CONFIRM");
+                } else {
+                  setDeliveryMethod(null);
+                  setStage("DELIVERY_TYPE");
+                }
+              }}
+              className="text-xs text-gray-400 underline hover:text-gray-600"
+            >
+              ← Voltar para {deliveryMethod === "delivery" ? "endereço" : "entrega/retirada"}
+            </button>
+          </div>
         </div>
       );
     }
@@ -3700,6 +3745,18 @@ export function PedidoClient({
                 </button>
               );
             })}
+          </div>
+          <div className="mt-2 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentMode(null);
+                setStage("PAYMENT");
+              }}
+              className="text-xs text-gray-400 underline hover:text-gray-600"
+            >
+              ← Voltar para forma de pagamento
+            </button>
           </div>
         </div>
       );
@@ -3739,6 +3796,18 @@ export function PedidoClient({
                 </div>
               </div>
             ))}
+          </div>
+          <div className="mt-3 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentMode(null);
+                setStage("PAYMENT");
+              }}
+              className="text-xs text-gray-400 underline hover:text-gray-600"
+            >
+              ← Voltar para forma de pagamento
+            </button>
           </div>
         </div>
       );
@@ -3891,7 +3960,7 @@ export function PedidoClient({
           >
             {ui === "thinking" ? "Confirmando…" : "Confirmar pedido 🎉"}
           </button>
-          <div className="mt-2 flex gap-2 justify-center">
+          <div className="mt-2 flex flex-wrap gap-2 justify-center">
             <button
               onClick={handleBackToBrowse}
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
@@ -3906,6 +3975,16 @@ export function PedidoClient({
                 Alterar endereço
               </button>
             )}
+            <button
+              onClick={() => {
+                setPaymentMode(null);
+                setPaymentMethodSub(null);
+                setStage("PAYMENT");
+              }}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
+            >
+              Trocar pagamento
+            </button>
           </div>
         </div>
       );
