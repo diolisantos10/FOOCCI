@@ -35,10 +35,10 @@
  * Recommended cron schedule: every 1 minute.
  */
 
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { EvolutionClient, EvolutionApiError } from "@/lib/evolution/EvolutionClient";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { signRecoveryToken } from "@/lib/recovery-token";
 import { isGuestIdentifier } from "@/lib/guest";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
@@ -67,13 +67,18 @@ export interface RecoverySendResult {
   durationMs:              number;
 }
 
-function buildShortRecoveryUrl(
-  draftId: string,
-  customerId: string,
-  restaurantId: string,
-): string {
-  const token = signRecoveryToken({ draftId, customerId, restaurantId });
-  return `${getPublicSiteUrl()}/r/${token}`;
+// Unambiguous alphanumeric charset (no 0/O, 1/I/l)
+const RECOVERY_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+
+function generateRecoveryCode(): string {
+  let code = "";
+  const bytes = crypto.randomBytes(8);
+  for (const byte of bytes) code += RECOVERY_CODE_CHARS[byte % RECOVERY_CODE_CHARS.length];
+  return code;
+}
+
+function buildShortRecoveryUrl(recoveryCode: string): string {
+  return `${getPublicSiteUrl()}/r/${recoveryCode}`;
 }
 
 function buildRecoveryMessage(name: string | null, shortRecoveryUrl: string): string {
@@ -332,8 +337,17 @@ export class OrderDraftRecoverySendService {
           skippedNoConfig++;
           continue;
         }
-        const config           = configResult.data;
-        const shortRecoveryUrl = buildShortRecoveryUrl(draft.id, draft.customerId, draft.restaurantId);
+        const config = configResult.data;
+
+        // Generate short recovery code and persist it BEFORE sending so the
+        // URL resolves in the DB the moment the customer taps the link.
+        const recoveryCode = generateRecoveryCode();
+        await prisma.orderDraft.update({
+          where: { id: draft.id },
+          data:  { recoveryCode },
+        });
+
+        const shortRecoveryUrl = buildShortRecoveryUrl(recoveryCode);
         const message          = buildRecoveryMessage(customer.name, shortRecoveryUrl);
 
         console.info(`[OrderDraftRecoverySendService] sending recovery`, {
@@ -346,7 +360,7 @@ export class OrderDraftRecoverySendService {
 
         await EvolutionClient.sendTextMessage(config, toPhone, message);
 
-        // Atomic: stamp draft so it never fires again
+        // Stamp draft so it never fires again
         const now = new Date();
         await prisma.orderDraft.update({
           where: { id: draft.id },
