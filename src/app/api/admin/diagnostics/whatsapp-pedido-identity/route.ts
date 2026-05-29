@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
 
   // ── Step 2: Resolve customer by phone ─────────────────────────────────────
   const candidates = phoneCandidates(phone);
-  let customer: { id: string; name: string; phone: string } | null = null;
+  let customer: { id: string; name: string; phone: string | null } | null = null;
   if (candidates.length > 0) {
     customer = await prisma.customer.findFirst({
       where:  { restaurantId: restaurant.id, phone: { in: candidates } },
@@ -168,7 +168,7 @@ export async function GET(req: NextRequest) {
 
   // ── Step 8: Simulate page.tsx SSR resolution ──────────────────────────────
   // Reproduce exactly what page.tsx does: verify token → phoneCandidates → DB lookup
-  let ssrCustomer: { id: string; name: string; phone: string } | null = null;
+  let ssrCustomer: { id: string; name: string; phone: string | null } | null = null;
   let ssrError: string | null = null;
   if (verifyPayload?.phone) {
     const ssrCandidates = phoneCandidates(verifyPayload.phone);
