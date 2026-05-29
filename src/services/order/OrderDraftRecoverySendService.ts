@@ -41,6 +41,7 @@ import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigServ
 import { signRecoveryToken } from "@/lib/recovery-token";
 import { isGuestIdentifier } from "@/lib/guest";
 import { getPublicSiteUrl } from "@/lib/public-url";
+import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { ConversationStatus } from "@prisma/client";
 
 function maskPhone(phone: string): string {
@@ -50,19 +51,20 @@ function maskPhone(phone: string): string {
 }
 
 export interface RecoverySendResult {
-  checked:               number;
-  eligible:              number;
-  sent:                  number;
-  skippedNoPhone:        number;
-  skippedAlreadySent:    number;
-  skippedDailyLimit:     number;
-  skippedOrderedAfter:   number;
-  skippedPendingPayment: number;
-  skippedNoConfig:       number; // restaurant has no Evolution/WhatsApp integration configured
-  failed:                number; // Evolution API was called but returned an error
-  dryRun:                boolean;
-  inactivityMinutes:     number;
-  durationMs:            number;
+  checked:                 number;
+  eligible:                number;
+  sent:                    number;
+  skippedNoPhone:          number;
+  skippedAlreadySent:      number;
+  skippedDailyLimit:       number;
+  skippedOrderedAfter:     number;
+  skippedPendingPayment:   number;
+  skippedNoConfig:         number; // restaurant has no Evolution/WhatsApp integration configured
+  skippedRestaurantClosed: number; // restaurant is closed — recovery deferred, attempts NOT incremented
+  failed:                  number; // Evolution API was called but returned an error
+  dryRun:                  boolean;
+  inactivityMinutes:       number;
+  durationMs:              number;
 }
 
 function buildShortRecoveryUrl(
@@ -199,7 +201,8 @@ export class OrderDraftRecoverySendService {
       return {
         checked: 0, eligible: 0, sent: 0,
         skippedNoPhone: 0, skippedAlreadySent: 0, skippedDailyLimit: 0,
-        skippedOrderedAfter: 0, skippedPendingPayment: 0, skippedNoConfig: 0, failed: 0,
+        skippedOrderedAfter: 0, skippedPendingPayment: 0, skippedNoConfig: 0,
+        skippedRestaurantClosed: 0, failed: 0,
         dryRun, inactivityMinutes,
         durationMs: Date.now() - startMs,
       };
@@ -235,15 +238,26 @@ export class OrderDraftRecoverySendService {
     );
 
     // ── Step 4: per-draft eligibility + send ────────────────────────────────
-    let eligible              = 0;
-    let sent                  = 0;
-    let skippedNoPhone        = 0;
-    let skippedAlreadySent    = 0;
-    let skippedDailyLimit     = 0;
-    let skippedOrderedAfter   = 0;
-    let skippedPendingPayment = 0;
-    let skippedNoConfig       = 0;
-    let failed                = 0;
+    let eligible                = 0;
+    let sent                    = 0;
+    let skippedNoPhone          = 0;
+    let skippedAlreadySent      = 0;
+    let skippedDailyLimit       = 0;
+    let skippedOrderedAfter     = 0;
+    let skippedPendingPayment   = 0;
+    let skippedNoConfig         = 0;
+    let skippedRestaurantClosed = 0;
+    let failed                  = 0;
+
+    // Cache open/closed status per restaurant for this tick — avoids N DB round-trips
+    // when multiple drafts belong to the same restaurant.
+    const restaurantOpenCache = new Map<string, boolean>();
+    const isOpen = async (restaurantId: string): Promise<boolean> => {
+      if (restaurantOpenCache.has(restaurantId)) return restaurantOpenCache.get(restaurantId)!;
+      const open = await isRestaurantOpenNow(restaurantId);
+      restaurantOpenCache.set(restaurantId, open);
+      return open;
+    };
 
     for (const draft of candidates) {
       const customer = draft.customer;
@@ -288,6 +302,14 @@ export class OrderDraftRecoverySendService {
       });
       if (recentOrder) {
         skippedOrderedAfter++;
+        continue;
+      }
+
+      // Business hours gate — do NOT increment recoveryAttempts when closed.
+      // Recovery is deferred until the next tick when the restaurant reopens.
+      // Returns true (open) when no BusinessHours row is configured.
+      if (!(await isOpen(draft.restaurantId))) {
+        skippedRestaurantClosed++;
         continue;
       }
 
@@ -375,7 +397,7 @@ export class OrderDraftRecoverySendService {
     }
 
     return {
-      checked:               candidates.length,
+      checked:                 candidates.length,
       eligible,
       sent,
       skippedNoPhone,
@@ -384,6 +406,7 @@ export class OrderDraftRecoverySendService {
       skippedOrderedAfter,
       skippedPendingPayment,
       skippedNoConfig,
+      skippedRestaurantClosed,
       failed,
       dryRun,
       inactivityMinutes,

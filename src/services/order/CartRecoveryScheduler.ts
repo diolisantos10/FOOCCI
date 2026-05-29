@@ -70,17 +70,18 @@ export class CartRecoveryScheduler {
       // Silent only when checked=0 (no stale OPEN drafts at all).
       if (result.checked > 0 || result.sent > 0 || result.failed > 0) {
         console.info("[CartRecoveryScheduler] Tick", {
-          checked:               result.checked,
-          eligible:              result.eligible,
-          sent:                  result.sent,
-          failed:                result.failed,
-          skippedNoPhone:        result.skippedNoPhone,
-          skippedAlreadySent:    result.skippedAlreadySent,
-          skippedDailyLimit:     result.skippedDailyLimit,
-          skippedOrderedAfter:   result.skippedOrderedAfter,
-          skippedPendingPayment: result.skippedPendingPayment,
-          skippedNoConfig:       result.skippedNoConfig,
-          durationMs:            result.durationMs,
+          checked:                 result.checked,
+          eligible:                result.eligible,
+          sent:                    result.sent,
+          failed:                  result.failed,
+          skippedNoPhone:          result.skippedNoPhone,
+          skippedAlreadySent:      result.skippedAlreadySent,
+          skippedDailyLimit:       result.skippedDailyLimit,
+          skippedOrderedAfter:     result.skippedOrderedAfter,
+          skippedPendingPayment:   result.skippedPendingPayment,
+          skippedNoConfig:         result.skippedNoConfig,
+          skippedRestaurantClosed: result.skippedRestaurantClosed,
+          durationMs:              result.durationMs,
         });
       }
     } catch (err) {

@@ -69,7 +69,9 @@ export async function GET(req: NextRequest) {
       note: dryRunResult.eligible === 0
         ? dryRunResult.checked === 0
           ? "No OPEN drafts with recoveryAttempts=0 and items found. Check draft status and recoveryAttempts."
-          : `${dryRunResult.checked} drafts checked but none eligible. See skip counts above.`
+          : dryRunResult.skippedRestaurantClosed > 0
+            ? `${dryRunResult.checked} drafts checked; ${dryRunResult.skippedRestaurantClosed} skipped because restaurant(s) are currently closed. Recovery will be retried on the next tick when they reopen. recoveryAttempts was NOT incremented.`
+            : `${dryRunResult.checked} drafts checked but none eligible. See skip counts above.`
         : `${dryRunResult.eligible} draft(s) eligible — would send ${dryRunResult.eligible} message(s).`,
     },
   });
