@@ -1010,7 +1010,7 @@ async function sendReply(
           sentAt:            now,
           externalMessageId: result.key.id,
           externalStatus:    "sent",
-          ...(metadata ? { metadata } : {}),
+          ...(metadata ? { metadata: metadata as object } : {}),
         },
       }),
       prisma.conversation.update({
