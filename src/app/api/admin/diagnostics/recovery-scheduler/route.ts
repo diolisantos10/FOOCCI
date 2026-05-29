@@ -64,7 +64,6 @@ export async function GET(req: NextRequest) {
     },
 
     dryRun: {
-      inactivityMinutes,
       ...dryRunResult,
       note: dryRunResult.eligible === 0
         ? dryRunResult.checked === 0
