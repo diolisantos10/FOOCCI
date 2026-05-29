@@ -25,6 +25,16 @@ const itemSchema = z.object({
   note:       z.string().optional(),
 });
 
+const addressSchema = z.object({
+  cep:          z.string().min(1),
+  street:       z.string().min(1),
+  number:       z.string().min(1),
+  neighborhood: z.string().default(""),
+  city:         z.string().default(""),
+  state:        z.string().default(""),
+  complement:   z.string().optional(),
+});
+
 const bodySchema = z.object({
   customerName:  z.string().min(1),
   customerPhone: z.string().optional(),
@@ -34,7 +44,8 @@ const bodySchema = z.object({
   paymentMethod: z.enum(["CASH", "PIX", "CREDIT_CARD", "DEBIT_CARD", "CARD_MACHINE"]),
   paymentStatus: z.enum(["PAID", "PAY_ON_DELIVERY"]).default("PAID"),
   source:        z.enum(["manual", "whatsapp_manual"]).default("manual"),
-  conversationId: z.string().optional(),
+  conversationId:  z.string().optional(),
+  deliveryAddress: addressSchema.optional(),
   // Real product items (preferred)
   items: z.array(itemSchema).optional(),
   // Legacy: free-text total (used when items not provided)
@@ -61,7 +72,7 @@ export async function POST(req: NextRequest) {
 
   const {
     customerName, customerPhone, notes, deliveryFee, type,
-    paymentMethod, paymentStatus, source, conversationId, items, total,
+    paymentMethod, paymentStatus, source, conversationId, deliveryAddress, items, total,
   } = parsed.data;
   const { restaurantId } = ctx;
 
@@ -126,17 +137,39 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Create delivery address record if provided
+    let deliveryAddressId: string | null = null;
+    if (type === "DELIVERY" && deliveryAddress) {
+      const addr = await tx.address.create({
+        data: {
+          customerId:   customer.id,
+          zipCode:      deliveryAddress.cep,
+          street:       deliveryAddress.street,
+          number:       deliveryAddress.number,
+          complement:   deliveryAddress.complement || null,
+          neighborhood: deliveryAddress.neighborhood,
+          city:         deliveryAddress.city,
+          state:        deliveryAddress.state,
+          label:        "Pedido manual",
+          isDefault:    false,
+        },
+        select: { id: true },
+      });
+      deliveryAddressId = addr.id;
+    }
+
     const created = await tx.order.create({
       data: {
         restaurantId,
-        customerId: customer.id,
-        status:     "CONFIRMED",
-        type:       type === "DELIVERY" ? "DELIVERY" : "PICKUP",
-        subtotal:   new Decimal(subtotal),
-        deliveryFee: new Decimal(deliveryFee),
-        discount:   new Decimal(0),
-        total:      new Decimal(orderTotal),
-        notes:      notes || null,
+        customerId:       customer.id,
+        status:           "CONFIRMED",
+        type:             type === "DELIVERY" ? "DELIVERY" : "PICKUP",
+        subtotal:         new Decimal(subtotal),
+        deliveryFee:      new Decimal(deliveryFee),
+        discount:         new Decimal(0),
+        total:            new Decimal(orderTotal),
+        notes:            notes || null,
+        deliveryAddressId: deliveryAddressId ?? undefined,
         source,
         items: resolvedItems.length > 0
           ? {

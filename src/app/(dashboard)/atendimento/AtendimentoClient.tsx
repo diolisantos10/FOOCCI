@@ -1464,6 +1464,34 @@ interface CartLine {
   quantity:   number;
 }
 
+interface DeliveryAddrFields {
+  cep:          string;
+  street:       string;
+  number:       string;
+  neighborhood: string;
+  city:         string;
+  state:        string;
+  complement:   string;
+}
+
+interface DeliveryQuoteResult {
+  deliveryFee:       number;
+  calculationStatus: string;
+  reason:            string;
+  totalPreview:      number;
+  distanceKm:        number | null;
+  maxDistanceKm:     number | null;
+}
+
+const PAYMENT_LABELS: Record<string, string> = {
+  CASH: "Dinheiro", PIX: "Pix", CREDIT_CARD: "Crédito",
+  DEBIT_CARD: "Débito", CARD_MACHINE: "Máquina",
+};
+
+const EMPTY_ADDR: DeliveryAddrFields = {
+  cep: "", street: "", number: "", neighborhood: "", city: "", state: "", complement: "",
+};
+
 function ManualOrderModal({
   conversationId,
   customerName: initName,
@@ -1477,18 +1505,27 @@ function ManualOrderModal({
   onClose:        () => void;
   onCreated:      (orderId: string) => void;
 }) {
-  const [customerName,    setCustomerName]    = useState(initName  ?? "");
-  const [customerPhone,   setCustomerPhone]   = useState(initPhone ?? "");
-  const [orderType,       setOrderType]       = useState<"DELIVERY" | "PICKUP">("PICKUP");
-  const [paymentMethod,   setPaymentMethod]   = useState<"CASH" | "PIX" | "CREDIT_CARD" | "DEBIT_CARD" | "CARD_MACHINE">("CASH");
-  const [paymentStatus,   setPaymentStatus]   = useState<"PAID" | "PAY_ON_DELIVERY">("PAID");
-  const [notes,           setNotes]           = useState("");
-  const [menuItems,       setMenuItems]       = useState<MenuItemRow[]>([]);
-  const [menuLoading,     setMenuLoading]     = useState(false);
-  const [itemSearch,      setItemSearch]      = useState("");
-  const [cart,            setCart]            = useState<CartLine[]>([]);
-  const [submitting,      setSubmitting]      = useState(false);
-  const [error,           setError]           = useState<string | null>(null);
+  const [step,          setStep]          = useState<"form" | "review">("form");
+  const [customerName,  setCustomerName]  = useState(initName  ?? "");
+  const [customerPhone, setCustomerPhone] = useState(initPhone ?? "");
+  const [orderType,     setOrderType]     = useState<"DELIVERY" | "PICKUP">("PICKUP");
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "PIX" | "CREDIT_CARD" | "DEBIT_CARD" | "CARD_MACHINE">("CASH");
+  const [paymentStatus, setPaymentStatus] = useState<"PAID" | "PAY_ON_DELIVERY">("PAID");
+  const [notes,         setNotes]         = useState("");
+  const [menuItems,     setMenuItems]     = useState<MenuItemRow[]>([]);
+  const [menuLoading,   setMenuLoading]   = useState(false);
+  const [itemSearch,    setItemSearch]    = useState("");
+  const [cart,          setCart]          = useState<CartLine[]>([]);
+  const [submitting,    setSubmitting]    = useState(false);
+  const [error,         setError]         = useState<string | null>(null);
+
+  // Delivery address
+  const [addr,         setAddr]         = useState<DeliveryAddrFields>(EMPTY_ADDR);
+  const [cepLoading,   setCepLoading]   = useState(false);
+  const [cepError,     setCepError]     = useState<string | null>(null);
+  const [quote,        setQuote]        = useState<DeliveryQuoteResult | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError,   setQuoteError]   = useState<string | null>(null);
 
   useEffect(() => {
     setMenuLoading(true);
@@ -1505,74 +1542,285 @@ function ManualOrderModal({
     const q = itemSearch.toLowerCase();
     if (!q) return menuItems;
     return menuItems.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.categoryName.toLowerCase().includes(q)
+      (m) => m.name.toLowerCase().includes(q) || m.categoryName.toLowerCase().includes(q)
     );
   }, [menuItems, itemSearch]);
 
   function addToCart(item: MenuItemRow) {
     setCart((prev) => {
       const existing = prev.find((l) => l.menuItemId === item.id);
-      if (existing) {
-        return prev.map((l) =>
-          l.menuItemId === item.id ? { ...l, quantity: l.quantity + 1 } : l
-        );
-      }
+      if (existing) return prev.map((l) => l.menuItemId === item.id ? { ...l, quantity: l.quantity + 1 } : l);
       return [...prev, { menuItemId: item.id, name: item.name, price: item.price, quantity: 1 }];
     });
   }
 
   function adjustQty(menuItemId: string, delta: number) {
     setCart((prev) =>
-      prev
-        .map((l) => l.menuItemId === menuItemId ? { ...l, quantity: l.quantity + delta } : l)
-        .filter((l) => l.quantity > 0)
+      prev.map((l) => l.menuItemId === menuItemId ? { ...l, quantity: l.quantity + delta } : l)
+          .filter((l) => l.quantity > 0)
     );
   }
 
-  const cartTotal = cart.reduce((s, l) => s + l.price * l.quantity, 0);
+  function handleOrderTypeChange(t: "DELIVERY" | "PICKUP") {
+    setOrderType(t);
+    if (t === "PICKUP") { setQuote(null); setQuoteError(null); }
+  }
 
-  async function handleSubmit() {
-    if (!customerName.trim()) { setError("Nome do cliente é obrigatório"); return; }
-    if (cart.length === 0)    { setError("Adicione pelo menos um item"); return; }
-    setSubmitting(true);
-    setError(null);
+  function updateAddr(field: keyof DeliveryAddrFields, value: string) {
+    setAddr((prev) => ({ ...prev, [field]: value }));
+    setQuote(null);
+    setQuoteError(null);
+  }
+
+  async function lookupCep() {
+    const cep = addr.cep.replace(/\D/g, "");
+    if (cep.length !== 8) { setCepError("CEP deve ter 8 dígitos"); return; }
+    setCepLoading(true);
+    setCepError(null);
     try {
-      const res = await fetch("/api/orders/manual", {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await res.json() as { erro?: boolean; logradouro?: string; bairro?: string; localidade?: string; uf?: string };
+      if (data.erro) { setCepError("CEP não encontrado"); return; }
+      setAddr((prev) => ({
+        ...prev,
+        cep,
+        street:       data.logradouro ?? prev.street,
+        neighborhood: data.bairro     ?? prev.neighborhood,
+        city:         data.localidade ?? prev.city,
+        state:        data.uf         ?? prev.state,
+      }));
+      setQuote(null);
+      setQuoteError(null);
+    } catch {
+      setCepError("Erro ao buscar CEP");
+    } finally {
+      setCepLoading(false);
+    }
+  }
+
+  const cartSubtotal = cart.reduce((s, l) => s + l.price * l.quantity, 0);
+  const deliveryFee  = orderType === "DELIVERY" ? (quote?.deliveryFee ?? 0) : 0;
+  const cartTotal    = cartSubtotal + deliveryFee;
+
+  async function calcFreight() {
+    if (!addr.street.trim() || !addr.number.trim()) {
+      setQuoteError("Preencha CEP, rua e número antes de calcular");
+      return;
+    }
+    setQuoteLoading(true);
+    setQuoteError(null);
+    try {
+      const res = await fetch("/api/admin/delivery-quote", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          customerName:  customerName.trim(),
-          customerPhone: customerPhone.trim() || undefined,
-          notes:         notes.trim() || undefined,
-          deliveryFee:   0,
-          type:          orderType,
-          paymentMethod,
-          paymentStatus,
-          source:        "whatsapp_manual",
-          conversationId: conversationId || undefined,
-          items:         cart.map((l) => ({ menuItemId: l.menuItemId, quantity: l.quantity })),
+          subtotal: cartSubtotal,
+          cep:          addr.cep,
+          street:       addr.street,
+          number:       addr.number,
+          neighborhood: addr.neighborhood,
+          city:         addr.city,
+          state:        addr.state,
         }),
+      });
+      const json = await res.json() as DeliveryQuoteResult & { error?: string };
+      if (!res.ok) { setQuoteError(json.error ?? "Erro ao calcular frete"); return; }
+      setQuote(json);
+    } catch {
+      setQuoteError("Falha de rede ao calcular frete");
+    } finally {
+      setQuoteLoading(false);
+    }
+  }
+
+  function isBlocked(status: string) {
+    return status === "out_of_range" || status === "distance_blocked";
+  }
+
+  function validateForm(): string | null {
+    if (!customerName.trim()) return "Nome do cliente é obrigatório";
+    if (cart.length === 0)    return "Adicione pelo menos um item";
+    if (orderType === "DELIVERY") {
+      if (!addr.cep.trim() || !addr.street.trim() || !addr.number.trim())
+        return "Preencha CEP, rua e número do endereço de entrega";
+      if (!addr.neighborhood.trim() || !addr.city.trim())
+        return "Preencha bairro e cidade do endereço de entrega";
+      if (!quote)
+        return "Calcule o frete antes de continuar";
+      if (isBlocked(quote.calculationStatus))
+        return quote.reason;
+    }
+    return null;
+  }
+
+  function handleGoToReview() {
+    const err = validateForm();
+    if (err) { setError(err); return; }
+    setError(null);
+    setStep("review");
+  }
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const body: Record<string, unknown> = {
+        customerName:  customerName.trim(),
+        customerPhone: customerPhone.trim() || undefined,
+        notes:         notes.trim() || undefined,
+        deliveryFee,
+        type:          orderType,
+        paymentMethod,
+        paymentStatus,
+        source:        "whatsapp_manual",
+        conversationId: conversationId || undefined,
+        items:         cart.map((l) => ({ menuItemId: l.menuItemId, quantity: l.quantity })),
+      };
+      if (orderType === "DELIVERY" && addr.street.trim()) {
+        body.deliveryAddress = {
+          cep:          addr.cep,
+          street:       addr.street,
+          number:       addr.number,
+          neighborhood: addr.neighborhood,
+          city:         addr.city,
+          state:        addr.state,
+          complement:   addr.complement || undefined,
+        };
+      }
+      const res = await fetch("/api/orders/manual", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(body),
       });
       const json = await res.json() as { success?: boolean; orderId?: string; error?: string };
       if (!res.ok || !json.success) {
         setError(json.error ?? "Erro ao criar pedido");
+        setStep("form");
         return;
       }
       onCreated(json.orderId!);
     } catch {
       setError("Falha de rede. Tente novamente.");
+      setStep("form");
     } finally {
       setSubmitting(false);
     }
   }
 
+  const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100";
+  const selectCls = "w-full rounded-lg border border-gray-200 px-2 py-2 text-xs text-gray-700 focus:border-orange-300 focus:outline-none";
+
+  // ── Review step ────────────────────────────────────────────────────────────
+  if (step === "review") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4">
+        <div className="flex h-[90vh] sm:h-auto sm:max-h-[90vh] w-full sm:max-w-xl flex-col rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 shrink-0">
+            <div>
+              <p className="text-sm font-bold text-gray-900">Revisão do pedido</p>
+              <p className="text-xs text-gray-500 mt-0.5">Confirme todos os dados antes de criar</p>
+            </div>
+            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {/* Customer */}
+            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Cliente</p>
+              <p className="text-sm font-semibold text-gray-900">{customerName}</p>
+              {customerPhone && <p className="text-xs text-gray-500">{customerPhone}</p>}
+            </div>
+
+            {/* Items */}
+            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Itens</p>
+              {cart.map((l) => (
+                <div key={l.menuItemId} className="flex items-center justify-between py-0.5 text-sm">
+                  <span className="text-gray-800">{l.quantity}× {l.name}</span>
+                  <span className="font-semibold text-gray-900">R$ {(l.price * l.quantity).toFixed(2).replace(".", ",")}</span>
+                </div>
+              ))}
+              <div className="mt-2 flex justify-between border-t border-gray-200 pt-2 text-sm">
+                <span className="text-gray-500">Subtotal</span>
+                <span className="font-semibold text-gray-900">R$ {cartSubtotal.toFixed(2).replace(".", ",")}</span>
+              </div>
+            </div>
+
+            {/* Delivery */}
+            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Entrega</p>
+              {orderType === "PICKUP" ? (
+                <p className="text-sm text-gray-800">🏠 Retirada — sem taxa</p>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-gray-800">
+                    {addr.street}, {addr.number}{addr.complement ? `, ${addr.complement}` : ""}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {addr.neighborhood} — {addr.city}/{addr.state} — CEP {addr.cep}
+                  </p>
+                  <div className="mt-2 flex justify-between text-sm">
+                    <span className="text-gray-500">Taxa de entrega</span>
+                    <span className="font-semibold text-gray-900">
+                      {deliveryFee === 0 ? "Grátis" : `R$ ${deliveryFee.toFixed(2).replace(".", ",")}`}
+                    </span>
+                  </div>
+                  {quote?.reason && <p className="mt-0.5 text-[10px] text-gray-400">{quote.reason}</p>}
+                </>
+              )}
+            </div>
+
+            {/* Payment */}
+            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Pagamento</p>
+              <p className="text-sm text-gray-800">
+                {PAYMENT_LABELS[paymentMethod] ?? paymentMethod} — {paymentStatus === "PAID" ? "Pago" : "Pagar na entrega"}
+              </p>
+            </div>
+
+            {/* Total */}
+            <div className="flex items-center justify-between rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+              <p className="text-sm font-bold text-gray-900">Total</p>
+              <p className="text-base font-bold text-orange-600">R$ {cartTotal.toFixed(2).replace(".", ",")}</p>
+            </div>
+
+            {notes && (
+              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Observações</p>
+                <p className="text-sm text-gray-700">{notes}</p>
+              </div>
+            )}
+
+            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
+          </div>
+
+          <div className="shrink-0 border-t border-gray-100 bg-gray-50 px-5 py-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => { setStep("form"); setError(null); }}
+              className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              ← Voltar e editar
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex-1 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+            >
+              {submitting ? "Criando…" : "✓ Confirmar e criar pedido"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Form step ──────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4">
       <div className="flex h-[90vh] sm:h-auto sm:max-h-[90vh] w-full sm:max-w-xl flex-col rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl">
 
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 shrink-0">
           <div>
             <p className="text-sm font-bold text-gray-900">Criar pedido</p>
@@ -1583,27 +1831,15 @@ function ManualOrderModal({
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
-          {/* Customer info */}
+          {/* Customer */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Nome *</label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Nome do cliente"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
-              />
+              <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente" className={inputCls} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Telefone</label>
-              <input
-                type="text"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="5511999999999"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
-              />
+              <input type="text" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="5511999999999" className={inputCls} />
             </div>
           </div>
 
@@ -1611,22 +1847,14 @@ function ManualOrderModal({
           <div className="grid grid-cols-3 gap-2">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Tipo</label>
-              <select
-                value={orderType}
-                onChange={(e) => setOrderType(e.target.value as "DELIVERY" | "PICKUP")}
-                className="w-full rounded-lg border border-gray-200 px-2 py-2 text-xs text-gray-700 focus:border-orange-300 focus:outline-none"
-              >
+              <select value={orderType} onChange={(e) => handleOrderTypeChange(e.target.value as "DELIVERY" | "PICKUP")} className={selectCls}>
                 <option value="PICKUP">Retirada</option>
                 <option value="DELIVERY">Entrega</option>
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Pagamento</label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
-                className="w-full rounded-lg border border-gray-200 px-2 py-2 text-xs text-gray-700 focus:border-orange-300 focus:outline-none"
-              >
+              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)} className={selectCls}>
                 <option value="CASH">Dinheiro</option>
                 <option value="PIX">Pix</option>
                 <option value="CREDIT_CARD">Crédito</option>
@@ -1636,51 +1864,118 @@ function ManualOrderModal({
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-              <select
-                value={paymentStatus}
-                onChange={(e) => setPaymentStatus(e.target.value as "PAID" | "PAY_ON_DELIVERY")}
-                className="w-full rounded-lg border border-gray-200 px-2 py-2 text-xs text-gray-700 focus:border-orange-300 focus:outline-none"
-              >
+              <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as "PAID" | "PAY_ON_DELIVERY")} className={selectCls}>
                 <option value="PAID">Pago</option>
                 <option value="PAY_ON_DELIVERY">Pagar na entrega</option>
               </select>
             </div>
           </div>
 
+          {/* Delivery address — shown only when DELIVERY */}
+          {orderType === "DELIVERY" && (
+            <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/30 px-4 py-3">
+              <p className="text-xs font-semibold text-blue-700">📍 Endereço de entrega</p>
+
+              {/* CEP row */}
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">CEP *</label>
+                  <input type="text" value={addr.cep} onChange={(e) => updateAddr("cep", e.target.value)} placeholder="00000-000" maxLength={9} className={inputCls} />
+                </div>
+                <div className="flex items-end">
+                  <button type="button" onClick={lookupCep} disabled={cepLoading}
+                    className="rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors">
+                    {cepLoading ? "…" : "Buscar endereço"}
+                  </button>
+                </div>
+              </div>
+              {cepError && <p className="text-xs text-red-500">{cepError}</p>}
+
+              {/* Street + Number */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Rua *</label>
+                  <input type="text" value={addr.street} onChange={(e) => updateAddr("street", e.target.value)} placeholder="Rua / Avenida" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Número *</label>
+                  <input type="text" value={addr.number} onChange={(e) => updateAddr("number", e.target.value)} placeholder="123" className={inputCls} />
+                </div>
+              </div>
+
+              {/* Complement + Neighborhood */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Complemento</label>
+                  <input type="text" value={addr.complement} onChange={(e) => updateAddr("complement", e.target.value)} placeholder="Apto, bloco…" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Bairro *</label>
+                  <input type="text" value={addr.neighborhood} onChange={(e) => updateAddr("neighborhood", e.target.value)} placeholder="Bairro" className={inputCls} />
+                </div>
+              </div>
+
+              {/* City + State */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Cidade *</label>
+                  <input type="text" value={addr.city} onChange={(e) => updateAddr("city", e.target.value)} placeholder="Cidade" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">UF</label>
+                  <input type="text" value={addr.state} onChange={(e) => updateAddr("state", e.target.value)} placeholder="SP" maxLength={2} className={inputCls} />
+                </div>
+              </div>
+
+              {/* Freight calculation */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button type="button" onClick={calcFreight}
+                  disabled={quoteLoading || !addr.street.trim() || !addr.number.trim()}
+                  className="rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-xs font-semibold text-orange-600 hover:bg-orange-50 disabled:opacity-50 transition-colors">
+                  {quoteLoading ? "Calculando…" : "Calcular entrega"}
+                </button>
+                {quote && !isBlocked(quote.calculationStatus) && (
+                  <span className="text-xs font-semibold text-green-700">
+                    Frete: {quote.deliveryFee === 0 ? "Grátis" : `R$ ${quote.deliveryFee.toFixed(2).replace(".", ",")}`}
+                    {quote.distanceKm != null ? ` (${quote.distanceKm.toFixed(1)} km)` : ""}
+                  </span>
+                )}
+              </div>
+              {quoteError && <p className="text-xs text-red-500">{quoteError}</p>}
+              {quote && isBlocked(quote.calculationStatus) && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{quote.reason}</p>
+              )}
+              {quote && quote.calculationStatus === "manual" && (
+                <p className="rounded-lg bg-yellow-50 px-3 py-2 text-xs text-yellow-700">
+                  Modo manual — confirme o frete com o cliente.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Product picker */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Produtos</label>
-            <input
-              type="text"
-              value={itemSearch}
-              onChange={(e) => setItemSearch(e.target.value)}
-              placeholder="Buscar produto..."
-              className="mb-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
-            />
+            <input type="text" value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Buscar produto..."
+              className="mb-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100" />
             {menuLoading ? (
               <p className="text-center text-xs text-gray-400 py-4">Carregando produtos…</p>
             ) : (
               <div className="max-h-40 overflow-y-auto rounded-xl border border-gray-100 divide-y divide-gray-50">
                 {filteredItems.length === 0 ? (
                   <p className="py-3 text-center text-xs text-gray-400">Nenhum produto encontrado</p>
-                ) : (
-                  filteredItems.slice(0, 50).map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => addToCart(item)}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-orange-50 transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-medium text-gray-800">{item.name}</p>
-                        <p className="text-[10px] text-gray-400">{item.categoryName}</p>
-                      </div>
-                      <span className="ml-3 shrink-0 text-xs font-semibold text-orange-600">
-                        + R$ {item.price.toFixed(2).replace(".", ",")}
-                      </span>
-                    </button>
-                  ))
-                )}
+                ) : filteredItems.slice(0, 50).map((item) => (
+                  <button key={item.id} type="button" onClick={() => addToCart(item)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-orange-50 transition-colors">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-gray-800">{item.name}</p>
+                      <p className="text-[10px] text-gray-400">{item.categoryName}</p>
+                    </div>
+                    <span className="ml-3 shrink-0 text-xs font-semibold text-orange-600">
+                      + R$ {item.price.toFixed(2).replace(".", ",")}
+                    </span>
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -1692,24 +1987,16 @@ function ManualOrderModal({
                 <div key={line.menuItemId} className="flex items-center gap-3 px-3 py-2">
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-xs font-medium text-gray-800">{line.name}</p>
-                    <p className="text-[10px] text-gray-400">
-                      R$ {(line.price * line.quantity).toFixed(2).replace(".", ",")}
-                    </p>
+                    <p className="text-[10px] text-gray-400">R$ {(line.price * line.quantity).toFixed(2).replace(".", ",")}</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => adjustQty(line.menuItemId, -1)}
-                      className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 text-sm leading-none"
-                    >
+                    <button type="button" onClick={() => adjustQty(line.menuItemId, -1)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 text-sm leading-none">
                       −
                     </button>
                     <span className="w-5 text-center text-xs font-semibold text-gray-700">{line.quantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => adjustQty(line.menuItemId, 1)}
-                      className="flex h-6 w-6 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 text-sm leading-none"
-                    >
+                    <button type="button" onClick={() => adjustQty(line.menuItemId, 1)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 text-sm leading-none">
                       +
                     </button>
                   </div>
@@ -1721,42 +2008,28 @@ function ManualOrderModal({
           {/* Notes */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Observações</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              placeholder="Ex: sem cebola, endereço de entrega…"
-              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
-            />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+              placeholder="Ex: sem cebola, referência de entrega…"
+              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100" />
           </div>
 
-          {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>
-          )}
+          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
         </div>
 
         {/* Footer */}
         <div className="shrink-0 border-t border-gray-100 bg-gray-50 px-5 py-4 flex items-center gap-3">
           <div className="flex-1">
-            <p className="text-xs text-gray-500">Total</p>
-            <p className="text-base font-bold text-gray-900">
-              R$ {cartTotal.toFixed(2).replace(".", ",")}
-            </p>
+            <p className="text-xs text-gray-500">{orderType === "DELIVERY" ? "Total com entrega" : "Total"}</p>
+            <p className="text-base font-bold text-gray-900">R$ {cartTotal.toFixed(2).replace(".", ",")}</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
-          >
+          <button type="button" onClick={onClose}
+            className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors">
             Cancelar
           </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting || cart.length === 0 || !customerName.trim()}
-            className="rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
-          >
-            {submitting ? "Criando…" : "Confirmar pedido"}
+          <button type="button" onClick={handleGoToReview}
+            disabled={cart.length === 0 || !customerName.trim()}
+            className="rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors">
+            Revisar pedido →
           </button>
         </div>
       </div>
