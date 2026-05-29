@@ -1935,7 +1935,7 @@ function MessageBubble({
     ? (msg.senderType === "AI" ? "IA"
       : msg.senderType === "HUMAN_EXTERNAL" ? "WhatsApp externo"
       : "Equipe")
-    : customerName;
+    : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : customerName);
 
   // Find the most recent customer message before this human reply
   const precedingCustomerMsg = isHumanMsg

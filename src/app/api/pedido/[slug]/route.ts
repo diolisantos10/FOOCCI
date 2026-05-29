@@ -168,7 +168,7 @@ export async function POST(
         await ConversationLogService.logMessage({
           conversationId,
           restaurantId: restaurant.id,
-          senderType:   "CUSTOMER",
+          senderType:   "CUSTOMER_CARDAPIO",
           content:      message.trim(),
         });
 
