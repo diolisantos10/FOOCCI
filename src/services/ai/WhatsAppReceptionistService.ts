@@ -336,10 +336,12 @@ function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
       if (!ctx.isCurrentlyOpen) {
         const base = ctx.closedMessage ?? "No momento estamos fechados.";
         return pedidoUrl
-          ? `${base}\n\nVeja nosso cardápio (pedidos pausados até reabrirmos):\n${pedidoUrl}`
+          ? `${base}\n\nVeja nosso cardápio (pedidos pausados até reabrirmos):\n\n${pedidoUrl}`
           : base;
       }
-      return orderPreMessage + (pedidoUrl ? `\n${pedidoUrl}` : "");
+      // Double newline so the URL sits on its own paragraph — WhatsApp renders a rich
+      // link preview card which looks cleaner than an inline long URL.
+      return pedidoUrl ? `${orderPreMessage}\n\n${pedidoUrl}` : orderPreMessage;
     case "handoff":
       if (!ctx.isCurrentlyOpen) {
         const base = ctx.closedMessage ?? "No momento estamos fechados.";
@@ -355,11 +357,11 @@ function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
       return handoffMessage;
     case "menu":
       return pedidoUrl
-        ? `Aqui está nosso cardápio:\n${pedidoUrl}`
+        ? `Aqui está nosso cardápio:\n\n${pedidoUrl}`
         : "Entre em contato com a loja para acessar o cardápio.";
     case "promotions":
       return pedidoUrl
-        ? `Confira nossas promoções atuais:\n${pedidoUrl}`
+        ? `Confira nossas promoções atuais:\n\n${pedidoUrl}`
         : "Entre em contato com a loja para saber sobre nossas promoções.";
     case "custom":
       if (opt.message?.trim()) return opt.message.trim();

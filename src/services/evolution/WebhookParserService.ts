@@ -163,8 +163,52 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
       const doc = message.documentMessage as Record<string, unknown>;
       content = (doc.fileName as string) ?? "[Documento]";
       mediaUrl = (doc.url as string) ?? undefined;
+    } else if (message.videoMessage) {
+      messageType = "DOCUMENT";
+      const vid = message.videoMessage as Record<string, unknown>;
+      content = (vid.caption as string) || "[Vídeo]";
+      mediaUrl = (vid.url as string) || undefined;
+    } else if (message.stickerMessage) {
+      messageType = "IMAGE";
+      const st = message.stickerMessage as Record<string, unknown>;
+      content = "[Figurinha]";
+      mediaUrl = (st.url as string) || undefined;
+    } else if (message.viewOnceMessage) {
+      const vonc = message.viewOnceMessage as Record<string, unknown>;
+      const inner = ((vonc.message ?? {}) as Record<string, unknown>);
+      if (inner.imageMessage) {
+        messageType = "IMAGE";
+        const img = inner.imageMessage as Record<string, unknown>;
+        content = (img.caption as string) || "[Foto]";
+        mediaUrl = (img.url as string) || undefined;
+      } else if (inner.videoMessage) {
+        messageType = "DOCUMENT";
+        content = "[Vídeo]";
+        mediaUrl = ((inner.videoMessage as Record<string, unknown>).url as string) || undefined;
+      } else {
+        content = "[Foto/vídeo]";
+      }
+    } else if (message.viewOnceMessageV2) {
+      const vonc = message.viewOnceMessageV2 as Record<string, unknown>;
+      const inner = ((vonc.message ?? {}) as Record<string, unknown>);
+      if (inner.imageMessage) {
+        messageType = "IMAGE";
+        const img = inner.imageMessage as Record<string, unknown>;
+        content = (img.caption as string) || "[Foto]";
+        mediaUrl = (img.url as string) || undefined;
+      } else {
+        content = "[Foto/vídeo]";
+      }
+    } else if (message.reactionMessage) {
+      const r = message.reactionMessage as Record<string, unknown>;
+      content = `[Reação: ${(r.text as string) || "❤️"}]`;
+    } else if (message.locationMessage) {
+      content = "[Localização compartilhada]";
+    } else if (message.protocolMessage) {
+      content = "[Mensagem apagada]";
     } else {
-      // Unknown message type — store as text placeholder
+      const msgKeys = message ? Object.keys(message).join(", ") : "empty";
+      console.warn("[WebhookParser] Unknown message type. Keys:", msgKeys);
       content = "[Mensagem não suportada]";
     }
   }

@@ -1845,9 +1845,21 @@ function ThreadPanel({
               {initials(thread.customer?.name ?? thread.customerName ?? "?")}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-gray-900">
-                {thread.customer?.name ?? thread.customerName ?? "Desconhecido"}
-              </p>
+              {thread.customer?.id ? (
+                <a
+                  href={`/customers/${thread.customer.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block truncate text-sm font-bold text-gray-900 hover:text-orange-600 hover:underline"
+                  title="Abrir ficha do cliente"
+                >
+                  {thread.customer.name ?? "Desconhecido"}
+                </a>
+              ) : (
+                <p className="truncate text-sm font-bold text-gray-900">
+                  {thread.customer?.name ?? thread.customerName ?? "Desconhecido"}
+                </p>
+              )}
               <p className="text-xs text-gray-500">
                 {(() => {
                   const ph = thread.customer?.phone ?? thread.customerPhone ?? "";
@@ -2337,39 +2349,101 @@ function MessageBubble({
               : "rounded-bl-sm bg-white text-gray-900 border border-gray-100"
           }`}
         >
-          {/* Image */}
-          {msg.type === "IMAGE" && msg.mediaUrl && (
-            <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="mb-1 block">
-              <img
-                src={msg.mediaUrl}
-                alt="imagem"
-                className="max-h-48 max-w-full rounded-xl object-cover"
-                loading="lazy"
-              />
-            </a>
+          {/* Image — render with fallback card if URL fails or is absent */}
+          {msg.type === "IMAGE" && (
+            msg.mediaUrl ? (
+              <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="mb-1 block">
+                <img
+                  src={msg.mediaUrl}
+                  alt="imagem"
+                  className="max-h-48 max-w-full rounded-xl object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    const el = e.currentTarget as HTMLImageElement;
+                    el.style.display = "none";
+                    const next = el.nextElementSibling as HTMLElement | null;
+                    if (next) next.style.display = "flex";
+                  }}
+                />
+                {/* Fallback shown when image URL fails to load */}
+                <span
+                  style={{ display: "none" }}
+                  className={`items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold underline ${
+                    isOutbound
+                      ? "border-orange-400/50 bg-orange-600 text-white"
+                      : "border-gray-200 bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  <span>📷</span>
+                  <span>Abrir imagem</span>
+                </span>
+              </a>
+            ) : (
+              <div className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+                isOutbound ? "border-orange-400/50 text-orange-200" : "border-gray-200 bg-gray-50 text-gray-500"
+              }`}>
+                <span>📷</span>
+                <span>Imagem recebida</span>
+              </div>
+            )
+          )}
+
+          {/* Audio */}
+          {msg.type === "AUDIO" && (
+            msg.mediaUrl ? (
+              <a
+                href={msg.mediaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold underline ${
+                  isOutbound
+                    ? "border-orange-400/50 bg-orange-600 text-white"
+                    : "border-gray-200 bg-gray-100 text-gray-700"
+                }`}
+              >
+                <span>🎵</span>
+                <span>Áudio — abrir/baixar</span>
+              </a>
+            ) : (
+              <div className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+                isOutbound ? "border-orange-400/50 text-orange-200" : "border-gray-200 bg-gray-50 text-gray-500"
+              }`}>
+                <span>🎵</span>
+                <span>Áudio recebido</span>
+              </div>
+            )
           )}
 
           {/* Document */}
-          {msg.type === "DOCUMENT" && msg.mediaUrl && (
-            <a
-              href={msg.mediaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold underline ${
-                isOutbound
-                  ? "border-orange-400/50 bg-orange-600 text-white"
-                  : "border-gray-200 bg-gray-100 text-gray-700"
-              }`}
-            >
-              <span>📄</span>
-              <span className="truncate">{msg.content || "Documento"}</span>
-            </a>
+          {msg.type === "DOCUMENT" && (
+            msg.mediaUrl ? (
+              <a
+                href={msg.mediaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold underline ${
+                  isOutbound
+                    ? "border-orange-400/50 bg-orange-600 text-white"
+                    : "border-gray-200 bg-gray-100 text-gray-700"
+                }`}
+              >
+                <span>📄</span>
+                <span className="truncate">{msg.content || "Documento"}</span>
+              </a>
+            ) : (
+              <div className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+                isOutbound ? "border-orange-400/50 text-orange-200" : "border-gray-200 bg-gray-50 text-gray-500"
+              }`}>
+                <span>📄</span>
+                <span className="truncate">{msg.content || "Arquivo recebido"}</span>
+              </div>
+            )
           )}
 
-          {/* Unknown media label (AUDIO, etc.) */}
-          {msg.type !== "TEXT" && msg.type !== "IMAGE" && msg.type !== "DOCUMENT" && (
+          {/* Unknown media types */}
+          {msg.type !== "TEXT" && msg.type !== "IMAGE" && msg.type !== "AUDIO" && msg.type !== "DOCUMENT" && (
             <p className={`mb-1 text-xs font-medium ${isOutbound ? "text-orange-200" : "text-gray-400"}`}>
-              [{msg.type.toLowerCase()}]
+              [{msg.type?.toLowerCase?.() ?? "anexo"}]
             </p>
           )}
 
