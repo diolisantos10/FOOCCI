@@ -258,10 +258,15 @@ jobs:
 
   # ── Job 3: Cart Recovery ─────────────────────────────────────────────────────
   #
-  # Fires every 5 minutes (GitHub Actions minimum) or on workflow_dispatch.
-  # Sends one WhatsApp recovery message per eligible OPEN OrderDraft that has
-  # been inactive for ≥ 2 minutes and has never received a recovery message.
-  # Anti-spam: max 1 per draft, max 1 per customer per day.
+  # PRIMARY runner: CartRecoveryScheduler (src/services/order/CartRecoveryScheduler.ts)
+  # fires every 60 s inside the Railway Node.js process — true 1-minute resolution.
+  #
+  # This GitHub Actions job (*/5) is a BACKUP: it covers the ~60 s window after
+  # a Railway restart before the in-process scheduler fires its first tick.
+  # It is fully idempotent — the DB-level anti-spam guards (recoveryAttempts=0,
+  # lastRecoveryAt 24 h) prevent double-sends even when both run concurrently.
+  #
+  # Anti-spam: max 1 per draft (ever), max 1 per customer per day.
   # ─────────────────────────────────────────────────────────────────────────────
   send-cart-recovery:
     name: "Cart Recovery"
