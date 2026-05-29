@@ -26,7 +26,6 @@ type ConvStatus =
 type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL";
 
 type StatusFilter  = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED" | "CRM_SENT" | "CRM_REPLIED";
-type ChannelFilter = "ALL" | "WHATSAPP" | "MENU" | "MANUAL";
 type SortOption    = "RECENT" | "OLDEST" | "NAME_AZ" | "NAME_ZA" | "CHANNEL";
 
 interface ActiveOrderItem {
@@ -123,13 +122,6 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
   { id: "RESOLVED",    label: "Resolvidas"    },
   { id: "CRM_SENT",    label: "CRM enviado"   },
   { id: "CRM_REPLIED", label: "Resposta CRM"  },
-];
-
-const CHANNEL_FILTERS: { id: ChannelFilter; label: string; icon: string }[] = [
-  { id: "ALL",      label: "Todos",             icon: ""   },
-  { id: "WHATSAPP", label: "WhatsApp",          icon: "📱" },
-  { id: "MENU",     label: "Cardápio / Pedido", icon: "📋" },
-  { id: "MANUAL",   label: "Manual",            icon: "✍️" },
 ];
 
 const SORT_OPTIONS: { id: SortOption; label: string }[] = [
@@ -318,7 +310,6 @@ export function AtendimentoClient({
   const [mobileView,    setMobileView]    = useState<"list" | "thread">("list");
 
   const [statusFilter,  setStatusFilter]  = useState<StatusFilter>("ALL");
-  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("ALL");
   const [sortBy,        setSortBy]        = useState<SortOption>("RECENT");
   const [search,        setSearch]        = useState("");
   const [searchInput,   setSearchInput]   = useState("");
@@ -354,10 +345,6 @@ export function AtendimentoClient({
     const params = new URLSearchParams({ limit: "100" });
     // Server-side status filter only for RESOLVED (reduces payload)
     if (statusFilter === "RESOLVED") params.set("status", "RESOLVED");
-    // Single-value channel filters handled server-side
-    if (channelFilter === "WHATSAPP") params.set("channel", "WHATSAPP");
-    if (channelFilter === "MANUAL")   params.set("channel", "MANUAL");
-    // MENU (WEB_AGENT + QR_AGENT) and search are handled client-side
 
     try {
       // Use /api/chat/conversations: supports channel, all status values, aiEnabled
@@ -411,7 +398,7 @@ export function AtendimentoClient({
     } finally {
       setLoadingList(false);
     }
-  }, [statusFilter, channelFilter, handoffSoundEnabled]);
+  }, [statusFilter, handoffSoundEnabled]);
 
   // Immediate refetch when filter/search changes
   useEffect(() => {
@@ -582,13 +569,6 @@ export function AtendimentoClient({
       }
     }
 
-    // Channel filter (client-side for MENU, otherwise already server-filtered)
-    if (channelFilter === "MENU") {
-      items = items.filter(
-        (c) => c.channel === "WEB_AGENT" || c.channel === "QR_AGENT",
-      );
-    }
-
     return items.sort((a, b) => {
       if (sortBy === "NAME_AZ") {
         const na = (a.customer?.name ?? a.customerName ?? "").toLowerCase();
@@ -616,7 +596,7 @@ export function AtendimentoClient({
       const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.createdAt).getTime();
       return sortBy === "OLDEST" ? ta - tb : tb - ta;
     });
-  }, [conversations, statusFilter, channelFilter, search, sortBy]);
+  }, [conversations, statusFilter, search, sortBy]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   async function handleAction(action: string) {
@@ -897,26 +877,6 @@ export function AtendimentoClient({
           </ScrollableChips>
         </div>
 
-        {/* Channel filter chips */}
-        <div className="border-b border-gray-100">
-          <ScrollableChips className="py-1.5">
-            {CHANNEL_FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setChannelFilter(f.id)}
-                className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                  channelFilter === f.id
-                    ? "bg-gray-700 text-white"
-                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                }`}
-              >
-                {f.icon ? `${f.icon} ` : ""}{f.label}
-              </button>
-            ))}
-          </ScrollableChips>
-        </div>
-
         {/* List */}
         <div className="flex-1 overflow-y-auto">
           {loadingList ? (
@@ -946,6 +906,8 @@ export function AtendimentoClient({
                 const isWaiting  = conv.status === "OPEN" && conv.unreadCount > 0;
                 const priority   = convPriorityLevel(conv);
                 const chanMeta   = CHANNEL_META[conv.channel] ?? { label: conv.channel, icon: "💬" };
+                const isConvMultichannel = conv.channel === "WHATSAPP" &&
+                  (conv.messages ?? []).some((m) => m.senderType === "CUSTOMER_CARDAPIO");
 
                 return (
                   <li key={conv.id}>
@@ -992,10 +954,28 @@ export function AtendimentoClient({
                               priority === "attention" ? "bg-amber-400" :
                               "bg-green-400"
                             }`} />
-                            {/* Channel badge */}
-                            <span className="text-[10px] text-gray-400" title={chanMeta.label}>
-                              {chanMeta.icon}
-                            </span>
+                            {/* Source badge */}
+                            {isConvMultichannel ? (
+                              <span className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-px text-[9px] font-bold leading-none text-blue-700">
+                                📱📋 Multicanal
+                              </span>
+                            ) : conv.channel === "WHATSAPP" ? (
+                              <span className="rounded-full border border-green-200 bg-green-50 px-1.5 py-px text-[9px] font-bold leading-none text-green-700">
+                                📱 WhatsApp
+                              </span>
+                            ) : conv.channel === "QR_AGENT" || conv.channel === "WEB_AGENT" ? (
+                              <span className="rounded-full border border-purple-200 bg-purple-50 px-1.5 py-px text-[9px] font-bold leading-none text-purple-700">
+                                📋 Cardápio
+                              </span>
+                            ) : conv.channel === "MANUAL" ? (
+                              <span className="rounded-full border border-gray-200 bg-gray-100 px-1.5 py-px text-[9px] font-bold leading-none text-gray-600">
+                                ✍️ Manual
+                              </span>
+                            ) : (
+                              <span className="rounded-full border border-gray-200 bg-gray-100 px-1.5 py-px text-[9px] font-bold leading-none text-gray-500">
+                                {chanMeta.icon} {chanMeta.label}
+                              </span>
+                            )}
                             {/* Unread badge */}
                             {conv.unreadCount > 0 && (
                               <span className="rounded-full bg-red-500 px-1.5 py-px text-[9px] font-bold text-white leading-none">
@@ -2316,10 +2296,19 @@ function MessageBubble({
   const isHumanMsg  = isOutbound && (msg.senderType === "HUMAN" || msg.senderType === "HUMAN_EXTERNAL");
   const senderLabel = isOutbound
     ? (msg.senderType === "AI"
-        ? (msg.metadata?.source === "CARDAPIO" ? "IA · Cardápio" : "IA")
+        ? (msg.metadata?.source === "CARDAPIO" ? "IA · Cardápio" : "IA · WhatsApp")
         : msg.senderType === "HUMAN_EXTERNAL" ? "WhatsApp externo"
-        : "Equipe")
-    : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : customerName);
+        : "Operador")
+    : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : `${customerName} · WhatsApp`);
+  const senderBadgeCls = isOutbound
+    ? (msg.senderType === "AI"
+        ? "bg-orange-50 border border-orange-200 text-orange-600"
+        : msg.senderType === "HUMAN_EXTERNAL"
+          ? "bg-teal-50 border border-teal-200 text-teal-700"
+          : "bg-gray-700 border border-gray-600 text-white")
+    : (msg.senderType === "CUSTOMER_CARDAPIO"
+        ? "bg-purple-50 border border-purple-200 text-purple-700"
+        : "bg-green-50 border border-green-200 text-green-700");
 
   // Find the most recent customer message before this human reply
   const precedingCustomerMsg = isHumanMsg
@@ -2340,7 +2329,9 @@ function MessageBubble({
       )}
 
       <div className={`flex flex-col gap-1 ${isOutbound ? "items-end" : "items-start"}`}>
-        <span className="px-1 text-[10px] text-gray-400">{senderLabel}</span>
+        <span className={`inline-block rounded-full px-2 py-px text-[10px] font-medium ${senderBadgeCls}`}>
+          {senderLabel}
+        </span>
 
         <div
           className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
