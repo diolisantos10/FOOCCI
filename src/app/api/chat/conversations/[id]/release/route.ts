@@ -49,9 +49,10 @@ export async function POST(
     const updated = await prisma.conversation.update({
       where: { id },
       data: {
-        aiEnabled:  true,
-        status:     ConversationStatus.AI_ATENDENDO,
-        assignedTo: null,
+        aiEnabled:   true,
+        status:      ConversationStatus.AI_ATENDENDO,
+        assignedTo:  null,
+        contextType: null, // clear CART_RECOVERY / CRM attribution so AI gate works on next inbound
       },
       select: { id: true, aiEnabled: true, status: true, assignedTo: true },
     });
