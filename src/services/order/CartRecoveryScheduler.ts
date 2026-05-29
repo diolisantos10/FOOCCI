@@ -5,7 +5,7 @@
  * within the Railway Node.js process. This gives true ~1-minute resolution
  * without relying on GitHub Actions (minimum 5-minute cron frequency).
  *
- * GitHub Actions cron (*/5) remains as a warm backup for the window after
+ * GitHub Actions cron (every 5 min) remains as a warm backup for the window after
  * a server restart before this scheduler fires its first tick.
  *
  * Anti-spam safety: even if multiple Railway instances run this scheduler
