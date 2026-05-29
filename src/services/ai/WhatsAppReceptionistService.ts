@@ -364,8 +364,7 @@ function appendBackToMainMenu(text: string): string {
 function renderMainMenu(ctx: ReplyContext): string {
   const menuList = buildMenuList(ctx.menuOptions);
   if (!menuList) return ctx.welcomeMessage;
-  const base = "Claro 😊 Voltando ao menu principal:" + menuList + "\n\nResponda com o número da opção 😊";
-  return ctx.pedidoUrl ? base + `\n\n👉 Fazer pedido: ${ctx.pedidoUrl}` : base;
+  return "Claro 😊 Voltando ao menu principal:" + menuList + "\n\nResponda com o número da opção 😊";
 }
 
 function buildTemplateReply(intent: Intent, ctx: ReplyContext): string | null {
