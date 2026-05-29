@@ -793,29 +793,46 @@ function SortableItemRow({
     setPlacingIn(targetCategoryId);
     try {
       const data = await apiFetch(
-        `/api/menu/categories/${targetCategoryId}/items`,
+        `/api/menu/items/${item.id}/duplicate`,
         "POST",
-        {
-          name:           item.name,
-          description:    item.description    || undefined,
-          ingredients:    item.ingredients    || undefined,
-          price:          item.price,
-          imageUrl:       item.imageUrl       || undefined,
-          showInDelivery: item.showInDelivery,
-          showInDineIn:   item.showInDineIn,
-          hasVariants:    item.hasVariants,
-          code:           item.code           || undefined,
-          servingSize:    item.servingSize    ?? undefined,
-          portionInfo:    item.portionInfo    || undefined,
-        }
+        { targetCategoryId }
       );
+      const raw = data.data;
       const newItem: Item = {
-        ...item,
-        id:            data.data.id,
-        sortOrder:     data.data.sortOrder ?? 0,
-        hasActivePromo: false,
-        variants:      [],
-        extras:        [],
+        id:                   raw.id,
+        name:                 raw.name,
+        description:          raw.description          ?? null,
+        ingredients:          raw.ingredients          ?? null,
+        price:                Number(raw.price),
+        imageUrl:             raw.imageUrl             ?? null,
+        isActive:             raw.isActive,
+        sortOrder:            raw.sortOrder            ?? 0,
+        isAvailable:          raw.isAvailable,
+        showInDelivery:       raw.showInDelivery,
+        showInDineIn:         raw.showInDineIn,
+        hasVariants:          raw.hasVariants,
+        code:                 raw.code                ?? null,
+        servingSize:          raw.servingSize          ?? null,
+        portionInfo:          raw.portionInfo          ?? null,
+        tagFunil:             raw.tagFunil             ?? null,
+        perfilPaladar:        raw.perfilPaladar        ?? null,
+        harmonizacaoSugerida: raw.harmonizacaoSugerida ?? null,
+        alergenosDetalhados:  raw.alergenosDetalhados  ?? null,
+        storytellingIA:       raw.storytellingIA       ?? null,
+        hasActivePromo:       false,
+        variants: (raw.variants ?? []).map((v: { id: string; name: string; price: string | number; isAvailable: boolean; sortOrder: number }) => ({
+          id:          v.id,
+          name:        v.name,
+          price:       Number(v.price),
+          isAvailable: v.isAvailable,
+          sortOrder:   v.sortOrder,
+        })),
+        extras: (raw.extras ?? []).map((e: { id: string; name: string; price: string | number; quantity: number }) => ({
+          id:       e.id,
+          name:     e.name,
+          price:    Number(e.price),
+          quantity: e.quantity,
+        })),
       };
       onDuplicated(newItem, targetCategoryId);
     } catch { /* ignore */ }
@@ -928,8 +945,11 @@ function SortableItemRow({
                           </div>
                           <button onClick={() => setDuplicateOpen(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
                         </div>
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                           Selecione a categoria de destino
+                        </p>
+                        <p className="mb-2 text-[10px] text-gray-400">
+                          Copia variações, opções e adicionais.
                         </p>
                         <div className="max-h-64 overflow-y-auto space-y-0.5">
                           {otherManualCategories.map((cat) => (
