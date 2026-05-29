@@ -17,7 +17,7 @@ export default async function MenuPage() {
   const proto = headersList.get("x-forwarded-proto") ?? "http";
   const appOrigin = `${proto}://${host}`;
 
-  const [restaurant, categories] = await Promise.all([
+  const [restaurant, categories, activePromos] = await Promise.all([
     prisma.restaurant.findUnique({
       where: { id: session.user.restaurantId },
       select: { slug: true },
@@ -39,7 +39,13 @@ export default async function MenuPage() {
         },
       },
     }),
+    prisma.promotion.findMany({
+      where: { restaurantId: session.user.restaurantId, status: "ACTIVE", target: "PRODUCT" },
+      select: { targetProductIds: true },
+    }),
   ]);
+
+  const promotedProductIds = new Set(activePromos.flatMap((p) => p.targetProductIds));
 
   // Normalise Decimal → number so the client component receives plain JSON
   const data = categories.map((cat) => ({
@@ -65,6 +71,7 @@ export default async function MenuPage() {
       showInDelivery: item.showInDelivery,
       showInDineIn: item.showInDineIn,
       hasVariants: item.hasVariants,
+      hasActivePromo: promotedProductIds.has(item.id),
       code: item.code ?? null,
       servingSize: item.servingSize ?? null,
       portionInfo: item.portionInfo ?? null,

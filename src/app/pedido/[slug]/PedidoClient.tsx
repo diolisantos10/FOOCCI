@@ -526,7 +526,7 @@ function resolvePaymentMethod(
   sub: PaymentMethodSub | null,
 ): string | null {
   if (!mode) return null;
-  if (mode === "pay_now") return "Link de pagamento";
+  if (mode === "pay_now") return "Pagar agora";
   const subLabels: Record<PaymentMethodSub, string> = {
     card_machine:  mode === "pay_on_delivery" ? "Cartão na entrega" : "Cartão na retirada",
     pix_in_person: mode === "pay_on_delivery" ? "Pix na entrega"    : "Pix na retirada",
@@ -642,7 +642,7 @@ function ProductCard({
 }) {
   return (
     /* w-36 card: image zone compact (h-24) to preserve chat space; content auto-height */
-    <div data-testid={`product-card-${item.id}`} className="flex w-36 shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <div data-testid={`product-card-${item.id}`} className="flex w-36 h-full shrink-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
 
       {/* Image zone — compact height, tappable, center-cropped */}
       <button onClick={onOpen} className="h-24 w-full shrink-0 overflow-hidden">
@@ -856,7 +856,7 @@ function ProductModal({
           <h2 className="text-xl font-bold leading-snug text-gray-900">{item.name}</h2>
 
           {item.description && (
-            <p className="mt-2 text-sm leading-relaxed text-gray-500">{item.description}</p>
+            <p className="mt-2 text-sm leading-relaxed text-gray-500 whitespace-pre-line">{item.description}</p>
           )}
 
           {/* Serving size + portion info */}
@@ -3179,7 +3179,7 @@ export function PedidoClient({
       setPaymentMode(mode);
       if (mode === "pay_now") {
         setStage("ONLINE_METHOD_SELECT");
-        pushUserMessage("💳 Pagar agora — link de pagamento");
+        pushUserMessage("💳 Pagar agora");
         pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ONLINE_METHOD_SELECT"]!);
       } else {
         setStage("PAYMENT_METHOD");
@@ -3654,7 +3654,7 @@ export function PedidoClient({
           <p className="mb-2 text-xs font-semibold text-gray-500">Quer pagar agora ou na entrega?</p>
           <div className="flex flex-col gap-2">
             <button onClick={() => handlePaymentMode("pay_now")} className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-left text-sm font-semibold text-indigo-700 hover:bg-indigo-100">
-              💳 Pagar agora — link de pagamento
+              💳 Pagar agora
             </button>
             {isDelivery && (
               <button onClick={() => handlePaymentMode("pay_on_delivery")} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-100">

@@ -78,6 +78,7 @@ type Item = {
   harmonizacaoSugerida: string | null;
   alergenosDetalhados:  string | null;
   storytellingIA:       string | null;
+  hasActivePromo?: boolean;
   variants: Variant[];
   extras: Extra[];
 };
@@ -837,6 +838,11 @@ function SortableItemRow({
           >
             {item.name}
           </span>
+          {item.hasActivePromo && (
+            <span className="shrink-0 rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-bold text-green-700">
+              Promo ativa
+            </span>
+          )}
           {item.description && (
             <span className="hidden truncate text-xs text-gray-400 sm:inline">
               — {item.description}

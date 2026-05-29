@@ -299,7 +299,7 @@ function ProductModal({
             </div>
 
             {item.description && (
-              <p className="text-sm text-gray-600 leading-relaxed">
+              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
                 {item.description}
               </p>
             )}
@@ -588,20 +588,6 @@ function ProductCard({
   );
 }
 
-// ── Static Placeholder Banner ─────────────────────────────────────────────────
-
-function PlaceholderBanner() {
-  return (
-    <div className="mx-auto max-w-2xl px-4 pb-5">
-      <div className="relative overflow-hidden rounded-2xl px-5 py-6 shadow-sm" style={{ backgroundColor: 'var(--brand-primary)' }}>
-        <p className="text-xl font-bold text-white leading-snug">🔥 Combo do dia</p>
-        <p className="mt-1 text-sm text-white/80">Pizza + bebida com desconto especial</p>
-        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-4xl opacity-30">🍕</span>
-      </div>
-    </div>
-  );
-}
-
 // ── Main Client Component ─────────────────────────────────────────────────────
 
 export function QRMenuClient({ slug, restaurant, categories, featured, promotedItems = [], promoBanner, promotionBanners = [], brandPrimaryColor, instagramUrl, tiktokUrl, restaurantPhone, googleReviewUrl }: Props) {
@@ -809,9 +795,6 @@ export function QRMenuClient({ slug, restaurant, categories, featured, promotedI
               </div>
             </div>
           )}
-
-          {/* Static promo banner */}
-          <PlaceholderBanner />
 
           {/* Promotion image banners from Promotions table */}
           {promotionBanners.length > 0 && (
