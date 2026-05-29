@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // \"\"' | grep -q 'git push' && bash -c '\n  SHA=$(git -C /home/user/FOOCCI rev-parse HEAD 2>/dev/null | cut -c1-7)\n  [ -z \"$SHA\" ] && exit 0\n  echo \"[deploy] Pushed $SHA — waiting for Railway...\"\n  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do\n    sleep 15\n    DEPLOYED=$(curl -sf https://foocci.com.br/api/health | jq -r \".commitSha // \\\"\\\"\" | cut -c1-7)\n    echo \"[deploy] poll $i: deployed=$DEPLOYED target=$SHA\"\n    if [ \"$DEPLOYED\" = \"$SHA\" ]; then\n      echo \"[deploy] PRODUCTION LIVE: $SHA\"\n      curl -sf https://foocci.com.br/api/health\n      exit 0\n    fi\n  done\n  echo \"[deploy] TIMEOUT after 5 min — last deployed: $DEPLOYED\"\n' || true"
+          }
+        ]
+      }
+    ]
+  }
+}
