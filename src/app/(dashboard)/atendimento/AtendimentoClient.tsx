@@ -26,7 +26,7 @@ type ConvStatus =
 type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL";
 
 type StatusFilter  = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED" | "CRM_SENT" | "CRM_REPLIED";
-type ChannelFilter = "ALL" | "WHATSAPP" | "MENU" | "MANUAL" | "EMAIL" | "SMS";
+type ChannelFilter = "ALL" | "WHATSAPP" | "MENU" | "MANUAL";
 type SortOption    = "RECENT" | "OLDEST" | "NAME_AZ" | "NAME_ZA" | "CHANNEL";
 
 interface ActiveOrderItem {
@@ -125,12 +125,10 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
 ];
 
 const CHANNEL_FILTERS: { id: ChannelFilter; label: string; icon: string }[] = [
-  { id: "ALL",      label: "Todos",             icon: ""    },
-  { id: "WHATSAPP", label: "WhatsApp",          icon: "📱"  },
-  { id: "MENU",     label: "Cardápio / Pedido", icon: "📋"  },
-  { id: "MANUAL",   label: "Manual",            icon: "✍️"  },
-  { id: "EMAIL",    label: "E-mail",            icon: "✉️"  },
-  { id: "SMS",      label: "SMS",               icon: "💬"  },
+  { id: "ALL",      label: "Todos",             icon: ""   },
+  { id: "WHATSAPP", label: "WhatsApp",          icon: "📱" },
+  { id: "MENU",     label: "Cardápio / Pedido", icon: "📋" },
+  { id: "MANUAL",   label: "Manual",            icon: "✍️" },
 ];
 
 const SORT_OPTIONS: { id: SortOption; label: string }[] = [
@@ -358,8 +356,6 @@ export function AtendimentoClient({
     // Single-value channel filters handled server-side
     if (channelFilter === "WHATSAPP") params.set("channel", "WHATSAPP");
     if (channelFilter === "MANUAL")   params.set("channel", "MANUAL");
-    if (channelFilter === "EMAIL")    params.set("channel", "EMAIL");
-    if (channelFilter === "SMS")      params.set("channel", "SMS");
     // MENU (WEB_AGENT + QR_AGENT) and search are handled client-side
 
     try {
@@ -1934,9 +1930,11 @@ function MessageBubble({
   }
 
   const isOutbound  = msg.direction === "OUTBOUND";
-  const isHumanMsg  = isOutbound && msg.senderType === "HUMAN";
+  const isHumanMsg  = isOutbound && (msg.senderType === "HUMAN" || msg.senderType === "HUMAN_EXTERNAL");
   const senderLabel = isOutbound
-    ? (msg.senderType === "AI" ? "IA" : "Equipe")
+    ? (msg.senderType === "AI" ? "IA"
+      : msg.senderType === "HUMAN_EXTERNAL" ? "WhatsApp externo"
+      : "Equipe")
     : customerName;
 
   // Find the most recent customer message before this human reply

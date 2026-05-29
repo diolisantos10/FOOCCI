@@ -23,6 +23,7 @@ import { EvolutionConfigService } from "./EvolutionConfigService";
 import type {
   ParsedEvent,
   InboundMessageEvent,
+  ExternalOutboundMessageEvent,
   MessageStatusUpdateEvent,
   ConnectionUpdateEvent,
 } from "./WebhookParserService";
@@ -46,6 +47,9 @@ export class WebhookProcessorService {
     switch (event.type) {
       case "inbound_message":
         return handleInboundMessage(event);
+
+      case "external_outbound_message":
+        return handleExternalOutboundMessage(event);
 
       case "message_status_update":
         return handleStatusUpdate(event);
@@ -215,6 +219,76 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
 
 // Silence unused-import warning — the type is used only for documentation.
 type _AIRef = AIOrderServiceType;
+
+// ─── external outbound (WhatsApp Web / mobile) ───────────────
+
+/**
+ * Handles messages sent FROM the restaurant WhatsApp number by a staff member
+ * using WhatsApp Web or the mobile app (fromMe=true).
+ *
+ * Dedup strategy:
+ *   If externalMessageId already exists in the DB, Foocci sent it — skip.
+ *   Otherwise it is a genuinely external message — save as HUMAN_EXTERNAL.
+ *
+ * We only attach to an existing active conversation; we never create a new
+ * conversation from an outbound-only event.
+ */
+async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent): Promise<ProcessResult> {
+  // 1. Resolve restaurant
+  const configResult = await EvolutionConfigService.findRestaurantByInstance(event.instanceName);
+  if (!configResult.ok) return { handled: false, detail: `Unknown instance: ${event.instanceName}` };
+  const { restaurantId } = configResult.data;
+
+  // 2. Dedup: if Foocci already saved this message (via MessageService), skip it
+  const existing = await prisma.message.findUnique({
+    where: { externalMessageId: event.externalMessageId },
+    select: { id: true },
+  });
+  if (existing) {
+    return { handled: true, action: "duplicate_skipped", detail: event.externalMessageId };
+  }
+
+  // 3. Find customer by phone (don't upsert — we only track known customers)
+  const customer = await prisma.customer.findUnique({
+    where: { phone_restaurantId: { phone: event.phone, restaurantId } },
+    select: { id: true },
+  });
+  if (!customer) return { handled: false, detail: "external_outbound: unknown customer" };
+
+  // 4. Find the active conversation — never create one from an outbound-only event
+  const conversation = await findActiveConversation(restaurantId, customer.id);
+  if (!conversation) return { handled: false, detail: "external_outbound: no active conversation" };
+
+  // 5. Persist as external human outbound
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: "OUTBOUND",
+        senderType: "HUMAN_EXTERNAL",
+        content: event.content,
+        type: event.messageType as MessageType,
+        mediaUrl: event.mediaUrl ?? null,
+        sentAt: new Date(event.rawTimestamp * 1000),
+        externalMessageId: event.externalMessageId,
+        externalStatus: "sent",
+      },
+    }),
+    prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: now },
+    }),
+  ]);
+
+  console.info("[WebhookProcessor] External outbound message saved.", {
+    restaurantId,
+    conversationId: conversation.id,
+    phone: event.phone,
+  });
+
+  return { handled: true, action: "external_outbound_persisted", detail: `conversation:${conversation.id}` };
+}
 
 // ─── conversation reuse ───────────────────────────────────────
 

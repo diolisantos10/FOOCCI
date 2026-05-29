@@ -15,7 +15,7 @@
 
 export type ParsedEventType =
   | "inbound_message"
-  | "outbound_status_echo"
+  | "external_outbound_message"
   | "message_status_update"
   | "connection_update"
   | "ignored";
@@ -46,6 +46,18 @@ export interface ConnectionUpdateEvent {
   state: "open" | "close" | "connecting";
 }
 
+/** Staff sent a message from WhatsApp Web / mobile (fromMe=true, not sent by Foocci). */
+export interface ExternalOutboundMessageEvent {
+  type: "external_outbound_message";
+  instanceName: string;
+  externalMessageId: string;
+  phone: string;                 // customer's phone (from remoteJid)
+  messageType: "TEXT" | "IMAGE" | "AUDIO" | "DOCUMENT";
+  content: string;
+  mediaUrl?: string;
+  rawTimestamp: number;
+}
+
 export interface IgnoredEvent {
   type: "ignored";
   reason: string;
@@ -53,6 +65,7 @@ export interface IgnoredEvent {
 
 export type ParsedEvent =
   | InboundMessageEvent
+  | ExternalOutboundMessageEvent
   | MessageStatusUpdateEvent
   | ConnectionUpdateEvent
   | IgnoredEvent;
@@ -120,11 +133,6 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
     return { type: "ignored", reason: `Skipping non-DM jid: ${remoteJid}` };
   }
 
-  // fromMe = true means Evolution is echoing our own outbound message
-  if (fromMe) {
-    return { type: "outbound_status_echo", instanceName: instance } as unknown as IgnoredEvent;
-  }
-
   const phone = jidToPhone(remoteJid);
   const senderName = (data.pushName as string | undefined) || undefined;
   const message = data.message as Record<string, unknown> | undefined;
@@ -159,6 +167,22 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
       // Unknown message type — store as text placeholder
       content = "[Mensagem não suportada]";
     }
+  }
+
+  // fromMe=true: message sent FROM the restaurant WhatsApp number.
+  // Could be Foocci itself (already persisted via MessageService) or an external
+  // staff member using WhatsApp Web / mobile. The processor handles dedup.
+  if (fromMe) {
+    return {
+      type: "external_outbound_message",
+      instanceName: instance,
+      externalMessageId,
+      phone,              // customer's phone (recipient)
+      messageType,
+      content,
+      mediaUrl,
+      rawTimestamp: timestamp,
+    };
   }
 
   return {
