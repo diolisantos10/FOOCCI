@@ -200,7 +200,19 @@ export async function GET(req: NextRequest) {
     };
   }
 
-  // ── Step 9: Latest WhatsApp conversation ─────────────────────────────────
+  // ── Step 9: Latest WhatsApp conversation + menu option 1 config ──────────
+  // Also show what option 1 is configured as — this determines which flow
+  // the reply builder takes when the customer sends "1".
+  const agentCfgForDiag = await prisma.whatsAppAgentConfig.findUnique({
+    where:  { restaurantId: restaurant.id },
+    select: { menuOptions: true },
+  });
+  const rawOpts = Array.isArray(agentCfgForDiag?.menuOptions) ? agentCfgForDiag.menuOptions as Array<{ id?: string; label?: string; flow?: string; message?: string }> : [];
+  const opt1 = rawOpts[0] ?? null;
+  result.step9_menuOption1 = opt1
+    ? { label: opt1.label, flow: opt1.flow, hasCustomMessage: !!(opt1.message?.trim()) }
+    : { note: "No menuOptions configured — fallback option 1 is flow=menu (Ver cardápio)" };
+
   if (customer) {
     const conv = await prisma.conversation.findFirst({
       where:   { restaurantId: restaurant.id, customerId: customer.id },
@@ -216,13 +228,14 @@ export async function GET(req: NextRequest) {
           where:   { direction: "OUTBOUND", senderType: "AI" },
           orderBy: { sentAt: "desc" },
           take:    1,
-          select:  { content: true, sentAt: true },
+          select:  { content: true, sentAt: true, metadata: true },
         },
       },
     });
 
     const lastMsg = conv?.messages[0] ?? null;
     const lastMsgAgeMs = lastMsg ? Date.now() - lastMsg.sentAt.getTime() : null;
+    const lastMsgMeta  = (lastMsg?.metadata as Record<string, unknown> | null) ?? null;
     result.step9_latestConversation = conv ? {
       conversationId:  conv.id,
       channel:         conv.channel,
@@ -231,18 +244,20 @@ export async function GET(req: NextRequest) {
       lastMessageAt:   conv.lastMessageAt?.toISOString() ?? null,
       aiEnabled:       conv.aiEnabled,
       lastAiReply:     lastMsg
-        ? { preview: lastMsg.content.slice(0, 100), sentAt: lastMsg.sentAt.toISOString() }
+        ? { preview: lastMsg.content.slice(0, 120), sentAt: lastMsg.sentAt.toISOString() }
         : null,
-      lastAiReplyHasLink: lastMsg
-        ? lastMsg.content.includes("foocci.com.br/pedido")
+      lastAiReplyHasPedidoUrl: lastMsg
+        ? lastMsg.content.includes("/pedido/")
         : null,
       lastAiReplyHasWaToken: lastMsg
         ? lastMsg.content.includes("waToken=")
         : null,
+      lastAiReplyWasRepaired: lastMsgMeta?.guardRepaired === true,
+      lastAiReplyRepairedAt:  lastMsgMeta?.guardRepairedAt ?? null,
       // Staleness: if last AI reply is > 3 h old it likely predates recent deploy
       lastAiReplyAgeHours: lastMsgAgeMs !== null ? Math.round(lastMsgAgeMs / 3_600_000) : null,
       mightPreDateFix: lastMsgAgeMs !== null ? lastMsgAgeMs > 3 * 3_600_000 : null,
-      step9Note: "Shows last AI reply ever sent to this conversation. If mightPreDateFix=true and lastAiReplyHasWaToken=false, the reply predates the fix — send '1' in WhatsApp and re-run to verify current behavior.",
+      step9Note: "lastAiReplyWasRepaired=true means the hard guard fired — signWaToken failed on first attempt but succeeded on retry. If false and lastAiReplyHasWaToken=false, both attempts failed (check NEXTAUTH_SECRET env var). Send '1' in WhatsApp and re-run to verify.",
     } : { found: false };
   } else {
     result.step9_latestConversation = { note: "Customer not in DB — no conversation to check" };

@@ -266,7 +266,19 @@ function buildIdentifiedPedidoUrl(
     url.searchParams.set("src", "whatsapp");
     return url.toString();
   } catch (err) {
-    console.error("[buildIdentifiedPedidoUrl] signWaToken failed — link will use client-side fallback", err);
+    console.error(
+      "[buildIdentifiedPedidoUrl] failed — falling back to unsigned URL",
+      {
+        errorMessage:  err instanceof Error ? err.message : String(err),
+        errorName:     err instanceof Error ? err.name    : "unknown",
+        phoneLen:      phone?.length ?? 0,
+        phoneTrimLen:  phone?.trim().length ?? 0,
+        hasSecret:     !!(process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET),
+        secretLen:     (process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET)?.length ?? 0,
+        baseUrlLen:    baseUrl?.length ?? 0,
+        isAbsoluteUrl: baseUrl?.startsWith("http") ?? false,
+      },
+    );
     try {
       const url = new URL(baseUrl);
       url.searchParams.set("src", "whatsapp");
@@ -552,10 +564,23 @@ async function run(conversationId: string): Promise<void> {
     conversation.customer.phone,
     conversation.customer.name ?? null,
   );
-  // Explicit warning if signing failed silently — helps diagnose production issues.
+  // Instrumentation: log link-generation state so we can diagnose waToken failures.
+  console.info("[WhatsAppReceptionistService] link-gen", {
+    conversationId,
+    restaurantSlug:       restaurant?.slug ?? null,
+    customerPhoneLen:     conversation.customer.phone?.length ?? 0,
+    customerPhoneTrimLen: conversation.customer.phone?.trim().length ?? 0,
+    hasSecret:            !!(process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET),
+    secretLen:            (process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET)?.length ?? 0,
+    basePedidoUrlPrefix:  basePedidoUrl ? basePedidoUrl.slice(0, 60) : null,
+    basePedidoIsAbsolute: basePedidoUrl?.startsWith("http") ?? false,
+    pedidoUrlHasWaToken:  pedidoUrl?.includes("waToken=") ?? false,
+    pedidoUrlHasSrc:      pedidoUrl?.includes("src=whatsapp") ?? false,
+  });
+  // Explicit warning if signing failed silently.
   if (pedidoUrl && !pedidoUrl.includes("waToken=")) {
     console.warn(
-      `[WhatsAppReceptionistService] pedidoUrl has no waToken for conv ${conversationId} — signWaToken likely threw (check NEXTAUTH_SECRET). URL: ${pedidoUrl.slice(0, 80)}`,
+      `[WhatsAppReceptionistService] pedidoUrl has no waToken for conv ${conversationId} — signWaToken likely threw. secretLen=${(process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET)?.length ?? 0}`,
     );
   }
   const qrMenuUrl = restaurant?.slug ? getPublicQrUrl(restaurant.slug) : null;
@@ -697,6 +722,16 @@ async function run(conversationId: string): Promise<void> {
   let triggerHandoff        = false;
 
   if (selectedOpt) {
+    // Instrumentation: log which option was selected and URL state.
+    console.info("[WhatsAppReceptionistService] option-selected", {
+      conversationId,
+      restaurantSlug:       restaurant?.slug ?? null,
+      customerIdPresent:    !!conversation.customer.id,
+      customerPhonePresent: !!(conversation.customer.phone?.trim()),
+      optionLabel:          selectedOpt.label,
+      optionFlow:           selectedOpt.flow,
+      ctxPedidoUrlHasWaToken: ctx.pedidoUrl?.includes("waToken=") ?? false,
+    });
     replyText      = buildFlowReply(selectedOpt, ctx);
     triggerHandoff = selectedOpt.flow === "handoff";
     if (!triggerHandoff) {
@@ -881,7 +916,72 @@ async function run(conversationId: string): Promise<void> {
     await markConversationNeedsHuman(conversationId, handoffReason);
   }
 
-  await sendReply(evolutionResult.data, toPhone, replyText, conversationId);
+  // ── Hard guard: re-sign unsigned /pedido links ────────────────────────────
+  // If signing failed when ctx.pedidoUrl was built (signWaToken threw), the reply
+  // contains ?src=whatsapp without waToken.  Attempt a second signing pass here —
+  // a transient failure may now succeed, and even if it fails again we log it.
+  let replyMetadata: Record<string, unknown> | undefined;
+  if (
+    replyText.includes("/pedido/") &&
+    replyText.includes("src=whatsapp") &&
+    !replyText.includes("waToken=") &&
+    basePedidoUrl &&
+    conversation.customer.phone?.trim()
+  ) {
+    const freshSigned = buildIdentifiedPedidoUrl(
+      basePedidoUrl,
+      conversation.customer.phone,
+      conversation.customer.name ?? null,
+    );
+    if (freshSigned?.includes("waToken=")) {
+      // Replace any unsigned /pedido URL in the reply text
+      const repairedText = replyText.replace(
+        /https?:\/\/\S+\/pedido\/\S+/g,
+        (match) => {
+          if (match.includes("waToken=")) return match; // already signed — leave alone
+          if (!match.includes("src=whatsapp")) return match; // unrelated URL — leave alone
+          return freshSigned;
+        },
+      );
+      if (repairedText !== replyText) {
+        replyText = repairedText;
+        replyMetadata = { guardRepaired: true, guardRepairedAt: new Date().toISOString() };
+        console.warn(
+          `[WhatsAppReceptionistService] Hard guard repaired unsigned /pedido URL for conv ${conversationId}`,
+          {
+            optionFlow: selectedOpt?.flow ?? null,
+            finalHasWaToken: replyText.includes("waToken="),
+          },
+        );
+      } else {
+        console.warn(
+          `[WhatsAppReceptionistService] Hard guard: fresh signed URL obtained but string replacement missed for conv ${conversationId}`,
+        );
+      }
+    } else {
+      console.warn(
+        `[WhatsAppReceptionistService] Hard guard: BOTH sign attempts failed for conv ${conversationId}`,
+        {
+          hasSecret: !!(process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET),
+          secretLen: (process.env.NEXTAUTH_SECRET ?? process.env.APP_SECRET)?.length ?? 0,
+        },
+      );
+    }
+  }
+
+  // Log final reply state before sending.
+  console.info("[WhatsAppReceptionistService] sending-reply", {
+    conversationId,
+    replyHasPedidoUrl: replyText.includes("/pedido/"),
+    replyHasWaToken:   replyText.includes("waToken="),
+    guardRepaired:     replyMetadata?.guardRepaired ?? false,
+    replyBuilderPath:
+      selectedOpt    ? `option.${selectedOpt.flow}` :
+      triggerHandoff ? "handoff" :
+      "intent-or-gpt",
+  });
+
+  await sendReply(evolutionResult.data, toPhone, replyText, conversationId, replyMetadata);
 }
 
 // ─── outbound helper ──────────────────────────────────────────
@@ -890,7 +990,8 @@ async function sendReply(
   config: { instanceName: string; baseUrl: string; apiKey: string },
   toPhone: string,
   text: string,
-  conversationId: string
+  conversationId: string,
+  metadata?: Record<string, unknown>,
 ): Promise<void> {
   try {
     const result = await EvolutionClient.sendTextMessage(config, toPhone, text);
@@ -907,6 +1008,7 @@ async function sendReply(
           sentAt:            now,
           externalMessageId: result.key.id,
           externalStatus:    "sent",
+          ...(metadata ? { metadata } : {}),
         },
       }),
       prisma.conversation.update({
