@@ -25,6 +25,10 @@ const nextConfig = {
   // Expose only non-secret env vars to the browser (prefix NEXT_PUBLIC_)
   // Secret vars are accessed server-side only via process.env
   experimental: {
+    // Required in Next.js 14.x to activate instrumentation.ts (register() hook).
+    // Without this, CartRecoveryScheduler and AutoSimulatorScheduler never start.
+    // Becomes unnecessary (but harmless) after upgrading to Next.js 15.
+    instrumentationHook: true,
     serverActions: {
       allowedOrigins: [
         "localhost:3000",

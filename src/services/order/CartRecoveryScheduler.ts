@@ -30,12 +30,20 @@ export class CartRecoveryScheduler {
   static start(): void {
     if (this.handle !== null) return;
     if (process.env.NODE_ENV !== "production") {
-      console.log("[CartRecoveryScheduler] Skipped in non-production environment");
+      console.log("[CartRecoveryScheduler] Skipped — NODE_ENV is not 'production'", {
+        NODE_ENV:        process.env.NODE_ENV,
+        NEXT_RUNTIME:    process.env.NEXT_RUNTIME,
+        RAILWAY_ENV:     process.env.RAILWAY_ENVIRONMENT,
+      });
       return;
     }
-    console.log(
-      "[CartRecoveryScheduler] Started (tick every 60 s, inactivity threshold: 2 min)"
-    );
+    console.log("[CartRecoveryScheduler] Started", {
+      tickIntervalMs:    TICK_INTERVAL_MS,
+      inactivityMinutes: INACTIVITY_MINUTES,
+      NODE_ENV:          process.env.NODE_ENV,
+      NEXT_RUNTIME:      process.env.NEXT_RUNTIME,
+      RAILWAY_ENV:       process.env.RAILWAY_ENVIRONMENT,
+    });
     this.handle = setInterval(() => void this.tick(), TICK_INTERVAL_MS);
   }
 
@@ -58,14 +66,21 @@ export class CartRecoveryScheduler {
         limit:             50,
         dryRun:            false,
       });
-      // Only log when something noteworthy happened to avoid log spam
-      if (result.sent > 0 || result.failed > 0) {
-        console.info("[CartRecoveryScheduler] Tick done", {
-          sent:        result.sent,
-          eligible:    result.eligible,
-          checked:     result.checked,
-          failed:      result.failed,
-          durationMs:  result.durationMs,
+      // Log every tick that has candidates, or any tick that sent/failed.
+      // Silent only when checked=0 (no stale OPEN drafts at all).
+      if (result.checked > 0 || result.sent > 0 || result.failed > 0) {
+        console.info("[CartRecoveryScheduler] Tick", {
+          checked:               result.checked,
+          eligible:              result.eligible,
+          sent:                  result.sent,
+          failed:                result.failed,
+          skippedNoPhone:        result.skippedNoPhone,
+          skippedAlreadySent:    result.skippedAlreadySent,
+          skippedDailyLimit:     result.skippedDailyLimit,
+          skippedOrderedAfter:   result.skippedOrderedAfter,
+          skippedPendingPayment: result.skippedPendingPayment,
+          skippedNoConfig:       result.skippedNoConfig,
+          durationMs:            result.durationMs,
         });
       }
     } catch (err) {
