@@ -262,13 +262,24 @@ export class ScheduledCampaignRunnerService {
     const newEligible = allEligible.filter((c) => !alreadySentIds.has(c.id));
 
     if (newEligible.length === 0) {
-      if (!dryRun) {
+      // Only mark COMPLETED when the campaign was explicitly configured to end
+      // on audience exhaustion. Campaigns created via the UI omit endCondition,
+      // so they should stay ACTIVE and re-evaluate on the next cron tick (new
+      // customers may become eligible after the cooldown window resets).
+      const shouldComplete = cfg.endCondition === "AUDIENCE_EXHAUSTED";
+      if (shouldComplete && !dryRun) {
         await prisma.campaign.update({
           where: { id: campaignId },
           data:  { status: "COMPLETED" as never },
         });
       }
-      return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: 0, reason: "Audience exhausted", completed: true };
+      return {
+        campaignId,
+        campaignName: campaign.name,
+        eligible: 0, sent: 0, failed: 0, skipped: 0,
+        reason: shouldComplete ? "Audience exhausted" : "No new eligible recipients this run",
+        completed: shouldComplete,
+      };
     }
 
     const batch = newEligible.slice(0, batchCap);

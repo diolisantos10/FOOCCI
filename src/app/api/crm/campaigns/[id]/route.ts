@@ -94,7 +94,7 @@ export async function PATCH(
     }
 
     const body = await req.json() as {
-      action?:          "pause" | "resume" | "cancel";
+      action?:          "pause" | "resume" | "cancel" | "reactivate";
       name?:            string;
       message?:         string;
       targetSegment?:   string;
@@ -104,15 +104,34 @@ export async function PATCH(
       scheduleConfig?:  Record<string, unknown> | null;
     };
 
-    // ── lifecycle actions (pause / resume / cancel) ──────────────
+    // ── lifecycle actions (pause / resume / cancel / reactivate) ──
     if (body.action) {
+      const currentStatus = campaign.status as string;
+
+      // reactivate: restore a COMPLETED recurring campaign back to ACTIVE.
+      // Needed to recover campaigns stuck COMPLETED by the premature-exhaustion bug.
+      if (body.action === "reactivate") {
+        if (currentStatus !== "COMPLETED") {
+          return badRequest("Apenas campanhas COMPLETED podem ser reativadas");
+        }
+        const cfg = campaign.scheduleConfig as { mode?: string } | null;
+        if (!cfg || cfg.mode !== "RECURRING") {
+          return badRequest("Apenas campanhas recorrentes podem ser reativadas");
+        }
+        const updated = await prisma.campaign.update({
+          where: { id: params.id },
+          data:  { status: "ACTIVE" as never },
+          select: { id: true, status: true },
+        });
+        return ok(updated);
+      }
+
       const TERMINAL = ["SENT", "COMPLETED", "CANCELLED"];
-      if (TERMINAL.includes(campaign.status)) {
+      if (TERMINAL.includes(currentStatus)) {
         return badRequest("Campanha já finalizada — não pode ser modificada");
       }
 
       let newStatus: string;
-      const currentStatus = campaign.status as string;
       if (body.action === "pause") {
         if (!["ACTIVE", "SCHEDULED"].includes(currentStatus)) {
           return badRequest("Apenas campanhas ativas ou agendadas podem ser pausadas");
