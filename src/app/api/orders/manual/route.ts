@@ -17,6 +17,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant";
 import { Decimal } from "@prisma/client/runtime/library";
+import { ConversationLogService } from "@/services/conversation/ConversationLogService";
 
 const itemSchema = z.object({
   menuItemId: z.string().min(1),
@@ -33,6 +34,7 @@ const bodySchema = z.object({
   paymentMethod: z.enum(["CASH", "PIX", "CREDIT_CARD", "DEBIT_CARD", "CARD_MACHINE"]),
   paymentStatus: z.enum(["PAID", "PAY_ON_DELIVERY"]).default("PAID"),
   source:        z.enum(["manual", "whatsapp_manual"]).default("manual"),
+  conversationId: z.string().optional(),
   // Real product items (preferred)
   items: z.array(itemSchema).optional(),
   // Legacy: free-text total (used when items not provided)
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
 
   const {
     customerName, customerPhone, notes, deliveryFee, type,
-    paymentMethod, paymentStatus, source, items, total,
+    paymentMethod, paymentStatus, source, conversationId, items, total,
   } = parsed.data;
   const { restaurantId } = ctx;
 
@@ -176,6 +178,17 @@ export async function POST(req: NextRequest) {
 
     return created;
   });
+
+  // Log a system event in the conversation timeline (best-effort, non-blocking)
+  if (conversationId) {
+    const shortId = order.id.slice(-6).toUpperCase();
+    ConversationLogService.logMessage({
+      conversationId,
+      restaurantId,
+      senderType: "SYSTEM",
+      content:    `Pedido #${shortId} criado pelo operador`,
+    }).catch(() => {});
+  }
 
   return NextResponse.json({ success: true, orderId: order.id });
 }

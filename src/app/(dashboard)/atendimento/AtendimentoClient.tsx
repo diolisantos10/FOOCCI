@@ -1118,6 +1118,7 @@ export function AtendimentoClient({
             isOwner={isOwner}
             isManagerOrOwner={isManagerOrOwner}
             onDeleteConversation={() => { setDeleteConvOpen(true); setDeleteConvError(null); }}
+            onOrderCreated={() => { if (selectedId) fetchThread(selectedId); }}
           />
         ) : null}
       </section>
@@ -1150,6 +1151,7 @@ interface ThreadPanelProps {
   isOwner?:                boolean;
   isManagerOrOwner?:       boolean;
   onDeleteConversation?:   () => void;
+  onOrderCreated?:         () => void;
 }
 
 // ── ActiveDraftPanel ──────────────────────────────────────────
@@ -1465,6 +1467,322 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
   );
 }
 
+// ── ManualOrderModal ──────────────────────────────────────────────────────────
+
+interface MenuItemRow {
+  id:           string;
+  name:         string;
+  price:        number;
+  categoryName: string;
+}
+
+interface CartLine {
+  menuItemId: string;
+  name:       string;
+  price:      number;
+  quantity:   number;
+}
+
+function ManualOrderModal({
+  conversationId,
+  customerName: initName,
+  customerPhone: initPhone,
+  onClose,
+  onCreated,
+}: {
+  conversationId?: string;
+  customerName?:  string | null;
+  customerPhone?: string | null;
+  onClose:        () => void;
+  onCreated:      (orderId: string) => void;
+}) {
+  const [customerName,    setCustomerName]    = useState(initName  ?? "");
+  const [customerPhone,   setCustomerPhone]   = useState(initPhone ?? "");
+  const [orderType,       setOrderType]       = useState<"DELIVERY" | "PICKUP">("PICKUP");
+  const [paymentMethod,   setPaymentMethod]   = useState<"CASH" | "PIX" | "CREDIT_CARD" | "DEBIT_CARD" | "CARD_MACHINE">("CASH");
+  const [paymentStatus,   setPaymentStatus]   = useState<"PAID" | "PAY_ON_DELIVERY">("PAID");
+  const [notes,           setNotes]           = useState("");
+  const [menuItems,       setMenuItems]       = useState<MenuItemRow[]>([]);
+  const [menuLoading,     setMenuLoading]     = useState(false);
+  const [itemSearch,      setItemSearch]      = useState("");
+  const [cart,            setCart]            = useState<CartLine[]>([]);
+  const [submitting,      setSubmitting]      = useState(false);
+  const [error,           setError]           = useState<string | null>(null);
+
+  useEffect(() => {
+    setMenuLoading(true);
+    fetch("/api/menu/items")
+      .then((r) => r.json())
+      .then((res: { success?: boolean; data?: MenuItemRow[] }) => {
+        if (res.success && Array.isArray(res.data)) setMenuItems(res.data);
+      })
+      .catch(() => {})
+      .finally(() => setMenuLoading(false));
+  }, []);
+
+  const filteredItems = useMemo(() => {
+    const q = itemSearch.toLowerCase();
+    if (!q) return menuItems;
+    return menuItems.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.categoryName.toLowerCase().includes(q)
+    );
+  }, [menuItems, itemSearch]);
+
+  function addToCart(item: MenuItemRow) {
+    setCart((prev) => {
+      const existing = prev.find((l) => l.menuItemId === item.id);
+      if (existing) {
+        return prev.map((l) =>
+          l.menuItemId === item.id ? { ...l, quantity: l.quantity + 1 } : l
+        );
+      }
+      return [...prev, { menuItemId: item.id, name: item.name, price: item.price, quantity: 1 }];
+    });
+  }
+
+  function adjustQty(menuItemId: string, delta: number) {
+    setCart((prev) =>
+      prev
+        .map((l) => l.menuItemId === menuItemId ? { ...l, quantity: l.quantity + delta } : l)
+        .filter((l) => l.quantity > 0)
+    );
+  }
+
+  const cartTotal = cart.reduce((s, l) => s + l.price * l.quantity, 0);
+
+  async function handleSubmit() {
+    if (!customerName.trim()) { setError("Nome do cliente é obrigatório"); return; }
+    if (cart.length === 0)    { setError("Adicione pelo menos um item"); return; }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/orders/manual", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          customerName:  customerName.trim(),
+          customerPhone: customerPhone.trim() || undefined,
+          notes:         notes.trim() || undefined,
+          deliveryFee:   0,
+          type:          orderType,
+          paymentMethod,
+          paymentStatus,
+          source:        "whatsapp_manual",
+          conversationId: conversationId || undefined,
+          items:         cart.map((l) => ({ menuItemId: l.menuItemId, quantity: l.quantity })),
+        }),
+      });
+      const json = await res.json() as { success?: boolean; orderId?: string; error?: string };
+      if (!res.ok || !json.success) {
+        setError(json.error ?? "Erro ao criar pedido");
+        return;
+      }
+      onCreated(json.orderId!);
+    } catch {
+      setError("Falha de rede. Tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4">
+      <div className="flex h-[90vh] sm:h-auto sm:max-h-[90vh] w-full sm:max-w-xl flex-col rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl">
+
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 shrink-0">
+          <div>
+            <p className="text-sm font-bold text-gray-900">Criar pedido</p>
+            <p className="text-xs text-gray-500 mt-0.5">Pedido via WhatsApp ou balcão</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+          {/* Customer info */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Nome *</label>
+              <input
+                type="text"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Nome do cliente"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Telefone</label>
+              <input
+                type="text"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                placeholder="5511999999999"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
+              />
+            </div>
+          </div>
+
+          {/* Order type + payment */}
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Tipo</label>
+              <select
+                value={orderType}
+                onChange={(e) => setOrderType(e.target.value as "DELIVERY" | "PICKUP")}
+                className="w-full rounded-lg border border-gray-200 px-2 py-2 text-xs text-gray-700 focus:border-orange-300 focus:outline-none"
+              >
+                <option value="PICKUP">Retirada</option>
+                <option value="DELIVERY">Entrega</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Pagamento</label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
+                className="w-full rounded-lg border border-gray-200 px-2 py-2 text-xs text-gray-700 focus:border-orange-300 focus:outline-none"
+              >
+                <option value="CASH">Dinheiro</option>
+                <option value="PIX">Pix</option>
+                <option value="CREDIT_CARD">Crédito</option>
+                <option value="DEBIT_CARD">Débito</option>
+                <option value="CARD_MACHINE">Máquina</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+              <select
+                value={paymentStatus}
+                onChange={(e) => setPaymentStatus(e.target.value as "PAID" | "PAY_ON_DELIVERY")}
+                className="w-full rounded-lg border border-gray-200 px-2 py-2 text-xs text-gray-700 focus:border-orange-300 focus:outline-none"
+              >
+                <option value="PAID">Pago</option>
+                <option value="PAY_ON_DELIVERY">Pagar na entrega</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Product picker */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Produtos</label>
+            <input
+              type="text"
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+              placeholder="Buscar produto..."
+              className="mb-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
+            />
+            {menuLoading ? (
+              <p className="text-center text-xs text-gray-400 py-4">Carregando produtos…</p>
+            ) : (
+              <div className="max-h-40 overflow-y-auto rounded-xl border border-gray-100 divide-y divide-gray-50">
+                {filteredItems.length === 0 ? (
+                  <p className="py-3 text-center text-xs text-gray-400">Nenhum produto encontrado</p>
+                ) : (
+                  filteredItems.slice(0, 50).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => addToCart(item)}
+                      className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-orange-50 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-gray-800">{item.name}</p>
+                        <p className="text-[10px] text-gray-400">{item.categoryName}</p>
+                      </div>
+                      <span className="ml-3 shrink-0 text-xs font-semibold text-orange-600">
+                        + R$ {item.price.toFixed(2).replace(".", ",")}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Cart */}
+          {cart.length > 0 && (
+            <div className="rounded-xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+              {cart.map((line) => (
+                <div key={line.menuItemId} className="flex items-center gap-3 px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-xs font-medium text-gray-800">{line.name}</p>
+                    <p className="text-[10px] text-gray-400">
+                      R$ {(line.price * line.quantity).toFixed(2).replace(".", ",")}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => adjustQty(line.menuItemId, -1)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 text-sm leading-none"
+                    >
+                      −
+                    </button>
+                    <span className="w-5 text-center text-xs font-semibold text-gray-700">{line.quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => adjustQty(line.menuItemId, 1)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 text-sm leading-none"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Observações</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Ex: sem cebola, endereço de entrega…"
+              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
+            />
+          </div>
+
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 border-t border-gray-100 bg-gray-50 px-5 py-4 flex items-center gap-3">
+          <div className="flex-1">
+            <p className="text-xs text-gray-500">Total</p>
+            <p className="text-base font-bold text-gray-900">
+              R$ {cartTotal.toFixed(2).replace(".", ",")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting || cart.length === 0 || !customerName.trim()}
+            className="rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+          >
+            {submitting ? "Criando…" : "Confirmar pedido"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ThreadPanel component ─────────────────────────────────────────────────────
 
 function ThreadPanel({
@@ -1489,6 +1807,7 @@ function ThreadPanel({
   isOwner,
   isManagerOrOwner,
   onDeleteConversation,
+  onOrderCreated,
 }: ThreadPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const badge          = getHandlerBadge(thread);
@@ -1496,6 +1815,9 @@ function ThreadPanel({
   const isResolved     = thread.status === "RESOLVED";
   const isAIActive     = thread.aiEnabled && !isResolved;
   const isHumanHandling = !thread.aiEnabled && !isResolved;
+
+  const [manualOrderOpen, setManualOrderOpen] = useState(false);
+  const [orderCreatedId,  setOrderCreatedId]  = useState<string | null>(null);
 
   return (
     <>
@@ -1585,6 +1907,15 @@ function ThreadPanel({
               Reabrir
             </button>
           )}
+          {isManagerOrOwner && (
+            <button
+              type="button"
+              onClick={() => { setOrderCreatedId(null); setManualOrderOpen(true); }}
+              className="shrink-0 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+            >
+              + Criar pedido
+            </button>
+          )}
           {isOwner && onDeleteConversation && (
             <button
               type="button"
@@ -1597,10 +1928,40 @@ function ThreadPanel({
           )}
         </div>
 
+        {/* Order created success notice */}
+        {orderCreatedId && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-700">
+            <span>✅</span>
+            <span>Pedido <span className="font-semibold">#{orderCreatedId.slice(-6).toUpperCase()}</span> criado com sucesso.</span>
+            <button
+              type="button"
+              onClick={() => setOrderCreatedId(null)}
+              className="ml-auto text-green-500 hover:text-green-700 leading-none"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Row 3: active order / draft */}
         {activeOrder && <ActiveOrderPanel order={activeOrder} isManagerOrOwner={isManagerOrOwner} />}
         {!activeOrder && activeDraft && <ActiveDraftPanel draft={activeDraft} />}
       </div>
+
+      {/* ── Manual order modal ────────────────────────────────────── */}
+      {manualOrderOpen && (
+        <ManualOrderModal
+          conversationId={thread.id}
+          customerName={thread.customer?.name ?? thread.customerName}
+          customerPhone={thread.customer?.phone ?? thread.customerPhone}
+          onClose={() => setManualOrderOpen(false)}
+          onCreated={(orderId) => {
+            setManualOrderOpen(false);
+            setOrderCreatedId(orderId);
+            onOrderCreated?.();
+          }}
+        />
+      )}
 
       {/* ── Message thread ────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-4">
