@@ -837,9 +837,6 @@ async function run(conversationId: string): Promise<void> {
             let greet = greetLine;
             if (menuList) {
               greet += menuList + "\n\nResponda com o número da opção 😊";
-              if (ctx.pedidoUrl) {
-                greet += `\n\n👉 Fazer pedido: ${ctx.pedidoUrl}`;
-              }
             } else if (ctx.pedidoUrl) {
               greet += `\n\nCardápio: ${ctx.pedidoUrl}`;
             }
