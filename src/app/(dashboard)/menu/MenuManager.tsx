@@ -78,7 +78,8 @@ type Item = {
   harmonizacaoSugerida: string | null;
   alergenosDetalhados:  string | null;
   storytellingIA:       string | null;
-  hasActivePromo?: boolean;
+  hasActivePromo?:   boolean;
+  promoActiveToday?: boolean;
   variants: Variant[];
   extras: Extra[];
 };
@@ -819,7 +820,8 @@ function SortableItemRow({
         harmonizacaoSugerida: raw.harmonizacaoSugerida ?? null,
         alergenosDetalhados:  raw.alergenosDetalhados  ?? null,
         storytellingIA:       raw.storytellingIA       ?? null,
-        hasActivePromo:       false,
+        hasActivePromo:    false,
+        promoActiveToday:  false,
         variants: (raw.variants ?? []).map((v: { id: string; name: string; price: string | number; isAvailable: boolean; sortOrder: number }) => ({
           id:          v.id,
           name:        v.name,
@@ -883,8 +885,12 @@ function SortableItemRow({
             {item.name}
           </span>
           {item.hasActivePromo && (
-            <span className="shrink-0 rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-bold text-green-700">
-              Promo ativa
+            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+              item.promoActiveToday === false
+                ? "bg-yellow-100 text-yellow-700"
+                : "bg-green-100 text-green-700"
+            }`}>
+              {item.promoActiveToday === false ? "Promo programada" : "Promo ativa"}
             </span>
           )}
           {item.description && (
@@ -2674,9 +2680,11 @@ function EditItemModal({
                   >
                     <span className="flex items-center gap-1.5">
                       {item?.hasActivePromo && (
-                        <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${item?.promoActiveToday === false ? "bg-yellow-500" : "bg-green-500"}`} />
                       )}
-                      {item?.hasActivePromo ? "Promo ativa — editar" : "Configurar promoção"}
+                      {item?.hasActivePromo
+                        ? (item?.promoActiveToday === false ? "Promo programada — editar" : "Promo ativa — editar")
+                        : "Configurar promoção"}
                     </span>
                     <span className="text-sm">%</span>
                   </button>

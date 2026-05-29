@@ -40,6 +40,18 @@ export type ResolvedPromotion = {
   badgeText: string;
 };
 
+/** Returns true when `now` falls within a HH:MM time window (both ends required). */
+function isWithinTimeWindow(timeFrom: string | null, timeTo: string | null, now: Date): boolean {
+  if (!timeFrom || !timeTo) return true;
+  const current = now.getHours() * 60 + now.getMinutes();
+  const [fh = 0, fm = 0] = timeFrom.split(":").map(Number);
+  const [th = 0, tm = 0] = timeTo.split(":").map(Number);
+  const from = fh * 60 + fm;
+  const to   = th * 60 + tm;
+  // Handle overnight windows (e.g. 22:00–02:00)
+  return from <= to ? current >= from && current < to : current >= from || current < to;
+}
+
 /** Fetch all currently-valid PRODUCT + CATEGORY promotions for a restaurant + channel. */
 export async function getActiveMenuPromotions(
   restaurantId: string,
@@ -67,11 +79,14 @@ export async function getActiveMenuPromotions(
       targetCategoryIds: true,
       channel: true,
       daysOfWeek: true,
+      timeFrom: true,
+      timeTo: true,
     },
   });
 
   return rows
     .filter((p) => p.daysOfWeek.length === 0 || p.daysOfWeek.includes(todayDow))
+    .filter((p) => isWithinTimeWindow(p.timeFrom, p.timeTo, now))
     .map((p) => ({
       id: p.id,
       target: p.target as "PRODUCT" | "CATEGORY",

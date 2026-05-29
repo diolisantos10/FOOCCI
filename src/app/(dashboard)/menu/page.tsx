@@ -41,11 +41,17 @@ export default async function MenuPage() {
     }),
     prisma.promotion.findMany({
       where: { restaurantId: session.user.restaurantId, status: "ACTIVE", target: "PRODUCT" },
-      select: { targetProductIds: true },
+      select: { targetProductIds: true, daysOfWeek: true },
     }),
   ]);
 
-  const promotedProductIds = new Set(activePromos.flatMap((p) => p.targetProductIds));
+  const todayDow = new Date().getDay();
+  const promotedProductIds    = new Set(activePromos.flatMap((p) => p.targetProductIds));
+  const promoActiveTodayIds   = new Set(
+    activePromos
+      .filter((p) => p.daysOfWeek.length === 0 || p.daysOfWeek.includes(todayDow))
+      .flatMap((p) => p.targetProductIds)
+  );
 
   // Normalise Decimal → number so the client component receives plain JSON
   const data = categories.map((cat) => ({
@@ -71,7 +77,8 @@ export default async function MenuPage() {
       showInDelivery: item.showInDelivery,
       showInDineIn: item.showInDineIn,
       hasVariants: item.hasVariants,
-      hasActivePromo: promotedProductIds.has(item.id),
+      hasActivePromo:    promotedProductIds.has(item.id),
+      promoActiveToday:  promoActiveTodayIds.has(item.id),
       code: item.code ?? null,
       servingSize: item.servingSize ?? null,
       portionInfo: item.portionInfo ?? null,
