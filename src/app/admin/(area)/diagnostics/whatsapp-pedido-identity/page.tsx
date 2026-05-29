@@ -55,17 +55,20 @@ interface Step8SSR {
 }
 
 interface Step9Conv {
-  conversationId?:      string;
-  channel?:             string;
-  status?:              string;
-  conversationPhone?:   string | null;
-  lastMessageAt?:       string | null;
-  aiEnabled?:           boolean;
-  lastAiReply?:         { preview: string; sentAt: string } | null;
-  lastAiReplyHasLink?:  boolean | null;
+  conversationId?:        string;
+  channel?:               string;
+  status?:                string;
+  conversationPhone?:     string | null;
+  lastMessageAt?:         string | null;
+  aiEnabled?:             boolean;
+  lastAiReply?:           { preview: string; sentAt: string } | null;
+  lastAiReplyHasLink?:    boolean | null;
   lastAiReplyHasWaToken?: boolean | null;
-  found?:               boolean;
-  note?:                string;
+  lastAiReplyAgeHours?:   number | null;
+  mightPreDateFix?:       boolean | null;
+  step9Note?:             string;
+  found?:                 boolean;
+  note?:                  string;
 }
 
 interface DiagResult {
@@ -81,7 +84,7 @@ interface DiagResult {
   step7_pedidoUrl?:     Step7PedidoUrl;
   step8_ssrResolution?: Step8SSR;
   step9_latestConversation?: Step9Conv;
-  summary?:             { verdict: string; failures: string[]; recommendation: string };
+  summary?:             { verdict: string; failures: string[]; warnings?: string[]; recommendation: string };
   error?:               string;
 }
 
@@ -258,9 +261,22 @@ export default function WhatsAppPedidoIdentityPage() {
                   ))}
                 </ul>
               )}
-              {sm.failures.length === 0 && (
+              {sm.failures.length === 0 && sm.warnings?.length === 0 && (
                 <p className="text-sm opacity-80">{sm.recommendation}</p>
               )}
+            </div>
+          )}
+
+          {/* Warnings (non-blocking) */}
+          {sm && sm.warnings && sm.warnings.length > 0 && (
+            <div className="rounded-lg border border-yellow-700 bg-yellow-950/30 px-4 py-3 space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-yellow-400">Avisos (não bloqueadores)</p>
+              {sm.warnings.map((w, i) => (
+                <p key={i} className="text-sm text-yellow-200 flex items-start gap-2">
+                  <span className="shrink-0">⚠️</span>
+                  <span>{w}</span>
+                </p>
+              ))}
             </div>
           )}
 
@@ -415,7 +431,7 @@ export default function WhatsAppPedidoIdentityPage() {
 
           {/* Step 9 — Latest conversation */}
           {s9 && (
-            <Section title="Step 9 — Última conversa WhatsApp">
+            <Section title="Step 9 — Última resposta IA enviada (histórico)">
               {s9.note ? (
                 <Row label="Nota"><span className="text-gray-400">{s9.note}</span></Row>
               ) : s9.found === false ? (
@@ -431,16 +447,40 @@ export default function WhatsAppPedidoIdentityPage() {
                   </Row>
                   {s9.lastAiReply ? (
                     <>
-                      <Row label="Última resposta IA">{s9.lastAiReply.preview}</Row>
+                      <Row label="Resposta IA enviada em">
+                        <span className="text-gray-200">
+                          {new Date(s9.lastAiReply.sentAt).toLocaleString("pt-BR")}
+                          {s9.lastAiReplyAgeHours != null && (
+                            <span className={`ml-2 text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                              s9.mightPreDateFix ? "bg-yellow-900/50 text-yellow-300" : "bg-gray-800 text-gray-400"
+                            }`}>
+                              {s9.lastAiReplyAgeHours}h atrás
+                              {s9.mightPreDateFix ? " · pode ser anterior ao fix" : ""}
+                            </span>
+                          )}
+                        </span>
+                      </Row>
+                      <Row label="Preview">{s9.lastAiReply.preview}</Row>
                       <Row label="Tem link /pedido">
                         <Pill ok={s9.lastAiReplyHasLink ?? null} label={s9.lastAiReplyHasLink ? "sim" : "não"} />
                       </Row>
                       <Row label="Tem waToken=">
-                        <Pill ok={s9.lastAiReplyHasWaToken ?? null} label={s9.lastAiReplyHasWaToken ? "sim" : "não — PROBLEMA"} />
+                        <Pill ok={s9.lastAiReplyHasWaToken ?? null} label={
+                          s9.lastAiReplyHasWaToken
+                            ? "sim ✓"
+                            : s9.mightPreDateFix
+                              ? "não — mensagem antiga, envie '1' no WhatsApp e rode novamente"
+                              : "não — PROBLEMA"
+                        } />
                       </Row>
                     </>
                   ) : (
                     <Row label="Última resposta IA"><span className="text-gray-500">nenhuma</span></Row>
+                  )}
+                  {s9.step9Note && (
+                    <div className="mt-2 text-[10px] text-gray-600 leading-relaxed pt-2 border-t border-gray-800">
+                      ℹ️ {s9.step9Note}
+                    </div>
                   )}
                 </>
               )}

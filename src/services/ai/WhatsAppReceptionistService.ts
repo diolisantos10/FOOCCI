@@ -552,6 +552,12 @@ async function run(conversationId: string): Promise<void> {
     conversation.customer.phone,
     conversation.customer.name ?? null,
   );
+  // Explicit warning if signing failed silently — helps diagnose production issues.
+  if (pedidoUrl && !pedidoUrl.includes("waToken=")) {
+    console.warn(
+      `[WhatsAppReceptionistService] pedidoUrl has no waToken for conv ${conversationId} — signWaToken likely threw (check NEXTAUTH_SECRET). URL: ${pedidoUrl.slice(0, 80)}`,
+    );
+  }
   const qrMenuUrl = restaurant?.slug ? getPublicQrUrl(restaurant.slug) : null;
 
   let address: string | null = null;

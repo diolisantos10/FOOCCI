@@ -221,6 +221,8 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    const lastMsg = conv?.messages[0] ?? null;
+    const lastMsgAgeMs = lastMsg ? Date.now() - lastMsg.sentAt.getTime() : null;
     result.step9_latestConversation = conv ? {
       conversationId:  conv.id,
       channel:         conv.channel,
@@ -228,15 +230,19 @@ export async function GET(req: NextRequest) {
       conversationPhone: conv.customerPhone,
       lastMessageAt:   conv.lastMessageAt?.toISOString() ?? null,
       aiEnabled:       conv.aiEnabled,
-      lastAiReply:     conv.messages[0]
-        ? { preview: conv.messages[0].content.slice(0, 100), sentAt: conv.messages[0].sentAt.toISOString() }
+      lastAiReply:     lastMsg
+        ? { preview: lastMsg.content.slice(0, 100), sentAt: lastMsg.sentAt.toISOString() }
         : null,
-      lastAiReplyHasLink: conv.messages[0]
-        ? conv.messages[0].content.includes("foocci.com.br/pedido")
+      lastAiReplyHasLink: lastMsg
+        ? lastMsg.content.includes("foocci.com.br/pedido")
         : null,
-      lastAiReplyHasWaToken: conv.messages[0]
-        ? conv.messages[0].content.includes("waToken=")
+      lastAiReplyHasWaToken: lastMsg
+        ? lastMsg.content.includes("waToken=")
         : null,
+      // Staleness: if last AI reply is > 3 h old it likely predates recent deploy
+      lastAiReplyAgeHours: lastMsgAgeMs !== null ? Math.round(lastMsgAgeMs / 3_600_000) : null,
+      mightPreDateFix: lastMsgAgeMs !== null ? lastMsgAgeMs > 3 * 3_600_000 : null,
+      step9Note: "Shows last AI reply ever sent to this conversation. If mightPreDateFix=true and lastAiReplyHasWaToken=false, the reply predates the fix — send '1' in WhatsApp and re-run to verify current behavior.",
     } : { found: false };
   } else {
     result.step9_latestConversation = { note: "Customer not in DB — no conversation to check" };
@@ -261,11 +267,27 @@ export async function GET(req: NextRequest) {
     failures.push("menuUrl still points to /qr/ — fix remap may not have taken effect");
   }
 
+  // Warnings: non-blocking issues that need human follow-up
+  const warnings: string[] = [];
+  const s9data = result.step9_latestConversation as Record<string, unknown> | undefined;
+  if (s9data?.mightPreDateFix && s9data?.lastAiReplyHasWaToken === false) {
+    warnings.push(
+      `step9: last AI reply (${s9data.lastAiReplyAgeHours}h ago) has no waToken — likely stale pre-fix message. Send '1' in WhatsApp and re-run to confirm current behavior.`,
+    );
+  } else if (s9data?.lastAiReplyHasWaToken === false && s9data?.lastAiReply !== null) {
+    warnings.push("step9: last AI reply has no waToken — verify by sending a fresh test message.");
+  }
+
+  const passRecommendation = warnings.length > 0
+    ? warnings[0]
+    : "Token chain is correct. Issue may be client-side (sessionStorage, React hydration, or browser cache). Check browser devtools.";
+
   result.summary = {
     verdict:  failures.length === 0 ? "PASS — identity chain intact" : "FAIL",
     failures,
+    warnings,
     recommendation: failures.length === 0
-      ? "Token chain is correct. Issue may be client-side (sessionStorage, React hydration, or browser cache). Check browser devtools."
+      ? passRecommendation
       : failures.join("; "),
   };
 
