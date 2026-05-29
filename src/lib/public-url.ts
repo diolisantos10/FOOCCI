@@ -1,7 +1,7 @@
 /**
  * Customer-facing public URL helpers.
  *
- * Resolution priority (first non-empty, non-localhost-in-production wins):
+ * Resolution priority (first non-empty, non-canonical-in-production wins):
  *   1. NEXT_PUBLIC_SITE_URL  — canonical customer domain (e.g. https://foocci.com.br).
  *                              Set this in Railway to override everything else.
  *   2. NEXTAUTH_URL          — Next-Auth callback base; typically set to the public domain.
@@ -10,12 +10,16 @@
  *                              in customer-facing WhatsApp messages, QR codes, or links.
  *   4. Hard fallback         — https://foocci.com.br
  *
- * Guard: if NODE_ENV=production and a candidate URL contains "localhost", it is skipped
- * and an error is logged. This prevents Railway's internal loopback from leaking into
- * customer-visible links (recovery links, QR codes, WhatsApp messages).
+ * Guards: in production, any candidate that contains "localhost" or ".railway.app" is
+ * rejected and an error is logged. This prevents Railway's internal domain from leaking
+ * into customer-visible links (recovery links, QR codes, WhatsApp messages).
  *
  * All services that generate customer-facing links must import from here.
  */
+
+function isNonCanonicalHost(url: string): boolean {
+  return url.includes("localhost") || url.includes(".railway.app");
+}
 
 function resolvePublicSiteUrl(): string {
   const candidates = [
@@ -27,9 +31,9 @@ function resolvePublicSiteUrl(): string {
   for (const raw of candidates) {
     if (!raw) continue;
     const trimmed = raw.replace(/\/$/, "");
-    if (process.env.NODE_ENV === "production" && trimmed.includes("localhost")) {
+    if (process.env.NODE_ENV === "production" && isNonCanonicalHost(trimmed)) {
       console.error(
-        `[public-url] Skipping candidate URL that contains "localhost" in production: "${trimmed}"`,
+        `[public-url] Skipping non-canonical candidate URL in production: "${trimmed}"`,
       );
       continue;
     }
@@ -59,4 +63,29 @@ export function getPublicQrUrl(slug: string): string {
 /** The canonical public site URL (no trailing slash). */
 export function getPublicSiteUrl(): string {
   return SITE_URL;
+}
+
+/**
+ * Sanitizes a URL stored in the database (e.g. WhatsAppAgentConfig.menuUrl)
+ * by replacing non-canonical hosts (Railway domain, localhost) with the canonical
+ * site URL. Call this before using any admin-configured URL in customer-facing output.
+ */
+export function sanitizeCustomerUrl(storedUrl: string): string {
+  try {
+    const parsed = new URL(storedUrl);
+    if (isNonCanonicalHost(parsed.hostname)) {
+      const canonical = new URL(SITE_URL);
+      console.warn("[public-url] rejected non-canonical customer host", {
+        host: parsed.hostname,
+        fallbackHost: canonical.hostname,
+      });
+      parsed.protocol = canonical.protocol;
+      parsed.hostname = canonical.hostname;
+      parsed.port = "";
+      return parsed.toString();
+    }
+    return storedUrl;
+  } catch {
+    return storedUrl;
+  }
 }

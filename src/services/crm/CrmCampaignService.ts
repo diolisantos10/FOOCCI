@@ -14,6 +14,7 @@
 import { prisma } from "@/lib/prisma";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
 import { isGuestIdentifier } from "@/lib/guest";
 import { ConversationStatus } from "@prisma/client";
 import { assignConversationContext, buildConversationMetadataForCrmSend, CONTEXT_TYPE } from "@/services/agents/AgentRoutingService";
@@ -325,8 +326,7 @@ export class CrmCampaignService {
       }),
     ]);
 
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    const pedidoUrl = restaurant?.slug ? `${baseUrl}/pedido/${restaurant.slug}` : baseUrl;
+    const pedidoUrl = restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : getPublicSiteUrl();
 
     const ctx: MessageContext = {
       restaurantName:  restaurant?.name ?? "nossa loja",

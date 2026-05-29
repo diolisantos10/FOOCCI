@@ -14,6 +14,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { Prisma, ConversationStatus } from "@prisma/client";
@@ -392,8 +393,7 @@ export class ScheduledCampaignRunnerService {
         select: { googleReviewUrl: true },
       }),
     ]);
-    const baseUrl   = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    const pedidoUrl = restaurant?.slug ? `${baseUrl}/pedido/${restaurant.slug}` : baseUrl;
+    const pedidoUrl = restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : getPublicSiteUrl();
     const msgCtx    = {
       restaurantName:  restaurant?.name ?? "nossa loja",
       pedidoUrl,

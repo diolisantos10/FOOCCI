@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
 import { personalizeMessage, type AudienceCustomer } from "@/services/crm/CrmCampaignService";
 import { CrmCampaignService } from "@/services/crm/CrmCampaignService";
 import type { CRMAutomation } from "@prisma/client";
@@ -184,8 +185,7 @@ export class AutomationSchedulerService {
       }),
     ]);
 
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    const pedidoUrl = restaurant?.slug ? `${baseUrl}/pedido/${restaurant.slug}` : baseUrl;
+    const pedidoUrl = restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : getPublicSiteUrl();
     const ctx = {
       restaurantName: restaurant?.name ?? "nossa loja",
       pedidoUrl,
@@ -394,8 +394,7 @@ export class AutomationSchedulerService {
       }),
     ]);
 
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    const pedidoUrl = restaurant?.slug ? `${baseUrl}/pedido/${restaurant.slug}` : baseUrl;
+    const pedidoUrl = restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : getPublicSiteUrl();
 
     return personalizeMessage(automation.messageTemplate, customer, {
       restaurantName: restaurant?.name ?? "nossa loja",

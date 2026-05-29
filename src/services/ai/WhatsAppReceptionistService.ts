@@ -32,7 +32,7 @@ import type { MenuOption } from "@/validators/whatsapp-agent";
 import { RestaurantKnowledgeService } from "@/services/knowledge/RestaurantKnowledgeService";
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { getPeriodsForRow, isInPeriod, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
-import { getPublicMenuUrl, getPublicQrUrl } from "@/lib/public-url";
+import { getPublicMenuUrl, getPublicQrUrl, sanitizeCustomerUrl } from "@/lib/public-url";
 import { signWaToken } from "@/lib/wa-token";
 
 // ─── constants ────────────────────────────────────────────────
@@ -543,7 +543,8 @@ async function run(conversationId: string): Promise<void> {
     return;
   }
 
-  const basePedidoUrl = agentCfg?.menuUrl?.trim() || (restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : null);
+  const rawMenuUrl = agentCfg?.menuUrl?.trim() || (restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : null);
+  const basePedidoUrl = rawMenuUrl ? sanitizeCustomerUrl(rawMenuUrl) : null;
   // Build customer-identified URL so /pedido can skip the phone-entry step
   const pedidoUrl = buildIdentifiedPedidoUrl(
     basePedidoUrl,
