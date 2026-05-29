@@ -15,6 +15,7 @@ import type {
   Insight,
   ImportedBaseline,
   ImportedCustomerRow,
+  ZeroSalesProduct,
 } from "@/services/analytics/AnalyticsService";
 
 // ─── Analytics Agent types ────────────────────────────────────────────────────
@@ -1060,6 +1061,46 @@ function TabVisaoGeral({
   );
 }
 
+// ─── Zero-sales card ─────────────────────────────────────────────────────────
+
+function ZeroSalesCard({ products }: { products: ZeroSalesProduct[] }) {
+  if (products.length === 0) return null;
+  return (
+    <Card title={`Produtos parados no período (${products.length})`}>
+      <p className="mb-3 text-xs text-gray-400">
+        Produtos ativos no cardápio sem nenhuma venda no período selecionado. Considere revisar descrição, foto ou preço, ou criar uma promoção.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b text-left text-gray-400">
+              <th className="pb-2 pr-4 font-medium">Produto</th>
+              <th className="pb-2 pr-4 font-medium">Categoria</th>
+              <th className="pb-2 font-medium text-right">Preço</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {products.map((p, i) => (
+              <tr key={i}>
+                <td className="py-2 pr-4 font-medium text-gray-800">
+                  {p.name}
+                  {!p.isAvailable && (
+                    <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                      Esgotado
+                    </span>
+                  )}
+                </td>
+                <td className="py-2 pr-4 text-gray-500">{p.category}</td>
+                <td className="py-2 text-right text-gray-500">{fmtBRL(p.price)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 // ─── Tab: Produtos ────────────────────────────────────────────────────────────
 
 function TabProdutos({ data, loading, preset }: {
@@ -1207,6 +1248,7 @@ function TabProdutos({ data, loading, preset }: {
       ? [...data!.topProducts].sort((a, b) => a.revenue - b.revenue)
           .slice(0, Math.min(10, Math.floor(data!.topProducts.length / 2)))
       : [];
+    const zeroSales: ZeroSalesProduct[] = data!.zeroSalesProducts ?? [];
 
     return (
       <div className="space-y-6">
@@ -1241,6 +1283,7 @@ function TabProdutos({ data, loading, preset }: {
                   <th className="pb-2 pr-4 font-medium">Produto</th>
                   <th className="pb-2 pr-4 font-medium">Categoria</th>
                   <th className="pb-2 pr-4 font-medium text-right">Receita</th>
+                  <th className="pb-2 pr-4 font-medium text-right">% receita</th>
                   <th className="pb-2 pr-4 font-medium text-right">Qtd</th>
                   <th className="pb-2 font-medium text-right">Pedidos</th>
                 </tr>
@@ -1252,6 +1295,7 @@ function TabProdutos({ data, loading, preset }: {
                     <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
                     <td className="py-2 pr-4 text-gray-500">{p.category ?? "—"}</td>
                     <td className="py-2 pr-4 text-right font-medium">{fmtBRL(p.revenue)}</td>
+                    <td className="py-2 pr-4 text-right text-gray-400">{fmtPct(p.share ?? 0)}</td>
                     <td className="py-2 pr-4 text-right text-gray-500">{fmtNum(p.qty)}</td>
                     <td className="py-2 text-right text-gray-500">{fmtNum(p.orderCount)}</td>
                   </tr>
@@ -1292,10 +1336,13 @@ function TabProdutos({ data, loading, preset }: {
             </div>
           </Card>
         )}
+
+        <ZeroSalesCard products={zeroSales} />
       </div>
     );
   }
 
+  const noSalesZero: ZeroSalesProduct[] = data?.zeroSalesProducts ?? [];
   return (
     <div className="space-y-4">
       <Empty
@@ -1303,6 +1350,7 @@ function TabProdutos({ data, loading, preset }: {
         sub={preset !== "all" ? 'Use "Todo histórico" para explorar a base importada Saipos/Nemo.' : undefined}
       />
       {preset !== "all" && <FallbackPrompt preset={preset} />}
+      <ZeroSalesCard products={noSalesZero} />
     </div>
   );
 }

@@ -34,11 +34,20 @@ export interface DailyPoint {
 }
 
 export interface ProductRow {
-  name:      string;
-  category:  string;   // "Sem categoria" when categoryName is null
-  revenue:   number;
-  qty:       number;
+  name:       string;
+  category:   string;   // "Sem categoria" when categoryName is null
+  revenue:    number;
+  qty:        number;
   orderCount: number;
+  share:      number;   // % of total product revenue in this period
+}
+
+export interface ZeroSalesProduct {
+  id:          string;
+  name:        string;
+  category:    string;
+  price:       number;
+  isAvailable: boolean; // false = esgotado (sold out)
 }
 
 export interface CategoryRow {
@@ -141,6 +150,7 @@ export interface AnalyticsOverview {
   importedTopCustomers:     ImportedCustomerRow[]; // top 20 by importedTotalSpent
   importedTopByOrders:      ImportedCustomerRow[]; // top 20 by importedOrderCount
   importedSemTelefoneCount: number;               // customers with importedTotalSpent>0 but no phone
+  zeroSalesProducts:        ZeroSalesProduct[];   // active menu items with no sales in the period
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -178,6 +188,7 @@ export class AnalyticsService {
       importedTopCustomers,
       importedTopByOrders,
       importedSemTelefoneCount,
+      zeroSalesProducts,
     ] = await Promise.all([
       this.getKpis(restaurantId, from, to),
       this.getSalesByDay(restaurantId, from, to),
@@ -192,11 +203,12 @@ export class AnalyticsService {
       this.getImportedTopCustomers(restaurantId),
       this.getImportedTopByOrders(restaurantId),
       this.getImportedSemTelefoneCount(restaurantId),
+      this.getZeroSalesProducts(restaurantId, from, to),
     ]);
 
     const insights = this.buildInsights({ kpi, topProducts, categories, attachRates, channels });
 
-    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, importedBaseline, importedTopCustomers, importedTopByOrders, importedSemTelefoneCount };
+    return { range, kpi, salesByDay, topProducts, categories, attachRates, topCustomers, segments, tiers, channels, insights, importedBaseline, importedTopCustomers, importedTopByOrders, importedSemTelefoneCount, zeroSalesProducts };
   }
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
@@ -292,7 +304,7 @@ export class AnalyticsService {
     restaurantId: string,
     from: Date,
     to: Date,
-    limit = 20,
+    limit = 50,
   ): Promise<ProductRow[]> {
     const rows = await prisma.$queryRaw<Array<{
       name:         string;
@@ -318,12 +330,15 @@ export class AnalyticsService {
       LIMIT ${limit}
     `;
 
+    const totalRevenue = rows.reduce((s, r) => s + toNum(r.revenue), 0);
+
     return rows.map((r) => ({
       name:       r.name,
       category:   r.category?.trim() || "Sem categoria",
       revenue:    toNum(r.revenue),
       qty:        toNum(r.qty),
       orderCount: toNum(r.order_count),
+      share:      totalRevenue > 0 ? (toNum(r.revenue) / totalRevenue) * 100 : 0,
     }));
   }
 
@@ -736,6 +751,58 @@ export class AnalyticsService {
         AND (phone IS NULL OR phone = '')
     `;
     return toNum(rows[0]?.cnt ?? 0);
+  }
+
+  // ── Zero-sales products ────────────────────────────────────────────────────
+  // Active menu items that had no confirmed order_items in the given date range.
+  // Uses a CTE to collect sold menuItemIds, then LEFT JOIN to find the gap.
+
+  private static async getZeroSalesProducts(
+    restaurantId: string,
+    from: Date,
+    to: Date,
+    limit = 100,
+  ): Promise<ZeroSalesProduct[]> {
+    const rows = await prisma.$queryRaw<Array<{
+      id:           string;
+      name:         string;
+      category:     string;
+      price:        string;
+      is_available: boolean;
+    }>>`
+      WITH sold AS (
+        SELECT DISTINCT oi."menuItemId"
+        FROM order_items oi
+        JOIN orders o ON o.id = oi."orderId"
+        WHERE o."restaurantId" = ${restaurantId}
+          AND o.status IN ('CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED')
+          AND COALESCE(o."importedAt", o."createdAt") >= ${from}
+          AND COALESCE(o."importedAt", o."createdAt") <  ${to}
+          AND oi."menuItemId" IS NOT NULL
+      )
+      SELECT
+        mi.id,
+        mi.name,
+        COALESCE(mc.name, 'Sem categoria') AS category,
+        mi.price::text,
+        mi."isAvailable"                   AS is_available
+      FROM menu_items mi
+      JOIN menu_categories mc ON mc.id = mi."categoryId"
+      LEFT JOIN sold s ON s."menuItemId" = mi.id
+      WHERE mc."restaurantId" = ${restaurantId}
+        AND mi."isActive" = true
+        AND s."menuItemId" IS NULL
+      ORDER BY mc.name, mi.name
+      LIMIT ${limit}
+    `;
+
+    return rows.map((r) => ({
+      id:          r.id,
+      name:        r.name,
+      category:    r.category,
+      price:       toNum(r.price),
+      isAvailable: r.is_available,
+    }));
   }
 
   // ── Imported aggregate baseline ────────────────────────────────────────────
