@@ -297,6 +297,7 @@ const ACTIVE_STATUSES = [
   ConversationStatus.HUMAN,
   ConversationStatus.BOT,
   ConversationStatus.AI_ATENDENDO,
+  ConversationStatus.HUMANO_ASSUMIU, // include human-takeover conversations
 ] as const;
 
 async function findActiveConversation(restaurantId: string, customerId: string) {
