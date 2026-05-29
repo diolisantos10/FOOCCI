@@ -148,11 +148,24 @@ export default async function PedidoPage({
           };
         }
       } else {
-        // Phone known (WhatsApp link) but no customer record yet
+        // Phone known (WhatsApp link) but no customer record yet — upsert now.
+        // Ensures knownCustomerId is always set when a waToken is used, eliminating
+        // the race between async auto-identify and the first cart / chat action.
         knownCustomerPhone = resolvedPhone;
-        // Use display name from token so the greeting can be personalised
-        if (waPayload?.name) {
-          knownCustomerName = waPayload.name.trim().split(/\s+/)[0] ?? null;
+        const tokenName = waPayload?.name?.trim() ?? null;
+        if (tokenName) knownCustomerName = tokenName.split(/\s+/)[0] ?? null;
+        try {
+          const upserted = await prisma.customer.upsert({
+            where:  { phone_restaurantId: { phone: resolvedPhone, restaurantId: restaurant.id } },
+            create: { restaurantId: restaurant.id, phone: resolvedPhone, name: tokenName ?? resolvedPhone },
+            update: {},
+            select: { id: true, name: true },
+          });
+          knownCustomerId = upserted.id;
+          if (!knownCustomerName) knownCustomerName = upserted.name.trim().split(/\s+/)[0] ?? null;
+        } catch (err) {
+          console.error("[pedido/page] customer upsert failed (non-fatal)", err);
+          // Auto-identify will retry client-side
         }
       }
     }

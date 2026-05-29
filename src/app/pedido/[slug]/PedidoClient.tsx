@@ -1926,13 +1926,16 @@ export function PedidoClient({
       if (!sessionStorage.getItem(`foocci-entry-${slug}`)) {
         sessionStorage.setItem(`foocci-entry-${slug}`, "1");
       }
-      if (knownCustomerId && !sessionStorage.getItem(`foocci-customer-${slug}`)) {
-        sessionStorage.setItem(`foocci-customer-${slug}`, JSON.stringify({
+      if (!sessionStorage.getItem(`foocci-customer-${slug}`)) {
+        // Always write phone (and customerId when available) so same-tab navigation
+        // without the waToken in the URL retains identity and skips auto-identify.
+        const entry: Record<string, string | undefined> = {
           phone:        knownCustomerPhone,
           name:         knownCustomerName ?? "",
-          customerId:   knownCustomerId,
           displayPhone: formatDisplayPhone(knownCustomerPhone),
-        }));
+        };
+        if (knownCustomerId) entry.customerId = knownCustomerId;
+        sessionStorage.setItem(`foocci-customer-${slug}`, JSON.stringify(entry));
       }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps

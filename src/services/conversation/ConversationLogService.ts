@@ -84,8 +84,10 @@ export class ConversationLogService {
       }
     }
 
-    // ── 3 & 4: Canonical lookup by phone (customerId not yet resolved) ──
-    if (customerPhone && !customerId) {
+    // ── 3 & 4: Canonical lookup by phone (fallback: customerId not resolved OR
+    //           customerId-based lookup found nothing — e.g. WHATSAPP conv indexed
+    //           only by phone before the customer record was linked) ──────────────
+    if (customerPhone) {
       const byPhone =
         (await prisma.conversation.findFirst({
           where: { restaurantId, customerPhone, channel: Channel.WHATSAPP, status: { in: ACTIVE_STATUSES } },

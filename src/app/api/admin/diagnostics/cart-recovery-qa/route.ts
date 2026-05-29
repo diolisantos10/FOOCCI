@@ -183,7 +183,7 @@ export async function GET(req: NextRequest) {
   // ── Step 4: Resolve / create test customer ──────────────────────────────────
   if (!rawPhone) {
     ["customer_resolve", "wa_token_sign", "wa_token_verify", "draft_create",
-     "draft_eligible", "draft_backdate"].forEach((s) =>
+     "draft_eligible", "pedido_chat_check", "draft_backdate"].forEach((s) =>
       addSkip(s, "No phone provided — pass ?phone=+5511999990000 to enable customer/draft steps"),
     );
   } else if (restaurantId && !failedStep) {
@@ -313,6 +313,38 @@ export async function GET(req: NextRequest) {
       lastRecoveryAt:   draft.lastRecoveryAt?.toISOString() ?? null,
     });
 
+    // ── Step 7b: Pedido chat message check ────────────────────────────────────
+    // Verifies that /pedido chat messages (CUSTOMER_CARDAPIO) are saved to a
+    // conversation linked to this customer and visible in Atendimento.
+    {
+      const convRows = await prisma.conversation.findMany({
+        where: { restaurantId: restaurantId!, customerId: customerId! },
+        orderBy: { lastMessageAt: "desc" },
+        select: {
+          id: true, channel: true, status: true,
+          messages: {
+            where: { senderType: "CUSTOMER_CARDAPIO" },
+            orderBy: { sentAt: "desc" },
+            take: 1,
+            select: { sentAt: true, content: true },
+          },
+        },
+      });
+      const convWithCardapio = convRows.find((c) => c.messages.length > 0);
+      const canonicalConvId  = convRows[0]?.id ?? null;
+      const latestMsg        = convWithCardapio?.messages[0];
+      addPass("pedido_chat_check", latestMsg
+        ? `Latest CUSTOMER_CARDAPIO message found — sentAt: ${latestMsg.sentAt.toISOString()}`
+        : "No CUSTOMER_CARDAPIO messages yet (expected if customer never chatted via /pedido)",
+        {
+          canonicalConversationId: canonicalConvId,
+          totalConversations: convRows.length,
+          conversationsWithCardapio: convRows.filter((c) => c.messages.length > 0).length,
+          latestCardapioMessageAt: latestMsg?.sentAt.toISOString() ?? null,
+        },
+      );
+    }
+
     // ── Step 8: Backdate updatedAt + reset recovery fields ──────────────────
     // Prisma's @updatedAt overwrites on every update(), so we use $executeRaw
     // to set updatedAt to a past timestamp directly in the DB.
@@ -337,7 +369,7 @@ export async function GET(req: NextRequest) {
   } else if (!rawPhone) {
     // already skipped above
   } else if (failedStep) {
-    ["draft_create", "draft_eligible", "draft_backdate"].forEach((s) =>
+    ["draft_create", "draft_eligible", "pedido_chat_check", "draft_backdate"].forEach((s) =>
       addSkip(s, `Skipped — earlier step failed: ${failedStep}`),
     );
   }
