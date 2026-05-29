@@ -153,16 +153,32 @@ export class ConversationLogService {
     senderType,
     content,
     metadata,
+    dedupeWindowMs,
   }: {
     conversationId: string;
     restaurantId:   string;
     senderType:     MsgSenderType;
     content:        string;
     metadata?:      Record<string, unknown>;
+    /**
+     * When set, skips logging if a message with the same senderType and content
+     * was already logged within this many milliseconds. Prevents duplicate
+     * greetings/AI replies when the customer reloads /pedido (re-fires ON_ENTRY).
+     */
+    dedupeWindowMs?: number;
   }): Promise<void> {
     const isInbound = senderType === "CUSTOMER" || senderType === "CUSTOMER_CARDAPIO";
     const direction = isInbound ? ("INBOUND" as const) : ("OUTBOUND" as const);
     const now       = new Date();
+
+    if (dedupeWindowMs && dedupeWindowMs > 0) {
+      const since = new Date(now.getTime() - dedupeWindowMs);
+      const dup = await prisma.message.findFirst({
+        where:  { conversationId, senderType, content, sentAt: { gte: since } },
+        select: { id: true },
+      });
+      if (dup) return; // already logged recently — skip
+    }
 
     await prisma.$transaction([
       prisma.message.create({

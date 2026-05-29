@@ -122,6 +122,7 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
         sentAt: new Date(event.rawTimestamp * 1000),
         externalMessageId: event.externalMessageId,
         externalStatus: "delivered",
+        ...(event.mediaMeta ? { metadata: event.mediaMeta as object } : {}),
       },
     }),
     prisma.conversation.update({
@@ -273,6 +274,7 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
         sentAt: new Date(event.rawTimestamp * 1000),
         externalMessageId: event.externalMessageId,
         externalStatus: "sent",
+        ...(event.mediaMeta ? { metadata: event.mediaMeta as object } : {}),
       },
     }),
     prisma.conversation.update({

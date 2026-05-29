@@ -30,7 +30,22 @@ export interface InboundMessageEvent {
   messageType: "TEXT" | "IMAGE" | "AUDIO" | "DOCUMENT";
   content: string;                // text body or caption
   mediaUrl?: string;
+  mediaMeta?: WhatsAppMediaMeta;  // present for IMAGE/AUDIO/DOCUMENT — used by the media proxy
   rawTimestamp: number;           // unix seconds from Evolution
+}
+
+/**
+ * Metadata needed to fetch decrypted WhatsApp media from Evolution later.
+ * WhatsApp media `url` fields point to encrypted `.enc` blobs that browsers
+ * cannot open; the media proxy uses the message key + mimetype to request the
+ * decrypted bytes via Evolution's getBase64FromMediaMessage endpoint.
+ */
+export interface WhatsAppMediaMeta {
+  whatsappMedia: true;
+  mimetype?: string;
+  fileName?: string;
+  remoteJid: string;
+  fromMe: boolean;
 }
 
 export interface MessageStatusUpdateEvent {
@@ -55,6 +70,7 @@ export interface ExternalOutboundMessageEvent {
   messageType: "TEXT" | "IMAGE" | "AUDIO" | "DOCUMENT";
   content: string;
   mediaUrl?: string;
+  mediaMeta?: WhatsAppMediaMeta;
   rawTimestamp: number;
 }
 
@@ -141,6 +157,8 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
   let messageType: InboundMessageEvent["messageType"] = "TEXT";
   let content = "";
   let mediaUrl: string | undefined;
+  let mimetype: string | undefined;
+  let fileName: string | undefined;
 
   if (message) {
     if (message.conversation) {
@@ -153,16 +171,20 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
       const img = message.imageMessage as Record<string, unknown>;
       content = (img.caption as string) ?? "";
       mediaUrl = (img.url as string) ?? undefined;
+      mimetype = (img.mimetype as string) ?? "image/jpeg";
     } else if (message.audioMessage) {
       messageType = "AUDIO";
       const aud = message.audioMessage as Record<string, unknown>;
       content = "[Áudio]";
       mediaUrl = (aud.url as string) ?? undefined;
+      mimetype = (aud.mimetype as string) ?? "audio/ogg";
     } else if (message.documentMessage) {
       messageType = "DOCUMENT";
       const doc = message.documentMessage as Record<string, unknown>;
       content = (doc.fileName as string) ?? "[Documento]";
       mediaUrl = (doc.url as string) ?? undefined;
+      mimetype = (doc.mimetype as string) ?? undefined;
+      fileName = (doc.fileName as string) ?? undefined;
     } else if (message.videoMessage) {
       messageType = "DOCUMENT";
       const vid = message.videoMessage as Record<string, unknown>;
@@ -213,6 +235,13 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
     }
   }
 
+  // For media messages, capture the metadata the media proxy needs to fetch
+  // the decrypted bytes from Evolution later (WhatsApp media `url` is encrypted).
+  const mediaMeta: WhatsAppMediaMeta | undefined =
+    messageType !== "TEXT"
+      ? { whatsappMedia: true, mimetype, fileName, remoteJid, fromMe: fromMe ?? false }
+      : undefined;
+
   // fromMe=true: message sent FROM the restaurant WhatsApp number.
   // Could be Foocci itself (already persisted via MessageService) or an external
   // staff member using WhatsApp Web / mobile. The processor handles dedup.
@@ -225,6 +254,7 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
       messageType,
       content,
       mediaUrl,
+      mediaMeta,
       rawTimestamp: timestamp,
     };
   }
@@ -239,6 +269,7 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
     messageType,
     content,
     mediaUrl,
+    mediaMeta,
     rawTimestamp: timestamp,
   };
 }

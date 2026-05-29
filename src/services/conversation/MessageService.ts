@@ -57,6 +57,7 @@ export class MessageService {
         content: true,
         type: true,
         mediaUrl: true,
+        metadata: true,
         isRead: true,
         sentAt: true,
         deliveredAt: true,
@@ -104,19 +105,26 @@ export class MessageService {
 
     const now = new Date();
 
-    // Non-WhatsApp channels: persist internally, no external delivery
+    // Non-WhatsApp channels: persist internally. For Cardápio (QR/WEB agent)
+    // conversations the message is delivered to the customer's /pedido chat via
+    // polling, so it is NOT "internal only" — flag accordingly so the operator
+    // sees the correct status. MANUAL/EMAIL/SMS remain internal notes.
     if (conv.channel !== "WHATSAPP") {
+      const isCardapio = conv.channel === "QR_AGENT" || conv.channel === "WEB_AGENT";
+      const source     = isCardapio ? "CARDAPIO" : conv.channel;
       const [message] = await prisma.$transaction([
         prisma.message.create({
           data: {
             conversationId,
-            direction: "OUTBOUND",
-            content: input.content,
-            type: input.type as MessageType,
-            mediaUrl: input.mediaUrl ?? null,
-            sentAt: now,
+            direction:  "OUTBOUND",
+            senderType: "HUMAN",
+            content:    input.content,
+            type:       input.type as MessageType,
+            mediaUrl:   input.mediaUrl ?? null,
+            sentAt:     now,
             externalMessageId: null,
-            externalStatus: null,
+            externalStatus:    null,
+            metadata:   { source } as object,
           },
         }),
         prisma.conversation.update({
@@ -124,7 +132,8 @@ export class MessageService {
           data: { lastMessageAt: now },
         }),
       ]);
-      return serviceOk({ ...message, _internalOnly: true });
+      // Cardápio replies are delivered to the customer via /pedido polling.
+      return serviceOk({ ...message, _internalOnly: !isCardapio, _deliveredVia: isCardapio ? "CARDAPIO" : null });
     }
 
     // WhatsApp: fetch decrypted credentials
@@ -173,13 +182,15 @@ export class MessageService {
       prisma.message.create({
         data: {
           conversationId,
-          direction: "OUTBOUND",
-          content: input.content,
-          type: input.type as MessageType,
-          mediaUrl: input.mediaUrl ?? null,
-          sentAt: now,
+          direction:  "OUTBOUND",
+          senderType: "HUMAN",
+          content:    input.content,
+          type:       input.type as MessageType,
+          mediaUrl:   input.mediaUrl ?? null,
+          sentAt:     now,
           externalMessageId,
           externalStatus: "sent",
+          metadata:   { source: "WHATSAPP" } as object,
         },
       }),
       prisma.conversation.update({

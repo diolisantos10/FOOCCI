@@ -124,6 +124,7 @@ export class ConversationService {
             content: true,
             type: true,
             mediaUrl: true,
+            metadata: true,
             isRead: true,
             sentAt: true,
             deliveredAt: true,

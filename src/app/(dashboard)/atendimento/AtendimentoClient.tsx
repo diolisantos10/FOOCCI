@@ -713,7 +713,9 @@ export function AtendimentoClient({
       // Clean up attachment
       if (attachment?.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
       setAttachment(null);
-      if (json.data?._internalOnly) {
+      if (json.data?._deliveredVia === "CARDAPIO") {
+        setSendNote("Enviado via Cardápio — o cliente verá no chat do /pedido.");
+      } else if (json.data?._internalOnly) {
         setSendNote("Mensagem registrada internamente. Este canal não usa WhatsApp.");
       }
       await fetchThread(selectedId);
@@ -2567,11 +2569,14 @@ function MessageBubble({
 
   const isOutbound  = msg.direction === "OUTBOUND";
   const isHumanMsg  = isOutbound && (msg.senderType === "HUMAN" || msg.senderType === "HUMAN_EXTERNAL");
+  const msgSource   = msg.metadata?.source; // "CARDAPIO" | "WHATSAPP" | undefined
   const senderLabel = isOutbound
     ? (msg.senderType === "AI"
-        ? (msg.metadata?.source === "CARDAPIO" ? "IA · Cardápio" : "IA · WhatsApp")
+        ? (msgSource === "CARDAPIO" ? "IA · Cardápio" : "IA · WhatsApp")
         : msg.senderType === "HUMAN_EXTERNAL" ? "WhatsApp externo"
-        : "Operador")
+        : msg.senderType === "HUMAN"
+          ? (msgSource === "CARDAPIO" ? "Operador · Cardápio" : "Operador · WhatsApp")
+          : "Operador")
     : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : `${customerName} · WhatsApp`);
   const senderBadgeCls = isOutbound
     ? (msg.senderType === "AI"
@@ -2582,6 +2587,12 @@ function MessageBubble({
     : (msg.senderType === "CUSTOMER_CARDAPIO"
         ? "bg-purple-50 border border-purple-200 text-purple-700"
         : "bg-green-50 border border-green-200 text-green-700");
+
+  // WhatsApp media arrives as an encrypted `.enc` URL the browser cannot open.
+  // For those, point to the authenticated proxy which streams decrypted bytes.
+  // All other media (operator uploads, Cardápio) use the stored URL directly.
+  const isWaMedia = msg.metadata?.whatsappMedia === true;
+  const mediaSrc  = isWaMedia ? `/api/chat/messages/${msg.id}/attachment` : msg.mediaUrl;
 
   // Find the most recent customer message before this human reply
   const precedingCustomerMsg = isHumanMsg
@@ -2615,10 +2626,10 @@ function MessageBubble({
         >
           {/* Image — render with fallback card if URL fails or is absent */}
           {msg.type === "IMAGE" && (
-            msg.mediaUrl ? (
-              <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="mb-1 block">
+            mediaSrc ? (
+              <a href={mediaSrc} target="_blank" rel="noopener noreferrer" className="mb-1 block">
                 <img
-                  src={msg.mediaUrl}
+                  src={mediaSrc}
                   alt="imagem"
                   className="max-h-48 max-w-full rounded-xl object-cover"
                   loading="lazy"
@@ -2654,9 +2665,12 @@ function MessageBubble({
 
           {/* Audio */}
           {msg.type === "AUDIO" && (
-            msg.mediaUrl ? (
+            mediaSrc ? (
+              isWaMedia ? (
+                <audio controls src={mediaSrc} className="mb-1 max-w-full" preload="none" />
+              ) : (
               <a
-                href={msg.mediaUrl}
+                href={mediaSrc}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold underline ${
@@ -2668,6 +2682,7 @@ function MessageBubble({
                 <span>🎵</span>
                 <span>Áudio — abrir/baixar</span>
               </a>
+              )
             ) : (
               <div className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
                 isOutbound ? "border-orange-400/50 text-orange-200" : "border-gray-200 bg-gray-50 text-gray-500"
@@ -2680,9 +2695,9 @@ function MessageBubble({
 
           {/* Document */}
           {msg.type === "DOCUMENT" && (
-            msg.mediaUrl ? (
+            mediaSrc ? (
               <a
-                href={msg.mediaUrl}
+                href={mediaSrc}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`mb-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold underline ${

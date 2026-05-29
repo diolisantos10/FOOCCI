@@ -246,14 +246,17 @@ export async function POST(
       options: (options ?? []).length,
     }));
 
-    // Log AI reply for any event that produced a visible reply (fire-and-forget)
+    // Log AI reply for any event that produced a visible reply (fire-and-forget).
+    // Dedup window guards against duplicate greetings when the customer reloads
+    // /pedido and ON_ENTRY (or repeated silent events) re-fire the same reply.
     if (conversationId && reply) {
       ConversationLogService.logMessage({
         conversationId,
-        restaurantId: restaurant.id,
-        senderType:   "AI",
-        content:      reply,
-        metadata:     { source: "CARDAPIO" },
+        restaurantId:   restaurant.id,
+        senderType:     "AI",
+        content:        reply,
+        metadata:       { source: "CARDAPIO" },
+        dedupeWindowMs: event === "ON_USER_MESSAGE" ? 0 : 60_000,
       }).catch((e) => console.error("[waiter] AI reply logging failed (non-fatal)", e));
     }
 

@@ -149,6 +149,29 @@ export const EvolutionClient = {
   },
 
   /**
+   * Fetch the decrypted bytes of a received WhatsApp media message.
+   *
+   * WhatsApp media `url` fields point to AES-encrypted `.enc` blobs that
+   * browsers cannot open. Evolution decrypts them server-side and returns
+   * base64. We pass the message key so Evolution can locate the message in
+   * its store and decrypt the corresponding media.
+   *
+   * Returns the raw base64 string and (when provided) the mimetype.
+   */
+  async getBase64FromMediaMessage(
+    config: EvolutionConfigSnapshot,
+    messageKey: { id: string; remoteJid: string; fromMe: boolean },
+  ): Promise<{ base64: string; mimetype?: string }> {
+    const res = await request<{ base64?: string; mimetype?: string; mediaType?: string }>(
+      config,
+      "POST",
+      `/chat/getBase64FromMediaMessage/${config.instanceName}`,
+      { message: { key: messageKey }, convertToMp4: false },
+    );
+    return { base64: res.base64 ?? "", mimetype: res.mimetype };
+  },
+
+  /**
    * Fetch the current connection state of the Evolution instance.
    *
    * Evolution v2 returns: { instance: { instanceName, state } }

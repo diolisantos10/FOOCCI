@@ -218,6 +218,8 @@ interface ChatMessage {
   cards?: string[];
   /** Quick-reply buttons — label is display text, value is what gets sent. */
   options?: WaiterOption[];
+  /** True when this assistant message came from a human operator (Atendimento). */
+  isOperator?: boolean;
 }
 
 interface MenuItemVariant {
@@ -581,9 +583,16 @@ function Bubble({
         className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
           isUser
             ? "rounded-br-sm bg-[#dcf8c6] text-gray-900"
-            : "rounded-bl-sm bg-white text-gray-900"
+            : msg.isOperator
+              ? "rounded-bl-sm border border-amber-200 bg-amber-50 text-gray-900"
+              : "rounded-bl-sm bg-white text-gray-900"
         }`}
       >
+        {msg.isOperator && (
+          <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+            👤 Atendente
+          </p>
+        )}
         <p style={{ whiteSpace: "pre-wrap" }}>{msg.content}</p>
         <p className={`mt-1 text-right text-[10px] ${isUser ? "text-green-700" : "text-gray-400"}`}>
           {formatTime(msg.ts)}
@@ -1756,6 +1765,56 @@ export function PedidoClient({
     if (savedConvId) setConvId(savedConvId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Operator reply polling ───────────────────────────────────────
+  // When an operator replies from Atendimento on a Cardápio conversation, the
+  // message is stored server-side. Poll for those and surface them in the chat
+  // so the customer sees the store's response. Deduped by message id.
+  const lastOpPollRef = useRef<string | null>(null); // ISO timestamp of newest seen op msg
+  const seenOpIdsRef  = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!convId) return;
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const qs = new URLSearchParams({ conversationId: convId! });
+        if (lastOpPollRef.current) qs.set("after", lastOpPollRef.current);
+        const res = await fetch(`/api/pedido/${slug}/operator-messages?${qs}`);
+        if (!res.ok) return;
+        const json = await res.json() as { messages?: { id: string; content: string; sentAt: string }[] };
+        const incoming = json.messages ?? [];
+        if (cancelled || incoming.length === 0) return;
+
+        const fresh = incoming.filter((m) => !seenOpIdsRef.current.has(m.id));
+        if (fresh.length === 0) return;
+        fresh.forEach((m) => seenOpIdsRef.current.add(m.id));
+        lastOpPollRef.current = fresh[fresh.length - 1]!.sentAt;
+
+        setMessages((prev) => [
+          ...prev,
+          ...fresh.map((m) => ({
+            id:         `op-${m.id}`,
+            role:       "assistant" as const,
+            content:    m.content,
+            ts:         new Date(m.sentAt),
+            isOperator: true,
+          })),
+        ]);
+        setHistory((prev) => [
+          ...prev,
+          ...fresh.map((m) => ({ role: "assistant" as const, content: m.content })),
+        ]);
+      } catch {
+        /* network blip — try again next tick */
+      }
+    }
+
+    poll();
+    const interval = setInterval(poll, 10_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convId, slug]);
 
   // ── UTM + source capture — read from URL params and persist to sessionStorage ─
   const utmKey      = `foocci-utm-${slug}`;
