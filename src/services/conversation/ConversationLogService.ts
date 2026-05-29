@@ -19,13 +19,13 @@ import { Channel, ConversationStatus } from "@prisma/client";
 export type MsgSenderType = "CUSTOMER" | "CUSTOMER_CARDAPIO" | "AI" | "HUMAN" | "SYSTEM";
 
 // Statuses considered "active" for canonical conversation reuse
-const ACTIVE_STATUSES = [
+const ACTIVE_STATUSES: ConversationStatus[] = [
   ConversationStatus.OPEN,
   ConversationStatus.HUMAN,
   ConversationStatus.BOT,
   ConversationStatus.AI_ATENDENDO,
   ConversationStatus.HUMANO_ASSUMIU,
-] as const;
+];
 
 export class ConversationLogService {
 
