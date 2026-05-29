@@ -70,6 +70,12 @@ export interface ScheduledCampaignRunSummary {
   results:            CampaignBatchResult[];
 }
 
+export interface StuckSendingRecoveryResult {
+  recovered:   number;
+  dryRun:      boolean;
+  campaignIds: string[];
+}
+
 // ─── Timezone helpers ─────────────────────────────────────────
 
 function getLocalTimeInfo(
@@ -532,6 +538,48 @@ export class ScheduledCampaignRunnerService {
     }
 
     return { sent, failed };
+  }
+
+  /**
+   * Find campaigns stuck in SENDING status (server crashed mid-send) and
+   * optionally reset them back to SCHEDULED so they can be re-sent from the UI.
+   */
+  static async recoverStuckSendingCampaigns(options: {
+    restaurantId?:     string;
+    olderThanMinutes?: number;
+    dryRun?:           boolean;
+  } = {}): Promise<StuckSendingRecoveryResult> {
+    const { restaurantId, olderThanMinutes = 30, dryRun = false } = options;
+
+    const stuck = await prisma.campaign.findMany({
+      where: {
+        status: "SENDING" as never,
+        ...(restaurantId ? { restaurantId } : {}),
+        updatedAt: { lt: new Date(Date.now() - olderThanMinutes * 60_000) },
+      },
+      select: { id: true, name: true, restaurantId: true },
+    });
+
+    if (stuck.length === 0) {
+      return { recovered: 0, dryRun, campaignIds: [] };
+    }
+
+    console.log(`[ScheduledCampaignRunner] recovering stuck SENDING campaigns (${stuck.length})`);
+
+    const stuckIds = stuck.map((c) => c.id);
+
+    if (!dryRun) {
+      await prisma.campaign.updateMany({
+        where: { id: { in: stuckIds } },
+        data:  { status: "SCHEDULED" as never },
+      });
+    }
+
+    return {
+      recovered:   stuck.length,
+      dryRun,
+      campaignIds: stuckIds,
+    };
   }
 }
 

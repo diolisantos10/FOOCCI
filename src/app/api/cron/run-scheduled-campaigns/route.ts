@@ -52,6 +52,13 @@ export async function POST(req: NextRequest) {
       ? Math.min(200, Math.max(1, parseInt(String(limitRaw))))
       : BATCH_DEFAULT;
 
+    // Auto-recover any campaigns stuck in SENDING from previous crashed runs.
+    // Safe: dryRun flag is threaded through — no DB writes in preview mode.
+    const recovery = await ScheduledCampaignRunnerService.recoverStuckSendingCampaigns({ restaurantId, dryRun });
+    if (recovery.recovered > 0) {
+      console.log(`[cron/run-scheduled-campaigns] Recovered ${recovery.recovered} stuck-SENDING campaigns → SCHEDULED`, recovery.campaignIds);
+    }
+
     if (campaignId) {
       // Single-campaign run
       const result = await ScheduledCampaignRunnerService.runCampaignBatch(campaignId, { dryRun, limit });

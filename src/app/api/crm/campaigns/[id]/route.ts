@@ -111,8 +111,19 @@ export async function PATCH(
       // reactivate: restore a COMPLETED recurring campaign back to ACTIVE.
       // Needed to recover campaigns stuck COMPLETED by the premature-exhaustion bug.
       if (body.action === "reactivate") {
+        if (currentStatus === "SENDING") {
+          // Recover one-shot campaign stuck in SENDING (server crashed mid-send).
+          // Reset to SCHEDULED so it can be re-sent from the UI.
+          const updated = await prisma.campaign.update({
+            where: { id: params.id },
+            data:  { status: "SCHEDULED" as never },
+            select: { id: true, status: true },
+          });
+          return ok(updated);
+        }
+
         if (currentStatus !== "COMPLETED") {
-          return badRequest("Apenas campanhas COMPLETED podem ser reativadas");
+          return badRequest("Apenas campanhas COMPLETED ou SENDING podem ser reativadas");
         }
         const cfg = campaign.scheduleConfig as { mode?: string } | null;
         if (!cfg || cfg.mode !== "RECURRING") {

@@ -71,6 +71,16 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
 
+    // Find campaigns stuck in SENDING
+    const stuckSending = await prisma.campaign.findMany({
+      where: {
+        ...(restaurantId ? { restaurantId } : {}),
+        status:    "SENDING" as never,
+        updatedAt: { lt: new Date(Date.now() - 30 * 60_000) },
+      },
+      select: { id: true, name: true, restaurantId: true, updatedAt: true },
+    });
+
     const rows = await Promise.all(
       campaigns.map(async (c) => {
         const cfg = c.scheduleConfig as Record<string, unknown> | null;
@@ -156,6 +166,16 @@ export async function GET(req: NextRequest) {
           safetyError = err instanceof Error ? err.message : String(err);
         }
 
+        let lastExecutionAt: string | null = null;
+        try {
+          const lastExec = await prisma.campaignExecution.findFirst({
+            where:   { campaignId: c.id },
+            orderBy: { sentAt: "desc" },
+            select:  { sentAt: true },
+          });
+          lastExecutionAt = lastExec?.sentAt?.toISOString() ?? null;
+        } catch { /* ignore */ }
+
         return {
           id:            c.id,
           name:          c.name,
@@ -179,6 +199,7 @@ export async function GET(req: NextRequest) {
           isDueNow:    isDue,
           notDueReason,
           nextRunAt:   nextRunAt?.toISOString() ?? null,
+          lastExecutionAt,
           audience: {
             total:      audienceTotal,
             newEligible: audienceNew,
@@ -205,6 +226,14 @@ export async function GET(req: NextRequest) {
       activeCampaigns:   rows.filter((r) => r.status === "ACTIVE").length,
       completedCampaigns: rows.filter((r) => r.status === "COMPLETED").length,
       cronBranchWarning,
+      stuckSendingCount:   stuckSending.length,
+      stuckSendingCampaigns: stuckSending.map((c) => ({
+        id:          c.id,
+        name:        c.name,
+        restaurantId: c.restaurantId,
+        stuckSince:  c.updatedAt.toISOString(),
+        recoverHint: `PATCH /api/crm/campaigns/${c.id} { "action": "reactivate" }`,
+      })),
       campaigns:         rows,
     });
   } catch (err: unknown) {
