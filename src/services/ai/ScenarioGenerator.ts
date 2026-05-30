@@ -618,6 +618,10 @@ const FIXED_PROFILE_DIMS: Dimensions[] = [
   { intent: "direto",   budget: "médio",  groupSize: "solo",    dietary: DIETARY_CONFIGS.find((d) => d.label === "sem lactose") ?? null, behavior: "aceita_upsell", variation: { patience: "short", upsellOpenness: "neutral" } },
   // 12. Hungry premium + changes mind (tests re-selection without repeat)
   { intent: "fome",     budget: "alto",   groupSize: "solo",    dietary: null,        behavior: "muda_de_ideia",        variation: { patience: "long",  indecisionLevel: "medium", upsellOpenness: "open" } },
+  // 13. Group of 3 explicitly requesting combo/shareable (core group-size regression)
+  { intent: "curioso",  budget: "médio",  groupSize: "família", dietary: null,        behavior: "aceita_upsell",        variation: { patience: "long",  upsellOpenness: "open" } },
+  // 14. Budget-conscious group — tests combo recommendation at low price tier
+  { intent: "indeciso", budget: "baixo",  groupSize: "família", dietary: null,        behavior: "pergunta_primeiro",    variation: { patience: "long",  budgetSensitivity: "high", indecisionLevel: "high" } },
 ];
 
 // ─── combination pool (for random extras) ────────────────────

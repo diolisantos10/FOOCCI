@@ -221,6 +221,7 @@ export async function POST(
       orderBy: { sortOrder: "asc" },
       select:  {
         id: true, name: true, price: true, description: true, sortOrder: true,
+        servingSize: true, portionInfo: true,
         tagFunil: true, perfilPaladar: true, harmonizacaoSugerida: true,
         alergenosDetalhados: true, storytellingIA: true,
         category: { select: { name: true } },
@@ -233,6 +234,8 @@ export async function POST(
       price:                Number(i.price),
       sortOrder:            i.sortOrder ?? undefined,
       description:          i.description ?? null,
+      servingSize:          (i.servingSize as number | null) ?? null,
+      portionInfo:          (i.portionInfo as string | null) ?? null,
       tagFunil:             i.tagFunil ?? null,
       perfilPaladar:        i.perfilPaladar ?? null,
       harmonizacaoSugerida: i.harmonizacaoSugerida ?? null,

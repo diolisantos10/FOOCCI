@@ -50,6 +50,9 @@ export interface V2CatalogItem {
   price:        number;
   sortOrder?:   number;
   description?: string | null;
+  // Portion / group-size fields (plumbed from MenuItem schema)
+  servingSize?: number | null;  // how many people this item serves (1, 2, 3, 4+)
+  portionInfo?: string | null;  // free-text weight/volume e.g. "300g", "500ml"
   // AI enrichment fields (optional — populated after migration)
   tagFunil?:             string | null;
   perfilPaladar?:        string | null;
@@ -284,7 +287,10 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
     };
   }
 
-  if (/\b(família|familia|grupo|[2-9]\s*pessoas?)\b|\bgroup\b|para\s*compartilhar/i.test(msg)) {
+  if (
+    /\b(família|familia|grupo|[2-9]\s*pessoas?)\b|\bgroup\b|para\s*compartilhar/i.test(msg) ||
+    /\bsomos\s*[2-9]\b|\bpara\s*[2-9]\s*pes|\b[2-9]\s*pesso/i.test(msg)
+  ) {
     return {
       customerIntent:   "wants_group_order",
       salesOpportunity: "suggest_group_combo",
@@ -469,7 +475,11 @@ export function analyzeMenuItem(item: V2CatalogItem, benchmarks: PriceBenchmarks
     tags.push("dessert", "pairing_candidate");
   } else {
     // Combo / group (overrides light — combos are always complete)
-    if (/combo|famil|balde|bandeja|para\s*[2-9]|[2-9]\s*pessoas?|compartilh/i.test(text)) {
+    // Detected via text keywords OR via the structured servingSize field (>=2 people)
+    if (
+      /combo|famil|balde|bandeja|para\s*[2-9]|[2-9]\s*pessoas?|compartilh/i.test(text) ||
+      (item.servingSize != null && item.servingSize >= 2)
+    ) {
       tags.push("combo", "group", "complete");
     }
     // Starter / small plates
@@ -1764,6 +1774,20 @@ function buildUserMessageDirective(cartItemIds: string[], cartValue: number): st
     "  → NÃO sugira produto nenhum neste turno.",
     "",
     "SUGERIR — cliente pediu ajuda, pediu sugestão, ou expressou preferência de categoria",
+    "",
+    "  ► GRUPO (intent=wants_group_order ou cliente mencionou número de pessoas):",
+    "    → PRIMEIRO: verifique no CARDÁPIO se há item com 'Serve: N pessoas' ou 'Porção:' ≥ ao grupo.",
+    "    → Se existir combo/porção que serve o grupo → sugira DIRETAMENTE via suggest_upsell.",
+    "      Texto: '\"Para [N] pessoas, esse combo cobre bem — já vem variado 👇\"'",
+    "    → Se não houver combo com serving explícito mas houver item com 'Serve' no nome/desc →",
+    "      sugira esse item + explique por que serve bem.",
+    "    → Se nenhum combo/porção cobrir o grupo → sugira 2 itens complementares que juntos servem.",
+    "    → Se o grupo não estiver claro (não mencionou número) → UMA pergunta:",
+    '      "Claro 😊 É para quantas pessoas? Prefere algo mais leve ou mais completo?"',
+    "      Não sugira produto ANTES da resposta.",
+    "    → NUNCA liste 4+ itens individuais para pedido de grupo — priorize sempre o shareable.",
+    "",
+    "  ► SUGESTÃO SIMPLES (sem grupo explícito):",
     "  → ANCORAGEM: chame suggest_upsell com o item mais COMPLETO/PREMIUM primeiro.",
     "  → Depois, sugira 1 opção de custo-benefício como segundo call (quando aplicável).",
     "  → GATILHOS: use 'o mais pedido da casa', 'combinação perfeita', 'o mais fresco do dia'.",

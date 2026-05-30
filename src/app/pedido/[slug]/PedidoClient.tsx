@@ -1634,9 +1634,9 @@ const SALES_BEHAVIOR: SalesBehavior = {
 // and the current stage is BROWSE. No client-side card inference from any other source.
 
 // Passive trigger: seconds of inactivity before permission prompt fires.
-const PASSIVE_TRIGGER_MS   = 5_000;  // 5 s
-// After declining, how long before the prompt may appear again.
-const SILENT_COOLDOWN_MS   = 5 * 60 * 1000; // 5 min
+const PASSIVE_TRIGGER_MS   = 8_000;  // 8 s — slightly more patient
+// After declining the CTA is silenced permanently for the session (sessionStorage persisted).
+const SILENT_COOLDOWN_MS   = 5 * 60 * 1000; // 5 min (cooldown between retries, but max=1 means it never retries)
 
 // ── Address complete panel ────────────────────────────────────────────────────
 // Shown after ViaCEP auto-fills street/neighborhood/city/state.
@@ -2232,7 +2232,10 @@ export function PedidoClient({
   type AIPermState = "idle" | "pending" | "consultive" | "silent";
   const [aiPermState, setAiPermState] = useState<AIPermState>("idle");
   const silentUntilRef    = useRef<number>(0);     // epoch ms when silence expires
-  const permPromptCountRef = useRef<number>(0);    // passive prompts shown this session (max 2)
+  // Read from sessionStorage so decline/shown persists across soft-reloads within the same session.
+  const permPromptCountRef = useRef<number>(
+    typeof window !== "undefined" && !!sessionStorage.getItem(`foocci-cta-seen-${slug}`) ? 1 : 0
+  );
   // (contextChosenRef removed — qualification suppression handled by options contract)
   const guidedStepRef     = useRef<"size" | "starters" | "main" | "drinks" | "dessert" | "done">("size");
   // Type of upsell pending at checkout ("drink" | "dessert")
@@ -2712,14 +2715,11 @@ export function PedidoClient({
     greetedRef.current = true;
     fireGtag("view_menu", { restaurant: restaurantName, ...getUtm() });
     const name = identifiedName;
-    const base = name
+    const greeting = name
       ? isWaEntry
-        ? `Olá, ${name}! 👋 Nosso cardápio está aberto aqui pra você 😊\nSe quiser algo específico, é só me falar que eu te ajudo!`
-        : `Bem-vindo, ${name}! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`
-      : `Bem-vindo! 😊\nJá deixei nosso cardápio aberto aqui pra você 👇\nSe quiser algo específico, é só me falar que eu te ajudo rapidinho.`;
-    const greeting = phone
-      ? `${base}\n\nSe preferir falar direto com a loja, toque no ícone do WhatsApp no topo da tela.`
-      : base;
+        ? `Olá, ${name}! 😊 Que bom te ver por aqui — dá uma olhada no cardápio e me fala o que te apetece!`
+        : `Olá, ${name}! 😊\nDá uma olhada no cardápio — me fala se quiser ajuda para escolher.`
+      : `Olá! 😊\nDá uma olhada no cardápio — qualquer dúvida ou sugestão, é só me chamar.`;
     setMessages((prev) => [
       ...prev,
       {
@@ -2790,13 +2790,14 @@ export function PedidoClient({
 
     const id = setInterval(() => {
       if (aiPermState !== "idle") return;
-      if (permPromptCountRef.current >= 2) return; // max 2 prompts per session
+      if (permPromptCountRef.current >= 1) return; // max 1 prompt per session
       if (Date.now() < silentUntilRef.current) return;
       if (cart.reduce((s, i) => s + i.qty, 0) > 1) return;
       if (suggestedProducts.length > 0) return; // double-check inside interval
       if (guidedMode) return;
       if (Date.now() - lastActivityRef.current < PASSIVE_TRIGGER_MS) return;
       permPromptCountRef.current += 1;
+      sessionStorage.setItem(`foocci-cta-seen-${slug}`, "1");
       setAiPermState("pending");
     }, 2_000);
     return () => clearInterval(id);
@@ -2813,12 +2814,13 @@ export function PedidoClient({
       aiPermState !== "idle" ||
       stage !== "BROWSE" ||
       entryPhase !== "browsing" ||
-      permPromptCountRef.current >= 2 ||
+      permPromptCountRef.current >= 1 ||
       suggestedProducts.length > 0 ||
       guidedMode
     ) return;
     const t = setTimeout(() => {
       permPromptCountRef.current += 1;
+      sessionStorage.setItem(`foocci-cta-seen-${slug}`, "1");
       setAiPermState("pending");
     }, 3_000);
     return () => clearTimeout(t);
@@ -3018,8 +3020,10 @@ export function PedidoClient({
   const handlePermissionDecline = useCallback(() => {
     setAiPermState("silent");
     silentUntilRef.current = Date.now() + SILENT_COOLDOWN_MS;
+    // Persist so a soft-reload within the same browser session doesn't re-show the CTA.
+    sessionStorage.setItem(`foocci-cta-seen-${slug}`, "1");
     pushAssistantMessage("Perfeito 😊 fica à vontade — qualquer coisa é só me chamar.");
-  }, [pushAssistantMessage]);
+  }, [pushAssistantMessage, slug]);
 
   // ── Checkout proceed helper ───────────────────────────────────────
   // Called by continue_checkout option or after all upsells resolve.
@@ -4487,23 +4491,23 @@ export function PedidoClient({
             <div className="flex justify-start" data-testid="waiter-permission-prompt">
               <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3">
                 <p className="text-sm text-gray-900 mb-3 leading-relaxed">
-                  Posso te sugerir algo que combine com o que você está vendo? 👇
+                  Quer ajuda para escolher? 😊
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-1.5">
                   <button
                     data-testid="waiter-permission-accept"
                     onClick={handlePermissionAccept}
-                    className="flex-1 rounded-xl py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                    className="w-full rounded-xl py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
                     style={{ backgroundColor: 'var(--brand-primary)' }}
                   >
-                    Quero sugestão ✨
+                    Me sugere algo ✨
                   </button>
                   <button
                     data-testid="waiter-permission-decline"
                     onClick={handlePermissionDecline}
-                    className="flex-1 rounded-xl py-2 text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
+                    className="w-full py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
                   >
-                    Prefiro continuar
+                    Agora não
                   </button>
                 </div>
               </div>

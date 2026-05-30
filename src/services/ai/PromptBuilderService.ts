@@ -86,6 +86,8 @@ export class PromptBuilderService {
                 description: true,
                 ingredients: true,
                 price: true,
+                servingSize: true,
+                portionInfo: true,
               },
             },
           },
@@ -176,7 +178,7 @@ export class PromptBuilderService {
           items: {
             where: { isActive: true },
             orderBy: { sortOrder: "asc" },
-            select: { id: true, name: true, description: true, ingredients: true, price: true },
+            select: { id: true, name: true, description: true, ingredients: true, price: true, servingSize: true, portionInfo: true },
           },
         },
       }),
@@ -236,7 +238,15 @@ type CustomerInfo = {
 };
 type CategoryWithItems = {
   name: string;
-  items: { id: string; name: string; description: string | null; ingredients: string | null; price: { toString(): string } }[];
+  items: {
+    id: string;
+    name: string;
+    description: string | null;
+    ingredients: string | null;
+    price: { toString(): string };
+    servingSize: number | null;
+    portionInfo: string | null;
+  }[];
 };
 type DraftData = {
   id: string;
@@ -621,12 +631,22 @@ function buildMenuBlock(categories: CategoryWithItems[]): string {
   return categories
     .map((cat) => {
       if (cat.items.length === 0) return null;
-      const itemLines = cat.items.map(
-        (item) =>
+      const itemLines = cat.items.map((item) => {
+        let line =
           `  • [ID: ${item.id}] ${item.name} — R$ ${Number(item.price).toFixed(2)}` +
           (item.description ? `\n    ${item.description}` : "") +
-          (item.ingredients ? `\n    Ingredientes: ${item.ingredients}` : "")
-      );
+          (item.ingredients ? `\n    Ingredientes: ${item.ingredients}` : "");
+        // Serving size / portion info — critical for group-size recommendations
+        const extras: string[] = [];
+        if (item.servingSize != null && item.servingSize >= 2) {
+          extras.push(`Serve: ${item.servingSize === 4 ? "4+" : item.servingSize} pessoas`);
+        }
+        if (item.portionInfo) {
+          extras.push(`Porção: ${item.portionInfo}`);
+        }
+        if (extras.length > 0) line += `\n    [${extras.join(" · ")}]`;
+        return line;
+      });
       return `${cat.name}:\n${itemLines.join("\n")}`;
     })
     .filter(Boolean)
