@@ -10,7 +10,72 @@
  *   level so even if customers reach the hosted page they only see Pix.
  */
 
+import crypto from "crypto";
+
 const MP_API_URL = "https://api.mercadopago.com";
+
+// ── Webhook signature verification ───────────────────────────────────────────
+
+/**
+ * Result of verifyMpWebhookSignature().
+ *   "verified"  — signature present and matches
+ *   "invalid"   — signature present but does not match (reject request)
+ *   "missing"   — x-signature header absent (caller decides whether to allow)
+ *   "no_secret" — MERCADO_PAGO_WEBHOOK_SECRET not configured (caller decides)
+ */
+export type MpSigResult = "verified" | "invalid" | "missing" | "no_secret";
+
+/**
+ * Verifies the official Mercado Pago Webhooks API signature.
+ *
+ * Official spec (https://www.mercadopago.com.br/developers/en/docs/your-integrations/notifications/webhooks):
+ *   x-signature  : "ts=<epoch_seconds>,v1=<hmac_sha256_hex>"
+ *   x-request-id : "<uuid>"
+ *
+ * Manifest: "id:<dataId>;request-id:<xRequestId>;ts:<ts>;"
+ * HMAC-SHA256 keyed with MERCADO_PAGO_WEBHOOK_SECRET.
+ *
+ * @param dataId      The payment/resource ID from the notification body (data.id).
+ * @param xSignature  Value of the x-signature header.
+ * @param xRequestId  Value of the x-request-id header.
+ */
+export function verifyMpWebhookSignature(
+  dataId: string,
+  xSignature: string,
+  xRequestId: string,
+): MpSigResult {
+  if (!xSignature) return "missing";
+
+  const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+  if (!secret) return "no_secret";
+
+  // Parse "ts=<value>,v1=<value>" — ignore unknown parts
+  const parts: Record<string, string> = {};
+  for (const part of xSignature.split(",")) {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx > 0) parts[part.slice(0, eqIdx).trim()] = part.slice(eqIdx + 1).trim();
+  }
+  const ts = parts["ts"];
+  const v1 = parts["v1"];
+  if (!ts || !v1) return "invalid";
+
+  // Build manifest per MP spec
+  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(manifest, "utf8")
+    .digest("hex");
+
+  try {
+    const expectedBuf = Buffer.from(expected, "hex");
+    const v1Buf       = Buffer.from(v1,       "hex");
+    if (expectedBuf.length !== v1Buf.length) return "invalid";
+    return crypto.timingSafeEqual(expectedBuf, v1Buf) ? "verified" : "invalid";
+  } catch {
+    return "invalid";
+  }
+}
 
 // ── Direct Pix (preferred) ────────────────────────────────────────────────────
 

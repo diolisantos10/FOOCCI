@@ -9,15 +9,23 @@
  *   2. IPN query params (legacy): POST ?topic=payment&id=<paymentId>
  *   3. IPN body (legacy):         { topic: "payment", id: "..." }
  *
+ * Signature verification:
+ *   Webhooks API notifications (format 1) carry x-signature and x-request-id headers.
+ *   We verify HMAC-SHA256 per the official MP spec. In production with
+ *   MERCADO_PAGO_WEBHOOK_SECRET set, a missing or invalid signature → 401.
+ *   Legacy IPN (formats 2/3) pre-date signatures and are allowed with a warning.
+ *
  * All formats are mapped to a payment ID, then we fetch the payment from MP API
  * to get external_reference (= our orderId) and confirm the order if approved.
  *
- * Always responds 200 so MP does not retry on application errors.
+ * Always responds 200 on application-level errors (not auth failures) so MP
+ * does not retry on transient issues.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
+import { verifyMpWebhookSignature } from "@/lib/mercadopago";
 import { Decimal } from "@prisma/client/runtime/library";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 
@@ -105,7 +113,97 @@ export async function confirmMpPayment(
 }
 
 export async function POST(req: NextRequest) {
-  // ── Step 1: extract payment ID from any MP notification format ──────────────
+  // ── Step 0: read headers and raw body once ────────────────────────────────
+  const xSignature  = req.headers.get("x-signature")  ?? "";
+  const xRequestId  = req.headers.get("x-request-id") ?? "";
+
+  let body: Record<string, unknown> = {};
+  try {
+    const text = await req.text();
+    if (text) body = JSON.parse(text);
+  } catch {
+    // Non-JSON body is fine for legacy IPN query-param notifications
+  }
+
+  // ── Step 1: determine notification format ─────────────────────────────────
+  // Webhooks API: body contains data.id — these carry x-signature.
+  // Legacy IPN:   body contains topic/id OR query params — no signature.
+  const dataObj      = body.data as Record<string, unknown> | undefined;
+  const bodyDataId   = dataObj?.id != null ? String(dataObj.id) : null;
+  const isWebhooksApi = bodyDataId !== null;
+
+  // ── Step 2: signature verification ────────────────────────────────────────
+  const sigPresent   = !!xSignature;
+  const reqIdPresent = !!xRequestId;
+
+  if (isWebhooksApi || sigPresent) {
+    // All Webhooks API notifications and any notification with an x-signature header
+    // go through verification. Use bodyDataId if available; fall back to query/body id.
+    const idForSig = bodyDataId
+      ?? req.nextUrl.searchParams.get("id")
+      ?? (body.id != null ? String(body.id) : "");
+
+    const sigResult = verifyMpWebhookSignature(idForSig, xSignature, xRequestId);
+
+    console.info(LOG, "signature check", {
+      format:    isWebhooksApi ? "webhooks_api" : "ipn_with_sig",
+      sigPresent,
+      reqIdPresent,
+      sigResult,
+    });
+
+    if (sigResult === "invalid") {
+      console.warn(LOG, "invalid signature — rejected", { idForSig });
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+
+    if (sigResult === "missing") {
+      // x-signature absent on a Webhooks API format notification
+      if (process.env.NODE_ENV === "production" && process.env.MERCADO_PAGO_WEBHOOK_SECRET) {
+        // Secret is configured but MP sent no signature — reject (spoofed or mis-configured MP app)
+        console.warn(LOG, "missing x-signature on Webhooks API notification — rejected");
+        return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+      }
+      if (process.env.NODE_ENV === "production") {
+        console.error(
+          LOG,
+          "CRITICAL: MERCADO_PAGO_WEBHOOK_SECRET is not set. " +
+          "Webhooks API notifications are accepted without signature verification. " +
+          "Set MERCADO_PAGO_WEBHOOK_SECRET in Railway to enable verification.",
+        );
+      } else {
+        console.warn(LOG, "x-signature absent — bypassed (dev/no secret configured)");
+      }
+    }
+
+    if (sigResult === "no_secret") {
+      if (process.env.NODE_ENV === "production") {
+        console.error(
+          LOG,
+          "CRITICAL: MERCADO_PAGO_WEBHOOK_SECRET is not set. " +
+          "Webhooks API notifications are accepted without signature verification. " +
+          "Set MERCADO_PAGO_WEBHOOK_SECRET in Railway to enable verification.",
+        );
+      } else {
+        console.warn(LOG, "MERCADO_PAGO_WEBHOOK_SECRET not set — signature verification skipped (dev)");
+      }
+    }
+
+    // sigResult === "verified" → fall through
+  } else {
+    // Legacy IPN notification (no x-signature, no data.id) — allow with warning in prod
+    if (process.env.NODE_ENV === "production" && process.env.MERCADO_PAGO_WEBHOOK_SECRET) {
+      console.warn(
+        LOG,
+        "legacy IPN notification without x-signature received in production. " +
+        "Consider migrating your MP integration to the Webhooks API for signature verification.",
+      );
+    } else {
+      console.info(LOG, "legacy IPN notification (no signature expected)");
+    }
+  }
+
+  // ── Step 3: extract payment ID from any MP notification format ────────────
   let paymentId: string | undefined;
 
   // IPN legacy: query params ?topic=payment&id=<paymentId>
@@ -114,15 +212,6 @@ export async function POST(req: NextRequest) {
   if (topicParam === "payment" && idParam) {
     paymentId = idParam;
     console.info(LOG, "IPN query-param format", { paymentId });
-  }
-
-  // Parse body — may be empty in IPN-only calls
-  let body: Record<string, unknown> = {};
-  try {
-    const text = await req.text();
-    if (text) body = JSON.parse(text);
-  } catch {
-    // Non-JSON body is fine if paymentId came from query params
   }
 
   if (!paymentId) {
@@ -141,9 +230,8 @@ export async function POST(req: NextRequest) {
     }
 
     // JSON Webhooks API: data.id  |  IPN body: id
-    const dataObj = body.data as Record<string, unknown> | undefined;
-    const rawId   = dataObj?.id ?? body.id;
-    paymentId     = rawId != null ? String(rawId) : undefined;
+    const rawId = bodyDataId ?? (body.id != null ? String(body.id) : undefined);
+    paymentId   = rawId ?? undefined;
   }
 
   if (!paymentId) {
@@ -151,9 +239,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  console.info(LOG, "processing payment", { paymentId });
+  console.info(LOG, "processing payment", {
+    paymentId,
+    sigVerified: sigPresent,
+  });
 
-  // ── Step 2: find the matching payment record ─────────────────────────────────
+  // ── Step 4: find the matching payment record ──────────────────────────────
   // Fast path: providerReference is stored as the MP payment ID since the direct Pix API flow.
   let payment = await prisma.payment.findFirst({
     where: { providerReference: paymentId, providerName: "mercadopago" },
@@ -224,7 +315,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // ── Step 3: fetch MP payment status if not already loaded ────────────────────
+  // ── Step 5: fetch MP payment status if not already loaded ─────────────────
   if (!mpPaymentData) {
     const accessToken = await getMpToken(payment.order.restaurantId);
     if (!accessToken) {
@@ -250,7 +341,7 @@ export async function POST(req: NextRequest) {
 
   console.info(LOG, "MP payment status", { paymentId, mpStatus: mpPaymentData.status, orderId: payment.order.id });
 
-  // ── Step 4: confirm if approved ──────────────────────────────────────────────
+  // ── Step 6: confirm if approved ───────────────────────────────────────────
   const result = await confirmMpPayment(payment, mpPaymentData);
   console.info(LOG, "done", { paymentId, orderId: payment.order.id, result });
 

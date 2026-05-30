@@ -31,10 +31,11 @@ export async function GET() {
       uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
       db: dbOk ? "ok" : "unreachable",
       checks: {
-        encryptionKey: !!process.env.ENCRYPTION_KEY,
-        nextauthSecret: !!process.env.NEXTAUTH_SECRET,
-        openaiKey: !!process.env.OPENAI_API_KEY,
-        databaseUrl: !!process.env.DATABASE_URL,
+        encryptionKey:    !!process.env.ENCRYPTION_KEY,
+        nextauthSecret:   !!process.env.NEXTAUTH_SECRET,
+        openaiKey:        !!process.env.OPENAI_API_KEY,
+        databaseUrl:      !!process.env.DATABASE_URL,
+        mpWebhookSecret:  !!process.env.MERCADO_PAGO_WEBHOOK_SECRET,
       },
     },
     { status: 200 }
