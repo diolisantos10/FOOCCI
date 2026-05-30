@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { isDeliveryQuoteAuthorized } from "@/lib/delivery-authorization";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -54,6 +54,24 @@ const EMPTY_ADDR: DeliveryAddr = {
 
 const DELIVERY_STEPS = ["Cliente", "Itens", "Entrega", "Endereço", "Desconto", "Pagamento", "Revisão"];
 const PICKUP_STEPS   = ["Cliente", "Itens", "Entrega", "Desconto", "Pagamento", "Revisão"];
+
+const DRAFT_VERSION = 1;
+
+interface ManualOrderDraft {
+  v:             number;
+  step:          InternalStep;
+  customerName:  string;
+  customerPhone: string;
+  notes:         string;
+  cart:          CartLine[];
+  orderType:     OrderType;
+  addr:          DeliveryAddr;
+  quote:         DeliveryQuote | null;
+  discountStr:   string;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  savedAt:       number;
+}
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 
@@ -112,6 +130,18 @@ export function ManualOrderModal({
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
 
+  // Draft persistence
+  const [draftRecovered,    setDraftRecovered]    = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const hydratedRef = useRef(false);
+
+  // Draft key — scoped to the operator's context so the Atendimento thread, a
+  // specific phone, and the generic Orders entry each keep their own draft.
+  const draftKey = useMemo(() => {
+    const scope = conversationId || (prefillPhone ?? "") || "orders";
+    return `manualOrderDraft:v${DRAFT_VERSION}:${source}:${scope}`;
+  }, [conversationId, prefillPhone, source]);
+
   // ── Computed ───────────────────────────────────────────────────────────────
 
   const cartSubtotal   = cart.reduce((s, l) => s + l.price * l.quantity, 0);
@@ -168,6 +198,73 @@ export function ManualOrderModal({
       ? menuItems.filter((m) => m.name.toLowerCase().includes(q) || m.categoryName.toLowerCase().includes(q))
       : menuItems;
   }, [menuItems, itemSearch]);
+
+  // ── Draft: restore on mount ────────────────────────────────────────────────
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw) as ManualOrderDraft;
+        if (d && d.v === DRAFT_VERSION) {
+          if (d.customerName)  setCustomerName(d.customerName);
+          if (d.customerPhone) setCustomerPhone(d.customerPhone);
+          setNotes(d.notes ?? "");
+          if (Array.isArray(d.cart)) setCart(d.cart);
+          if (d.orderType) setOrderType(d.orderType);
+          if (d.addr) setAddr(d.addr);
+          setQuote(d.quote ?? null);
+          setDiscountStr(d.discountStr ?? "");
+          if (d.paymentMethod) setPaymentMethod(d.paymentMethod);
+          if (d.paymentStatus) setPaymentStatus(d.paymentStatus);
+          if (d.step) setStep(d.step);
+          const hasContent = (d.cart?.length ?? 0) > 0 || !!d.customerName?.trim() || !!d.notes?.trim();
+          if (hasContent) setDraftRecovered(true);
+        }
+      }
+    } catch {
+      // Corrupt draft — ignore and start fresh.
+    } finally {
+      hydratedRef.current = true;
+    }
+    // Restore once per mount, scoped to the resolved draft key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  // ── Draft: persist on change ───────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!hydratedRef.current) return; // don't overwrite before the restore runs
+    const hasContent =
+      cart.length > 0 || customerName.trim() !== "" || notes.trim() !== "" ||
+      addr.cep.trim() !== "" || addr.street.trim() !== "";
+    // Nothing meaningful yet — don't write (and don't delete, to avoid racing
+    // the restore on mount). Explicit clears handle removal on success/discard.
+    if (!hasContent) return;
+    try {
+      const draft: ManualOrderDraft = {
+        v: DRAFT_VERSION, step, customerName, customerPhone, notes, cart,
+        orderType, addr, quote, discountStr, paymentMethod, paymentStatus,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch {
+      // Storage full / unavailable — non-fatal.
+    }
+  }, [
+    draftKey, step, customerName, customerPhone, notes, cart, orderType,
+    addr, quote, discountStr, paymentMethod, paymentStatus,
+  ]);
+
+  function clearDraft() {
+    try { localStorage.removeItem(draftKey); } catch { /* noop */ }
+  }
+
+  function discardDraft() {
+    clearDraft();
+    setShowDiscardConfirm(false);
+    onClose();
+  }
 
   // ── Cart helpers ──────────────────────────────────────────────────────────
 
@@ -333,6 +430,7 @@ export function ManualOrderModal({
         setStep(1);
         return;
       }
+      clearDraft();
       onCreated(json.orderId!, json.displayNumber);
     } catch {
       setError("Falha de rede. Tente novamente.");
@@ -351,7 +449,7 @@ export function ManualOrderModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4">
-      <div className="flex h-[92vh] sm:h-auto sm:max-h-[90vh] w-full sm:max-w-xl flex-col rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl">
+      <div className="relative flex h-[92vh] sm:h-auto sm:max-h-[90vh] w-full sm:max-w-xl flex-col rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl">
 
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between border-b border-gray-100 px-5 py-4">
@@ -393,28 +491,31 @@ export function ManualOrderModal({
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
+          {draftRecovered && (
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2">
+              <p className="text-xs font-medium text-blue-700">↩︎ Rascunho recuperado — continue de onde parou.</p>
+              <button type="button"
+                onClick={() => setShowDiscardConfirm(true)}
+                className="shrink-0 text-[11px] font-semibold text-blue-500 hover:text-red-500 transition-colors">
+                Descartar
+              </button>
+            </div>
+          )}
+
           {/* ── Step 1: Customer ─────────────────────────────────────── */}
           {step === 1 && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Nome *</label>
-                  <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Nome do cliente" className={inputCls} autoFocus />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Telefone</label>
-                  <input type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="(11) 99999-9999" className={inputCls} />
-                </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Nome *</label>
+                <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Nome do cliente" className={inputCls} autoFocus />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Observações</label>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-                  placeholder="Ex: sem cebola, referência de entrega…"
-                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100" />
+                <label className="block text-xs font-medium text-gray-700 mb-1">Telefone</label>
+                <input type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="(11) 99999-9999" className={inputCls} />
               </div>
-            </>
+            </div>
           )}
 
           {/* ── Step 2: Products ─────────────────────────────────────── */}
@@ -479,6 +580,15 @@ export function ManualOrderModal({
                   </div>
                 </>
               )}
+
+              {/* Order-level observations — captured while selecting items, where
+                  staff usually receive prep/delivery notes from the customer. */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Observações de preparo/entrega</label>
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+                  placeholder="Ex: sem cream cheese, trocar molho, ponto da carne, referência de entrega…"
+                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100" />
+              </div>
             </>
           )}
 
@@ -691,7 +801,13 @@ export function ManualOrderModal({
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Cliente</p>
                 <p className="text-sm font-semibold text-gray-900">{customerName}</p>
                 {customerPhone && <p className="text-xs text-gray-500">{customerPhone}</p>}
-                {notes && <p className="text-xs text-gray-400 mt-0.5 italic">{notes}</p>}
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Observações</p>
+                {notes.trim()
+                  ? <p className="text-sm text-gray-800 whitespace-pre-wrap">{notes}</p>
+                  : <p className="text-sm text-gray-400 italic">Nenhuma observação</p>}
               </div>
 
               <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
@@ -768,7 +884,7 @@ export function ManualOrderModal({
               ← Voltar
             </button>
           ) : (
-            <button type="button" onClick={onClose}
+            <button type="button" onClick={() => setShowDiscardConfirm(true)}
               className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors">
               Cancelar
             </button>
@@ -786,6 +902,26 @@ export function ManualOrderModal({
             </button>
           )}
         </div>
+
+        {/* Discard confirmation */}
+        {showDiscardConfirm && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 rounded-t-2xl sm:rounded-2xl px-6">
+            <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl">
+              <p className="text-sm font-bold text-gray-900">Descartar este pedido em andamento?</p>
+              <p className="mt-1 text-xs text-gray-500">As informações preenchidas serão apagadas.</p>
+              <div className="mt-4 flex flex-col gap-2">
+                <button type="button" onClick={() => setShowDiscardConfirm(false)}
+                  className="rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-600 transition-colors">
+                  Continuar editando
+                </button>
+                <button type="button" onClick={discardDraft}
+                  className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors">
+                  Descartar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
