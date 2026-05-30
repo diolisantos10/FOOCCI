@@ -2667,6 +2667,28 @@ export function PedidoClient({
         ts: new Date(),
       },
     ]);
+    // Fire ON_ENTRY to the server for Atendimento logging + early conversationId
+    // init. Non-fatal — ordering continues if this fails.
+    const sid = sessionIdRef.current;
+    if (sid) {
+      fetch(`/api/pedido/${slug}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "", event: "ON_ENTRY", history: [], cart: [],
+          sessionId: sid,
+          ...(resolvedCustomerId    ? { customerId:    resolvedCustomerId }    : {}),
+          ...(effectiveCustomerPhone ? { customerPhone: effectiveCustomerPhone } : {}),
+          ...(customerName           ? { customerName:  customerName }           : {}),
+        }),
+      })
+        .then((r) => r.json())
+        .then((json: { data?: { conversationId?: string | null } }) => {
+          const cid = json?.data?.conversationId;
+          if (cid) setConvId(cid);
+        })
+        .catch(() => { /* non-fatal */ });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryPhase]);
 

@@ -149,11 +149,13 @@ export async function POST(
     if (!Array.isArray(history)) return badRequest("history must be an array.");
 
     // ── Chat Inbox: conversation logging ─────────────────────────────────────
-    // Conversation is ensured on ON_ENTRY (greeting) and ON_USER_MESSAGE (chat).
+    // Conversation is ensured on ON_ENTRY (greeting), ON_USER_MESSAGE (chat),
+    // and ON_ITEM_ADDED (so item-added AI replies are logged even before the
+    // customer sends their first message).
     // All errors are caught so ordering never breaks due to logging failures.
     let conversationId: string | null = reqConvId ?? null;
 
-    if (sessionId && (event === "ON_USER_MESSAGE" || event === "ON_ENTRY")) {
+    if (sessionId && (event === "ON_USER_MESSAGE" || event === "ON_ENTRY" || event === "ON_ITEM_ADDED")) {
       try {
         conversationId = await ConversationLogService.ensureConversation({
           restaurantId:  restaurant.id,

@@ -341,9 +341,9 @@ export async function GET(req: NextRequest) {
       shortRecoveryUrlWouldGenerate: `${getPublicSiteUrl()}/r/<code>`,
     });
 
-    // ── Step 7b: Pedido chat message check ────────────────────────────────────
-    // Verifies that /pedido chat messages (CUSTOMER_CARDAPIO) are saved to a
-    // conversation linked to this customer and visible in Atendimento.
+    // ── Step 7b: Conversation + message source check ──────────────────────────
+    // Shows all message sources in the customer's conversations so we can verify
+    // WhatsApp, Cardápio, and AI messages are all landing in the same thread.
     {
       const convRows = await prisma.conversation.findMany({
         where: { restaurantId: restaurantId!, customerId: customerId! },
@@ -351,24 +351,45 @@ export async function GET(req: NextRequest) {
         select: {
           id: true, channel: true, status: true,
           messages: {
-            where: { senderType: "CUSTOMER_CARDAPIO" },
             orderBy: { sentAt: "desc" },
-            take: 1,
-            select: { sentAt: true, content: true },
+            take: 10,
+            select: { sentAt: true, content: true, senderType: true, metadata: true },
           },
         },
       });
-      const convWithCardapio = convRows.find((c) => c.messages.length > 0);
-      const canonicalConvId  = convRows[0]?.id ?? null;
-      const latestMsg        = convWithCardapio?.messages[0];
-      addPass("pedido_chat_check", latestMsg
-        ? `Latest CUSTOMER_CARDAPIO message found — sentAt: ${latestMsg.sentAt.toISOString()}`
-        : "No CUSTOMER_CARDAPIO messages yet (expected if customer never chatted via /pedido)",
+      const canonicalConvId = convRows[0]?.id ?? null;
+      const allMessages = convRows.flatMap((c) => c.messages);
+      const hasWhatsApp   = allMessages.some((m) => m.senderType === "CUSTOMER");
+      const hasCardapio   = allMessages.some((m) => m.senderType === "CUSTOMER_CARDAPIO");
+      const hasAiCardapio = allMessages.some(
+        (m) => m.senderType === "AI" && (m.metadata as Record<string, unknown> | null)?.source === "CARDAPIO",
+      );
+      const recent3 = [...allMessages]
+        .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime())
+        .slice(0, 3)
+        .map((m) => ({
+          senderType: m.senderType,
+          source:     (m.metadata as Record<string, unknown> | null)?.source ?? null,
+          sentAt:     m.sentAt.toISOString(),
+          preview:    m.content.slice(0, 80),
+        }));
+      const latestCardapioMsg = allMessages
+        .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime())
+        .find((m) => m.senderType === "CUSTOMER_CARDAPIO");
+      addPass("pedido_chat_check", latestCardapioMsg
+        ? `Latest CUSTOMER_CARDAPIO message — sentAt: ${latestCardapioMsg.sentAt.toISOString()}`
+        : hasWhatsApp
+          ? "No Cardápio messages yet — WhatsApp messages present"
+          : "No messages yet (expected if customer hasn't chatted)",
         {
           canonicalConversationId: canonicalConvId,
-          totalConversations: convRows.length,
-          conversationsWithCardapio: convRows.filter((c) => c.messages.length > 0).length,
-          latestCardapioMessageAt: latestMsg?.sentAt.toISOString() ?? null,
+          totalConversations:       convRows.length,
+          sourcesPresent:           { hasWhatsApp, hasCardapio, hasAiCardapio },
+          conversationsWithCardapio: convRows.filter((c) =>
+            c.messages.some((m) => m.senderType === "CUSTOMER_CARDAPIO"),
+          ).length,
+          latestCardapioMessageAt: latestCardapioMsg?.sentAt.toISOString() ?? null,
+          recent3Messages:         recent3,
         },
       );
     }
