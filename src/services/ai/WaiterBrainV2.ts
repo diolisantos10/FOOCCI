@@ -216,6 +216,15 @@ export interface V2Output {
   aiDirective:  string;          // injected into system prompt for AI events
   memoryPatch?: Partial<WaiterMemory>; // client merges this into its WaiterMemory
   pinnedCardId?: string;         // ID of the harmonically suggested item (shown with ⭐)
+  /**
+   * Card-rendering policy for this response (internal — consumed by the validator):
+   *   "category"       → user asked for options/a category: show ALL relevant available
+   *                      cards (only a high technical-safety ceiling applies).
+   *   "recommendation" → consultative pick: concise, ordered, soft cap.
+   *   "upsell"         → passive upsell: small relevant subset.
+   * Unset is treated as "category" (never hide available cards by default).
+   */
+  cardScope?: "category" | "recommendation" | "upsell";
 }
 
 // ─── sales intelligence types ────────────────────────────────
@@ -529,6 +538,36 @@ function tagCatalog(catalog: V2CatalogItem[]): TaggedItem[] {
 
 function bySort(a: V2CatalogItem, b: V2CatalogItem): number {
   return (a.sortOrder ?? 999) - (b.sortOrder ?? 999);
+}
+
+// ─── best-seller ordering ─────────────────────────────────────
+// A product's "most sold" signal. Restaurants provide ONE consistent metric
+// (salesCount from order aggregation, or a normalized popularityScore, or a
+// manual isBestSeller flag). Absent any data → 0, so ordering falls back to the
+// deterministic sortOrder/name comparator below.
+export function bestSellerScore(i?: V2CatalogItem | null): number {
+  if (!i) return 0;
+  if (typeof i.salesCount === "number"      && i.salesCount > 0)      return i.salesCount;
+  if (typeof i.popularityScore === "number" && i.popularityScore > 0) return i.popularityScore;
+  if (i.isBestSeller) return 0.5;
+  return 0;
+}
+
+/**
+ * Card ordering comparator for a set already filtered for relevance:
+ *   1. best-seller score (most sold first)
+ *   2. strategic/promotion boost (restaurantPriority)
+ *   3. menu sortOrder
+ *   4. name (stable, deterministic tiebreak)
+ * With no sales/priority data this is a pure sortOrder→name sort (fully deterministic).
+ */
+export function byBestSeller(a: V2CatalogItem, b: V2CatalogItem): number {
+  return (
+    bestSellerScore(b) - bestSellerScore(a) ||
+    (b.restaurantPriority ?? 0) - (a.restaurantPriority ?? 0) ||
+    (a.sortOrder ?? 999) - (b.sortOrder ?? 999) ||
+    a.name.localeCompare(b.name)
+  );
 }
 
 /**
@@ -1076,8 +1115,14 @@ export function searchMenuByQuery(
 
   const confidence = topScore >= 40 ? "high" : topScore >= 20 ? "medium" : "low";
 
-  // Order by menu/catalog position — restaurant's commercial priority.
-  matched.sort((a, b) => (menuOrder.get(a.id) ?? 99999) - (menuOrder.get(b.id) ?? 99999));
+  // Order by relevance first (so weak description-only matches never outrank a
+  // name/category match), then by best-seller inside each relevance band, then
+  // by menu position. Returns ALL matches — the caller decides how many to render.
+  const itemById = new Map(catalog.map((i) => [i.id, i]));
+  matched.sort((a, b) =>
+    b.score - a.score ||
+    byBestSeller(itemById.get(a.id)!, itemById.get(b.id)!) ||
+    (menuOrder.get(a.id) ?? 99999) - (menuOrder.get(b.id) ?? 99999));
 
   // Apply session filter only when the caller opts in (direct search passes []).
   const ids = matched
@@ -1371,6 +1416,7 @@ export function rankProducts(
   const tagged     = catalog.map((item) => analyzeMenuItem(item, benchmarks));
   const cartTagged = tagged.filter((i) => cartItemIds.includes(i.id));
   const ctx: ScoreContext = { cartItemIds, cartTagged, benchmarks };
+  const itemById   = new Map(catalog.map((i) => [i.id, i]));
 
   const scored:   Array<{ id: string; score: number }> = [];
   const rejected: Array<{ id: string; reason: string; score?: number }> = [];
@@ -1390,7 +1436,12 @@ export function rankProducts(
       rejected.push({ id: item.id, reason: wasSuggested ? "already_suggested" : "low_score", score });
     }
   }
-  scored.sort((a, b) => b.score - a.score);
+  // Primary: intent relevance (score). Secondary: best-seller order INSIDE the
+  // filtered set — a less-relevant item never jumps a more-relevant one just
+  // because it sells more, but equally-relevant items surface most-sold first.
+  scored.sort((a, b) =>
+    b.score - a.score ||
+    byBestSeller(itemById.get(a.id)!, itemById.get(b.id)!));
 
   const seen    = new Set<string>();
   const results: string[] = [];
@@ -2063,6 +2114,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
           requiresAI:  false,
           aiDirective: "",
           pinnedCardId,
+          cardScope:   "upsell",
           memoryPatch: { checkoutUpsellStage: "drink_shown" },
         };
       }
@@ -2088,6 +2140,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
           requiresAI:  false,
           aiDirective: "",
           pinnedCardId,
+          cardScope:   "upsell",
           memoryPatch: { checkoutUpsellStage: "dessert_shown" },
         };
       }
@@ -2105,6 +2158,7 @@ function handleCheckoutStarted(input: V2Input): V2Output {
         options:     [],
         requiresAI:  false,
         aiDirective: "",
+        cardScope:   "upsell",
         memoryPatch: { checkoutUpsellStage: "extras_shown" },
       };
     }
@@ -2464,7 +2518,7 @@ function handleUserMessage(input: V2Input): V2Output {
     if (cards.length === 0 && rawIds.length > 0) return noCardsFound();
     const base    = buildCommercialResponse({ intent, selectedProducts: cards, mode }, cfg);
     const message = buildObjectionCopy(msgRaw, intent) ?? base.message;
-    return { ...base, message, requiresAI: false, aiDirective: "" };
+    return { ...base, message, requiresAI: false, aiDirective: "", cardScope: scopeForIntent(intent) };
   };
 
   // ── Discovery answer paths — strict intent-matched filters ───────────────────
@@ -2515,7 +2569,7 @@ function handleUserMessage(input: V2Input): V2Output {
 
   // ── Special path: "Ver sobremesas novamente" button ───────────────────────────
   if (msgLow === "see_desserts_again") {
-    const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 5, []);
+    const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, OPTIONS_CARD_LIMIT, []);
     if (cards.length > 0) return suggest("asks_for_dessert", cards, "SUGGESTION");
     return noCardsFound();
   }
@@ -2792,7 +2846,7 @@ function handleUserMessage(input: V2Input): V2Output {
 
     // Group-size intent → shareable/combo cards (servingSize-aware via rankProducts).
     if (ctxAnalysis.customerIntent === "wants_group_order") {
-      const cards = rankProducts(catalog, "wants_group_order", cartItemIds, 5, suggestedIds);
+      const cards = rankProducts(catalog, "wants_group_order", cartItemIds, OPTIONS_CARD_LIMIT, suggestedIds);
       if (cards.length > 0) return suggest("wants_group_order", cards, "SUGGESTION");
       // No shareable match found → ask ONE qualifying question (never literal search).
       return {
@@ -2864,13 +2918,13 @@ function handleUserMessage(input: V2Input): V2Output {
       if (porcaoCat) {
         const cards = catalog
           .filter((i) => i.categoryName === porcaoCat && !cartItemIds.includes(i.id))
-          .sort(bySort)
-          .slice(0, 5)
+          .sort(byBestSeller)
+          .slice(0, OPTIONS_CARD_LIMIT)
           .map((i) => i.id);
         if (cards.length > 0) return suggest("asks_category", cards, "SUGGESTION");
       }
       // No dedicated category → fall back to shareable/group ranking.
-      const shareCards = rankProducts(catalog, "wants_group_order", cartItemIds, 5, suggestedIds);
+      const shareCards = rankProducts(catalog, "wants_group_order", cartItemIds, OPTIONS_CARD_LIMIT, suggestedIds);
       if (shareCards.length > 0) return suggest("wants_group_order", shareCards, "SUGGESTION");
     }
   }
@@ -2922,6 +2976,7 @@ function handleUserMessage(input: V2Input): V2Output {
       options:     [],
       requiresAI:  false,
       aiDirective: "",
+      cardScope:   "category", // explicit product/category query → show ALL relevant
     };
   }
 
@@ -2941,7 +2996,7 @@ function handleUserMessage(input: V2Input): V2Output {
       return noCardsFound();
     }
     case "wants_group_order": {
-      const cards = rankProducts(catalog, "wants_group_order", cartItemIds, 5, suggestedIds);
+      const cards = rankProducts(catalog, "wants_group_order", cartItemIds, OPTIONS_CARD_LIMIT, suggestedIds);
       if (cards.length > 0) return suggest("wants_group_order", cards, "SUGGESTION");
       return noCardsFound();
     }
@@ -2959,7 +3014,7 @@ function handleUserMessage(input: V2Input): V2Output {
       return noCardsFound();
     }
     case "asks_for_dessert": {
-      const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, 5, suggestedIds);
+      const cards = rankProducts(catalog, "asks_for_dessert", cartItemIds, OPTIONS_CARD_LIMIT, suggestedIds);
       if (cards.length > 0) return suggest("asks_for_dessert", cards, "SUGGESTION");
       if (suggestedIds.some((id) => {
         const item = catalog.find((i) => i.id === id);
@@ -2980,7 +3035,7 @@ function handleUserMessage(input: V2Input): V2Output {
       return noCardsFound();
     }
     case "asks_for_drink": {
-      const cards = rankProducts(catalog, "asks_for_drink", cartItemIds, 5, suggestedIds);
+      const cards = rankProducts(catalog, "asks_for_drink", cartItemIds, OPTIONS_CARD_LIMIT, suggestedIds);
       if (cards.length > 0) return suggest("asks_for_drink", cards, "SUGGESTION");
       return noCardsFound();
     }
@@ -3002,8 +3057,8 @@ function handleUserMessage(input: V2Input): V2Output {
       if (hitCat) {
         const cards = catalog
           .filter((i) => i.categoryName === hitCat && !cartItemIds.includes(i.id))
-          .sort(bySort)
-          .slice(0, 5)
+          .sort(byBestSeller)
+          .slice(0, OPTIONS_CARD_LIMIT)
           .map((i) => i.id);
         if (cards.length > 0) return suggest("asks_category", cards, "SUGGESTION");
       }
@@ -3061,9 +3116,41 @@ const SAFE_FALLBACK: V2Output = {
 
 const VALID_MODES = new Set<WaiterMode>(["BROWSE", "SUGGESTION", "INTERVENTION", "CHECKOUT_SUPPORT"]);
 
-// Hard ceiling on how many product cards a single response may render.
-// Keeps suggestions scannable and prevents accidental full-catalog dumps.
-const MAX_SUGGESTION_CARDS = 6;
+// ─── card-rendering policy ────────────────────────────────────
+// Foocci rule: when a customer asks for options/a category, the Waiter must show
+// ALL relevant available products (organized, not hidden). Only a high technical
+// safety ceiling applies there. Consultative recommendation stays concise; passive
+// upsell shows a small relevant subset.
+const CATEGORY_CARD_CAP       = 50; // technical safety only — NOT a product limit
+const RECOMMENDATION_CARD_CAP = 8;  // consultative pick: text stays concise, cards ordered
+const UPSELL_CARD_CAP         = 6;  // passive upsell: small relevant subset
+
+// Internal rank limit for category/options flows — request "all relevant" up to the cap.
+const OPTIONS_CARD_LIMIT = CATEGORY_CARD_CAP;
+
+/** Final card ceiling for a response, by its declared scope. Unset → category (show all). */
+function capForCardScope(scope?: V2Output["cardScope"]): number {
+  if (scope === "recommendation") return RECOMMENDATION_CARD_CAP;
+  if (scope === "upsell")         return UPSELL_CARD_CAP;
+  return CATEGORY_CARD_CAP;
+}
+
+/**
+ * Maps a detected intent to its card scope. Explicit "show me options/a category"
+ * intents render all relevant available cards; everything else stays consultative.
+ */
+function scopeForIntent(intent: CustomerIntent): NonNullable<V2Output["cardScope"]> {
+  switch (intent) {
+    case "wants_group_order":   // "para 4 pessoas", "compartilhar"
+    case "asks_for_drink":      // "tem bebida?"
+    case "asks_for_dessert":    // "tem sobremesa?"
+    case "asks_category":       // "me mostra as porções"
+    case "asks_specific_product": // "tem hot roll?"
+      return "category";
+    default:
+      return "recommendation";
+  }
+}
 
 // Unanswered choice questions → attach appropriate buttons automatically
 const QUESTION_BUTTON_PATTERNS: { re: RegExp; options: WaiterOption[] }[] = [
@@ -3155,9 +3242,14 @@ export function validateWaiterResponse(
     const catalogIds = new Set(catalog.map((i) => i.id));
     cards = [...new Set(cards)].filter((id) => catalogIds.has(id));
 
-    // 2b. Cap card count — a consultative seller never dumps a long menu list.
-    //     Keep the highest-priority items (already ordered by relevance/sortOrder).
-    if (cards.length > MAX_SUGGESTION_CARDS) cards = cards.slice(0, MAX_SUGGESTION_CARDS);
+    // 2b. Cap card count by scope. Category/options responses show ALL relevant
+    //     available cards (only a high technical ceiling); consultative/upsell stay
+    //     concise. Cards are already ordered (best-seller → relevance → sortOrder),
+    //     so slicing keeps the highest-priority items.
+    {
+      const cap = capForCardScope(output.cardScope);
+      if (cards.length > cap) cards = cards.slice(0, cap);
+    }
 
     // 3. Truncate message to max 2 non-empty lines
     {

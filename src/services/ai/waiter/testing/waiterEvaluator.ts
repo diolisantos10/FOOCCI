@@ -191,6 +191,28 @@ function runCheck(
       };
     }
 
+    case "returns_all_in_category": {
+      if (!check.categoryPattern) {
+        return { type: check.type, pass: false, detail: "Missing categoryPattern for returns_all_in_category check" };
+      }
+      const re = new RegExp(check.categoryPattern, "i");
+      // Available items in this category (the cart is empty in these scenarios, so
+      // none are excluded). Every one of them must appear in the returned cards.
+      const available = catalog.filter((i) => re.test(i.categoryName)).map((i) => i.id);
+      const shown     = new Set(output.cards);
+      const missing   = available.filter((id) => !shown.has(id));
+      const pass      = available.length > 0 && missing.length === 0;
+      return {
+        type:   check.type,
+        pass,
+        detail: available.length === 0
+          ? `No catalog item matches category /${check.categoryPattern}/i (cannot verify)`
+          : pass
+            ? `All ${available.length} available item(s) in /${check.categoryPattern}/i shown (${output.cards.length} cards)`
+            : `Hid ${missing.length}/${available.length} available item(s): ${missing.slice(0, 5).join(", ")}`,
+      };
+    }
+
     case "respects_refusal": {
       const cat = check.refusedCategory;
       if (!cat) {

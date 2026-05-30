@@ -15,7 +15,8 @@ import { NextRequest } from "next/server";
 import { prisma }      from "@/lib/prisma";
 import { ok, badRequest, serverError } from "@/lib/api-response";
 import { AIOrderService } from "@/services/ai/AIOrderService";
-import type { V2Event } from "@/services/ai/WaiterBrainV2";
+import type { V2Event, V2CatalogItem } from "@/services/ai/WaiterBrainV2";
+import { getBestSellerMap, applyBestSellers } from "@/services/ai/waiter/bestSellers";
 import type { OrderStage } from "@/lib/agent/types";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { ConversationLogService } from "@/services/conversation/ConversationLogService";
@@ -256,7 +257,7 @@ export async function POST(
         category: { select: { name: true } },
       },
     });
-    const catalogItems = catalogRows.map((i: typeof catalogRows[number]) => ({
+    const catalogItems: V2CatalogItem[] = catalogRows.map((i: typeof catalogRows[number]) => ({
       id:                   i.id,
       name:                 i.name,
       categoryName:         (i.category as { name: string } | null)?.name ?? "",
@@ -270,7 +271,18 @@ export async function POST(
       harmonizacaoSugerida: i.harmonizacaoSugerida ?? null,
       alergenosDetalhados:  i.alergenosDetalhados ?? null,
       storytellingIA:       i.storytellingIA ?? null,
+      salesCount:           null,
+      isBestSeller:         null,
     }));
+
+    // Enrich catalog with best-seller metrics so the Waiter orders cards by most-sold
+    // first. Cached per restaurant; degrades to deterministic fallback ordering on error.
+    try {
+      const bestSellerMap = await getBestSellerMap(restaurant.id);
+      applyBestSellers(catalogItems, bestSellerMap);
+    } catch {
+      /* non-fatal — fallback ordering (sortOrder/name) still applies */
+    }
 
     const { reply, cards, mode, options, suggestedItemName, pinnedCardId, memoryPatch } = await AIOrderService.runWebTurn({
       restaurantId:  restaurant.id,

@@ -29,7 +29,9 @@ export type CheckType =
   // ── W4 consultative-selling checks ──────────────────────────────────────────
   | "has_cta_or_next_step"  // response invites a next action (CTA 👇 / question / option / add-language)
   | "no_long_menu_dump"     // cards.length ≤ MAX_CARDS_PER_RESPONSE (never dump the whole menu)
-  | "respects_refusal";     // when refusedCategory set: NO returned card belongs to that category
+  | "respects_refusal"      // when refusedCategory set: NO returned card belongs to that category
+  // ── P0 card policy: category/options browsing must NOT hide available products ──
+  | "returns_all_in_category"; // every available catalog item in categoryPattern is present in cards
 
 export interface EvalCheck {
   type:             CheckType;
@@ -512,6 +514,49 @@ export const WAITER_TEST_CASES: WaiterTestCase[] = [
       { type: "has_real_cards" },
       { type: "has_cta_or_next_step" },
       { type: "no_long_menu_dump" },
+    ],
+  },
+
+  // ── 11. all_cards_category (P0) — show ALL available cards for category/options ─
+
+  {
+    id:          "ac-01",
+    group:       "all_cards_category",
+    groupLabel:  "Cards: Categoria Completa",
+    description: "'me mostra as porções' → ALL available Porções cards (none hidden)",
+    message:     "me mostra as porções",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "cards_not_empty" },
+      { type: "has_real_cards" },
+      { type: "returns_all_in_category", categoryPattern: "por[çc]" },
+      { type: "has_cta_or_next_step" },
+    ],
+  },
+  {
+    id:          "ac-02",
+    group:       "all_cards_category",
+    groupLabel:  "Cards: Categoria Completa",
+    description: "'tem sobremesa?' → ALL available Sobremesas cards (none hidden)",
+    message:     "tem sobremesa?",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "cards_not_empty" },
+      { type: "has_real_cards" },
+      { type: "returns_all_in_category", categoryPattern: "sobremesa|doce" },
+    ],
+  },
+  {
+    id:          "ac-03",
+    group:       "all_cards_category",
+    groupLabel:  "Cards: Categoria Completa",
+    description: "'quais porções vocês têm?' → ALL available Porções cards",
+    message:     "quais porções vocês têm?",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "cards_not_empty" },
+      { type: "has_real_cards" },
+      { type: "returns_all_in_category", categoryPattern: "por[çc]" },
     ],
   },
 ];
