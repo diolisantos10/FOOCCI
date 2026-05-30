@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
 import type { WaiterMemory, CheckoutUpsellStage } from "@/services/ai/WaiterBrainV2";
+import type { RepeatOrderPayload } from "@/services/order/RepeatOrderService";
 import { buildWhatsAppUrl, buildInstagramUrl, buildTikTokUrl } from "@/lib/social";
 
 // ── Order tracking (post-checkout) ────────────────────────────────────────────
@@ -394,6 +395,8 @@ interface Props {
   pausedUntil?: string | null;
   /** Pre-validated cart items to restore from a recovery link (src=recovery). */
   recoveryCart?: Array<{ id: string; name: string; price: number; qty: number }>;
+  /** Validated last-order payload for the "Pedir novamente" module (W3). */
+  repeatOrder?: RepeatOrderPayload;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1732,6 +1735,7 @@ export function PedidoClient({
   pauseReason = null,
   pausedUntil = null,
   recoveryCart,
+  repeatOrder,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -1929,6 +1933,8 @@ export function PedidoClient({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartRestored, setCartRestored] = useState(false);
+  // "Pedir novamente" module — dismissed once acted on or when the customer taps "Ver cardápio".
+  const [repeatDismissed, setRepeatDismissed] = useState(false);
   // Products suggested by the AI — rendered in the product grid, not in chat.
   const [suggestedProducts, setSuggestedProducts] = useState<MenuItem[]>([]);
   // ID of the harmonically suggested item — shown with ⭐ in the carousel.
@@ -2706,6 +2712,45 @@ export function PedidoClient({
     ]);
   }, []);
 
+  // ── Repeat order (W3): hydrate the cart from a validated last-order payload ──
+  // Adds only the validated/available items (current prices), never auto-finalizes,
+  // and merges into any existing cart so the customer can still edit normally.
+  const hydrateRepeatCart = useCallback((data: RepeatOrderPayload) => {
+    if (!data.items.length) {
+      pushAssistantMessage("Seu último pedido não está disponível hoje, mas posso te sugerir algo parecido 😊");
+      setRepeatDismissed(true);
+      return;
+    }
+    const repeatItems: CartItem[] = data.items.map((it) => ({
+      id:         it.variantId ? `${it.menuItemId}_${it.variantId}` : it.menuItemId,
+      baseItemId: it.menuItemId,
+      name:       it.name,
+      price:      it.price,
+      qty:        it.qty,
+      ...(it.variantId ? { variantId: it.variantId, variantName: it.variantName ?? undefined } : {}),
+    }));
+    setCart((prev) => {
+      const map = new Map(prev.map((c) => [c.id, { ...c }]));
+      for (const it of repeatItems) {
+        const ex = map.get(it.id);
+        if (ex) map.set(it.id, { ...ex, qty: ex.qty + it.qty });
+        else    map.set(it.id, it);
+      }
+      return Array.from(map.values());
+    });
+    setRepeatDismissed(true);
+    fireGtag("repeat_order", { items: repeatItems.length, source: "repeat_order" });
+    pushAssistantMessage(
+      data.unavailableCount > 0
+        ? "Alguns itens do último pedido não estão disponíveis hoje, então adicionei apenas os disponíveis. Confira antes de finalizar 😊"
+        : "Pronto, coloquei seu último pedido no carrinho. Confira antes de finalizar 😊",
+    );
+    if (data.priceChanged) {
+      pushAssistantMessage("Os valores podem ter mudado desde seu último pedido.");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pushAssistantMessage]);
+
   // ── Welcome message (fires once, first time user enters browsing) ────────
   const greetedRef = useRef(
     typeof window !== "undefined" && !!sessionStorage.getItem(`foocci-entry-${slug}`)
@@ -3077,6 +3122,29 @@ export function PedidoClient({
       // "browse_menu" → dismiss any active suggestion, return to passive browsing.
       if (value === "browse_menu") { setSuggestedProducts([]); return; }
 
+      // "repeat_last_order" → hydrate cart from the last order (W3).
+      // Use the SSR payload when present; otherwise fetch fresh for the current customer.
+      if (value === "repeat_last_order") {
+        setSuggestedProducts([]);
+        if (repeatOrder && repeatOrder.items.length > 0) {
+          hydrateRepeatCart(repeatOrder);
+          return;
+        }
+        const cid = resolvedCustomerId;
+        if (!cid) {
+          pushAssistantMessage("Pra repetir seu último pedido, preciso te identificar primeiro 😊");
+          return;
+        }
+        fetch(`/api/pedido/${slug}/repeat-order?customerId=${encodeURIComponent(cid)}`)
+          .then((r) => r.json())
+          .then((d: { ok: boolean; repeatOrder: RepeatOrderPayload | null }) => {
+            if (d.repeatOrder && d.repeatOrder.items.length > 0) hydrateRepeatCart(d.repeatOrder);
+            else pushAssistantMessage("Seu último pedido não está disponível hoje, mas posso te sugerir algo parecido 😊");
+          })
+          .catch(() => pushAssistantMessage("Não consegui recuperar seu último pedido agora 😕"));
+        return;
+      }
+
       // "see_final_suggestions" → show pairing suggestions before checkout.
       if (value === "see_final_suggestions") {
         setSuggestedProducts([]);
@@ -3114,7 +3182,7 @@ export function PedidoClient({
       setSuggestedProducts([]);
       sendText(value, cart, stage, activeUpsell, { displayText: label });
     },
-    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, pushAssistantMessage, proceedToCheckout],
+    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, pushAssistantMessage, proceedToCheckout, repeatOrder, hydrateRepeatCart, resolvedCustomerId, slug],
   );
 
   // Sends a category intro via the standard sendText path so cards are preserved
@@ -4469,6 +4537,43 @@ export function PedidoClient({
                 <PhoneEntryCard slug={slug} onIdentified={handlePhoneIdentified} />
               </div>
             </>
+          )}
+
+          {/* Repeat-order module (W3) — subtle bubble near the top of the chat.
+              Shown only to an identified returning customer with an empty cart,
+              never during a recovery flow (recovery cart takes precedence). */}
+          {stage === "BROWSE" && entryPhase === "browsing" && repeatOrder
+            && repeatOrder.items.length > 0 && !repeatDismissed
+            && cart.length === 0 && !recoveryCart?.length && (
+            <div className="flex justify-start" data-testid="repeat-order-module">
+              <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white shadow-sm px-4 py-3 border border-green-100">
+                <p className="text-sm font-semibold text-gray-900 mb-0.5 leading-relaxed">
+                  Quer repetir seu último pedido? 😊
+                </p>
+                <p className="text-xs text-gray-500 mb-3">
+                  Você pediu recentemente: {repeatOrder.summary}
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    type="button"
+                    data-testid="repeat-order-confirm"
+                    onClick={() => hydrateRepeatCart(repeatOrder)}
+                    className="w-full rounded-xl py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                    style={{ backgroundColor: 'var(--brand-primary)' }}
+                  >
+                    Pedir novamente
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="repeat-order-dismiss"
+                    onClick={() => setRepeatDismissed(true)}
+                    className="w-full py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    Ver cardápio
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {messages.map((msg) => (

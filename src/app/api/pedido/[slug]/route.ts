@@ -19,6 +19,7 @@ import type { V2Event } from "@/services/ai/WaiterBrainV2";
 import type { OrderStage } from "@/lib/agent/types";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { ConversationLogService } from "@/services/conversation/ConversationLogService";
+import { REPEAT_ORDER_INTENT_RE, buildRepeatOrderReply } from "@/services/order/RepeatOrderService";
 import { Channel } from "@prisma/client";
 
 // ── Request shape ─────────────────────────────────────────────────────────────
@@ -213,6 +214,34 @@ export async function POST(
         console.error("[waiter] conversation logging failed (non-fatal)", logErr);
         // continue — ordering must not break due to logging failure
       }
+    }
+
+    // ── Repeat-order intent (W3): "quero o mesmo", "repetir pedido", "o de sempre" ──
+    // Handled here (not in WaiterBrainV2) so the deterministic Waiter brain stays
+    // pure (no DB) and its test suite is unaffected. Returns before decide() runs.
+    if (event === "ON_USER_MESSAGE" && message?.trim() && REPEAT_ORDER_INTENT_RE.test(message)) {
+      const repeat = await buildRepeatOrderReply(restaurant.id, customerId ?? null);
+      if (conversationId && repeat.reply) {
+        ConversationLogService.logMessage({
+          conversationId,
+          restaurantId:   restaurant.id,
+          senderType:     "AI",
+          content:        repeat.reply,
+          metadata:       { source: "CARDAPIO" },
+          dedupeWindowMs: 0,
+        }).catch((e) => console.error("[waiter] repeat-order reply logging failed (non-fatal)", e));
+      }
+      return ok({
+        reply:             repeat.reply,
+        cards:             [],
+        mode:              "BROWSE",
+        options:           repeat.options,
+        suggestedItemName: null,
+        pinnedCardId:      null,
+        memoryPatch:       null,
+        conversationId,
+        aiActive,
+      });
     }
 
     // Fetch flat catalog for WaiterBrainV2 card selection (lightweight query)

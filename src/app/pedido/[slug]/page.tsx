@@ -14,6 +14,7 @@ import { verifyWaToken } from "@/lib/wa-token";
 import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
 import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
+import { getRepeatableOrder } from "@/services/order/RepeatOrderService";
 
 export const dynamic = "force-dynamic";
 
@@ -206,6 +207,19 @@ export default async function PedidoPage({
       }
     } catch (err) {
       console.error("[pedido/page] recovery draft fetch failed (non-fatal)", err);
+    }
+  }
+
+  // ── Repeat order (W3): offer "Pedir novamente" to identified returning customers ──
+  // Suppressed during the recovery flow — a restored recovery cart takes precedence
+  // so we never offer to repeat over a cart the customer is already resuming.
+  let repeatOrder: NonNullable<Awaited<ReturnType<typeof getRepeatableOrder>>> | undefined;
+  if (knownCustomerId && !isRecovery) {
+    try {
+      const payload = await getRepeatableOrder(restaurant.id, knownCustomerId);
+      if (payload && payload.items.length > 0) repeatOrder = payload;
+    } catch (err) {
+      console.error("[pedido/page] repeat-order fetch failed (non-fatal)", err);
     }
   }
 
@@ -484,6 +498,7 @@ gtag('config', '${ga4Id}');
         pauseReason={pauseReason}
         pausedUntil={isOrderingPaused && pausedUntil ? pausedUntil.toISOString() : null}
         recoveryCart={recoveryCart.length > 0 ? recoveryCart : undefined}
+        repeatOrder={repeatOrder}
       />
     </>
   );
