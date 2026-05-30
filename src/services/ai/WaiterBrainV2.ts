@@ -317,7 +317,7 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
     };
   }
 
-  if (/\bleve\b|\bsuave\b|light/i.test(msg)) {
+  if (/\bleve\b|\bsuave\b|light|menos\s+pesado|nada\s+pesado|n[aã]o\s+(?:muito\s+)?pesado|mais\s+tranquilo|algo\s+fresco|sem\s+fritura|pouca\s+fritura|mais\s+leve/i.test(msg)) {
     return {
       customerIntent:   "wants_light_option",
       salesOpportunity: "suggest_light_options",
@@ -371,7 +371,7 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
     };
   }
 
-  if (/sugest|indica|recomend|me ajud|o que (tem|você|vc)|qual.*melhor|mais.*sai|não sei.*pedir|o que.*pedir/i.test(msg)) {
+  if (/sugest|sugere|sugira|indica|recomend|me ajud|o que (tem|você|vc)|qual.*melhor|mais.*sai|não sei.*pedir|o que.*pedir/i.test(msg)) {
     return {
       customerIntent:   "wants_recommendation",
       salesOpportunity: hasCart ? "suggest_pairing" : "recommend_first_product",
@@ -2695,8 +2695,9 @@ function handleUserMessage(input: V2Input): V2Output {
   // Context/preference phrases must NOT be treated as literal product searches:
   //   • "para 4 pessoas" / "somos 4" = group-size intent, NOT a product "pessoas".
   //   • "tem porção?" / "porções"     = shareable/category intent, NOT a product "porção".
+  //   • "tem opção mais em conta?"    = budget intent, NOT a product "conta".
   // Without this guard the existence-denial guard below could reply
-  // "não encontrei pessoas/porção no cardápio" — bot-like behavior the Waiter
+  // "não encontrei pessoas/porção/conta no cardápio" — bot-like behavior the Waiter
   // professional profile explicitly forbids.
   {
     const ctxAnalysis = analyzeSalesContext(input);
@@ -2713,6 +2714,24 @@ function handleUserMessage(input: V2Input): V2Output {
         options:     [
           { label: "Mais leve",    value: "light"    },
           { label: "Mais completo", value: "complete" },
+        ],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
+
+    // Budget intent — "em conta", "barato", "mais barato", etc. must never become a
+    // literal product search (which would incorrectly deny "conta" as a catalog item).
+    if (ctxAnalysis.customerIntent === "wants_budget_option") {
+      const cards = rankProducts(catalog, "wants_budget_option", cartItemIds, 5, suggestedIds);
+      if (cards.length > 0) return suggest("wants_budget_option", cards, "SUGGESTION");
+      return {
+        message:     "Tenho sim 😊 Quer algo individual mais em conta ou algo para dividir?",
+        cards:       [],
+        mode:        "BROWSE",
+        options:     [
+          { label: "Individual", value: "light"  },
+          { label: "Para dividir", value: "group" },
         ],
         requiresAI:  false,
         aiDirective: "",
