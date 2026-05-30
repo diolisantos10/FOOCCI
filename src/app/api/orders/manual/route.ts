@@ -19,6 +19,9 @@ import { getTenantContext } from "@/lib/tenant";
 import { Decimal } from "@prisma/client/runtime/library";
 import { ConversationLogService } from "@/services/conversation/ConversationLogService";
 import { assignOrderNumber, formatOrderNumber } from "@/lib/order-number";
+import { resolveDeliveryFee } from "@/lib/delivery-fee-resolver";
+import { geocodeAddress, type LatLng } from "@/lib/geocoding";
+import { isQuoteStatusBlocked } from "@/lib/delivery-authorization";
 
 const itemSchema = z.object({
   menuItemId: z.string().min(1),
@@ -122,6 +125,98 @@ export async function POST(req: NextRequest) {
     resolvedItems = [];
   } else {
     return NextResponse.json({ error: "Informe os itens do pedido ou o valor total." }, { status: 400 });
+  }
+
+  // ── Server-side delivery authorization (mirror of /api/admin/delivery-quote) ──
+  // Direct API callers must not be able to create a DELIVERY order to an
+  // address that the delivery config blocks (out of range / unresolvable).
+  if (type === "DELIVERY" && deliveryAddress) {
+    if (!Number.isFinite(deliveryFee) || deliveryFee < 0) {
+      return NextResponse.json(
+        { error: "Taxa de entrega inválida." },
+        { status: 400 }
+      );
+    }
+
+    const [restaurant, deliveryCfg] = await Promise.all([
+      prisma.restaurant.findUnique({
+        where:  { id: restaurantId },
+        select: {
+          storeProfile: {
+            select: {
+              latitude: true, longitude: true,
+              cep: true, street: true, streetNumber: true,
+              neighborhood: true, city: true, state: true,
+            },
+          },
+        },
+      }),
+      prisma.deliveryConfig.findUnique({
+        where:  { restaurantId },
+        select: {
+          enabled: true, mode: true, fee: true, freeDeliveryAbove: true,
+          distanceBaseFee: true, distancePricePerKm: true,
+          distanceMinFee: true, distanceMinFeeKm: true, distanceMaxKm: true, distanceMaxFee: true,
+        },
+      }),
+    ]);
+
+    // Only enforce when distance-based delivery is configured. When delivery is
+    // not configured the resolver returns "manual" (operator confirms fee), so
+    // we don't block — matching the quote endpoint's behavior.
+    if (deliveryCfg && deliveryCfg.enabled) {
+      let restaurantCoords: LatLng | null = null;
+      const sp = restaurant?.storeProfile;
+      if (sp?.latitude != null && sp?.longitude != null) {
+        restaurantCoords = { lat: Number(sp.latitude), lng: Number(sp.longitude) };
+      } else if (deliveryCfg.mode === "distance" && sp?.city) {
+        const coords = await geocodeAddress({
+          cep:          sp.cep          ?? undefined,
+          street:       sp.street       ?? undefined,
+          number:       sp.streetNumber ?? undefined,
+          neighborhood: sp.neighborhood ?? undefined,
+          city:         sp.city         ?? undefined,
+          state:        sp.state        ?? undefined,
+        });
+        if (coords) restaurantCoords = coords;
+      }
+
+      const quote = await resolveDeliveryFee({
+        mode:         deliveryCfg.mode,
+        deliveryType: "delivery",
+        subtotal,
+        address: {
+          cep:          deliveryAddress.cep,
+          street:       deliveryAddress.street,
+          number:       deliveryAddress.number,
+          neighborhood: deliveryAddress.neighborhood,
+          city:         deliveryAddress.city,
+          state:        deliveryAddress.state,
+        },
+        restaurantCoords,
+        deliveryConfig: {
+          fee:                deliveryCfg.fee               != null ? Number(deliveryCfg.fee)                : null,
+          freeDeliveryAbove:  deliveryCfg.freeDeliveryAbove != null ? Number(deliveryCfg.freeDeliveryAbove)  : null,
+          distanceBaseFee:    deliveryCfg.distanceBaseFee   != null ? Number(deliveryCfg.distanceBaseFee)    : null,
+          distancePricePerKm: deliveryCfg.distancePricePerKm != null ? Number(deliveryCfg.distancePricePerKm) : null,
+          distanceMinFee:     deliveryCfg.distanceMinFee    != null ? Number(deliveryCfg.distanceMinFee)     : null,
+          distanceMinFeeKm:   deliveryCfg.distanceMinFeeKm  != null ? Number(deliveryCfg.distanceMinFeeKm)   : null,
+          distanceMaxKm:      deliveryCfg.distanceMaxKm     != null ? Number(deliveryCfg.distanceMaxKm)      : null,
+          distanceMaxFee:     deliveryCfg.distanceMaxFee    != null ? Number(deliveryCfg.distanceMaxFee)     : null,
+        },
+      });
+
+      if (isQuoteStatusBlocked(quote.calculationStatus)) {
+        return NextResponse.json(
+          {
+            error:  "Endereço fora da área de entrega ou entrega não autorizada. Escolha Retirada ou informe outro endereço.",
+            reason: quote.reason,
+            calculationStatus: quote.calculationStatus,
+          },
+          { status: 422 }
+        );
+      }
+    }
   }
 
   const discount   = Math.max(0, discountAmount ?? 0);

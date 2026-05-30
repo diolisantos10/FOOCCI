@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { isQuoteStatusBlocked, isDeliveryQuoteAuthorized } from "@/lib/delivery-authorization";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -123,9 +124,18 @@ export function ManualOrderModal({
   const visualStep = step <= 3 ? step : orderType === "PICKUP" ? step - 1 : step;
   const stepLabel  = stepLabels[visualStep - 1] ?? "";
 
+  // Allowlist-based guards live in @/lib/delivery-authorization (shared with the
+  // backend). Local aliases keep the JSX terse.
+  const isBlocked         = isQuoteStatusBlocked;
+  const isQuoteAuthorized = isDeliveryQuoteAuthorized;
+
   const isAdvanceBlocked =
     step === 4 &&
-    (!addr.cep.trim() || !addr.street.trim() || !addr.number.trim() || !quote || isBlocked(quote.calculationStatus));
+    (!addr.cep.trim() ||
+      !addr.street.trim() ||
+      !addr.number.trim() ||
+      !addr.city.trim() ||
+      !isQuoteAuthorized(quote));
 
   // ── Load menu items on mount ───────────────────────────────────────────────
 
@@ -177,11 +187,14 @@ export function ManualOrderModal({
     } else if (step === 3) {
       setStep(orderType === "DELIVERY" ? 4 : 5);
     } else if (step === 4) {
-      if (!addr.cep.trim() || !addr.street.trim() || !addr.number.trim()) {
-        setError("Preencha CEP, rua e número"); return;
+      if (!addr.cep.trim() || !addr.street.trim() || !addr.number.trim() || !addr.city.trim()) {
+        setError("Preencha CEP, rua, número e cidade"); return;
       }
       if (!quote) { setError("Calcule o frete antes de continuar"); return; }
-      if (isBlocked(quote.calculationStatus)) { setError(quote.reason); return; }
+      if (!isQuoteAuthorized(quote)) {
+        setError("Endereço fora da área de entrega ou entrega não autorizada. Escolha Retirada ou informe outro endereço.");
+        return;
+      }
       setStep(5);
     } else if (step === 5) {
       setStep(6);
@@ -200,9 +213,6 @@ export function ManualOrderModal({
     else if (step === 2) setStep(1);
   }
 
-  function isBlocked(status: string) {
-    return status === "out_of_range" || status === "distance_blocked";
-  }
 
   // ── CEP lookup ────────────────────────────────────────────────────────────
 
