@@ -2691,6 +2691,52 @@ function handleUserMessage(input: V2Input): V2Output {
     };
   }
 
+  // ── Priority intent guard (runs BEFORE literal search / existence denial) ────
+  // Context/preference phrases must NOT be treated as literal product searches:
+  //   • "para 4 pessoas" / "somos 4" = group-size intent, NOT a product "pessoas".
+  //   • "tem porção?" / "porções"     = shareable/category intent, NOT a product "porção".
+  // Without this guard the existence-denial guard below could reply
+  // "não encontrei pessoas/porção no cardápio" — bot-like behavior the Waiter
+  // professional profile explicitly forbids.
+  {
+    const ctxAnalysis = analyzeSalesContext(input);
+
+    // Group-size intent → shareable/combo cards (servingSize-aware via rankProducts).
+    if (ctxAnalysis.customerIntent === "wants_group_order") {
+      const cards = rankProducts(catalog, "wants_group_order", cartItemIds, 5, suggestedIds);
+      if (cards.length > 0) return suggest("wants_group_order", cards, "SUGGESTION");
+      // No shareable match found → ask ONE qualifying question (never literal search).
+      return {
+        message:     "Pra quantas pessoas? E preferem algo mais leve ou mais completo? 😊",
+        cards:       [],
+        mode:        "BROWSE",
+        options:     [
+          { label: "Mais leve",    value: "light"    },
+          { label: "Mais completo", value: "complete" },
+        ],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
+
+    // "porção / porções" — shareable/category intent, never a literal product search.
+    if (/\bpor[çc](ão|ões|ao|oes)\b/i.test(msgLow)) {
+      const porcaoCat = [...new Set(catalog.map((i) => i.categoryName))]
+        .find((c) => /por[çc]/i.test(c));
+      if (porcaoCat) {
+        const cards = catalog
+          .filter((i) => i.categoryName === porcaoCat && !cartItemIds.includes(i.id))
+          .sort(bySort)
+          .slice(0, 5)
+          .map((i) => i.id);
+        if (cards.length > 0) return suggest("asks_category", cards, "SUGGESTION");
+      }
+      // No dedicated category → fall back to shareable/group ranking.
+      const shareCards = rankProducts(catalog, "wants_group_order", cartItemIds, 5, suggestedIds);
+      if (shareCards.length > 0) return suggest("wants_group_order", shareCards, "SUGGESTION");
+    }
+  }
+
   // ── Menu Retrieval Contract: existence denial guard ───────────────────────────
   // When the customer asks "Tem X?" and X is genuinely absent from the menu,
   // return a safe denial with real alternatives — prevents AI hallucination.

@@ -32,6 +32,7 @@ import { AI_TOOL_DEFINITIONS, executeTool, type ToolContext } from "./AITools";
 import { getDrinkAttemptCount, getAlreadySuggestedItems, isDessertCategory, isMainCategory } from "./ConversationGuardrails";
 import * as WaiterBrain from "./WaiterBrain";
 import * as WaiterBrainV2 from "./WaiterBrainV2";
+import { buildWaiterProfileDirective } from "./waiter/WaiterAgentProfile";
 import type { V2Event, V2CatalogItem, WaiterMode, WaiterOption, MenuIntentResult } from "./WaiterBrainV2";
 import type { UpsellSuggestion } from "./UpsellEngine";
 import type OpenAI from "openai";
@@ -280,8 +281,12 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
     brandConfig,
   });
 
-  // 5. Inject V2 directive + optional upsell hints
+  // 5. Inject Waiter professional profile (constitution) + V2 directive + upsell hints.
+  // The profile is prepended to the system prompt so the AI reads its professional
+  // identity (waiter/salesperson, not bot) BEFORE the per-turn behavior directive.
+  // Web-only: this does not touch the WhatsApp Agent path (which uses build()).
   const sysMsg = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
+  messages[0] = { ...sysMsg, content: `${buildWaiterProfileDirective()}\n\n${sysMsg.content}` };
   let sysAddendum = v2.aiDirective;
 
   // Only inject upsell candidates for ON_USER_MESSAGE (not AFTER_CHECKOUT)
@@ -332,7 +337,8 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   }
 
   if (sysAddendum) {
-    messages[0] = { ...sysMsg, content: sysMsg.content + sysAddendum };
+    const cur = messages[0] as OpenAI.Chat.ChatCompletionSystemMessageParam;
+    messages[0] = { ...cur, content: cur.content + sysAddendum };
   }
 
   // 6. OpenAI call with AI_TOOL_DEFINITIONS active
