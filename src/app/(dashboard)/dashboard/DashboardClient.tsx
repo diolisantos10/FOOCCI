@@ -492,14 +492,19 @@ function HourlyChart({ hourlyOrders }: { hourlyOrders: DashboardData["hourlyOrde
 const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
 
 function TrendChart({
-  trend, totalRevenue, periodLabel, days,
+  trend, totalRevenue, periodLabel, days, period,
 }: {
   trend:        DashboardData["trendDays"];
   totalRevenue: number;
   periodLabel:  string;
   days:         number;
+  period:       PeriodKey;
 }) {
   if (trend.length === 0) return null;
+
+  // Only the "today" view renders a rolling 7-day base where the final bar IS today.
+  // Other single-day periods (e.g. "Ontem") must NOT highlight their bar as "Hoje".
+  const isTodayView = period === "today";
 
   const maxRev = Math.max(1, ...trend.map(d => d.revenue));
   // For many bars, only show label every N days so they don't overlap
@@ -508,7 +513,7 @@ function TrendChart({
   return (
     <Card className="p-4">
       <SectionHeader
-        title={days <= 1 ? "Últimos 7 dias" : `Tendência · ${periodLabel}`}
+        title={isTodayView ? "Últimos 7 dias" : `Tendência · ${periodLabel}`}
         sub={`${fmtCurrency(totalRevenue)} em receita`}
         href="/analytics"
         hrefLabel="Analytics"
@@ -517,7 +522,7 @@ function TrendChart({
       <div className="flex items-end gap-px" style={{ height: 76 }}>
         {trend.map((d, i) => {
           const isLast  = i === trend.length - 1;
-          const isToday = days <= 1 ? isLast : false;
+          const isToday = isTodayView ? isLast : false;
           const parts   = d.date.split("-") as [string, string, string];
           const jsDay   = new Date(+parts[0], +parts[1] - 1, +parts[2]).getDay();
           const label   = isToday ? "Hoje"
@@ -943,6 +948,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
           totalRevenue={data.revenueTrend}
           periodLabel={pLabel}
           days={data.periodDays}
+          period={data.period}
         />
 
         {/* Active campaigns */}
