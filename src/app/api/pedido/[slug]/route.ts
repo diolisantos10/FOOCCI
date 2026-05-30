@@ -175,9 +175,20 @@ export async function POST(
             content:      message.trim(),
           });
 
-          // Check if AI is suppressed for this conversation
-          const aiEnabled = await ConversationLogService.isAiEnabled(conversationId, restaurant.id);
-          if (!aiEnabled) {
+          // Check if AI is suppressed for this conversation.
+          // Guard: only block /pedido AI when the operator explicitly took over a
+          // Cardápio session (QR_AGENT/WEB_AGENT channel). A WhatsApp human takeover
+          // on the merged conversation must NOT block the /pedido AI — the customer
+          // deserves a response when browsing the menu on a different channel.
+          const convAiState = await prisma.conversation.findFirst({
+            where:  { id: conversationId, restaurantId: restaurant.id },
+            select: { aiEnabled: true, channel: true },
+          });
+          const aiEnabled     = convAiState?.aiEnabled ?? true;
+          const isCardapioConv = !convAiState ||
+            convAiState.channel === Channel.QR_AGENT ||
+            convAiState.channel === Channel.WEB_AGENT;
+          if (!aiEnabled && isCardapioConv) {
             return ok({
               reply:             "Um atendente da loja assumiu essa conversa. Aguarde um momento.",
               cards:             [],

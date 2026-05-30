@@ -365,7 +365,7 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
     };
   }
 
-  if (/sugere|indica|recomenda|me ajud|o que (tem|você|vc)/i.test(msg)) {
+  if (/sugest|indica|recomend|me ajud|o que (tem|você|vc)|qual.*melhor|mais.*sai|não sei.*pedir|o que.*pedir/i.test(msg)) {
     return {
       customerIntent:   "wants_recommendation",
       salesOpportunity: hasCart ? "suggest_pairing" : "recommend_first_product",
