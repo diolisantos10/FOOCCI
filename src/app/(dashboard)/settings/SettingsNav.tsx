@@ -33,6 +33,12 @@ const GROUPS: Group[] = [
       { href: "/settings/policies", label: "Políticas", icon: "📄" },
     ],
   },
+  {
+    title: "CRM",
+    items: [
+      { href: "/settings/crm", label: "CRM", icon: "💬" },
+    ],
+  },
 ];
 
 export default function SettingsNav() {

@@ -47,6 +47,8 @@ export default async function PedidoPage({
   const waPayload  = rawWaToken ? verifyWaToken(rawWaToken) : null;
   // Phone from token is used when no ?phone= param is present
   const resolvedPhone = rawPhone ?? waPayload?.phone ?? null;
+  // Recovery link sets src=recovery — used below to restore the customer's draft cart
+  const isRecovery = sp.src === "recovery";
 
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug },
@@ -168,6 +170,42 @@ export default async function PedidoPage({
           // Auto-identify will retry client-side
         }
       }
+    }
+  }
+
+  // ── Recovery: restore previous draft cart ───────────────────────────────────
+  // Only when the link came from a recovery message AND the customer is identified.
+  // Items are validated against the live menu — unavailable items are silently dropped.
+  type RecoveryCartItem = { id: string; name: string; price: number; qty: number };
+  let recoveryCart: RecoveryCartItem[] = [];
+
+  if (isRecovery && knownCustomerId) {
+    try {
+      const draft = await prisma.orderDraft.findFirst({
+        where:   { restaurantId: restaurant.id, customerId: knownCustomerId, status: "OPEN" },
+        orderBy: { updatedAt: "desc" },
+        select: {
+          items: {
+            select: {
+              menuItemId: true,
+              quantity:   true,
+              menuItem:   { select: { id: true, name: true, price: true, isActive: true, isAvailable: true } },
+            },
+          },
+        },
+      });
+      if (draft) {
+        recoveryCart = draft.items
+          .filter((i) => i.menuItem?.isActive && i.menuItem.isAvailable && i.menuItemId)
+          .map((i) => ({
+            id:    i.menuItemId!,
+            name:  i.menuItem!.name,
+            price: Number(i.menuItem!.price),
+            qty:   i.quantity,
+          }));
+      }
+    } catch (err) {
+      console.error("[pedido/page] recovery draft fetch failed (non-fatal)", err);
     }
   }
 
@@ -445,6 +483,7 @@ gtag('config', '${ga4Id}');
         isOrderingPaused={isOrderingPaused}
         pauseReason={pauseReason}
         pausedUntil={isOrderingPaused && pausedUntil ? pausedUntil.toISOString() : null}
+        recoveryCart={recoveryCart.length > 0 ? recoveryCart : undefined}
       />
     </>
   );

@@ -5,7 +5,7 @@ import Link from "next/link";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type PeriodKey = "today" | "7d" | "current_month" | "30d" | "custom";
+type PeriodKey = "today" | "yesterday" | "this_week" | "7d" | "current_month" | "30d" | "custom";
 
 interface TopProduct {
   name:         string;
@@ -59,6 +59,21 @@ interface DashboardData {
   revenueTrend:  number;
 
   activeCampaigns: Campaign[];
+
+  foocciProof: {
+    upsellRevenue:    number;
+    upsellItemCount:  number;
+    recoveryTotal:    number;
+    recoveryConverted: number;
+    recoveryRate:     number | null;
+  };
+
+  crmSegments: {
+    quente:     number;
+    morno:      number;
+    frio:       number;
+    semPedidos: number;
+  };
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
@@ -119,11 +134,11 @@ function LoadingSkeleton() {
 // ── Period Filter ──────────────────────────────────────────────────────────────
 
 const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
-  { key: "today",         label: "Hoje"         },
-  { key: "7d",            label: "7 dias"       },
-  { key: "current_month", label: "Mês atual"    },
-  { key: "30d",           label: "30 dias"      },
-  { key: "custom",        label: "Personalizado" },
+  { key: "today",      label: "Hoje"          },
+  { key: "yesterday",  label: "Ontem"         },
+  { key: "this_week",  label: "Esta semana"   },
+  { key: "7d",         label: "Últimos 7 dias" },
+  { key: "custom",     label: "Personalizado"  },
 ];
 
 function PeriodFilter({
@@ -595,43 +610,104 @@ function CampaignSection({ campaigns }: { campaigns: Campaign[] }) {
   );
 }
 
-// ── CRM Section ────────────────────────────────────────────────────────────────
+// ── Foocci Proof ──────────────────────────────────────────────────────────────
 
-function CrmSection({
-  totalCustomers, newPeriod, campaignCount, periodLabel,
+function FoocciProofSection({
+  proof, periodLabel,
 }: {
-  totalCustomers: number; newPeriod: number; campaignCount: number; periodLabel: string;
+  proof: DashboardData["foocciProof"];
+  periodLabel: string;
 }) {
+  const hasData = proof.upsellRevenue > 0 || proof.recoveryTotal > 0;
+
   return (
     <Card className="p-4">
-      <SectionHeader title="CRM" sub="Clientes e relacionamento" href="/crm" hrefLabel="Abrir CRM" />
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { icon: "👥", value: fmtNum(totalCustomers), label: "Clientes"                      },
-          { icon: "✨", value: fmtNum(newPeriod),       label: `Novos · ${periodLabel}`        },
-          { icon: "📣", value: fmtNum(campaignCount),   label: "Campanhas"                     },
-        ].map(item => (
-          <div key={item.label} className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
-            <span className="text-xl">{item.icon}</span>
-            <span className="mt-1 text-xl font-bold text-gray-900">{item.value}</span>
-            <span className="text-[10px] leading-tight text-gray-500">{item.label}</span>
+      <SectionHeader
+        title="Foocci em ação"
+        sub={`${periodLabel} · upsell e recuperação gerados pela IA`}
+        href="/analytics"
+        hrefLabel="Analytics"
+      />
+      {!hasData ? (
+        <p className="py-3 text-center text-xs text-gray-400">Nenhum dado de upsell ou recuperação no período</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="flex flex-col items-center rounded-xl bg-orange-50 p-3 text-center">
+            <span className="text-lg">🚀</span>
+            <span className="mt-1 text-lg font-bold text-orange-700">{fmtCurrency(proof.upsellRevenue)}</span>
+            <span className="text-[10px] leading-tight text-gray-500">Receita upsell</span>
+          </div>
+          <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
+            <span className="text-lg">🛒</span>
+            <span className="mt-1 text-lg font-bold text-gray-900">{proof.upsellItemCount}</span>
+            <span className="text-[10px] leading-tight text-gray-500">Itens upsell</span>
+          </div>
+          <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
+            <span className="text-lg">♻️</span>
+            <span className="mt-1 text-lg font-bold text-gray-900">
+              {proof.recoveryConverted}/{proof.recoveryTotal}
+            </span>
+            <span className="text-[10px] leading-tight text-gray-500">Recuperações</span>
+          </div>
+          <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
+            <span className="text-lg">📈</span>
+            <span className={`mt-1 text-lg font-bold ${proof.recoveryRate !== null && proof.recoveryRate > 0 ? "text-green-700" : "text-gray-400"}`}>
+              {proof.recoveryRate !== null ? `${proof.recoveryRate}%` : "—"}
+            </span>
+            <span className="text-[10px] leading-tight text-gray-500">Taxa recuperação</span>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ── CRM Opportunities ─────────────────────────────────────────────────────────
+
+const SEG_META = [
+  { key: "quente",    label: "Ativos",          icon: "🔥", bg: "bg-red-50",    text: "text-red-700",    desc: "Compraram recentemente" },
+  { key: "morno",     label: "Mornos",           icon: "☀️", bg: "bg-amber-50",  text: "text-amber-700",  desc: "Algum tempo sem comprar" },
+  { key: "frio",      label: "Em risco",         icon: "❄️", bg: "bg-blue-50",   text: "text-blue-700",   desc: "Inativos — acionar CRM"  },
+  { key: "semPedidos",label: "Sem pedidos",       icon: "👤", bg: "bg-gray-50",   text: "text-gray-500",   desc: "Nunca compraram"         },
+] as const;
+
+function CrmOpportunitiesSection({
+  segments, totalCustomers,
+}: {
+  segments: DashboardData["crmSegments"];
+  totalCustomers: number;
+}) {
+  const rows = SEG_META.map(m => ({ ...m, count: segments[m.key as keyof typeof segments] }));
+  const atRisk = segments.frio;
+
+  return (
+    <Card className="p-4">
+      <SectionHeader
+        title="Base de clientes"
+        sub={`${fmtNum(totalCustomers)} clientes · segmentação em tempo real`}
+        href="/crm"
+        hrefLabel="Abrir CRM"
+      />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {rows.map(row => (
+          <div key={row.key} className={`flex flex-col items-center rounded-xl ${row.bg} p-3 text-center`}>
+            <span className="text-base">{row.icon}</span>
+            <span className={`mt-1 text-xl font-bold leading-none ${row.text}`}>{fmtNum(row.count)}</span>
+            <span className="mt-0.5 text-[10px] font-semibold text-gray-600">{row.label}</span>
+            <span className="mt-0.5 text-[9px] leading-tight text-gray-400">{row.desc}</span>
           </div>
         ))}
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <Link
-          href="/crm"
-          className="flex items-center justify-center gap-1 rounded-xl border border-gray-200 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-        >
-          Ver CRM →
-        </Link>
-        <Link
-          href="/crm"
-          className="flex items-center justify-center gap-1 rounded-xl bg-orange-500 py-2 text-xs font-bold text-white transition-colors hover:bg-orange-600"
-        >
-          Criar campanha
-        </Link>
-      </div>
+      {atRisk > 0 && (
+        <div className="mt-3 flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+          <p className="text-xs text-blue-800">
+            <span className="font-bold">{fmtNum(atRisk)}</span> clientes em risco de churn — considere uma campanha de reativação
+          </p>
+          <Link href="/crm" className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-blue-700">
+            Criar campanha
+          </Link>
+        </div>
+      )}
     </Card>
   );
 }
@@ -872,13 +948,14 @@ export default function DashboardClient({ userName }: { userName: string }) {
         {/* Active campaigns */}
         <CampaignSection campaigns={data.activeCampaigns} />
 
-        {/* CRM summary */}
-        <CrmSection
+        {/* CRM base + segment opportunities */}
+        <CrmOpportunitiesSection
+          segments={data.crmSegments}
           totalCustomers={data.totalCustomers}
-          newPeriod={data.newCustomersPeriod}
-          campaignCount={data.activeCampaigns.length}
-          periodLabel={pLabel}
         />
+
+        {/* Foocci upsell + recovery proof */}
+        <FoocciProofSection proof={data.foocciProof} periodLabel={pLabel} />
 
         {/* Analytics link */}
         <Card className="p-4">

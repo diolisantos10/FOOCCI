@@ -392,6 +392,8 @@ interface Props {
   pauseReason?: string | null;
   /** ISO timestamp until which ordering is paused; null = indefinite or not paused. */
   pausedUntil?: string | null;
+  /** Pre-validated cart items to restore from a recovery link (src=recovery). */
+  recoveryCart?: Array<{ id: string; name: string; price: number; qty: number }>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1729,6 +1731,7 @@ export function PedidoClient({
   isOrderingPaused = false,
   pauseReason = null,
   pausedUntil = null,
+  recoveryCart,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -1925,6 +1928,7 @@ export function PedidoClient({
   // ── Cart ──────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [cartRestored, setCartRestored] = useState(false);
   // Products suggested by the AI — rendered in the product grid, not in chat.
   const [suggestedProducts, setSuggestedProducts] = useState<MenuItem[]>([]);
   // ID of the harmonically suggested item — shown with ⭐ in the carousel.
@@ -1934,6 +1938,23 @@ export function PedidoClient({
   // closure over the state) reads the latest value even before React re-renders.
   const [waiterMemory, setWaiterMemory] = useState<Partial<WaiterMemory>>({});
   const waiterMemoryRef = useRef<Partial<WaiterMemory>>({});
+
+  // ── Cart recovery: restore draft items from recovery link ─────────
+  useEffect(() => {
+    if (!recoveryCart?.length) return;
+    setCart(recoveryCart.map((item) => ({
+      id:         item.id,
+      baseItemId: item.id,
+      name:       item.name,
+      price:      item.price,
+      qty:        item.qty,
+    })));
+    setCartRestored(true);
+    // Auto-dismiss the banner after 6 seconds
+    const t = setTimeout(() => setCartRestored(false), 6_000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Guided flow mode ──────────────────────────────────────────────
   // Activated when user accepts the "Can I suggest something?" prompt.
@@ -4660,6 +4681,13 @@ export function PedidoClient({
         {renderCheckoutPanel()}
 
         {/* Human-mode banner — operator took over from Atendimento */}
+        {cartRestored && (
+          <div className="shrink-0 flex items-center gap-2 bg-green-50 border-t border-green-200 px-4 py-2 text-xs font-medium text-green-800">
+            <span>🛒</span>
+            <span>Seu carrinho foi restaurado com os itens anteriores.</span>
+            <button type="button" className="ml-auto text-green-600 underline" onClick={() => setCartRestored(false)}>fechar</button>
+          </div>
+        )}
         {humanMode && (
           <div className="shrink-0 flex items-center gap-2 bg-amber-50 border-t border-amber-200 px-4 py-2 text-xs font-medium text-amber-800">
             <span>👩‍💼</span>

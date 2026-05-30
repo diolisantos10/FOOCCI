@@ -4,15 +4,16 @@
  * Comprehensive operational dashboard data — tenant-scoped.
  * Accepts optional ?period= query param for historical analysis.
  *
- * Period values: today (default) | 7d | current_month | 30d | custom
+ * Period values: today (default) | yesterday | this_week | 7d | current_month | 30d | custom
  * Custom range:  ?period=custom&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
  *
  * Always real-time (never period-filtered):
- *   pipeline, delayedCount, pendingPaymentsCount, activeCampaigns, totalCustomers
+ *   pipeline, delayedCount, pendingPaymentsCount, activeCampaigns, totalCustomers,
+ *   crmSegments
  *
  * Period-sensitive:
  *   revenue, orders, avgTicket, topProducts, ordersByType, trendDays, hourlyOrders,
- *   newCustomersPeriod
+ *   newCustomersPeriod, foocciProof
  */
 
 import { NextRequest } from "next/server";
@@ -42,7 +43,7 @@ function parseBrazilDate(s: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-type Period = "today" | "7d" | "current_month" | "30d" | "custom";
+type Period = "today" | "yesterday" | "this_week" | "7d" | "current_month" | "30d" | "custom";
 
 interface PeriodRange {
   rangeStart: Date;
@@ -68,6 +69,30 @@ function computePeriodRange(
       rangeStart: todayStart, rangeEnd: now,
       prevStart:  new Date(todayStart.getTime() - 86_400_000), prevEnd: todayStart,
       period, label: "Hoje", days: 1, isToday: true,
+    };
+  }
+
+  if (period === "yesterday") {
+    const yStart = new Date(todayStart.getTime() - 86_400_000);
+    const yEnd   = todayStart;
+    return {
+      rangeStart: yStart, rangeEnd: yEnd,
+      prevStart:  new Date(yStart.getTime() - 86_400_000), prevEnd: yStart,
+      period, label: "Ontem", days: 1, isToday: false,
+    };
+  }
+
+  if (period === "this_week") {
+    // Monday 00:00 Brazil time
+    const brazilNow  = new Date(now.getTime() - 3 * 3_600_000);
+    const dayOfWeek  = brazilNow.getUTCDay(); // 0=Sun,1=Mon...6=Sat
+    const daysSinceMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const weekStart  = new Date(todayStart.getTime() - daysSinceMon * 86_400_000);
+    const days       = Math.max(1, daysSinceMon + 1);
+    return {
+      rangeStart: weekStart, rangeEnd: now,
+      prevStart:  new Date(weekStart.getTime() - 7 * 86_400_000), prevEnd: weekStart,
+      period, label: "Esta semana", days, isToday: false,
     };
   }
 
@@ -132,7 +157,7 @@ export async function GET(req: NextRequest) {
   try {
     const sp            = req.nextUrl.searchParams;
     const rawPeriod     = sp.get("period") ?? "today";
-    const periodKey     = (["today","7d","current_month","30d","custom"].includes(rawPeriod)
+    const periodKey     = (["today","yesterday","this_week","7d","current_month","30d","custom"].includes(rawPeriod)
       ? rawPeriod : "today") as Period;
 
     const pr = computePeriodRange(periodKey, sp.get("startDate"), sp.get("endDate"));
@@ -149,6 +174,8 @@ export async function GET(req: NextRequest) {
       totalCustomers,
       newCustomersPeriod,
       activeCampaigns,
+      recoveryStats,
+      crmSegmentCounts,
     ] = await Promise.all([
       // 1. Period orders (KPIs + products + types + hourly/daily)
       prisma.order.findMany({
@@ -162,6 +189,7 @@ export async function GET(req: NextRequest) {
           items: {
             select: {
               name: true, menuItemId: true, quantity: true, total: true, categoryName: true,
+              isUpsell: true,
               menuItem: { select: { imageUrl: true } },
             },
           },
@@ -203,6 +231,21 @@ export async function GET(req: NextRequest) {
         select:  { id: true, name: true, status: true, totalSent: true, totalResponded: true, totalAudience: true },
         orderBy: { createdAt: "desc" },
         take:    3,
+      }),
+      // 8. Recovery stats for period (drafts with at least one recovery attempt)
+      prisma.orderDraft.findMany({
+        where: {
+          restaurantId:    ctx.restaurantId,
+          recoveryAttempts: { gt: 0 },
+          createdAt:       { gte: rangeStart, lte: rangeEnd },
+        },
+        select: { status: true },
+      }),
+      // 9. CRM segment counts (real-time)
+      prisma.customer.groupBy({
+        by:    ["segment"],
+        where: { restaurantId: ctx.restaurantId, isGuest: false, isActive: true },
+        _count: { id: true },
       }),
     ]);
 
@@ -313,6 +356,24 @@ export async function GET(req: NextRequest) {
 
     const revenueTrend = trendDays.reduce((s, d) => s + d.revenue, 0);
 
+    // ── Foocci proof (upsell + recovery) ──────────────────────────────────────
+    let upsellRevenue = 0;
+    let upsellItemCount = 0;
+    for (const order of periodOrders) {
+      for (const item of order.items) {
+        if (item.isUpsell) { upsellRevenue += Number(item.total); upsellItemCount += item.quantity; }
+      }
+    }
+    const recoveryTotal     = recoveryStats.length;
+    const recoveryConverted = recoveryStats.filter(d => d.status === "CONFIRMED").length;
+    const recoveryRate      = recoveryTotal > 0 ? Math.round((recoveryConverted / recoveryTotal) * 100) : null;
+
+    // ── CRM segment breakdown (real-time) ─────────────────────────────────────
+    const segMap: Record<string, number> = {};
+    for (const row of crmSegmentCounts) {
+      segMap[row.segment] = row._count.id;
+    }
+
     return ok({
       // Period metadata
       period:        periodKey,
@@ -350,6 +411,23 @@ export async function GET(req: NextRequest) {
         totalResponded: c.totalResponded,
         totalAudience:  c.totalAudience,
       })),
+
+      // Foocci proof (period)
+      foocciProof: {
+        upsellRevenue:      Math.round(upsellRevenue  * 100) / 100,
+        upsellItemCount,
+        recoveryTotal,
+        recoveryConverted,
+        recoveryRate,
+      },
+
+      // CRM segment breakdown (real-time)
+      crmSegments: {
+        quente:      segMap["QUENTE"]      ?? 0,
+        morno:       segMap["MORNO"]       ?? 0,
+        frio:        segMap["FRIO"]        ?? 0,
+        semPedidos:  segMap["SEM_PEDIDOS"] ?? 0,
+      },
     });
   } catch (err) {
     console.error("[GET /api/dashboard]", err);
