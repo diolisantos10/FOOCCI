@@ -111,3 +111,16 @@ export type RestaurantSafeAgentProfile = Omit<
   AgentProfileDefinition,
   "forbiddenActions" | "safetyRules" | "promptInstructions"
 >;
+
+/**
+ * Admin (internal) read view of an agent profile. Same structured content plus
+ * DB metadata when available (null when served from the code registry).
+ * INTERNAL ONLY — never sent to restaurant users.
+ */
+export type AdminAgentProfileView = AgentProfileDefinition & {
+  /** ISO timestamp from the DB row, or null when served from the code registry. */
+  updatedAt: string | null;
+  /** Where the view was sourced: "db" or "code". */
+  origin: "db" | "code";
+};
+

@@ -22,6 +22,7 @@ import {
 } from "./defaultAgentProfiles";
 import type {
   AgentProfileDefinition,
+  AdminAgentProfileView,
   RestaurantSafeAgentProfile,
 } from "./types";
 
@@ -110,7 +111,66 @@ export async function getActiveAgentProfiles(): Promise<AgentProfileDefinition[]
   }
 }
 
-// ── Future-ready runtime helper (NO-OP switch in Phase 1) ───────────────────────
+// ── Admin (internal) reads — ALL agents, with DB metadata when available ─────────
+//
+// These power the internal Admin → Agents area (read-only). They return EVERY
+// agent (including DRAFT placeholders), never filter by status, and carry the
+// full structured content INCLUDING internal-only safety fields — that area is
+// admin-only and never exposed to restaurant users.
+
+/** Map a code-defined default into the admin view shape (no DB metadata). */
+function defaultToAdminView(def: AgentProfileDefinition): AdminAgentProfileView {
+  return { ...def, updatedAt: null, origin: "code" };
+}
+
+/**
+ * Every agent profile for the internal admin overview. DB-aware: when the flag
+ * is ON and rows exist, returns DB rows (with updatedAt); otherwise falls back
+ * to the full code registry. Never throws.
+ */
+export async function getAdminAgentProfiles(): Promise<AdminAgentProfileView[]> {
+  if (!isAgentProfileDbEnabled()) {
+    return DEFAULT_AGENT_PROFILES.map(defaultToAdminView);
+  }
+  try {
+    const rows = await prisma.agentProfile.findMany({ orderBy: { area: "asc" } });
+    if (rows.length === 0) return DEFAULT_AGENT_PROFILES.map(defaultToAdminView);
+    return rows.map((row) => ({
+      ...rowToDefinition(row),
+      updatedAt: row.updatedAt.toISOString(),
+      origin: "db" as const,
+    }));
+  } catch {
+    return DEFAULT_AGENT_PROFILES.map(defaultToAdminView);
+  }
+}
+
+/**
+ * A single agent profile for the internal admin detail view, by slug.
+ * DB-aware with code fallback. Returns null only when the slug is unknown.
+ */
+export async function getAdminAgentProfile(
+  slug: string,
+): Promise<AdminAgentProfileView | null> {
+  const codeDefault = getDefaultAgentProfileBySlug(slug);
+  const codeView = codeDefault ? defaultToAdminView(codeDefault) : null;
+
+  if (!isAgentProfileDbEnabled()) return codeView;
+
+  try {
+    const row = await prisma.agentProfile.findUnique({ where: { slug } });
+    if (!row) return codeView;
+    return {
+      ...rowToDefinition(row),
+      updatedAt: row.updatedAt.toISOString(),
+      origin: "db",
+    };
+  } catch {
+    return codeView;
+  }
+}
+
+
 
 /**
  * Build the system-context directive for an agent — the future single entry
