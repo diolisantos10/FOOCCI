@@ -2486,6 +2486,195 @@ function customActionToTemplate(action: CustomActionRow): ActionTemplate {
   };
 }
 
+// ── Campaign + Coupon performance ──────────────────────────────────────────
+
+type CouponMetricRow = {
+  promotionId: string; couponCode: string | null; name: string; type: string;
+  status: string; usedCount: number; orderCount: number; revenue: number;
+  discount: number; averageTicket: number; uniqueCustomers: number;
+  firstUsedAt: string | null; lastUsedAt: string | null; conversion: number | null;
+};
+type CampaignMetricRow = {
+  campaignId: string; name: string; status: string; audienceSize: number;
+  sentCount: number; failedCount: number; responseCount: number;
+  assistedConversions: number; assistedRevenue: number; conversionRate: number | null;
+  lastExecutionAt: string | null;
+};
+type CampaignCouponMetricsResponse = {
+  period: string;
+  coupons: {
+    totalCouponsActive: number; totalCouponOrders: number;
+    couponRevenue: number; totalDiscountGiven: number; rows: CouponMetricRow[];
+  };
+  campaigns: {
+    totalCampaigns: number; totalSent: number; totalFailed: number;
+    totalAssistedRevenue: number; couponAttribution: string;
+    couponAttributionNote: string; rows: CampaignMetricRow[];
+  };
+};
+
+const PERFORMANCE_PERIODS: { value: string; label: string }[] = [
+  { value: "7d",  label: "7 dias"  },
+  { value: "30d", label: "30 dias" },
+  { value: "90d", label: "90 dias" },
+  { value: "all", label: "Tudo"    },
+];
+
+function CampaignCouponPerformance() {
+  const [period,  setPeriod]  = useState("30d");
+  const [data,    setData]    = useState<CampaignCouponMetricsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/crm/campaign-metrics?period=${period}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setData(json.data ?? null))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [period]);
+
+  const cards = [
+    { label: "Cupons usados",     value: data ? String(data.coupons.totalCouponOrders) : "—",                    sub: data ? `${data.coupons.totalCouponsActive} ativos` : "" },
+    { label: "Receita com cupons", value: data ? `R$ ${formatCurrency(data.coupons.couponRevenue)}` : "—",        sub: "pedidos válidos" },
+    { label: "Desconto concedido", value: data ? `R$ ${formatCurrency(data.coupons.totalDiscountGiven)}` : "—",   sub: "total no período" },
+    { label: "Campanhas enviadas", value: data ? String(data.campaigns.totalSent) : "—",                          sub: data ? `${data.campaigns.totalFailed} falhas` : "" },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900">Performance de campanhas e cupons</h3>
+          <p className="mt-0.5 text-xs text-gray-500">Cupons com atribuição confiável; receita de campanha é assistida (pós-envio).</p>
+        </div>
+        <div className="flex items-center gap-1 rounded-lg border border-gray-200 p-0.5">
+          {PERFORMANCE_PERIODS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => setPeriod(p.value)}
+              className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                period === p.value ? "bg-brand-600 text-white" : "text-gray-500 hover:bg-gray-100"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Metric cards */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {cards.map((c) => (
+          <div key={c.label} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{c.label}</p>
+            <p className="mt-1 text-lg font-bold leading-none text-gray-900">{c.value}</p>
+            {c.sub && <p className="mt-1 text-[10px] text-gray-400">{c.sub}</p>}
+          </div>
+        ))}
+      </div>
+
+      {loading ? (
+        <p className="py-6 text-center text-xs text-gray-400">Carregando métricas…</p>
+      ) : !data ? (
+        <p className="py-6 text-center text-xs text-gray-400">Não foi possível carregar as métricas.</p>
+      ) : (
+        <>
+          {/* Coupon table */}
+          <div className="mt-5">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">Cupons</p>
+            {data.coupons.rows.length === 0 ? (
+              <div className="rounded-xl border-2 border-dashed border-gray-100 py-5 text-center text-xs text-gray-400">
+                Nenhum cupom cadastrado.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+                      <th className="py-1.5 pr-2 font-semibold">Cupom</th>
+                      <th className="py-1.5 px-2 font-semibold text-right">Usos</th>
+                      <th className="py-1.5 px-2 font-semibold text-right">Pedidos</th>
+                      <th className="py-1.5 px-2 font-semibold text-right">Receita</th>
+                      <th className="py-1.5 px-2 font-semibold text-right">Desconto</th>
+                      <th className="py-1.5 pl-2 font-semibold text-right">Ticket médio</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {data.coupons.rows.map((r) => (
+                      <tr key={r.promotionId} className="text-gray-700">
+                        <td className="py-2 pr-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-gray-900">{r.couponCode ?? "—"}</span>
+                            {r.status !== "ACTIVE" && (
+                              <span className="rounded bg-gray-100 px-1 py-0.5 text-[9px] font-semibold text-gray-400">
+                                {r.status}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-gray-400">{r.name}</span>
+                        </td>
+                        <td className="py-2 px-2 text-right tabular-nums">{r.orderCount}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{r.uniqueCustomers} clientes</td>
+                        <td className="py-2 px-2 text-right tabular-nums font-semibold text-green-700">R$ {formatCurrency(r.revenue)}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-gray-500">R$ {formatCurrency(r.discount)}</td>
+                        <td className="py-2 pl-2 text-right tabular-nums">R$ {formatCurrency(r.averageTicket)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Campaign table */}
+          <div className="mt-5">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">Campanhas</p>
+            <p className="mb-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10px] text-amber-700">
+              ⚠︎ {data.campaigns.couponAttributionNote}
+            </p>
+            {data.campaigns.rows.length === 0 ? (
+              <div className="rounded-xl border-2 border-dashed border-gray-100 py-5 text-center text-xs text-gray-400">
+                Nenhuma campanha no período.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+                      <th className="py-1.5 pr-2 font-semibold">Campanha</th>
+                      <th className="py-1.5 px-2 font-semibold text-right">Enviados</th>
+                      <th className="py-1.5 px-2 font-semibold text-right">Falhas</th>
+                      <th className="py-1.5 px-2 font-semibold text-right">Conversões</th>
+                      <th className="py-1.5 px-2 font-semibold text-right">Conversão</th>
+                      <th className="py-1.5 pl-2 font-semibold text-right">Receita assistida</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {data.campaigns.rows.map((r) => (
+                      <tr key={r.campaignId} className="text-gray-700">
+                        <td className="py-2 pr-2">
+                          <span className="font-semibold text-gray-900">{r.name}</span>
+                          <span className="block text-[10px] text-gray-400">{r.audienceSize} no público</span>
+                        </td>
+                        <td className="py-2 px-2 text-right tabular-nums">{r.sentCount}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-red-500">{r.failedCount}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{r.assistedConversions}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{r.conversionRate !== null ? `${r.conversionRate}%` : "—"}</td>
+                        <td className="py-2 pl-2 text-right tabular-nums font-semibold text-green-700">R$ {formatCurrency(r.assistedRevenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function CampanhasTab({ stats }: { stats: OverviewStats }) {
   const [selectedTemplate,  setSelectedTemplate]  = useState<ActionTemplate | null>(null);
   const [showCreateModal,   setShowCreateModal]    = useState(false);
@@ -2626,6 +2815,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           </div>
         ))}
       </div>
+
+      {/* ── Performance de campanhas e cupons ────────────────────────────────── */}
+      <CampaignCouponPerformance />
 
       {/* ── Campanhas ativas ─────────────────────────────────────────────────── */}
       {!loadingHistory && (
