@@ -1765,6 +1765,10 @@ export function PedidoClient({
   // convId:    returned by server on first logged message, stored in sessionStorage
   const sessionIdRef = useRef<string>(uid());
   const [convId, setConvId] = useState<string | null>(null);
+  // humanMode: an operator took over this Cardápio conversation from Atendimento.
+  // While true, the AI does not reply; customer messages still reach the operator.
+  const [humanMode, setHumanMode] = useState(false);
+  const humanModeRef = useRef(false);
   useEffect(() => {
     const sKey = `foocci_sid_${slug}`;
     const cKey = `foocci_cid_${slug}`;
@@ -1785,6 +1789,28 @@ export function PedidoClient({
   // so the customer sees the store's response. Deduped by message id.
   const lastOpPollRef = useRef<string | null>(null); // ISO timestamp of newest seen op msg
   const seenOpIdsRef  = useRef<Set<string>>(new Set());
+
+  // Toggle human-mode in response to the server's aiActive flag. Pushes a one-off
+  // system message on each transition so the customer understands who is replying.
+  const applyAiActive = useCallback((aiActive: boolean) => {
+    const nextHuman = !aiActive;
+    if (nextHuman === humanModeRef.current) return; // no transition
+    humanModeRef.current = nextHuman;
+    setHumanMode(nextHuman);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id:      uid(),
+        role:    "assistant" as const,
+        content: nextHuman
+          ? "Atendimento humano ativo. A equipe da loja assumiu a conversa 👩‍💼"
+          : "A IA voltou a te atender 😊",
+        ts:         new Date(),
+        isOperator: nextHuman,
+      },
+    ]);
+  }, []);
+
   useEffect(() => {
     if (!convId) return;
     let cancelled = false;
@@ -1795,7 +1821,11 @@ export function PedidoClient({
         if (lastOpPollRef.current) qs.set("after", lastOpPollRef.current);
         const res = await fetch(`/api/pedido/${slug}/operator-messages?${qs}`);
         if (!res.ok) return;
-        const json = await res.json() as { messages?: { id: string; content: string; sentAt: string }[] };
+        const json = await res.json() as {
+          messages?: { id: string; content: string; sentAt: string }[];
+          aiActive?: boolean;
+        };
+        if (!cancelled && typeof json.aiActive === "boolean") applyAiActive(json.aiActive);
         const incoming = json.messages ?? [];
         if (cancelled || incoming.length === 0) return;
 
@@ -2542,6 +2572,17 @@ export function PedidoClient({
           try { sessionStorage.setItem(`foocci_cid_${slug}`, returnedConvId); } catch { /* ignore */ }
         }
 
+        // Sync human-mode. When an operator owns the Cardápio conversation the
+        // server returns aiActive=false and an empty reply — show the human-mode
+        // banner instead of an AI bubble; the customer's message already reached
+        // the operator in Atendimento.
+        if (typeof data?.data?.aiActive === "boolean") {
+          applyAiActive(data.data.aiActive);
+          if (data.data.aiActive === false) {
+            return; // operator owns the chat — finally{} resets the typing state
+          }
+        }
+
         if (data?.data?.memoryPatch && typeof data.data.memoryPatch === "object") {
           // Update ref synchronously so the next sendText call (even before re-render)
           // ships the latest memory to the server — prevents stage repeat on rapid clicks.
@@ -2620,7 +2661,7 @@ export function PedidoClient({
         setUi("idle");
       }
     },
-    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, effectiveCustomerPhone, resolvedCustomerId, categories],
+    [slug, history, deliveryMethod, address, customerName, paymentMode, paymentMethodSub, effectiveCustomerPhone, resolvedCustomerId, categories, applyAiActive],
   );
 
   // ── Deterministic message helpers ─────────────────────────────────
@@ -2683,9 +2724,10 @@ export function PedidoClient({
         }),
       })
         .then((r) => r.json())
-        .then((json: { data?: { conversationId?: string | null } }) => {
+        .then((json: { data?: { conversationId?: string | null; aiActive?: boolean } }) => {
           const cid = json?.data?.conversationId;
           if (cid) setConvId(cid);
+          if (typeof json?.data?.aiActive === "boolean") applyAiActive(json.data.aiActive);
         })
         .catch(() => { /* non-fatal */ });
     }
@@ -4238,6 +4280,7 @@ export function PedidoClient({
     || stage === "ASK_NAME";
   const inputPlaceholder =
     stage === "ASK_NAME"        ? "Seu nome…" :
+    humanMode                   ? "Digite sua mensagem para o atendente…" :
     "Peça uma sugestão…";
 
   // ── Render ────────────────────────────────────────────────────────
@@ -4615,6 +4658,14 @@ export function PedidoClient({
 
         {/* Checkout panels (address / payment / review / done) */}
         {renderCheckoutPanel()}
+
+        {/* Human-mode banner — operator took over from Atendimento */}
+        {humanMode && (
+          <div className="shrink-0 flex items-center gap-2 bg-amber-50 border-t border-amber-200 px-4 py-2 text-xs font-medium text-amber-800">
+            <span>👩‍💼</span>
+            <span>Atendimento humano ativo. A equipe da loja assumiu a conversa.</span>
+          </div>
+        )}
 
         {/* Text input */}
         {showInput && (

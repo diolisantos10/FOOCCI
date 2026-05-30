@@ -41,11 +41,16 @@ export async function GET(
   // Verify the conversation belongs to this restaurant before returning anything.
   const conv = await prisma.conversation.findFirst({
     where:  { id: conversationId, restaurantId: restaurant.id },
-    select: { id: true },
+    select: { id: true, aiEnabled: true, channel: true },
   });
   if (!conv) {
-    return NextResponse.json({ messages: [] });
+    return NextResponse.json({ messages: [], aiActive: true });
   }
+
+  // aiActive: false only when an operator took over a Cardápio (QR/WEB) session.
+  // Lets the /pedido client toggle human-mode UI even while the customer is idle.
+  const isCardapioConv = conv.channel === "QR_AGENT" || conv.channel === "WEB_AGENT";
+  const aiActive = !(conv.aiEnabled === false && isCardapioConv);
 
   const after = afterRaw ? new Date(afterRaw) : null;
   const validAfter = after && !Number.isNaN(after.getTime()) ? after : null;
@@ -66,6 +71,7 @@ export async function GET(
   });
 
   return NextResponse.json({
+    aiActive,
     messages: rows.map((m) => ({
       id:      m.id,
       content: m.content,

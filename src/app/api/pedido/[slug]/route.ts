@@ -154,6 +154,10 @@ export async function POST(
     // customer sends their first message).
     // All errors are caught so ordering never breaks due to logging failures.
     let conversationId: string | null = reqConvId ?? null;
+    // aiActive: false when an operator explicitly took over THIS Cardápio session.
+    // Surfaced in every response so the /pedido client can render human-mode UI
+    // (banner + "fale com o atendente" placeholder) and stop expecting AI replies.
+    let aiActive = true;
 
     if (sessionId && (event === "ON_USER_MESSAGE" || event === "ON_ENTRY" || event === "ON_ITEM_ADDED")) {
       try {
@@ -166,8 +170,23 @@ export async function POST(
           channel:       Channel.QR_AGENT,
         });
 
+        // Resolve human-takeover state for this conversation.
+        // Guard: only a Cardápio (QR_AGENT/WEB_AGENT) takeover suppresses the
+        // /pedido AI. A WhatsApp human takeover on the merged conversation must
+        // NOT block the /pedido AI — the customer browsing the menu still deserves
+        // a response on this channel.
+        const convAiState = await prisma.conversation.findFirst({
+          where:  { id: conversationId, restaurantId: restaurant.id },
+          select: { aiEnabled: true, channel: true },
+        });
+        const isCardapioConv = !convAiState ||
+          convAiState.channel === Channel.QR_AGENT ||
+          convAiState.channel === Channel.WEB_AGENT;
+        aiActive = !((convAiState?.aiEnabled === false) && isCardapioConv);
+
         if (event === "ON_USER_MESSAGE" && message?.trim()) {
-          // Log customer message
+          // Log customer message (always — even in human mode, so the operator
+          // sees what the customer is typing in Atendimento).
           await ConversationLogService.logMessage({
             conversationId,
             restaurantId: restaurant.id,
@@ -175,22 +194,10 @@ export async function POST(
             content:      message.trim(),
           });
 
-          // Check if AI is suppressed for this conversation.
-          // Guard: only block /pedido AI when the operator explicitly took over a
-          // Cardápio session (QR_AGENT/WEB_AGENT channel). A WhatsApp human takeover
-          // on the merged conversation must NOT block the /pedido AI — the customer
-          // deserves a response when browsing the menu on a different channel.
-          const convAiState = await prisma.conversation.findFirst({
-            where:  { id: conversationId, restaurantId: restaurant.id },
-            select: { aiEnabled: true, channel: true },
-          });
-          const aiEnabled     = convAiState?.aiEnabled ?? true;
-          const isCardapioConv = !convAiState ||
-            convAiState.channel === Channel.QR_AGENT ||
-            convAiState.channel === Channel.WEB_AGENT;
-          if (!aiEnabled && isCardapioConv) {
+          if (!aiActive) {
+            // Operator owns this Cardápio conversation — do not run the AI.
             return ok({
-              reply:             "Um atendente da loja assumiu essa conversa. Aguarde um momento.",
+              reply:             "",
               cards:             [],
               mode:              "BROWSE",
               options:           [],
@@ -198,6 +205,7 @@ export async function POST(
               pinnedCardId:      null,
               memoryPatch:       null,
               conversationId,
+              aiActive:          false,
             });
           }
         }
@@ -282,6 +290,7 @@ export async function POST(
       pinnedCardId:      pinnedCardId ?? null,
       memoryPatch:       memoryPatch ?? null,
       conversationId,
+      aiActive,
     });
   } catch (err) {
     console.error("[POST /api/pedido/[slug]]", err);
