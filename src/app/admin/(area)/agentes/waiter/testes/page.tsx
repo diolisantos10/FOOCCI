@@ -12,7 +12,7 @@ interface RestaurantOption {
   slug: string;
 }
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+// ─── display helpers ─────────────────────────────────────────────────────────
 
 function scoreColor(score: number): string {
   if (score >= 90) return "text-green-400";
@@ -24,6 +24,132 @@ function statusBadge(pass: boolean) {
   return pass
     ? <span className="rounded-full bg-green-900/50 px-2 py-0.5 text-[11px] font-semibold text-green-400">PASS</span>
     : <span className="rounded-full bg-red-900/50 px-2 py-0.5 text-[11px] font-semibold text-red-400">FAIL</span>;
+}
+
+// ─── export helpers ───────────────────────────────────────────────────────────
+
+function fmtDateForFilename(iso: string): string {
+  const d   = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}`;
+}
+
+function buildFilename(slug: string, ranAt: string, ext: "json" | "txt"): string {
+  return `waiter-test-${slug}-${fmtDateForFilename(ranAt)}.${ext}`;
+}
+
+function triggerDownload(content: string, filename: string, mime: string): void {
+  const blob = new Blob([content], { type: mime });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function buildJsonExport(
+  report:         EvalReport,
+  restaurantSlug: string,
+  selectedGroups: Set<string>,
+): Record<string, unknown> {
+  return {
+    exportedAt:     new Date().toISOString(),
+    restaurantSlug,
+    selectedGroups: selectedGroups.size > 0 ? Array.from(selectedGroups) : "all",
+    restaurantId:   report.restaurantId,
+    restaurantName: report.restaurantName,
+    ranAt:          report.ranAt,
+    durationMs:     report.durationMs,
+    summary:        report.summary,
+    results: report.results.map((r: ScenarioResult) => ({
+      id:          r.id,
+      group:       r.group,
+      groupLabel:  r.groupLabel,
+      description: r.description,
+      message:     r.message,
+      pass:        r.pass,
+      checks:      r.checks,
+      aiResponse:  r.aiResponse,
+    })),
+  };
+}
+
+function buildTxtReport(report: EvalReport, restaurantSlug: string): string {
+  const dateStr       = new Date(report.ranAt).toLocaleString("pt-BR");
+  const failedResults = report.results.filter((r: ScenarioResult) => !r.pass);
+  const passedResults = report.results.filter((r: ScenarioResult) => r.pass);
+
+  // Recommendations based on which check types failed
+  const failedCheckTypes = new Set<string>(
+    failedResults.flatMap((r: ScenarioResult) =>
+      r.checks.filter((c) => !c.pass).map((c) => c.type as string),
+    ),
+  );
+  const recommendations: string[] = [];
+  if (failedCheckTypes.has("no_forbidden_denial"))
+    recommendations.push("- Revisar priority intent guard em WaiterBrainV2.handleUserMessage (frases de grupo/porcao)");
+  if (failedCheckTypes.has("includes_shareable"))
+    recommendations.push("- Verificar isShareable() e catalogo (servingSize >= 2, keywords de combo/grupo)");
+  if (failedCheckTypes.has("cards_not_empty"))
+    recommendations.push("- Catalogo pode nao ter itens suficientes para este cenario ou modo retornou sem cards");
+  if (failedCheckTypes.has("has_real_cards") || failedCheckTypes.has("no_hallucination"))
+    recommendations.push("- Verificar filtro de IDs em WaiterBrainV2 — possivel regressao de alucinacao");
+  if (failedCheckTypes.has("includes_category"))
+    recommendations.push("- Verificar mapeamento de categorias no catalogo e regras de filtragem por categoria");
+
+  const lines: string[] = [
+    "===========================================",
+    `WAITER TEST REPORT -- ${report.restaurantName}`,
+    "===========================================",
+    `Data:    ${dateStr}`,
+    `Slug:    ${restaurantSlug}`,
+    `Score:   ${report.summary.score}% (${report.summary.passed}/${report.summary.total} passou)`,
+    `Falhas:  ${report.summary.failed}`,
+    `Duracao: ${report.durationMs}ms`,
+    "",
+  ];
+
+  if (failedResults.length > 0) {
+    lines.push("-------------------------------------------");
+    lines.push(`FALHAS (${failedResults.length})`);
+    lines.push("-------------------------------------------");
+    lines.push("");
+    for (const r of failedResults) {
+      lines.push(`[FAIL] ${r.id} -- ${r.groupLabel}`);
+      lines.push(`Descricao:   ${r.description}`);
+      lines.push(`Mensagem:    "${r.message}"`);
+      lines.push(`Resposta IA: ${r.aiResponse.message || "(sem mensagem)"}`);
+      if (r.aiResponse.cards.length > 0) {
+        lines.push(`Produtos:    ${r.aiResponse.cards.join(", ")}`);
+      }
+      lines.push(`Modo:        ${r.aiResponse.mode}`);
+      lines.push("Checks:");
+      for (const c of r.checks) {
+        lines.push(`  [${c.pass ? "OK  " : "FAIL"}] ${c.type} -- ${c.detail}`);
+      }
+      lines.push("");
+    }
+  }
+
+  lines.push("-------------------------------------------");
+  lines.push(`PASSOU (${passedResults.length})`);
+  lines.push("-------------------------------------------");
+  lines.push("");
+  for (const r of passedResults) {
+    lines.push(`[OK] ${r.id} -- ${r.description} (${r.groupLabel})`);
+  }
+  lines.push("");
+
+  if (recommendations.length > 0) {
+    lines.push("-------------------------------------------");
+    lines.push("ACAO RECOMENDADA");
+    lines.push("-------------------------------------------");
+    for (const rec of recommendations) lines.push(rec);
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
 
 // ─── result card ──────────────────────────────────────────────────────────────
@@ -96,6 +222,7 @@ export default function WaiterTestesPage() {
   const [report, setReport]                 = useState<EvalReport | null>(null);
   const [error, setError]                   = useState<string | null>(null);
   const [expandAll, setExpandAll]           = useState(false);
+  const [copied, setCopied]                 = useState(false);
 
   // Load restaurant list
   useEffect(() => {
@@ -160,6 +287,49 @@ export default function WaiterTestesPage() {
       setLoading(false);
     }
   }, [restaurantId, selectedGroups, groups.length]);
+
+  // ─── export handlers ─────────────────────────────────────────────────────
+
+  function getSlug(): string {
+    return restaurants.find((r) => r.id === restaurantId)?.slug ?? "restaurante";
+  }
+
+  function handleDownloadJson() {
+    if (!report) return;
+    const slug    = getSlug();
+    const payload = buildJsonExport(report, slug, selectedGroups);
+    triggerDownload(
+      JSON.stringify(payload, null, 2),
+      buildFilename(slug, report.ranAt, "json"),
+      "application/json",
+    );
+  }
+
+  function handleDownloadTxt() {
+    if (!report) return;
+    const slug = getSlug();
+    triggerDownload(
+      buildTxtReport(report, slug),
+      buildFilename(slug, report.ranAt, "txt"),
+      "text/plain;charset=utf-8",
+    );
+  }
+
+  async function handleCopyToClipboard() {
+    if (!report) return;
+    const slug = getSlug();
+    const txt  = buildTxtReport(report, slug);
+    try {
+      await navigator.clipboard.writeText(txt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard unavailable — fallback to download
+      triggerDownload(txt, buildFilename(slug, report.ranAt, "txt"), "text/plain;charset=utf-8");
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   const failedResults = report?.results.filter((r) => !r.pass) ?? [];
   const passedResults = report?.results.filter((r) => r.pass)  ?? [];
@@ -296,6 +466,36 @@ export default function WaiterTestesPage() {
                 }`}
                 style={{ width: `${report.summary.score}%` }}
               />
+            </div>
+
+            {/* Export buttons */}
+            <div className="mt-3 flex items-center gap-2 flex-wrap border-t border-gray-800 pt-3">
+              <button
+                type="button"
+                onClick={handleDownloadJson}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+              >
+                <span className="text-[11px]">⬇</span> Baixar JSON
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadTxt}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+              >
+                <span className="text-[11px]">⬇</span> Baixar relatório .txt
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyToClipboard}
+                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  copied
+                    ? "border-green-700 bg-green-900/30 text-green-400"
+                    : "border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+              >
+                <span className="text-[11px]">{copied ? "✓" : "⎘"}</span>
+                {copied ? "Copiado!" : "Copiar relatório"}
+              </button>
             </div>
           </div>
 
