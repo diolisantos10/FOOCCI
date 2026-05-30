@@ -18,14 +18,54 @@
  * in dev/staging environments.
  */
 
-import { OrderDraftRecoverySendService } from "./OrderDraftRecoverySendService";
+import {
+  OrderDraftRecoverySendService,
+  type RecoverySendResult,
+} from "./OrderDraftRecoverySendService";
 
 const TICK_INTERVAL_MS  = 60_000; // 1 minute
 const INACTIVITY_MINUTES = 2;     // matches route.ts default
 
+/**
+ * Lightweight in-memory snapshot of scheduler activity, surfaced by the
+ * diagnostics endpoints so operators can confirm the scheduler is ticking
+ * without grepping Railway logs. Resets on process restart — no DB writes.
+ */
+export interface SchedulerState {
+  started:           boolean;
+  startedAt:         string | null;
+  tickIntervalMs:    number;
+  inactivityMinutes: number;
+  tickCount:         number;
+  lastTickAt:        string | null;
+  lastTickResult:    RecoverySendResult | null;
+  lastTickError:     string | null;
+}
+
 export class CartRecoveryScheduler {
   private static handle:  ReturnType<typeof setInterval> | null = null;
   private static running = false;
+
+  // ── In-memory diagnostics (reset on restart) ──────────────────────────────
+  private static startedAt:      Date | null = null;
+  private static tickCount       = 0;
+  private static lastTickAt:     Date | null = null;
+  private static lastTickResult: RecoverySendResult | null = null;
+  private static lastTickError:  string | null = null;
+
+  /** Read-only snapshot of scheduler activity for diagnostics. */
+  static getState(): SchedulerState {
+    return {
+      started:           this.handle !== null,
+      startedAt:         this.startedAt?.toISOString() ?? null,
+      tickIntervalMs:    TICK_INTERVAL_MS,
+      inactivityMinutes: INACTIVITY_MINUTES,
+      tickCount:         this.tickCount,
+      lastTickAt:        this.lastTickAt?.toISOString() ?? null,
+      lastTickResult:    this.lastTickResult,
+      lastTickError:     this.lastTickError,
+    };
+  }
 
   static start(): void {
     if (this.handle !== null) return;
@@ -37,6 +77,7 @@ export class CartRecoveryScheduler {
       });
       return;
     }
+    this.startedAt = new Date();
     console.log("[CartRecoveryScheduler] Started", {
       tickIntervalMs:    TICK_INTERVAL_MS,
       inactivityMinutes: INACTIVITY_MINUTES,
@@ -66,6 +107,10 @@ export class CartRecoveryScheduler {
         limit:             50,
         dryRun:            false,
       });
+      this.tickCount++;
+      this.lastTickAt     = new Date();
+      this.lastTickResult = result;
+      this.lastTickError  = null;
       // Log every tick that has candidates, or any tick that sent/failed.
       // Silent only when checked=0 (no stale OPEN drafts at all).
       if (result.checked > 0 || result.sent > 0 || result.failed > 0) {
@@ -85,6 +130,9 @@ export class CartRecoveryScheduler {
         });
       }
     } catch (err) {
+      this.tickCount++;
+      this.lastTickAt    = new Date();
+      this.lastTickError = err instanceof Error ? err.message : String(err);
       console.error("[CartRecoveryScheduler] Tick error:", err);
     } finally {
       this.running = false;

@@ -10,13 +10,17 @@
  * Query params:
  *   inactivityMinutes — threshold override (default: 2, same as scheduler)
  *   limit             — max candidates to inspect (default: 20)
+ *   slug              — optional restaurant slug to scope the dry-run to a single
+ *                       restaurant (default: global pool, matching the scheduler).
  *
  * Safe: read-only. No messages sent. Phones masked to last-4 digits.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
+import { prisma } from "@/lib/prisma";
 import { OrderDraftRecoverySendService } from "@/services/order/OrderDraftRecoverySendService";
+import { CartRecoveryScheduler } from "@/services/order/CartRecoveryScheduler";
 
 export async function GET(req: NextRequest) {
   if (!process.env.ADMIN_SECRET) {
@@ -32,6 +36,7 @@ export async function GET(req: NextRequest) {
     60,
   );
   const limit = Math.min(Number(sp.get("limit") ?? "20"), 100);
+  const slug  = sp.get("slug")?.trim().toLowerCase() || null;
 
   // ── 1. Environment state ───────────────────────────────────────────────────
   const nodeEnv     = process.env.NODE_ENV;
@@ -41,16 +46,34 @@ export async function GET(req: NextRequest) {
   const schedulerWouldStart =
     nodeEnv === "production" && nextRuntime === "nodejs";
 
-  // ── 2. Dry-run recovery pass ───────────────────────────────────────────────
+  // ── 2. Optional restaurant scope ───────────────────────────────────────────
+  let restaurantId: string | undefined;
+  if (slug) {
+    const restaurant = await prisma.restaurant.findFirst({
+      where:  { slug },
+      select: { id: true },
+    });
+    if (!restaurant) {
+      return NextResponse.json(
+        { ok: false, error: `No restaurant found with slug "${slug}"` },
+        { status: 404 },
+      );
+    }
+    restaurantId = restaurant.id;
+  }
+
+  // ── 3. Dry-run recovery pass ───────────────────────────────────────────────
   const dryRunResult = await OrderDraftRecoverySendService.sendCartRecoveryMessages({
     inactivityMinutes,
     limit,
     dryRun: true,
+    ...(restaurantId ? { restaurantId } : {}),
   });
 
   return NextResponse.json({
     ok:        true,
     queriedAt: new Date().toISOString(),
+    scope:     slug ? { slug, restaurantId } : { slug: null, note: "global pool (all restaurants)" },
 
     schedulerEnv: {
       NODE_ENV:     nodeEnv,
@@ -62,6 +85,9 @@ export async function GET(req: NextRequest) {
         : `Scheduler is DISABLED. NODE_ENV="${nodeEnv}" NEXT_RUNTIME="${nextRuntime}". ` +
           `Both must be "production" and "nodejs" respectively.`,
     },
+
+    // Live in-memory snapshot from the running scheduler singleton (resets on restart).
+    schedulerLive: CartRecoveryScheduler.getState(),
 
     dryRun: {
       ...dryRunResult,

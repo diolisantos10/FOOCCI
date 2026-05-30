@@ -13,11 +13,15 @@
  * Auth: x-admin-secret header OR foocci-admin-token cookie.
  *
  * Query params:
- *   slug              — restaurant slug, exact match (default: sushi-cazza)
- *   phone             — E.164 test phone, e.g. +5511999990000
- *                       Required for customer/draft/waToken steps.
- *   liveTest          — "true" sends to test phone via Evolution (default: false)
- *   inactivityMinutes — minutes of inactivity to simulate (default: 2, max: 60)
+ *   slug                    — restaurant slug, exact match (default: sushi-cazza)
+ *   phone                   — E.164 test phone, e.g. +5511999990000
+ *                             Required for customer/draft/waToken steps.
+ *   liveTest                — "true" sends to test phone via Evolution (default: false)
+ *   inactivityMinutes       — minutes of inactivity to simulate (default: 2, max: 60)
+ *   includeOtherRestaurants — "true" runs the dry-run globally across ALL
+ *                             restaurants (default: false → scoped to this slug,
+ *                             so stale test drafts from other restaurants such as
+ *                             pizzaria-testando never pollute the result).
  *
  * Safety guards:
  *   - liveTest=false by default — always dryRun unless explicitly enabled.
@@ -39,6 +43,7 @@ import {
   OrderDraftRecoverySendService,
   type RecoverySendResult,
 } from "@/services/order/OrderDraftRecoverySendService";
+import { CartRecoveryScheduler } from "@/services/order/CartRecoveryScheduler";
 import { getPublicSiteUrl, getPublicMenuUrl } from "@/lib/public-url";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
 
@@ -90,6 +95,7 @@ export async function GET(req: NextRequest) {
   const slug             = (sp.get("slug") ?? "sushi-cazza").trim().toLowerCase();
   const rawPhone         = sp.get("phone")?.trim() ?? null;
   const liveTest         = sp.get("liveTest") === "true";
+  const includeOtherRestaurants = sp.get("includeOtherRestaurants") === "true";
   const inactivityMinutes = Math.min(
     Math.max(Number(sp.get("inactivityMinutes") ?? "2"), 1),
     60,
@@ -252,10 +258,15 @@ export async function GET(req: NextRequest) {
   // ── Step 6: Find or create test draft with at least 1 item ─────────────────
   if (customerId && restaurantId && !failedStep) {
     // Reuse any existing OPEN draft for this test customer
+    const draftSelect = {
+      id: true, status: true, recoveryAttempts: true, lastRecoveryAt: true,
+      recoveryCode: true, abandonedAt: true, updatedAt: true,
+      _count: { select: { items: true } },
+    } as const;
+
     const existing = await prisma.orderDraft.findFirst({
       where:   { restaurantId, customerId, status: "OPEN" },
-      select:  { id: true, recoveryAttempts: true, lastRecoveryAt: true, updatedAt: true,
-                 _count: { select: { items: true } } },
+      select:  draftSelect,
       orderBy: { updatedAt: "desc" },
     });
 
@@ -263,8 +274,7 @@ export async function GET(req: NextRequest) {
     if (!draft) {
       draft = await prisma.orderDraft.create({
         data:   { restaurantId, customerId, status: "OPEN" },
-        select: { id: true, recoveryAttempts: true, lastRecoveryAt: true, updatedAt: true,
-                  _count: { select: { items: true } } },
+        select: draftSelect,
       });
     }
     draftId = draft.id;
@@ -290,16 +300,30 @@ export async function GET(req: NextRequest) {
         : `item added: QA placeholder (no active menu items found for this restaurant)`;
     }
 
+    const updatedAtAgeMin = Math.round((Date.now() - draft.updatedAt.getTime()) / 60_000);
     addPass("draft_create", `Draft ${draft.id} ready — ${itemNote}`, {
       draftId,
-      status:           "OPEN",
+      status:           draft.status,
       existingItems:    draft._count.items,
       itemNote,
       recoveryAttempts: draft.recoveryAttempts,
       lastRecoveryAt:   draft.lastRecoveryAt?.toISOString() ?? null,
+      abandonedAt:      draft.abandonedAt?.toISOString() ?? null,
+      updatedAt:        draft.updatedAt.toISOString(),
+      updatedAtAgeMin,
+      recoveryCode:     draft.recoveryCode ?? null,
     });
 
     // ── Step 7: Verify draft eligibility fields ────────────────────────────
+    // Daily cap is keyed by customerId (global across restaurants): is there any
+    // draft for this customer that already received a recovery within 24h?
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60_000);
+    const recentRecovery = await prisma.orderDraft.findFirst({
+      where:  { customerId, lastRecoveryAt: { gt: oneDayAgo } },
+      select: { id: true, lastRecoveryAt: true },
+    });
+    const dailyCapHit = !!recentRecovery;
+
     const phoneDigits = (phone ?? "").replace(/\D/g, "");
     addPass("draft_eligible", "All eligibility fields confirmed present", {
       draftId,
@@ -307,10 +331,14 @@ export async function GET(req: NextRequest) {
       customerId,
       phoneMasked:      maskPhone(phone ?? ""),
       phoneValid:       /^\d{10,15}$/.test(phoneDigits),
-      status:           "OPEN",
+      status:           draft.status,
       hasItems:         true,
       recoveryAttempts: draft.recoveryAttempts,
       lastRecoveryAt:   draft.lastRecoveryAt?.toISOString() ?? null,
+      abandonedAt:      draft.abandonedAt?.toISOString() ?? null,
+      dailyCapHit,
+      dailyCapLastRecoveryAt: recentRecovery?.lastRecoveryAt?.toISOString() ?? null,
+      shortRecoveryUrlWouldGenerate: `${getPublicSiteUrl()}/r/<code>`,
     });
 
     // ── Step 7b: Pedido chat message check ────────────────────────────────────
@@ -376,10 +404,14 @@ export async function GET(req: NextRequest) {
 
   // ── Step 9: dryRun sendCartRecoveryMessages ─────────────────────────────────
   if (restaurantId && !failedStep) {
+    // Scope the dry-run to THIS restaurant by default so stale test drafts from
+    // other restaurants (e.g. pizzaria-testando) never pollute the counts.
+    // Pass ?includeOtherRestaurants=true to evaluate the global pool instead.
     dryRunResult = await OrderDraftRecoverySendService.sendCartRecoveryMessages({
       inactivityMinutes,
-      limit:  50,
-      dryRun: true,
+      limit:        50,
+      dryRun:       true,
+      ...(includeOtherRestaurants ? {} : { restaurantId }),
     });
 
     const { eligible, skippedRestaurantClosed, checked } = dryRunResult;
@@ -495,13 +527,19 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Scheduler state (informational) ────────────────────────────────────────
+  const wouldStart = process.env.NODE_ENV === "production" && process.env.NEXT_RUNTIME === "nodejs";
+  const liveSchedulerState = CartRecoveryScheduler.getState();
   const schedulerState = {
-    wouldStart:  process.env.NODE_ENV === "production" && process.env.NEXT_RUNTIME === "nodejs",
+    wouldStart,
     NODE_ENV:    process.env.NODE_ENV    ?? "(not set)",
     NEXT_RUNTIME: process.env.NEXT_RUNTIME ?? "(not set)",
-    note: process.env.NODE_ENV === "production" && process.env.NEXT_RUNTIME === "nodejs"
-      ? "Scheduler should be running — check Railway logs for [CartRecoveryScheduler] Tick."
-      : "Scheduler DISABLED in this environment. GitHub Actions cron (every 5 min) is the active backup.",
+    // Live in-memory snapshot from the running scheduler singleton (resets on restart).
+    live: liveSchedulerState,
+    note: liveSchedulerState.started
+      ? `Scheduler RUNNING — ${liveSchedulerState.tickCount} tick(s) so far, last at ${liveSchedulerState.lastTickAt ?? "(none yet)"}.`
+      : wouldStart
+        ? "Scheduler would start in this environment but has not started yet in this process — check Railway logs for [CartRecoveryScheduler] Started."
+        : "Scheduler DISABLED in this environment. GitHub Actions cron (every 5 min) is the active backup.",
   };
 
   // ── Final response ──────────────────────────────────────────────────────────

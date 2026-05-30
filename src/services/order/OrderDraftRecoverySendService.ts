@@ -162,10 +162,19 @@ export class OrderDraftRecoverySendService {
     inactivityMinutes = 2,
     limit             = 50,
     dryRun            = false,
+    restaurantId,
   }: {
     inactivityMinutes?: number;
     limit?:             number;
     dryRun?:            boolean;
+    /**
+     * Optional restaurant scope. When set, only this restaurant's drafts are
+     * considered — used by the diagnostics QA endpoint so a per-restaurant check
+     * (e.g. sushi-cazza) is never polluted by stale test drafts from other
+     * restaurants (e.g. pizzaria-testando). The production scheduler/cron leave
+     * this unset for global behaviour.
+     */
+    restaurantId?:      string;
   } = {}): Promise<RecoverySendResult> {
     const startMs        = Date.now();
     const thresholdDate  = new Date(Date.now() - inactivityMinutes * 60_000);
@@ -179,6 +188,7 @@ export class OrderDraftRecoverySendService {
         updatedAt:        { lt: thresholdDate },
         recoveryAttempts: 0,
         items:            { some: {} },
+        ...(restaurantId ? { restaurantId } : {}),
       },
       select: {
         id:           true,
