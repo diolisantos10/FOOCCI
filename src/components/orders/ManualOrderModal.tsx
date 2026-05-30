@@ -123,6 +123,10 @@ export function ManualOrderModal({
   const visualStep = step <= 3 ? step : orderType === "PICKUP" ? step - 1 : step;
   const stepLabel  = stepLabels[visualStep - 1] ?? "";
 
+  const isAdvanceBlocked =
+    step === 4 &&
+    (!addr.cep.trim() || !addr.street.trim() || !addr.number.trim() || !quote || isBlocked(quote.calculationStatus));
+
   // ── Load menu items on mount ───────────────────────────────────────────────
 
   useEffect(() => {
@@ -549,7 +553,10 @@ export function ManualOrderModal({
               </div>
               {quoteError && <p className="text-xs text-red-500">{quoteError}</p>}
               {quote && isBlocked(quote.calculationStatus) && (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{quote.reason}</p>
+                <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5">
+                  <p className="text-xs font-semibold text-red-700">Endereço fora da área de entrega ou entrega não autorizada.</p>
+                  <p className="text-xs text-red-600 mt-0.5">Escolha <strong>Retirada</strong> ou informe outro endereço.</p>
+                </div>
               )}
               {quote && quote.calculationStatus === "manual" && (
                 <p className="rounded-lg bg-yellow-50 px-3 py-2 text-xs text-yellow-700">
@@ -738,7 +745,8 @@ export function ManualOrderModal({
           )}
           {step < 7 ? (
             <button type="button" onClick={nextStep}
-              className="flex-1 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-600 transition-colors">
+              disabled={isAdvanceBlocked}
+              className="flex-1 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
               Avançar →
             </button>
           ) : (

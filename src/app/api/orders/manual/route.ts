@@ -79,6 +79,13 @@ export async function POST(req: NextRequest) {
   } = parsed.data;
   const { restaurantId } = ctx;
 
+  if (type === "DELIVERY" && !deliveryAddress) {
+    return NextResponse.json(
+      { error: "Endereço de entrega é obrigatório para pedidos de entrega." },
+      { status: 400 }
+    );
+  }
+
   // ── Validate and resolve items from DB ────────────────────────────────────────
   type ResolvedItem = { menuItemId: string; name: string; price: number; quantity: number; note?: string };
   let resolvedItems: ResolvedItem[] = [];
