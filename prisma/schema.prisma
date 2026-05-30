@@ -83,6 +83,7 @@ model Restaurant {
   customerDataSignals    CustomerDataSignal[]
   knowledgeItems         RestaurantKnowledgeItem[]
   orderEditLogs          OrderEditLog[]
+  agentProfileOverrides  RestaurantAgentProfileOverride[]
 
   @@map("restaurants")
 }
@@ -2018,3 +2019,181 @@ model OperationalManualDecisionLog {
   @@index([status])
   @@map("operational_manual_decision_logs")
 }
+
+// ═══════════════════════════════════════════
+//  AI AGENTS ADMIN — FOUNDATION (Phase 1)
+// ═══════════════════════════════════════════
+//
+//  Internal foundation for the future "Admin → AI Agents" area.
+//
+//  ┌────────────────────────────────────────────────────────────────────────┐
+//  │  SOURCE-OF-TRUTH PRECEDENCE (do NOT violate)                            │
+//  │                                                                        │
+//  │  1. HARDCODED safety / protocol rules = the IMMUTABLE FLOOR.            │
+//  │     - src/lib/agent/protocol.ts  → ABSOLUTE_RULES                       │
+//  │     - src/services/ai/waiter/WaiterAgentProfile.ts → SAFETY_BOUNDARIES  │
+//  │     These are never overridable by DB rows, ever.                      │
+//  │  2. MASTER AgentProfile (these tables) may ENRICH behavior.            │
+//  │  3. RestaurantAgentProfileOverride may PERSONALIZE tone only —         │
+//  │     it can NEVER override safety / forbidden rules.                    │
+//  │                                                                        │
+//  │  RUNTIME USE IS DISABLED in Phase 1. The Waiter runtime still reads    │
+//  │  exclusively from the code-defined constitution. These rows are        │
+//  │  data-only (seed + future Admin UI). The `isRuntimeEnabled` column     │
+//  │  and the AGENT_PROFILE_DB_ENABLED env flag both default to OFF and     │
+//  │  gate any future DB-driven runtime (Phase 3).                          │
+//  └────────────────────────────────────────────────────────────────────────┘
+
+/// Logical area / department of an AI agent. Mirrors the agent registry.
+enum AgentArea {
+  ORCHESTRATOR // Manager agent that coordinates the others
+  SECURITY     // Security & Governance agent
+  WAITER       // Sales / ordering agent inside /pedido
+  WHATSAPP     // Inbound WhatsApp receptionist
+  CRM          // Outbound relationship agent
+  UI_UX        // UI/UX agent
+  MANUAL       // Manual / Constitution agent
+  QA           // QA / Test agent
+  INTEGRATION  // Integration agent
+  BRANDING     // Branding agent
+  ANALYTICS    // Analytics / Product agent
+  GENERAL
+}
+
+/// Lifecycle status of an agent profile.
+enum AgentStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+/// Who is allowed to SEE an agent profile.
+/// INTERNAL = master/internal admins only (never exposed to restaurant users).
+enum AgentVisibility {
+  INTERNAL
+  RESTAURANT
+  PUBLIC
+}
+
+/// Master, global definition of an AI agent's professional profile.
+/// One row per logical agent (Waiter, WhatsApp, CRM, …). Structured sections
+/// map 1:1 to the future Admin → Agents editor. Rich, normalized-where-cheap,
+/// JSON-where-flexible (objectives/rules/examples are arrays, not tables).
+///
+/// SAFETY: `forbiddenActions` and `safetyRules` are INTERNAL/master-only and
+/// are NEVER editable or visible to restaurant users.
+model AgentProfile {
+  id          String          @id @default(cuid())
+  slug        String          @unique
+  name        String
+  title       String?
+  area        AgentArea       @default(GENERAL)
+  description String?         @db.Text
+
+  // ── Professional identity (structured sections) ──
+  mission            String? @db.Text
+  objectives         Json    @default("[]") // string[]
+  responsibilities   Json    @default("[]") // string[]
+  skills             Json    @default("[]") // string[]
+  allowedActions     Json    @default("[]") // string[]  (CAN_DO)
+  forbiddenActions   Json    @default("[]") // string[]  (CANNOT_DO) — INTERNAL ONLY
+  tools              Json    @default("[]") // string[]
+  knowledgeAreas     Json    @default("[]") // string[]  (Phase 4 will link real items)
+  interfaceContext   String? @db.Text
+  businessRules      Json    @default("[]") // string[]
+  safetyRules        Json    @default("[]") // string[]  (SAFETY_BOUNDARIES) — INTERNAL ONLY, IMMUTABLE FLOOR
+  escalationRules    Json    @default("[]") // string[]
+  promptInstructions String? @db.Text
+  outputRules        Json    @default("[]") // string[]
+  evaluationCriteria Json    @default("[]") // string[]
+
+  /// Agent-specific rich sections that do not deserve their own columns yet
+  /// (e.g. Waiter: salesPrinciples, menuReadingRules, examples, …).
+  /// Kept as JSON to evolve without migrations until patterns stabilize.
+  extendedSections Json? // Record<string, unknown>
+
+  // ── Governance / lifecycle ──
+  status          AgentStatus     @default(DRAFT)
+  visibility      AgentVisibility @default(INTERNAL)
+  isGlobalDefault Boolean         @default(true)
+  /// Master kill-switch for DB-driven runtime for THIS agent. OFF in Phase 1.
+  isRuntimeEnabled Boolean        @default(false)
+  version         String          @default("0.1")
+  /// Where the row originated: CODE_SEED | MANUAL | IMPORT | …
+  source          String?         @default("CODE_SEED")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+  updatedBy String?
+
+  versions  AgentProfileVersion[]
+  overrides RestaurantAgentProfileOverride[]
+
+  @@index([area])
+  @@index([status])
+  @@index([visibility])
+  @@map("agent_profiles")
+}
+
+/// Immutable snapshot of an AgentProfile at a specific version.
+/// Created on every meaningful edit (Phase 2+). Enables history / rollback /
+/// "why did the Waiter change?" audits — the same pattern as the Operational
+/// Manual revisions.
+model AgentProfileVersion {
+  id             String   @id @default(cuid())
+  agentProfileId String
+  version        String
+  /// Full structured snapshot of the profile at this version.
+  snapshot       Json
+  changeSummary  String?
+  source         String?  @default("MANUAL")
+  createdAt      DateTime @default(now())
+  createdBy      String?
+
+  profile AgentProfile @relation(fields: [agentProfileId], references: [id], onDelete: Cascade)
+
+  @@index([agentProfileId])
+  @@map("agent_profile_versions")
+}
+
+/// Per-restaurant personalization of a master agent profile.
+///
+/// SAFETY: this layer may ONLY personalize tone/voice and ADD non-safety
+/// enrichment. It can NEVER override `forbiddenActions` / `safetyRules` from
+/// the master profile, nor the hardcoded protocol floor. The application layer
+/// enforces this; the schema deliberately exposes no safety columns here.
+model RestaurantAgentProfileOverride {
+  id             String  @id @default(cuid())
+  restaurantId   String
+  agentProfileId String
+
+  displayName        String?
+  toneOverride       String?
+  styleOverride      String?
+  /// Free-text additions from the restaurant owner. Injected AFTER all hard
+  /// rules (same contract as RestaurantBrandConfig.waiterPrompt). Never safety.
+  customInstructions String? @db.Text
+  /// Non-safety enrichment sections (e.g. local specialties, seasonal notes).
+  enrichmentSections Json?
+  /// Whether this restaurant has opted into the override. OFF by default.
+  isEnabled          Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  profile    AgentProfile @relation(fields: [agentProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, agentProfileId])
+  @@index([restaurantId])
+  @@index([agentProfileId])
+  @@map("restaurant_agent_profile_overrides")
+}
+
+// TODO (Phase 4 — Knowledge Library): AgentKnowledgeRef
+// A join model linking an AgentProfile to concrete knowledge sources
+// (RestaurantKnowledgeItem, OperationalManualChapter with agentVisibility=true).
+// Intentionally NOT created in Phase 1 — knowledge governance + the manual
+// `agentVisibility` gate are Phase 4 concerns. Until then, AgentProfile.knowledgeAreas
+// holds plain string labels only.
