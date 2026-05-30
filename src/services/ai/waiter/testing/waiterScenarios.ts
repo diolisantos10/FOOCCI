@@ -25,23 +25,36 @@ export type CheckType =
   | "has_real_cards"        // every card ID exists in the live catalog
   | "no_hallucination"      // alias for has_real_cards (semantic distinction in output)
   | "includes_shareable"    // ≥1 card has servingSize >= 2 OR name/cat contains group keywords
-  | "includes_category";    // ≥1 card is from a category matching categoryPattern
+  | "includes_category"     // ≥1 card is from a category matching categoryPattern
+  // ── W4 consultative-selling checks ──────────────────────────────────────────
+  | "has_cta_or_next_step"  // response invites a next action (CTA 👇 / question / option / add-language)
+  | "no_long_menu_dump"     // cards.length ≤ MAX_CARDS_PER_RESPONSE (never dump the whole menu)
+  | "respects_refusal";     // when refusedCategory set: NO returned card belongs to that category
 
 export interface EvalCheck {
   type:             CheckType;
-  categoryPattern?: string; // regex string — required for includes_category
+  categoryPattern?: string;          // regex string — required for includes_category
+  refusedCategory?: "drink" | "dessert"; // required for respects_refusal
 }
 
 // ─── scenario definition ──────────────────────────────────────────────────────
 
 export interface WaiterTestCase {
-  id:           string;
-  group:        string;       // machine ID (e.g. "group_size")
-  groupLabel:   string;       // human-readable (e.g. "Grupo / Família")
-  description:  string;       // what this case validates
-  message:      string;       // the user message to feed into decide()
-  cartItemIds?: string[];     // pre-populate cart (catalog IDs resolved at runtime)
-  checks:       EvalCheck[];
+  id:              string;
+  group:           string;    // machine ID (e.g. "group_size")
+  groupLabel:      string;    // human-readable (e.g. "Grupo / Família")
+  description:     string;    // what this case validates
+  message:         string;    // the user message to feed into decide()
+  cartItemIds?:    string[];  // pre-populate cart with explicit catalog IDs
+  /**
+   * Regex (string) resolved at eval time against the live catalog to seed the cart
+   * with a real item (e.g. "combo|combinado"). Used by scenarios that need cart
+   * context (pairing, refusal, checkout) without hard-coding restaurant IDs.
+   */
+  cartSeedPattern?: string;
+  /** Optional session memory to simulate prior turns (e.g. an already-declined upsell). */
+  memory?:          Partial<import("../../WaiterBrainV2").WaiterMemory>;
+  checks:           EvalCheck[];
 }
 
 // ─── scenario library ─────────────────────────────────────────────────────────
@@ -385,6 +398,120 @@ export const WAITER_TEST_CASES: WaiterTestCase[] = [
     checks: [
       { type: "no_hallucination" },
       { type: "has_real_cards" },
+    ],
+  },
+
+  // ── 10. consultative_close (W4) — venda consultiva / fechamento ───────────────
+
+  {
+    id:          "vc-01",
+    group:       "consultative_close",
+    groupLabel:  "Venda Consultiva / Fechamento",
+    description: "'me sugere algo' → real cards + CTA, no empty output, no dump",
+    message:     "me sugere algo",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "cards_not_empty" },
+      { type: "has_real_cards" },
+      { type: "has_cta_or_next_step" },
+      { type: "no_long_menu_dump" },
+    ],
+  },
+  {
+    id:          "vc-02",
+    group:       "consultative_close",
+    groupLabel:  "Venda Consultiva / Fechamento",
+    description: "'somos em 3 e queremos algo completo' → shareable rec + CTA",
+    message:     "somos em 3 e queremos algo completo",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "cards_not_empty" },
+      { type: "has_real_cards" },
+      { type: "includes_shareable" },
+      { type: "has_cta_or_next_step" },
+    ],
+  },
+  {
+    id:          "vc-03",
+    group:       "consultative_close",
+    groupLabel:  "Venda Consultiva / Fechamento",
+    description: "'quero algo leve' → light cards + short reason + CTA",
+    message:     "quero algo leve",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "cards_not_empty" },
+      { type: "has_real_cards" },
+      { type: "has_cta_or_next_step" },
+      { type: "no_long_menu_dump" },
+    ],
+  },
+  {
+    id:          "vc-04",
+    group:       "consultative_close",
+    groupLabel:  "Venda Consultiva / Fechamento",
+    description: "'tem opção mais em conta?' → budget cards + helpful CTA",
+    message:     "tem opção mais em conta?",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "cards_not_empty" },
+      { type: "has_real_cards" },
+      { type: "has_cta_or_next_step" },
+    ],
+  },
+  {
+    id:          "vc-05",
+    group:       "consultative_close",
+    groupLabel:  "Venda Consultiva / Fechamento",
+    description: "'gostei, pode colocar' → confirm/ask-which, never a denial or dump",
+    message:     "gostei, pode colocar",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "no_hallucination" },
+      { type: "has_cta_or_next_step" },
+      { type: "no_long_menu_dump" },
+    ],
+  },
+  {
+    id:              "vc-06",
+    group:           "consultative_close",
+    groupLabel:      "Venda Consultiva / Fechamento",
+    description:     "'não quero bebida' (cart has food) → refusal respected, no drink re-push",
+    message:         "não quero bebida",
+    cartSeedPattern: "uramaki|sushi|temaki|hot|combo|combinado|yakisoba|frango|carne|salm",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "no_hallucination" },
+      { type: "respects_refusal", refusedCategory: "drink" },
+    ],
+  },
+  {
+    id:              "vc-07",
+    group:           "consultative_close",
+    groupLabel:      "Venda Consultiva / Fechamento",
+    description:     "'quero finalizar' (cart has items) → checkout guidance, no upsell dump",
+    message:         "quero finalizar",
+    cartSeedPattern: "uramaki|sushi|temaki|hot|combo|combinado|yakisoba|frango|carne|salm|.",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "no_hallucination" },
+      { type: "has_cta_or_next_step" },
+      { type: "no_long_menu_dump" },
+      { type: "respects_refusal", refusedCategory: "drink" },
+    ],
+  },
+  {
+    id:              "vc-08",
+    group:           "consultative_close",
+    groupLabel:      "Venda Consultiva / Fechamento",
+    description:     "'o que combina com esse combo?' (combo in cart) → contextual pairing + CTA",
+    message:         "o que combina com esse combo?",
+    cartSeedPattern: "combo|combinado|festival|bandeja|uramaki|sushi|temaki|.",
+    checks: [
+      { type: "no_forbidden_denial" },
+      { type: "cards_not_empty" },
+      { type: "has_real_cards" },
+      { type: "has_cta_or_next_step" },
+      { type: "no_long_menu_dump" },
     ],
   },
 ];

@@ -7,7 +7,7 @@
  * No OpenAI calls. No DB writes. Pure function — safe to call in any context.
  */
 
-import { decide, type V2CatalogItem, type V2Input } from "../../WaiterBrainV2";
+import { decide, createWaiterMemory, type V2CatalogItem, type V2Input } from "../../WaiterBrainV2";
 import type { WaiterTestCase, EvalCheck } from "./waiterScenarios";
 
 // ─── result types ─────────────────────────────────────────────────────────────
@@ -58,6 +58,35 @@ function isShareable(item: V2CatalogItem): boolean {
   if (GROUP_KEYWORDS.test(item.name))         return true;
   if (GROUP_KEYWORDS.test(item.categoryName)) return true;
   return false;
+}
+
+// Max cards a consultative response may render (mirrors WaiterBrainV2 ceiling).
+const MAX_CARDS_PER_RESPONSE = 6;
+
+const DRINK_CAT_RE   = /bebida|suco|drink|refri|água|agua|cerveja|vinho|refrigerante|soda|shake/i;
+const DESSERT_CAT_RE = /sobremesa|doce|gelad|sorvete|brownie|pudim|mousse|tembleque/i;
+
+function isCategory(item: V2CatalogItem, cat: "drink" | "dessert"): boolean {
+  const re = cat === "drink" ? DRINK_CAT_RE : DESSERT_CAT_RE;
+  return re.test(item.categoryName) || re.test(item.name);
+}
+
+/** True when the response invites a clear next action (CTA, question, button, or add-language). */
+function hasCtaOrNextStep(output: ReturnType<typeof decide>): boolean {
+  if (output.options.length > 0) return true;
+  const m = output.message;
+  if (m.includes("👇") || m.includes("?")) return true;
+  return /adicion|carrinho|finaliz|toc(ar|a|e|o)|toque|revisar|pedir|separo|colocar|pra fechar|pode escolher/i.test(m);
+}
+
+/** Resolves a cartSeedPattern (regex string) to a real catalog item ID, else falls back to the first item. */
+export function resolveCartSeed(pattern: string | undefined, catalog: V2CatalogItem[]): string[] {
+  if (!pattern || catalog.length === 0) return [];
+  let re: RegExp;
+  try { re = new RegExp(pattern, "i"); } catch { return catalog[0] ? [catalog[0].id] : []; }
+  const hit = catalog.find((i) => re.test(i.name) || re.test(i.categoryName));
+  if (hit) return [hit.id];
+  return catalog[0] ? [catalog[0].id] : [];
 }
 
 // ─── check evaluator ──────────────────────────────────────────────────────────
@@ -139,6 +168,47 @@ function runCheck(
           : `No card from category matching /${check.categoryPattern}/i`,
       };
     }
+
+    case "has_cta_or_next_step": {
+      const pass = hasCtaOrNextStep(output);
+      return {
+        type:   check.type,
+        pass,
+        detail: pass
+          ? "Response carries a CTA / question / option / add-language next step"
+          : `No next step in response: "${output.message.slice(0, 80)}" (options=${output.options.length})`,
+      };
+    }
+
+    case "no_long_menu_dump": {
+      const pass = output.cards.length <= MAX_CARDS_PER_RESPONSE;
+      return {
+        type:   check.type,
+        pass,
+        detail: pass
+          ? `Card count ${output.cards.length} ≤ ${MAX_CARDS_PER_RESPONSE}`
+          : `Menu dump: ${output.cards.length} cards exceeds max ${MAX_CARDS_PER_RESPONSE}`,
+      };
+    }
+
+    case "respects_refusal": {
+      const cat = check.refusedCategory;
+      if (!cat) {
+        return { type: check.type, pass: false, detail: "Missing refusedCategory for respects_refusal check" };
+      }
+      const offending = output.cards.filter((id) => {
+        const item = catalogMap.get(id);
+        return item ? isCategory(item, cat) : false;
+      });
+      const pass = offending.length === 0;
+      return {
+        type:   check.type,
+        pass,
+        detail: pass
+          ? `No ${cat} card re-pushed after refusal`
+          : `Refusal ignored — re-pushed ${cat} card(s): ${offending.slice(0, 3).join(", ")}`,
+      };
+    }
   }
 }
 
@@ -148,12 +218,15 @@ export function evaluateScenario(
   tc:      WaiterTestCase,
   catalog: V2CatalogItem[],
 ): ScenarioResult {
+  const cartItemIds = tc.cartItemIds ?? resolveCartSeed(tc.cartSeedPattern, catalog);
+
   const input: V2Input = {
     event:       "ON_USER_MESSAGE",
-    cartItemIds: tc.cartItemIds ?? [],
+    cartItemIds,
     cartValue:   0,
     catalog,
     message:     tc.message,
+    ...(tc.memory ? { memory: { ...createWaiterMemory(), ...tc.memory } } : {}),
   };
 
   const output    = decide(input);

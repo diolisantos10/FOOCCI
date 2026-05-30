@@ -289,7 +289,7 @@ export function analyzeSalesContext(input: V2Input): SalesAnalysis {
 
   if (
     /\b(família|familia|grupo|[2-9]\s*pessoas?)\b|\bgroup\b|para\s*compartilhar/i.test(msg) ||
-    /\bsomos\s*[2-9]\b|\bpara\s*[2-9]\s*pes|\b[2-9]\s*pesso/i.test(msg)
+    /\bsomos\s+(?:em\s+)?[2-9]\b|\bn[óo]s\s+(?:somos\s+)?(?:em\s+)?[2-9]\b|\bpara\s*[2-9]\s*pes|\bem\s+[2-9]\s+pessoas?\b|\b[2-9]\s*pesso/i.test(msg)
   ) {
     return {
       customerIntent:   "wants_group_order",
@@ -2029,10 +2029,11 @@ function findPinnedId(catalog: V2CatalogItem[], pairing: string, cards: string[]
 }
 
 function handleCheckoutStarted(input: V2Input): V2Output {
-  const cfg   = input.config ?? DEFAULT_WAITER_CONFIG;
-  const mem   = input.memory ?? createWaiterMemory();
-  const ca    = analyzeCart(input.cartItemIds, input.catalog);
-  const stage = mem.checkoutUpsellStage ?? "none";
+  const cfg      = input.config ?? DEFAULT_WAITER_CONFIG;
+  const mem      = input.memory ?? createWaiterMemory();
+  const ca       = analyzeCart(input.cartItemIds, input.catalog);
+  const stage    = mem.checkoutUpsellStage ?? "none";
+  const declined = mem.declinedSuggestionTypes ?? [];
 
   const done = (): V2Output => ({
     message: "Excelente pedido. Vamos concluir agora.", cards: [], mode: "CHECKOUT_SUPPORT",
@@ -2044,9 +2045,9 @@ function handleCheckoutStarted(input: V2Input): V2Output {
     return done();
   }
 
-  // Stage "none": offer drinks first (if cart lacks one)
+  // Stage "none": offer drinks first (if cart lacks one and drinks weren't refused)
   if (stage === "none") {
-    if (!ca.hasDrink) {
+    if (!ca.hasDrink && !declined.includes("drink_upsell")) {
       const drinkCards = selectDrinkItems(input.catalog, input.cartItemIds);
       if (drinkCards.length > 0) {
         const pairing      = getCartPairing(input.catalog, input.cartItemIds);
@@ -2069,9 +2070,9 @@ function handleCheckoutStarted(input: V2Input): V2Output {
     // No drink needed / no drink cards → fall through to dessert stage
   }
 
-  // Stage "none" (no drinks) or "drink_shown": offer desserts
+  // Stage "none" (no drinks) or "drink_shown": offer desserts (unless refused)
   if (stage === "none" || stage === "drink_shown") {
-    if (!ca.hasDessert) {
+    if (!ca.hasDessert && !declined.includes("dessert_upsell")) {
       const dessertCards = selectDessertItems(input.catalog, input.cartItemIds);
       if (dessertCards.length > 0) {
         const pairing      = getCartPairing(input.catalog, input.cartItemIds);
@@ -2220,18 +2221,20 @@ function noCardsFound(): V2Output {
 
 // ─── Commercial Response Builder (Sprint 4D) ─────────────────
 
+// Each copy ends with a soft CLOSING CTA — the consultative seller always invites
+// the next step (add to cart) instead of leaving the suggestion hanging.
 const INTENT_COPY: Partial<Record<CustomerIntent, string>> = {
-  wants_light_option:    "Pra algo mais leve — essas são as favoritas da casa 👇",
-  wants_complete_meal:   "Pra uma refeição completa — essa combinação é perfeita 👇",
-  wants_group_order:     "As favoritas do grupo — combinação certeira 👇",
-  wants_budget_option:   "Melhor custo-benefício da casa — o mais pedido nessa faixa 👇",
-  wants_premium_option:  "O melhor da casa — vale cada detalhe 👇",
-  asks_for_drink:        "A combinação perfeita pra acompanhar o pedido 👇",
-  asks_for_dessert:      "O favorito dos clientes pra fechar com chave de ouro 🍰",
-  asks_for_pairing:      "Combinação perfeita com o que você escolheu 👇",
-  wants_recommendation:  "O mais pedido da casa — você vai adorar 👇",
-  asks_specific_product: "Separei essa opção especial pra você 👇",
-  asks_category:         "As melhores opções dessa categoria 👇",
+  wants_light_option:    "Pra algo mais leve, essas são as favoritas 👇 Quer que eu adicione?",
+  wants_complete_meal:   "Pra uma refeição completa, essa combinação é certeira 👇 Quer adicionar?",
+  wants_group_order:     "As favoritas do grupo pra dividir 👇 Quer que eu coloque no pedido?",
+  wants_budget_option:   "Melhor custo-benefício da casa 👇 Quer adicionar uma dessas?",
+  wants_premium_option:  "O melhor da casa, vale cada detalhe 👇 Quer experimentar?",
+  asks_for_drink:        "A bebida perfeita pra acompanhar 👇 Quer adicionar?",
+  asks_for_dessert:      "O favorito pra fechar com chave de ouro 🍰 Quer adicionar?",
+  asks_for_pairing:      "Combina certinho com o seu pedido 👇 Quer que eu adicione?",
+  wants_recommendation:  "O mais pedido da casa 👇 Quer que eu já adicione?",
+  asks_specific_product: "Separei essa opção pra você 👇 Quer adicionar ao pedido?",
+  asks_category:         "As melhores dessa categoria 👇 Quer adicionar alguma?",
 };
 
 export interface CommercialResponseInput {
@@ -2421,6 +2424,25 @@ function findCulinaryExplanation(msgLow: string): string | null {
   }
   return null;
 }
+
+// ─── Consultative selling: refusal + acceptance detection (W4) ───────────────
+// A real salesperson respects "no" and acts on "yes". These run before intent
+// classification so a refusal is never misread as a fresh category request
+// (e.g. "não quero bebida" must NOT trigger a drink suggestion).
+
+const REFUSAL_DRINK_RE =
+  /\b(n[ãa]o\s+quero|n[ãa]o\s+vou\s+querer|sem|nada\s+de|dispenso|n[ãa]o\s+precisa\s+(de|d[ao]))\s+(uma\s+|a\s+|um\s+)?(bebida|refri(gerante)?|suco|drink)\b|n[ãa]o\s+quero\s+beber/i;
+
+const REFUSAL_DESSERT_RE =
+  /\b(n[ãa]o\s+quero|n[ãa]o\s+vou\s+querer|sem|nada\s+de|dispenso|n[ãa]o\s+precisa\s+(de|d[ao]))\s+(uma\s+|a\s+)?(sobremesa|doce)\b/i;
+
+// Generic "I'm done / no more" closing signal.
+const REFUSAL_GENERIC_RE =
+  /^(n[ãa]o\s*,?\s*(obrigad[oa])?\.?|n[ãa]o\s+quero\s+(mais\s+)?nada|s[óo]\s+isso|s[óo]\s+isso\s+mesmo|t[áa]\s+(bom|certo|[óo]timo)\s+assim|pode\s+fechar|chega|j[áa]\s+chega|nada\s+mais|tudo\s+certo)\b/i;
+
+// Acceptance without a specific product reference ("gostei, pode colocar").
+const ACCEPTANCE_RE =
+  /\b(pode\s+(colocar|adicionar|p[ôo]r|botar|mandar|incluir)|adiciona(\s+(isso|esse|esses|a[íi]))?|gostei[,!.\s]+(pode|quero|adiciona)|quero\s+esse|quero\s+sim|fechad[oa]|isso\s+mesmo|manda\s+ver|pode\s+ser\s+esse)\b/i;
 
 function handleUserMessage(input: V2Input): V2Output {
   const cfg          = input.config ?? DEFAULT_WAITER_CONFIG;
@@ -2691,6 +2713,72 @@ function handleUserMessage(input: V2Input): V2Output {
     };
   }
 
+  // ── Refusal handling (W4) — respect "não quero X" / closing signals ──────────
+  // Runs BEFORE intent classification & menu search so a refusal is never re-read
+  // as a category request (which would re-suggest the very thing just declined).
+  {
+    const declined       = input.memory?.declinedSuggestionTypes ?? [];
+    const drinkRefused   = REFUSAL_DRINK_RE.test(msgLow);
+    const dessertRefused = REFUSAL_DESSERT_RE.test(msgLow);
+    if (drinkRefused || dessertRefused) {
+      const type = drinkRefused ? "drink_upsell" : "dessert_upsell";
+      return {
+        message:     "Sem problema 😊 Você pode revisar seu pedido quando quiser.",
+        cards:       [],
+        mode:        "BROWSE",
+        options:     [],
+        requiresAI:  false,
+        aiDirective: "",
+        memoryPatch: { declinedSuggestionTypes: [...new Set([...declined, type])] },
+      };
+    }
+    // Generic "no more / I'm done" — guide to checkout without pushing anything.
+    if (REFUSAL_GENERIC_RE.test(msgLow)) {
+      return cartItemIds.length > 0
+        ? {
+            message:     "Perfeito 😊 Quando quiser, é só tocar em Finalizar Pedido.",
+            cards:       [],
+            mode:        "CHECKOUT_SUPPORT",
+            options:     [],
+            requiresAI:  false,
+            aiDirective: "",
+          }
+        : {
+            message:     "Perfeito 😊 Fico por aqui se precisar de uma sugestão.",
+            cards:       [],
+            mode:        "BROWSE",
+            options:     [],
+            requiresAI:  false,
+            aiDirective: "",
+          };
+    }
+  }
+
+  // ── Acceptance handling (W4) — customer said "yes, add it" ───────────────────
+  // The brain cannot add to the cart (UI owns that), so it re-surfaces the last
+  // suggested cards with a clear tap-to-add CTA, or asks which item if none.
+  if (ACCEPTANCE_RE.test(msgLow)) {
+    const prev = (input.memory?.suggestedProductIds ?? []).filter((id) => !cartItemIds.includes(id));
+    if (prev.length > 0) {
+      return {
+        message:     "Boa escolha 😊 É só tocar no card pra adicionar ao pedido 👇",
+        cards:       prev,
+        mode:        "SUGGESTION",
+        options:     [],
+        requiresAI:  false,
+        aiDirective: "",
+      };
+    }
+    return {
+      message:     "Perfeito 😊 Qual deles você quer? Me diz o nome que eu já separo.",
+      cards:       [],
+      mode:        "BROWSE",
+      options:     [],
+      requiresAI:  false,
+      aiDirective: "",
+    };
+  }
+
   // ── Priority intent guard (runs BEFORE literal search / existence denial) ────
   // Context/preference phrases must NOT be treated as literal product searches:
   //   • "para 4 pessoas" / "somos 4" = group-size intent, NOT a product "pessoas".
@@ -2718,6 +2806,37 @@ function handleUserMessage(input: V2Input): V2Output {
         requiresAI:  false,
         aiDirective: "",
       };
+    }
+
+    // Pairing request WITH items in cart → contextual complement (drink/dessert/
+    // pairing), not a literal search on the dish name the customer referenced.
+    // e.g. "o que combina com esse combo?" → harmonizing items, not more combos.
+    if (ctxAnalysis.customerIntent === "asks_for_pairing" && cartItemIds.length > 0) {
+      const cards = rankProducts(catalog, "asks_for_pairing", cartItemIds, 5, suggestedIds);
+      if (cards.length > 0) return suggest("asks_for_pairing", cards, "SUGGESTION");
+    }
+
+    // Preference / recommendation intents must be answered with real cards, never
+    // routed to the literal existence-denial guard below. Phrasings like
+    // "tem opção mais leve?" or "o que tem de melhor?" carry "tem" but are NOT
+    // existence questions — denying them ("não encontrei leve") is bot-like and
+    // forbidden by the Waiter profile. Each returns cards when available; otherwise
+    // it falls through to the existing AI / discovery handling.
+    if (ctxAnalysis.customerIntent === "wants_light_option") {
+      const cards = rankProducts(catalog, "wants_light_option", cartItemIds, 5, suggestedIds);
+      if (cards.length > 0) return suggest("wants_light_option", cards, "SUGGESTION");
+    }
+    if (ctxAnalysis.customerIntent === "wants_complete_meal") {
+      const cards = rankProducts(catalog, "wants_complete_meal", cartItemIds, 5, suggestedIds);
+      if (cards.length > 0) return suggest("wants_complete_meal", cards, "SUGGESTION");
+    }
+    if (ctxAnalysis.customerIntent === "wants_premium_option") {
+      const cards = rankProducts(catalog, "wants_premium_option", cartItemIds, 5, suggestedIds);
+      if (cards.length > 0) return suggest("wants_premium_option", cards, "INTERVENTION");
+    }
+    if (ctxAnalysis.customerIntent === "wants_recommendation") {
+      const cards = rankProducts(catalog, "wants_recommendation", cartItemIds, 5, suggestedIds);
+      if (cards.length > 0) return suggest("wants_recommendation", cards, "SUGGESTION");
     }
 
     // Budget intent — "em conta", "barato", "mais barato", etc. must never become a
@@ -2904,9 +3023,17 @@ function handleUserMessage(input: V2Input): V2Output {
     }
     case "checkout_intent": {
       if (!hasItems) break;
-      // Delegate to the same stage machine used by the Finalizar button
-      // so typing "finalizar" advances through the same drink→dessert→checkout sequence.
-      return handleCheckoutStarted(input);
+      // Customer explicitly asked to finish — respect it: guide to checkout and
+      // STOP selling (no fresh upsell). The one-shot upsell still lives on the
+      // Finalizar button (ON_CHECKOUT_STARTED), which is a separate moment.
+      return {
+        message:     "Perfeito! 😊 É só tocar em Finalizar Pedido pra concluir. Quer revisar algo antes?",
+        cards:       [],
+        mode:        "CHECKOUT_SUPPORT",
+        options:     [],
+        requiresAI:  false,
+        aiDirective: "",
+      };
     }
   }
 
@@ -2933,6 +3060,10 @@ const SAFE_FALLBACK: V2Output = {
 };
 
 const VALID_MODES = new Set<WaiterMode>(["BROWSE", "SUGGESTION", "INTERVENTION", "CHECKOUT_SUPPORT"]);
+
+// Hard ceiling on how many product cards a single response may render.
+// Keeps suggestions scannable and prevents accidental full-catalog dumps.
+const MAX_SUGGESTION_CARDS = 6;
 
 // Unanswered choice questions → attach appropriate buttons automatically
 const QUESTION_BUTTON_PATTERNS: { re: RegExp; options: WaiterOption[] }[] = [
@@ -3023,6 +3154,10 @@ export function validateWaiterResponse(
     // 2. Deduplicate cards and drop any ID not present in the catalog
     const catalogIds = new Set(catalog.map((i) => i.id));
     cards = [...new Set(cards)].filter((id) => catalogIds.has(id));
+
+    // 2b. Cap card count — a consultative seller never dumps a long menu list.
+    //     Keep the highest-priority items (already ordered by relevance/sortOrder).
+    if (cards.length > MAX_SUGGESTION_CARDS) cards = cards.slice(0, MAX_SUGGESTION_CARDS);
 
     // 3. Truncate message to max 2 non-empty lines
     {
@@ -3125,6 +3260,10 @@ function computeMemoryPatch(input: V2Input, output: V2Output): Partial<WaiterMem
   }
   if (output.memoryPatch?.checkoutUpsellStage !== undefined) {
     patch.checkoutUpsellStage = output.memoryPatch.checkoutUpsellStage;
+  }
+  // Refusal handler (W4) records declined upsell categories so they are not re-pushed.
+  if (output.memoryPatch?.declinedSuggestionTypes) {
+    patch.declinedSuggestionTypes = output.memoryPatch.declinedSuggestionTypes;
   }
 
   // Always track last mode
