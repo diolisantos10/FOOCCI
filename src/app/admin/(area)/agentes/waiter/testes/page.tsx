@@ -41,7 +41,7 @@ function ResultCard({ result }: { result: ScenarioResult }) {
             <span className="rounded bg-violet-900/40 px-1.5 py-0.5 text-[10px] text-violet-300">{result.groupLabel}</span>
           </div>
           <p className="text-sm text-gray-300 truncate">{result.description}</p>
-          <p className="mt-0.5 text-xs text-gray-500 italic truncate">"{result.message}"</p>
+          <p className="mt-0.5 text-xs text-gray-500 italic truncate">&ldquo;{result.message}&rdquo;</p>
         </div>
         <button
           type="button"
