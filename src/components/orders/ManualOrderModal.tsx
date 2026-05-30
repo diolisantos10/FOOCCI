@@ -36,6 +36,14 @@ interface DeliveryQuote {
   distanceKm:        number | null;
 }
 
+interface AppliedCoupon {
+  promotionId:    string;
+  couponCode:     string;
+  discountAmount: number;
+  discountType:   string;
+  name:           string;
+}
+
 type PaymentMethod = "CASH" | "PIX" | "CREDIT_CARD" | "DEBIT_CARD" | "CARD_MACHINE";
 type PaymentStatus = "PAID" | "PAY_ON_DELIVERY";
 type OrderType     = "DELIVERY" | "PICKUP";
@@ -68,6 +76,8 @@ interface ManualOrderDraft {
   addr:          DeliveryAddr;
   quote:         DeliveryQuote | null;
   discountStr:   string;
+  couponInput:   string;
+  appliedCoupon: AppliedCoupon | null;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   savedAt:       number;
@@ -119,8 +129,12 @@ export function ManualOrderModal({
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError,   setQuoteError]   = useState<string | null>(null);
 
-  // Step 5: Discount
-  const [discountStr, setDiscountStr] = useState("");
+  // Step 5: Discount / Coupon
+  const [discountStr,    setDiscountStr]    = useState("");
+  const [couponInput,    setCouponInput]    = useState("");
+  const [appliedCoupon,  setAppliedCoupon]  = useState<AppliedCoupon | null>(null);
+  const [couponError,    setCouponError]    = useState<string | null>(null);
+  const [couponLoading,  setCouponLoading]  = useState(false);
 
   // Step 6: Payment
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
@@ -146,7 +160,10 @@ export function ManualOrderModal({
 
   const cartSubtotal   = cart.reduce((s, l) => s + l.price * l.quantity, 0);
   const deliveryFee    = orderType === "DELIVERY" ? (quote?.deliveryFee ?? 0) : 0;
-  const discountAmount = Math.max(0, parseFloat(discountStr.replace(",", ".")) || 0);
+  // coupon discount takes precedence over the manual freeform discount field
+  const discountAmount = appliedCoupon
+    ? appliedCoupon.discountAmount
+    : Math.max(0, parseFloat(discountStr.replace(",", ".")) || 0);
   const cartTotal      = Math.max(0, cartSubtotal + deliveryFee - discountAmount);
 
   const stepLabels = orderType === "DELIVERY" ? DELIVERY_STEPS : PICKUP_STEPS;
@@ -215,6 +232,8 @@ export function ManualOrderModal({
           if (d.addr) setAddr(d.addr);
           setQuote(d.quote ?? null);
           setDiscountStr(d.discountStr ?? "");
+          setCouponInput(d.couponInput ?? "");
+          setAppliedCoupon(d.appliedCoupon ?? null);
           if (d.paymentMethod) setPaymentMethod(d.paymentMethod);
           if (d.paymentStatus) setPaymentStatus(d.paymentStatus);
           if (d.step) setStep(d.step);
@@ -244,7 +263,8 @@ export function ManualOrderModal({
     try {
       const draft: ManualOrderDraft = {
         v: DRAFT_VERSION, step, customerName, customerPhone, notes, cart,
-        orderType, addr, quote, discountStr, paymentMethod, paymentStatus,
+        orderType, addr, quote, discountStr, couponInput, appliedCoupon,
+        paymentMethod, paymentStatus,
         savedAt: Date.now(),
       };
       localStorage.setItem(draftKey, JSON.stringify(draft));
@@ -253,7 +273,7 @@ export function ManualOrderModal({
     }
   }, [
     draftKey, step, customerName, customerPhone, notes, cart, orderType,
-    addr, quote, discountStr, paymentMethod, paymentStatus,
+    addr, quote, discountStr, couponInput, appliedCoupon, paymentMethod, paymentStatus,
   ]);
 
   function clearDraft() {
@@ -264,6 +284,54 @@ export function ManualOrderModal({
     clearDraft();
     setShowDiscardConfirm(false);
     onClose();
+  }
+
+  // ── Coupon helpers ────────────────────────────────────────────────────────
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponLoading(true);
+    setCouponError(null);
+    try {
+      const res  = await fetch("/api/orders/validate-coupon", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          couponCode:  code,
+          subtotal:    cartSubtotal,
+          deliveryFee: deliveryFee,
+          type:        orderType,
+        }),
+      });
+      const json = await res.json() as {
+        valid: boolean; error?: string;
+        promotionId?: string; couponCode?: string;
+        discountAmount?: number; discountType?: string; name?: string;
+      };
+      if (!res.ok || !json.valid) {
+        setCouponError(json.error ?? "Cupom inválido, expirado ou não aplicável");
+      } else {
+        setAppliedCoupon({
+          promotionId:    json.promotionId!,
+          couponCode:     json.couponCode!,
+          discountAmount: json.discountAmount!,
+          discountType:   json.discountType!,
+          name:           json.name!,
+        });
+        setDiscountStr("");   // clear manual discount when coupon is applied
+        setCouponInput("");
+      }
+    } catch {
+      setCouponError("Falha de rede ao validar cupom");
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null);
+    setCouponError(null);
   }
 
   // ── Cart helpers ──────────────────────────────────────────────────────────
@@ -400,7 +468,11 @@ export function ManualOrderModal({
         customerPhone:  customerPhone.trim() || undefined,
         notes:          notes.trim() || undefined,
         deliveryFee,
-        discountAmount: discountAmount > 0 ? discountAmount : undefined,
+        // When a coupon is applied, the backend re-validates and computes the
+        // discount itself — do not send discountAmount alongside couponCode.
+        ...(appliedCoupon
+          ? { couponCode: appliedCoupon.couponCode }
+          : { discountAmount: discountAmount > 0 ? discountAmount : undefined }),
         type:           orderType,
         paymentMethod,
         paymentStatus,
@@ -706,18 +778,70 @@ export function ManualOrderModal({
             </div>
           )}
 
-          {/* ── Step 5: Discount ─────────────────────────────────────── */}
+          {/* ── Step 5: Discount / Coupon ────────────────────────────── */}
           {step === 5 && (
             <div className="space-y-4">
               <p className="text-xs text-gray-500">
-                Opcional. Deixe em branco para pedido sem desconto.
+                Opcional. Use um cupom de desconto ou informe um valor manual.
               </p>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Desconto em R$ (opcional)</label>
-                <input type="text" inputMode="decimal" value={discountStr}
-                  onChange={(e) => setDiscountStr(e.target.value)}
-                  placeholder="0,00" className={inputCls} autoFocus />
-              </div>
+
+              {/* Coupon section */}
+              {!appliedCoupon ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Cupom de desconto</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponInput}
+                      onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(null); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") void applyCoupon(); }}
+                      placeholder="CÓDIGO DO CUPOM"
+                      className={inputCls + " uppercase tracking-widest"}
+                      disabled={couponLoading}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void applyCoupon()}
+                      disabled={couponLoading || !couponInput.trim()}
+                      className="shrink-0 rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                    >
+                      {couponLoading ? "…" : "Aplicar"}
+                    </button>
+                  </div>
+                  {couponError && (
+                    <p className="mt-1.5 text-xs text-red-600">{couponError}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-3 rounded-lg bg-green-50 border border-green-200 px-3 py-2.5">
+                  <div>
+                    <p className="text-xs font-bold text-green-800 tracking-wide">{appliedCoupon.couponCode}</p>
+                    <p className="text-xs text-green-700 mt-0.5">
+                      {appliedCoupon.name} — desconto: −&nbsp;R$&nbsp;{appliedCoupon.discountAmount.toFixed(2).replace(".", ",")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeCoupon}
+                    className="shrink-0 text-xs font-semibold text-green-600 hover:text-red-500 transition-colors whitespace-nowrap pt-0.5"
+                  >
+                    Remover
+                  </button>
+                </div>
+              )}
+
+              {/* Manual discount — hidden while a coupon is active */}
+              {!appliedCoupon && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Desconto manual em R$ (opcional)</label>
+                  <input type="text" inputMode="decimal" value={discountStr}
+                    onChange={(e) => setDiscountStr(e.target.value)}
+                    placeholder="0,00" className={inputCls} />
+                </div>
+              )}
+
+              {/* Order summary */}
               <div className="rounded-xl border border-gray-100 bg-gray-50 divide-y divide-gray-100 text-sm">
                 <div className="flex justify-between px-3 py-2">
                   <span className="text-gray-500">Subtotal</span>
@@ -731,7 +855,7 @@ export function ManualOrderModal({
                 )}
                 {discountAmount > 0 && (
                   <div className="flex justify-between px-3 py-2 text-green-700">
-                    <span>Desconto</span>
+                    <span>Desconto{appliedCoupon ? ` (${appliedCoupon.couponCode})` : ""}</span>
                     <span>− R$ {discountAmount.toFixed(2).replace(".", ",")}</span>
                   </div>
                 )}
@@ -782,7 +906,7 @@ export function ManualOrderModal({
                 )}
                 {discountAmount > 0 && (
                   <div className="flex justify-between px-3 py-2 text-green-700">
-                    <span>Desconto</span>
+                    <span>Desconto{appliedCoupon ? ` (${appliedCoupon.couponCode})` : ""}</span>
                     <span>− R$ {discountAmount.toFixed(2).replace(".", ",")}</span>
                   </div>
                 )}
@@ -857,6 +981,12 @@ export function ManualOrderModal({
               {discountAmount > 0 && (
                 <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3">
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-green-400">Desconto</p>
+                  {appliedCoupon && (
+                    <p className="text-xs font-bold text-green-700 mb-0.5 tracking-wide">{appliedCoupon.couponCode}</p>
+                  )}
+                  {appliedCoupon && (
+                    <p className="text-[11px] text-green-600 mb-1">{appliedCoupon.name}</p>
+                  )}
                   <p className="text-sm font-semibold text-green-700">
                     − R$ {discountAmount.toFixed(2).replace(".", ",")}
                   </p>

@@ -51,6 +51,8 @@ const bodySchema = z.object({
   conversationId:  z.string().optional(),
   deliveryAddress: addressSchema.optional(),
   discountAmount:  z.number().min(0).optional(),
+  // Coupon: when provided the backend re-validates and overrides discountAmount.
+  couponCode:      z.string().max(50).optional(),
   // Real product items (preferred)
   items: z.array(itemSchema).optional(),
   // Legacy: free-text total (used when items not provided)
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest) {
   const {
     customerName, customerPhone, notes, deliveryFee, type,
     paymentMethod, paymentStatus, source, conversationId, deliveryAddress, items, total,
-    discountAmount,
+    discountAmount, couponCode,
   } = parsed.data;
   const { restaurantId } = ctx;
 
@@ -218,7 +220,79 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const discount   = Math.max(0, discountAmount ?? 0);
+  // ── Coupon server-side re-validation ─────────────────────────────────────
+  // When couponCode is provided: validate, compute discount, and write coupon
+  // fields on the Order. The client-supplied discountAmount is ignored.
+  // When couponCode is absent: discountAmount is used as a manual operator discount.
+  let resolvedCouponCode:     string | null = null;
+  let resolvedPromoId:        string | null = null;
+  let promoOneTimePerUser                   = false;
+  let couponDiscountAmount                  = 0;
+
+  if (couponCode?.trim()) {
+    const code  = couponCode.trim();
+    const promo = await prisma.promotion.findFirst({
+      where: {
+        restaurantId,
+        status:     "ACTIVE",
+        couponCode: { equals: code, mode: "insensitive" },
+      },
+    });
+
+    if (!promo) {
+      return NextResponse.json({ error: "Cupom inválido ou expirado" }, { status: 400 });
+    }
+
+    const now = new Date();
+    if ((promo.startsAt && promo.startsAt > now) || (promo.endsAt && promo.endsAt < now)) {
+      return NextResponse.json({ error: "Cupom expirado ou ainda não válido" }, { status: 400 });
+    }
+    if (promo.daysOfWeek.length > 0 && !promo.daysOfWeek.includes(now.getDay())) {
+      return NextResponse.json({ error: "Cupom não válido hoje" }, { status: 400 });
+    }
+
+    // Channel: DELIVERY / QR_MENU channel restrictions applied.
+    // WHATSAPP channel allowed for manual orders (WhatsApp-originating).
+    const isDelivery = type === "DELIVERY";
+    if (promo.channel === "DELIVERY" && !isDelivery) {
+      return NextResponse.json({ error: "Cupom válido apenas para pedidos com entrega" }, { status: 400 });
+    }
+    if (promo.channel === "QR_MENU" && isDelivery) {
+      return NextResponse.json({ error: "Cupom válido apenas para retirada no balcão" }, { status: 400 });
+    }
+
+    if (promo.minOrderValue !== null && subtotal < Number(promo.minOrderValue)) {
+      const min = Number(promo.minOrderValue).toFixed(2).replace(".", ",");
+      return NextResponse.json({ error: `Pedido mínimo de R$ ${min} para este cupom` }, { status: 400 });
+    }
+    if (promo.maxUses !== null && promo.maxUses > 0 && promo.usedCount >= promo.maxUses) {
+      return NextResponse.json({ error: "Cupom esgotado" }, { status: 400 });
+    }
+
+    const dv = Number(promo.discountValue);
+    const orderTotalForCap = subtotal + deliveryFee;
+    switch (promo.type) {
+      case "PERCENTAGE":
+        couponDiscountAmount = Math.min((subtotal * dv) / 100, subtotal); break;
+      case "FIXED":
+      case "COUPON":
+        couponDiscountAmount = Math.min(dv, orderTotalForCap); break;
+      case "FREE_DELIVERY":
+        couponDiscountAmount = deliveryFee; break;
+      default:
+        couponDiscountAmount = 0;
+    }
+    couponDiscountAmount = Math.round(couponDiscountAmount * 100) / 100;
+
+    resolvedCouponCode    = promo.couponCode ?? code;
+    resolvedPromoId       = promo.id;
+    promoOneTimePerUser   = promo.oneTimePerUser;
+  }
+
+  // couponCode present → use server-computed coupon discount and ignore client value
+  const discount   = resolvedPromoId
+    ? Math.max(0, couponDiscountAmount)
+    : Math.max(0, discountAmount ?? 0);
   const orderTotal = Math.max(0, subtotal + deliveryFee - discount);
   const phone      = customerPhone?.trim() || `GUEST-${randomUUID()}`;
   const isGuest    = phone.startsWith("GUEST-");
@@ -240,6 +314,19 @@ export async function POST(req: NextRequest) {
         where: { id: customer.id },
         data:  { name: customerName },
       });
+    }
+
+    // oneTimePerUser coupon guard — checked inside transaction for serializability.
+    if (resolvedPromoId && promoOneTimePerUser) {
+      const alreadyUsed = await tx.order.findFirst({
+        where: {
+          customerId:  customer.id,
+          promotionId: resolvedPromoId,
+          status:      { notIn: ["AWAITING_PAYMENT", "CANCELLED"] },
+        },
+        select: { id: true },
+      });
+      if (alreadyUsed) throw new Error("COUPON_ALREADY_USED");
     }
 
     // Create delivery address record if provided
@@ -278,6 +365,9 @@ export async function POST(req: NextRequest) {
         total:            new Decimal(orderTotal),
         notes:            notes || null,
         deliveryAddressId: deliveryAddressId ?? undefined,
+        couponCode:           resolvedCouponCode ?? undefined,
+        promotionId:          resolvedPromoId    ?? undefined,
+        couponUsageCountedAt: resolvedPromoId    ? new Date() : undefined,
         source,
         items: resolvedItems.length > 0
           ? {
@@ -303,6 +393,15 @@ export async function POST(req: NextRequest) {
       select: { id: true, status: true, total: true, orderNumber: true },
     });
 
+    // Increment coupon usedCount — manual orders are always CONFIRMED, so usage
+    // is counted immediately (no deferred webhook path unlike pay_now Pix).
+    if (resolvedPromoId) {
+      await tx.promotion.update({
+        where: { id: resolvedPromoId },
+        data:  { usedCount: { increment: 1 } },
+      });
+    }
+
     // Payment record
     await tx.payment.create({
       data: {
@@ -318,7 +417,14 @@ export async function POST(req: NextRequest) {
     });
 
     return created;
+  }).catch((err: unknown) => {
+    if (err instanceof Error && err.message === "COUPON_ALREADY_USED") return null as never;
+    throw err;
   });
+
+  if (order === null) {
+    return NextResponse.json({ error: "Cupom já utilizado por este cliente" }, { status: 400 });
+  }
 
   const displayNumber = formatOrderNumber(order.orderNumber, order.id);
 
