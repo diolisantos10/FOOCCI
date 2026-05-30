@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { isQuoteStatusBlocked, isDeliveryQuoteAuthorized } from "@/lib/delivery-authorization";
+import { isDeliveryQuoteAuthorized } from "@/lib/delivery-authorization";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -124,18 +124,30 @@ export function ManualOrderModal({
   const visualStep = step <= 3 ? step : orderType === "PICKUP" ? step - 1 : step;
   const stepLabel  = stepLabels[visualStep - 1] ?? "";
 
-  // Allowlist-based guards live in @/lib/delivery-authorization (shared with the
-  // backend). Local aliases keep the JSX terse.
-  const isBlocked         = isQuoteStatusBlocked;
+  // Allowlist-based guard lives in @/lib/delivery-authorization (shared with the
+  // backend). Local alias keeps the JSX terse.
   const isQuoteAuthorized = isDeliveryQuoteAuthorized;
 
+  // Delivery is allowed ONLY when there is an authorized quote with a valid fee
+  // and no outstanding quote error (e.g. a 401 "Não autorizado" response or a
+  // network failure). PICKUP never needs a quote.
+  const deliveryAllowed =
+    orderType !== "DELIVERY"
+      ? true
+      : isQuoteAuthorized(quote) && !quoteError;
+
+  const hasRequiredAddress =
+    !!addr.cep.trim() && !!addr.street.trim() && !!addr.number.trim() && !!addr.city.trim();
+
   const isAdvanceBlocked =
+    step === 4 && (!hasRequiredAddress || !deliveryAllowed);
+
+  // Show the blocked banner whenever a calculation was attempted and delivery
+  // is not allowed: a blocked quote status OR a quote error (401/out_of_range/etc).
+  const showDeliveryBlocked =
     step === 4 &&
-    (!addr.cep.trim() ||
-      !addr.street.trim() ||
-      !addr.number.trim() ||
-      !addr.city.trim() ||
-      !isQuoteAuthorized(quote));
+    orderType === "DELIVERY" &&
+    ((quote != null && !isQuoteAuthorized(quote)) || quoteError != null);
 
   // ── Load menu items on mount ───────────────────────────────────────────────
 
@@ -232,8 +244,7 @@ export function ManualOrderModal({
         city:         data.localidade ?? prev.city,
         state:        data.uf         ?? prev.state,
       }));
-      setQuote(null);
-      setQuoteError(null);
+      resetQuote();
     } catch {
       setCepError("Erro ao buscar CEP");
     } finally {
@@ -242,6 +253,14 @@ export function ManualOrderModal({
   }
 
   // ── Freight calculation ───────────────────────────────────────────────────
+
+  // Any change to an address field invalidates a previous quote: clear both the
+  // quote and its error so deliveryAllowed becomes false and a recalculation is
+  // required before the operator can advance.
+  function resetQuote() {
+    setQuote(null);
+    setQuoteError(null);
+  }
 
   async function calcFreight() {
     if (!addr.street.trim() || !addr.number.trim()) {
@@ -491,7 +510,7 @@ export function ManualOrderModal({
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-gray-700 mb-1">CEP *</label>
                   <input type="text" value={addr.cep}
-                    onChange={(e) => { setAddr((p) => ({ ...p, cep: e.target.value })); setQuote(null); }}
+                    onChange={(e) => { setAddr((p) => ({ ...p, cep: e.target.value })); resetQuote(); }}
                     placeholder="00000-000" maxLength={9} className={inputCls} autoFocus />
                 </div>
                 <div className="flex items-end">
@@ -507,13 +526,13 @@ export function ManualOrderModal({
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Rua *</label>
                   <input type="text" value={addr.street}
-                    onChange={(e) => { setAddr((p) => ({ ...p, street: e.target.value })); setQuote(null); }}
+                    onChange={(e) => { setAddr((p) => ({ ...p, street: e.target.value })); resetQuote(); }}
                     placeholder="Rua / Avenida" className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Número *</label>
                   <input type="text" value={addr.number}
-                    onChange={(e) => { setAddr((p) => ({ ...p, number: e.target.value })); setQuote(null); }}
+                    onChange={(e) => { setAddr((p) => ({ ...p, number: e.target.value })); resetQuote(); }}
                     placeholder="123" className={inputCls} />
                 </div>
               </div>
@@ -522,13 +541,13 @@ export function ManualOrderModal({
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Complemento</label>
                   <input type="text" value={addr.complement}
-                    onChange={(e) => setAddr((p) => ({ ...p, complement: e.target.value }))}
+                    onChange={(e) => { setAddr((p) => ({ ...p, complement: e.target.value })); resetQuote(); }}
                     placeholder="Apto, bloco…" className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Bairro *</label>
                   <input type="text" value={addr.neighborhood}
-                    onChange={(e) => { setAddr((p) => ({ ...p, neighborhood: e.target.value })); setQuote(null); }}
+                    onChange={(e) => { setAddr((p) => ({ ...p, neighborhood: e.target.value })); resetQuote(); }}
                     placeholder="Bairro" className={inputCls} />
                 </div>
               </div>
@@ -537,13 +556,13 @@ export function ManualOrderModal({
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Cidade *</label>
                   <input type="text" value={addr.city}
-                    onChange={(e) => { setAddr((p) => ({ ...p, city: e.target.value })); setQuote(null); }}
+                    onChange={(e) => { setAddr((p) => ({ ...p, city: e.target.value })); resetQuote(); }}
                     placeholder="Cidade" className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">UF</label>
                   <input type="text" value={addr.state}
-                    onChange={(e) => setAddr((p) => ({ ...p, state: e.target.value }))}
+                    onChange={(e) => { setAddr((p) => ({ ...p, state: e.target.value })); resetQuote(); }}
                     placeholder="SP" maxLength={2} className={inputCls} />
                 </div>
               </div>
@@ -554,7 +573,7 @@ export function ManualOrderModal({
                   className="rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-xs font-semibold text-orange-600 hover:bg-orange-50 disabled:opacity-50 transition-colors">
                   {quoteLoading ? "Calculando…" : "Calcular entrega"}
                 </button>
-                {quote && !isBlocked(quote.calculationStatus) && (
+                {isQuoteAuthorized(quote) && quote && (
                   <span className="text-xs font-semibold text-green-700">
                     Frete: {quote.deliveryFee === 0 ? "Grátis" : `R$ ${quote.deliveryFee.toFixed(2).replace(".", ",")}`}
                     {quote.distanceKm != null ? ` (${quote.distanceKm.toFixed(1)} km)` : ""}
@@ -562,13 +581,14 @@ export function ManualOrderModal({
                 )}
               </div>
               {quoteError && <p className="text-xs text-red-500">{quoteError}</p>}
-              {quote && isBlocked(quote.calculationStatus) && (
+              {showDeliveryBlocked && (
                 <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5">
                   <p className="text-xs font-semibold text-red-700">Endereço fora da área de entrega ou entrega não autorizada.</p>
                   <p className="text-xs text-red-600 mt-0.5">Escolha <strong>Retirada</strong> ou informe outro endereço.</p>
+                  <p className="text-[11px] text-red-500 mt-1">Você pode trocar para Retirada ou testar outro endereço.</p>
                 </div>
               )}
-              {quote && quote.calculationStatus === "manual" && (
+              {isQuoteAuthorized(quote) && quote?.calculationStatus === "manual" && (
                 <p className="rounded-lg bg-yellow-50 px-3 py-2 text-xs text-yellow-700">
                   Modo manual — confirme o frete com o cliente.
                 </p>
