@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
+import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
 
@@ -94,22 +95,6 @@ interface CustomerProfile {
   lastOrderAt?: string | null;
   note?: string;
   tier?: string;
-}
-
-// Menu item option for the manual-order product picker
-interface MenuItemOption {
-  id:           string;
-  name:         string;
-  price:        number;
-  categoryName: string;
-}
-
-// Line item in the manual-order cart
-interface OrderItemLine {
-  menuItemId: string;
-  name:       string;
-  price:      number;
-  quantity:   number;
 }
 
 interface MockOrder {
@@ -1762,24 +1747,7 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
   const [manualConfirmError,   setManualConfirmError]   = useState<string | null>(null);
 
   // Manual order creation dialog
-  const [manualOrderOpen,       setManualOrderOpen]       = useState(false);
-  const [manualOrderSubmitting, setManualOrderSubmitting] = useState(false);
-  const [manualOrderError,      setManualOrderError]      = useState<string | null>(null);
-  const [manualOrderForm,       setManualOrderForm]       = useState({
-    customerName:  "",
-    customerPhone: "",
-    notes:         "",
-    deliveryFee:   "",
-    type:          "DELIVERY" as "DELIVERY" | "PICKUP",
-    paymentMethod: "PIX" as "CASH" | "PIX" | "CREDIT_CARD" | "DEBIT_CARD" | "CARD_MACHINE",
-    paymentStatus: "PAID" as "PAID" | "PAY_ON_DELIVERY",
-    source:        "manual" as "manual" | "whatsapp_manual",
-  });
-  // Product picker for manual order
-  const [menuItems,       setMenuItems]       = useState<MenuItemOption[]>([]);
-  const [menuItemsLoading,setMenuItemsLoading]= useState(false);
-  const [orderItemLines,  setOrderItemLines]  = useState<OrderItemLine[]>([]);
-  const [itemSearch,      setItemSearch]      = useState("");
+  const [manualOrderOpen, setManualOrderOpen] = useState(false);
 
   // MP reconciliation
   const [reconciling,    setReconciling]    = useState(false);
@@ -2109,75 +2077,8 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     }
   }
 
-  async function handleCreateManualOrder() {
-    const { customerName, notes, deliveryFee, type, paymentMethod, paymentStatus, source, customerPhone } = manualOrderForm;
-    if (!customerName.trim()) {
-      setManualOrderError("Nome do cliente é obrigatório.");
-      return;
-    }
-    if (orderItemLines.length === 0) {
-      setManualOrderError("Adicione pelo menos um produto ao pedido.");
-      return;
-    }
-    const feeNum = parseFloat((deliveryFee || "0").replace(",", ".")) || 0;
-
-    setManualOrderSubmitting(true);
-    setManualOrderError(null);
-    try {
-      const res  = await fetch("/api/orders/manual", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          customerName:  customerName.trim(),
-          customerPhone: customerPhone.trim() || undefined,
-          notes:         notes.trim() || undefined,
-          deliveryFee:   feeNum,
-          type,
-          paymentMethod,
-          paymentStatus,
-          source,
-          items: orderItemLines.map((i) => ({
-            menuItemId: i.menuItemId,
-            quantity:   i.quantity,
-          })),
-        }),
-      });
-      const json = await res.json() as { success?: boolean; orderId?: string; error?: string };
-      if (json.success) {
-        setManualOrderOpen(false);
-        setManualOrderForm({
-          customerName: "", customerPhone: "", notes: "",
-          deliveryFee: "", type: "DELIVERY", paymentMethod: "PIX",
-          paymentStatus: "PAID", source: "manual",
-        });
-        setOrderItemLines([]);
-        setItemSearch("");
-        fetchOrders();
-      } else {
-        setManualOrderError(json.error ?? "Erro ao criar pedido");
-      }
-    } catch {
-      setManualOrderError("Falha de rede");
-    } finally {
-      setManualOrderSubmitting(false);
-    }
-  }
-
   function handleOpenManualOrder() {
     setManualOrderOpen(true);
-    setManualOrderError(null);
-    setOrderItemLines([]);
-    setItemSearch("");
-    if (menuItems.length === 0 && !menuItemsLoading) {
-      setMenuItemsLoading(true);
-      fetch("/api/menu/items")
-        .then((r) => r.json())
-        .then((res: { success?: boolean; data?: MenuItemOption[] }) => {
-          if (res.success && Array.isArray(res.data)) setMenuItems(res.data);
-        })
-        .catch(() => {})
-        .finally(() => setMenuItemsLoading(false));
-    }
   }
 
   async function handleReconcile() {
@@ -2255,18 +2156,6 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
       setTimeout(() => setReconcileToast(null), 6000);
     }
   }
-
-  // Derived: subtotal of manual order cart
-  const orderItemsSubtotal = orderItemLines.reduce((s, i) => s + i.price * i.quantity, 0);
-  const manualOrderTotal   = orderItemsSubtotal + (parseFloat((manualOrderForm.deliveryFee || "0").replace(",", ".")) || 0);
-
-  // Filtered product list for picker
-  const filteredMenuItems = itemSearch.trim()
-    ? menuItems.filter((m) =>
-        m.name.toLowerCase().includes(itemSearch.toLowerCase()) ||
-        m.categoryName.toLowerCase().includes(itemSearch.toLowerCase())
-      )
-    : menuItems;
 
   return (
     <div className="flex flex-col bg-[#F5F5F5]" style={{ height: "calc(100vh - 56px)" }}>
@@ -2527,232 +2416,15 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
         </div>
       )}
 
-      {/* Manual order creation dialog */}
       {manualOrderOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-xl" style={{ maxHeight: "90vh" }}>
-            {/* Header */}
-            <div className="shrink-0 border-b border-gray-100 px-5 py-4">
-              <h3 className="text-base font-bold text-gray-900">Criar pedido manual</h3>
-              <p className="mt-0.5 text-xs text-gray-500">Pedidos por telefone, balcão ou WhatsApp.</p>
-            </div>
-
-            {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-
-              {/* Customer */}
-              <div className="space-y-2.5">
-                <div>
-                  <label className="text-xs font-semibold text-gray-700">Nome do cliente *</label>
-                  <input
-                    type="text"
-                    value={manualOrderForm.customerName}
-                    onChange={(e) => setManualOrderForm((f) => ({ ...f, customerName: e.target.value }))}
-                    placeholder="Ex: Maria Silva"
-                    className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-700">Telefone (opcional)</label>
-                  <input
-                    type="tel"
-                    value={manualOrderForm.customerPhone}
-                    onChange={(e) => setManualOrderForm((f) => ({ ...f, customerPhone: e.target.value }))}
-                    placeholder="(11) 99999-9999"
-                    className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-              </div>
-
-              {/* Product picker */}
-              <div>
-                <label className="text-xs font-semibold text-gray-700">Itens do pedido *</label>
-                {menuItemsLoading ? (
-                  <p className="mt-1 text-xs text-gray-400">Carregando produtos…</p>
-                ) : menuItems.length === 0 ? (
-                  <p className="mt-1 text-xs text-red-500">Nenhum produto ativo encontrado no cardápio.</p>
-                ) : (
-                  <>
-                    <input
-                      type="text"
-                      value={itemSearch}
-                      onChange={(e) => setItemSearch(e.target.value)}
-                      placeholder="Buscar produto…"
-                      className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    />
-                    {/* Product list — limited to 6 visible rows */}
-                    <div className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50">
-                      {filteredMenuItems.length === 0 ? (
-                        <p className="px-3 py-2 text-xs text-gray-400">Nenhum produto encontrado</p>
-                      ) : (
-                        filteredMenuItems.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setOrderItemLines((prev) => {
-                                const existing = prev.find((l) => l.menuItemId === item.id);
-                                if (existing) {
-                                  return prev.map((l) => l.menuItemId === item.id ? { ...l, quantity: l.quantity + 1 } : l);
-                                }
-                                return [...prev, { menuItemId: item.id, name: item.name, price: item.price, quantity: 1 }];
-                              });
-                            }}
-                            className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-blue-50 transition-colors"
-                          >
-                            <span className="min-w-0 flex-1 truncate text-gray-800">{item.name}</span>
-                            <span className="shrink-0 text-gray-400">{item.categoryName}</span>
-                            <span className="shrink-0 font-semibold text-blue-700">
-                              R$ {item.price.toFixed(2).replace(".", ",")}
-                            </span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Cart lines */}
-                {orderItemLines.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {orderItemLines.map((line) => (
-                      <div key={line.menuItemId} className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white px-2.5 py-1.5">
-                        <span className="flex-1 truncate text-xs text-gray-800">{line.name}</span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setOrderItemLines((prev) =>
-                              prev.map((l) => l.menuItemId === line.menuItemId ? { ...l, quantity: Math.max(1, l.quantity - 1) } : l)
-                            )}
-                            className="flex h-5 w-5 items-center justify-center rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-100"
-                          >−</button>
-                          <span className="w-5 text-center text-xs font-semibold text-gray-700">{line.quantity}</span>
-                          <button
-                            type="button"
-                            onClick={() => setOrderItemLines((prev) =>
-                              prev.map((l) => l.menuItemId === line.menuItemId ? { ...l, quantity: l.quantity + 1 } : l)
-                            )}
-                            className="flex h-5 w-5 items-center justify-center rounded border border-gray-200 text-xs text-gray-600 hover:bg-gray-100"
-                          >+</button>
-                        </div>
-                        <span className="w-16 shrink-0 text-right text-xs font-semibold text-gray-700">
-                          R$ {(line.price * line.quantity).toFixed(2).replace(".", ",")}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setOrderItemLines((prev) => prev.filter((l) => l.menuItemId !== line.menuItemId))}
-                          className="text-gray-300 hover:text-red-500 transition-colors"
-                          aria-label="Remover"
-                        >✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="text-xs font-semibold text-gray-700">Observações (opcional)</label>
-                <textarea
-                  value={manualOrderForm.notes}
-                  onChange={(e) => setManualOrderForm((f) => ({ ...f, notes: e.target.value }))}
-                  placeholder="Ex: sem cebola, troco para R$ 50..."
-                  rows={2}
-                  className="mt-0.5 w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-
-              {/* Delivery + payment row */}
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="text-xs font-semibold text-gray-700">Tipo</label>
-                  <select
-                    value={manualOrderForm.type}
-                    onChange={(e) => setManualOrderForm((f) => ({ ...f, type: e.target.value as "DELIVERY" | "PICKUP" }))}
-                    className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="DELIVERY">Delivery</option>
-                    <option value="PICKUP">Retirada</option>
-                  </select>
-                </div>
-                {manualOrderForm.type === "DELIVERY" && (
-                  <div className="flex-1">
-                    <label className="text-xs font-semibold text-gray-700">Taxa entrega</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={manualOrderForm.deliveryFee}
-                      onChange={(e) => setManualOrderForm((f) => ({ ...f, deliveryFee: e.target.value }))}
-                      placeholder="0,00"
-                      className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="text-xs font-semibold text-gray-700">Pagamento</label>
-                  <select
-                    value={manualOrderForm.paymentMethod}
-                    onChange={(e) => setManualOrderForm((f) => ({ ...f, paymentMethod: e.target.value as typeof manualOrderForm.paymentMethod }))}
-                    className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="PIX">Pix</option>
-                    <option value="CASH">Dinheiro</option>
-                    <option value="CREDIT_CARD">Cartão crédito</option>
-                    <option value="DEBIT_CARD">Cartão débito</option>
-                    <option value="CARD_MACHINE">Maquininha</option>
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="text-xs font-semibold text-gray-700">Status pagamento</label>
-                  <select
-                    value={manualOrderForm.paymentStatus}
-                    onChange={(e) => setManualOrderForm((f) => ({ ...f, paymentStatus: e.target.value as "PAID" | "PAY_ON_DELIVERY" }))}
-                    className="mt-0.5 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="PAID">Pago</option>
-                    <option value="PAY_ON_DELIVERY">Pagar na entrega</option>
-                  </select>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Sticky footer */}
-            <div className="shrink-0 border-t border-gray-100 px-5 py-3">
-              {/* Order total summary */}
-              {orderItemLines.length > 0 && (
-                <div className="mb-3 flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 text-sm">
-                  <span className="text-blue-700">Total do pedido</span>
-                  <span className="font-bold text-blue-900">
-                    R$ {manualOrderTotal.toFixed(2).replace(".", ",")}
-                  </span>
-                </div>
-              )}
-              {manualOrderError && (
-                <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{manualOrderError}</p>
-              )}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setManualOrderOpen(false); setManualOrderError(null); }}
-                  disabled={manualOrderSubmitting}
-                  className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleCreateManualOrder}
-                  disabled={manualOrderSubmitting || orderItemLines.length === 0 || !manualOrderForm.customerName.trim()}
-                  className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
-                >
-                  {manualOrderSubmitting ? "Criando…" : "Criar pedido"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ManualOrderModal
+          source="manual"
+          onClose={() => setManualOrderOpen(false)}
+          onCreated={() => {
+            setManualOrderOpen(false);
+            fetchOrders();
+          }}
+        />
       )}
 
     </div>

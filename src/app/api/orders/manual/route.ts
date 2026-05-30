@@ -43,9 +43,10 @@ const bodySchema = z.object({
   type:          z.enum(["DELIVERY", "PICKUP"]),
   paymentMethod: z.enum(["CASH", "PIX", "CREDIT_CARD", "DEBIT_CARD", "CARD_MACHINE"]),
   paymentStatus: z.enum(["PAID", "PAY_ON_DELIVERY"]).default("PAID"),
-  source:        z.enum(["manual", "whatsapp_manual"]).default("manual"),
+  source:         z.enum(["manual", "whatsapp_manual"]).default("manual"),
   conversationId:  z.string().optional(),
   deliveryAddress: addressSchema.optional(),
+  discountAmount:  z.number().min(0).optional(),
   // Real product items (preferred)
   items: z.array(itemSchema).optional(),
   // Legacy: free-text total (used when items not provided)
@@ -73,6 +74,7 @@ export async function POST(req: NextRequest) {
   const {
     customerName, customerPhone, notes, deliveryFee, type,
     paymentMethod, paymentStatus, source, conversationId, deliveryAddress, items, total,
+    discountAmount,
   } = parsed.data;
   const { restaurantId } = ctx;
 
@@ -114,7 +116,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Informe os itens do pedido ou o valor total." }, { status: 400 });
   }
 
-  const orderTotal = subtotal + deliveryFee;
+  const discount   = Math.max(0, discountAmount ?? 0);
+  const orderTotal = Math.max(0, subtotal + deliveryFee - discount);
   const phone      = customerPhone?.trim() || `GUEST-${randomUUID()}`;
   const isGuest    = phone.startsWith("GUEST-");
 
@@ -166,7 +169,7 @@ export async function POST(req: NextRequest) {
         type:             type === "DELIVERY" ? "DELIVERY" : "PICKUP",
         subtotal:         new Decimal(subtotal),
         deliveryFee:      new Decimal(deliveryFee),
-        discount:         new Decimal(0),
+        discount:         new Decimal(discount),
         total:            new Decimal(orderTotal),
         notes:            notes || null,
         deliveryAddressId: deliveryAddressId ?? undefined,
