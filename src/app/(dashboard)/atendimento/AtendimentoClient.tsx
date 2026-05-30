@@ -13,6 +13,7 @@ import { isGuestIdentifier } from "@/lib/guest";
 import { KNOWLEDGE_CATEGORIES } from "@/services/knowledge/RestaurantKnowledgeService";
 import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledgeService";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
+import { formatOrderNumber } from "@/lib/order-number";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,12 +37,13 @@ interface ActiveOrderItem {
 }
 
 interface ActiveOrder {
-  id:        string;
-  status:    string;
-  total:     string;
-  type:      string;
-  createdAt: string;
-  items:     ActiveOrderItem[];
+  id:           string;
+  orderNumber?: number | null;
+  status:       string;
+  total:        string;
+  type:         string;
+  createdAt:    string;
+  items:        ActiveOrderItem[];
 }
 
 interface ActiveDraftItem {
@@ -1407,7 +1409,7 @@ function ActiveOrderPanel({ order, isManagerOrOwner }: { order: ActiveOrder; isM
               Esta ação marca o pedido como pago e o envia para produção.
             </p>
             <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
-              Pedido #{order.id.slice(-6).toUpperCase()} · R$ {parseFloat(order.total).toFixed(2).replace(".", ",")}
+              Pedido {formatOrderNumber(order.orderNumber, order.id)} · R$ {parseFloat(order.total).toFixed(2).replace(".", ",")}
             </div>
             <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-semibold text-gray-700">
               <input
@@ -1487,6 +1489,7 @@ function ThreadPanel({
 
   const [manualOrderOpen, setManualOrderOpen] = useState(false);
   const [orderCreatedId,  setOrderCreatedId]  = useState<string | null>(null);
+  const [orderCreatedNumber, setOrderCreatedNumber] = useState<string | null>(null);
 
   return (
     <>
@@ -1620,7 +1623,7 @@ function ThreadPanel({
         {orderCreatedId && (
           <div className="mt-2 flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-700">
             <span>✅</span>
-            <span>Pedido <span className="font-semibold">#{orderCreatedId.slice(-6).toUpperCase()}</span> criado com sucesso.</span>
+            <span>Pedido <span className="font-semibold">{orderCreatedNumber ?? `#${orderCreatedId.slice(-6).toUpperCase()}`}</span> criado com sucesso.</span>
             <button
               type="button"
               onClick={() => setOrderCreatedId(null)}
@@ -1644,9 +1647,10 @@ function ThreadPanel({
           prefillPhone={thread.customer?.phone ?? thread.customerPhone}
           source="whatsapp_manual"
           onClose={() => setManualOrderOpen(false)}
-          onCreated={(orderId) => {
+          onCreated={(orderId, displayNumber) => {
             setManualOrderOpen(false);
             setOrderCreatedId(orderId);
+            setOrderCreatedNumber(displayNumber ?? null);
             onOrderCreated?.();
           }}
         />

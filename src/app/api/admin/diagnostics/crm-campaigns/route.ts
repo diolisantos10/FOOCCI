@@ -28,6 +28,7 @@ import { checkAdminRequest } from "@/lib/admin-auth";
 import {
   ScheduledCampaignRunnerService,
 } from "@/services/crm/ScheduledCampaignRunnerService";
+import { ScheduledCampaignScheduler } from "@/services/crm/ScheduledCampaignScheduler";
 import { resolveAudience } from "@/services/crm/CrmCampaignService";
 import { getSafetyConfig, checkQuietHours, checkWeekendBlock } from "@/lib/crm-safety";
 
@@ -219,12 +220,37 @@ export async function GET(req: NextRequest) {
           `Scheduled campaign cron triggers will NOT fire automatically unless crm-cron.yml is merged to '${EXPECTED_DEFAULT}'.`
         : null;
 
+    // In-process scheduler (ScheduledCampaignScheduler) status. This runs the
+    // due campaigns automatically every 10 min from within the Node process,
+    // independent of GitHub Actions cron.
+    const lastRun = ScheduledCampaignScheduler.getLastRun();
+    const scheduler = {
+      active:            ScheduledCampaignScheduler.isActive(),
+      productionOnly:    true,
+      tickIntervalMin:   10,
+      note:              ScheduledCampaignScheduler.isActive()
+        ? "In-process scheduler is running. Scheduled campaigns execute automatically — GitHub Actions cron is only a warm backup."
+        : "In-process scheduler is NOT active in this process (expected only in NODE_ENV=production). It starts on server boot via instrumentation.ts.",
+      lastRun:           lastRun ? {
+        at:                    lastRun.at,
+        mode:                  lastRun.mode,
+        dueCampaignCount:      lastRun.dueCampaignCount,
+        sent:                  lastRun.sent,
+        failed:                lastRun.failed,
+        skipped:               lastRun.skipped,
+        stuckSendingRecovered: lastRun.stuckSendingRecovered,
+        errors:                lastRun.errors,
+        durationMs:            lastRun.durationMs,
+      } : null,
+    };
+
     return NextResponse.json({
       generatedAt:       now.toISOString(),
       totalCampaigns:    rows.length,
       dueCampaigns:      rows.filter((r) => r.isDueNow).length,
       activeCampaigns:   rows.filter((r) => r.status === "ACTIVE").length,
       completedCampaigns: rows.filter((r) => r.status === "COMPLETED").length,
+      scheduler,
       cronBranchWarning,
       stuckSendingCount:   stuckSending.length,
       stuckSendingCampaigns: stuckSending.map((c) => ({

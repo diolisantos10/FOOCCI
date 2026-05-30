@@ -2,7 +2,8 @@
  * Next.js Instrumentation Hook
  *
  * Runs once when the Node.js server process starts.
- * Starts background schedulers: AutoSimulatorScheduler and CartRecoveryScheduler.
+ * Starts background schedulers: AutoSimulatorScheduler, CartRecoveryScheduler
+ * and ScheduledCampaignScheduler.
  */
 
 export async function register() {
@@ -16,5 +17,10 @@ export async function register() {
       "./services/order/CartRecoveryScheduler"
     );
     CartRecoveryScheduler.start();
+
+    const { ScheduledCampaignScheduler } = await import(
+      "./services/crm/ScheduledCampaignScheduler"
+    );
+    ScheduledCampaignScheduler.start();
   }
 }

@@ -13,6 +13,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, unauthorized, notFound, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { formatOrderNumber } from "@/lib/order-number";
 import type { OrderStatus, PaymentStatus } from "@prisma/client";
 
 const VALID_ORDER_STATUSES: OrderStatus[] = [
@@ -54,16 +55,17 @@ export async function GET(
         ],
       },
       select: {
-        id:         true,
-        subtotal:   true,
-        discount:   true,
-        total:      true,
-        status:     true,
-        type:       true,
-        createdAt:  true,
-        customerId: true,
-        customer:   { select: { name: true, phone: true } },
-        payment:    { select: { status: true } },
+        id:          true,
+        orderNumber: true,
+        subtotal:    true,
+        discount:    true,
+        total:       true,
+        status:      true,
+        type:        true,
+        createdAt:   true,
+        customerId:  true,
+        customer:    { select: { name: true, phone: true } },
+        payment:     { select: { status: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 200,
@@ -87,7 +89,7 @@ export async function GET(
       lastUsedAt,
       orders: orders.map((o) => ({
         id:            o.id,
-        orderRef:      o.id.slice(-6).toUpperCase(),
+        orderRef:      formatOrderNumber(o.orderNumber, o.id),
         customerName:  o.customer?.name ?? null,
         customerPhone: o.customer?.phone ?? null,
         createdAt:     o.createdAt.toISOString(),

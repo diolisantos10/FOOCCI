@@ -1,13 +1,10 @@
 import { isGuestIdentifier } from "@/lib/guest";
+import { formatOrderNumber } from "@/lib/order-number";
 
 // ── Money ─────────────────────────────────────────────────────────────────────
 
 function brl(value: unknown): string {
   return `R$ ${Number(value).toFixed(2).replace(".", ",")}`;
-}
-
-function displayId(orderId: string): string {
-  return `#${orderId.slice(-6).toUpperCase()}`;
 }
 
 function fmtDate(date: Date): string {
@@ -77,6 +74,7 @@ const PAYMENT_LABELS: Record<string, string> = {
 
 interface OrderTicketOrder {
   id:          string;
+  orderNumber?: number | null;
   type:        string;
   subtotal:    unknown;
   deliveryFee: unknown;
@@ -240,7 +238,7 @@ function ReceiptContent({
             lineHeight:    "1.1",
           }}
         >
-          {displayId(order.id)}
+          {formatOrderNumber(order.orderNumber, order.id)}
         </div>
         <div style={{ fontSize: "13px", color: DARK, marginTop: "3px" }}>
           {fmtDate(order.createdAt)}

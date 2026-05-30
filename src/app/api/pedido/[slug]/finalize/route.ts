@@ -36,6 +36,7 @@ import { resolveDeliveryFee } from "@/lib/delivery-fee-resolver";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { getActiveMenuPromotions, resolveMenuItemPromotion } from "@/services/promotions/productPromotionResolver";
 import { getPublicSiteUrl } from "@/lib/public-url";
+import { assignOrderNumber } from "@/lib/order-number";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -562,10 +563,13 @@ export async function POST(
         if (alreadyUsed) throw new Error("COUPON_ALREADY_USED");
       }
 
+      const orderNumber = await assignOrderNumber(tx, restaurantId);
+
       const order = await tx.order.create({
         data: {
           restaurantId,
           customerId:     customer.id,
+          orderNumber,
           status:         "PENDING",
           type:           deliveryMethod === "delivery" ? "DELIVERY" : "PICKUP",
           source:         "pedido",

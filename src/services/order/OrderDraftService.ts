@@ -12,6 +12,7 @@
 
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
+import { assignOrderNumber } from "@/lib/order-number";
 import { serviceOk, serviceFail, ServiceResult } from "@/types";
 import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncService";
 import type {
@@ -395,11 +396,13 @@ export class OrderDraftService {
     const total = subtotal.plus(deliveryFee).minus(discount);
 
     const order = await prisma.$transaction(async (tx) => {
+      const orderNumber = await assignOrderNumber(tx, restaurantId);
       // Create confirmed order
       const newOrder = await tx.order.create({
         data: {
           restaurantId,
           customerId:        draft.customerId,
+          orderNumber,
           orderDraftId:      draftId,
           type:              draft.fulfillmentType as "DELIVERY" | "PICKUP" | "DINE_IN",
           source:            "whatsapp",

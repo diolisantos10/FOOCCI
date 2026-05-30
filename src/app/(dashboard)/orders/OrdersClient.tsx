@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { isGuestIdentifier } from "@/lib/guest";
 import { SaiposRetryButton } from "@/components/saipos/SaiposRetryButton";
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
+import { formatOrderNumber } from "@/lib/order-number";
 
 // ─── Sound alert ──────────────────────────────────────────────────────────────
 
@@ -100,6 +101,7 @@ interface CustomerProfile {
 interface MockOrder {
   id: string;
   num: number;
+  orderNumber?: number | null;
   customer: string;
   customerId?: string;
   phone: string;
@@ -146,6 +148,7 @@ interface ApiOrderItem {
 
 interface ApiOrder {
   id: string;
+  orderNumber?: number | null;
   status: string;
   type: string;
   subtotal: string;
@@ -195,6 +198,7 @@ function apiOrderToMock(o: ApiOrder, index: number): MockOrder {
   return {
     id:         o.id,
     num:        index + 1,
+    orderNumber: o.orderNumber ?? null,
     customer:   o.customer.name,
     customerId: o.customer.id ?? undefined,
     phone:      !o.customer.phone || isGuestIdentifier(o.customer.phone) ? "Telefone não informado" : o.customer.phone,
@@ -800,7 +804,7 @@ function OrderCard({
             className="h-3.5 w-3.5 shrink-0 accent-orange-500"
           />
           <span className="font-mono text-sm font-bold text-gray-700">
-            #{order.id.slice(-6).toUpperCase()}
+            {formatOrderNumber(order.orderNumber, order.id)}
           </span>
           {badge}
           <span className={`ml-auto text-xs font-semibold tabular-nums ${delayed ? "text-red-600" : "text-gray-400"}`}>
@@ -1287,7 +1291,7 @@ function DetailPanel({
           ← Voltar
         </button>
         <span className="font-mono text-xs text-gray-400">
-          Pedido #{order.id.slice(-6).toUpperCase()}
+          Pedido {formatOrderNumber(order.orderNumber, order.id)}
         </span>
         <button
           onClick={() => printOrder(order.id)}
@@ -1301,7 +1305,7 @@ function DetailPanel({
       <div className="hidden items-start justify-between border-b border-gray-100 px-5 py-4 lg:flex">
         <div>
           <p className="font-mono text-xs text-gray-400">
-            Pedido #{order.id.slice(-6).toUpperCase()}
+            Pedido {formatOrderNumber(order.orderNumber, order.id)}
           </p>
           <h3 className="mt-0.5 text-base font-bold text-gray-900">
             {order.customerId ? (
@@ -1570,7 +1574,7 @@ function NewOrderModal({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-mono text-xs text-gray-400">
-                Pedido #{order.id.slice(-6).toUpperCase()}
+                Pedido {formatOrderNumber(order.orderNumber, order.id)}
               </p>
               <h3 className="mt-0.5 text-xl font-bold text-gray-900 leading-tight">
                 {order.customerId ? (
@@ -1911,11 +1915,18 @@ export default function OrdersClient({ isOwner, isManagerOrOwner }: { isOwner?: 
     if (statusFilter === "DELAYED") result = result.filter(isDelayed);
     else if (statusFilter) result = result.filter((o) => o.status === statusFilter);
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((o) =>
-        o.customer.toLowerCase().includes(q) ||
-        o.id.slice(-6).toLowerCase().includes(q)
-      );
+      const q       = searchQuery.toLowerCase();
+      const qDigits = q.replace(/\D/g, ""); // "#001" / "001" / "1" → "001"/"1"
+      result = result.filter((o) => {
+        if (o.customer.toLowerCase().includes(q)) return true;
+        if (o.id.slice(-6).toLowerCase().includes(q)) return true;
+        if (o.orderNumber != null && qDigits) {
+          const num = String(o.orderNumber);
+          // match raw ("42"), zero-padded ("042"/"001"), or substring
+          if (num.includes(qDigits) || String(o.orderNumber).padStart(3, "0").includes(qDigits)) return true;
+        }
+        return false;
+      });
     }
     return result;
   }, [filtered, statusFilter, searchQuery]);

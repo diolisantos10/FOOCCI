@@ -43,11 +43,12 @@ export async function GET(
         },
         orderBy: { createdAt: "desc" },
         select: {
-          id:        true,
-          status:    true,
-          total:     true,
-          type:      true,
-          createdAt: true,
+          id:          true,
+          orderNumber: true,
+          status:      true,
+          total:       true,
+          type:        true,
+          createdAt:   true,
           items: {
             select: { name: true, quantity: true, price: true },
             take:   5,

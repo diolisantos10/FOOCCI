@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isGuestIdentifier } from "@/lib/guest";
+import { formatOrderNumber } from "@/lib/order-number";
 import type { CustomerIntelligenceReport } from "@/services/crm/CustomerIntelligenceService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ export interface InteractionItem {
 
 export interface OrderHistoryItem {
   id: string;
+  orderNumber?: number | null;
   status: string;
   total: number;
   createdAt: string;
@@ -1065,7 +1067,7 @@ function OrderDetailModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              Pedido #{order.id.slice(-8).toUpperCase()}
+              Pedido {formatOrderNumber(order.orderNumber, order.id)}
             </p>
             <p className="text-sm text-gray-500 mt-0.5">{date}</p>
           </div>

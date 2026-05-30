@@ -42,6 +42,10 @@ model Restaurant {
   orderingPausedUntil  DateTime?
   orderingPausedBy     String?
 
+  // Monotonic per-restaurant counter for human-friendly sequential order numbers.
+  // Incremented atomically inside the order-creation transaction.
+  lastOrderNumber      Int       @default(0)
+
   users                  User[]
   customers              Customer[]
   menuCategories         MenuCategory[]
@@ -383,6 +387,7 @@ model Order {
   id                  String      @id @default(cuid())
   restaurantId        String
   customerId          String
+  orderNumber         Int?        // human-friendly sequential number, unique per restaurant; null for legacy orders
   orderDraftId        String?     @unique // traceability back to originating draft
   status              OrderStatus @default(PENDING)
   type                OrderType   @default(DELIVERY)
@@ -427,6 +432,7 @@ model Order {
   payment         Payment?
   editLogs        OrderEditLog[]
 
+  @@unique([restaurantId, orderNumber])
   @@index([restaurantId])
   @@index([customerId])
   @@index([restaurantId, status])

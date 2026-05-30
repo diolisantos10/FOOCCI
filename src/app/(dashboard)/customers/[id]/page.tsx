@@ -391,6 +391,7 @@ export default async function CustomerDetailPage({
         orderBy: { createdAt: "asc" },
         select: {
           id:          true,
+          orderNumber: true,
           status:      true,
           createdAt:   true,
           total:       true,
@@ -456,6 +457,7 @@ export default async function CustomerDetailPage({
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .map((o) => ({
       id:          o.id,
+      orderNumber: o.orderNumber ?? null,
       status:      o.status,
       total:       Number(o.total),
       subtotal:    Number(o.subtotal),

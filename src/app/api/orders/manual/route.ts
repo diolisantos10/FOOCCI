@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant";
 import { Decimal } from "@prisma/client/runtime/library";
 import { ConversationLogService } from "@/services/conversation/ConversationLogService";
+import { assignOrderNumber, formatOrderNumber } from "@/lib/order-number";
 
 const itemSchema = z.object({
   menuItemId: z.string().min(1),
@@ -161,10 +162,13 @@ export async function POST(req: NextRequest) {
       deliveryAddressId = addr.id;
     }
 
+    const orderNumber = await assignOrderNumber(tx, restaurantId);
+
     const created = await tx.order.create({
       data: {
         restaurantId,
         customerId:       customer.id,
+        orderNumber,
         status:           "CONFIRMED",
         type:             type === "DELIVERY" ? "DELIVERY" : "PICKUP",
         subtotal:         new Decimal(subtotal),
@@ -195,7 +199,7 @@ export async function POST(req: NextRequest) {
               },
             },
       },
-      select: { id: true, status: true, total: true },
+      select: { id: true, status: true, total: true, orderNumber: true },
     });
 
     // Payment record
@@ -215,16 +219,17 @@ export async function POST(req: NextRequest) {
     return created;
   });
 
+  const displayNumber = formatOrderNumber(order.orderNumber, order.id);
+
   // Log a system event in the conversation timeline (best-effort, non-blocking)
   if (conversationId) {
-    const shortId = order.id.slice(-6).toUpperCase();
     ConversationLogService.logMessage({
       conversationId,
       restaurantId,
       senderType: "SYSTEM",
-      content:    `Pedido #${shortId} criado pelo operador`,
+      content:    `Pedido ${displayNumber} criado pelo operador`,
     }).catch(() => {});
   }
 
-  return NextResponse.json({ success: true, orderId: order.id });
+  return NextResponse.json({ success: true, orderId: order.id, orderNumber: order.orderNumber, displayNumber });
 }

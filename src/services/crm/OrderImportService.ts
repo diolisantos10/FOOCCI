@@ -21,6 +21,7 @@
 import { createHash } from "crypto";
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
+import { assignOrderNumber } from "@/lib/order-number";
 import { CustomerMetricsSyncService } from "./CustomerMetricsSyncService";
 
 // ── Field Mapping ─────────────────────────────────────────────────────────────
@@ -565,10 +566,12 @@ export class OrderImportService {
             const orderTotal = group.orderTotal;
             const subtotal   = Math.max(0, orderTotal - group.deliveryFee + group.discount);
 
+            const orderNumber = await assignOrderNumber(tx, restaurantId);
             const order = await tx.order.create({
               data: {
                 restaurantId,
                 customerId:    customer.id,
+                orderNumber,
                 status:        "CONFIRMED",
                 type:          group.fulfillmentType === "PICKUP" ? "PICKUP"
                              : group.fulfillmentType === "DINE_IN" ? "DINE_IN"

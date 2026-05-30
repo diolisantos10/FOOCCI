@@ -62,7 +62,7 @@ export interface ManualOrderModalProps {
   prefillPhone?:   string | null;
   source?:         "manual" | "whatsapp_manual";
   onClose:         () => void;
-  onCreated:       (orderId: string) => void;
+  onCreated:       (orderId: string, displayNumber?: string) => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -294,13 +294,13 @@ export function ManualOrderModal({
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(body),
       });
-      const json = await res.json() as { success?: boolean; orderId?: string; error?: string };
+      const json = await res.json() as { success?: boolean; orderId?: string; displayNumber?: string; error?: string };
       if (!res.ok || !json.success) {
         setError(json.error ?? "Erro ao criar pedido");
         setStep(1);
         return;
       }
-      onCreated(json.orderId!);
+      onCreated(json.orderId!, json.displayNumber);
     } catch {
       setError("Falha de rede. Tente novamente.");
       setStep(1);

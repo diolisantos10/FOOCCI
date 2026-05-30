@@ -15,6 +15,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { assignOrderNumber } from "@/lib/order-number";
 import { isDessertCategory, isMainCategory } from "./ConversationGuardrails";
 import type OpenAI from "openai";
 
@@ -440,10 +441,12 @@ async function execConfirmOrder(
   const nameMap = Object.fromEntries(menuItemRows.map((m) => [m.id, m.name]));
 
   const order = await prisma.$transaction(async (tx) => {
+    const orderNumber = await assignOrderNumber(tx, ctx.restaurantId);
     const newOrder = await tx.order.create({
       data: {
         restaurantId: ctx.restaurantId,
         customerId: ctx.customerId,
+        orderNumber,
         orderDraftId: ctx.draftId!,
         status: "PENDING",
         source: "whatsapp",
