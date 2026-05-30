@@ -311,6 +311,10 @@ interface CartItem {
   notes?: string;
   variantId?: string;
   variantName?: string;
+  // Analytics only: true when the item was added from a Foocci suggestion
+  // (AI/waiter suggestion grid or in-chat suggestion card), not normal menu
+  // browsing. Drives the "Receita incremental Foocci" metric. Never affects price.
+  isUpsell?: boolean;
   selectedOptions?: SelectedOption[];
   selectedExtras?: SelectedExtra[];
 }
@@ -1746,6 +1750,15 @@ export function PedidoClient({
     categories[0]?.id ?? null,
   );
   const [selectedProduct, setSelectedProduct] = useState<MenuItem | null>(null);
+  // Tracks whether the currently-open product modal was opened from a Foocci
+  // suggestion (vs normal menu browsing) so the modal's add handlers can
+  // attribute the resulting cart line as an upsell. Ref (not state) so the
+  // value is read synchronously at add-time, immune to render ordering.
+  const selectedUpsellRef = useRef(false);
+  const openProduct = useCallback((item: MenuItem, fromUpsell = false) => {
+    selectedUpsellRef.current = fromUpsell;
+    setSelectedProduct(item);
+  }, []);
 
   // ── Chat Inbox — session + conversation tracking ─────────────────
   // sessionId: stable per-tab identifier (survives re-renders, resets on new tab)
@@ -2745,12 +2758,16 @@ export function PedidoClient({
   // ── Handlers ──────────────────────────────────────────────────────
 
   const handleItemAdd = useCallback(
-    (item: MenuItem) => {
-      const existing = cart.find((c) => c.id === item.id);
+    (item: MenuItem, fromUpsell = false) => {
       const effectivePrice = item.promotion?.promotionalPrice ?? item.price;
+      // Upsell adds use a distinct cart-line id so they never merge with a
+      // normally-browsed line of the same product — keeps attribution clean and
+      // lets repeated upsell adds of the same item merge with each other.
+      const cartId   = fromUpsell ? `${item.id}__upsell` : item.id;
+      const existing = cart.find((c) => c.id === cartId);
       const newCart = existing
-        ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
-        : [...cart, { id: item.id, baseItemId: item.id, name: item.name, price: effectivePrice, qty: 1 }];
+        ? cart.map((c) => c.id === cartId ? { ...c, qty: c.qty + 1 } : c)
+        : [...cart, { id: cartId, baseItemId: item.id, name: item.name, price: effectivePrice, qty: 1, ...(fromUpsell ? { isUpsell: true } : {}) }];
       setCart(newCart);
       fireGtag("add_to_cart", { item_name: item.name, value: effectivePrice, currency: "BRL" });
       lastActivityRef.current = Date.now();
@@ -2764,8 +2781,8 @@ export function PedidoClient({
   );
 
   const handleVariantAdd = useCallback(
-    (item: MenuItem, variant: MenuItemVariant) => {
-      const cartId   = `${item.id}_${variant.id}`;
+    (item: MenuItem, variant: MenuItemVariant, fromUpsell = false) => {
+      const cartId   = `${item.id}_${variant.id}${fromUpsell ? "__upsell" : ""}`;
       const cartName = `${item.name} — ${variant.name}`;
       const existing = cart.find((c) => c.id === cartId);
       const newCart  = existing
@@ -2774,6 +2791,7 @@ export function PedidoClient({
             id: cartId, baseItemId: item.id, name: cartName,
             price: variant.price, qty: 1,
             variantId: variant.id, variantName: variant.name,
+            ...(fromUpsell ? { isUpsell: true } : {}),
           }];
       setCart(newCart);
       setSelectedProduct(null);
@@ -2786,7 +2804,7 @@ export function PedidoClient({
   );
 
   const handleCustomizedAdd = useCallback(
-    (item: MenuItem, notes: string, selectedOptions: SelectedOption[], selectedExtras: SelectedExtra[]) => {
+    (item: MenuItem, notes: string, selectedOptions: SelectedOption[], selectedExtras: SelectedExtra[], fromUpsell = false) => {
       const optionsExtra = selectedOptions.reduce((s, o) => s + o.priceAdjustment * o.qty, 0);
       const extrasExtra  = selectedExtras.reduce((s, e) => s + e.unitPrice * e.qty, 0);
       const finalPrice   = (item.promotion?.promotionalPrice ?? item.price) + optionsExtra + extrasExtra;
@@ -2794,10 +2812,11 @@ export function PedidoClient({
 
       let newCart: CartItem[];
       if (!hasAny) {
-        const existing = cart.find((c) => c.id === item.id);
+        const cartId   = fromUpsell ? `${item.id}__upsell` : item.id;
+        const existing = cart.find((c) => c.id === cartId);
         newCart = existing
-          ? cart.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
-          : [...cart, { id: item.id, baseItemId: item.id, name: item.name, price: finalPrice, qty: 1 }];
+          ? cart.map((c) => c.id === cartId ? { ...c, qty: c.qty + 1 } : c)
+          : [...cart, { id: cartId, baseItemId: item.id, name: item.name, price: finalPrice, qty: 1, ...(fromUpsell ? { isUpsell: true } : {}) }];
       } else {
         newCart = [
           ...cart,
@@ -2808,6 +2827,7 @@ export function PedidoClient({
             price:           finalPrice,
             qty:             1,
             notes:           notes.trim() || undefined,
+            ...(fromUpsell ? { isUpsell: true } : {}),
             selectedOptions: selectedOptions.length > 0 ? selectedOptions : undefined,
             selectedExtras:  selectedExtras.length  > 0 ? selectedExtras  : undefined,
           },
@@ -2949,9 +2969,10 @@ export function PedidoClient({
       if (value === "add_to_cart") {
         const firstItem = suggestedProducts[0];
         if (firstItem) {
+          // From the suggestion grid → attribute as a Foocci upsell.
           if (firstItem.hasVariants || firstItem.optionGroups.length > 0 || firstItem.extras.some((e) => e.price > 0))
-            setSelectedProduct(firstItem);
-          else handleItemAdd(firstItem);
+            openProduct(firstItem, true);
+          else handleItemAdd(firstItem, true);
         }
         return;
       }
@@ -4366,9 +4387,11 @@ export function PedidoClient({
               msg={msg}
               onOptionSelect={handleOptionSelect}
               onItemAdd={(item) => {
+                // Product cards rendered inside an AI chat bubble are Foocci
+                // suggestion cards → attribute the add as an upsell.
                 if (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0))
-                  setSelectedProduct(item);
-                else handleItemAdd(item);
+                  openProduct(item, true);
+                else handleItemAdd(item, true);
               }}
             />
           ))}
@@ -4491,8 +4514,8 @@ export function PedidoClient({
                       <ProductCard
                         item={item}
                         qty={itemCartQty(item, cart)}
-                        onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? setSelectedProduct(item) : handleItemAdd(item)}
-                        onOpen={() => setSelectedProduct(item)}
+                        onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? openProduct(item, true) : handleItemAdd(item, true)}
+                        onOpen={() => openProduct(item, true)}
                       />
                     </div>
                   ))}
@@ -4520,8 +4543,8 @@ export function PedidoClient({
                       key={item.id}
                       item={item}
                       qty={itemCartQty(item, cart)}
-                      onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? setSelectedProduct(item) : handleItemAdd(item)}
-                      onOpen={() => setSelectedProduct(item)}
+                      onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? openProduct(item, false) : handleItemAdd(item, false)}
+                      onOpen={() => openProduct(item, false)}
                     />
                   ))}
                 </div>
@@ -4653,8 +4676,8 @@ export function PedidoClient({
                         <DesktopProductCard
                           item={item}
                           qty={itemCartQty(item, cart)}
-                          onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? setSelectedProduct(item) : handleItemAdd(item)}
-                          onOpen={() => setSelectedProduct(item)}
+                          onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? openProduct(item, true) : handleItemAdd(item, true)}
+                          onOpen={() => openProduct(item, true)}
                         />
                       </div>
                     ))}
@@ -4673,8 +4696,8 @@ export function PedidoClient({
                         key={item.id}
                         item={item}
                         qty={itemCartQty(item, cart)}
-                        onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? setSelectedProduct(item) : handleItemAdd(item)}
-                        onOpen={() => setSelectedProduct(item)}
+                        onAdd={() => (item.hasVariants || item.optionGroups.length > 0 || item.extras.some((e) => e.price > 0)) ? openProduct(item, false) : handleItemAdd(item, false)}
+                        onOpen={() => openProduct(item, false)}
                       />
                     ))}
                   </div>
@@ -4738,13 +4761,13 @@ export function PedidoClient({
           item={selectedProduct}
           qty={itemCartQty(selectedProduct, cart)}
           onAdd={() => {
-            handleItemAdd(selectedProduct);
+            handleItemAdd(selectedProduct, selectedUpsellRef.current);
             setSelectedProduct(null);
           }}
           onAddCustomized={(notes, selectedOptions, selectedExtras) =>
-            handleCustomizedAdd(selectedProduct, notes, selectedOptions, selectedExtras)
+            handleCustomizedAdd(selectedProduct, notes, selectedOptions, selectedExtras, selectedUpsellRef.current)
           }
-          onAddVariant={(variant) => handleVariantAdd(selectedProduct, variant)}
+          onAddVariant={(variant) => handleVariantAdd(selectedProduct, variant, selectedUpsellRef.current)}
           cart={cart}
           onClose={() => setSelectedProduct(null)}
         />

@@ -37,6 +37,7 @@ import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { getActiveMenuPromotions, resolveMenuItemPromotion } from "@/services/promotions/productPromotionResolver";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { assignOrderNumber } from "@/lib/order-number";
+import { resolveItemUpsell } from "@/lib/upsell-attribution";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -64,6 +65,9 @@ const cartItemSchema = z.object({
   qty:         z.number().int().positive(),
   notes:       z.string().max(500).optional(),
   variantName: z.string().optional(),
+  // Analytics-only: marks items the customer added from a Foocci suggestion
+  // card (AI/waiter grid), not from normal menu browsing. Never affects pricing.
+  isUpsell:    z.boolean().optional(),
   selectedOptions: z.array(selectedOptionSchema).optional(),
   selectedExtras:  z.array(selectedExtraSchema).optional(),
 });
@@ -600,6 +604,8 @@ export async function POST(
               categoryName: item.categoryName ?? null,
               variantName:  item.variantName  ?? null,
               notes:        item.notes        ?? null,
+              // Foocci incremental-revenue attribution (analytics only).
+              isUpsell:     resolveItemUpsell(item),
               addonsJson:   (item.selectedOptions?.length || item.selectedExtras?.length)
                 ? { options: item.selectedOptions ?? [], extras: item.selectedExtras ?? [] }
                 : undefined,
