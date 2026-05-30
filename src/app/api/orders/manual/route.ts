@@ -127,9 +127,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Informe os itens do pedido ou o valor total." }, { status: 400 });
   }
 
-  // ── Server-side delivery authorization (mirror of /api/admin/delivery-quote) ──
+  // ── Server-side delivery authorization (same engine as /api/orders/delivery-quote) ──
   // Direct API callers must not be able to create a DELIVERY order to an
-  // address that the delivery config blocks (out of range / unresolvable).
+  // address the delivery config blocks. No enabled-check divergence — matches
+  // public /pedido route behavior exactly.
   if (type === "DELIVERY" && deliveryAddress) {
     if (!Number.isFinite(deliveryFee) || deliveryFee < 0) {
       return NextResponse.json(
@@ -153,18 +154,16 @@ export async function POST(req: NextRequest) {
       }),
       prisma.deliveryConfig.findUnique({
         where:  { restaurantId },
+        // No enabled field — same as public /pedido route
         select: {
-          enabled: true, mode: true, fee: true, freeDeliveryAbove: true,
+          mode: true, fee: true, freeDeliveryAbove: true,
           distanceBaseFee: true, distancePricePerKm: true,
           distanceMinFee: true, distanceMinFeeKm: true, distanceMaxKm: true, distanceMaxFee: true,
         },
       }),
     ]);
 
-    // Only enforce when distance-based delivery is configured. When delivery is
-    // not configured the resolver returns "manual" (operator confirms fee), so
-    // we don't block — matching the quote endpoint's behavior.
-    if (deliveryCfg && deliveryCfg.enabled) {
+    if (deliveryCfg) {
       let restaurantCoords: LatLng | null = null;
       const sp = restaurant?.storeProfile;
       if (sp?.latitude != null && sp?.longitude != null) {

@@ -269,7 +269,7 @@ export function ManualOrderModal({
     setQuoteLoading(true);
     setQuoteError(null);
     try {
-      const res  = await fetch("/api/admin/delivery-quote", {
+      const res  = await fetch("/api/orders/delivery-quote", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
