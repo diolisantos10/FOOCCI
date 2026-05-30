@@ -80,6 +80,30 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   }
   const { restaurantId } = configResult.data;
 
+  // 1b. Build OS command interception (Priority 1.1).
+  // BEFORE any customer/conversation/message record is created: if this is a
+  // Build OS command (/build, /cmd, /prompt) from an authorized operator, route
+  // it to the Build OS handler and STOP normal customer processing. Gated by
+  // BUILDOS_ENABLED (default OFF) — fully inert and a no-op otherwise. Text
+  // messages only; media is never a command. Never throws into the hot path.
+  if (event.messageType === "TEXT") {
+    try {
+      const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
+      const buildResult = await handleBuildCommand({
+        restaurantId,
+        phone: event.phone,
+        senderName: event.senderName,
+        content: event.content,
+      });
+      if (buildResult.isBuildCommand) {
+        return { handled: true, action: "buildos_command", detail: event.externalMessageId };
+      }
+    } catch (err) {
+      // Build OS must never break WhatsApp customer service — log and continue.
+      console.error("[WebhookProcessor] Build OS branch error (ignored):", err);
+    }
+  }
+
   // 2. Idempotency: reject duplicates early
   const existing = await prisma.message.findUnique({
     where: { externalMessageId: event.externalMessageId },

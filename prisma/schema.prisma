@@ -2197,3 +2197,135 @@ model RestaurantAgentProfileOverride {
 // Intentionally NOT created in Phase 1 — knowledge governance + the manual
 // `agentVisibility` gate are Phase 4 concerns. Until then, AgentProfile.knowledgeAreas
 // holds plain string labels only.
+
+// ═══════════════════════════════════════════
+//  BUILD OS — PROMPT RELAY / COMMAND ROUTER (Priority 1.1)
+// ═══════════════════════════════════════════
+//
+//  Project-agnostic command intake foundation. Foocci is the first project, but
+//  these models deliberately have NO `restaurantId` — tenancy is by BuildProject.
+//
+//  ┌────────────────────────────────────────────────────────────────────────┐
+//  │  SCOPE (Priority 1.1) — intake + persistence + audit ONLY                │
+//  │   • An authorized operator sends a WhatsApp command (/build, /cmd,        │
+//  │     /prompt). It is stored as a BuildCommand with append-only events.     │
+//  │   • NO Claude relay, NO GitHub issues, NO LLM prompt generation,          │
+//  │     NO code execution. Confirmation reply only.                           │
+//  │  SECURITY: only allow-listed phone numbers create records. Unauthorized   │
+//  │     senders are ignored (no record, no sensitive reply).                  │
+//  └────────────────────────────────────────────────────────────────────────┘
+
+enum BuildCommandStatus {
+  RECEIVED
+  AWAITING_CONFIRMATION
+  CANCELLED
+  FAILED
+}
+
+enum BuildCommandSourceChannel {
+  WHATSAPP
+  ADMIN
+}
+
+enum BuildRiskLevel {
+  UNKNOWN
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum BuildTaskType {
+  UNKNOWN
+  FEATURE
+  FIX
+  REFACTOR
+  AUDIT
+  DOCS
+}
+
+/// A project the Build OS can receive commands for. Project-agnostic tenancy:
+/// NOT tied to Restaurant. Foocci is seeded as the default project.
+model BuildProject {
+  id            String  @id @default(cuid())
+  slug          String  @unique
+  name          String
+  description   String?
+  defaultBranch String  @default("main")
+  githubOwner   String?
+  githubRepo    String?
+  isDefault     Boolean @default(false)
+  isActive      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commands BuildCommand[]
+
+  @@index([isActive])
+  @@map("build_projects")
+}
+
+/// Allow-list of operators permitted to issue Build OS commands.
+/// Build OS operator identity is SEPARATE from any restaurant customer.
+/// `allowedProjectIds` is a JSON string[] of BuildProject ids; an empty array
+/// means "all active projects" (resolved in the service layer).
+model BuildAuthorizedSender {
+  id                String  @id @default(cuid())
+  /// Normalized E.164 phone, e.g. "+5511999990000". Unique.
+  phone             String  @unique
+  name              String?
+  role              String  @default("operator")
+  isActive          Boolean @default(true)
+  allowedProjectIds Json    @default("[]") // string[] of BuildProject ids ([] = all)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("build_authorized_senders")
+}
+
+/// A single command received from an authorized operator. Raw + parsed parts are
+/// stored; classification (risk/task) defaults to UNKNOWN in Priority 1.1.
+model BuildCommand {
+  id            String                    @id @default(cuid())
+  projectId     String? // optional until project resolution is implemented
+  senderPhone   String // normalized E.164
+  senderName    String?
+  sourceChannel BuildCommandSourceChannel @default(WHATSAPP)
+  rawMessage    String                    @db.Text
+  commandPrefix String // "/build" | "/cmd" | "/prompt"
+  commandText   String                    @db.Text // raw message minus the prefix
+  status        BuildCommandStatus        @default(RECEIVED)
+  riskLevel     BuildRiskLevel            @default(UNKNOWN)
+  taskType      BuildTaskType             @default(UNKNOWN)
+  receivedAt    DateTime                  @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project BuildProject?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  events  BuildCommandEvent[]
+
+  @@index([status])
+  @@index([senderPhone])
+  @@index([projectId])
+  @@index([createdAt])
+  @@map("build_commands")
+}
+
+/// Append-only audit log for a command's lifecycle.
+model BuildCommandEvent {
+  id        String   @id @default(cuid())
+  commandId String
+  type      String // RECEIVED | CONFIRMATION_SENT | ...
+  message   String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  command BuildCommand @relation(fields: [commandId], references: [id], onDelete: Cascade)
+
+  @@index([commandId])
+  @@map("build_command_events")
+}
