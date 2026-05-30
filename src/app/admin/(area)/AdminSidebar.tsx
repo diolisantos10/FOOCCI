@@ -19,6 +19,7 @@ export function AdminSidebar() {
 
   const navItems = [
     { href: "/admin/restaurants",                          label: "Restaurantes", icon: "🏪" },
+    { href: "/admin/agents",                               label: "Agentes",      icon: "🤖" },
     { href: "/admin/preflight",                            label: "Pré-piloto",   icon: "✅" },
     { href: "/admin/manual-operacional",                   label: "Manual",       icon: "📖" },
     { href: "/admin/diagnostics/restaurant-mismatch",      label: "Diagnóstico",  icon: "🔍" },
