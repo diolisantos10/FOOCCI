@@ -9,10 +9,6 @@
 
 import { getBuildCommandsForAdmin } from "@/services/buildos/BuildCommandService";
 import { getAllBuildProjects } from "@/services/buildos/BuildProjectService";
-import {
-  isBuildOsEnabled,
-  getAuthorizedSenderCount,
-} from "@/services/buildos/BuildCommandRouter";
 import type { AdminBuildCommandView } from "@/services/buildos/types";
 import type { BuildProjectView } from "@/services/buildos/BuildProjectService";
 import { BuildOsDashboard } from "./BuildOsDashboard";
@@ -34,12 +30,6 @@ export default async function AdminBuildOsPage() {
   }
 
   return (
-    <BuildOsDashboard
-      commands={commands}
-      projects={projects}
-      enabled={isBuildOsEnabled()}
-      authorizedCount={getAuthorizedSenderCount()}
-      loadError={loadError}
-    />
+    <BuildOsDashboard commands={commands} projects={projects} loadError={loadError} />
   );
 }

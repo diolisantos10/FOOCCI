@@ -13,7 +13,7 @@
  *     reaches here for allow-listed senders); we re-check defensively anyway.
  */
 
-import { isAuthorizedBuildSender } from "./BuildCommandRouter";
+import { authorizeSender } from "./BuildOSConfigService";
 import {
   BUILD_EVENT,
   logBuildCommandEvent,
@@ -85,8 +85,9 @@ export async function handleBuildReply(
   const parsed = parseBuildReply(messageText);
   if (!parsed) return NOT_HANDLED;
 
-  // Defensive re-check (caller already gated on authorization).
-  if (!isAuthorizedBuildSender(senderPhone)) return { handled: true };
+  // Defensive re-check (caller already gated on authorization) — DB-first.
+  const auth = await authorizeSender(senderPhone);
+  if (!auth.authorized) return { handled: true };
 
   // Only ever act on THIS sender's own latest awaiting command.
   const pending = await findLatestAwaitingCommandForSender(senderPhone);

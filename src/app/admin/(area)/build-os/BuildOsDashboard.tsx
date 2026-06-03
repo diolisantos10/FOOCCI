@@ -11,12 +11,11 @@
 import { useState } from "react";
 import type { AdminBuildCommandView } from "@/services/buildos/types";
 import type { BuildProjectView } from "@/services/buildos/BuildProjectService";
+import { BuildOsConfigPanel } from "./BuildOsConfigPanel";
 
 interface Props {
   commands: AdminBuildCommandView[];
   projects: BuildProjectView[];
-  enabled: boolean;
-  authorizedCount: number;
   loadError: boolean;
 }
 
@@ -89,8 +88,6 @@ function maskPhone(phone: string): string {
 export function BuildOsDashboard({
   commands,
   projects,
-  enabled,
-  authorizedCount,
   loadError,
 }: Props) {
   const [tab, setTab] = useState<Tab>("comandos");
@@ -138,9 +135,7 @@ export function BuildOsDashboard({
         <CommandsTab commands={commands} loadError={loadError} />
       )}
       {tab === "projetos" && <ProjectsTab projects={projects} />}
-      {tab === "configuracao" && (
-        <ConfigTab enabled={enabled} authorizedCount={authorizedCount} projects={projects} />
-      )}
+      {tab === "configuracao" && <ConfigTab />}
     </div>
   );
 }
@@ -330,63 +325,7 @@ function Meta({ label, value }: { label: string; value: string }) {
 
 // ── Configuração ────────────────────────────────────────────────────────────────
 
-function ConfigTab({
-  enabled,
-  authorizedCount,
-  projects,
-}: {
-  enabled: boolean;
-  authorizedCount: number;
-  projects: BuildProjectView[];
-}) {
-  const activeProjects = projects.filter((p) => p.isActive).length;
-  return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-        Esta aba mostra o estado do Build OS (somente leitura). Nada aqui altera
-        configuração — variáveis são definidas no ambiente (Railway), não na interface.
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-400">BUILDOS_ENABLED</p>
-          <p className={`mt-1 text-lg font-bold ${enabled ? "text-green-700" : "text-gray-500"}`}>
-            {enabled ? "ON" : "OFF"}
-          </p>
-          {!enabled && (
-            <p className="mt-1 text-xs text-gray-400">
-              Comandos do WhatsApp são ignorados até a flag ser ativada.
-            </p>
-          )}
-        </div>
-        <div className="rounded-xl border border-gray-200 p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-400">Operadores autorizados</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">{authorizedCount}</p>
-          <p className="mt-1 text-xs text-gray-400">via BUILD_OS_AUTHORIZED_PHONES</p>
-        </div>
-        <div className="rounded-xl border border-gray-200 p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-400">Projetos ativos</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">
-            {activeProjects}<span className="text-sm font-normal text-gray-400"> / {projects.length}</span>
-          </p>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-        <p className="mb-2 font-semibold text-gray-800">Escopo atual (Priority 1.2)</p>
-        <ul className="space-y-1 text-xs">
-          {[
-            "Captação de comandos via WhatsApp (1.1).",
-            "Registro de projetos + resolução determinística por palavra-chave (1.2).",
-            "SEM geração de prompt por IA, SEM Claude, SEM GitHub, SEM execução.",
-          ].map((line) => (
-            <li key={line} className="flex gap-2">
-              <span className="text-gray-400">•</span>
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
+function ConfigTab() {
+  // Interactive panel: enable/disable + authorized operators (DB-driven).
+  return <BuildOsConfigPanel />;
 }

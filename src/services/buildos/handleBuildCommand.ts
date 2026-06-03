@@ -19,11 +19,12 @@
  * Priority 1.1: intake + confirmation only. No Claude, no GitHub, no LLM.
  */
 
+import { detectBuildCommand } from "./BuildCommandRouter";
 import {
-  detectBuildCommand,
-  isAuthorizedBuildSender,
-  isBuildOsEnabled,
-} from "./BuildCommandRouter";
+  resolveBuildOsEnabled,
+  authorizeSender,
+  touchSenderLastUsed,
+} from "./BuildOSConfigService";
 import {
   createBuildCommandFromWhatsApp,
   logBuildCommandEvent,
@@ -55,8 +56,10 @@ const NOT_BUILD: BuildCommandHandlingResult = { isBuildCommand: false };
 export async function handleBuildCommand(
   input: BuildCommandHandlingInput,
 ): Promise<BuildCommandHandlingResult> {
-  // 0. Feature flag — entirely inert unless explicitly enabled.
-  if (!isBuildOsEnabled()) return NOT_BUILD;
+  // 0. Enable gate — DB-first (admin config), env bootstrap fallback, hard kill.
+  //    Honors BUILDOS_HARD_DISABLED → BuildOSConfig.isEnabled → BUILDOS_ENABLED.
+  const enabled = await resolveBuildOsEnabled();
+  if (!enabled.enabled) return NOT_BUILD;
 
   const detected = detectBuildCommand(input.content);
 
@@ -64,13 +67,15 @@ export async function handleBuildCommand(
     // ── New command path (/build, /cmd, /prompt) ──
     // The message LOOKS like a command, so we intercept it regardless of
     // authorization (a customer can't reach this — prefixes are intentional).
-    if (!isAuthorizedBuildSender(input.phone)) {
+    const auth = await authorizeSender(input.phone);
+    if (!auth.authorized) {
       console.warn("[BuildOS] Unauthorized command attempt ignored.", {
         phone: maskPhone(input.phone),
         prefix: detected.prefix,
       });
       return { isBuildCommand: true };
     }
+    if (auth.senderId) touchSenderLastUsed(auth.senderId).catch(() => {});
     await handleNewCommand(input, detected.prefix, detected.commandText);
     return { isBuildCommand: true };
   }
@@ -78,10 +83,12 @@ export async function handleBuildCommand(
   // ── Confirmation-reply path (ENVIAR/APROVAR/CANCELAR/AJUSTAR/STATUS) ──
   // Only an AUTHORIZED sender's reply is considered. Non-authorized senders are
   // never intercepted here (their normal customer flow is untouched).
-  if (isAuthorizedBuildSender(input.phone)) {
+  const replyAuth = await authorizeSender(input.phone);
+  if (replyAuth.authorized) {
     try {
       const result = await handleBuildReply(input.phone, input.content);
       if (result.handled) {
+        if (replyAuth.senderId) touchSenderLastUsed(replyAuth.senderId).catch(() => {});
         if (result.reply) {
           await sendBuildConfirmation(input.restaurantId, input.phone, result.reply).catch(() => {});
         }

@@ -2308,18 +2308,47 @@ model BuildProject {
 /// means "all active projects" (resolved in the service layer).
 model BuildAuthorizedSender {
   id                String  @id @default(cuid())
-  /// Normalized E.164 phone, e.g. "+5511999990000". Unique.
+  /// Normalized E.164 phone, e.g. "+5511999990000". Unique. (canonical match key)
   phone             String  @unique
+  /// Raw value the admin typed (for display); the canonical match uses `phone`.
+  rawPhone          String?
   name              String?
   role              String  @default("operator")
   isActive          Boolean @default(true)
   allowedProjectIds Json    @default("[]") // string[] of BuildProject ids ([] = all)
+  notes             String?
+  lastUsedAt        DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([isActive])
   @@map("build_authorized_senders")
+}
+
+/// Operating mode for Build OS (Priority 1.4.1).
+enum BuildOSMode {
+  INTERNAL_ONLY
+  PRODUCT
+}
+
+/// Singleton-ish runtime configuration for Build OS, editable from the admin UI
+/// WITHOUT touching env vars / Railway. Env vars remain bootstrap/emergency only.
+/// There is normally exactly one active row (the most recent is authoritative).
+model BuildOSConfig {
+  id        String      @id @default(cuid())
+  isEnabled Boolean     @default(false)
+  mode      BuildOSMode @default(INTERNAL_ONLY)
+  /// Optional override for the default project; falls back to BuildProject.isDefault.
+  defaultProjectId String?
+  /// When true, env BUILD_OS_AUTHORIZED_PHONES is allowed as a fallback even when
+  /// DB senders exist. When false, DB authorized senders are the sole source once any exist.
+  allowEnvAuthorizedPhonesFallback Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("build_os_config")
 }
 
 /// A single command received from an authorized operator. Raw + parsed parts are

@@ -86,6 +86,37 @@ export function normalizeSenderPhone(phone: string): string {
 }
 
 /**
+ * Build the set of equivalent E.164 forms for a Brazilian mobile, covering the
+ * "nono dígito" ambiguity: WhatsApp sometimes delivers the JID without the extra
+ * `9` after the DDD. Given either form, returns BOTH ("+55DD9XXXXXXXX" and
+ * "+55DDXXXXXXXX"). For non-BR or non-mobile numbers, returns just the input.
+ *
+ * Examples:
+ *   "+5511999990000" → {"+5511999990000", "+551199990000"}
+ *   "+551199990000"  → {"+551199990000",  "+5511999990000"}
+ */
+export function phoneVariants(normalized: string): Set<string> {
+  const out = new Set<string>();
+  if (!normalized) return out;
+  out.add(normalized);
+
+  const m = normalized.match(/^\+55(\d{2})(\d+)$/);
+  if (!m || !m[1] || !m[2]) return out; // not a +55 number — no variant logic
+
+  const ddd = m[1];
+  const rest = m[2];
+
+  if (rest.length === 9 && rest.startsWith("9")) {
+    // has the 9 → also add the without-9 form
+    out.add(`+55${ddd}${rest.slice(1)}`);
+  } else if (rest.length === 8) {
+    // missing the 9 → also add the with-9 form
+    out.add(`+55${ddd}9${rest}`);
+  }
+  return out;
+}
+
+/**
  * Synchronous authorization check against the env allow-list (MVP fallback).
  * A DB-backed check can be layered on later via BuildCommandService without
  * changing the webhook call site.
