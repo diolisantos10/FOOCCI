@@ -58,6 +58,52 @@ interface AgentReport {
   dataQuality: "NONE" | "LOW" | "SUFFICIENT";
 }
 
+// ─── Diagnosis Engine types (W1) ──────────────────────────────────────────────
+
+interface DiagnosisFinding {
+  id:                string;
+  title:             string;
+  severity:          InsightSeverity;
+  metric:            string;
+  currentValue:      number;
+  previousValue:     number;
+  deltaAbs:          number;
+  deltaPct:          number;
+  likelyCauses:      string[];
+  evidence:          string[];
+  confidence:        "LOW" | "MEDIUM" | "HIGH";
+  recommendedAction: string;
+  relatedEntities:   {
+    products?:      string[];
+    categories?:    string[];
+    campaignIds?:   string[];
+    channel?:       string;
+    paymentMethod?: string;
+  };
+}
+
+interface DiagnosisAnomaly {
+  id:                string;
+  severity:          InsightSeverity;
+  metric:            string;
+  threshold:         string;
+  observedValue:     number;
+  whyItMatters:      string;
+  recommendedAction: string;
+}
+
+interface DiagnosisReport {
+  period:             { from: string; to: string; label: string };
+  comparisonPeriod:   { from: string; to: string; label: string } | null;
+  summary:            string;
+  findings:           DiagnosisFinding[];
+  anomalies:          DiagnosisAnomaly[];
+  recommendedActions: string[];
+  limitations:        string[];
+  dataQuality:        "NONE" | "LOW" | "SUFFICIENT";
+  hasComparison:      boolean;
+}
+
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
 function toISO(d: Date) {
@@ -886,6 +932,158 @@ function QuestionBoxPlaceholder() {
   );
 }
 
+// ─── Diagnosis Panel (W1) ─────────────────────────────────────────────────────
+
+const CONFIDENCE_LABEL: Record<string, string> = {
+  LOW: "confiança baixa", MEDIUM: "confiança média", HIGH: "confiança alta",
+};
+
+function SeverityBadge({ severity }: { severity: InsightSeverity }) {
+  const s = SEVERITY_STYLE[severity];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${s.badge} ${s.badgeText}`}>
+      <span>{s.icon}</span>{SEVERITY_LABEL[severity]}
+    </span>
+  );
+}
+
+function DiagnosisFindingCard({ finding }: { finding: DiagnosisFinding }) {
+  const s = SEVERITY_STYLE[finding.severity];
+  return (
+    <div className={`rounded-xl border p-4 space-y-2 ${s.border} ${s.bg}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-gray-900">{finding.title}</p>
+        <SeverityBadge severity={finding.severity} />
+      </div>
+      {finding.likelyCauses.length > 0 && (
+        <ul className="space-y-1">
+          {finding.likelyCauses.map((c, i) => (
+            <li key={i} className="text-xs text-gray-600 leading-relaxed">• {c}</li>
+          ))}
+        </ul>
+      )}
+      {finding.evidence.length > 0 && (
+        <div className="rounded-lg bg-white/70 px-2.5 py-1.5">
+          {finding.evidence.map((e, i) => (
+            <p key={i} className="text-[11px] font-mono text-gray-500">{e}</p>
+          ))}
+        </div>
+      )}
+      <p className="text-xs font-medium text-gray-700">→ {finding.recommendedAction}</p>
+      <p className="text-[10px] uppercase tracking-wide text-gray-400">
+        {CONFIDENCE_LABEL[finding.confidence] ?? finding.confidence}
+      </p>
+    </div>
+  );
+}
+
+function DiagnosisAnomalyRow({ anomaly }: { anomaly: DiagnosisAnomaly }) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2.5">
+      <SeverityBadge severity={anomaly.severity} />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold text-gray-800">
+          {anomaly.metric} <span className="font-normal text-gray-400">· {anomaly.threshold}</span>
+        </p>
+        <p className="text-[11px] text-gray-500 leading-relaxed">{anomaly.whyItMatters}</p>
+        <p className="mt-0.5 text-[11px] font-medium text-gray-600">→ {anomaly.recommendedAction}</p>
+      </div>
+    </div>
+  );
+}
+
+function DiagnosisPanel({ data, loading }: { data: DiagnosisReport | null; loading: boolean }) {
+  const topFindings  = data?.findings.slice(0, 3) ?? [];
+  const topAnomalies = data?.anomalies.slice(0, 3) ?? [];
+
+  return (
+    <div className="rounded-xl border-2 border-rose-100 bg-gradient-to-br from-rose-50/50 to-white p-6 space-y-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-xl shadow-sm">
+          🩺
+        </div>
+        <div>
+          <h2 className="text-base font-bold text-gray-900">Diagnóstico do período</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Por que mudou, onde está vazando e qual ação tomar — baseado nos seus dados.
+          </p>
+        </div>
+      </div>
+
+      {loading && <AgentSkeleton />}
+
+      {!loading && !data && (
+        <p className="text-sm text-gray-400">Não foi possível gerar o diagnóstico. Tente novamente.</p>
+      )}
+
+      {!loading && data && data.dataQuality === "NONE" && (
+        <div className="rounded-xl border border-dashed border-rose-200 bg-white p-6 text-center">
+          <p className="text-2xl mb-2">🩺</p>
+          <p className="text-sm text-gray-500 max-w-md mx-auto">{data.summary}</p>
+        </div>
+      )}
+
+      {!loading && data && data.dataQuality !== "NONE" && (
+        <>
+          <div className="rounded-xl bg-white border border-rose-100 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-rose-400 mb-2">Resumo do diagnóstico</p>
+            <p className="text-sm text-gray-700 leading-relaxed">{data.summary}</p>
+          </div>
+
+          {topFindings.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 px-1">
+                Principais achados
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {topFindings.map((f) => <DiagnosisFindingCard key={f.id} finding={f} />)}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl bg-green-50 border border-green-200 p-4 text-center">
+              <p className="text-sm text-green-700 font-medium">✅ Nenhum problema relevante diagnosticado no período.</p>
+            </div>
+          )}
+
+          {topAnomalies.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 px-1">
+                Alertas (anomalias)
+              </p>
+              <div className="space-y-2">
+                {topAnomalies.map((a) => <DiagnosisAnomalyRow key={a.id} anomaly={a} />)}
+              </div>
+            </div>
+          )}
+
+          {data.recommendedActions.length > 0 && (
+            <div className="rounded-xl bg-white border border-rose-100 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-rose-400 mb-2">Ações recomendadas</p>
+              <ol className="space-y-1.5">
+                {data.recommendedActions.map((a, i) => (
+                  <li key={i} className="flex gap-2 text-xs text-gray-700">
+                    <span className="font-bold text-rose-400">{i + 1}.</span>
+                    <span>{a}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {data.limitations.length > 0 && (
+            <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Limitações</p>
+              {data.limitations.map((l, i) => (
+                <p key={i} className="text-[11px] text-gray-500 leading-relaxed">• {l}</p>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function AgentPanel({ data, loading }: { data: AgentReport | null; loading: boolean }) {
   return (
     <div className="rounded-xl border-2 border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-white p-6 space-y-5">
@@ -1005,12 +1203,14 @@ function UpsellRevenueCard({ upsell }: { upsell: UpsellRevenue | undefined }) {
 // ─── Tab: Visão Geral ─────────────────────────────────────────────────────────
 
 function TabVisaoGeral({
-  data, loading, agentData, agentLoading, preset,
+  data, loading, agentData, agentLoading, diagnosisData, diagnosisLoading, preset,
 }: {
   data: AnalyticsOverview | null;
   loading: boolean;
   agentData: AgentReport | null;
   agentLoading: boolean;
+  diagnosisData: DiagnosisReport | null;
+  diagnosisLoading: boolean;
   preset: Preset;
 }) {
   const kpi            = data?.kpi;
@@ -1094,6 +1294,9 @@ function TabVisaoGeral({
       {!loading && !hasRealOrders && !hasImported && preset !== "all" && (
         <FallbackPrompt preset={preset} />
       )}
+
+      {/* Diagnosis Engine — period root-cause + anomalies (W1) */}
+      <DiagnosisPanel data={diagnosisData} loading={diagnosisLoading} />
 
       {/* Analytics Agent */}
       <AgentPanel data={agentData} loading={agentLoading} />
@@ -2000,6 +2203,9 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
   const [agentData,    setAgentData]    = useState<AgentReport | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
 
+  const [diagnosisData,    setDiagnosisData]    = useState<DiagnosisReport | null>(null);
+  const [diagnosisLoading, setDiagnosisLoading] = useState(false);
+
   const load = useCallback(async (f: string, t: string) => {
     setLoading(true);
     setError(null);
@@ -2029,10 +2235,25 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
     }
   }, []);
 
+  const loadDiagnosis = useCallback(async (f: string, t: string) => {
+    setDiagnosisLoading(true);
+    try {
+      const res  = await fetch(`/api/analytics/diagnosis?from=${f}&to=${t}`);
+      const json = await res.json() as { data?: DiagnosisReport; error?: string };
+      if (res.ok && json.data) setDiagnosisData(json.data);
+      else setDiagnosisData(null);
+    } catch {
+      setDiagnosisData(null);
+    } finally {
+      setDiagnosisLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void load(from, to);
     void loadAgent(from, to);
-  }, [from, to, load, loadAgent]);
+    void loadDiagnosis(from, to);
+  }, [from, to, load, loadAgent, loadDiagnosis]);
 
   function handlePreset(p: Preset) {
     setPreset(p);
@@ -2134,6 +2355,8 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
             loading={loading}
             agentData={agentData}
             agentLoading={agentLoading}
+            diagnosisData={diagnosisData}
+            diagnosisLoading={diagnosisLoading}
             preset={preset}
           />
         )}
