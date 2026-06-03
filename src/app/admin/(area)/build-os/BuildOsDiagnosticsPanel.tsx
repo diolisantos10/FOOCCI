@@ -355,6 +355,10 @@ function WebhookCard() {
       <p className="mt-2 text-xs text-gray-600">
         URL esperada: <code className="rounded bg-gray-100 px-1 font-mono">{EXPECTED_WEBHOOK_URL}</code>
       </p>
+      <p className="mt-1 text-xs text-gray-500">
+        Use isto quando o Build OS estiver <strong>HEALTHY</strong>, mas o WhatsApp real não gerar
+        trace (badge &ldquo;Webhook real recebeu /build&rdquo; em FAIL).
+      </p>
 
       {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>}
 

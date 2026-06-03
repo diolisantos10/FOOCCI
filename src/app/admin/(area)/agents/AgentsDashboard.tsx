@@ -74,6 +74,14 @@ export function AgentsDashboard({ agents, dbOrigin, initialTab }: Props) {
         </p>
       </header>
 
+      {/* Discreet wayfinding: this is NOT the Build OS / Prompt Relay screen. */}
+      <a
+        href="/admin/build-os"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-600 hover:border-orange-300 hover:text-orange-700"
+      >
+        🛠️ Procurando o Prompt Relay / diagnóstico do WhatsApp? Acesse <strong>Build OS</strong> →
+      </a>
+
       {/* Pill / tab navigation */}
       <nav className="flex flex-wrap gap-2 border-b border-gray-200 pb-3">
         {tabs.map((t) => {
