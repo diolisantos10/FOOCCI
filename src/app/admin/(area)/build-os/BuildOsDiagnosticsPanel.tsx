@@ -13,6 +13,10 @@ const DEFAULT_PHONE = "+5511989400692";
 const DEFAULT_MESSAGE = "/build Faz um RAIO-X do checkout Pix. Não implemente nada ainda.";
 
 interface Report {
+  deployInfo: {
+    commitSha: string; branch: string; appVersion: string; nodeEnv: string;
+    buildMarker: string; webhookRouteExpected: string; healthEndpoint: string;
+  };
   buildOsConfig: { exists: boolean; enabled: boolean; source: string; hardDisabled: boolean; mode: string };
   authorizedSenderCheck: {
     inputPhone: string; normalizedPhone: string; variants: string[];
@@ -141,6 +145,20 @@ export function BuildOsDiagnosticsPanel() {
             <Badge ok={report.promptDraftCheck.canGeneratePromptDraft} label="Rascunho de prompt" />
             <Badge ok={report.webhookReceivedRealBuild} label="Webhook real recebeu /build" />
           </div>
+
+          {/* Deploy info — confirma se produção roda o build com trace */}
+          <Card title="Deploy em produção (confirme se é o build atual)">
+            <Row k="Build marker" v={report.deployInfo.buildMarker} />
+            <Row k="Commit" v={report.deployInfo.commitSha} />
+            <Row k="Branch" v={report.deployInfo.branch} />
+            <Row k="App version" v={report.deployInfo.appVersion} />
+            <Row k="Rota esperada do webhook" v={report.deployInfo.webhookRouteExpected} />
+            <Row k="Health" v={report.deployInfo.healthEndpoint} />
+            <p className="mt-2 text-xs text-gray-400">
+              Se o build marker acima não aparecer, o deploy em produção é antigo (sem o
+              código de trace) — faça o redeploy do serviço que recebe o webhook.
+            </p>
+          </Card>
 
           {/* Webhook real — o indicador decisivo */}
           <div className={`rounded-xl border p-4 ${report.webhookReceivedRealBuild ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>

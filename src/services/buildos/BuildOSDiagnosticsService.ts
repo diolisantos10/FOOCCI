@@ -226,8 +226,23 @@ export async function runBuildOsDiagnostics(opts?: {
   const recentWebhookTraces = await getRecentWebhookTraces(10);
   const lastWebhookAt = recentWebhookTraces[0]?.createdAt ?? null;
 
+  // ── deployInfo: lets the admin confirm production runs the trace-capable build.
+  //    `buildMarker` is bumped whenever the Build OS webhook path changes, so an
+  //    old deploy is obvious without reading commit SHAs.
+  const deployInfo = {
+    commitSha: process.env.RAILWAY_GIT_COMMIT_SHA ?? "unknown",
+    branch: process.env.RAILWAY_GIT_BRANCH ?? "unknown",
+    appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? "dev",
+    nodeEnv: process.env.NODE_ENV ?? "unknown",
+    // Bump this when the Build OS webhook trace/interception path changes.
+    buildMarker: "buildos-webhook-trace-v1",
+    webhookRouteExpected: "POST /api/webhooks/evolution",
+    healthEndpoint: "/api/health",
+  };
+
   return {
     generatedAt: new Date().toISOString(),
+    deployInfo,
     buildOsConfig,
     authorizedSenderCheck,
     projectCheck,
