@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { isGuestIdentifier } from "@/lib/guest";
 import { formatOrderNumber } from "@/lib/order-number";
 import type { CustomerIntelligenceReport } from "@/services/crm/CustomerIntelligenceService";
+import type { NextBestAction } from "@/services/crm/CustomerIntelligenceSnapshotService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ interface Props {
   importedLastOrderAt: string | null;
   averageTicket: number | null;
   intelligence: CustomerIntelligenceReport;
+  nextBestAction: NextBestAction | null;
 }
 
 export interface InteractionItem {
@@ -901,6 +903,65 @@ function IntelligenceSection({ intel }: { intel: CustomerIntelligenceReport }) {
   );
 }
 
+// ─── Next Best Action card ──────────────────────────────────────────────────────
+
+const NBA_PRIORITY_STYLE: Record<string, { badge: string; label: string }> = {
+  HIGH:   { badge: "bg-red-100 text-red-700",     label: "Alta"  },
+  MEDIUM: { badge: "bg-amber-100 text-amber-700", label: "Média" },
+  LOW:    { badge: "bg-blue-100 text-blue-700",   label: "Baixa" },
+  NONE:   { badge: "bg-gray-100 text-gray-500",   label: "—"     },
+};
+
+const NBA_ACTION_LABEL: Record<string, string> = {
+  WELCOME_FIRST_ORDER: "Boas-vindas / 1º pedido",
+  VIP_APPRECIATION:    "Reconhecimento VIP",
+  REVIEW_REQUEST:      "Pedir avaliação",
+  PREMIUM_OFFER:       "Oferta premium",
+  GENTLE_REMINDER:     "Lembrete leve",
+  REACTIVATION:        "Reativação",
+  WINBACK:             "Reconquista",
+  LOYALTY_THANK_YOU:   "Agradecimento / fidelização",
+  DATA_ENRICHMENT:     "Enriquecer cadastro",
+  NO_ACTION:           "Nenhuma ação",
+};
+
+const NBA_CHANNEL_LABEL: Record<string, string> = {
+  WHATSAPP: "WhatsApp",
+  INTERNAL: "Interno",
+  NONE:     "—",
+};
+
+function NextBestActionCard({ nba }: { nba: NextBestAction }) {
+  const ps = NBA_PRIORITY_STYLE[nba.priority] ?? NBA_PRIORITY_STYLE.NONE!;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <span className="text-sm font-semibold text-gray-800">
+          {NBA_ACTION_LABEL[nba.actionType] ?? nba.actionType}
+        </span>
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${ps.badge}`}>
+          {ps.label}
+        </span>
+      </div>
+      <div className="px-4 py-3 space-y-2">
+        <p className="text-xs text-gray-600 leading-snug">{nba.reason}</p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">
+            Canal: {NBA_CHANNEL_LABEL[nba.recommendedChannel] ?? nba.recommendedChannel}
+          </span>
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] ${nba.safeToContact ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+            {nba.safeToContact ? "Seguro contatar" : "Não contatar"}
+          </span>
+        </div>
+        <div className="pt-1">
+          <p className="text-[11px] text-gray-500 mb-0.5">Objetivo da mensagem</p>
+          <p className="text-xs text-gray-700 leading-snug">{nba.suggestedMessageGoal}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OverviewTab({
   behavior,
   insights,
@@ -913,6 +974,7 @@ function OverviewTab({
   importedLastOrderAt,
   averageTicket,
   intelligence,
+  nextBestAction,
 }: {
   behavior: BehaviorData;
   insights: InsightItem[];
@@ -925,6 +987,7 @@ function OverviewTab({
   importedLastOrderAt: string | null;
   averageTicket: number | null;
   intelligence: CustomerIntelligenceReport;
+  nextBestAction: NextBestAction | null;
 }) {
   const hasImported = document !== null || financialBalance !== null || importedOrderCount !== null || importedTotalSpent !== null || importedLastOrderAt !== null || averageTicket !== null || notes !== null;
 
@@ -943,6 +1006,12 @@ function OverviewTab({
 
       {/* Right column — 1/3 */}
       <div className="space-y-6">
+        {nextBestAction && (
+          <Section title="Próxima melhor ação" icon="🎯">
+            <NextBestActionCard nba={nextBestAction} />
+          </Section>
+        )}
+
         <Section title="Inteligência do cliente" icon="🧠">
           <IntelligenceSection intel={intelligence} />
         </Section>
@@ -1452,6 +1521,7 @@ export default function CustomerProfileClient({
   importedLastOrderAt,
   averageTicket,
   intelligence,
+  nextBestAction,
 }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -1546,7 +1616,7 @@ export default function CustomerProfileClient({
 
       {/* Tab content */}
       <div className="mx-auto max-w-7xl p-6">
-        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} addresses={addresses} notes={notes} document={document} financialBalance={financialBalance} importedOrderCount={importedOrderCount} importedTotalSpent={importedTotalSpent} importedLastOrderAt={importedLastOrderAt} averageTicket={averageTicket} intelligence={intelligence} />}
+        {activeTab === "overview"     && <OverviewTab behavior={behavior} insights={insights} addresses={addresses} notes={notes} document={document} financialBalance={financialBalance} importedOrderCount={importedOrderCount} importedTotalSpent={importedTotalSpent} importedLastOrderAt={importedLastOrderAt} averageTicket={averageTicket} intelligence={intelligence} nextBestAction={nextBestAction} />}
         {activeTab === "history"      && <HistoryTab orders={orders} onOrderClick={setSelectedOrder} />}
         {activeTab === "interactions" && <InteractionsTab interactions={interactions} />}
         {activeTab === "actions"      && <ActionsTab tags={tags} />}

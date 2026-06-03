@@ -7,6 +7,8 @@ import CustomerProfileClient from "./CustomerProfileClient";
 import type { Classification, BehaviorData, InsightItem, OrderHistoryItem, InteractionItem, CustomerTag, AddressItem } from "./CustomerProfileClient";
 import { CustomerIntelligenceService } from "@/services/crm/CustomerIntelligenceService";
 import type { CustomerIntelligenceReport } from "@/services/crm/CustomerIntelligenceService";
+import { CustomerIntelligenceSnapshotService } from "@/services/crm/CustomerIntelligenceSnapshotService";
+import type { NextBestAction } from "@/services/crm/CustomerIntelligenceSnapshotService";
 
 export const metadata = { title: "Perfil do Cliente" };
 
@@ -517,6 +519,13 @@ export default async function CustomerDetailPage({
     },
   );
 
+  // Unified intelligence snapshot — surfaces the deterministic Next Best Action.
+  const snapshot = await CustomerIntelligenceSnapshotService.getSnapshot(
+    customer.restaurantId,
+    customer.id,
+  ).catch(() => null);
+  const nextBestAction: NextBestAction | null = snapshot?.nextBestAction ?? null;
+
   return (
     <>
       <TopBar title={customer.name} />
@@ -548,6 +557,7 @@ export default async function CustomerDetailPage({
         importedLastOrderAt={customer.importedLastOrderAt?.toISOString() ?? null}
         averageTicket={customer.averageTicket !== null ? Number(customer.averageTicket) : null}
         intelligence={intelligence}
+        nextBestAction={nextBestAction}
       />
     </>
   );
