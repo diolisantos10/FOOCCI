@@ -2243,6 +2243,20 @@ enum BuildTaskType {
   REFACTOR
   AUDIT
   DOCS
+  UI_UX
+  CONFIG
+  TEST
+  SECURITY
+}
+
+/// Deterministic execution intent inferred from the command text (Priority 1.3).
+enum BuildExecutionIntent {
+  UNKNOWN
+  AUDIT_ONLY
+  IMPLEMENT
+  FIX
+  REVIEW
+  EXPLAIN
 }
 
 /// A project the Build OS can receive commands for. Project-agnostic tenancy:
@@ -2311,6 +2325,12 @@ model BuildCommand {
   riskLevel     BuildRiskLevel            @default(UNKNOWN)
   taskType      BuildTaskType             @default(UNKNOWN)
   receivedAt    DateTime                  @default(now())
+
+  // ── Priority 1.3: deterministic (non-LLM) classification metadata ──
+  executionIntent          BuildExecutionIntent @default(UNKNOWN)
+  targetArea               String? // e.g. "checkout", "whatsapp", "waiter", "buildos", "unknown"
+  requiresHumanConfirmation Boolean             @default(true)
+  classificationSummary    String? // short human-readable summary
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

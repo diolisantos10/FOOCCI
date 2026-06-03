@@ -14,6 +14,7 @@ import {
   resolveBuildProjectFromMessage,
   type ProjectResolution,
 } from "./BuildProjectService";
+import { classifyBuildCommandText } from "./BuildCommandClassifier";
 import type {
   AdminBuildCommandView,
   CreateBuildCommandFromWhatsAppInput,
@@ -24,6 +25,7 @@ export const BUILD_EVENT = {
   RECEIVED: "RECEIVED",
   PROJECT_RESOLVED: "PROJECT_RESOLVED",
   PROJECT_UNRESOLVED: "PROJECT_UNRESOLVED",
+  COMMAND_CLASSIFIED: "COMMAND_CLASSIFIED",
   CONFIRMATION_SENT: "CONFIRMATION_SENT",
   CONFIRMATION_FAILED: "CONFIRMATION_FAILED",
 } as const;
@@ -74,6 +76,9 @@ export async function createBuildCommandFromWhatsApp(
     // keep UNRESOLVED — never block creation
   }
 
+  // Deterministic (non-LLM) classification from the RAW message (Priority 1.3).
+  const classification = classifyBuildCommandText(input.rawMessage);
+
   try {
     const command = await prisma.buildCommand.create({
       data: {
@@ -85,7 +90,12 @@ export async function createBuildCommandFromWhatsApp(
         commandPrefix: input.prefix,
         commandText: input.commandText,
         status: "RECEIVED",
-        // riskLevel / taskType default to UNKNOWN — classification is a later phase.
+        taskType: classification.taskType,
+        riskLevel: classification.riskLevel,
+        executionIntent: classification.executionIntent,
+        targetArea: classification.targetArea,
+        requiresHumanConfirmation: classification.requiresHumanConfirmation,
+        classificationSummary: classification.classificationSummary,
       },
       select: { id: true, projectId: true },
     });
@@ -94,6 +104,20 @@ export async function createBuildCommandFromWhatsApp(
       prefix: input.prefix,
       senderPhone: input.senderPhone,
     });
+
+    // Audit the deterministic classification.
+    await logBuildCommandEvent(
+      command.id,
+      BUILD_EVENT.COMMAND_CLASSIFIED,
+      classification.classificationSummary,
+      {
+        taskType: classification.taskType,
+        riskLevel: classification.riskLevel,
+        executionIntent: classification.executionIntent,
+        targetArea: classification.targetArea,
+        requiresHumanConfirmation: classification.requiresHumanConfirmation,
+      },
+    );
 
     // Audit the project resolution outcome.
     if (resolution.projectId) {
@@ -149,6 +173,10 @@ export async function getBuildCommandsForAdmin(limit = 100): Promise<AdminBuildC
       status: r.status,
       riskLevel: r.riskLevel,
       taskType: r.taskType,
+      executionIntent: r.executionIntent,
+      targetArea: r.targetArea,
+      requiresHumanConfirmation: r.requiresHumanConfirmation,
+      classificationSummary: r.classificationSummary,
       sourceChannel: r.sourceChannel,
       projectSlug: r.project?.slug ?? null,
       projectName: r.project?.name ?? null,

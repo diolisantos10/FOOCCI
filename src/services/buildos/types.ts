@@ -38,6 +38,10 @@ export interface AdminBuildCommandView {
   status: string;
   riskLevel: string;
   taskType: string;
+  executionIntent: string;
+  targetArea: string | null;
+  requiresHumanConfirmation: boolean;
+  classificationSummary: string | null;
   sourceChannel: string;
   projectSlug: string | null;
   projectName: string | null;

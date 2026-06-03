@@ -38,6 +38,49 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+const RISK_STYLES: Record<string, string> = {
+  LOW: "bg-green-50 text-green-700",
+  MEDIUM: "bg-amber-50 text-amber-700",
+  HIGH: "bg-orange-50 text-orange-700",
+  CRITICAL: "bg-red-50 text-red-700",
+  UNKNOWN: "bg-gray-100 text-gray-500",
+};
+
+function RiskBadge({ risk }: { risk: string }) {
+  const cls = RISK_STYLES[risk] ?? "bg-gray-100 text-gray-600";
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>
+      {risk}
+    </span>
+  );
+}
+
+const INTENT_STYLES: Record<string, string> = {
+  AUDIT_ONLY: "bg-blue-50 text-blue-700",
+  IMPLEMENT: "bg-purple-50 text-purple-700",
+  FIX: "bg-orange-50 text-orange-700",
+  REVIEW: "bg-cyan-50 text-cyan-700",
+  EXPLAIN: "bg-gray-100 text-gray-600",
+  UNKNOWN: "bg-gray-100 text-gray-500",
+};
+
+function IntentBadge({ intent }: { intent: string }) {
+  const cls = INTENT_STYLES[intent] ?? "bg-gray-100 text-gray-600";
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {intent}
+    </span>
+  );
+}
+
+function TaskBadge({ task }: { task: string }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+      {task}
+    </span>
+  );
+}
+
 function maskPhone(phone: string): string {
   if (phone.length <= 6) return phone;
   return `${phone.slice(0, 3)}•••${phone.slice(-4)}`;
@@ -134,7 +177,7 @@ function CommandsTab({
             <th className="px-4 py-3 font-semibold">Operador</th>
             <th className="px-4 py-3 font-semibold">Comando</th>
             <th className="px-4 py-3 font-semibold">Projeto</th>
-            <th className="px-4 py-3 font-semibold">Canal</th>
+            <th className="px-4 py-3 font-semibold">Classificação</th>
             <th className="px-4 py-3 font-semibold">Status</th>
             <th className="px-4 py-3 font-semibold">Recebido</th>
           </tr>
@@ -147,7 +190,7 @@ function CommandsTab({
                 <p className="text-gray-900">{c.senderName ?? "—"}</p>
                 <p className="font-mono text-xs text-gray-400">{maskPhone(c.senderPhone)}</p>
               </td>
-              <td className="px-4 py-3 max-w-md">
+              <td className="px-4 py-3 max-w-xs">
                 <p className="text-gray-900">
                   <span className="mr-1 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-600">
                     {c.commandPrefix}
@@ -156,7 +199,29 @@ function CommandsTab({
                 </p>
               </td>
               <td className="px-4 py-3 text-gray-600">{c.projectName ?? "— não resolvido —"}</td>
-              <td className="px-4 py-3 text-gray-500">{c.sourceChannel}</td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap gap-1.5">
+                  <RiskBadge risk={c.riskLevel} />
+                  <TaskBadge task={c.taskType} />
+                  <IntentBadge intent={c.executionIntent} />
+                  {c.targetArea && c.targetArea !== "unknown" && (
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                      {c.targetArea}
+                    </span>
+                  )}
+                  {c.requiresHumanConfirmation && (
+                    <span
+                      className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+                      title="Requer confirmação humana"
+                    >
+                      ⚠ confirmar
+                    </span>
+                  )}
+                </div>
+                {c.classificationSummary && (
+                  <p className="mt-1 text-xs text-gray-400">{c.classificationSummary}</p>
+                )}
+              </td>
               <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
               <td className="px-4 py-3 text-xs text-gray-500">
                 {new Date(c.createdAt).toLocaleString("pt-BR")}
