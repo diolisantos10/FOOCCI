@@ -764,6 +764,7 @@ function ActionConfigDrawer({
   const [preparing, setPreparing] = useState(false);
   const [prepError, setPrepError] = useState<string | null>(null);
   const [campaignName, setCampaignName] = useState(template.id === "custom" ? "" : template.title);
+  const [linkedCouponCode, setLinkedCouponCode] = useState("");
 
   const isCustom = template.id === "custom";
   const [customAudienceId, setCustomAudienceId] = useState("");
@@ -834,6 +835,7 @@ function ActionConfigDrawer({
         targetSegment:   targetId,
         messageTemplate: message,
         objective:       template.objective,
+        ...(linkedCouponCode.trim() ? { couponCode: linkedCouponCode.trim().toUpperCase() } : {}),
       };
 
       if (sendMode === "recurring") {
@@ -1068,6 +1070,25 @@ function ActionConfigDrawer({
             />
             <p className="mt-1 text-[10px] text-gray-400">
               Use <code className="bg-gray-100 px-1 rounded">{"{nome}"}</code> para inserir o nome do cliente automaticamente.
+            </p>
+          </div>
+
+          {/* Coupon attribution link (optional) */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-700">
+              Cupom vinculado{" "}
+              <span className="font-normal text-gray-400">(opcional — para relatório de atribuição)</span>
+            </label>
+            <input
+              type="text"
+              value={linkedCouponCode}
+              onChange={(e) => setLinkedCouponCode(e.target.value.toUpperCase())}
+              placeholder="Ex: PROMO10"
+              maxLength={40}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 uppercase focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 transition"
+            />
+            <p className="mt-1 text-[10px] text-gray-400">
+              Se esta campanha usa um cupom, vincule-o aqui para ver a receita comprovada nos relatórios.
             </p>
           </div>
 
@@ -2515,6 +2536,20 @@ type CampaignCouponMetricsResponse = {
   };
 };
 
+type AttributionQuality = "COUPON_PROVEN" | "CAMPAIGN_COUPON" | "ASSISTED" | "NONE";
+type AttributionRowClient = {
+  campaignId: string; attributionQuality: AttributionQuality;
+  attributionLabel: string; attributionDescription: string;
+  linkedCouponCode: string | null; couponOrderCount: number | null;
+  couponRevenue: number | null; discountGiven: number | null;
+};
+const QUALITY_BADGE: Record<AttributionQuality, { bg: string; text: string }> = {
+  COUPON_PROVEN:   { bg: "bg-green-100",  text: "text-green-700"  },
+  CAMPAIGN_COUPON: { bg: "bg-blue-100",   text: "text-blue-700"   },
+  ASSISTED:        { bg: "bg-amber-100",  text: "text-amber-700"  },
+  NONE:            { bg: "bg-gray-100",   text: "text-gray-500"   },
+};
+
 const PERFORMANCE_PERIODS: { value: string; label: string }[] = [
   { value: "7d",  label: "7 dias"  },
   { value: "30d", label: "30 dias" },
@@ -2523,17 +2558,28 @@ const PERFORMANCE_PERIODS: { value: string; label: string }[] = [
 ];
 
 function CampaignCouponPerformance() {
-  const [period,  setPeriod]  = useState("30d");
-  const [data,    setData]    = useState<CampaignCouponMetricsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [period,      setPeriod]      = useState("30d");
+  const [data,        setData]        = useState<CampaignCouponMetricsResponse | null>(null);
+  const [attribution, setAttribution] = useState<Map<string, AttributionRowClient>>(new Map());
+  const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/crm/campaign-metrics?period=${period}`)
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((json) => setData(json.data ?? null))
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch(`/api/crm/campaign-metrics?period=${period}`)
+        .then((r) => r.ok ? r.json() : Promise.reject())
+        .then((json) => json.data ?? null)
+        .catch(() => null),
+      fetch(`/api/crm/attribution?period=${period}`)
+        .then((r) => r.ok ? r.json() : Promise.reject())
+        .then((json): AttributionRowClient[] => (json.data?.rows ?? []))
+        .catch(() => [] as AttributionRowClient[]),
+    ]).then(([metrics, attrRows]) => {
+      setData(metrics);
+      const map = new Map<string, AttributionRowClient>();
+      for (const r of attrRows) map.set(r.campaignId, r);
+      setAttribution(map);
+    }).finally(() => setLoading(false));
   }, [period]);
 
   const cards = [
@@ -2632,9 +2678,6 @@ function CampaignCouponPerformance() {
           {/* Campaign table */}
           <div className="mt-5">
             <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">Campanhas</p>
-            <p className="mb-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10px] text-amber-700">
-              ⚠︎ {data.campaigns.couponAttributionNote}
-            </p>
             {data.campaigns.rows.length === 0 ? (
               <div className="rounded-xl border-2 border-dashed border-gray-100 py-5 text-center text-xs text-gray-400">
                 Nenhuma campanha no período.
@@ -2648,26 +2691,55 @@ function CampaignCouponPerformance() {
                       <th className="py-1.5 px-2 font-semibold text-right">Enviados</th>
                       <th className="py-1.5 px-2 font-semibold text-right">Falhas</th>
                       <th className="py-1.5 px-2 font-semibold text-right">Conversões</th>
-                      <th className="py-1.5 px-2 font-semibold text-right">Conversão</th>
-                      <th className="py-1.5 pl-2 font-semibold text-right">Receita assistida</th>
+                      <th className="py-1.5 px-2 font-semibold text-right">Atribuição</th>
+                      <th className="py-1.5 pl-2 font-semibold text-right">Receita</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {data.campaigns.rows.map((r) => (
-                      <tr key={r.campaignId} className="text-gray-700">
-                        <td className="py-2 pr-2">
-                          <span className="font-semibold text-gray-900">{r.name}</span>
-                          <span className="block text-[10px] text-gray-400">{r.audienceSize} no público</span>
-                        </td>
-                        <td className="py-2 px-2 text-right tabular-nums">{r.sentCount}</td>
-                        <td className="py-2 px-2 text-right tabular-nums text-red-500">{r.failedCount}</td>
-                        <td className="py-2 px-2 text-right tabular-nums">{r.assistedConversions}</td>
-                        <td className="py-2 px-2 text-right tabular-nums">{r.conversionRate !== null ? `${r.conversionRate}%` : "—"}</td>
-                        <td className="py-2 pl-2 text-right tabular-nums font-semibold text-green-700">R$ {formatCurrency(r.assistedRevenue)}</td>
-                      </tr>
-                    ))}
+                    {data.campaigns.rows.map((r) => {
+                      const attr = attribution.get(r.campaignId);
+                      const quality = attr?.attributionQuality ?? "NONE";
+                      const badge = QUALITY_BADGE[quality];
+                      const revenueLabel = quality === "COUPON_PROVEN" && attr?.couponRevenue != null
+                        ? `R$ ${formatCurrency(attr.couponRevenue)}`
+                        : r.assistedRevenue > 0
+                        ? `R$ ${formatCurrency(r.assistedRevenue)}`
+                        : "—";
+                      return (
+                        <tr key={r.campaignId} className="text-gray-700">
+                          <td className="py-2 pr-2">
+                            <span className="font-semibold text-gray-900">{r.name}</span>
+                            <span className="block text-[10px] text-gray-400">{r.audienceSize} no público</span>
+                            {attr?.linkedCouponCode && (
+                              <span className="block text-[10px] text-blue-500">cupom: {attr.linkedCouponCode}</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums">{r.sentCount}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-red-500">{r.failedCount}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{r.assistedConversions}</td>
+                          <td className="py-2 px-2 text-right">
+                            {attr ? (
+                              <span
+                                className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-semibold ${badge.bg} ${badge.text}`}
+                                title={attr.attributionDescription}
+                              >
+                                {attr.attributionLabel}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="py-2 pl-2 text-right tabular-nums font-semibold text-green-700">
+                            {revenueLabel}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+                <p className="mt-2 text-[10px] text-gray-400">
+                  Receita: comprovada por cupom quando vinculado; assistida (pós-envio) caso contrário.
+                </p>
               </div>
             )}
           </div>

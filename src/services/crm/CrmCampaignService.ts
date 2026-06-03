@@ -45,6 +45,8 @@ export interface CreateCampaignInput {
   scheduledAt?:    Date;     // if set, campaign starts as SCHEDULED
   scheduleConfig?: any; // Prisma Json? field
   audienceConfig?: any; // Prisma Json? field
+  couponCode?:     string;   // optional coupon link for attribution
+  promotionId?:    string;   // optional promotion link for attribution
 }
 
 export interface CampaignRecipientRow {
@@ -359,6 +361,8 @@ export class CrmCampaignService {
           scheduledAt:    input.scheduledAt ?? null,
           scheduleConfig: input.scheduleConfig ?? undefined,
           audienceConfig: input.audienceConfig ?? undefined,
+          couponCode:     input.couponCode     ?? null,
+          promotionId:    input.promotionId    ?? null,
         },
       });
 

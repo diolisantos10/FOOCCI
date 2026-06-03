@@ -103,6 +103,8 @@ export async function POST(req: NextRequest) {
       scheduledAt?:     string | null;
       scheduleConfig?:  Record<string, unknown> | null;
       audienceConfig?:  Record<string, unknown> | null;
+      couponCode?:      string | null;
+      promotionId?:     string | null;
     };
 
     if (!body.name?.trim()) {
@@ -125,6 +127,8 @@ export async function POST(req: NextRequest) {
       scheduledAt:     body.scheduledAt ? new Date(body.scheduledAt) : undefined,
       scheduleConfig:  body.scheduleConfig ?? undefined,
       audienceConfig:  body.audienceConfig ?? undefined,
+      couponCode:      body.couponCode?.trim() || undefined,
+      promotionId:     body.promotionId?.trim() || undefined,
     });
 
     return ok(result, 201);

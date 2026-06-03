@@ -698,6 +698,8 @@ model Campaign {
   totalResponded Int            @default(0)
   totalConverted Int            @default(0)
   totalRevenue   Decimal        @default(0) @db.Decimal(12, 2)
+  couponCode     String?        // soft link to Promotion.couponCode for attribution
+  promotionId    String?        // soft FK to Promotion.id for attribution (no cascade)
   scheduleConfig Json? // { mode, scheduledAt?, weekdays?, timeWindowStart?, timeWindowEnd?, dailyLimit? }
   audienceConfig Json? // { templateId?, segment?, filters? }
   createdAt      DateTime       @default(now())
