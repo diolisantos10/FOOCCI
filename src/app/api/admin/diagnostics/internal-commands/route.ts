@@ -26,8 +26,9 @@ function buildPrefixFilter() {
 }
 
 export async function GET(req: NextRequest) {
-  const authError = checkAdminRequest(req);
-  if (authError) return authError;
+  if (!checkAdminRequest(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const { searchParams } = new URL(req.url);
   const restaurantId = searchParams.get("restaurantId") ?? undefined;
