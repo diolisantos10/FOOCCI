@@ -101,6 +101,8 @@ export interface ComputeActionsInput {
   segmentConfig: SegmentConfig;
   recentCampaignStats: { sentCount: number; convertedCount: number } | null;
   restaurantAvgTicket: number;
+  /** Whether a Google/iFood review link is configured (W8). Defaults true for back-compat. */
+  hasReviewLink?: boolean;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -186,6 +188,7 @@ export function computeActions(input: ComputeActionsInput): CrmAction[] {
     segmentConfig,
     recentCampaignStats,
     restaurantAvgTicket,
+    hasReviewLink = true,
   } = input;
 
   const nowMs = now.getTime();
@@ -432,12 +435,16 @@ export function computeActions(input: ComputeActionsInput): CrmAction[] {
     addAction(
       "REVIEW_REQUEST",
       `Pedir avaliação de ${reviewReady.length} cliente(s)`,
-      "Clientes com pedido de 1–5 dias atrás. Momento ideal para solicitar avaliação no Google ou iFood.",
+      hasReviewLink
+        ? "Clientes com pedido de 1–5 dias atrás. Momento ideal para solicitar avaliação no Google ou iFood."
+        : "Clientes com pedido de 1–5 dias atrás — mas nenhum link de avaliação (Google/iFood) está configurado em Marca.",
       "MEDIUM",
       reviewReady,
       {
-        suggestedNextStep: "Enviar link de avaliação Google/iFood personalizado.",
-        recommendedCampaignType: "solicitar-avaliacao",
+        suggestedNextStep: hasReviewLink
+          ? "Gerar pedido de avaliação Google/iFood personalizado (requer aprovação)."
+          : "Configurar link de avaliação em Marca antes de pedir avaliações.",
+        recommendedCampaignType: hasReviewLink ? "solicitar-avaliacao" : null,
         reason: "Experiência recente em memória → avaliação mais provável e honesta.",
         conversionRate: 0,
       },
@@ -527,7 +534,7 @@ export class CrmActionCenterService {
   ): Promise<ActionCenterResult> {
     const now = opts?.now ?? new Date();
 
-    const [customers, hasEvolution, couponRows, segmentConfig, campaignStats] =
+    const [customers, hasEvolution, couponRows, segmentConfig, campaignStats, brandConfig] =
       await Promise.all([
         prisma.customer.findMany({
           where: { restaurantId, isActive: true, isGuest: false },
@@ -579,9 +586,16 @@ export class CrmActionCenterService {
             },
           }),
         ]).then(([sentCount, convertedCount]) => ({ sentCount, convertedCount })),
+
+        prisma.restaurantBrandConfig.findUnique({
+          where: { restaurantId },
+          select: { googleReviewUrl: true, ifoodReviewUrl: true },
+        }),
       ]);
 
     const couponUserIds = new Set(couponRows);
+    const hasReviewLink =
+      !!brandConfig?.googleReviewUrl?.trim() || !!brandConfig?.ifoodReviewUrl?.trim();
 
     // Compute restaurant-level average ticket as fallback for customers with no history
     const ticketSamples = customers
@@ -621,11 +635,15 @@ export class CrmActionCenterService {
       segmentConfig,
       recentCampaignStats: campaignStats,
       restaurantAvgTicket,
+      hasReviewLink,
     });
 
     const warnings: string[] = [];
     if (!hasEvolution) {
       warnings.push("Integração WhatsApp (Evolution) não configurada — campanhas bloqueadas.");
+    }
+    if (!hasReviewLink) {
+      warnings.push("Nenhum link de avaliação (Google/iFood) configurado — pedidos de avaliação bloqueados. Configure em Marca.");
     }
 
     return {

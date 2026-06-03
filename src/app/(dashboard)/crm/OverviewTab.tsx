@@ -281,6 +281,12 @@ function ActionCenterSection({
   const highCount = actions.filter((a) => a.priority === "HIGH").length;
   const visible = expanded ? actions : actions.slice(0, 3);
 
+  // W8: a REVIEW_REQUEST action with no recommended campaign type signals a
+  // missing Google/iFood review link — surface a config CTA to /marca.
+  const reviewBlockedNoLink = actions.some(
+    (a) => a.type === "REVIEW_REQUEST" && a.recommendedCampaignType === null,
+  );
+
   return (
     <div className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between mb-4">
@@ -296,6 +302,19 @@ function ActionCenterSection({
           {actions.length} ação{actions.length !== 1 ? "ões" : ""}
         </span>
       </div>
+      {reviewBlockedNoLink && (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
+          <p className="text-[11px] text-amber-700">
+            ⭐ Para pedir avaliações, configure o link do Google ou iFood em Marca.
+          </p>
+          <a
+            href="/marca"
+            className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-700 transition-colors"
+          >
+            Configurar link
+          </a>
+        </div>
+      )}
       <div className="space-y-3">
         {visible.map((action) => (
           <ActionCard key={action.id} action={action} onNavigateToTab={onNavigateToTab} />
