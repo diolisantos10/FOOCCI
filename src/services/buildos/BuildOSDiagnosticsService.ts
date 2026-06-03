@@ -235,6 +235,71 @@ export async function runBuildOsDiagnostics(opts?: {
     evolutionInstanceCheck = { available: false };
   }
 
+  // ── recentMessages: "Últimas mensagens reais recebidas da Evolution".
+  //    Correlates the raw webhook event log (EVERY event, incl. ignored) with the
+  //    Build OS trace (the decision for messages that reached the handler), by
+  //    nearest timestamp. Everything is masked/sanitized — no full phone, no text
+  //    body, no tokens. We surface only: prefix detected, build-command candidate,
+  //    authorized, and the failureReason when it did not become a Build OS command.
+  let recentMessages: Array<Record<string, unknown>> = [];
+  try {
+    const [events, traces] = await Promise.all([
+      prisma.evolutionWebhookEventLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 15,
+        select: {
+          instanceName: true, eventName: true, normalizedEventName: true,
+          accepted: true, ignored: true, direction: true, remoteJidMasked: true,
+          messageId: true, error: true, createdAt: true,
+        },
+      }),
+      prisma.buildWebhookTrace.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 30,
+        select: {
+          maskedPhone: true, prefixDetected: true, authorized: true, fromMe: true,
+          commandCreated: true, shortCircuited: true, failureReason: true, createdAt: true,
+        },
+      }),
+    ]);
+
+    // Match each event to the Build OS trace closest in time (±15s window).
+    const MATCH_WINDOW_MS = 15_000;
+    recentMessages = events.map((e) => {
+      const eTime = e.createdAt.getTime();
+      let best: (typeof traces)[number] | null = null;
+      let bestDelta = MATCH_WINDOW_MS;
+      for (const t of traces) {
+        const delta = Math.abs(t.createdAt.getTime() - eTime);
+        if (delta <= bestDelta) { best = t; bestDelta = delta; }
+      }
+      const prefixDetected = best?.prefixDetected ?? null;
+      return {
+        createdAt: e.createdAt.toISOString(),
+        instanceName: e.instanceName,
+        eventNameRaw: e.eventName,
+        eventNameNormalized: e.normalizedEventName,
+        accepted: e.accepted,
+        ignored: e.ignored,
+        direction: e.direction,                 // INBOUND | OUTBOUND
+        fromMe: best?.fromMe ?? (e.direction === "OUTBOUND" ? true : e.direction === "INBOUND" ? false : null),
+        remoteJidMasked: e.remoteJidMasked,      // already masked
+        senderMasked: best?.maskedPhone ?? null, // masked phone the Build OS path saw
+        extractedPhoneMasked: best?.maskedPhone ?? null,
+        prefixDetected,                          // "/build" | "/cmd" | "/prompt" | null
+        buildCommandCandidate: !!prefixDetected, // a Build OS command was recognized
+        authorized: best?.authorized ?? null,
+        commandCreated: best?.commandCreated ?? false,
+        shortCircuited: best?.shortCircuited ?? false,
+        // Why it did NOT become a Build OS command (when applicable).
+        failureReason: best?.failureReason ?? (e.ignored ? `event_ignored` : (e.error ? "processing_error" : null)),
+        hasBuildTrace: !!best,
+      };
+    });
+  } catch {
+    recentMessages = [];
+  }
+
   // ── lastCommands (for the sender) ──
   let lastCommands: Array<Record<string, unknown>> = [];
   try {
@@ -301,6 +366,7 @@ export async function runBuildOsDiagnostics(opts?: {
     promptDraftCheck,
     webhookIntegrationCheck,
     evolutionInstanceCheck,
+    recentMessages,
     webhookReceivedRealBuild: recentWebhookTraces.length > 0,
     lastWebhookAt,
     recentWebhookTraces,

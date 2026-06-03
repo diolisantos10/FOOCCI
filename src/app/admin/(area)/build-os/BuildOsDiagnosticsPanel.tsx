@@ -43,6 +43,15 @@ interface Report {
       remoteJid: string | null; error: string | null; createdAt: string;
     }>;
   };
+  recentMessages: Array<{
+    createdAt: string; instanceName: string; eventNameRaw: string;
+    eventNameNormalized: string | null; accepted: boolean; ignored: boolean;
+    direction: string | null; fromMe: boolean | null; remoteJidMasked: string | null;
+    senderMasked: string | null; extractedPhoneMasked: string | null;
+    prefixDetected: string | null; buildCommandCandidate: boolean;
+    authorized: boolean | null; commandCreated: boolean; shortCircuited: boolean;
+    failureReason: string | null; hasBuildTrace: boolean;
+  }>;
   webhookReceivedRealBuild: boolean;
   lastWebhookAt: string | null;
   recentWebhookTraces: Array<{
@@ -219,6 +228,56 @@ export function BuildOsDiagnosticsPanel() {
                   desconectada, URL do webhook, ou número/instância diferente do testado).
                 </p>
               )}
+            </Card>
+          )}
+
+          {/* Últimas mensagens reais recebidas da Evolution (mascarado) */}
+          {report.recentMessages && report.recentMessages.length > 0 && (
+            <Card title={`Últimas mensagens reais recebidas da Evolution (${report.recentMessages.length})`}>
+              <p className="mb-2 text-xs text-gray-500">
+                Tudo mascarado/sanitizado. Cruzamento do log de eventos da Evolution com o trace do
+                Build OS. Procure uma linha com <strong>prefixo /build</strong> e veja onde parou.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="text-left text-gray-400">
+                      <th className="py-1">Quando</th>
+                      <th>Evento (raw)</th>
+                      <th>Norm.</th>
+                      <th>Dir.</th>
+                      <th>fromMe</th>
+                      <th>remoteJid</th>
+                      <th>Telefone</th>
+                      <th>Prefixo</th>
+                      <th>Candidato</th>
+                      <th>Autoriz.</th>
+                      <th>Criou</th>
+                      <th>Trace</th>
+                      <th>failureReason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.recentMessages.map((m, i) => (
+                      <tr key={i} className="border-t border-gray-100 align-top">
+                        <td className="py-1">{new Date(m.createdAt).toLocaleTimeString("pt-BR")}</td>
+                        <td className="font-mono">{m.eventNameRaw}</td>
+                        <td className="font-mono">{m.eventNameNormalized ?? "—"}</td>
+                        <td>{m.direction ?? "—"}</td>
+                        <td>{m.fromMe === null ? "—" : String(m.fromMe)}</td>
+                        <td className="font-mono">{m.remoteJidMasked ?? "—"}</td>
+                        <td className="font-mono">{m.extractedPhoneMasked ?? "—"}</td>
+                        <td className={m.prefixDetected ? "font-semibold text-orange-700" : ""}>{m.prefixDetected ?? "—"}</td>
+                        <td>{m.buildCommandCandidate ? "sim" : "não"}</td>
+                        <td>{m.authorized === null ? "—" : String(m.authorized)}</td>
+                        <td>{String(m.commandCreated)}</td>
+                        <td>{m.hasBuildTrace ? "sim" : "não"}</td>
+                        <td className="text-red-600">{m.failureReason ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           )}
 
