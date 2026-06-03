@@ -52,6 +52,23 @@ interface Report {
     authorized: boolean | null; commandCreated: boolean; shortCircuited: boolean;
     failureReason: string | null; hasBuildTrace: boolean;
   }>;
+  buildTextSearch: {
+    searched: boolean;
+    foundInMessages?: boolean;
+    messages?: Array<{
+      createdAt: string; prefixDetected: string | null; direction: string;
+      senderType: string | null; channel: string | null; restaurantId: string | null;
+      phoneMasked: string | null; snippet: string;
+    }>;
+    foundInTraces?: boolean;
+    traces?: Array<{
+      createdAt: string; prefixDetected: string | null; phoneMasked: string | null;
+      authorized: boolean | null; fromMe: boolean | null; failureReason: string | null;
+    }>;
+    authorizedOperatorMasked?: string;
+    authorizedVariantsMasked?: string[];
+    verdict?: string;
+  };
   webhookReceivedRealBuild: boolean;
   lastWebhookAt: string | null;
   recentWebhookTraces: Array<{
@@ -278,6 +295,72 @@ export function BuildOsDiagnosticsPanel() {
                   </tbody>
                 </table>
               </div>
+            </Card>
+          )}
+
+          {/* Busca por /build nos eventos e mensagens */}
+          {report.buildTextSearch?.searched && (
+            <Card title="Busca por /build nos eventos e mensagens">
+              {report.buildTextSearch.verdict && (
+                <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{report.buildTextSearch.verdict}</p>
+              )}
+              <div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
+                <Row k="/build em mensagens normais" v={report.buildTextSearch.foundInMessages ? "SIM" : "não"} />
+                <Row k="/build em traces Build OS" v={report.buildTextSearch.foundInTraces ? "SIM" : "não"} />
+                <Row k="Operador autorizado (mascarado)" v={report.buildTextSearch.authorizedOperatorMasked ?? "—"} />
+                <Row k="Variantes autorizadas" v={(report.buildTextSearch.authorizedVariantsMasked ?? []).join("  |  ")} />
+              </div>
+
+              {(report.buildTextSearch.messages ?? []).length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                    /build em Conversation/Message (fluxo normal)
+                  </p>
+                  <table className="mt-1 w-full text-[11px]">
+                    <thead><tr className="text-left text-gray-400">
+                      <th>Quando</th><th>Prefixo</th><th>Dir.</th><th>Sender</th><th>Canal</th><th>Telefone</th><th>Trecho</th>
+                    </tr></thead>
+                    <tbody>
+                      {(report.buildTextSearch.messages ?? []).map((m, i) => (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td>{new Date(m.createdAt).toLocaleString("pt-BR")}</td>
+                          <td className="font-semibold text-orange-700">{m.prefixDetected ?? "—"}</td>
+                          <td>{m.direction}</td>
+                          <td>{m.senderType ?? "—"}</td>
+                          <td>{m.channel ?? "—"}</td>
+                          <td className="font-mono">{m.phoneMasked ?? "—"}</td>
+                          <td className="font-mono">{m.snippet}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {(report.buildTextSearch.traces ?? []).length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                    /build em BuildWebhookTrace
+                  </p>
+                  <table className="mt-1 w-full text-[11px]">
+                    <thead><tr className="text-left text-gray-400">
+                      <th>Quando</th><th>Prefixo</th><th>Telefone</th><th>Autoriz.</th><th>fromMe</th><th>failureReason</th>
+                    </tr></thead>
+                    <tbody>
+                      {(report.buildTextSearch.traces ?? []).map((t, i) => (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td>{new Date(t.createdAt).toLocaleString("pt-BR")}</td>
+                          <td className="font-semibold text-orange-700">{t.prefixDetected ?? "—"}</td>
+                          <td className="font-mono">{t.phoneMasked ?? "—"}</td>
+                          <td>{t.authorized === null ? "—" : String(t.authorized)}</td>
+                          <td>{t.fromMe === null ? "—" : String(t.fromMe)}</td>
+                          <td className="text-red-600">{t.failureReason ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </Card>
           )}
 

@@ -51,6 +51,12 @@ function maskPhone(phone: string): string {
   return `${phone.slice(0, 3)}***${phone.slice(-4)}`;
 }
 
+/** Mask a long id, keeping only a short tail for correlation (no PII). */
+function maskTail(id: string): string {
+  if (!id || id.length <= 6) return "***";
+  return `***${id.slice(-6)}`;
+}
+
 export async function runBuildOsDiagnostics(opts?: {
   phone?: string;
   message?: string;
@@ -300,6 +306,81 @@ export async function runBuildOsDiagnostics(opts?: {
     recentMessages = [];
   }
 
+  // ── buildTextSearch: "Busca por /build nos eventos e mensagens".
+  //    The webhook EVENT LOG does not store text, so the literal "/build" string,
+  //    if it reached the normal customer flow, lives in Message.content. We search
+  //    there (any prefix) + the Build OS traces, to prove WHERE the command landed.
+  //    Everything masked: phone partial, message text shown only as the detected
+  //    prefix + a short masked snippet (no full body, no PII beyond a masked tail).
+  const BUILD_PREFIXES = ["/build", "/cmd", "/prompt"];
+  let buildTextSearch: Record<string, unknown> = { searched: false };
+  try {
+    const messages = await prisma.message.findMany({
+      where: {
+        OR: BUILD_PREFIXES.map((p) => ({ content: { startsWith: p, mode: "insensitive" as const } })),
+      },
+      orderBy: { sentAt: "desc" },
+      take: 10,
+      select: {
+        content: true, direction: true, senderType: true, externalStatus: true,
+        sentAt: true,
+        conversation: {
+          select: {
+            channel: true, restaurantId: true, customerPhone: true,
+            customer: { select: { phone: true, name: true } },
+          },
+        },
+      },
+    });
+
+    const tracesWithPrefix = await prisma.buildWebhookTrace.findMany({
+      where: { prefixDetected: { not: null } },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { maskedPhone: true, prefixDetected: true, authorized: true, fromMe: true, failureReason: true, createdAt: true },
+    });
+
+    buildTextSearch = {
+      searched: true,
+      // /build literally found in normal customer Conversation/Message records:
+      foundInMessages: messages.length > 0,
+      messages: messages.map((m) => {
+        const phone = m.conversation?.customer?.phone ?? m.conversation?.customerPhone ?? null;
+        const prefix = BUILD_PREFIXES.find((p) => m.content.toLowerCase().startsWith(p)) ?? null;
+        return {
+          createdAt: m.sentAt.toISOString(),
+          prefixDetected: prefix,
+          direction: m.direction,               // INBOUND | OUTBOUND
+          senderType: m.senderType,             // CUSTOMER | AI | HUMAN | SYSTEM
+          channel: m.conversation?.channel ?? null,
+          restaurantId: m.conversation?.restaurantId ? maskTail(m.conversation.restaurantId) : null,
+          phoneMasked: phone ? maskPhone(phone) : null,
+          // masked snippet: prefix + length only, never the full text
+          snippet: `${prefix ?? "?"} … (${m.content.length} chars)`,
+        };
+      }),
+      // /build found in Build OS traces:
+      foundInTraces: tracesWithPrefix.length > 0,
+      traces: tracesWithPrefix.map((t) => ({
+        createdAt: t.createdAt.toISOString(),
+        prefixDetected: t.prefixDetected,
+        phoneMasked: t.maskedPhone,
+        authorized: t.authorized,
+        fromMe: t.fromMe,
+        failureReason: t.failureReason,
+      })),
+      authorizedOperatorMasked: maskPhone(normalizedPhone),
+      authorizedVariantsMasked: variants.map(maskPhone),
+      verdict: messages.length === 0 && tracesWithPrefix.length === 0
+        ? "O texto /build NÃO foi encontrado em nenhuma mensagem nem trace — provavelmente não chegou como INBOUND a este app/instância (verifique número/instância conectada)."
+        : messages.length > 0 && tracesWithPrefix.length === 0
+        ? "O /build CHEGOU e foi salvo como mensagem normal, mas NÃO gerou trace Build OS — compare o telefone associado (phoneMasked) com o operador autorizado; provável divergência de número/instância."
+        : "Há trace Build OS para /build — veja failureReason para o motivo de não virar comando.",
+    };
+  } catch {
+    buildTextSearch = { searched: false };
+  }
+
   // ── lastCommands (for the sender) ──
   let lastCommands: Array<Record<string, unknown>> = [];
   try {
@@ -367,6 +448,7 @@ export async function runBuildOsDiagnostics(opts?: {
     webhookIntegrationCheck,
     evolutionInstanceCheck,
     recentMessages,
+    buildTextSearch,
     webhookReceivedRealBuild: recentWebhookTraces.length > 0,
     lastWebhookAt,
     recentWebhookTraces,
