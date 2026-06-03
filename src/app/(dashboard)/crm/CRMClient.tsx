@@ -552,6 +552,7 @@ const SEGMENT_BADGE: Record<string, { bg: string; text: string; label: string }>
   QUENTE:      { bg: "bg-red-100",    text: "text-red-700",    label: "Quente"   },
   MORNO:       { bg: "bg-amber-100",  text: "text-amber-700",  label: "Morno"    },
   FRIO:        { bg: "bg-blue-100",   text: "text-blue-700",   label: "Frio"     },
+  PERDIDO:     { bg: "bg-purple-100", text: "text-purple-700", label: "Perdido"  },
   SEM_PEDIDOS: { bg: "bg-gray-100",   text: "text-gray-500",   label: "Sem pedidos" },
 };
 

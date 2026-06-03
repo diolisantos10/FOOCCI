@@ -167,8 +167,9 @@ const TIER_STYLES: Record<Classification["tier"], { badge: string; avatarRing: s
 const SEGMENT_CONFIG: Record<string, { label: string; emoji: string; bg: string; text: string }> = {
   QUENTE:      { label: "Quente",      emoji: "🔥", bg: "bg-red-50",    text: "text-red-700"    },
   MORNO:       { label: "Morno",       emoji: "🌡️", bg: "bg-amber-50",  text: "text-amber-700"  },
-  FRIO:        { label: "Frio",        emoji: "🥶", bg: "bg-blue-50",   text: "text-blue-700"   },
-  SEM_PEDIDOS: { label: "Sem pedidos", emoji: "💤", bg: "bg-gray-100",  text: "text-gray-500"   },
+  FRIO:        { label: "Frio",        emoji: "🥶", bg: "bg-blue-50",    text: "text-blue-700"   },
+  PERDIDO:     { label: "Perdido",     emoji: "👻", bg: "bg-purple-50",  text: "text-purple-700" },
+  SEM_PEDIDOS: { label: "Sem pedidos", emoji: "💤", bg: "bg-gray-100",   text: "text-gray-500"   },
 };
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -490,13 +491,15 @@ function HeaderSection({
     ? (totalOrders > 0 ? displaySpend / displayOrders : 0)
     : (averageTicket ?? (displayOrders > 0 ? displaySpend / displayOrders : 0));
 
-  // When using imported data, show the segment derived from importedLastOrderAt
+  // When stored segment is SEM_PEDIDOS but we have imported data, derive from importedLastOrderAt.
+  // lostMinDays defaults to 120 here since we don't have access to the restaurant's SegmentConfig.
   const effectiveSegment = (segment === "SEM_PEDIDOS" && importedLastOrderAt)
     ? (() => {
         const days = Math.floor((Date.now() - new Date(importedLastOrderAt).getTime()) / 86_400_000);
-        if (days <= 30) return "QUENTE";
-        if (days <= 60) return "MORNO";
-        return "FRIO";
+        if (days <= 30)  return "QUENTE";
+        if (days <= 60)  return "MORNO";
+        if (days < 120)  return "FRIO";
+        return "PERDIDO";
       })()
     : segment;
   const segCfg = SEGMENT_CONFIG[effectiveSegment] ?? SEGMENT_CONFIG["SEM_PEDIDOS"]!;

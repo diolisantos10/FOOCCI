@@ -22,7 +22,13 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
 import { isCrmCountable } from "./crm-countable";
-import { computeTier, computeSegment } from "./crm-helpers";
+import { resolveCustomerClassification } from "./CustomerSegmentService";
+import {
+  RelationshipProgramService,
+  DEFAULT_SETTINGS,
+  type TierSettingsInput,
+} from "./RelationshipProgramService";
+import { getSegmentConfig, DEFAULT_SEGMENT_CONFIG, type SegmentConfig } from "@/lib/crm-segments";
 export { isCrmCountable } from "./crm-countable";
 
 type SyncResult = "synced" | "skipped_already_synced" | "skipped_not_countable" | "skipped_no_customer" | "skipped_guest";
@@ -48,6 +54,7 @@ export class CustomerMetricsSyncService {
       where: { id: orderId },
       select: {
         id:           true,
+        restaurantId: true,
         customerId:   true,
         status:       true,
         total:        true,
@@ -85,6 +92,12 @@ export class CustomerMetricsSyncService {
     const amount = new Decimal(order.total);
     const now    = new Date();
 
+    // Fetch restaurant-level settings (two tiny indexed lookups per order sync).
+    const [tierSettings, segCfg] = await Promise.all([
+      RelationshipProgramService.getSettings(order.restaurantId),
+      getSegmentConfig(order.restaurantId),
+    ]);
+
     await prisma.$transaction(async (tx) => {
       // Re-read inside the transaction to guard against concurrent syncs
       const fresh = await tx.order.findUnique({
@@ -96,13 +109,30 @@ export class CustomerMetricsSyncService {
       // Read current totals so we can compute the new tier/segment atomically
       const current = await tx.customer.findUnique({
         where:  { id: order.customerId! },
-        select: { totalSpend: true, totalOrders: true },
+        select: {
+          totalSpend:          true,
+          totalOrders:         true,
+          importedTotalSpent:  true,
+          importedOrderCount:  true,
+          importedLastOrderAt: true,
+        },
       });
 
       const newTotalSpend  = Number(current?.totalSpend  ?? 0) + Number(amount);
       const newTotalOrders = (current?.totalOrders ?? 0) + 1;
-      const tier    = computeTier(newTotalSpend);
-      const segment = computeSegment(now, newTotalOrders); // now = lastOrderAt after this sync
+
+      // Customer just ordered — lastOrderAt is now, so they are always QUENTE.
+      // Route through the shared resolver anyway for tier correctness + consistency.
+      const { tier, segment } = resolveCustomerClassification({
+        lastOrderAt:         now,
+        importedLastOrderAt: current?.importedLastOrderAt ?? null,
+        totalOrders:         newTotalOrders,
+        importedOrderCount:  current?.importedOrderCount  ?? null,
+        totalSpend:          newTotalSpend,
+        importedTotalSpent:  current?.importedTotalSpent ? Number(current.importedTotalSpent) : null,
+        cfg:                 segCfg,
+        settings:            tierSettings,
+      });
 
       await tx.customer.update({
         where: { id: order.customerId! },
@@ -146,23 +176,40 @@ export class CustomerMetricsSyncService {
    * do not double-count them afterward.
    *
    * Does NOT use crmSyncedAt as input — always recalculates from actual order data.
+   *
+   * @param opts  Pre-fetched settings to avoid redundant DB calls in batch rebuilds.
    */
-  static async rebuildCustomerMetrics(customerId: string): Promise<{
+  static async rebuildCustomerMetrics(
+    customerId: string,
+    opts?: { tierSettings?: TierSettingsInput; segmentConfig?: SegmentConfig }
+  ): Promise<{
     ordersFound:   number;
     ordersCounted: number;
     totalSpend:    number;
   }> {
-    const orders = await prisma.order.findMany({
-      where:  { customerId },
-      select: {
-        id:         true,
-        status:     true,
-        total:      true,
-        createdAt:  true,
-        importedAt: true,  // historical date for imported orders
-        payment: { select: { paymentMode: true, status: true } },
-      },
-    });
+    const [orders, customer] = await Promise.all([
+      prisma.order.findMany({
+        where:  { customerId },
+        select: {
+          id:           true,
+          restaurantId: true,
+          status:       true,
+          total:        true,
+          createdAt:    true,
+          importedAt:   true,  // historical date for imported orders
+          payment: { select: { paymentMode: true, status: true } },
+        },
+      }),
+      prisma.customer.findUnique({
+        where:  { id: customerId },
+        select: {
+          restaurantId:        true,
+          importedLastOrderAt: true,
+          importedOrderCount:  true,
+          importedTotalSpent:  true,
+        },
+      }),
+    ]);
 
     const countable = orders.filter(isCrmCountable);
 
@@ -177,8 +224,32 @@ export class CustomerMetricsSyncService {
       : null;
 
     const now = new Date();
-    const tier    = computeTier(totalSpend);
-    const segment = computeSegment(lastOrderAt, totalOrders);
+
+    // Resolve settings — use pre-fetched values from bulk rebuild, or look them up.
+    const restaurantId = customer?.restaurantId ?? orders[0]?.restaurantId;
+    const [tierSettings, segCfg] = await (async () => {
+      if (opts?.tierSettings && opts.segmentConfig) {
+        return [opts.tierSettings, opts.segmentConfig] as const;
+      }
+      if (restaurantId) {
+        return Promise.all([
+          opts?.tierSettings  ? Promise.resolve(opts.tierSettings)  : RelationshipProgramService.getSettings(restaurantId),
+          opts?.segmentConfig ? Promise.resolve(opts.segmentConfig) : getSegmentConfig(restaurantId),
+        ]);
+      }
+      return [DEFAULT_SETTINGS, DEFAULT_SEGMENT_CONFIG] as const;
+    })();
+
+    const { tier, segment } = resolveCustomerClassification({
+      lastOrderAt,
+      importedLastOrderAt: customer?.importedLastOrderAt ?? null,
+      totalOrders,
+      importedOrderCount:  customer?.importedOrderCount  ?? null,
+      totalSpend,
+      importedTotalSpent:  customer?.importedTotalSpent ? Number(customer.importedTotalSpent) : null,
+      cfg:                 segCfg,
+      settings:            tierSettings,
+    });
 
     await prisma.$transaction(async (tx) => {
       await tx.customer.update({
@@ -193,17 +264,10 @@ export class CustomerMetricsSyncService {
       });
 
       // Stamp crmSyncedAt on every countable order that lacks it
-      const unsyncedIds = countable
-        .filter((o) => {
-          // orders fetched above don't include crmSyncedAt; we stamp all of them
-          // (updateMany with crmSyncedAt: null guard prevents redundant writes)
-          return true;
-        })
-        .map((o) => o.id);
-
-      if (unsyncedIds.length > 0) {
+      const ids = countable.map((o) => o.id);
+      if (ids.length > 0) {
         await tx.order.updateMany({
-          where: { id: { in: unsyncedIds }, crmSyncedAt: null },
+          where: { id: { in: ids }, crmSyncedAt: null },
           data:  { crmSyncedAt: now },
         });
       }
@@ -215,7 +279,7 @@ export class CustomerMetricsSyncService {
   /**
    * Rebuild CRM metrics for every customer in a restaurant.
    *
-   * Returns a summary of what was processed.
+   * Pre-fetches settings once so individual rebuilds avoid N+1 DB calls.
    */
   static async rebuildRestaurantCustomerMetrics(restaurantId: string): Promise<{
     customersProcessed: number;
@@ -223,10 +287,14 @@ export class CustomerMetricsSyncService {
     totalOrdersCounted: number;
     errors:             number;
   }> {
-    const customers = await prisma.customer.findMany({
-      where:  { restaurantId },
-      select: { id: true },
-    });
+    const [customers, tierSettings, segCfg] = await Promise.all([
+      prisma.customer.findMany({
+        where:  { restaurantId },
+        select: { id: true },
+      }),
+      RelationshipProgramService.getSettings(restaurantId),
+      getSegmentConfig(restaurantId),
+    ]);
 
     let customersUpdated   = 0;
     let totalOrdersCounted = 0;
@@ -234,7 +302,7 @@ export class CustomerMetricsSyncService {
 
     for (const { id } of customers) {
       try {
-        const result = await this.rebuildCustomerMetrics(id);
+        const result = await this.rebuildCustomerMetrics(id, { tierSettings, segmentConfig: segCfg });
         customersUpdated++;
         totalOrdersCounted += result.ordersCounted;
       } catch (err) {
