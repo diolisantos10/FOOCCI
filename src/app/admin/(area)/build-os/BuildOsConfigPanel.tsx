@@ -144,6 +144,9 @@ export function BuildOsConfigPanel() {
         <strong>bootstrap/emergência</strong>.
       </div>
 
+      {/* Bootstrap / repair card */}
+      <BootstrapCard onApplied={load} onError={setError} />
+
       {/* Status card */}
       {status && (
         <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -327,6 +330,151 @@ function Meta({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-[10px] uppercase tracking-wide text-gray-400">{label}</dt>
       <dd className="font-medium text-gray-800">{value}</dd>
+    </div>
+  );
+}
+
+// ── Bootstrap / repair card ─────────────────────────────────────────────────────
+
+interface BootstrapPlan {
+  normalizedPhone: string;
+  rawPhone: string;
+  phoneVariants: string[];
+  name: string;
+  role: string;
+  actions: string[];
+}
+interface BootstrapResult {
+  dryRun: boolean;
+  plan: BootstrapPlan;
+  applied: boolean;
+  configEnabled?: boolean;
+  projectSeed?: { created: number; updated: number };
+  senderAction?: "created" | "updated";
+}
+
+function BootstrapCard({
+  onApplied,
+  onError,
+}: {
+  onApplied: () => void;
+  onError: (e: string | null) => void;
+}) {
+  const [name, setName] = useState("Diego");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState("OWNER");
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<BootstrapResult | null>(null);
+  const [applied, setApplied] = useState<BootstrapResult | null>(null);
+
+  async function call(dryRun: boolean): Promise<BootstrapResult | null> {
+    onError(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/build-os/bootstrap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name || undefined, phone, role: role || undefined, dryRun }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        onError(d.error ?? "Falha no bootstrap.");
+        return null;
+      }
+      return d.result as BootstrapResult;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doPreview() {
+    setApplied(null);
+    const r = await call(true);
+    if (r) setPreview(r);
+  }
+  async function doApply() {
+    const r = await call(false);
+    if (r) {
+      setApplied(r);
+      setPreview(null);
+      onApplied();
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-5">
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">
+        Inicializar / Reparar Build OS
+      </h3>
+      <p className="mt-1 text-sm text-gray-600">
+        Use para ativar o Build OS e cadastrar um operador autorizado sem acessar Railway ou
+        credenciais. Roda no ambiente do app (banco já configurado). Idempotente — não apaga dados.
+      </p>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Field label="Nome">
+          <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Diego" />
+        </Field>
+        <Field label="Telefone (com DDI/DDD)">
+          <input className={INPUT} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+5511999999999" />
+        </Field>
+        <Field label="Função/cargo">
+          <input className={INPUT} value={role} onChange={(e) => setRole(e.target.value)} placeholder="OWNER" />
+        </Field>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy || !phone.trim()}
+          onClick={doPreview}
+          className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+        >
+          Pré-visualizar
+        </button>
+        <button
+          type="button"
+          disabled={busy || !phone.trim()}
+          onClick={doApply}
+          className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
+        >
+          Aplicar bootstrap
+        </button>
+      </div>
+
+      {/* Dry-run preview */}
+      {preview && (
+        <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4 text-sm">
+          <p className="mb-2 font-semibold text-gray-800">Pré-visualização (nenhum dado gravado)</p>
+          <dl className="grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
+            <Meta label="Telefone original" value={preview.plan.rawPhone} />
+            <Meta label="Telefone normalizado" value={preview.plan.normalizedPhone} />
+            <Meta label="Variantes reconhecidas" value={preview.plan.phoneVariants.join("  |  ")} />
+            <Meta label="Operador" value={`${preview.plan.name} (${preview.plan.role})`} />
+          </dl>
+          <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Ações planejadas</p>
+          <ul className="mt-1 space-y-1 text-xs text-gray-700">
+            {preview.plan.actions.map((a, i) => (
+              <li key={i} className="flex gap-2"><span className="text-gray-400">•</span><span>{a}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Apply result */}
+      {applied && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4 text-sm">
+          <p className="mb-2 font-semibold text-green-800">✅ Bootstrap aplicado com sucesso</p>
+          <ul className="space-y-1 text-xs text-gray-700">
+            <li>• BuildOSConfig ativado ({String(applied.configEnabled)}).</li>
+            <li>• Foocci default/ativo confirmado (projetos criados {applied.projectSeed?.created ?? 0}, atualizados {applied.projectSeed?.updated ?? 0}).</li>
+            <li>• Operador {applied.plan.name} ({applied.plan.normalizedPhone}) {applied.senderAction === "created" ? "criado" : "atualizado/reativado"}.</li>
+            <li>• Variantes reconhecidas: {applied.plan.phoneVariants.join("  |  ")}.</li>
+          </ul>
+          <p className="mt-3 mb-1 text-xs text-gray-600">Agora teste no WhatsApp (do celular autorizado):</p>
+          <CopyableCommand text="/build Teste de comando interno do Build OS." />
+        </div>
+      )}
     </div>
   );
 }

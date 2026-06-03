@@ -17,6 +17,12 @@ describe("prepareBootstrapPlan", () => {
     expect(plan.actions.length).toBeGreaterThan(0);
   });
 
+  it("exposes the with/without-9 phone variants", () => {
+    const plan = prepareBootstrapPlan({ phone: "+5511989400692" });
+    expect(plan.phoneVariants).toContain("+5511989400692");
+    expect(plan.phoneVariants).toContain("+551189400692");
+  });
+
   it("honors provided name/role", () => {
     const plan = prepareBootstrapPlan({ phone: "+5511999990000", name: "Ana", role: "ADMIN" });
     expect(plan.name).toBe("Ana");

@@ -32,7 +32,9 @@ export type AuditAction =
   | "conversation.assign"
   | "conversation.resolve"
   | "conversation.reopen"
-  | "conversation.delete";
+  | "conversation.delete"
+  // Build OS (internal admin)
+  | "buildos.bootstrap";
 
 export interface AuditEntry {
   action: AuditAction;

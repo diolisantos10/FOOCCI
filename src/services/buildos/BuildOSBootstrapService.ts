@@ -14,7 +14,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { normalizeSenderPhone } from "./BuildCommandRouter";
+import { normalizeSenderPhone, phoneVariants } from "./BuildCommandRouter";
 import { seedDefaultBuildProjects } from "./defaultBuildProjects";
 import { classifyBuildCommandText } from "./BuildCommandClassifier";
 import { generateTechnicalPromptDraft, type PromptSourceCommand } from "./BuildPromptDraftService";
@@ -29,6 +29,8 @@ export interface BootstrapInput {
 export interface BootstrapPlan {
   normalizedPhone: string;
   rawPhone: string;
+  /** Equivalent E.164 forms recognized on authorization (Brazilian 9th-digit). */
+  phoneVariants: string[];
   name: string;
   role: string;
   actions: string[];
@@ -59,6 +61,7 @@ export function prepareBootstrapPlan(input: BootstrapInput): BootstrapPlan {
   return {
     normalizedPhone,
     rawPhone,
+    phoneVariants: Array.from(phoneVariants(normalizedPhone)),
     name,
     role,
     actions: [
