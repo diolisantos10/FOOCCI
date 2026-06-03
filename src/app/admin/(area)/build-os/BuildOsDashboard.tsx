@@ -169,67 +169,77 @@ function CommandsTab({
     );
   }
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-400">
-            <th className="px-4 py-3 font-semibold">#</th>
-            <th className="px-4 py-3 font-semibold">Operador</th>
-            <th className="px-4 py-3 font-semibold">Comando</th>
-            <th className="px-4 py-3 font-semibold">Projeto</th>
-            <th className="px-4 py-3 font-semibold">Classificação</th>
-            <th className="px-4 py-3 font-semibold">Status</th>
-            <th className="px-4 py-3 font-semibold">Recebido</th>
-          </tr>
-        </thead>
-        <tbody>
-          {commands.map((c) => (
-            <tr key={c.id} className="border-b border-gray-100 last:border-0 align-top">
-              <td className="px-4 py-3 font-mono text-xs text-gray-500">{c.shortId}</td>
-              <td className="px-4 py-3">
-                <p className="text-gray-900">{c.senderName ?? "—"}</p>
-                <p className="font-mono text-xs text-gray-400">{maskPhone(c.senderPhone)}</p>
-              </td>
-              <td className="px-4 py-3 max-w-xs">
-                <p className="text-gray-900">
-                  <span className="mr-1 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-600">
-                    {c.commandPrefix}
-                  </span>
-                  {c.commandText || <span className="text-gray-400">(vazio)</span>}
-                </p>
-              </td>
-              <td className="px-4 py-3 text-gray-600">{c.projectName ?? "— não resolvido —"}</td>
-              <td className="px-4 py-3">
-                <div className="flex flex-wrap gap-1.5">
-                  <RiskBadge risk={c.riskLevel} />
-                  <TaskBadge task={c.taskType} />
-                  <IntentBadge intent={c.executionIntent} />
-                  {c.targetArea && c.targetArea !== "unknown" && (
-                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                      {c.targetArea}
-                    </span>
-                  )}
-                  {c.requiresHumanConfirmation && (
-                    <span
-                      className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
-                      title="Requer confirmação humana"
-                    >
-                      ⚠ confirmar
-                    </span>
-                  )}
-                </div>
-                {c.classificationSummary && (
-                  <p className="mt-1 text-xs text-gray-400">{c.classificationSummary}</p>
-                )}
-              </td>
-              <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
-              <td className="px-4 py-3 text-xs text-gray-500">
-                {new Date(c.createdAt).toLocaleString("pt-BR")}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      {commands.map((c) => (
+        <CommandCard key={c.id} c={c} />
+      ))}
+    </div>
+  );
+}
+
+function CommandCard({ c }: { c: AdminBuildCommandView }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs text-gray-500">#{c.shortId}</span>
+            <StatusBadge status={c.status} />
+            {c.latestPromptVersion !== null && (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                prompt v{c.latestPromptVersion}
+              </span>
+            )}
+          </div>
+          <p className="text-gray-900">
+            <span className="mr-1 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-600">
+              {c.commandPrefix}
+            </span>
+            {c.commandText || <span className="text-gray-400">(vazio)</span>}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <RiskBadge risk={c.riskLevel} />
+            <TaskBadge task={c.taskType} />
+            <IntentBadge intent={c.executionIntent} />
+            {c.targetArea && c.targetArea !== "unknown" && (
+              <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                {c.targetArea}
+              </span>
+            )}
+            {c.requiresHumanConfirmation && (
+              <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                ⚠ confirmar
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-gray-400">
+            {c.senderName ?? "—"} · {maskPhone(c.senderPhone)} ·{" "}
+            {c.projectName ?? "projeto não resolvido"} ·{" "}
+            {new Date(c.createdAt).toLocaleString("pt-BR")}
+          </p>
+        </div>
+        {c.latestPromptText && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+          >
+            {open ? "Ocultar prompt" : "Ver prompt"}
+          </button>
+        )}
+      </div>
+
+      {open && c.latestPromptText && (
+        <div className="mt-3">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+            Prompt v{c.latestPromptVersion} (somente leitura · gerado por TEMPLATE, sem IA · não enviado a Claude/GitHub)
+          </p>
+          <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-4 text-xs leading-relaxed text-gray-800">
+            {c.latestPromptText}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }

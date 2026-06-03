@@ -28,7 +28,83 @@ export const BUILD_EVENT = {
   COMMAND_CLASSIFIED: "COMMAND_CLASSIFIED",
   CONFIRMATION_SENT: "CONFIRMATION_SENT",
   CONFIRMATION_FAILED: "CONFIRMATION_FAILED",
+  // Priority 1.4 — prompt draft + confirmation loop
+  PROMPT_DRAFTED: "PROMPT_DRAFTED",
+  AWAITING_CONFIRMATION: "AWAITING_CONFIRMATION",
+  PROMPT_APPROVED: "PROMPT_APPROVED",
+  PROMPT_REVISION_REQUESTED: "PROMPT_REVISION_REQUESTED",
+  COMMAND_CANCELLED: "COMMAND_CANCELLED",
 } as const;
+
+/** BuildCommand statuses used by the confirmation loop (string-typed for portability). */
+export type BuildCommandStatusValue =
+  | "RECEIVED" | "DRAFTED" | "AWAITING_CONFIRMATION"
+  | "APPROVED_FOR_RELAY" | "REVISION_REQUESTED" | "CANCELLED" | "FAILED";
+
+/** Update a command's status. Best-effort; returns true on success. */
+export async function setBuildCommandStatus(
+  commandId: string,
+  status: BuildCommandStatusValue,
+): Promise<boolean> {
+  try {
+    await prisma.buildCommand.update({
+      where: { id: commandId },
+      data: { status: status as never },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Find the latest command from `senderPhone` that is awaiting a confirmation
+ * reply (AWAITING_CONFIRMATION or REVISION_REQUESTED). Returns null if none.
+ * Used by the reply handler so a phone only ever acts on its OWN pending command.
+ */
+export async function findLatestAwaitingCommandForSender(
+  senderPhone: string,
+): Promise<{ id: string } | null> {
+  try {
+    const row = await prisma.buildCommand.findFirst({
+      where: {
+        senderPhone,
+        status: { in: ["AWAITING_CONFIRMATION", "REVISION_REQUESTED"] as never },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    return row;
+  } catch {
+    return null;
+  }
+}
+
+/** Lightweight status snapshot for the STATUS reply. */
+export async function getBuildCommandStatusSnapshot(commandId: string): Promise<{
+  shortId: string;
+  status: string;
+  projectName: string | null;
+  riskLevel: string;
+  executionIntent: string;
+} | null> {
+  try {
+    const c = await prisma.buildCommand.findUnique({
+      where: { id: commandId },
+      include: { project: { select: { name: true } } },
+    });
+    if (!c) return null;
+    return {
+      shortId: shortId(c.id),
+      status: c.status,
+      projectName: c.project?.name ?? null,
+      riskLevel: c.riskLevel,
+      executionIntent: c.executionIntent,
+    };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Append an audit event to a command. Best-effort: swallows errors so it never
@@ -159,6 +235,11 @@ export async function getBuildCommandsForAdmin(limit = 100): Promise<AdminBuildC
       include: {
         project: { select: { slug: true, name: true } },
         _count: { select: { events: true } },
+        promptVersions: {
+          orderBy: { versionNumber: "desc" },
+          take: 1,
+          select: { versionNumber: true, promptText: true },
+        },
       },
     });
 
@@ -173,6 +254,8 @@ export async function getBuildCommandsForAdmin(limit = 100): Promise<AdminBuildC
       status: r.status,
       riskLevel: r.riskLevel,
       taskType: r.taskType,
+      latestPromptVersion: r.promptVersions[0]?.versionNumber ?? null,
+      latestPromptText: r.promptVersions[0]?.promptText ?? null,
       executionIntent: r.executionIntent,
       targetArea: r.targetArea,
       requiresHumanConfirmation: r.requiresHumanConfirmation,

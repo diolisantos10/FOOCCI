@@ -2218,9 +2218,21 @@ model RestaurantAgentProfileOverride {
 
 enum BuildCommandStatus {
   RECEIVED
+  DRAFTED
   AWAITING_CONFIRMATION
+  APPROVED_FOR_RELAY
+  REVISION_REQUESTED
   CANCELLED
   FAILED
+}
+
+/// How a stored prompt draft was produced. Priority 1.4 = TEMPLATE only (no LLM).
+enum BuildPromptKind {
+  TECHNICAL_DRAFT
+}
+
+enum BuildPromptGeneratedBy {
+  TEMPLATE
 }
 
 enum BuildCommandSourceChannel {
@@ -2337,6 +2349,7 @@ model BuildCommand {
 
   project BuildProject?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
   events  BuildCommandEvent[]
+  promptVersions BuildPromptVersion[]
 
   @@index([status])
   @@index([senderPhone])
@@ -2358,6 +2371,27 @@ model BuildCommandEvent {
 
   @@index([commandId])
   @@map("build_command_events")
+}
+
+/// A stored, versioned prompt draft for a command (Priority 1.4).
+/// Generated deterministically from a TEMPLATE — never by an LLM in this phase.
+/// Stored internally only; the full text is visible solely in the admin area.
+model BuildPromptVersion {
+  id                 String                 @id @default(cuid())
+  commandId          String
+  versionNumber      Int                    @default(1)
+  promptText         String                 @db.Text
+  promptKind         BuildPromptKind        @default(TECHNICAL_DRAFT)
+  generatedBy        BuildPromptGeneratedBy @default(TEMPLATE)
+  /// When this version was produced by an AJUSTAR reply, the operator's instruction.
+  revisionInstruction String?               @db.Text
+  createdAt          DateTime               @default(now())
+
+  command BuildCommand @relation(fields: [commandId], references: [id], onDelete: Cascade)
+
+  @@unique([commandId, versionNumber])
+  @@index([commandId])
+  @@map("build_prompt_versions")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

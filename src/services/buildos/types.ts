@@ -45,6 +45,8 @@ export interface AdminBuildCommandView {
   sourceChannel: string;
   projectSlug: string | null;
   projectName: string | null;
+  latestPromptVersion: number | null;
+  latestPromptText: string | null;
   createdAt: string;
   eventCount: number;
 }
