@@ -70,10 +70,23 @@ export async function GET(req: NextRequest) {
     byRestaurant[rid] = (byRestaurant[rid] ?? 0) + 1;
   }
 
+  // Breakdown by senderType + direction (every leaked row would be hidden/
+  // relabelled as "Comando interno ocultado" by the current Atendimento rules).
+  const bySenderType: Record<string, number> = {};
+  for (const s of samples) {
+    const key = `${s.senderType}/${s.direction}`;
+    bySenderType[key] = (bySenderType[key] ?? 0) + 1;
+  }
+
   return NextResponse.json({
     total,
     scanned: restaurantId ? "single_restaurant" : "all_restaurants",
     byRestaurant: Object.entries(byRestaurant).map(([id, count]) => ({ restaurantId: id, count })),
+    bySenderType: Object.entries(bySenderType).map(([key, count]) => ({ senderTypeDirection: key, count })),
+    // Every matched row starts with an internal command prefix, so the current UI
+    // rule (isInternalCommandContent) hides/relabels 100% of them as a separator.
+    wouldBeHiddenByUi: samples.length,
+    uiRule: "AtendimentoClient renders these as the 'Comando interno ocultado' separator and excludes them from the conversation preview.",
     samples: samples.map((s) => ({
       id: s.id,
       sentAt: s.sentAt,

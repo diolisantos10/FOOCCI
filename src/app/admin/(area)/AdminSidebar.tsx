@@ -26,6 +26,7 @@ export function AdminSidebar() {
     { href: "/admin/diagnostics/restaurant-mismatch",      label: "Diagnóstico",  icon: "🔍" },
     { href: "/admin/diagnostics/cart-recovery-qa",         label: "QA Recovery",  icon: "🧪" },
     { href: "/admin/diagnostics/whatsapp-pedido-identity", label: "WA Identity",   icon: "🔗" },
+    { href: "/admin/diagnostics/whatsapp-routing-test",    label: "WA Routing Lab", icon: "🧬" },
     { href: "/admin/agentes/waiter/testes",                label: "Waiter Testes", icon: "🧠" },
     { href: "/admin/agentes/crm/testes",                   label: "CRM Testes",    icon: "📞" },
   ];
