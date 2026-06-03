@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { OverviewStats, CustomerTier } from "@/services/crm/CRMService";
+import type { CrmAction, CrmActionType, ActionPriority } from "@/services/crm/CrmActionCenterService";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,150 @@ const TIER_CONFIG: Record<CustomerTier, { label: string; icon: string; bar: stri
 // ── Date filter ───────────────────────────────────────────────────────────────
 
 export type DateFilterPreset = "total" | "month" | "year" | "custom";
+
+// ── Action Center config ──────────────────────────────────────────────────────
+
+const PRIORITY_STYLE: Record<ActionPriority, { dot: string; badge: string; label: string; border: string; bg: string }> = {
+  HIGH:   { dot: "bg-red-500",    badge: "bg-red-50 text-red-700",       label: "Alta",  border: "border-red-100",    bg: "bg-red-50/30"     },
+  MEDIUM: { dot: "bg-yellow-400", badge: "bg-yellow-50 text-yellow-700", label: "Média", border: "border-gray-100",   bg: "bg-gray-50/50"    },
+  LOW:    { dot: "bg-gray-300",   badge: "bg-gray-50 text-gray-500",     label: "Baixa", border: "border-gray-100",   bg: "bg-gray-50/30"    },
+};
+
+const ACTION_ICON: Record<CrmActionType, string> = {
+  RECOVER_COLD_CUSTOMERS:       "🔴",
+  RECOVER_LOST_CUSTOMERS:       "👻",
+  WARM_CUSTOMERS:               "🟡",
+  VIP_APPRECIATION:             "💎",
+  REVIEW_REQUEST:                "⭐",
+  BIRTHDAY_CAMPAIGN:            "🎂",
+  COUPON_OPPORTUNITY:           "🎁",
+  NO_ORDER_FIRST_PURCHASE:      "🆕",
+  HIGH_VALUE_CUSTOMER_ATTENTION:"🏆",
+  CAMPAIGN_PERFORMANCE_ALERT:   "📊",
+  SAFETY_ISSUE_ALERT:           "⚠️",
+};
+
+function ActionCard({
+  action,
+  onNavigateToTab,
+}: {
+  action: CrmAction;
+  onNavigateToTab: (tab: "campanhas" | "customers") => void;
+}) {
+  const ps = PRIORITY_STYLE[action.priority];
+  const icon = ACTION_ICON[action.type];
+  const isAlert =
+    action.type === "SAFETY_ISSUE_ALERT" || action.type === "CAMPAIGN_PERFORMANCE_ALERT";
+
+  return (
+    <div className={`rounded-xl border p-4 ${ps.border} ${ps.bg}`}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className={`h-2 w-2 rounded-full shrink-0 ${ps.dot}`} />
+            <span className="text-sm font-semibold text-gray-900">
+              {icon} {action.title}
+            </span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0 ${ps.badge}`}>
+              {ps.label}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mb-2">{action.description}</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+            {action.eligibleCount > 0 && (
+              <span>{action.eligibleCount} contactável{action.eligibleCount !== 1 ? "is" : ""}</span>
+            )}
+            {action.blockedCount > 0 && (
+              <span className="text-gray-400">{action.blockedCount} bloqueado{action.blockedCount !== 1 ? "s" : ""}</span>
+            )}
+            {action.estimatedRevenueOpportunity > 0 && (
+              <span className="font-semibold text-green-700">
+                ~R$ {action.estimatedRevenueOpportunity.toLocaleString("pt-BR")}
+              </span>
+            )}
+          </div>
+          {action.safetyStatus === "BLOCKED" && action.blockerReasons.length > 0 && (
+            <p className="mt-2 text-[10px] text-red-600 border-t border-red-100 pt-2">
+              Bloqueado: {action.blockerReasons.join(" · ")}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5 shrink-0">
+          {!isAlert && (
+            <button
+              onClick={() => onNavigateToTab("campanhas")}
+              disabled={action.safetyStatus === "BLOCKED"}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-40 whitespace-nowrap"
+            >
+              Criar campanha
+            </button>
+          )}
+          {!isAlert && action.linkedCustomerSample.length > 0 && (
+            <button
+              onClick={() => onNavigateToTab("customers")}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+            >
+              Ver clientes
+            </button>
+          )}
+          {isAlert && (
+            <button
+              onClick={() => onNavigateToTab("campanhas")}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+            >
+              Ver campanhas
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActionCenterSection({
+  actions,
+  onNavigateToTab,
+}: {
+  actions: CrmAction[];
+  onNavigateToTab: (tab: "campanhas" | "customers") => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (actions.length === 0) return null;
+
+  const highCount = actions.filter((a) => a.priority === "HIGH").length;
+  const visible = expanded ? actions : actions.slice(0, 3);
+
+  return (
+    <div className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Próximas ações recomendadas
+          </p>
+          {highCount > 0 && (
+            <p className="text-[10px] text-red-600 mt-0.5">{highCount} de alta prioridade</p>
+          )}
+        </div>
+        <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">
+          {actions.length} ação{actions.length !== 1 ? "ões" : ""}
+        </span>
+      </div>
+      <div className="space-y-3">
+        {visible.map((action) => (
+          <ActionCard key={action.id} action={action} onNavigateToTab={onNavigateToTab} />
+        ))}
+      </div>
+      {actions.length > 3 && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-3 w-full rounded-lg border border-gray-100 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+        >
+          {expanded ? "Ver menos" : `Ver mais ${actions.length - 3} ação${actions.length - 3 !== 1 ? "ões" : ""}`}
+        </button>
+      )}
+    </div>
+  );
+}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -57,6 +202,8 @@ function KPICard({
 export function OverviewTab({
   stats,
   opportunitiesCount,
+  actions = [],
+  onNavigateToTab,
   loading,
   datePreset,
   customFrom,
@@ -65,6 +212,8 @@ export function OverviewTab({
 }: {
   stats: OverviewStats;
   opportunitiesCount: number;
+  actions?: CrmAction[];
+  onNavigateToTab?: (tab: "campanhas" | "customers") => void;
   loading: boolean;
   datePreset: DateFilterPreset;
   customFrom: string;
@@ -193,6 +342,14 @@ export function OverviewTab({
           loading={loading}
         />
       </div>
+
+      {/* ── Action Center ───────────────────────────────────────────────── */}
+      {actions.length > 0 && (
+        <ActionCenterSection
+          actions={actions}
+          onNavigateToTab={onNavigateToTab ?? (() => {})}
+        />
+      )}
 
       {/* ── Temperatura da base ──────────────────────────────────────────── */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">

@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { CRMCustomer, Opportunity, CustomerTier, OverviewStats } from "@/services/crm/CRMService";
+import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
 import { ProgramaTab } from "./ProgramaTab";
@@ -4783,6 +4784,7 @@ const TAB_URL_MAP: Record<Tab, string> = {
 export function CRMClient({
   initialCustomers,
   initialOpportunities,
+  initialActions = [],
   overviewStats,
   opportunitiesCount,
   reviewLinks = { google: null, ifood: null },
@@ -4790,6 +4792,7 @@ export function CRMClient({
 }: {
   initialCustomers:     CRMCustomer[];
   initialOpportunities: Opportunity[];
+  initialActions?:      CrmAction[];
   restaurantName:       string;
   overviewStats:        OverviewStats;
   opportunitiesCount:   number;
@@ -4916,6 +4919,8 @@ export function CRMClient({
         <OverviewTab
           stats={currentStats}
           opportunitiesCount={opportunitiesCount}
+          actions={initialActions}
+          onNavigateToTab={setTab}
           loading={statsLoading}
           datePreset={datePreset}
           customFrom={customFrom}

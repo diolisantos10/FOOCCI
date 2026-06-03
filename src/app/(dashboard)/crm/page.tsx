@@ -5,6 +5,8 @@ import { TopBar } from "@/components/layout/TopBar";
 import { CRMClient } from "./CRMClient";
 import { CRMService, getTier } from "@/services/crm/CRMService";
 import type { CRMCustomer, Opportunity, OverviewStats } from "@/services/crm/CRMService";
+import { CrmActionCenterService } from "@/services/crm/CrmActionCenterService";
+import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 
 export const metadata = { title: "CRM — Motor de Receita" };
 export const dynamic = "force-dynamic";
@@ -31,8 +33,9 @@ export default async function CRMPage({
   let restaurantName = "Restaurante";
   try { restaurantId = getTenantId(); } catch { /* unauthenticated */ }
 
-  let customers:     CRMCustomer[]  = [];
-  let opportunities: Opportunity[]  = [];
+  let customers:           CRMCustomer[]  = [];
+  let opportunities:       Opportunity[]  = [];
+  let actionCenterActions: CrmAction[]    = [];
   let overviewStats: OverviewStats = {
     totalCustomers: 0, ativoCustomers: 0, mornoCustomers: 0, frioCustomers: 0,
     newCustomers: 0, segments: [],
@@ -41,7 +44,7 @@ export default async function CRMPage({
   let reviewLinks: { google: string | null; ifood: string | null } = { google: null, ifood: null };
 
   if (restaurantId) {
-    const [restaurant, rows, opResult, statsResult, brandConfig] = await Promise.all([
+    const [restaurant, rows, opResult, statsResult, brandConfig, actionCenterResult] = await Promise.all([
       prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
       prisma.customer.findMany({
         where: { restaurantId, isGuest: false },
@@ -61,6 +64,7 @@ export default async function CRMPage({
         where: { restaurantId },
         select: { googleReviewUrl: true, ifoodReviewUrl: true },
       }),
+      CrmActionCenterService.getActionCenter(restaurantId).catch(() => null),
     ]);
 
     restaurantName = restaurant?.name ?? "Restaurante";
@@ -110,6 +114,7 @@ export default async function CRMPage({
         ifood:  brandConfig.ifoodReviewUrl  ?? null,
       };
     }
+    if (actionCenterResult) actionCenterActions = actionCenterResult.actions;
   }
 
   return (
@@ -123,6 +128,7 @@ export default async function CRMPage({
         <CRMClient
           initialCustomers={customers}
           initialOpportunities={opportunities}
+          initialActions={actionCenterActions}
           restaurantName={restaurantName}
           overviewStats={overviewStats}
           opportunitiesCount={opportunities.length}
