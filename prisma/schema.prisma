@@ -2404,6 +2404,31 @@ model BuildCommandEvent {
   @@map("build_command_events")
 }
 
+/// Diagnostic trace of EVERY Build OS webhook attempt (Priority 1.4.1 debug).
+/// Persisted so the admin can confirm — without console/Railway — whether the
+/// REAL Evolution webhook reached the Build OS branch and what happened. Holds
+/// no secrets; the phone is stored masked. Best-effort write; never blocks the
+/// webhook. Trimmed by keeping only recent rows in the admin view.
+model BuildWebhookTrace {
+  id              String   @id @default(cuid())
+  /// Masked phone (e.g. "+55***0692"). Never the full number.
+  maskedPhone     String?
+  prefixDetected  String?
+  configEnabled   Boolean?
+  configSource    String?
+  authorized      Boolean?
+  fromMe          Boolean?
+  commandCreated  Boolean  @default(false)
+  promptDrafted   Boolean  @default(false)
+  responseSent    Boolean  @default(false)
+  shortCircuited  Boolean  @default(false)
+  failureReason   String?
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("build_webhook_traces")
+}
+
 /// A stored, versioned prompt draft for a command (Priority 1.4).
 /// Generated deterministically from a TEMPLATE — never by an LLM in this phase.
 /// Stored internally only; the full text is visible solely in the admin area.

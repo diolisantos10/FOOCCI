@@ -95,6 +95,7 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
         phone: event.phone,
         senderName: event.senderName,
         content: event.content,
+        fromMe: false,
       });
       if (buildResult.isBuildCommand) {
         return { handled: true, action: "buildos_command", detail: event.externalMessageId };
@@ -278,6 +279,28 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
   const configResult = await EvolutionConfigService.findRestaurantByInstance(event.instanceName);
   if (!configResult.ok) return { handled: false, detail: `Unknown instance: ${event.instanceName}` };
   const { restaurantId } = configResult.data;
+
+  // 1b. Build OS command interception for fromMe messages (Priority 1.4.1).
+  // If the operator sends /build from the SAME number connected as the instance,
+  // Evolution flags it fromMe and it lands here (not in the inbound branch). Try
+  // the Build OS handler before treating it as a staff outbound message. Gated by
+  // BUILDOS_ENABLED; TEXT only; never throws into the hot path.
+  if (event.messageType === "TEXT") {
+    try {
+      const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
+      const buildResult = await handleBuildCommand({
+        restaurantId,
+        phone: event.phone,
+        content: event.content,
+        fromMe: true,
+      });
+      if (buildResult.isBuildCommand) {
+        return { handled: true, action: "buildos_command_fromme", detail: event.externalMessageId };
+      }
+    } catch (err) {
+      console.error("[WebhookProcessor] Build OS (fromMe) branch error (ignored):", err);
+    }
+  }
 
   // 2. Dedup: if Foocci already saved this message (via MessageService), skip it
   const existing = await prisma.message.findUnique({

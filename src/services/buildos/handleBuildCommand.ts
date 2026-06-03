@@ -38,12 +38,15 @@ import {
   buildPromptPreview,
 } from "./BuildPromptDraftService";
 import { handleBuildReply } from "./BuildReplyHandler";
+import { recordWebhookTrace } from "./BuildWebhookTrace";
 
 export interface BuildCommandHandlingInput {
   restaurantId: string; // Evolution instance owner — used only to send the reply
   phone: string;        // normalized E.164 sender
   senderName?: string;
   content: string;      // raw inbound text
+  /** True when Evolution flagged the message as sent by the connected number. */
+  fromMe?: boolean;
 }
 
 export interface BuildCommandHandlingResult {
@@ -62,6 +65,7 @@ export async function handleBuildCommand(
     received: true,
     prefixDetected: null as string | null,
     normalizedPhone: maskPhone(input.phone),
+    fromMe: input.fromMe ?? null,
     configEnabled: null as boolean | null,
     configSource: null as string | null,
     authorized: null as boolean | null,
@@ -140,13 +144,28 @@ export async function handleBuildCommand(
   return NOT_BUILD;
 }
 
-/** Emit a single compact, secret-free diagnostic line for the WhatsApp path. */
+/** Emit a compact, secret-free diagnostic line AND persist a trace row. */
 function logDiag(diag: Record<string, unknown>): void {
   try {
     console.log(`[BUILD_OS_WHATSAPP] ${JSON.stringify(diag)}`);
   } catch {
     /* logging must never throw */
   }
+  // Persist a DB trace so the admin can confirm the REAL webhook reached here,
+  // without console/Railway access. Best-effort, fire-and-forget.
+  recordWebhookTrace({
+    maskedPhone: diag.normalizedPhone as string | null,
+    prefixDetected: diag.prefixDetected as string | null,
+    configEnabled: diag.configEnabled as boolean | null,
+    configSource: diag.configSource as string | null,
+    authorized: diag.authorized as boolean | null,
+    fromMe: diag.fromMe as boolean | null,
+    commandCreated: !!diag.commandCreated,
+    promptDrafted: !!diag.promptDrafted,
+    responseSent: !!diag.responseSent,
+    shortCircuited: !!diag.shortCircuited,
+    failureReason: diag.failureReason as string | null,
+  }).catch(() => {});
 }
 
 interface NewCommandOutcome {

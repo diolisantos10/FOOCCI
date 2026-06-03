@@ -24,6 +24,14 @@ interface Report {
   classificationCheck: { taskType: string; executionIntent: string; targetArea: string; riskLevel: string; requiresHumanConfirmation: boolean };
   promptDraftCheck: { canGeneratePromptDraft: boolean; preview?: string; noClaudeRelay: boolean };
   webhookIntegrationCheck: Record<string, unknown>;
+  webhookReceivedRealBuild: boolean;
+  lastWebhookAt: string | null;
+  recentWebhookTraces: Array<{
+    id: string; maskedPhone: string | null; prefixDetected: string | null;
+    configEnabled: boolean | null; authorized: boolean | null; fromMe: boolean | null;
+    commandCreated: boolean; responseSent: boolean; shortCircuited: boolean;
+    failureReason: string | null; createdAt: string;
+  }>;
   lastCommands: Array<{ id: string; status: string; project: string | null; taskType: string; riskLevel: string; createdAt: string; promptVersions: number; events: number }>;
   likelyRootCause: { code: string; explanation: string; recommendedFix: string };
 }
@@ -131,7 +139,50 @@ export function BuildOsDiagnosticsPanel() {
             <Badge ok={report.projectCheck.defaultProjectFound} label="Projeto default" />
             <Badge ok={!!report.detectorCheck.prefixDetected} label="Prefixo detectado" />
             <Badge ok={report.promptDraftCheck.canGeneratePromptDraft} label="Rascunho de prompt" />
+            <Badge ok={report.webhookReceivedRealBuild} label="Webhook real recebeu /build" />
           </div>
+
+          {/* Webhook real — o indicador decisivo */}
+          <div className={`rounded-xl border p-4 ${report.webhookReceivedRealBuild ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+            <p className="text-sm font-semibold text-gray-900">
+              {report.webhookReceivedRealBuild
+                ? "✅ O webhook real do WhatsApp JÁ alcançou o Build OS."
+                : "❌ Nenhuma tentativa real do webhook Build OS foi registrada ainda."}
+            </p>
+            <p className="mt-1 text-xs text-gray-600">
+              {report.webhookReceivedRealBuild
+                ? `Última tentativa: ${report.lastWebhookAt ? new Date(report.lastWebhookAt).toLocaleString("pt-BR") : "—"}.`
+                : "Se você já enviou /build no WhatsApp e isto continua vazio, o webhook real NÃO está chegando neste código (deploy antigo, URL do webhook errada no Evolution, ou outra instância). Confirme o deploy/URL e envie /build novamente."}
+            </p>
+          </div>
+
+          {/* Webhook traces */}
+          {report.recentWebhookTraces.length > 0 && (
+            <Card title={`Tentativas reais do webhook (${report.recentWebhookTraces.length})`}>
+              <table className="w-full text-xs">
+                <thead><tr className="text-left text-gray-400">
+                  <th className="py-1">#</th><th>Telefone</th><th>Prefixo</th><th>fromMe</th>
+                  <th>Config</th><th>Autoriz.</th><th>Criou</th><th>Respondeu</th><th>Falha</th><th>Quando</th>
+                </tr></thead>
+                <tbody>
+                  {report.recentWebhookTraces.map((t) => (
+                    <tr key={t.id} className="border-t border-gray-100">
+                      <td className="py-1 font-mono">{t.id}</td>
+                      <td className="font-mono">{t.maskedPhone ?? "—"}</td>
+                      <td>{t.prefixDetected ?? "—"}</td>
+                      <td>{t.fromMe === null ? "—" : String(t.fromMe)}</td>
+                      <td>{t.configEnabled === null ? "—" : String(t.configEnabled)}</td>
+                      <td>{t.authorized === null ? "—" : String(t.authorized)}</td>
+                      <td>{String(t.commandCreated)}</td>
+                      <td>{String(t.responseSent)}</td>
+                      <td className="text-red-600">{t.failureReason ?? "—"}</td>
+                      <td>{new Date(t.createdAt).toLocaleString("pt-BR")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
 
           {/* Cards */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

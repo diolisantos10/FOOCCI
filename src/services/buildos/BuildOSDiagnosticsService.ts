@@ -28,6 +28,7 @@ import {
 import { classifyBuildCommandText } from "./BuildCommandClassifier";
 import { generateTechnicalPromptDraft, buildPromptPreview, type PromptSourceCommand } from "./BuildPromptDraftService";
 import { resolveBuildProjectFromMessage } from "./BuildProjectService";
+import { getRecentWebhookTraces } from "./BuildWebhookTrace";
 
 const DEFAULT_PHONE = "+5511989400692";
 const DEFAULT_MESSAGE = "/build Faz um RAIO-X do checkout Pix. Não implemente nada ainda.";
@@ -221,6 +222,10 @@ export async function runBuildOsDiagnostics(opts?: {
     hasRecentCommand: lastCommands.length > 0,
   });
 
+  // ── recentWebhookTraces (did the REAL webhook reach the Build OS branch?) ──
+  const recentWebhookTraces = await getRecentWebhookTraces(10);
+  const lastWebhookAt = recentWebhookTraces[0]?.createdAt ?? null;
+
   return {
     generatedAt: new Date().toISOString(),
     buildOsConfig,
@@ -230,6 +235,9 @@ export async function runBuildOsDiagnostics(opts?: {
     classificationCheck,
     promptDraftCheck,
     webhookIntegrationCheck,
+    webhookReceivedRealBuild: recentWebhookTraces.length > 0,
+    lastWebhookAt,
+    recentWebhookTraces,
     lastCommands,
     likelyRootCause,
   };
