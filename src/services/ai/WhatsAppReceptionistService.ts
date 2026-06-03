@@ -28,6 +28,7 @@ import { openai } from "@/lib/openai";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { ConversationStatus } from "@prisma/client";
+import { detectBuildCommand } from "@/services/buildos/BuildCommandRouter";
 import type { MenuOption } from "@/validators/whatsapp-agent";
 import { RestaurantKnowledgeService } from "@/services/knowledge/RestaurantKnowledgeService";
 import { markConversationNeedsHuman } from "@/lib/handoff";
@@ -708,6 +709,15 @@ async function run(conversationId: string): Promise<void> {
       ? `Recebi sua mensagem! 😊 Posso te ajudar melhor por texto. Para fazer seu pedido:\n${ctx.pedidoUrl}`
       : "Recebi sua mensagem! 😊 Posso te ajudar melhor por texto. É só digitar o que você precisa!";
     await sendReply(evolutionResult.data, toPhone, mediaReply, conversationId);
+    return;
+  }
+
+  // ── Defense-in-depth: internal command suppression ───────────────────────
+  // /build, /cmd, /prompt prefixes must be intercepted before WebhookProcessorService
+  // calls this function. If one reaches here anyway (deploy gap, test bypass,
+  // etc.), drop it silently — no AI call, no Evolution send, no echo to customer.
+  if (detectBuildCommand(lastMessage.content)) {
+    console.warn("[WhatsAppReceptionistService] internal command reached receptionist — suppressed", { conversationId });
     return;
   }
 

@@ -88,8 +88,16 @@ export async function handleBuildCommand(
   diag.configSource = enabled.source;
   if (!enabled.enabled) {
     if (detected) {
+      // Build OS is disabled, but this message is a /build command. Suppress it:
+      // return isBuildCommand:true so WebhookProcessorService stops processing
+      // BEFORE the message is persisted to DB or passed to the AI / Evolution.
+      // "Disabled" means "don't execute commands," NOT "treat /build as a normal
+      // customer message." The customer must never receive an AI echo of an
+      // internal command prefix.
+      diag.shortCircuited = true;
       diag.failureReason = `config_disabled:${enabled.source}`;
       logDiag(diag);
+      return { isBuildCommand: true };
     }
     return NOT_BUILD;
   }
