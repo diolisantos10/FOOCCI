@@ -28,6 +28,21 @@ interface Report {
   classificationCheck: { taskType: string; executionIntent: string; targetArea: string; riskLevel: string; requiresHumanConfirmation: boolean };
   promptDraftCheck: { canGeneratePromptDraft: boolean; preview?: string; noClaudeRelay: boolean };
   webhookIntegrationCheck: Record<string, unknown>;
+  evolutionInstanceCheck: {
+    available: boolean;
+    instances?: Array<{ instanceName: string; isActive: boolean; restaurant: string | null }>;
+    anyEventReceived?: boolean;
+    lastEventAt?: string | null;
+    lastEventName?: string | null;
+    lastEventNormalized?: string | null;
+    lastInboundAt?: string | null;
+    lastInboundEventName?: string | null;
+    recentEvents?: Array<{
+      instanceName: string; eventName: string; normalized: string | null;
+      accepted: boolean; ignored: boolean; direction: string | null;
+      remoteJid: string | null; error: string | null; createdAt: string;
+    }>;
+  };
   webhookReceivedRealBuild: boolean;
   lastWebhookAt: string | null;
   recentWebhookTraces: Array<{
@@ -162,6 +177,50 @@ export function BuildOsDiagnosticsPanel() {
               código de trace) — faça o redeploy do serviço que recebe o webhook.
             </p>
           </Card>
+
+          {/* Instância Evolution testada — chegada real de eventos */}
+          {report.evolutionInstanceCheck.available && (
+            <Card title="Instância Evolution testada (chegada real de eventos)">
+              <Row k="Algum evento recebido" v={report.evolutionInstanceCheck.anyEventReceived ? "Sim" : "NÃO — nenhum evento chegou ao app"} />
+              <Row k="Último evento" v={report.evolutionInstanceCheck.lastEventName ?? "—"} />
+              <Row k="Último evento (normalizado)" v={report.evolutionInstanceCheck.lastEventNormalized ?? "—"} />
+              <Row k="Último inbound" v={report.evolutionInstanceCheck.lastInboundEventName ?? "—"} />
+              <Row k="Quando (último evento)" v={report.evolutionInstanceCheck.lastEventAt ? new Date(report.evolutionInstanceCheck.lastEventAt).toLocaleString("pt-BR") : "—"} />
+              <div className="mt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Instâncias configuradas</p>
+                {(report.evolutionInstanceCheck.instances ?? []).map((i) => (
+                  <p key={i.instanceName} className="text-xs text-gray-700">
+                    {i.instanceName} · {i.restaurant ?? "—"} · {i.isActive ? "ativa" : "inativa"}
+                  </p>
+                ))}
+              </div>
+              {(report.evolutionInstanceCheck.recentEvents ?? []).length > 0 && (
+                <table className="mt-2 w-full text-[11px]">
+                  <thead><tr className="text-left text-gray-400">
+                    <th>Evento</th><th>Norm.</th><th>Aceito</th><th>Ignorado</th><th>Dir.</th><th>Quando</th>
+                  </tr></thead>
+                  <tbody>
+                    {(report.evolutionInstanceCheck.recentEvents ?? []).map((e, idx) => (
+                      <tr key={idx} className="border-t border-gray-100">
+                        <td className="font-mono">{e.eventName}</td>
+                        <td className="font-mono">{e.normalized ?? "—"}</td>
+                        <td>{String(e.accepted)}</td>
+                        <td>{String(e.ignored)}</td>
+                        <td>{e.direction ?? "—"}</td>
+                        <td>{new Date(e.createdAt).toLocaleTimeString("pt-BR")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {!report.evolutionInstanceCheck.anyEventReceived && (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Nenhum evento chegou ao app: o problema é entrega Evolution → app (instância
+                  desconectada, URL do webhook, ou número/instância diferente do testado).
+                </p>
+              )}
+            </Card>
+          )}
 
           {/* Webhook real — o indicador decisivo */}
           <div className={`rounded-xl border p-4 ${report.webhookReceivedRealBuild ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>

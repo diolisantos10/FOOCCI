@@ -111,7 +111,14 @@ export class WebhookParserService {
       return { type: "ignored", reason: "Missing event field" };
     }
 
-    switch (event) {
+    // Evolution builds send the event name in different casings/separators:
+    // "messages.upsert" (dotted) or "MESSAGES_UPSERT" (configured form) or
+    // "messages_upsert". Normalize to the dotted lowercase canonical so the
+    // switch matches regardless of which build/format Evolution used. This is
+    // strictly more permissive (parses MORE valid events, never fewer).
+    const normalizedEvent = event.toLowerCase().replace(/_/g, ".");
+
+    switch (normalizedEvent) {
       case "messages.upsert":
         return parseMessageUpsert(instance, raw);
 

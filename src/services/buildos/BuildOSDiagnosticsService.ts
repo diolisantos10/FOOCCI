@@ -182,8 +182,58 @@ export async function runBuildOsDiagnostics(opts?: {
     buildOsBranchBeforeCustomerFlow: true, // lines ~84-106, before customer/conversation/message creation
     shortCircuitsOnHandled: true,          // returns { handled:true, action:"buildos_command" }
     outboundSendService: "BuildNotifier.sendBuildConfirmation → EvolutionClient.sendTextMessage",
-    note: "TEXT messages only; fromMe messages route to external_outbound and are NOT command-checked.",
+    note: "TEXT messages only; fromMe handled in external_outbound branch too.",
   };
+
+  // ── evolutionInstanceCheck: did ANY webhook event arrive, and with what event
+  //    name? This is the decisive real-path evidence. Reads the raw webhook event
+  //    log (every inbound event is recorded there). All values privacy-safe.
+  let evolutionInstanceCheck: Record<string, unknown> = { available: false };
+  try {
+    const [configs, recentEvents] = await Promise.all([
+      prisma.evolutionConfig.findMany({
+        select: { instanceName: true, isActive: true, restaurant: { select: { slug: true, name: true } } },
+      }),
+      prisma.evolutionWebhookEventLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        select: {
+          instanceName: true, eventName: true, normalizedEventName: true,
+          accepted: true, ignored: true, direction: true, remoteJidMasked: true,
+          messageId: true, error: true, createdAt: true,
+        },
+      }),
+    ]);
+    const lastEvent = recentEvents[0] ?? null;
+    const lastInbound = recentEvents.find((e) => e.direction === "INBOUND") ?? null;
+    evolutionInstanceCheck = {
+      available: true,
+      instances: configs.map((c) => ({
+        instanceName: c.instanceName,
+        isActive: c.isActive,
+        restaurant: c.restaurant?.slug ?? c.restaurant?.name ?? null,
+      })),
+      anyEventReceived: recentEvents.length > 0,
+      lastEventAt: lastEvent?.createdAt.toISOString() ?? null,
+      lastEventName: lastEvent?.eventName ?? null,
+      lastEventNormalized: lastEvent?.normalizedEventName ?? null,
+      lastInboundAt: lastInbound?.createdAt.toISOString() ?? null,
+      lastInboundEventName: lastInbound?.eventName ?? null,
+      recentEvents: recentEvents.map((e) => ({
+        instanceName: e.instanceName,
+        eventName: e.eventName,
+        normalized: e.normalizedEventName,
+        accepted: e.accepted,
+        ignored: e.ignored,
+        direction: e.direction,
+        remoteJid: e.remoteJidMasked,
+        error: e.error,
+        createdAt: e.createdAt.toISOString(),
+      })),
+    };
+  } catch {
+    evolutionInstanceCheck = { available: false };
+  }
 
   // ── lastCommands (for the sender) ──
   let lastCommands: Array<Record<string, unknown>> = [];
@@ -250,6 +300,7 @@ export async function runBuildOsDiagnostics(opts?: {
     classificationCheck,
     promptDraftCheck,
     webhookIntegrationCheck,
+    evolutionInstanceCheck,
     webhookReceivedRealBuild: recentWebhookTraces.length > 0,
     lastWebhookAt,
     recentWebhookTraces,
