@@ -59,3 +59,48 @@ describe("WebhookParserService — event name normalization", () => {
     expect(r.type).toBe("ignored");
   });
 });
+
+describe("WebhookParserService — text extraction across wrappers", () => {
+  function withMessage(msg: Record<string, unknown>) {
+    return {
+      event: "MESSAGES_UPSERT",
+      instance: "sushicazza",
+      data: {
+        key: { id: "M1", fromMe: false, remoteJid: "5511989400692@s.whatsapp.net" },
+        pushName: "Diego",
+        message: msg,
+        messageTimestamp: 1_700_000_000,
+      },
+    };
+  }
+  function textOf(msg: Record<string, unknown>): string {
+    const r = WebhookParserService.parse(withMessage(msg));
+    if (r.type !== "inbound_message") throw new Error("expected inbound_message");
+    return r.content;
+  }
+
+  it("extracts plain conversation text", () => {
+    expect(textOf({ conversation: "/build x" })).toBe("/build x");
+  });
+
+  it("extracts extendedTextMessage.text", () => {
+    expect(textOf({ extendedTextMessage: { text: "/build y" } })).toBe("/build y");
+  });
+
+  it("unwraps ephemeralMessage → inner conversation", () => {
+    expect(textOf({ ephemeralMessage: { message: { conversation: "/build eph" } } })).toBe("/build eph");
+  });
+
+  it("unwraps editedMessage → inner extendedTextMessage", () => {
+    expect(
+      textOf({ editedMessage: { message: { extendedTextMessage: { text: "/build edited" } } } }),
+    ).toBe("/build edited");
+  });
+
+  it("extracts list/button reply ids as text", () => {
+    expect(textOf({ buttonsResponseMessage: { selectedButtonId: "/build btn" } })).toBe("/build btn");
+    expect(
+      textOf({ listResponseMessage: { singleSelectReply: { selectedRowId: "/build row" } } }),
+    ).toBe("/build row");
+  });
+});

@@ -139,6 +139,14 @@ export async function handleBuildCommand(
       console.error("[BuildOS] Reply handling error (ignored):", err);
       // fall through — treat as a normal message
     }
+
+    // Authorized sender, but the text was neither a /build command nor a known
+    // reply. Trace it (without intercepting) so the cause is never invisible:
+    // e.g. the operator typed "/build …" but extraction/normalization missed it.
+    diag.authorized = true;
+    diag.shortCircuited = false;
+    diag.failureReason = "authorized_sender_no_command_detected";
+    logDiag(diag);
   }
 
   return NOT_BUILD;

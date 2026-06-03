@@ -167,7 +167,16 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
   let mimetype: string | undefined;
   let fileName: string | undefined;
 
-  if (message) {
+  // Unwrap common WhatsApp text wrappers BEFORE type detection so a /build sent
+  // as an ephemeral/edited/viewOnce text is still extracted (otherwise it falls
+  // through to "[Mensagem não suportada]" and the command is lost).
+  const unwrapped = unwrapTextWrappers(message);
+  const directText = extractPlainText(unwrapped);
+
+  if (directText !== null) {
+    // Plain text found anywhere in the (unwrapped) message → use it directly.
+    content = directText;
+  } else if (message) {
     if (message.conversation) {
       content = message.conversation as string;
     } else if (message.extendedTextMessage) {
@@ -336,4 +345,53 @@ function jidToPhone(jid: string): string {
   const numberPart = jid.split("@")[0];
   // Remove the extra 9 that some Brazilian numbers include in JID but not E.164
   return `+${numberPart}`;
+}
+
+/**
+ * Unwrap common WhatsApp message wrappers so the real content is reachable.
+ * WhatsApp wraps text in ephemeralMessage / editedMessage / viewOnceMessage(V2)
+ * → each has an inner `.message`. Unwraps up to a few levels. Returns the inner
+ * message object (or the original if no wrapper).
+ */
+function unwrapTextWrappers(
+  message: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  let m = message;
+  for (let i = 0; i < 4 && m; i++) {
+    const wrapper =
+      (m.ephemeralMessage as Record<string, unknown> | undefined) ??
+      (m.editedMessage as Record<string, unknown> | undefined) ??
+      (m.documentWithCaptionMessage as Record<string, unknown> | undefined);
+    const inner = wrapper?.message as Record<string, unknown> | undefined;
+    if (inner) { m = inner; continue; }
+    break;
+  }
+  return m;
+}
+
+/**
+ * Extract plain text from an (unwrapped) message across all known text-bearing
+ * fields. Returns null when the message carries no plain text (e.g. media without
+ * caption). Empty/whitespace text returns "" (still text, not null).
+ */
+function extractPlainText(message: Record<string, unknown> | undefined): string | null {
+  if (!message) return null;
+
+  if (typeof message.conversation === "string") return message.conversation;
+
+  const ext = message.extendedTextMessage as Record<string, unknown> | undefined;
+  if (ext && typeof ext.text === "string") return ext.text;
+
+  // Button / list interactive replies sometimes carry the actionable text.
+  const btn = message.buttonsResponseMessage as Record<string, unknown> | undefined;
+  if (btn && typeof btn.selectedButtonId === "string") return btn.selectedButtonId;
+
+  const list = message.listResponseMessage as Record<string, unknown> | undefined;
+  const single = list?.singleSelectReply as Record<string, unknown> | undefined;
+  if (single && typeof single.selectedRowId === "string") return single.selectedRowId;
+
+  const tmpl = message.templateButtonReplyMessage as Record<string, unknown> | undefined;
+  if (tmpl && typeof tmpl.selectedId === "string") return tmpl.selectedId;
+
+  return null;
 }
