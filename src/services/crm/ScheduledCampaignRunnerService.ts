@@ -33,8 +33,10 @@ import {
   checkQuietHours,
   checkWeekendBlock,
   randomDelayMs,
+  isBirthdayCampaign,
   type CRMWhatsAppSafetyConfig,
 } from "@/lib/crm-safety";
+import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -425,11 +427,48 @@ export class ScheduledCampaignRunnerService {
       })).map((c) => c.id)
     );
 
+    // Unified contact-safety context. Time-window and daily-cap gates were
+    // already enforced once before this batch (see runCampaignBatch), so here
+    // the gate adds the per-customer rules the runner historically lacked:
+    // customer cooldown, weekly cap, and CROSS-CAMPAIGN 24h dedup.
+    const isBirthday    = isBirthdayCampaign(campaign);
+    const safetyContext = await ContactSafetyService.buildGlobalContext(campaign.restaurantId, {
+      evolutionAvailable: true,
+    });
+
     let sent        = 0;
     let failed      = 0;
     let sendIndex   = 0; // tracks actual send attempts (for inter-send delay placement)
 
     for (const customer of customers) {
+      // Authoritative unified safety gate (cooldown / weekly cap / cross-campaign dedup).
+      const decision = await ContactSafetyService.assertSendable({
+        restaurantId:       campaign.restaurantId,
+        customerId:         customer.id,
+        phone:              customer.phone,
+        campaignId:         campaign.id,
+        isBirthday,
+        enforceTimeWindows: false, // already gated pre-batch in runCampaignBatch
+        enforceDailyCap:    false, // already gated pre-batch in runCampaignBatch
+        context:            safetyContext,
+      });
+      if (!decision.sendable) {
+        await prisma.campaignExecution.create({
+          data: {
+            campaignId:    campaign.id,
+            restaurantId:  campaign.restaurantId,
+            customerId:    customer.id,
+            customerName:  customer.name,
+            customerPhone: customer.phone,
+            messageText:   "",
+            status:        "FAILED",
+            failedReason:  decision.detail ?? decision.reason ?? "BLOCKED",
+          },
+        });
+        failed++;
+        continue;
+      }
+
       if (optedOutIds.has(customer.id)) {
         await prisma.campaignExecution.create({
           data: {

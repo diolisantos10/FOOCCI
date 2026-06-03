@@ -32,6 +32,7 @@ import { ConversationStatus, MessageType } from "@prisma/client";
 import type { AIOrderService as AIOrderServiceType } from "@/services/ai/AIOrderService";
 import { markCrmReplyIfApplicable } from "@/services/agents/AgentRoutingService";
 import { markConversationNeedsHuman } from "@/lib/handoff";
+import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 
 // Resolved conversations older than this are treated as new threads.
 const REOPEN_WINDOW_HOURS = 24;
@@ -162,6 +163,19 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   //     Fire-and-forget — never block the webhook hot path.
   markCrmReplyIfApplicable(conversation.id).catch(() => {});
 
+  // 7a-bis. Inbound opt-out (LGPD): if the customer texts STOP/SAIR/PARAR/etc.,
+  //     mark them opted-out so no future CRM message is ever sent. We do NOT
+  //     send any auto-reply (recorded silently) and we suppress the AI response
+  //     for this turn so the customer is never answered with marketing.
+  let optedOutThisTurn = false;
+  if (event.messageType === "TEXT") {
+    optedOutThisTurn = await ContactSafetyService.applyInboundOptOut(
+      restaurantId,
+      customer.id,
+      event.content,
+    ).catch(() => false);
+  }
+
   // 7b. Cart recovery handoff: if the customer replies to a cart recovery
   //     message, escalate immediately to human. AI should never intercept
   //     these replies — the customer is likely asking for help or expressing
@@ -193,6 +207,7 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     conversation.aiEnabled &&
     !isCrmOrigin &&
     !isCartRecovery &&
+    !optedOutThisTurn &&
     (conversation.status === ConversationStatus.OPEN ||
      conversation.status === ConversationStatus.BOT ||
      conversation.status === ConversationStatus.AI_ATENDENDO);

@@ -20,6 +20,7 @@ import { ConversationStatus } from "@prisma/client";
 import { assignConversationContext, buildConversationMetadataForCrmSend, CONTEXT_TYPE } from "@/services/agents/AgentRoutingService";
 import { getSegmentConfig, buildCutoffs } from "@/lib/crm-segments";
 import { isBirthdayCampaign } from "@/lib/crm-safety";
+import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 
 // ─── types ────────────────────────────────────────────────────
 
@@ -482,12 +483,47 @@ export class CrmCampaignService {
         : []
     );
 
+    // Unified contact-safety context (built once per batch). This is the
+    // authoritative gate — it ADDS per-customer cooldown + weekly-cap
+    // enforcement on top of the legacy opt-out / phone / 24h guards below.
+    // Manual send is human-triggered: time-window and daily-cap gates are
+    // overridden (a human explicitly clicked "Enviar"), but every per-customer
+    // safety rule (opt-out, contactability, phone, cooldown, weekly cap,
+    // cross-campaign 24h dedup) is still enforced.
+    const safetyContext = await ContactSafetyService.buildGlobalContext(restaurantId, {
+      evolutionAvailable: true,
+    });
+
     let totalSent        = 0;
     let totalFailed      = 0;
     let duplicateSkipped = 0;
     const results: SendResult["results"] = [];
 
     for (const exec of executions) {
+      // Authoritative unified safety gate.
+      const decision = await ContactSafetyService.assertSendable({
+        restaurantId,
+        customerId:    exec.customerId ?? null,
+        phone:         exec.customerPhone ?? null,
+        campaignId,
+        isBirthday,
+        enforceTimeWindows: false, // human-triggered manual send
+        enforceDailyCap:    false, // human override
+        context:        safetyContext,
+      });
+      if (!decision.sendable) {
+        await prisma.campaignExecution.update({
+          where: { id: exec.id },
+          data:  { status: "FAILED", failedReason: decision.detail ?? decision.reason ?? "BLOCKED" },
+        });
+        totalFailed++;
+        if (decision.reason === "RECENT_CRM_MESSAGE_24H" || decision.reason === "DUPLICATE_CAMPAIGN_RECIPIENT") {
+          duplicateSkipped++;
+        }
+        results.push({ id: exec.id, status: "FAILED", error: decision.reason ?? "BLOCKED" });
+        continue;
+      }
+
       // 24 h duplicate guard: do not send via Evolution if this customer already received
       // a successful CRM WhatsApp message from another campaign today.
       if (exec.customerId && recentlySentIds.has(exec.customerId)) {
