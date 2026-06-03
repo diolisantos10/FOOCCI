@@ -207,3 +207,38 @@ describe("J — report shape supports TXT/JSON export with failures + actual", (
     expect(report.results.length).toBe(CRM_SCENARIOS.length);
   });
 });
+
+// ── K: CRM Agent tab includes a link to the CRM Test Center ─────────────────
+
+describe("K — CRM Agent tab surfaces a link to the CRM Test Center", () => {
+  const componentsSrc = readFileSync(
+    resolve(__dirname, "../../../app/admin/(area)/agents/_components.tsx"),
+    "utf8",
+  );
+
+  it("_components.tsx contains a CrmCallout component", () => {
+    expect(componentsSrc).toContain("CrmCallout");
+  });
+
+  it("CrmCallout links to /admin/agentes/crm/testes", () => {
+    expect(componentsSrc).toContain("/admin/agentes/crm/testes");
+  });
+
+  it("AgentDashboard renders CrmCallout when slug is 'crm'", () => {
+    expect(componentsSrc).toContain(`agent.slug === "crm"`);
+    expect(componentsSrc).toContain("{isCrm");
+  });
+
+  it("CRM Test Center page exists at the linked path", () => {
+    const pageSrc = readFileSync(
+      resolve(__dirname, "../../../app/admin/(area)/agentes/crm/testes/page.tsx"),
+      "utf8",
+    );
+    expect(pageSrc).toContain("CRM Test Center");
+    expect(pageSrc).toContain("Rodar teste rápido");
+    expect(pageSrc).toContain("Rodar suíte completa");
+    expect(pageSrc).toContain("Baixar JSON");
+    expect(pageSrc).toContain("Baixar relatório .txt");
+    expect(pageSrc).toContain("Copiar relatório");
+  });
+});

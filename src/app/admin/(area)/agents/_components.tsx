@@ -6,6 +6,7 @@
  * compact cards, clear status badges. No editing affordances in Phase 2.
  */
 
+import Link from "next/link";
 import type {
   AdminAgentProfileView,
   AgentArea,
@@ -305,6 +306,56 @@ function WaiterCallout() {
           </li>
         ))}
       </ul>
+      <div className="mt-4 border-t border-orange-200 pt-4">
+        <Link
+          href="/admin/agentes/waiter/testes"
+          className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
+        >
+          🧠 Abrir Waiter Test Center
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function CrmCallout() {
+  return (
+    <div className="rounded-xl border border-violet-200 bg-violet-50 p-5">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-violet-700">
+            CRM Test Center 🧠
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-gray-800">
+            Avalie o comportamento do CRM Agent antes de liberar qualquer automação. Rode a suíte
+            determinística de testes: segurança de contato, segmentação/tier, inteligência do cliente,
+            action center, rascunho de mensagem, atribuição de campanha e review request.
+          </p>
+        </div>
+      </div>
+      <ul className="mb-4 grid grid-cols-1 gap-1.5 text-sm text-gray-700 sm:grid-cols-2">
+        {[
+          "Contact Safety: opt-out, cooldown, caps, quiet hours",
+          "Segmentação: QUENTE / MORNO / FRIO / PERDIDO / tier",
+          "Customer Intelligence: próxima melhor ação",
+          "Action Center: ações e prioridades corretas",
+          "Message Variation: sem desconto falso, sem spam",
+          "Atribuição de campanha: COUPON_PROVEN → NONE",
+          "Review Request: elegibilidade e bloqueios",
+          "Sem envios, sem campanhas, sem efeitos colaterais",
+        ].map((line) => (
+          <li key={line} className="flex gap-2">
+            <span className="text-violet-500">✓</span>
+            <span>{line}</span>
+          </li>
+        ))}
+      </ul>
+      <Link
+        href="/admin/agentes/crm/testes"
+        className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-700"
+      >
+        🧠 Abrir CRM Test Center
+      </Link>
     </div>
   );
 }
@@ -353,8 +404,9 @@ function Meta({ label, value }: { label: string; value: string }) {
  * the /admin/agents/[slug] deep-link page. Pure render — no hooks, no mutations.
  */
 export function AgentDashboard({ agent }: { agent: AdminAgentProfileView }) {
-  const isWaiter = agent.slug === "waiter";
+  const isWaiter   = agent.slug === "waiter";
   const isSecurity = agent.slug === "security-governance";
+  const isCrm      = agent.slug === "crm";
   const isPlaceholder = agent.status === "DRAFT";
 
   return (
@@ -376,8 +428,9 @@ export function AgentDashboard({ agent }: { agent: AdminAgentProfileView }) {
         </div>
       )}
 
-      {isWaiter && <WaiterCallout />}
-      {isSecurity && <SecurityCallout />}
+      {isWaiter    && <WaiterCallout />}
+      {isSecurity  && <SecurityCallout />}
+      {isCrm       && <CrmCallout />}
 
       <Section title="Identidade">
         <TextBlock text={agent.description} />
