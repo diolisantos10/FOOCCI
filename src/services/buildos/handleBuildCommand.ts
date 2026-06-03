@@ -56,27 +56,60 @@ const NOT_BUILD: BuildCommandHandlingResult = { isBuildCommand: false };
 export async function handleBuildCommand(
   input: BuildCommandHandlingInput,
 ): Promise<BuildCommandHandlingResult> {
+  // Structured diagnostic line (no secrets, no full prompt). Emitted once per
+  // candidate message so the WhatsApp path is traceable in logs without console.
+  const diag: Record<string, unknown> = {
+    received: true,
+    prefixDetected: null as string | null,
+    normalizedPhone: maskPhone(input.phone),
+    configEnabled: null as boolean | null,
+    configSource: null as string | null,
+    authorized: null as boolean | null,
+    commandCreated: false,
+    promptDrafted: false,
+    responseSent: false,
+    shortCircuited: false,
+    failureReason: null as string | null,
+  };
+
+  // Detect FIRST so we can log even when the feature gate is off (the previous
+  // blind spot: a /build silently fell through when disabled).
+  const detected = detectBuildCommand(input.content);
+  diag.prefixDetected = detected?.prefix ?? null;
+
   // 0. Enable gate — DB-first (admin config), env bootstrap fallback, hard kill.
   //    Honors BUILDOS_HARD_DISABLED → BuildOSConfig.isEnabled → BUILDOS_ENABLED.
   const enabled = await resolveBuildOsEnabled();
-  if (!enabled.enabled) return NOT_BUILD;
-
-  const detected = detectBuildCommand(input.content);
+  diag.configEnabled = enabled.enabled;
+  diag.configSource = enabled.source;
+  if (!enabled.enabled) {
+    if (detected) {
+      diag.failureReason = `config_disabled:${enabled.source}`;
+      logDiag(diag);
+    }
+    return NOT_BUILD;
+  }
 
   if (detected) {
     // ── New command path (/build, /cmd, /prompt) ──
     // The message LOOKS like a command, so we intercept it regardless of
     // authorization (a customer can't reach this — prefixes are intentional).
     const auth = await authorizeSender(input.phone);
+    diag.authorized = auth.authorized;
     if (!auth.authorized) {
-      console.warn("[BuildOS] Unauthorized command attempt ignored.", {
-        phone: maskPhone(input.phone),
-        prefix: detected.prefix,
-      });
+      diag.shortCircuited = true;
+      diag.failureReason = "unauthorized_sender";
+      logDiag(diag);
       return { isBuildCommand: true };
     }
     if (auth.senderId) touchSenderLastUsed(auth.senderId).catch(() => {});
-    await handleNewCommand(input, detected.prefix, detected.commandText);
+    const outcome = await handleNewCommand(input, detected.prefix, detected.commandText);
+    diag.commandCreated = outcome.commandCreated;
+    diag.promptDrafted = outcome.promptDrafted;
+    diag.responseSent = outcome.responseSent;
+    diag.shortCircuited = true;
+    if (!outcome.responseSent) diag.failureReason = outcome.failureReason ?? "response_send_failed";
+    logDiag(diag);
     return { isBuildCommand: true };
   }
 
@@ -92,6 +125,10 @@ export async function handleBuildCommand(
         if (result.reply) {
           await sendBuildConfirmation(input.restaurantId, input.phone, result.reply).catch(() => {});
         }
+        diag.authorized = true;
+        diag.shortCircuited = true;
+        diag.responseSent = !!result.reply;
+        logDiag(diag);
         return { isBuildCommand: true };
       }
     } catch (err) {
@@ -103,12 +140,28 @@ export async function handleBuildCommand(
   return NOT_BUILD;
 }
 
+/** Emit a single compact, secret-free diagnostic line for the WhatsApp path. */
+function logDiag(diag: Record<string, unknown>): void {
+  try {
+    console.log(`[BUILD_OS_WHATSAPP] ${JSON.stringify(diag)}`);
+  } catch {
+    /* logging must never throw */
+  }
+}
+
+interface NewCommandOutcome {
+  commandCreated: boolean;
+  promptDrafted: boolean;
+  responseSent: boolean;
+  failureReason: string | null;
+}
+
 /** Intake a new command: persist, classify (in service), draft prompt, ask to confirm. */
 async function handleNewCommand(
   input: BuildCommandHandlingInput,
   prefix: "/build" | "/cmd" | "/prompt",
   commandText: string,
-): Promise<void> {
+): Promise<NewCommandOutcome> {
   const created = await createBuildCommandFromWhatsApp({
     senderPhone: input.phone,
     senderName: input.senderName ?? null,
@@ -118,12 +171,12 @@ async function handleNewCommand(
   });
 
   if (!created) {
-    await sendBuildConfirmation(
+    const sent = await sendBuildConfirmation(
       input.restaurantId,
       input.phone,
       "⚠️ Não consegui registrar seu comando agora. Tente novamente em instantes.",
-    ).catch(() => {});
-    return;
+    ).catch(() => false);
+    return { commandCreated: false, promptDrafted: false, responseSent: !!sent, failureReason: "command_create_failed" };
   }
 
   // Generate the deterministic (TEMPLATE) prompt draft — NO LLM, NO relay.
@@ -132,12 +185,12 @@ async function handleNewCommand(
   if (!version) {
     // Persisted but draft failed — still keep it; ask the operator to retry STATUS.
     await setBuildCommandStatus(created.id, "RECEIVED");
-    await sendBuildConfirmation(
+    const sent = await sendBuildConfirmation(
       input.restaurantId,
       input.phone,
       `✅ Comando #${shortId(created.id)} registrado, mas não consegui gerar o rascunho do prompt agora. Envie STATUS para tentar de novo.`,
-    ).catch(() => {});
-    return;
+    ).catch(() => false);
+    return { commandCreated: true, promptDrafted: false, responseSent: !!sent, failureReason: "prompt_draft_failed" };
   }
 
   await setBuildCommandStatus(created.id, "DRAFTED");
@@ -162,6 +215,7 @@ async function handleNewCommand(
     BUILD_EVENT.AWAITING_CONFIRMATION,
     sent ? "Rascunho enviado ao operador; aguardando confirmação." : "Aguardando confirmação (falha ao enviar preview).",
   );
+  return { commandCreated: true, promptDrafted: true, responseSent: !!sent, failureReason: sent ? null : "response_send_failed" };
 }
 
 /** Mask a phone for safe logging (keeps country + last 4). */

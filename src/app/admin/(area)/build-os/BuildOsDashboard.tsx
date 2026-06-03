@@ -12,6 +12,7 @@ import { useState } from "react";
 import type { AdminBuildCommandView } from "@/services/buildos/types";
 import type { BuildProjectView } from "@/services/buildos/BuildProjectService";
 import { BuildOsConfigPanel } from "./BuildOsConfigPanel";
+import { BuildOsDiagnosticsPanel } from "./BuildOsDiagnosticsPanel";
 
 interface Props {
   commands: AdminBuildCommandView[];
@@ -19,7 +20,7 @@ interface Props {
   loadError: boolean;
 }
 
-type Tab = "comandos" | "projetos" | "configuracao";
+type Tab = "comandos" | "projetos" | "configuracao" | "diagnostico";
 
 const STATUS_STYLES: Record<string, string> = {
   RECEIVED: "bg-blue-50 text-blue-700",
@@ -96,6 +97,7 @@ export function BuildOsDashboard({
     { key: "comandos", label: "Comandos", count: commands.length },
     { key: "projetos", label: "Projetos", count: projects.length },
     { key: "configuracao", label: "Configuração" },
+    { key: "diagnostico", label: "Diagnóstico" },
   ];
 
   return (
@@ -136,6 +138,7 @@ export function BuildOsDashboard({
       )}
       {tab === "projetos" && <ProjectsTab projects={projects} />}
       {tab === "configuracao" && <ConfigTab />}
+      {tab === "diagnostico" && <BuildOsDiagnosticsPanel />}
     </div>
   );
 }
