@@ -15,6 +15,21 @@ import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledge
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { formatOrderNumber } from "@/lib/order-number";
 
+// ── Internal command detection (client-safe pure helper) ──────────────────────
+
+const INTERNAL_CMD_PREFIXES = ["/build", "/cmd", "/prompt"] as const;
+
+/** Returns true when the message is a Build OS internal command prefix. */
+function isInternalCommandContent(content: string): boolean {
+  if (!content) return false;
+  const lower = content.trimStart().toLowerCase();
+  return INTERNAL_CMD_PREFIXES.some((p) => {
+    if (!lower.startsWith(p)) return false;
+    const next = lower.charAt(p.length);
+    return next === "" || /[^a-z0-9]/.test(next);
+  });
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type ConvStatus =
@@ -896,10 +911,10 @@ export function AtendimentoClient({
           ) : (
             <ul className="divide-y divide-gray-100">
               {displayed.map((conv) => {
-                // Skip SYSTEM messages (handoff events) for the preview snippet.
-                // The API already excludes them from the messages subquery, but
-                // guard here too in case older cached data slips through.
-                const lastMsg  = (conv.messages ?? []).find((m) => m.senderType !== "SYSTEM");
+                // Skip SYSTEM messages (handoff events) and internal commands for preview.
+                const lastMsg  = (conv.messages ?? []).find(
+                  (m) => m.senderType !== "SYSTEM" && !isInternalCommandContent(m.content ?? ""),
+                );
                 const preview  = lastMsg
                   ? (lastMsg.type && lastMsg.type !== "TEXT")
                     ? `[${lastMsg.type.toLowerCase()}]`
@@ -1981,6 +1996,20 @@ function MessageBubble({
   // System events (handoff, escalation metadata) are not chat bubbles.
   if (msg.senderType === "SYSTEM") {
     return <SystemEventNote msg={msg} />;
+  }
+
+  // Historical internal command messages that leaked before the security fix.
+  // Render as an admin-only separator — never as a customer chat bubble.
+  if (isInternalCommandContent(msg.content)) {
+    return (
+      <div className="flex items-center gap-2 py-1">
+        <div className="h-px flex-1 bg-gray-200" />
+        <span className="shrink-0 rounded-full bg-gray-100 border border-gray-300 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+          Comando interno ocultado
+        </span>
+        <div className="h-px flex-1 bg-gray-200" />
+      </div>
+    );
   }
 
   const isOutbound  = msg.direction === "OUTBOUND";

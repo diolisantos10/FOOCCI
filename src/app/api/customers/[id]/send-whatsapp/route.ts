@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { isGuestIdentifier } from "@/lib/guest";
+import { isInternalCommandText } from "@/services/buildos/BuildCommandRouter";
 import { ok, badRequest, unauthorized, notFound, serverError } from "@/lib/api-response";
 import { ConversationStatus } from "@prisma/client";
 
@@ -34,6 +35,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!parsed.success) return badRequest("Mensagem inválida ou vazia.");
 
     const { message } = parsed.data;
+
+    if (isInternalCommandText(message)) {
+      return badRequest("Comandos internos (/build, /cmd, /prompt) não podem ser enviados via WhatsApp manual.");
+    }
 
     // ── Load & validate customer ───────────────────────────────────────────────
     const customer = await prisma.customer.findUnique({

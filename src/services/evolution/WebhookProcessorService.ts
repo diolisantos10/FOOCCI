@@ -19,6 +19,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { isInternalCommandText } from "@/services/buildos/BuildCommandRouter";
 import { EvolutionConfigService } from "./EvolutionConfigService";
 import type {
   ParsedEvent,
@@ -82,11 +83,30 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   const { restaurantId } = configResult.data;
 
   // 1b. Build OS command interception (Priority 1.1).
-  // BEFORE any customer/conversation/message record is created: if this is a
-  // Build OS command (/build, /cmd, /prompt) from an authorized operator, route
-  // it to the Build OS handler and STOP normal customer processing. Gated by
-  // BUILDOS_ENABLED (default OFF) — fully inert and a no-op otherwise. Text
-  // messages only; media is never a command. Never throws into the hot path.
+  // BEFORE any customer/conversation/message record is created.
+  //
+  // Safety invariant: if content is an internal command prefix (/build, /cmd,
+  // /prompt), this message MUST be suppressed — even if handleBuildCommand
+  // throws or Build OS is disabled. isInternalCommandText() is synchronous and
+  // never throws, so the pre-flight below is the hard gate; handleBuildCommand
+  // is best-effort (logging/recording only from this point).
+  if (event.messageType === "TEXT" && isInternalCommandText(event.content)) {
+    try {
+      const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
+      await handleBuildCommand({
+        restaurantId,
+        phone: event.phone,
+        senderName: event.senderName,
+        content: event.content,
+        fromMe: false,
+      });
+    } catch (err) {
+      console.error("[WebhookProcessor] Build OS branch error (suppressed anyway):", err);
+    }
+    return { handled: true, action: "buildos_command", detail: event.externalMessageId };
+  }
+  // Non-command text: still offer Build OS the chance to handle confirmation
+  // replies (ENVIAR/CANCELAR/etc.) from authorized senders.
   if (event.messageType === "TEXT") {
     try {
       const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
@@ -98,10 +118,9 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
         fromMe: false,
       });
       if (buildResult.isBuildCommand) {
-        return { handled: true, action: "buildos_command", detail: event.externalMessageId };
+        return { handled: true, action: "buildos_reply", detail: event.externalMessageId };
       }
     } catch (err) {
-      // Build OS must never break WhatsApp customer service — log and continue.
       console.error("[WebhookProcessor] Build OS branch error (ignored):", err);
     }
   }
@@ -281,10 +300,22 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
   const { restaurantId } = configResult.data;
 
   // 1b. Build OS command interception for fromMe messages (Priority 1.4.1).
-  // If the operator sends /build from the SAME number connected as the instance,
-  // Evolution flags it fromMe and it lands here (not in the inbound branch). Try
-  // the Build OS handler before treating it as a staff outbound message. Gated by
-  // BUILDOS_ENABLED; TEXT only; never throws into the hot path.
+  // Same safety invariant as the inbound branch: a command prefix is ALWAYS
+  // suppressed, even if handleBuildCommand throws. Pre-flight is the hard gate.
+  if (event.messageType === "TEXT" && isInternalCommandText(event.content)) {
+    try {
+      const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
+      await handleBuildCommand({
+        restaurantId,
+        phone: event.phone,
+        content: event.content,
+        fromMe: true,
+      });
+    } catch (err) {
+      console.error("[WebhookProcessor] Build OS (fromMe) branch error (suppressed anyway):", err);
+    }
+    return { handled: true, action: "buildos_command_fromme", detail: event.externalMessageId };
+  }
   if (event.messageType === "TEXT") {
     try {
       const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
@@ -295,10 +326,10 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
         fromMe: true,
       });
       if (buildResult.isBuildCommand) {
-        return { handled: true, action: "buildos_command_fromme", detail: event.externalMessageId };
+        return { handled: true, action: "buildos_reply_fromme", detail: event.externalMessageId };
       }
     } catch (err) {
-      console.error("[WebhookProcessor] Build OS (fromMe) branch error (ignored):", err);
+      console.error("[WebhookProcessor] Build OS (fromMe) reply branch error (ignored):", err);
     }
   }
 

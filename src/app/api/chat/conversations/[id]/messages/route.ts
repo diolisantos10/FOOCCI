@@ -17,6 +17,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
+import { isInternalCommandText } from "@/services/buildos/BuildCommandRouter";
 import { ok, unauthorized, notFound, badRequest, serverError } from "@/lib/api-response";
 
 const bodySchema = z.object({
@@ -42,6 +43,10 @@ export async function POST(
     const raw    = await req.json().catch(() => null);
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) return badRequest("content is required");
+
+    if (isInternalCommandText(parsed.data.content)) {
+      return badRequest("Comandos internos (/build, /cmd, /prompt) não podem ser enviados por esta interface.");
+    }
 
     const now = new Date();
 

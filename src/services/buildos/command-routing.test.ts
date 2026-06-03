@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { detectBuildCommand } from "./BuildCommandRouter";
+import { detectBuildCommand, isInternalCommandText } from "./BuildCommandRouter";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -150,6 +150,142 @@ describe("F — all internal command prefixes are detected", () => {
   for (const [input, expectedPrefix] of cases) {
     it(`detects prefix from: ${JSON.stringify(input)}`, () => {
       expect(detectBuildCommand(input)?.prefix).toBe(expectedPrefix);
+    });
+  }
+});
+
+// ── G: isInternalCommandText pure helper ──────────────────────────────────────
+
+describe("G — isInternalCommandText pure boolean helper", () => {
+  it("returns true for /build", () => {
+    expect(isInternalCommandText("/build teste")).toBe(true);
+  });
+
+  it("returns true for /cmd", () => {
+    expect(isInternalCommandText("/cmd rodar testes")).toBe(true);
+  });
+
+  it("returns true for /prompt", () => {
+    expect(isInternalCommandText("/prompt gera algo")).toBe(true);
+  });
+
+  it("returns true for bare /build (no text)", () => {
+    expect(isInternalCommandText("/build")).toBe(true);
+  });
+
+  it("returns false for a normal customer message", () => {
+    expect(isInternalCommandText("Oi, quero fazer um pedido")).toBe(false);
+  });
+
+  it("returns false for an empty string", () => {
+    expect(isInternalCommandText("")).toBe(false);
+  });
+
+  it("returns false when /build appears mid-sentence", () => {
+    expect(isInternalCommandText("como usar /build no projeto?")).toBe(false);
+  });
+
+  it("returns false for /builder (word char after prefix)", () => {
+    expect(isInternalCommandText("/builder install")).toBe(false);
+  });
+});
+
+// ── H: exception fall-through safety — pre-flight always suppresses ───────────
+
+describe("H — pre-flight suppression is independent of handleBuildCommand", () => {
+  // This validates the invariant that isInternalCommandText() is the hard gate:
+  // even if handleBuildCommand threw an exception, the caller already knows it
+  // must suppress because isInternalCommandText returned true first.
+
+  it("isInternalCommandText does not throw for any string input", () => {
+    const inputs = [
+      "/build",
+      "/cmd",
+      "/prompt",
+      "",
+      "Oi",
+      "\n\n/build\n",
+      "/BUILD UPPERCASE",
+      "a".repeat(5000),
+      "\0​/build",
+    ];
+    for (const input of inputs) {
+      expect(() => isInternalCommandText(input)).not.toThrow();
+    }
+  });
+
+  it("uppercase variants are also detected (case-insensitive)", () => {
+    expect(isInternalCommandText("/BUILD raio-x")).toBe(true);
+    expect(isInternalCommandText("/CMD teste")).toBe(true);
+    expect(isInternalCommandText("/PROMPT gera")).toBe(true);
+  });
+});
+
+// ── I: exception fall-through: pre-flight is the hard gate ───────────────────
+
+describe("I — exception fall-through: isInternalCommandText is the infallible gate", () => {
+  // The caller (WebhookProcessorService) checks isInternalCommandText() BEFORE
+  // calling handleBuildCommand. If handleBuildCommand throws (e.g. DB is down),
+  // the caller already has true from the pure check and suppresses regardless.
+  // These tests verify the pure gate is reliable under all inputs.
+
+  it("correctly identifies /build even when called in a catch-block context", () => {
+    // Simulate what the caller does after catching an exception from handleBuildCommand:
+    // it falls back to the synchronous isInternalCommandText result.
+    const content = "/build raio-x checkout";
+    let suppressed = false;
+    try {
+      throw new Error("DB_DOWN");
+    } catch {
+      suppressed = isInternalCommandText(content);
+    }
+    expect(suppressed).toBe(true);
+  });
+
+  it("returns false for normal messages even in exception context", () => {
+    const content = "quero fazer um pedido";
+    let suppressed = true;
+    try {
+      throw new Error("DB_DOWN");
+    } catch {
+      suppressed = isInternalCommandText(content);
+    }
+    expect(suppressed).toBe(false);
+  });
+});
+
+// ── J: operator send routes block internal commands ───────────────────────────
+
+describe("J — isInternalCommandText correctly identifies inputs to block in operator routes", () => {
+  // The operator-send API routes call isInternalCommandText before persisting.
+  // This test validates the exact same function they use.
+
+  const shouldBlock = [
+    "/build teste envio manual",
+    "/cmd rodar testes no servidor",
+    "/prompt gera waiter novo",
+    "/BUILD uppercase must block",
+    "  /build  with leading spaces",
+  ];
+
+  const shouldAllow = [
+    "Olá, tudo bem?",
+    "quero fazer um pedido",
+    "1",
+    "",
+    "/buildmore text",  // not a real prefix (word char after)
+    "fale sobre /build para mim",  // mid-sentence
+  ];
+
+  for (const input of shouldBlock) {
+    it(`blocks: ${JSON.stringify(input)}`, () => {
+      expect(isInternalCommandText(input)).toBe(true);
+    });
+  }
+
+  for (const input of shouldAllow) {
+    it(`allows: ${JSON.stringify(input)}`, () => {
+      expect(isInternalCommandText(input)).toBe(false);
     });
   }
 });

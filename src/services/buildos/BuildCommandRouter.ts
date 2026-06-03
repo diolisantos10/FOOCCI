@@ -117,6 +117,18 @@ export function phoneVariants(normalized: string): Set<string> {
 }
 
 /**
+ * Returns true when `content` is an internal Build OS command prefix (/build,
+ * /cmd, /prompt). Pure, synchronous, and never throws.
+ *
+ * Use this as a cheap pre-flight check anywhere a command must be suppressed
+ * even if the full handleBuildCommand pipeline is unavailable (e.g. inside a
+ * catch block, operator send routes, preview rendering).
+ */
+export function isInternalCommandText(content: string): boolean {
+  return detectBuildCommand(content) !== null;
+}
+
+/**
  * Synchronous authorization check against the env allow-list (MVP fallback).
  * A DB-backed check can be layered on later via BuildCommandService without
  * changing the webhook call site.
