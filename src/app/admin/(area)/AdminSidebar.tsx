@@ -27,6 +27,7 @@ export function AdminSidebar() {
     { href: "/admin/diagnostics/cart-recovery-qa",         label: "QA Recovery",  icon: "🧪" },
     { href: "/admin/diagnostics/whatsapp-pedido-identity", label: "WA Identity",   icon: "🔗" },
     { href: "/admin/agentes/waiter/testes",                label: "Waiter Testes", icon: "🧠" },
+    { href: "/admin/agentes/crm/testes",                   label: "CRM Testes",    icon: "📞" },
   ];
 
   return (
