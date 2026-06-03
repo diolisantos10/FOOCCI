@@ -66,6 +66,17 @@ export function getPublicSiteUrl(): string {
 }
 
 /**
+ * The canonical Evolution webhook URL (base, no token) — the SINGLE source of
+ * truth used by the diagnostics card, the live-status comparison, and the sync
+ * endpoint. Always built from the canonical site URL (never the Railway proxy
+ * host), so a `host`-derived `foocci.up.railway.app` can never be applied to
+ * Evolution by mistake.
+ */
+export function getExpectedEvolutionWebhookUrl(): string {
+  return `${SITE_URL}/api/webhooks/evolution`;
+}
+
+/**
  * Sanitizes a URL stored in the database (e.g. WhatsAppAgentConfig.menuUrl)
  * by replacing non-canonical hosts (Railway domain, localhost) with the canonical
  * site URL. Call this before using any admin-configured URL in customer-facing output.

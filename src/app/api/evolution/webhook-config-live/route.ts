@@ -16,6 +16,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { unauthorized, forbidden, serverError } from "@/lib/api-response";
+import { getExpectedEvolutionWebhookUrl } from "@/lib/public-url";
 
 export async function GET(req: NextRequest) {
   try {
@@ -33,11 +34,10 @@ export async function GET(req: NextRequest) {
 
     const snapshot = snapshotResult.data;
 
-    // Derive the URL Foocci expects the webhook to be configured with.
+    // Canonical expected webhook URL — SINGLE source of truth (never the Railway
+    // proxy host). This guarantees the card, the comparison, and sync all agree.
     // If a webhookSecret exists, ?token= is appended server-side — never shown to client.
-    const host    = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
-    const proto   = (req.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() ?? "https";
-    const baseUrl = `${proto}://${host}/api/webhooks/evolution`;
+    const baseUrl = getExpectedEvolutionWebhookUrl();
     let expectedUrl = baseUrl;
     if (snapshot.webhookSecret) {
       const eu = new URL(baseUrl);

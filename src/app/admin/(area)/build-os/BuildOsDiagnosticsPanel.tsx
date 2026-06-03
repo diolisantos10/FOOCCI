@@ -321,6 +321,8 @@ function WebhookCard() {
   async function syncWebhook() {
     setBusy(true); setErr(null); setAuthIssue(false);
     try {
+      // The server ALWAYS applies the canonical URL (getExpectedEvolutionWebhookUrl);
+      // this body is informational only and cannot override the canonical host.
       const res = await fetch("/api/evolution/sync-webhook", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

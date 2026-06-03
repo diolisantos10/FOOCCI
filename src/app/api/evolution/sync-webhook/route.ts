@@ -21,6 +21,7 @@ import {
   EvolutionConfigSnapshot,
 } from "@/lib/evolution/EvolutionClient";
 import { unauthorized, forbidden, serverError } from "@/lib/api-response";
+import { getExpectedEvolutionWebhookUrl } from "@/lib/public-url";
 
 const WEBHOOK_EVENTS = ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"];
 
@@ -99,16 +100,12 @@ export async function POST(req: NextRequest) {
     if (!ctx) return unauthorized();
     if (ctx.role !== "OWNER") return forbidden("Restrito ao proprietário.");
 
-    let reqBody: Record<string, unknown> = {};
-    try { reqBody = await req.json(); } catch { /* no body — ok */ }
+    // Body is ignored for the URL on purpose: the webhook URL is ALWAYS the
+    // canonical one (never the Railway proxy host, never a client-supplied host).
+    // This prevents accidentally configuring Evolution with foocci.up.railway.app.
+    try { await req.json(); } catch { /* no body — ok */ }
 
-    const clientUrl = reqBody.webhookUrl ? String(reqBody.webhookUrl) : null;
-    const host  = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
-    const proto = (req.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() ?? "https";
-    const origin = clientUrl
-      ? clientUrl.replace(/\/api\/webhooks\/evolution$/, "")
-      : `${proto}://${host}`;
-    const webhookUrl = `${origin}/api/webhooks/evolution`;
+    const webhookUrl = getExpectedEvolutionWebhookUrl();
 
     const snapshotResult = await EvolutionConfigService.getSnapshot(
       ctx.restaurantId,
