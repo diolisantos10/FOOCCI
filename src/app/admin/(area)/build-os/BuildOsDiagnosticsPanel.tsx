@@ -96,6 +96,9 @@ export function BuildOsDiagnosticsPanel() {
         ambiente do app (sem console, sem Railway, sem credenciais). Não envia nada a Claude/GitHub.
       </div>
 
+      {/* Webhook Evolution — corrective action lives where the problem is diagnosed */}
+      <WebhookCard />
+
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
       {simResult && <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">{simResult}</div>}
 
@@ -256,6 +259,142 @@ export function BuildOsDiagnosticsPanel() {
               </table>
             )}
           </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Webhook Evolution card ──────────────────────────────────────────────────────
+// Reuses the EXISTING endpoints (no duplication):
+//   GET  /api/evolution/webhook-config-live  → read live status (OWNER-only)
+//   POST /api/evolution/sync-webhook         → set the correct URL (OWNER-only)
+// Both strip secrets/token server-side. The corrective action lives here so the
+// operator never has to leave the Build OS diagnostics screen.
+
+const EXPECTED_WEBHOOK_URL = "https://foocci.com.br/api/webhooks/evolution";
+
+interface WebhookLive {
+  success: boolean;
+  instanceName?: string;
+  expectedUrl?: string;
+  url?: string | null;
+  enabled?: boolean | null;
+  events?: string[];
+  hasMessagesUpsert?: boolean;
+  isEnabled?: boolean;
+  isHealthy?: boolean;
+  issues?: string[];
+  recommendation?: string;
+  error?: string;
+}
+
+interface SyncResult {
+  success: boolean;
+  instanceName?: string;
+  webhookUrlConfigured?: string;
+  eventsConfigured?: string[];
+  recommendation?: string;
+  error?: string | null;
+}
+
+function WebhookCard() {
+  const [live, setLive] = useState<WebhookLive | null>(null);
+  const [sync, setSync] = useState<SyncResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [authIssue, setAuthIssue] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function loadStatus() {
+    setBusy(true); setErr(null); setAuthIssue(false); setSync(null);
+    try {
+      const res = await fetch("/api/evolution/webhook-config-live");
+      if (res.status === 401 || res.status === 403) { setAuthIssue(true); return; }
+      const d = (await res.json().catch(() => ({}))) as WebhookLive;
+      if (!res.ok && !d.success) { setErr(d.error ?? "Falha ao consultar webhook."); return; }
+      setLive(d);
+    } catch {
+      setErr("Falha de rede ao consultar o webhook.");
+    } finally { setBusy(false); }
+  }
+
+  async function syncWebhook() {
+    setBusy(true); setErr(null); setAuthIssue(false);
+    try {
+      const res = await fetch("/api/evolution/sync-webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ webhookUrl: EXPECTED_WEBHOOK_URL }),
+      });
+      if (res.status === 401 || res.status === 403) { setAuthIssue(true); return; }
+      const d = (await res.json().catch(() => ({}))) as SyncResult;
+      if (!res.ok && !d.success) { setErr(d.error ?? "Falha ao sincronizar."); return; }
+      setSync(d);
+      await loadStatus(); // refresh live status after sync
+    } catch {
+      setErr("Falha de rede ao sincronizar o webhook.");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Webhook Evolution</h3>
+        <div className="flex gap-2">
+          <button type="button" disabled={busy} onClick={loadStatus}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+            {busy ? "…" : "Verificar status"}
+          </button>
+          <button type="button" disabled={busy} onClick={syncWebhook}
+            className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-40">
+            Sincronizar webhook Evolution
+          </button>
+        </div>
+      </div>
+
+      <p className="mt-2 text-xs text-gray-600">
+        URL esperada: <code className="rounded bg-gray-100 px-1 font-mono">{EXPECTED_WEBHOOK_URL}</code>
+      </p>
+
+      {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>}
+
+      {authIssue && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Esta ação usa a integração do restaurante (login de <strong>proprietário</strong>). Faça login
+          como dono do restaurante no mesmo navegador e tente novamente — a verificação/sincronização do
+          webhook é por restaurante, não pela sessão admin global.
+        </p>
+      )}
+
+      {live && (
+        <div className="mt-3 space-y-1">
+          <div className="flex flex-wrap gap-2">
+            <Badge ok={!!live.isHealthy} label="Webhook saudável" />
+            <Badge ok={!!live.isEnabled} label="Habilitado" />
+            <Badge ok={!!live.hasMessagesUpsert} label="MESSAGES_UPSERT" />
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
+            <Row k="Instância" v={live.instanceName ?? "—"} />
+            <Row k="URL na Evolution" v={live.url ?? "—"} />
+            <Row k="URL esperada" v={live.expectedUrl ?? EXPECTED_WEBHOOK_URL} />
+            <Row k="Eventos" v={(live.events ?? []).join(", ") || "—"} />
+          </div>
+          {live.issues && live.issues.length > 0 && (
+            <ul className="mt-2 space-y-1 text-xs text-amber-800">
+              {live.issues.map((i, idx) => <li key={idx}>⚠ {i}</li>)}
+            </ul>
+          )}
+          {live.recommendation && <p className="mt-1 text-xs text-gray-500">{live.recommendation}</p>}
+        </div>
+      )}
+
+      {sync && (
+        <div className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3 text-xs">
+          <p className="font-semibold text-green-800">{sync.success ? "✅ Webhook sincronizado." : "⚠ Sincronização retornou aviso."}</p>
+          <p className="mt-1 text-gray-700">URL aplicada: <code className="font-mono">{sync.webhookUrlConfigured ?? EXPECTED_WEBHOOK_URL}</code></p>
+          <p className="text-gray-700">Eventos: {(sync.eventsConfigured ?? []).join(", ") || "—"}</p>
+          {sync.instanceName && <p className="text-gray-700">Instância: {sync.instanceName}</p>}
+          <p className="mt-2 font-medium text-gray-800">Envie <code className="font-mono">/build</code> novamente no WhatsApp e rode o diagnóstico.</p>
         </div>
       )}
     </div>
