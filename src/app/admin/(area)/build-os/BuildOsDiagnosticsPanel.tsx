@@ -97,6 +97,22 @@ export function BuildOsDiagnosticsPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [simResult, setSimResult] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
+  const [copyFallback, setCopyFallback] = useState<string | null>(null);
+
+  async function copyDiagnostic() {
+    if (!report) return;
+    const text = buildReportMarkdown(report);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyState("copied");
+      setCopyFallback(null);
+      setTimeout(() => setCopyState("idle"), 2000);
+    } catch {
+      // Clipboard blocked (insecure context / permissions) → show copyable textarea.
+      setCopyFallback(text);
+    }
+  }
 
   async function runDiagnostic() {
     setBusy(true); setError(null); setSimResult(null);
@@ -167,7 +183,26 @@ export function BuildOsDiagnosticsPanel() {
             className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">
             Simular comando (criar)
           </button>
+          <button type="button" disabled={!report} onClick={copyDiagnostic}
+            title={report ? "Copiar relatório completo (Markdown)" : "Rode o diagnóstico primeiro"}
+            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+            {copyState === "copied" ? "✓ Diagnóstico copiado" : "Copiar diagnóstico completo"}
+          </button>
         </div>
+
+        {copyFallback !== null && (
+          <div className="mt-3">
+            <p className="mb-1 text-xs text-amber-700">
+              O navegador bloqueou a cópia automática. Selecione tudo abaixo e copie (Ctrl/Cmd+C):
+            </p>
+            <textarea
+              readOnly
+              value={copyFallback}
+              onFocus={(e) => e.currentTarget.select()}
+              className="h-40 w-full rounded-lg border border-gray-200 p-2 font-mono text-[11px] text-gray-800"
+            />
+          </div>
+        )}
       </div>
 
       {report && (
@@ -497,6 +532,150 @@ interface SyncResult {
   eventsConfigured?: string[];
   recommendation?: string;
   error?: string | null;
+}
+
+/**
+ * Build the full Markdown diagnostic report from the already-loaded `report`.
+ * Uses ONLY data already present on screen (no new fetch). Everything is the
+ * masked/sanitized values the diagnostics API returns — no secrets/tokens/phones.
+ */
+function buildReportMarkdown(r: Report): string {
+  const yn = (v: boolean | null | undefined) => (v === null || v === undefined ? "—" : v ? "sim" : "não");
+  const L: string[] = [];
+  L.push("# Build OS Diagnostic Report");
+  L.push(`Gerado em: ${new Date().toLocaleString("pt-BR")}`);
+  L.push("");
+
+  L.push("## Causa-raiz provável");
+  L.push(`- Label: ${r.likelyRootCause.code}`);
+  L.push(`- Explicação: ${r.likelyRootCause.explanation}`);
+  L.push(`- Correção recomendada: ${r.likelyRootCause.recommendedFix}`);
+  L.push("");
+
+  L.push("## Checks principais");
+  L.push(`- Config ativa: ${yn(r.buildOsConfig.enabled && !r.buildOsConfig.hardDisabled)}`);
+  L.push(`- Operador autorizado: ${yn(r.authorizedSenderCheck.authorized)}`);
+  L.push(`- Projeto default: ${yn(r.projectCheck.defaultProjectFound)}`);
+  L.push(`- Prefixo detectado: ${yn(!!r.detectorCheck.prefixDetected)}`);
+  L.push(`- Rascunho de prompt: ${yn(r.promptDraftCheck.canGeneratePromptDraft)}`);
+  L.push(`- Webhook real recebeu /build: ${yn(r.webhookReceivedRealBuild)}`);
+  L.push("");
+
+  L.push("## Deploy em produção");
+  L.push(`- Build marker: ${r.deployInfo.buildMarker}`);
+  L.push(`- Commit: ${r.deployInfo.commitSha}`);
+  L.push(`- Branch: ${r.deployInfo.branch}`);
+  L.push(`- App version: ${r.deployInfo.appVersion}`);
+  L.push(`- Rota esperada do webhook: ${r.deployInfo.webhookRouteExpected}`);
+  L.push(`- Health endpoint: ${r.deployInfo.healthEndpoint}`);
+  L.push("");
+
+  L.push("## Instância Evolution testada");
+  const ev = r.evolutionInstanceCheck;
+  if (ev.available) {
+    L.push(`- Algum evento recebido: ${yn(ev.anyEventReceived)}`);
+    L.push(`- Último evento: ${ev.lastEventName ?? "—"}`);
+    L.push(`- Último evento normalizado: ${ev.lastEventNormalized ?? "—"}`);
+    L.push(`- Último inbound: ${ev.lastInboundEventName ?? "—"}`);
+    L.push(`- Horário do último evento: ${ev.lastEventAt ? new Date(ev.lastEventAt).toLocaleString("pt-BR") : "—"}`);
+    L.push(`- Instâncias configuradas: ${(ev.instances ?? []).map((i) => `${i.instanceName}(${i.restaurant ?? "—"}, ${i.isActive ? "ativa" : "inativa"})`).join(", ") || "—"}`);
+    L.push("- Últimos eventos:");
+    for (const e of ev.recentEvents ?? []) {
+      L.push(`  - ${new Date(e.createdAt).toLocaleString("pt-BR")} | ${e.eventName} → ${e.normalized ?? "—"} | accepted=${yn(e.accepted)} ignored=${yn(e.ignored)} | dir=${e.direction ?? "—"} | ${e.remoteJid ?? "—"}${e.error ? ` | err=${e.error}` : ""}`);
+    }
+  } else {
+    L.push("- (indisponível)");
+  }
+  L.push("");
+
+  L.push("## Últimas mensagens reais recebidas da Evolution");
+  if (r.recentMessages.length === 0) L.push("- (nenhuma)");
+  for (const m of r.recentMessages) {
+    L.push(`- ${new Date(m.createdAt).toLocaleString("pt-BR")} | ${m.eventNameRaw}→${m.eventNameNormalized ?? "—"} | dir=${m.direction ?? "—"} fromMe=${yn(m.fromMe)} | jid=${m.remoteJidMasked ?? "—"} tel=${m.extractedPhoneMasked ?? "—"} | prefix=${m.prefixDetected ?? "—"} candidate=${yn(m.buildCommandCandidate)} authorized=${yn(m.authorized)} created=${yn(m.commandCreated)} trace=${yn(m.hasBuildTrace)}${m.failureReason ? ` | reason=${m.failureReason}` : ""}`);
+  }
+  L.push("");
+
+  L.push("## Busca por /build");
+  const bt = r.buildTextSearch;
+  if (bt.searched) {
+    L.push(`- Encontrado em mensagens normais: ${yn(bt.foundInMessages)}`);
+    L.push(`- Encontrado em traces Build OS: ${yn(bt.foundInTraces)}`);
+    L.push(`- Operador autorizado (mascarado): ${bt.authorizedOperatorMasked ?? "—"}`);
+    L.push(`- Variantes autorizadas: ${(bt.authorizedVariantsMasked ?? []).join(", ") || "—"}`);
+    for (const m of bt.messages ?? []) {
+      L.push(`  - [msg] ${new Date(m.createdAt).toLocaleString("pt-BR")} | ${m.prefixDetected ?? "—"} | dir=${m.direction} sender=${m.senderType ?? "—"} canal=${m.channel ?? "—"} tel=${m.phoneMasked ?? "—"} | ${m.snippet}`);
+    }
+    for (const t of bt.traces ?? []) {
+      L.push(`  - [trace] ${new Date(t.createdAt).toLocaleString("pt-BR")} | ${t.prefixDetected ?? "—"} | tel=${t.phoneMasked ?? "—"} authorized=${yn(t.authorized)} fromMe=${yn(t.fromMe)} reason=${t.failureReason ?? "—"}`);
+    }
+    if (bt.verdict) L.push(`- Conclusão: ${bt.verdict}`);
+  } else {
+    L.push("- (não pesquisado)");
+  }
+  L.push("");
+
+  L.push("## Configuração");
+  L.push(`- Existe no banco: ${yn(r.buildOsConfig.exists)}`);
+  L.push(`- Ativado: ${yn(r.buildOsConfig.enabled)}`);
+  L.push(`- Origem: ${r.buildOsConfig.source}`);
+  L.push(`- Hard disabled: ${yn(r.buildOsConfig.hardDisabled)}`);
+  L.push(`- Modo: ${r.buildOsConfig.mode}`);
+  L.push("");
+
+  L.push("## Autorização do operador");
+  const a = r.authorizedSenderCheck;
+  L.push(`- Telefone (mascarado): ${a.normalizedPhone}`);
+  L.push(`- Variantes: ${a.variants.join(", ")}`);
+  L.push(`- Operador no banco: ${yn(a.dbSenderFound)}`);
+  L.push(`- Ativo: ${yn(a.dbSenderActive)}`);
+  L.push(`- Autorizado: ${yn(a.authorized)}`);
+  L.push(`- Fonte: ${a.authorizationSource}`);
+  L.push(`- Último uso: ${a.lastUsedAt ?? "—"}`);
+  L.push("");
+
+  L.push("## Projeto");
+  L.push(`- Default encontrado: ${yn(r.projectCheck.defaultProjectFound)}`);
+  L.push(`- Slug default: ${r.projectCheck.defaultProjectSlug ?? "—"}`);
+  L.push(`- Projetos ativos: ${r.projectCheck.activeProjectsCount}`);
+  L.push(`- Resolvido da mensagem: ${r.projectCheck.resolvedFromMessage ?? "—"}`);
+  L.push("");
+
+  L.push("## Detecção + Classificação");
+  L.push(`- Prefixo: ${r.detectorCheck.prefixDetected ?? "—"}`);
+  L.push(`- taskType: ${r.classificationCheck.taskType}`);
+  L.push(`- executionIntent: ${r.classificationCheck.executionIntent}`);
+  L.push(`- targetArea: ${r.classificationCheck.targetArea}`);
+  L.push(`- riskLevel: ${r.classificationCheck.riskLevel}`);
+  L.push("");
+
+  L.push("## Webhook Evolution (verificar pelo card; status ao vivo é OWNER-only)");
+  L.push(`- URL esperada: ${r.deployInfo.webhookRouteExpected}`);
+  L.push("");
+
+  L.push("## Últimos comandos do operador");
+  if (r.lastCommands.length === 0) L.push("- nenhum comando registrado");
+  for (const c of r.lastCommands) {
+    L.push(`- #${c.id} | ${c.status} | proj=${c.project ?? "—"} | risco=${c.riskLevel} | promptV=${c.promptVersions} | ${new Date(c.createdAt).toLocaleString("pt-BR")}`);
+  }
+  L.push("");
+
+  // Final one-line conclusion about the likely current bottleneck.
+  let bottleneck: string;
+  if (!r.buildOsConfig.enabled || r.buildOsConfig.hardDisabled) {
+    bottleneck = "Build OS desativado em runtime (config/hard-disable).";
+  } else if (!r.evolutionInstanceCheck.anyEventReceived) {
+    bottleneck = "Nenhum evento da Evolution chega ao app (instância/URL/conexão).";
+  } else if (r.buildTextSearch.foundInMessages && !r.buildTextSearch.foundInTraces) {
+    bottleneck = "/build chega como mensagem normal mas não vira Build OS — provável divergência de número/instância (compare telefone associado x operador autorizado).";
+  } else if (!r.webhookReceivedRealBuild) {
+    bottleneck = "Eventos chegam, mas nenhum /build virou trace — verifique extração de texto/sender e número do operador.";
+  } else {
+    bottleneck = "Caminho saudável; se ainda falha, verifique envio de confirmação (failureReason nos traces).";
+  }
+  L.push("## Conclusão final");
+  L.push(`- ${bottleneck}`);
+
+  return L.join("\n");
 }
 
 function WebhookCard() {
