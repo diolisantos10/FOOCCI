@@ -22,6 +22,10 @@ import {
   WAITER_AGENT_PROFILE,
   buildWaiterProfileDirective,
 } from "@/services/ai/waiter/WaiterAgentProfile";
+import {
+  CRM_AGENT_PROFILE,
+  buildCrmProfileDirective,
+} from "@/services/crm/CrmAgentProfile";
 import type { AgentProfileDefinition } from "./types";
 
 // ── WAITER (rich) — derived from the existing constitution ──────────────────────
@@ -136,6 +140,85 @@ function placeholder(
   };
 }
 
+// ── CRM Agent (rich) — derived from CrmAgentProfile constitution ────────────────
+
+const CRM_PROFILE: AgentProfileDefinition = {
+  slug: "crm",
+  name: "CRM Agent",
+  title: "Gerente de relacionamento e estrategista de retenção",
+  area: "CRM",
+  description:
+    "Gerente de relacionamento outbound que opera via WhatsApp de forma discreta, " +
+    "útil e humana. Reativa clientes inativos, recompensa VIPs e recupera quem está " +
+    "em risco — baseando cada mensagem em dados reais, nunca em invenções.",
+
+  mission: CRM_AGENT_PROFILE.mission,
+  objectives: [...CRM_AGENT_PROFILE.objectives],
+  responsibilities: [...CRM_AGENT_PROFILE.responsibilities],
+  skills: [...CRM_AGENT_PROFILE.skills],
+  allowedActions: [...CRM_AGENT_PROFILE.boundaries.canDo],
+  // INTERNAL ONLY — hard safety floor: inviolável mesmo antes da implementação.
+  forbiddenActions: [...CRM_AGENT_PROFILE.boundaries.cannotDo],
+  tools: ["send_whatsapp_message", "log_campaign_send", "escalate_to_human"],
+  knowledgeAreas: [
+    "Segmentos RFM do cliente (HOT/WARM/COLD/VIP/CHAMPION)",
+    "Histórico real de pedidos (totalOrders, totalSpend, lastOrderAt)",
+    "Cupons e promoções configurados pelo operador no sistema",
+    "Configurações de segurança WhatsApp (cooldown, cap, quiet hours)",
+    "Regras de opt-out e compliance LGPD",
+  ],
+  interfaceContext:
+    "O CRM Agent opera exclusivamente no canal WhatsApp outbound. " +
+    "Não tem acesso à interface /pedido, ao checkout ou ao cardápio em tempo real. " +
+    "Trabalha com segmentos pré-calculados e dados reais de Customer/Order.",
+  businessRules: [
+    ...CRM_AGENT_PROFILE.relationshipPrinciples,
+    ...CRM_AGENT_PROFILE.campaignStrategyRules,
+    ...CRM_AGENT_PROFILE.personalizationRules,
+    ...CRM_AGENT_PROFILE.couponAndOfferRules,
+    ...CRM_AGENT_PROFILE.reviewRequestRules,
+    ...CRM_AGENT_PROFILE.metricsAndAttributionRules,
+    ...CRM_AGENT_PROFILE.messageToneRules,
+  ],
+  // INTERNAL ONLY — piso de segurança (mirror das constantes de código).
+  safetyRules: [...CRM_AGENT_PROFILE.whatsAppSafetyRules, ...CRM_AGENT_PROFILE.antiSpamRules],
+  escalationRules: [...CRM_AGENT_PROFILE.failureHandling],
+  promptInstructions: buildCrmProfileDirective(),
+  outputRules: [...CRM_AGENT_PROFILE.antiSpamRules],
+  evaluationCriteria: [
+    "Nunca inventa ofertas, cupons ou fatos do cliente.",
+    "Usa apenas dados reais (totalOrders, totalSpend, lastOrderAt).",
+    "Respeita opt-out, cooldown, cap diário e weekly antes de qualquer envio.",
+    "Tom humano e caloroso — nunca spam ou corporativês frio.",
+    "Só pede review para clientes HOT com pedido recente (<7 dias).",
+    "Registra envio, skip e falha para atribuição e diagnóstico.",
+  ],
+
+  // Rich CRM-specific sections kept as JSON (sem colunas dedicadas ainda).
+  extendedSections: {
+    relationshipPrinciples: CRM_AGENT_PROFILE.relationshipPrinciples,
+    campaignStrategyRules: CRM_AGENT_PROFILE.campaignStrategyRules,
+    personalizationRules: CRM_AGENT_PROFILE.personalizationRules,
+    whatsAppSafetyRules: CRM_AGENT_PROFILE.whatsAppSafetyRules,
+    antiSpamRules: CRM_AGENT_PROFILE.antiSpamRules,
+    customerIntelligenceRules: CRM_AGENT_PROFILE.customerIntelligenceRules,
+    couponAndOfferRules: CRM_AGENT_PROFILE.couponAndOfferRules,
+    reviewRequestRules: CRM_AGENT_PROFILE.reviewRequestRules,
+    metricsAndAttributionRules: CRM_AGENT_PROFILE.metricsAndAttributionRules,
+    messageToneRules: CRM_AGENT_PROFILE.messageToneRules,
+    failureHandling: CRM_AGENT_PROFILE.failureHandling,
+    examples: CRM_AGENT_PROFILE.examples,
+  },
+
+  status: "ACTIVE",
+  visibility: "INTERNAL",
+  isGlobalDefault: true,
+  // Phase 1: DB runtime is OFF. Real sends still use hard-coded paths.
+  isRuntimeEnabled: false,
+  version: "1.0",
+  source: "CODE_SEED",
+};
+
 const PLACEHOLDER_PROFILES: AgentProfileDefinition[] = [
   placeholder(
     "orchestrator",
@@ -154,12 +237,6 @@ const PLACEHOLDER_PROFILES: AgentProfileDefinition[] = [
     "WhatsApp Agent",
     "WHATSAPP",
     "Recepcionista de entrada no WhatsApp: triagem, Q&A simples, handoff. Placeholder.",
-  ),
-  placeholder(
-    "crm",
-    "CRM Agent",
-    "CRM",
-    "Relacionamento outbound: campanhas, automações, recuperação. Placeholder.",
   ),
   placeholder(
     "ui-ux",
@@ -205,6 +282,7 @@ const PLACEHOLDER_PROFILES: AgentProfileDefinition[] = [
  */
 export const DEFAULT_AGENT_PROFILES: readonly AgentProfileDefinition[] = [
   WAITER_PROFILE,
+  CRM_PROFILE,
   ...PLACEHOLDER_PROFILES,
 ] as const;
 
