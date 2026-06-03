@@ -68,6 +68,11 @@ function getEnvAllowedPhones(): Set<string> {
   return set;
 }
 
+/** Count of distinct authorized operator phones (for the admin status view). */
+export function getAuthorizedSenderCount(): number {
+  return getEnvAllowedPhones().size;
+}
+
 /**
  * Normalize a phone to the same E.164 shape the webhook parser produces
  * ("+5511999990000"). Returns "" when there are no digits.

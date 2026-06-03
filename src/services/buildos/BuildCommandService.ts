@@ -10,6 +10,10 @@
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import {
+  resolveBuildProjectFromMessage,
+  type ProjectResolution,
+} from "./BuildProjectService";
 import type {
   AdminBuildCommandView,
   CreateBuildCommandFromWhatsAppInput,
@@ -18,6 +22,8 @@ import type {
 /** Standard event types for the append-only audit log. */
 export const BUILD_EVENT = {
   RECEIVED: "RECEIVED",
+  PROJECT_RESOLVED: "PROJECT_RESOLVED",
+  PROJECT_UNRESOLVED: "PROJECT_UNRESOLVED",
   CONFIRMATION_SENT: "CONFIRMATION_SENT",
   CONFIRMATION_FAILED: "CONFIRMATION_FAILED",
 } as const;
@@ -48,36 +54,30 @@ export async function logBuildCommandEvent(
 }
 
 /**
- * Resolve the default BuildProject id, or null if none is configured.
- * Priority 1.1 does not parse a project from the command text yet — every
- * command is attributed to the default project (Foocci) when one exists.
- */
-async function resolveDefaultProjectId(): Promise<string | null> {
-  try {
-    const project = await prisma.buildProject.findFirst({
-      where: { isDefault: true, isActive: true },
-      select: { id: true },
-    });
-    return project?.id ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Create a BuildCommand from a WhatsApp message and write the initial RECEIVED
- * event. Caller MUST have already verified authorization. Returns the created
- * command id + resolved project, or null on failure.
+ * Create a BuildCommand from a WhatsApp message, resolve its project
+ * deterministically (Priority 1.2), and write the audit events. Caller MUST have
+ * already verified authorization. Returns the created command id + resolved
+ * project, or null on failure.
+ *
+ * Project resolution is best-effort and NEVER blocks command creation: an
+ * unresolved project still produces a command (projectId null) plus a
+ * PROJECT_UNRESOLVED event. No LLM is used.
  */
 export async function createBuildCommandFromWhatsApp(
   input: CreateBuildCommandFromWhatsAppInput,
 ): Promise<{ id: string; projectId: string | null } | null> {
-  const projectId = await resolveDefaultProjectId();
+  // Deterministic, keyword-based resolution from the RAW message (active-only).
+  let resolution: ProjectResolution = { projectId: null, slug: null, method: "UNRESOLVED" };
+  try {
+    resolution = await resolveBuildProjectFromMessage(input.rawMessage);
+  } catch {
+    // keep UNRESOLVED — never block creation
+  }
 
   try {
     const command = await prisma.buildCommand.create({
       data: {
-        projectId,
+        projectId: resolution.projectId,
         senderPhone: input.senderPhone,
         senderName: input.senderName ?? null,
         sourceChannel: "WHATSAPP",
@@ -94,6 +94,23 @@ export async function createBuildCommandFromWhatsApp(
       prefix: input.prefix,
       senderPhone: input.senderPhone,
     });
+
+    // Audit the project resolution outcome.
+    if (resolution.projectId) {
+      await logBuildCommandEvent(
+        command.id,
+        BUILD_EVENT.PROJECT_RESOLVED,
+        `Projeto resolvido: ${resolution.slug} (${resolution.method}).`,
+        { slug: resolution.slug, method: resolution.method },
+      );
+    } else {
+      await logBuildCommandEvent(
+        command.id,
+        BUILD_EVENT.PROJECT_UNRESOLVED,
+        "Nenhum projeto resolvido — seleção ficará para uma fase posterior.",
+        { method: resolution.method },
+      );
+    }
 
     return { id: command.id, projectId: command.projectId };
   } catch {

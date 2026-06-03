@@ -2258,6 +2258,15 @@ model BuildProject {
   isDefault     Boolean @default(false)
   isActive      Boolean @default(true)
 
+  // ── Priority 1.2: registry metadata (no secrets; GitHub fields are metadata
+  //    only — never tokens). projectRules/promptContext are high-level notes
+  //    used by FUTURE phases; nothing here drives runtime or prompt generation.
+  projectRules Json?   // string[] of high-level rules (no secrets)
+  promptContext String? @db.Text // freeform context block for later prompt phases
+  displayOrder Int     @default(0)
+  category     String? // e.g. "platform", "agency", "experiment"
+  riskNotes    String? @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
