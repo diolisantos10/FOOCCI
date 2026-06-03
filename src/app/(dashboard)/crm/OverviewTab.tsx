@@ -39,6 +39,155 @@ const ACTION_ICON: Record<CrmActionType, string> = {
   SAFETY_ISSUE_ALERT:           "⚠️",
 };
 
+// ── AI Draft Preview (W6 — draft-only, no send) ──────────────────────────────
+
+interface MessagePreview {
+  draftMessage: string | null;
+  alternatives: string[];
+  safetyNotes: string[];
+  usedFacts: string[];
+  missingFacts: string[];
+  blockedReasons: string[];
+  requiresApproval: boolean;
+  generatedBy: string;
+}
+
+function DraftPreviewPanel({ action }: { action: CrmAction }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [preview, setPreview] = useState<MessagePreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const sampleCustomerId = action.linkedCustomerSample[0]?.id;
+
+  async function generate() {
+    setLoading(true);
+    setError(null);
+    setCopied(false);
+    try {
+      const res = await fetch("/api/crm/message-variation/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: sampleCustomerId,
+          actionType: action.type,
+          maxVariants: 3,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setError(json?.error ?? "Não foi possível gerar a mensagem.");
+        return;
+      }
+      setPreview(json.data as MessagePreview);
+    } catch {
+      setError("Erro de conexão ao gerar a mensagem.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleToggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && !preview && !loading) void generate();
+  }
+
+  function copyDraft() {
+    if (!preview?.draftMessage) return;
+    void navigator.clipboard.writeText(preview.draftMessage);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <div className="mt-3 border-t border-gray-100 pt-3">
+      <button
+        onClick={handleToggle}
+        className="text-xs font-semibold text-brand-700 hover:text-brand-800"
+      >
+        {open ? "▾ Ocultar rascunho" : "✨ Gerar mensagem com IA"}
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-2">
+          {loading && (
+            <div className="h-12 animate-pulse rounded-lg bg-gray-100" />
+          )}
+
+          {error && <p className="text-xs text-red-600">{error}</p>}
+
+          {!loading && preview && (
+            <>
+              {preview.blockedReasons.length > 0 ? (
+                <div className="rounded-lg border border-red-100 bg-red-50/50 p-3">
+                  <p className="text-[11px] font-semibold text-red-700 mb-1">
+                    Rascunho não gerado (bloqueado por segurança):
+                  </p>
+                  <ul className="list-disc pl-4 text-[11px] text-red-600">
+                    {preview.blockedReasons.map((r, i) => <li key={i}>{r}</li>)}
+                  </ul>
+                </div>
+              ) : preview.draftMessage ? (
+                <>
+                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="text-xs text-gray-800 whitespace-pre-wrap">{preview.draftMessage}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        onClick={copyDraft}
+                        className="rounded-md border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-50"
+                      >
+                        {copied ? "Copiado!" : "Copiar"}
+                      </button>
+                      <button
+                        onClick={generate}
+                        className="rounded-md border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-50"
+                      >
+                        Gerar outra
+                      </button>
+                      <span className="text-[10px] text-gray-400">
+                        {preview.generatedBy === "llm" ? "Gerado por IA" : "Modelo padrão"} · requer aprovação
+                      </span>
+                    </div>
+                  </div>
+
+                  {preview.alternatives.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Alternativas</p>
+                      {preview.alternatives.map((alt, i) => (
+                        <p key={i} className="rounded-md bg-gray-50 p-2 text-[11px] text-gray-600">{alt}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {preview.usedFacts.length > 0 && (
+                    <p className="text-[10px] text-gray-500">
+                      <span className="font-semibold">Fatos usados:</span> {preview.usedFacts.join(" · ")}
+                    </p>
+                  )}
+                  {preview.missingFacts.length > 0 && (
+                    <p className="text-[10px] text-gray-400">
+                      <span className="font-semibold">Dados ausentes:</span> {preview.missingFacts.join(" · ")}
+                    </p>
+                  )}
+                  {preview.safetyNotes.length > 0 && (
+                    <ul className="list-disc pl-4 text-[10px] text-amber-600">
+                      {preview.safetyNotes.map((n, i) => <li key={i}>{n}</li>)}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-gray-500">Nenhum rascunho disponível.</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ActionCard({
   action,
   onNavigateToTab,
@@ -50,6 +199,7 @@ function ActionCard({
   const icon = ACTION_ICON[action.type];
   const isAlert =
     action.type === "SAFETY_ISSUE_ALERT" || action.type === "CAMPAIGN_PERFORMANCE_ALERT";
+  const canPreview = !isAlert && action.linkedCustomerSample.length > 0;
 
   return (
     <div className={`rounded-xl border p-4 ${ps.border} ${ps.bg}`}>
@@ -112,6 +262,8 @@ function ActionCard({
           )}
         </div>
       </div>
+
+      {canPreview && <DraftPreviewPanel action={action} />}
     </div>
   );
 }
