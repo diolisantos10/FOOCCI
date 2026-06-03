@@ -54,13 +54,17 @@ export async function GET(req: NextRequest) {
 
   // ── Step 2: Resolve customer by phone ─────────────────────────────────────
   const candidates = phoneCandidates(phone);
-  let customer: { id: string; name: string; phone: string | null } | null = null;
-  if (candidates.length > 0) {
-    customer = await prisma.customer.findFirst({
-      where:  { restaurantId: restaurant.id, phone: { in: candidates } },
-      select: { id: true, name: true, phone: true },
-    });
-  }
+  // Fetch ALL matching records (not just the first) so we can surface duplicate
+  // customers split across 9th-digit / formatting variants — the historical
+  // root cause of "WhatsApp customer not recognized".
+  const matches = candidates.length > 0
+    ? await prisma.customer.findMany({
+        where:  { restaurantId: restaurant.id, phone: { in: candidates } },
+        select: { id: true, name: true, phone: true, _count: { select: { orders: true } } },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+  const customer = matches[0] ?? null;
   result.step2_customer = {
     inputPhone:  phone,
     candidates,
@@ -70,6 +74,14 @@ export async function GET(req: NextRequest) {
     customerName: customer?.name  ?? null,
     mismatchNote: customer && customer.phone !== phone
       ? `DB phone "${customer.phone}" differs from input "${phone}" — both are valid candidates`
+      : null,
+    duplicateCount: matches.length,
+    duplicateRecords: matches.length > 1
+      ? matches.map((m) => ({ id: m.id, phone: m.phone, orders: m._count.orders }))
+      : undefined,
+    duplicateWarning: matches.length > 1
+      ? "MULTIPLE customer records match this phone (split by 9th-digit/format). " +
+        "phoneCandidates now unifies them at lookup; consider merging the records."
       : null,
   };
 

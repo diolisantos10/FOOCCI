@@ -25,11 +25,11 @@ describe("wa-token", () => {
   });
 
   it("B: rejects an expired token", () => {
-    const realNow = Date.now;
-    // Sign in the past (8 days ago)
-    vi.spyOn(Date, "now").mockReturnValue(realNow() - 8 * 24 * 60 * 60 * 1000);
+    // Sign far in the past so the 7-day TTL is already exceeded against real now.
+    const past = Date.parse("2020-01-01T00:00:00Z");
+    const spy = vi.spyOn(Date, "now").mockReturnValue(past);
     const token = signWaToken({ phone: "+5511940595223" });
-    vi.spyOn(Date, "now").mockRestore();
+    spy.mockRestore(); // restore the real clock before verifying
     expect(verifyWaToken(token)).toBeNull();
   });
 

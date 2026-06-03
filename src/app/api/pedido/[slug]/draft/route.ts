@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
+import { phoneCandidates } from "@/lib/phone";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -83,14 +84,27 @@ export async function POST(
   }
 
   if (!customerId && phone) {
-    // Strip non-digits for a loose phone match (handles formatting differences)
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length >= 8) {
+    // Match against all plausible normalized variants (E.164, raw, ±9th digit)
+    // so a WhatsApp-origin phone attaches to the existing rich customer record
+    // instead of failing and dropping the draft (the skippedNoPhone root cause).
+    const candidates = phoneCandidates(phone);
+    if (candidates.length > 0) {
       const customer = await prisma.customer.findFirst({
-        where:  { restaurantId, phone: { contains: digits } },
+        where:  { restaurantId, phone: { in: candidates } },
         select: { id: true },
       });
       if (customer) customerId = customer.id;
+    }
+    // Fallback: loose substring match for any legacy format the variants miss.
+    if (!customerId) {
+      const digits = phone.replace(/\D/g, "");
+      if (digits.length >= 8) {
+        const customer = await prisma.customer.findFirst({
+          where:  { restaurantId, phone: { contains: digits } },
+          select: { id: true },
+        });
+        if (customer) customerId = customer.id;
+      }
     }
   }
 

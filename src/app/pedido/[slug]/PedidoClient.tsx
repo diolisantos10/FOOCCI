@@ -16,6 +16,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEven
 import type { WaiterMemory, CheckoutUpsellStage } from "@/services/ai/WaiterBrainV2";
 import type { RepeatOrderPayload } from "@/services/order/RepeatOrderService";
 import { buildWhatsAppUrl, buildInstagramUrl, buildTikTokUrl } from "@/lib/social";
+import { phoneCandidates } from "@/lib/phone";
 
 // ── Order tracking (post-checkout) ────────────────────────────────────────────
 
@@ -1980,21 +1981,34 @@ export function PedidoClient({
     } catch { return null; }
   });
 
+  // A waToken-resolved SSR identity must never be shadowed by a stale anonymous
+  // (or different-customer) identity left in sessionStorage from a prior visit.
+  // Only trust the stored identity when there is no SSR phone, or when the stored
+  // phone resolves to the same number (±9th digit / formatting) as the SSR phone.
+  const trustedStored = (() => {
+    if (!storedCustomer) return null;
+    if (!knownCustomerPhone) return storedCustomer;
+    if (!storedCustomer.phone) return null;
+    const ssr = new Set(phoneCandidates(knownCustomerPhone));
+    const sameNumber = phoneCandidates(storedCustomer.phone).some((c) => ssr.has(c));
+    return sameNumber ? storedCustomer : null;
+  })();
+
   // Effective phone: from server (WhatsApp link) or from session-stored identify response
-  const effectiveCustomerPhone = knownCustomerPhone ?? storedCustomer?.phone ?? null;
+  const effectiveCustomerPhone = knownCustomerPhone ?? trustedStored?.phone ?? null;
   // Effective customerId: from server prop or from session-stored identify response
-  const effectiveCustomerId = knownCustomerId ?? storedCustomer?.customerId ?? undefined;
+  const effectiveCustomerId = knownCustomerId ?? trustedStored?.customerId ?? undefined;
 
   // customerName declared early so enterBrowsing / handlePhoneIdentified can reference its setter
   const [customerName, setCustomerName] = useState(
-    knownCustomerName?.trim().split(/\s+/)[0] ?? storedCustomer?.name ?? "",
+    knownCustomerName?.trim().split(/\s+/)[0] ?? trustedStored?.name ?? "",
   );
 
   // ── Display phone for identity strip ──────────────────────────────
   const [identifiedPhone, setIdentifiedPhone] = useState<string | null>(
     knownCustomerPhone
       ? formatDisplayPhone(knownCustomerPhone)
-      : (storedCustomer?.displayPhone ?? null),
+      : (trustedStored?.displayPhone ?? null),
   );
 
   // ── Entry / identification ─────────────────────────────────────────
@@ -2010,7 +2024,7 @@ export function PedidoClient({
     return "identifying";
   });
   const [identifiedName, setIdentifiedName] = useState<string | null>(
-    knownCustomerName ?? storedCustomer?.name ?? null,
+    knownCustomerName ?? trustedStored?.name ?? null,
   );
   // True when the customer arrived via a WhatsApp link (src=whatsapp in URL).
   // Used to personalise the greeting and skip re-identification prompts.
