@@ -310,6 +310,13 @@ export function BuildOsConfigPanel() {
           <li>• Responda ENVIAR / CANCELAR / AJUSTAR: [correção] / STATUS para conduzir.</li>
           <li>• Não vira conversa de cliente e não aciona Waiter/Claude/GitHub/IA.</li>
         </ul>
+        <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+          A configuração também pode ser inicializada por <strong>script interno seguro</strong> para
+          ambientes de desenvolvimento/admin — sem Railway/UI. Ex.:{" "}
+          <code className="rounded bg-gray-200 px-1">npm run buildos:bootstrap</code>,{" "}
+          <code className="rounded bg-gray-200 px-1">npm run buildos:verify</code> (ver{" "}
+          <code>docs/BUILDOS_BOOTSTRAP.md</code>).
+        </p>
       </div>
     </div>
   );
