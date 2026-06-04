@@ -66,7 +66,15 @@ export interface ExternalOutboundMessageEvent {
   type: "external_outbound_message";
   instanceName: string;
   externalMessageId: string;
-  phone: string;                 // customer's phone (from remoteJid)
+  phone: string;                 // customer's phone (from remoteJid = recipient)
+  /**
+   * The CONNECTED instance's own phone (the operator who sent this fromMe message),
+   * derived from the payload's top-level `sender`/`owner` JID when present. For a
+   * fromMe message, `remoteJid` is the RECIPIENT — this is who actually sent it,
+   * and is the correct operator candidate for Build OS. May be undefined when the
+   * Evolution build omits it.
+   */
+  instanceOwnerPhone?: string;
   messageType: "TEXT" | "IMAGE" | "AUDIO" | "DOCUMENT";
   content: string;
   mediaUrl?: string;
@@ -267,6 +275,10 @@ function parseMessageUpsert(instance: string, raw: Record<string, unknown>): Par
       instanceName: instance,
       externalMessageId,
       phone,              // customer's phone (recipient)
+      // The operator who SENT this — the connected instance's own number. For a
+      // fromMe message remoteJid is the recipient, so we read the sender from the
+      // payload's top-level owner/sender JID instead.
+      instanceOwnerPhone: extractInstanceOwnerPhone(raw, data),
       messageType,
       content,
       mediaUrl,
@@ -345,6 +357,33 @@ function jidToPhone(jid: string): string {
   const numberPart = jid.split("@")[0];
   // Remove the extra 9 that some Brazilian numbers include in JID but not E.164
   return `+${numberPart}`;
+}
+
+/**
+ * For a fromMe message, the SENDER is the connected instance's own WhatsApp
+ * number — NOT `remoteJid` (which is the recipient). Evolution builds expose the
+ * instance's own JID in different places depending on version; we probe the
+ * common ones (top-level `sender`/`owner`, then `data.owner`). Returns an E.164
+ * phone, or undefined when the payload doesn't carry it. Group-only fields like
+ * `participant` are intentionally ignored (DMs only here).
+ */
+function extractInstanceOwnerPhone(
+  raw: Record<string, unknown>,
+  data: Record<string, unknown> | undefined,
+): string | undefined {
+  const candidates = [
+    raw.sender,
+    raw.owner,
+    data?.owner,
+    (raw.instance as Record<string, unknown> | undefined)?.owner,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.includes("@") && !c.endsWith("@g.us")) {
+      const phone = jidToPhone(c);
+      if (phone.length > 6) return phone;
+    }
+  }
+  return undefined;
 }
 
 /**

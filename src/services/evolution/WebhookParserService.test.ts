@@ -104,3 +104,55 @@ describe("WebhookParserService — text extraction across wrappers", () => {
     ).toBe("/build row");
   });
 });
+
+describe("WebhookParserService — fromMe /build operator resolution", () => {
+  function fromMePayload(extra: Record<string, unknown> = {}, text = "/build do checkout") {
+    return {
+      event: "MESSAGES_UPSERT",
+      instance: "sushicazza",
+      // remoteJid here is the RECIPIENT (the customer the operator messaged).
+      data: {
+        key: { id: "OUT1", fromMe: true, remoteJid: "5511955555223@s.whatsapp.net" },
+        message: { conversation: text },
+        messageTimestamp: 1_700_000_000,
+      },
+      ...extra,
+    };
+  }
+
+  it("routes fromMe text as external_outbound_message and extracts the command text", () => {
+    const r = WebhookParserService.parse(fromMePayload({ sender: "5511989400692@s.whatsapp.net" }));
+    if (r.type !== "external_outbound_message") throw new Error("expected external_outbound_message");
+    expect(r.content).toBe("/build do checkout");
+    // phone is the recipient (unchanged behavior for customer-message persistence)
+    expect(r.phone).toBe("+5511955555223");
+  });
+
+  it("resolves the operator from the top-level sender JID (not remoteJid)", () => {
+    const r = WebhookParserService.parse(fromMePayload({ sender: "5511989400692@s.whatsapp.net" }));
+    if (r.type !== "external_outbound_message") throw new Error("expected external_outbound_message");
+    expect(r.instanceOwnerPhone).toBe("+5511989400692");
+    // The operator must NOT be the recipient.
+    expect(r.instanceOwnerPhone).not.toBe(r.phone);
+  });
+
+  it("falls back to data.owner when there is no top-level sender", () => {
+    const p = fromMePayload();
+    (p.data as Record<string, unknown>).owner = "5511989400692@s.whatsapp.net";
+    const r = WebhookParserService.parse(p);
+    if (r.type !== "external_outbound_message") throw new Error("expected external_outbound_message");
+    expect(r.instanceOwnerPhone).toBe("+5511989400692");
+  });
+
+  it("leaves instanceOwnerPhone undefined when the payload omits it", () => {
+    const r = WebhookParserService.parse(fromMePayload());
+    if (r.type !== "external_outbound_message") throw new Error("expected external_outbound_message");
+    expect(r.instanceOwnerPhone).toBeUndefined();
+  });
+
+  it("ignores group JIDs as an owner source", () => {
+    const r = WebhookParserService.parse(fromMePayload({ sender: "120363@g.us" }));
+    if (r.type !== "external_outbound_message") throw new Error("expected external_outbound_message");
+    expect(r.instanceOwnerPhone).toBeUndefined();
+  });
+});

@@ -46,7 +46,8 @@ interface Report {
   recentMessages: Array<{
     createdAt: string; instanceName: string; eventNameRaw: string;
     eventNameNormalized: string | null; accepted: boolean; ignored: boolean;
-    direction: string | null; fromMe: boolean | null; remoteJidMasked: string | null;
+    direction: string | null; fromMe: boolean | null; fromMeNote: string | null;
+    remoteJidMasked: string | null;
     senderMasked: string | null; extractedPhoneMasked: string | null;
     prefixDetected: string | null; buildCommandCandidate: boolean;
     authorized: boolean | null; commandCreated: boolean; shortCircuited: boolean;
@@ -345,21 +346,28 @@ export function BuildOsDiagnosticsPanel() {
                   </thead>
                   <tbody>
                     {report.recentMessages.map((m, i) => (
-                      <tr key={i} className="border-t border-gray-100 align-top">
-                        <td className="py-1">{new Date(m.createdAt).toLocaleTimeString("pt-BR")}</td>
-                        <td className="font-mono">{m.eventNameRaw}</td>
-                        <td className="font-mono">{m.eventNameNormalized ?? "—"}</td>
-                        <td>{m.direction ?? "—"}</td>
-                        <td>{m.fromMe === null ? "—" : String(m.fromMe)}</td>
-                        <td className="font-mono">{m.remoteJidMasked ?? "—"}</td>
-                        <td className="font-mono">{m.extractedPhoneMasked ?? "—"}</td>
-                        <td className={m.prefixDetected ? "font-semibold text-orange-700" : ""}>{m.prefixDetected ?? "—"}</td>
-                        <td>{m.buildCommandCandidate ? "sim" : "não"}</td>
-                        <td>{m.authorized === null ? "—" : String(m.authorized)}</td>
-                        <td>{String(m.commandCreated)}</td>
-                        <td>{m.hasBuildTrace ? "sim" : "não"}</td>
-                        <td className="text-red-600">{m.failureReason ?? "—"}</td>
-                      </tr>
+                      <Fragment key={i}>
+                        <tr className="border-t border-gray-100 align-top">
+                          <td className="py-1">{new Date(m.createdAt).toLocaleTimeString("pt-BR")}</td>
+                          <td className="font-mono">{m.eventNameRaw}</td>
+                          <td className="font-mono">{m.eventNameNormalized ?? "—"}</td>
+                          <td>{m.direction ?? "—"}</td>
+                          <td>{m.fromMe === null ? "—" : String(m.fromMe)}</td>
+                          <td className="font-mono">{m.remoteJidMasked ?? "—"}</td>
+                          <td className="font-mono">{m.extractedPhoneMasked ?? "—"}</td>
+                          <td className={m.prefixDetected ? "font-semibold text-orange-700" : ""}>{m.prefixDetected ?? "—"}</td>
+                          <td>{m.buildCommandCandidate ? "sim" : "não"}</td>
+                          <td>{m.authorized === null ? "—" : String(m.authorized)}</td>
+                          <td>{String(m.commandCreated)}</td>
+                          <td>{m.hasBuildTrace ? "sim" : "não"}</td>
+                          <td className="text-red-600">{m.failureReason ?? "—"}</td>
+                        </tr>
+                        {m.fromMeNote && (
+                          <tr className="bg-amber-50">
+                            <td colSpan={13} className="px-2 py-1 text-[11px] text-amber-700">ℹ️ {m.fromMeNote}</td>
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -492,6 +500,11 @@ export function BuildOsDiagnosticsPanel() {
                             {eligible && !t.canAuthorize && (
                               <span className="text-xs text-gray-500" title="Este trace é anterior ao registro do número; reenvie /build para gerar um trace autorizável.">
                                 Trace antigo — reenvie /build para autorizar
+                              </span>
+                            )}
+                            {t.failureReason === "fromme_operator_unresolved" && (
+                              <span className="text-xs text-amber-600" title="O /build veio da própria instância (fromMe), mas o webhook não trouxe o número conectado do operador. Não dá para autorizar sem identificar o operador.">
+                                Operador da instância não identificado no webhook
                               </span>
                             )}
                           </td>

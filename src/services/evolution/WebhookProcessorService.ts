@@ -299,12 +299,19 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
   // 1b. Build OS command interception for fromMe messages (Priority 1.4.1).
   // Same safety invariant as the inbound branch: a command prefix is ALWAYS
   // suppressed, even if handleBuildCommand throws. Pre-flight is the hard gate.
+  //
+  // CRITICAL for fromMe: `event.phone` is the RECIPIENT (remoteJid), not who
+  // sent the command. The operator is the connected instance's own number
+  // (event.instanceOwnerPhone). We pass that as the candidate operator so the
+  // command is authorized against — and any trace's recoverable rawPhone is —
+  // the operator, never the customer they happened to message.
+  const operatorPhone = event.instanceOwnerPhone ?? "";
   if (event.messageType === "TEXT" && isInternalCommandText(event.content)) {
     try {
       const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
       await handleBuildCommand({
         restaurantId,
-        phone: event.phone,
+        phone: operatorPhone,
         content: event.content,
         fromMe: true,
       });
@@ -318,7 +325,7 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
       const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
       const buildResult = await handleBuildCommand({
         restaurantId,
-        phone: event.phone,
+        phone: operatorPhone,
         content: event.content,
         fromMe: true,
       });

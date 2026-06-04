@@ -19,7 +19,7 @@
  * Priority 1.1: intake + confirmation only. No Claude, no GitHub, no LLM.
  */
 
-import { detectBuildCommand } from "./BuildCommandRouter";
+import { detectBuildCommand, normalizeSenderPhone } from "./BuildCommandRouter";
 import {
   resolveBuildOsEnabled,
   authorizeSender,
@@ -104,6 +104,16 @@ export async function handleBuildCommand(
 
   if (detected) {
     // ── New command path (/build, /cmd, /prompt) ──
+    // fromMe guard: when this command came from the connected number itself, the
+    // operator phone is the instance owner. If the webhook payload didn't carry
+    // it, we CANNOT authorize anyone (we must never fall back to the recipient).
+    // Trace it with a distinct reason so the diagnostic explains the empty button.
+    if (input.fromMe && !normalizeSenderPhone(input.phone)) {
+      diag.shortCircuited = true;
+      diag.failureReason = "fromme_operator_unresolved";
+      logDiag(diag, input.phone);
+      return { isBuildCommand: true };
+    }
     // The message LOOKS like a command, so we intercept it regardless of
     // authorization (a customer can't reach this — prefixes are intentional).
     const auth = await authorizeSender(input.phone);

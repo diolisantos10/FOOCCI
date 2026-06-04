@@ -280,6 +280,13 @@ export async function runBuildOsDiagnostics(opts?: {
         if (delta <= bestDelta) { best = t; bestDelta = delta; }
       }
       const prefixDetected = best?.prefixDetected ?? null;
+      const isFromMe = best?.fromMe ?? (e.direction === "OUTBOUND" ? true : e.direction === "INBOUND" ? false : null);
+      // When a /build is sent FROM the connected instance itself, remoteJid is the
+      // RECIPIENT, not the operator. Make this explicit so a fromMe trace is never
+      // misread as "the customer 5223 tried /build".
+      const fromMeNote = isFromMe
+        ? "Enviada pela própria instância (fromMe=true) — remoteJid é o destinatário, não o operador. O operador é o número conectado da instância."
+        : null;
       return {
         createdAt: e.createdAt.toISOString(),
         instanceName: e.instanceName,
@@ -288,9 +295,10 @@ export async function runBuildOsDiagnostics(opts?: {
         accepted: e.accepted,
         ignored: e.ignored,
         direction: e.direction,                 // INBOUND | OUTBOUND
-        fromMe: best?.fromMe ?? (e.direction === "OUTBOUND" ? true : e.direction === "INBOUND" ? false : null),
-        remoteJidMasked: e.remoteJidMasked,      // already masked
-        senderMasked: best?.maskedPhone ?? null, // masked phone the Build OS path saw
+        fromMe: isFromMe,
+        fromMeNote,
+        remoteJidMasked: e.remoteJidMasked,      // already masked (recipient when fromMe)
+        senderMasked: best?.maskedPhone ?? null, // masked OPERATOR phone the Build OS path saw
         extractedPhoneMasked: best?.maskedPhone ?? null,
         prefixDetected,                          // "/build" | "/cmd" | "/prompt" | null
         buildCommandCandidate: !!prefixDetected, // a Build OS command was recognized
