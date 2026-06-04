@@ -1030,7 +1030,7 @@ export function AtendimentoClient({
                               {conv.customer?.name ?? conv.customerName ?? "Desconhecido"}
                             </span>
                             <span className="shrink-0 text-[10px] text-gray-400">
-                              {fmtTime(conv.lastMessageAt)}
+                              {fmtTime(conv.lastMessageAt ?? conv.createdAt)}
                             </span>
                           </div>
 
