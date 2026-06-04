@@ -164,6 +164,33 @@ interface OperationalEfficiencyReport {
   hasData:     boolean;
 }
 
+// ─── W3 Conversational Agent types ───────────────────────────────────────────
+
+interface AgentMetric {
+  label: string;
+  value: string | number;
+  unit?: string;
+}
+
+type AnalyticsIntent =
+  | "SALES_OVERVIEW" | "REVENUE_DROP_DIAGNOSIS" | "PRODUCT_PERFORMANCE"
+  | "CUSTOMER_RETENTION" | "OPERATIONAL_EFFICIENCY" | "CAMPAIGN_PERFORMANCE"
+  | "COUPON_ATTRIBUTION" | "UPSELL_PERFORMANCE" | "CART_RECOVERY"
+  | "REVIEW_PERFORMANCE" | "ACTION_RECOMMENDATION" | "UNKNOWN_UNSUPPORTED";
+
+interface AnalyticsAgentAnswer {
+  answer:             string;
+  summary:            string;
+  intent:             AnalyticsIntent;
+  confidence:         "LOW" | "MEDIUM" | "HIGH";
+  dataSourcesUsed:    string[];
+  metrics:            AgentMetric[];
+  findings:           string[];
+  recommendedActions: string[];
+  limitations:        string[];
+  followUpQuestions:  string[];
+}
+
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
 function toISO(d: Date) {
@@ -209,6 +236,7 @@ function presetRange(preset: Preset): { from: string; to: string } {
 
 const TABS = [
   { id: "visao-geral",  label: "Visão Geral"        },
+  { id: "analista",     label: "Analista"            },
   { id: "produtos",     label: "Produtos"            },
   { id: "categorias",   label: "Categorias"          },
   { id: "clientes",     label: "Clientes"            },
@@ -2446,6 +2474,236 @@ function TabHistorico({ data, loading }: { data: AnalyticsOverview | null; loadi
   return <ImportedBaselineSection baseline={data.importedBaseline} />;
 }
 
+// ─── Tab: Analista (W3 — Conversational Analytics) ───────────────────────────
+
+const QUICK_PROMPTS = [
+  "Por que as vendas caíram?",
+  "Quais produtos mais venderam?",
+  "Os clientes estão voltando?",
+  "Como está a operação?",
+  "O que devo fazer hoje?",
+];
+
+const INTENT_LABELS: Record<AnalyticsIntent, string> = {
+  SALES_OVERVIEW:          "Visão de vendas",
+  REVENUE_DROP_DIAGNOSIS:  "Diagnóstico de queda",
+  PRODUCT_PERFORMANCE:     "Desempenho de produtos",
+  CUSTOMER_RETENTION:      "Retenção de clientes",
+  OPERATIONAL_EFFICIENCY:  "Eficiência operacional",
+  CAMPAIGN_PERFORMANCE:    "Performance de campanhas",
+  COUPON_ATTRIBUTION:      "Atribuição de cupons",
+  UPSELL_PERFORMANCE:      "Upsell / Attach",
+  CART_RECOVERY:           "Recuperação de carrinho",
+  REVIEW_PERFORMANCE:      "Avaliações",
+  ACTION_RECOMMENDATION:   "Recomendações de ação",
+  UNKNOWN_UNSUPPORTED:     "Pergunta não reconhecida",
+};
+
+const CONFIDENCE_CONFIG: Record<"LOW" | "MEDIUM" | "HIGH", { label: string; cls: string }> = {
+  HIGH:   { label: "Alta confiança",   cls: "bg-green-100 text-green-700"  },
+  MEDIUM: { label: "Média confiança",  cls: "bg-yellow-100 text-yellow-700" },
+  LOW:    { label: "Baixa confiança",  cls: "bg-gray-100 text-gray-600"    },
+};
+
+function TabAnalista({ from, to }: { from: string; to: string }) {
+  const [question,  setQuestion]  = useState("");
+  const [loading,   setLoading]   = useState(false);
+  const [answer,    setAnswer]    = useState<AnalyticsAgentAnswer | null>(null);
+  const [error,     setError]     = useState("");
+  const [showRaw,   setShowRaw]   = useState(false);
+
+  async function ask(q: string) {
+    if (!q.trim() || loading) return;
+    setLoading(true);
+    setError("");
+    setAnswer(null);
+    try {
+      const res = await fetch("/api/analytics/agent", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ question: q.trim(), from, to }),
+      });
+      const json = await res.json() as { data?: AnalyticsAgentAnswer; error?: string };
+      if (!res.ok || json.error) {
+        setError(json.error ?? "Erro ao processar pergunta.");
+      } else {
+        setAnswer(json.data ?? null);
+      }
+    } catch {
+      setError("Falha de rede. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const conf = answer ? CONFIDENCE_CONFIG[answer.confidence] : null;
+
+  return (
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-5 py-4">
+        <p className="text-sm font-semibold text-indigo-800">Analista de Dados</p>
+        <p className="mt-0.5 text-xs text-indigo-600">
+          Faça uma pergunta sobre o seu negócio. As respostas são baseadas nos dados reais do período selecionado — sem invenções.
+        </p>
+      </div>
+
+      {/* ── Quick prompts ── */}
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Perguntas rápidas</p>
+        <div className="flex flex-wrap gap-2">
+          {QUICK_PROMPTS.map((q) => (
+            <button
+              key={q}
+              type="button"
+              disabled={loading}
+              onClick={() => { setQuestion(q); void ask(q); }}
+              className="rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 transition-colors"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Input ── */}
+      <div className="flex gap-2">
+        <input
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") void ask(question); }}
+          placeholder="Digite sua pergunta sobre o negócio…"
+          disabled={loading}
+          className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60"
+        />
+        <button
+          type="button"
+          disabled={loading || !question.trim()}
+          onClick={() => void ask(question)}
+          className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+        >
+          {loading ? (
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          ) : "Perguntar"}
+        </button>
+      </div>
+
+      {/* ── Error ── */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* ── Answer card ── */}
+      {answer && (
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm divide-y divide-gray-100">
+
+          {/* Intent + confidence header */}
+          <div className="flex flex-wrap items-center gap-2 px-5 py-3">
+            <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
+              {INTENT_LABELS[answer.intent] ?? answer.intent}
+            </span>
+            {conf && (
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${conf.cls}`}>
+                {conf.label}
+              </span>
+            )}
+            {answer.dataSourcesUsed.length > 0 && (
+              <span className="ml-auto text-[10px] text-gray-400">
+                Fontes: {answer.dataSourcesUsed.join(", ")}
+              </span>
+            )}
+          </div>
+
+          {/* Answer text */}
+          <div className="px-5 py-4">
+            <p className="text-sm leading-relaxed text-gray-800 whitespace-pre-line">{answer.answer}</p>
+          </div>
+
+          {/* Metrics */}
+          {answer.metrics.length > 0 && (
+            <div className="px-5 py-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Métricas</p>
+              <div className="flex flex-wrap gap-3">
+                {answer.metrics.map((m, i) => (
+                  <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                    <p className="text-[10px] text-gray-500">{m.label}</p>
+                    <p className="text-sm font-semibold text-gray-800">{String(m.value)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recommended actions */}
+          {answer.recommendedActions.length > 0 && (
+            <div className="px-5 py-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Ações recomendadas</p>
+              <ul className="space-y-1.5">
+                {answer.recommendedActions.map((a, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600">{i + 1}</span>
+                    {a}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Limitations */}
+          {answer.limitations.length > 0 && (
+            <div className="px-5 py-3 bg-amber-50/60">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-600">Limitações dos dados</p>
+              <ul className="space-y-1">
+                {answer.limitations.map((l, i) => (
+                  <li key={i} className="text-xs text-amber-700">• {l}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Follow-up questions */}
+          {answer.followUpQuestions.length > 0 && (
+            <div className="px-5 py-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Perguntas de continuidade</p>
+              <div className="flex flex-wrap gap-2">
+                {answer.followUpQuestions.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => { setQuestion(q); void ask(q); }}
+                    className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Raw data toggle (debug) */}
+          <div className="px-5 py-2">
+            <button
+              type="button"
+              onClick={() => setShowRaw((v) => !v)}
+              className="text-[10px] text-gray-400 hover:text-gray-600"
+            >
+              {showRaw ? "Ocultar detalhes técnicos" : "Ver detalhes técnicos"}
+            </button>
+            {showRaw && (
+              <pre className="mt-2 overflow-x-auto rounded-lg bg-gray-50 p-3 text-[10px] text-gray-500">
+                {JSON.stringify({ intent: answer.intent, confidence: answer.confidence, dataSourcesUsed: answer.dataSourcesUsed, findings: answer.findings }, null, 2)}
+              </pre>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: string }) {
@@ -2642,6 +2900,9 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
 
       {/* ── 3. Tab content ── */}
       <div className="mt-6">
+        {activeTab === "analista" && (
+          <TabAnalista from={from} to={to} />
+        )}
         {activeTab === "visao-geral" && (
           <TabVisaoGeral
             data={data}

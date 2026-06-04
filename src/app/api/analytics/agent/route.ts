@@ -1,17 +1,19 @@
 /**
- * GET /api/analytics/agent?from=YYYY-MM-DD&to=YYYY-MM-DD
+ * GET  /api/analytics/agent?from=YYYY-MM-DD&to=YYYY-MM-DD
+ *   → AgentReport (executive summary, typed insights, period comparison)
  *
- * Returns the Analytics Agent report: executive summary, typed insights,
- * and period-over-period comparison.
+ * POST /api/analytics/agent
+ *   Body: { question, from?, to?, period?, includeRawData? }
+ *   → AnalyticsAgentAnswer (W3 conversational analytics)
  *
- * Uses the same date parsing as /api/analytics/overview (BRT midnight).
- * Previous period = same duration shifted back by the same number of days.
+ * Both routes are read-only, tenant-scoped, no side effects.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { AnalyticsService } from "@/services/analytics/AnalyticsService";
 import { AnalyticsInsightService } from "@/services/analytics/AnalyticsInsightService";
+import { answerQuestion } from "@/services/analytics/AnalyticsAgentService";
 import { prisma } from "@/lib/prisma";
 
 function parseDateBR(iso: string): Date {
@@ -69,6 +71,45 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     console.error("[GET /api/analytics/agent]", err);
     return NextResponse.json({ error: "Erro ao gerar análise" }, { status: 500 });
+  }
+}
+
+// ─── POST — W3 Conversational Analytics ─────────────────────────────────────
+
+export async function POST(req: NextRequest) {
+  const ctx = getTenantContext(req);
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  let body: { question?: string; from?: string; to?: string; period?: string; includeRawData?: boolean };
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    return NextResponse.json({ error: "Body JSON inválido" }, { status: 400 });
+  }
+
+  const question = (body.question ?? "").trim();
+  if (!question) {
+    return NextResponse.json({ error: "Campo 'question' é obrigatório" }, { status: 400 });
+  }
+
+  try {
+    const from = body.from ? parseDateBR(body.from) : undefined;
+    const to   = body.to   ? parseDateBR(body.to)   : undefined;
+
+    const answer = await answerQuestion({
+      restaurantId:   ctx.restaurantId,
+      question,
+      from,
+      to,
+      period:         body.period,
+      locale:         "pt-BR",
+      includeRawData: body.includeRawData ?? false,
+    });
+
+    return NextResponse.json({ data: answer });
+  } catch (err) {
+    console.error("[POST /api/analytics/agent]", err);
+    return NextResponse.json({ error: "Erro ao processar pergunta" }, { status: 500 });
   }
 }
 
