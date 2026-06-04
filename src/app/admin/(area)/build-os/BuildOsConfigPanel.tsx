@@ -801,7 +801,7 @@ function MasterChannelCard() {
           {syncBusy ? "Sincronizando…" : "Sincronizar webhook"}
         </button>
         <button type="button" onClick={loadQr} disabled={checkBusy || syncBusy || qrBusy || credsMissing} className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40">
-          {qrBusy ? "Gerando QR…" : "Conectar Canal Admin (QR)"}
+          {qrBusy ? "Preparando…" : "Preparar/Conectar Canal Admin"}
         </button>
       </div>
 
@@ -813,8 +813,8 @@ function MasterChannelCard() {
           ) : qr.base64 ? (
             <div className="flex flex-col items-start gap-2">
               <p className="text-gray-700">
-                Escaneie com o WhatsApp do <strong>número receptor do Futi Admin</strong> (Aparelhos conectados →
-                Conectar aparelho). É um número interno do Admin — <strong>não</strong> é WhatsApp de restaurante.
+                {qr.note ?? "Escaneie com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados → Conectar aparelho)."}{" "}
+                É um número interno do Admin — <strong>não</strong> é WhatsApp de restaurante.
               </p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qr.base64} alt="QR Code do Canal Admin" className="h-56 w-56 rounded bg-white p-2" />

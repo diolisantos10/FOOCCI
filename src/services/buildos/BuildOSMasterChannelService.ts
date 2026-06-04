@@ -10,7 +10,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { EvolutionClient, EvolutionApiError, type EvolutionConfigSnapshot } from "@/lib/evolution/EvolutionClient";
 import { getExpectedEvolutionWebhookUrl } from "@/lib/public-url";
 import { countActiveDbSenders } from "./BuildOSConfigService";
 import {
@@ -256,51 +256,119 @@ export interface MasterQrResult {
   error?: string;
   instanceName?: string;
   connected?: boolean;
+  /** True when the instance was just created on the Evolution server. */
+  created?: boolean;
   base64?: string | null;
   pairingCode?: string | null;
   state?: string | null;
   note?: string;
 }
 
-/** QR / pairing to connect the ADMIN number — admin snapshot only, no restaurant. */
+/** Canonical webhook URL with the admin token appended server-side (never returned). */
+function adminWebhookUrl(snapshot: EvolutionConfigSnapshot): string {
+  const base = getExpectedEvolutionWebhookUrl();
+  if (!snapshot.webhookSecret) return base;
+  const u = new URL(base);
+  u.searchParams.set("token", snapshot.webhookSecret);
+  return u.toString();
+}
+
+/**
+ * Ensure the Admin instance EXISTS on the Evolution server. The 404 on
+ * /instance/connect comes from the instance never having been created (we only
+ * stored DB config). Mirrors the restaurant provisioning (POST /instance/create)
+ * but with the admin snapshot — no restaurant context.
+ *
+ * Returns { existed, created, connected } or throws EvolutionApiError on a real
+ * Evolution failure (translated by the caller).
+ */
+async function ensureAdminInstance(
+  snapshot: EvolutionConfigSnapshot,
+): Promise<{ existed: boolean; created: boolean; connected: boolean }> {
+  // 1. Does it already exist? connectionState 404 = not found.
+  try {
+    const status = await EvolutionClient.getInstanceStatus(snapshot);
+    return { existed: true, created: false, connected: status.state === "open" };
+  } catch (err) {
+    if (!(err instanceof EvolutionApiError) || err.status !== 404) throw err;
+    // 404 → instance does not exist yet → create it below.
+  }
+
+  // 2. Create it (same contract the restaurant flow uses).
+  await EvolutionClient.createInstance(snapshot, {
+    instanceName: snapshot.instanceName,
+    integration: "WHATSAPP-BAILEYS",
+    webhookUrl: adminWebhookUrl(snapshot),
+    webhookByEvents: false,
+    webhookEvents: WEBHOOK_EVENTS,
+    webhookSecret: snapshot.webhookSecret,
+  });
+  return { existed: false, created: true, connected: false };
+}
+
+/** Friendly translation of Evolution errors — never surfaces a raw "HTTP 404". */
+export function friendlyEvolutionError(err: unknown, instanceName: string): string {
+  if (err instanceof EvolutionApiError) {
+    if (err.status === 404) return `A instância "${instanceName}" ainda não existe na Evolution (e não foi possível criá-la automaticamente). Verifique a apiKey/baseUrl do servidor Evolution.`;
+    if (err.status === 401 || err.status === 403) return "apiKey/token da Evolution sem permissão (401/403). Verifique a credencial do servidor Evolution.";
+    return `Evolution respondeu HTTP ${err.status} ao preparar o Canal Admin. Verifique baseUrl/apiKey e a versão da Evolution.`;
+  }
+  const msg = err instanceof Error ? err.message.slice(0, 160) : String(err).slice(0, 160);
+  return `Falha ao preparar/conectar o Canal Admin: ${msg}`;
+}
+
+/**
+ * Prepare + connect the Admin number: ensure the instance exists (create if
+ * missing), then return QR / pairing — admin snapshot only, no restaurant. Never
+ * surfaces a raw HTTP 404.
+ */
 export async function getMasterChannelQr(): Promise<MasterQrResult> {
-  const snapshot = await getAdminWhatsAppSnapshot();
+  const snapshot = await getAdminWhatsAppSnapshot(true);
   if (!snapshot) {
     return { ok: false, error: "Credenciais Evolution do Canal Admin não configuradas. Configure baseUrl + apiKey + instanceName primeiro." };
   }
 
+  // 1. Ensure the instance exists (the real cause of the 404).
+  let prep: { existed: boolean; created: boolean; connected: boolean };
   try {
-    const status = await EvolutionClient.getInstanceStatus(snapshot);
-    if (status.state === "open") {
-      return { ok: true, instanceName: snapshot.instanceName, connected: true, state: "open", note: "Canal Admin já conectado." };
-    }
-  } catch { /* fall through */ }
+    prep = await ensureAdminInstance(snapshot);
+  } catch (err) {
+    return { ok: false, instanceName: snapshot.instanceName, error: friendlyEvolutionError(err, snapshot.instanceName) };
+  }
 
+  if (prep.connected) {
+    return { ok: true, instanceName: snapshot.instanceName, connected: true, created: prep.created, state: "open", note: "Canal Admin já conectado." };
+  }
+
+  // 2. Now that it exists, fetch the QR / pairing code.
   try {
     const qr = await EvolutionClient.getQRCode(snapshot);
     if (qr.instanceState === "open") {
-      return { ok: true, instanceName: snapshot.instanceName, connected: true, state: "open", note: "Canal Admin já conectado." };
+      return { ok: true, instanceName: snapshot.instanceName, connected: true, created: prep.created, state: "open", note: "Canal Admin já conectado." };
     }
     if (qr.base64 || qr.pairingCode) {
       return {
         ok: true,
         instanceName: snapshot.instanceName,
         connected: false,
+        created: prep.created,
         base64: qr.base64,
         pairingCode: qr.pairingCode,
         state: qr.instanceState ?? null,
-        note: "Escaneie o QR com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados).",
+        note: prep.created
+          ? "Instância futi-admin criada. Escaneie o QR com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados)."
+          : "Escaneie o QR com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados).",
       };
     }
     return {
       ok: false,
       instanceName: snapshot.instanceName,
+      created: prep.created,
       error: qr.countOnly
-        ? "A Evolution está gerando um novo QR — tente novamente em alguns segundos."
-        : "Não foi possível obter o QR do Canal Admin agora.",
+        ? "A Evolution está gerando o QR — clique novamente em alguns segundos."
+        : "Instância pronta, mas a Evolution não retornou o QR agora. Tente novamente em instantes.",
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200);
-    return { ok: false, instanceName: snapshot.instanceName, error: `Falha ao obter QR: ${msg}` };
+    return { ok: false, instanceName: snapshot.instanceName, created: prep.created, error: friendlyEvolutionError(err, snapshot.instanceName) };
   }
 }
