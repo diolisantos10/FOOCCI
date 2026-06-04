@@ -38,7 +38,8 @@ async function bounded<T>(p: Promise<T>, fallback: T): Promise<T> {
 function maskNumber(raw: unknown): string | null {
   const digits = String(raw ?? "").replace(/\D/g, "");
   if (digits.length < 6) return null;
-  return `+${digits.slice(0, 3)}***${digits.slice(-4)}`;
+  const e164 = `+${digits}`;
+  return `${e164.slice(0, 3)}***${e164.slice(-4)}`;
 }
 
 /** Pull the matching instance entry from a fetchInstances() result (v1 + v2 shapes). */
