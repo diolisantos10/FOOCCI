@@ -144,6 +144,15 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     }
   }
 
+  // Master-channel isolation: the Build OS Master instance is an INTERNAL admin
+  // channel. No message on it may reach the restaurant customer flow (Customer,
+  // Conversation, Waiter, CRM, Atendimento). Anything that wasn't a Build OS
+  // command/reply above is simply ignored here — never persisted as a customer
+  // message. Restaurant instances are unaffected.
+  if (channel.isBuildOsChannel) {
+    return { handled: true, action: "buildos_master_non_command_ignored", detail: event.externalMessageId };
+  }
+
   // 2. Idempotency: reject duplicates early
   const existing = await prisma.message.findUnique({
     where: { externalMessageId: event.externalMessageId },
@@ -364,6 +373,12 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
     } catch (err) {
       console.error("[WebhookProcessor] Build OS (fromMe) reply branch error (ignored):", err);
     }
+  }
+
+  // Master-channel isolation (fromMe): never persist an outbound on the internal
+  // Build OS channel into a restaurant conversation.
+  if (channel.isBuildOsChannel) {
+    return { handled: true, action: "buildos_master_non_command_ignored", detail: event.externalMessageId };
   }
 
   // 2. Dedup: if Foocci already saved this message (via MessageService), skip it

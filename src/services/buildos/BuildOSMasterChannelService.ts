@@ -201,3 +201,77 @@ export async function syncMasterWebhook(): Promise<MasterSyncResult> {
       : "Webhook configurado, mas MESSAGES_UPSERT não apareceu na releitura — verifique a versão da Evolution.",
   };
 }
+
+export interface MasterQrResult {
+  ok: boolean;
+  error?: string;
+  instanceName?: string;
+  /** True when the Master instance is already connected (no QR needed). */
+  connected?: boolean;
+  base64?: string | null;       // data:image/png;... QR image
+  pairingCode?: string | null;  // 8-digit pairing code (alternative to QR)
+  state?: string | null;
+  note?: string;
+}
+
+/**
+ * Fetch the QR / pairing code to connect the Build OS MASTER number — admin-only,
+ * by instanceName, with NO restaurant context. Reuses the restaurant-agnostic
+ * EvolutionClient.getQRCode/getInstanceStatus. Requires that the Master instance
+ * already exists as an Evolution config (creds live there); otherwise returns an
+ * honest "instance not configured" — we never fall back to a restaurant screen.
+ */
+export async function getMasterChannelQr(): Promise<MasterQrResult> {
+  const ch = await getBuildOsChannel();
+  if (!ch.instanceName) {
+    return { ok: false, error: "Defina e salve o instanceName do Canal Master primeiro." };
+  }
+
+  const snapResult = await EvolutionConfigService.getSnapshotByInstanceName(ch.instanceName, false);
+  if (!snapResult.ok) {
+    return {
+      ok: false,
+      instanceName: ch.instanceName,
+      error: `A instância "${ch.instanceName}" ainda não existe na Evolution (sem credenciais). Selecione uma instância existente no seletor, ou conecte uma instância dedicada do Futi Admin. NÃO use a integração do restaurante.`,
+    };
+  }
+  const snapshot = snapResult.data;
+
+  // Already connected? No QR needed.
+  try {
+    const status = await EvolutionClient.getInstanceStatus(snapshot);
+    if (status.state === "open") {
+      return { ok: true, instanceName: ch.instanceName, connected: true, state: "open", note: "Canal Master já conectado." };
+    }
+  } catch {
+    /* fall through to QR attempt */
+  }
+
+  try {
+    const qr = await EvolutionClient.getQRCode(snapshot);
+    if (qr.instanceState === "open") {
+      return { ok: true, instanceName: ch.instanceName, connected: true, state: "open", note: "Canal Master já conectado." };
+    }
+    if (qr.base64 || qr.pairingCode) {
+      return {
+        ok: true,
+        instanceName: ch.instanceName,
+        connected: false,
+        base64: qr.base64,
+        pairingCode: qr.pairingCode,
+        state: qr.instanceState ?? null,
+        note: "Escaneie o QR Code com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados).",
+      };
+    }
+    return {
+      ok: false,
+      instanceName: ch.instanceName,
+      error: qr.countOnly
+        ? "A Evolution está gerando um novo QR — tente novamente em alguns segundos."
+        : "Não foi possível obter o QR da instância Master agora.",
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200);
+    return { ok: false, instanceName: ch.instanceName, error: `Falha ao obter QR: ${msg}` };
+  }
+}

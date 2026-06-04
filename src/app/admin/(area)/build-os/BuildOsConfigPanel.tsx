@@ -629,9 +629,21 @@ function MasterChannelCard({
   const [status, setStatus] = useState<MasterStatus | null>(null);
   const [checkBusy, setCheckBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [qrBusy, setQrBusy] = useState(false);
+  const [qr, setQr] = useState<{ connected?: boolean; base64?: string | null; pairingCode?: string | null; note?: string } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { setInstanceName(channel.instanceName ?? ""); }, [channel.instanceName]);
+
+  async function loadQr() {
+    setQrBusy(true); setErr(null); setMsg(null); setQr(null);
+    try {
+      const res = await fetch("/api/admin/build-os/master-channel/qr");
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao gerar QR."); return; }
+      setQr(d.result);
+    } finally { setQrBusy(false); }
+  }
 
   // Load status once on mount so the instance dropdown + checklist are populated
   // without the user having to click "Verificar conexão" first.
@@ -761,16 +773,42 @@ function MasterChannelCard({
         >
           {syncBusy ? "Sincronizando…" : "Sincronizar webhook"}
         </button>
-        <a
-          href="/integracoes/whatsapp"
-          className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-100"
+        <button
+          type="button"
+          onClick={loadQr}
+          disabled={checkBusy || syncBusy || qrBusy}
+          className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40"
         >
-          Conectar instância (QR) →
-        </a>
+          {qrBusy ? "Gerando QR…" : "Conectar Canal Master (QR)"}
+        </button>
       </div>
       <p className="mt-1 text-[11px] text-gray-400">
-        &quot;Conectar instância (QR)&quot; abre a tela de conexão WhatsApp para criar/conectar a instância via QR Code.
+        &quot;Conectar Canal Master (QR)&quot; gera o QR Code para conectar o número receptor do <strong>Futi Admin</strong> —
+        aqui mesmo, sem abrir a integração do restaurante.
       </p>
+
+      {/* QR / pairing for the Master number — Build OS context only */}
+      {qr && (
+        <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50 p-3 text-xs">
+          {qr.connected ? (
+            <p className="font-semibold text-green-700">✅ Canal Master já conectado.</p>
+          ) : qr.base64 ? (
+            <div className="flex flex-col items-start gap-2">
+              <p className="text-gray-700">
+                Escaneie com o WhatsApp do <strong>número receptor do Futi Admin</strong> (Aparelhos conectados →
+                Conectar aparelho). Este número é interno do Admin — <strong>não</strong> é WhatsApp de restaurante.
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qr.base64} alt="QR Code do Canal Master" className="h-56 w-56 rounded bg-white p-2" />
+              {qr.pairingCode && <p className="font-mono text-sm">Código: {qr.pairingCode}</p>}
+            </div>
+          ) : qr.pairingCode ? (
+            <p>Código de pareamento: <span className="font-mono text-sm font-semibold">{qr.pairingCode}</span></p>
+          ) : (
+            <p className="text-gray-600">{qr.note ?? "QR indisponível."}</p>
+          )}
+        </div>
+      )}
 
       {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>}
       {msg && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">{msg}</p>}
@@ -784,13 +822,11 @@ function MasterChannelCard({
             <div className="text-xs text-red-700">
               <p className="font-semibold">Canal Master configurado, mas instância &quot;{status.instanceName}&quot; não encontrada na Evolution.</p>
               <p className="mt-1 text-gray-600">
-                Próximo passo: escolha uma instância existente no seletor acima, OU clique em &quot;Conectar instância (QR)&quot;
-                para criar/conectar uma instância com este nome via QR Code. Depois volte e clique em &quot;Verificar conexão&quot;.
-                Não use instâncias de restaurante como Build OS.
+                Próximo passo: escolha uma instância <strong>existente</strong> no seletor acima (ela já tem credenciais
+                Evolution) e clique em &quot;Conectar Canal Master (QR)&quot; aqui mesmo. Uma instância dedicada totalmente nova
+                (sem credenciais) ainda não pode ser criada por esta tela — <strong>não</strong> use a integração do
+                restaurante. Depois volte e clique em &quot;Verificar conexão&quot;.
               </p>
-              <a href="/integracoes/whatsapp" className="mt-1 inline-block rounded-lg bg-orange-500 px-3 py-1.5 font-semibold text-white hover:bg-orange-600">
-                Conectar instância (QR) →
-              </a>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-gray-700 sm:grid-cols-2">
