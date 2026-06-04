@@ -72,7 +72,7 @@ interface Report {
   webhookReceivedRealBuild: boolean;
   lastWebhookAt: string | null;
   recentWebhookTraces: Array<{
-    id: string; traceId: string; maskedPhone: string | null; prefixDetected: string | null;
+    id: string; traceId: string; canAuthorize: boolean; maskedPhone: string | null; prefixDetected: string | null;
     configEnabled: boolean | null; authorized: boolean | null; fromMe: boolean | null;
     commandCreated: boolean; responseSent: boolean; shortCircuited: boolean;
     failureReason: string | null; createdAt: string;
@@ -481,13 +481,18 @@ export function BuildOsDiagnosticsPanel() {
                           <td className="text-red-600">{t.failureReason ?? "—"}</td>
                           <td>{new Date(t.createdAt).toLocaleString("pt-BR")}</td>
                           <td>
-                            {eligible && !formOpen && (
+                            {eligible && !formOpen && t.canAuthorize && (
                               <button
                                 onClick={() => openAuthForm(t.traceId)}
                                 className="rounded-md bg-orange-600 px-2 py-1 text-xs font-semibold text-white hover:bg-orange-700"
                               >
                                 Autorizar
                               </button>
+                            )}
+                            {eligible && !t.canAuthorize && (
+                              <span className="text-xs text-gray-500" title="Este trace é anterior ao registro do número; reenvie /build para gerar um trace autorizável.">
+                                Trace antigo — reenvie /build para autorizar
+                              </span>
                             )}
                           </td>
                         </tr>

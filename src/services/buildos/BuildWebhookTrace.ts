@@ -59,6 +59,13 @@ export interface WebhookTraceView {
   id: string;
   /** Full trace id — the ONLY token the admin "Autorizar" action sends back. */
   traceId: string;
+  /**
+   * True when this trace stored a recoverable full phone server-side, so the
+   * "Autorizar" action can work. Old traces (created before the rawPhone column)
+   * are false → the UI shows "reenvie /build" instead of a dead button. This is a
+   * boolean ONLY — the phone itself is never exposed.
+   */
+  canAuthorize: boolean;
   maskedPhone: string | null;
   prefixDetected: string | null;
   configEnabled: boolean | null;
@@ -83,6 +90,8 @@ export async function getRecentWebhookTraces(limit = 10): Promise<WebhookTraceVi
     return rows.map((r) => ({
       id: r.id.slice(-6).toUpperCase(),
       traceId: r.id,
+      // Boolean only — never the phone. Derived from whether a full number is stored.
+      canAuthorize: !!r.rawPhone,
       maskedPhone: r.maskedPhone,
       prefixDetected: r.prefixDetected,
       configEnabled: r.configEnabled,
