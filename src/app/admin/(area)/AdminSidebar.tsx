@@ -21,6 +21,7 @@ export function AdminSidebar() {
     { href: "/admin/restaurants",                          label: "Restaurantes", icon: "🏪" },
     { href: "/admin/agents",                               label: "Agentes",      icon: "🤖" },
     { href: "/admin/build-os",                             label: "Build OS",     icon: "🛠️" },
+    { href: "/integracoes/whatsapp",                       label: "WhatsApp (conexão)", icon: "📱" },
     { href: "/admin/preflight",                            label: "Pré-piloto",   icon: "✅" },
     { href: "/admin/manual-operacional",                   label: "Manual",       icon: "📖" },
     { href: "/admin/diagnostics/restaurant-mismatch",      label: "Diagnóstico",  icon: "🔍" },

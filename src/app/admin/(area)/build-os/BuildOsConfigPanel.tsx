@@ -601,6 +601,7 @@ interface MasterStatus {
     lastEventReceived: boolean;
     allReady: boolean;
   };
+  availableInstances: Array<{ instanceName: string; restaurant: string | null }>;
 }
 
 function ChecklistRow({ ok, label, hint }: { ok: boolean; label: string; hint?: string }) {
@@ -631,6 +632,20 @@ function MasterChannelCard({
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { setInstanceName(channel.instanceName ?? ""); }, [channel.instanceName]);
+
+  // Load status once on mount so the instance dropdown + checklist are populated
+  // without the user having to click "Verificar conexão" first.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/build-os/master-channel");
+        const d = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok && d.ok) setStatus(d.status as MasterStatus);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   async function verify() {
     setCheckBusy(true); setErr(null); setMsg(null);
@@ -670,6 +685,22 @@ function MasterChannelCard({
       )}
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
+        {status && status.availableInstances.length > 0 && (
+          <Field label="Usar uma instância existente">
+            <select
+              className={INPUT + " w-56"}
+              value={status.availableInstances.some((i) => i.instanceName === instanceName) ? instanceName : ""}
+              onChange={(e) => { if (e.target.value) setInstanceName(e.target.value); }}
+            >
+              <option value="">— escolher —</option>
+              {status.availableInstances.map((i) => (
+                <option key={i.instanceName} value={i.instanceName}>
+                  {i.instanceName}{i.restaurant ? ` (${i.restaurant})` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label="Nome da instância (Evolution) do Build OS">
           <input
             className={INPUT + " w-64"}
@@ -730,7 +761,16 @@ function MasterChannelCard({
         >
           {syncBusy ? "Sincronizando…" : "Sincronizar webhook"}
         </button>
+        <a
+          href="/integracoes/whatsapp"
+          className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-100"
+        >
+          Conectar instância (QR) →
+        </a>
       </div>
+      <p className="mt-1 text-[11px] text-gray-400">
+        &quot;Conectar instância (QR)&quot; abre a tela de conexão WhatsApp para criar/conectar a instância via QR Code.
+      </p>
 
       {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>}
       {msg && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">{msg}</p>}
@@ -744,11 +784,12 @@ function MasterChannelCard({
             <div className="text-xs text-red-700">
               <p className="font-semibold">Canal Master configurado, mas instância &quot;{status.instanceName}&quot; não encontrada na Evolution.</p>
               <p className="mt-1 text-gray-600">
-                Próximo passo: crie/conecte essa instância na Evolution (página de Integrações → WhatsApp) e depois volte aqui
-                em &quot;Verificar conexão&quot;. Não use instâncias de restaurante como Build OS.
+                Próximo passo: escolha uma instância existente no seletor acima, OU clique em &quot;Conectar instância (QR)&quot;
+                para criar/conectar uma instância com este nome via QR Code. Depois volte e clique em &quot;Verificar conexão&quot;.
+                Não use instâncias de restaurante como Build OS.
               </p>
-              <a href="/integracoes/whatsapp" className="mt-1 inline-block font-semibold text-orange-700 underline">
-                Abrir Integrações → WhatsApp
+              <a href="/integracoes/whatsapp" className="mt-1 inline-block rounded-lg bg-orange-500 px-3 py-1.5 font-semibold text-white hover:bg-orange-600">
+                Conectar instância (QR) →
               </a>
             </div>
           ) : (

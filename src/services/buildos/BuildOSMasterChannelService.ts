@@ -14,6 +14,7 @@ import { runInstanceHealthCheck, type InstanceHealth } from "./BuildOSInstanceHe
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { getExpectedEvolutionWebhookUrl } from "@/lib/public-url";
+import { prisma } from "@/lib/prisma";
 
 const WEBHOOK_EVENTS = ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"];
 
@@ -43,6 +44,8 @@ export interface MasterChannelStatus {
   operatorMasked: string | null;
   expectedWebhookUrl: string;
   readiness: MasterChannelReadiness;
+  /** Existing Evolution instances the admin can designate as Master (names only). */
+  availableInstances: Array<{ instanceName: string; restaurant: string | null }>;
 }
 
 /** Focused status for the Master channel card (reuses the instance-health probe). */
@@ -50,6 +53,22 @@ export async function getMasterChannelStatus(): Promise<MasterChannelStatus> {
   const ch = await getBuildOsChannel();
   const expectedWebhookUrl = getExpectedEvolutionWebhookUrl();
   const operatorActive = (await countActiveDbSenders()) > 0;
+
+  // Existing Evolution instances (names only) so the admin can DESIGNATE one as
+  // Master from a dropdown instead of typing a name that doesn't exist.
+  let availableInstances: Array<{ instanceName: string; restaurant: string | null }> = [];
+  try {
+    const rows = await prisma.evolutionConfig.findMany({
+      select: { instanceName: true, restaurant: { select: { slug: true, name: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    availableInstances = rows.map((r) => ({
+      instanceName: r.instanceName,
+      restaurant: r.restaurant?.slug ?? r.restaurant?.name ?? null,
+    }));
+  } catch {
+    availableInstances = [];
+  }
 
   if (!ch.instanceName) {
     return {
@@ -72,6 +91,7 @@ export async function getMasterChannelStatus(): Promise<MasterChannelStatus> {
         lastEventReceived: false,
         allReady: false,
       },
+      availableInstances,
     };
   }
 
@@ -110,6 +130,7 @@ export async function getMasterChannelStatus(): Promise<MasterChannelStatus> {
     operatorMasked,
     expectedWebhookUrl,
     readiness,
+    availableInstances,
   };
 }
 
