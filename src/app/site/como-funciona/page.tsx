@@ -6,8 +6,9 @@ import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { ArrowRightIcon } from "@/components/marketing/icons";
+import { PROPOSTA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
-const TITLE = "Como funciona a Foocci | Vendas, WhatsApp e CRM para restaurantes";
+const TITLE = "Como funciona a Foocci | Sistema inteligente para restaurantes";
 const DESCRIPTION =
   "Entenda como a Foocci conecta pedido, atendimento, WhatsApp, IA e CRM para ajudar restaurantes a vender mais e fazer clientes voltarem.";
 
@@ -36,7 +37,9 @@ export default function ComoFuncionaPage() {
         badge="Como funciona"
         title="Da primeira mensagem ao próximo pedido."
         subtitle="A Foocci conecta atendimento, cardápio, WhatsApp, CRM e inteligência comercial para ajudar seu restaurante a vender melhor antes, durante e depois do pedido."
-        primaryLabel="Quero ver a Foocci funcionando"
+        primaryLabel="Conhecer a proposta"
+        primaryHref={PROPOSTA_URL}
+        note={PRELAUNCH_NOTE}
       />
 
       {/* 1. The journey */}
@@ -98,7 +101,11 @@ export default function ComoFuncionaPage() {
       </section>
 
       {/* 4. CTA */}
-      <CtaBand title="Quer ver essa jornada no seu restaurante?" label="Agendar demonstração" />
+      <CtaBand
+        title="A Foocci está sendo preparada para restaurantes como o seu."
+        label="Voltar para a página principal"
+        href="/site"
+      />
     </>
   );
 }

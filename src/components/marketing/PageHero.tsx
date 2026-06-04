@@ -1,11 +1,11 @@
 /**
  * Shared hero for internal marketing pages (/site/*). Server component.
- * Centered, white-dominant, single H1.
+ * Centered, white-dominant, single H1. Supports a primary + secondary CTA and
+ * an optional pre-launch note.
  */
 
 import type { ReactNode } from "react";
-import { DEMO_URL } from "./config";
-import { PrimaryCta, WhatsAppCta } from "./Cta";
+import { PrimaryCta, SecondaryCta } from "./Cta";
 
 type PageHeroProps = {
   badge: string;
@@ -13,7 +13,9 @@ type PageHeroProps = {
   subtitle: string;
   primaryLabel?: string;
   primaryHref?: string;
-  showWhatsApp?: boolean;
+  secondaryLabel?: string;
+  secondaryHref?: string;
+  note?: string;
 };
 
 export function PageHero({
@@ -21,9 +23,12 @@ export function PageHero({
   title,
   subtitle,
   primaryLabel,
-  primaryHref = DEMO_URL,
-  showWhatsApp = false,
+  primaryHref,
+  secondaryLabel,
+  secondaryHref,
+  note,
 }: PageHeroProps) {
+  const hasCta = Boolean(primaryLabel || secondaryLabel);
   return (
     <section className="relative overflow-hidden bg-white">
       <div
@@ -31,7 +36,7 @@ export function PageHero({
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b from-gray-50 to-white"
       />
       <div className="mx-auto max-w-3xl px-5 pb-12 pt-16 text-center lg:px-8 lg:pb-16 lg:pt-20">
-        <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700">
+        <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
           <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
           {badge}
         </span>
@@ -42,12 +47,14 @@ export function PageHero({
 
         <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-gray-600">{subtitle}</p>
 
-        {(primaryLabel || showWhatsApp) && (
+        {hasCta && (
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             {primaryLabel && <PrimaryCta label={primaryLabel} href={primaryHref} className="w-full sm:w-auto" />}
-            {showWhatsApp && <WhatsAppCta className="w-full sm:w-auto" />}
+            {secondaryLabel && <SecondaryCta label={secondaryLabel} href={secondaryHref} className="w-full sm:w-auto" />}
           </div>
         )}
+
+        {note && <p className="mt-4 text-sm text-gray-500">{note}</p>}
       </div>
     </section>
   );

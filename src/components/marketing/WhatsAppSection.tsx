@@ -66,7 +66,7 @@ export function WhatsAppSection() {
 
         <div className="order-1 lg:order-2">
           <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            Transforme seu WhatsApp em um canal de venda e relacionamento.
+            WhatsApp como canal de relacionamento e pedido direto.
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">
             A Foocci ajuda a organizar conversas, direcionar clientes, registrar

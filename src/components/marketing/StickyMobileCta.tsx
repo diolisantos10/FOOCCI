@@ -2,13 +2,12 @@
 
 /**
  * Sticky bottom CTA bar — mobile only. Appears after the user scrolls past the
- * hero. No dependencies; pure scroll listener. Hidden on lg+ where the header
- * CTA is always visible.
+ * hero. Pre-launch: a single, non-sales CTA that explains the product
+ * (no WhatsApp). No dependencies; pure scroll listener.
  */
 
 import { useEffect, useState } from "react";
-import { DEMO_URL, PRIMARY_CTA_LABEL, WHATSAPP_CTA_LABEL, ctaTarget, whatsappUrl } from "./config";
-import { WhatsAppIcon } from "./icons";
+import { COMO_FUNCIONA_URL, PRIMARY_CTA_LABEL } from "./config";
 
 export function StickyMobileCta() {
   const [show, setShow] = useState(false);
@@ -22,23 +21,14 @@ export function StickyMobileCta() {
 
   if (!show) return null;
 
-  const waHref = whatsappUrl() ?? DEMO_URL;
-
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 p-3 backdrop-blur-md lg:hidden">
-      <div className="mx-auto flex max-w-md items-center gap-2">
+      <div className="mx-auto max-w-md">
         <a
-          href={DEMO_URL}
-          className="inline-flex flex-1 items-center justify-center rounded-full bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+          href={COMO_FUNCIONA_URL}
+          className="inline-flex w-full items-center justify-center rounded-full bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
         >
           {PRIMARY_CTA_LABEL}
-        </a>
-        <a
-          {...ctaTarget(waHref)}
-          aria-label={WHATSAPP_CTA_LABEL}
-          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-[#25D366] hover:bg-gray-50"
-        >
-          <WhatsAppIcon className="h-6 w-6" />
         </a>
       </div>
     </div>

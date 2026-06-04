@@ -1,20 +1,20 @@
 /**
- * /site/demonstracao — lead conversion page. Inherits /site/layout.tsx.
+ * /site/demonstracao — PRE-LAUNCH. Inherits /site/layout.tsx.
  *
- * The lead form has no backend (see DemoForm). It does not fake a submission:
- * it opens WhatsApp with the details when a number is configured, otherwise the
- * submit stays disabled. TODO(backend): wire a real lead-capture endpoint.
+ * The commercial demo is not open yet. There is intentionally NO lead form and
+ * NO WhatsApp CTA here: the page presents what a future demo will show and routes
+ * to the educational page. Nothing fakes a submission or implies availability.
  */
 
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
-import { DemoForm } from "@/components/marketing/DemoForm";
-import { WhatsAppCta } from "@/components/marketing/Cta";
+import { CtaBand } from "@/components/marketing/CtaBand";
 import { CheckIcon } from "@/components/marketing/icons";
+import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
-const TITLE = "Demonstração Foocci | Veja a Foocci funcionando no seu restaurante";
+const TITLE = "Demonstração Foocci em breve | Conheça a proposta";
 const DESCRIPTION =
-  "Solicite uma demonstração da Foocci e veja como vender mais, atender melhor no WhatsApp e ativar CRM para seu restaurante.";
+  "A demonstração comercial da Foocci será aberta em breve. Enquanto isso, conheça a proposta, os pilares e o funcionamento do sistema.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -23,69 +23,55 @@ export const metadata: Metadata = {
   openGraph: { type: "website", locale: "pt_BR", siteName: "Foocci", title: TITLE, description: DESCRIPTION },
 };
 
-const STEPS = [
-  "Entendemos seu tipo de restaurante.",
-  "Vemos como seus pedidos chegam hoje.",
-  "Mostramos como a Foocci conduz pedido e relacionamento.",
-  "Indicamos uma configuração inicial para sua operação.",
+const WILL_SHOW = [
+  "Como a Foocci conduz o pedido a partir do seu cardápio.",
+  "Como o WhatsApp se torna um canal de relacionamento.",
+  "Como o CRM organiza seus clientes e oportunidades.",
+  "Como campanhas e reativação ajudam o cliente a voltar.",
+  "Qual configuração faz sentido para o seu tipo de restaurante.",
 ];
 
 export default function DemonstracaoPage() {
   return (
     <>
       <PageHero
-        badge="Demonstração"
-        title="Veja como a Foocci pode funcionar no seu restaurante."
-        subtitle="Em uma demonstração rápida, mostramos como a Foocci pode atuar no seu cardápio, WhatsApp, pedidos e relacionamento com clientes."
-        primaryLabel="Solicitar demonstração"
-        primaryHref="#form"
+        badge="Demonstração · em breve"
+        title="A demonstração comercial da Foocci será aberta em breve."
+        subtitle="Enquanto a Foocci está em fase piloto, você pode conhecer a proposta, os pilares e o funcionamento do sistema."
+        primaryLabel="Ver como a Foocci funciona"
+        primaryHref={COMO_FUNCIONA_URL}
+        secondaryLabel="Conhecer a proposta"
+        note={PRELAUNCH_NOTE}
       />
 
-      {/* 1. What happens in the demo */}
+      {/* What a future demo will show */}
       <section className="bg-gray-50 py-20">
-        <div className="mx-auto max-w-5xl px-5 lg:px-8">
-          <h2 className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            O que acontece na demonstração
-          </h2>
-          <div className="mt-12 grid gap-5 sm:grid-cols-2">
-            {STEPS.map((s) => (
-              <div key={s} className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-6">
-                <CheckIcon className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
-                <p className="text-base font-medium text-gray-800">{s}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 2. Lead form */}
-      <section id="form" className="scroll-mt-20 bg-white py-20">
         <div className="mx-auto max-w-2xl px-5 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
-              Solicite sua demonstração
-            </h2>
-            <p className="mt-4 text-lg text-gray-600">
-              Conte um pouco sobre sua operação e a gente prepara uma demonstração focada na sua realidade.
+          <div className="rounded-3xl border border-gray-200 bg-white p-7 shadow-sm sm:p-9">
+            <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+              O que a demonstração vai mostrar
+            </span>
+            <ul className="mt-6 space-y-3">
+              {WILL_SHOW.map((item) => (
+                <li key={item} className="flex items-start gap-3">
+                  <CheckIcon className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
+                  <span className="text-base text-gray-700">{item}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-7 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
+              O formulário de interesse será ativado no lançamento comercial.
             </p>
           </div>
-          <div className="mt-10 rounded-3xl border border-gray-200 bg-gray-50 p-6 shadow-sm sm:p-8">
-            <DemoForm includeChallenge />
-          </div>
         </div>
       </section>
 
-      {/* 3. WhatsApp alternative */}
-      <section className="bg-gray-50 py-16">
-        <div className="mx-auto max-w-2xl px-5 text-center lg:px-8">
-          <h2 className="text-2xl font-bold tracking-tight text-[#0B0B0B] sm:text-3xl">
-            Prefere falar direto?
-          </h2>
-          <div className="mt-6 flex justify-center">
-            <WhatsAppCta label="Chamar no WhatsApp" fallbackHref="#form" />
-          </div>
-        </div>
-      </section>
+      <CtaBand
+        title="Quer entender se a Foocci faz sentido para o seu restaurante?"
+        label="Ver como a Foocci funciona"
+        href={COMO_FUNCIONA_URL}
+      />
     </>
   );
 }

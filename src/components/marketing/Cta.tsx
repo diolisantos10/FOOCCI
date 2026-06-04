@@ -1,20 +1,22 @@
 /**
- * Reusable CTA buttons for the marketing site.
+ * Reusable CTA buttons for the marketing site (pre-launch mode).
  *
- * Plain presentational anchors (no hooks) so they can be used inside both
- * server and client section components.
+ * PrimaryCta + SecondaryCta are the only CTAs used right now. WhatsAppCta is
+ * kept here RESERVED for launch but is intentionally not imported anywhere while
+ * Foocci is in pilot (no WhatsApp sales links in pre-launch).
  */
 
 import {
-  DEMO_URL,
+  COMO_FUNCIONA_URL,
+  PROPOSTA_URL,
   PRIMARY_CTA_LABEL,
-  WHATSAPP_CTA_LABEL,
+  SECONDARY_CTA_LABEL,
   ctaTarget,
   whatsappUrl,
 } from "./config";
 import { ArrowRightIcon, WhatsAppIcon } from "./icons";
 
-type PrimaryProps = {
+type BtnProps = {
   className?: string;
   label?: string;
   href?: string;
@@ -25,10 +27,10 @@ type PrimaryProps = {
 export function PrimaryCta({
   className = "",
   label = PRIMARY_CTA_LABEL,
-  href = DEMO_URL,
+  href = COMO_FUNCIONA_URL,
   withArrow = true,
   block = false,
-}: PrimaryProps) {
+}: BtnProps) {
   return (
     <a
       {...ctaTarget(href)}
@@ -42,29 +44,41 @@ export function PrimaryCta({
   );
 }
 
-type WhatsAppProps = {
-  className?: string;
-  label?: string;
-  block?: boolean;
-  /** Where to send the user when no WhatsApp number is configured. */
-  fallbackHref?: string;
-};
+export function SecondaryCta({
+  className = "",
+  label = SECONDARY_CTA_LABEL,
+  href = PROPOSTA_URL,
+  withArrow = false,
+  block = false,
+}: BtnProps) {
+  return (
+    <a
+      {...ctaTarget(href)}
+      className={`inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-6 py-3.5 text-base font-semibold text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${
+        block ? "w-full" : ""
+      } ${className}`}
+    >
+      {label}
+      {withArrow && <ArrowRightIcon className="h-4 w-4" />}
+    </a>
+  );
+}
 
-/**
- * "Falar no WhatsApp" — opens WhatsApp when a sales number is configured,
- * otherwise routes to the demo page (or a custom fallback).
- */
+/* ── RESERVED for launch — not used in pre-launch mode ───────────────────────── */
+
+type WhatsAppProps = { className?: string; label?: string; block?: boolean; fallbackHref?: string };
+
 export function WhatsAppCta({
   className = "",
-  label = WHATSAPP_CTA_LABEL,
+  label = "Falar no WhatsApp",
   block = false,
-  fallbackHref = DEMO_URL,
+  fallbackHref = COMO_FUNCIONA_URL,
 }: WhatsAppProps) {
   const href = whatsappUrl() ?? fallbackHref;
   return (
     <a
       {...ctaTarget(href)}
-      className={`inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-6 py-3.5 text-base font-semibold text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${
+      className={`inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-6 py-3.5 text-base font-semibold text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50 ${
         block ? "w-full" : ""
       } ${className}`}
     >

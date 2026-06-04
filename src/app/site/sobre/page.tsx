@@ -5,6 +5,7 @@
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
+import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 import {
   TrendingUpIcon,
   HeartIcon,
@@ -50,6 +51,9 @@ export default function SobrePage() {
         badge="Sobre a Foocci"
         title="Tecnologia, relacionamento e hospitalidade para restaurantes criarem experiências que fidelizam."
         subtitle="A Foocci nasceu para ajudar restaurantes a transformar atendimento digital em venda, experiência e recorrência."
+        primaryLabel="Ver como a Foocci funciona"
+        primaryHref={COMO_FUNCIONA_URL}
+        note={PRELAUNCH_NOTE}
       />
 
       {/* 1. What we believe */}
@@ -103,7 +107,11 @@ export default function SobrePage() {
       </section>
 
       {/* 4. CTA */}
-      <CtaBand title="Quer construir uma operação mais inteligente para seu restaurante?" label="Ver demonstração" />
+      <CtaBand
+        title="Quer construir uma operação mais inteligente para seu restaurante?"
+        label="Ver como a Foocci funciona"
+        href={COMO_FUNCIONA_URL}
+      />
     </>
   );
 }

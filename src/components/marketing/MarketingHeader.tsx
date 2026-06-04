@@ -3,11 +3,12 @@
 /**
  * Sticky marketing header (shared across /site and /site/*). Client component:
  * tracks scroll (subtle border once scrolled) and toggles the mobile menu.
+ * Pre-launch: shows a subtle "em breve" pill; primary CTA explains the product.
  */
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { LOGIN_URL, NAV_LINKS, PRIMARY_CTA_LABEL, DEMO_URL } from "./config";
+import { LOGIN_URL, NAV_LINKS, PRIMARY_CTA_LABEL, COMO_FUNCIONA_URL } from "./config";
 import { MenuIcon, CloseIcon } from "./icons";
 
 export function MarketingHeader() {
@@ -28,8 +29,11 @@ export function MarketingHeader() {
       }`}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 lg:px-8">
-        <Link href="/site" className="flex items-center" aria-label="Foocci">
+        <Link href="/site" className="flex items-center gap-2" aria-label="Foocci">
           <span className="text-xl font-bold tracking-tight text-[#0B0B0B]">Foocci</span>
+          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-600">
+            em breve
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-8 lg:flex">
@@ -45,7 +49,7 @@ export function MarketingHeader() {
             Entrar
           </Link>
           <Link
-            href={DEMO_URL}
+            href={COMO_FUNCIONA_URL}
             className="inline-flex items-center rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600"
           >
             {PRIMARY_CTA_LABEL}
@@ -85,7 +89,7 @@ export function MarketingHeader() {
                 Entrar
               </Link>
               <Link
-                href={DEMO_URL}
+                href={COMO_FUNCIONA_URL}
                 onClick={() => setOpen(false)}
                 className="inline-flex items-center justify-center rounded-full bg-brand-500 px-4 py-3 text-base font-semibold text-white hover:bg-brand-600"
               >

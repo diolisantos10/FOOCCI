@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * FAQ accordion. Client component.
+ * FAQ accordion (home). Client component. Includes pre-launch questions.
  */
 
 import { useState } from "react";
@@ -9,12 +9,24 @@ import { PlusIcon } from "./icons";
 
 const FAQS = [
   {
+    q: "A Foocci já está disponível?",
+    a: "A Foocci está em fase piloto e terá abertura comercial em breve.",
+  },
+  {
+    q: "Posso contratar agora?",
+    a: "A contratação ainda não está aberta. Neste momento, o site apresenta a proposta, a visão e o funcionamento da Foocci.",
+  },
+  {
+    q: "Quando será o lançamento?",
+    a: "O lançamento comercial será anunciado em breve.",
+  },
+  {
     q: "A Foocci é um chatbot?",
     a: "Não. A Foocci usa inteligência artificial, mas é um sistema de vendas, relacionamento e fidelização para restaurantes.",
   },
   {
     q: "Preciso trocar meu sistema atual?",
-    a: "Não necessariamente. A Foocci pode começar como uma camada comercial para melhorar pedido direto, atendimento e relacionamento.",
+    a: "Não necessariamente. A Foocci pode atuar como uma camada comercial para melhorar pedido direto, atendimento e relacionamento.",
   },
   {
     q: "A Foocci funciona com WhatsApp?",
@@ -29,12 +41,8 @@ const FAQS = [
     a: "Sim. A Foocci foi pensada para simplificar vendas, relacionamento e recorrência sem exigir uma operação complexa.",
   },
   {
-    q: "Preciso entender tecnologia?",
+    q: "Preciso entender de tecnologia?",
     a: "Não. A tecnologia trabalha no bastidor. A experiência precisa ser simples para o dono, a equipe e o cliente.",
-  },
-  {
-    q: "Como funciona a demonstração?",
-    a: "Você mostra um pouco da sua operação e a gente apresenta como a Foocci poderia funcionar no seu restaurante.",
   },
 ];
 

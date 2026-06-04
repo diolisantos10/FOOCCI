@@ -1,40 +1,43 @@
 /**
  * Shared config for the public marketing site (/site and /site/*).
  *
- * Single source of truth for CTAs, navigation and contact destinations so the
- * restaurant owner can wire real values in one place.
- *
- * NOTE (documented, intentional): no Foocci sales WhatsApp number is configured
- * yet. While `WHATSAPP_SALES_NUMBER` is null, every "Falar no WhatsApp" CTA falls
- * back to the demo page. Set a number (international format, digits only) to
- * activate WhatsApp everywhere.
+ * PRE-LAUNCH MODE (pilot): Foocci is not selling yet. CTAs communicate the
+ * proposal and the upcoming launch — no WhatsApp sales, no demo scheduling, no
+ * working lead capture. The WhatsApp helpers below are RESERVED for launch and
+ * are intentionally not wired to any CTA right now.
+ * See docs/foocci-site/pre-launch-mode-v1.md.
  */
 
 export const LOGIN_URL = "/login";
 
-/** TODO(owner): set the real Foocci sales WhatsApp (e.g. "5511999999999"). */
+/** RESERVED for launch — not used by any CTA in pre-launch mode. */
 export const WHATSAPP_SALES_NUMBER: string | null = null;
 
-/** Canonical conversion destination — the dedicated demo page. */
+/** Internal destinations used by pre-launch CTAs. */
+export const COMO_FUNCIONA_URL = "/site/como-funciona";
+export const PROPOSTA_URL = "/site/sobre";
 export const DEMO_URL = "/site/demonstracao";
 
-export const PRIMARY_CTA_LABEL = "Quero ver a Foocci funcionando";
-export const WHATSAPP_CTA_LABEL = "Falar no WhatsApp";
+/** Pre-launch CTA copy. */
+export const PRIMARY_CTA_LABEL = "Ver como a Foocci funciona";
+export const SECONDARY_CTA_LABEL = "Conhecer a proposta";
 
-const DEFAULT_WA_MESSAGE = "Olá! Quero ver a Foocci funcionando no meu restaurante.";
+/** Pre-launch messaging. */
+export const PRELAUNCH_BADGE = "Em breve para restaurantes selecionados";
+export const PRELAUNCH_NOTE = "Lançamento comercial em breve.";
 
-/** Returns a wa.me URL when a number is configured, otherwise null. */
+const DEFAULT_WA_MESSAGE = "Olá! Quero saber mais sobre a Foocci.";
+
+/** RESERVED for launch. Returns a wa.me URL when a number is configured. */
 export function whatsappUrl(message: string = DEFAULT_WA_MESSAGE): string | null {
   if (!WHATSAPP_SALES_NUMBER) return null;
   return `https://wa.me/${WHATSAPP_SALES_NUMBER}?text=${encodeURIComponent(message)}`;
 }
 
-/** Props for a link that is external (WhatsApp) when configured, else internal. */
+/** Props for a link that is external when configured, else internal. */
 export function ctaTarget(href: string): { href: string } & Record<string, string> {
   const external = href.startsWith("http");
-  return external
-    ? { href, target: "_blank", rel: "noopener noreferrer" }
-    : { href };
+  return external ? { href, target: "_blank", rel: "noopener noreferrer" } : { href };
 }
 
 export const NAV_LINKS: { href: string; label: string }[] = [

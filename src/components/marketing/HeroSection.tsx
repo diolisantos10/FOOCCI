@@ -1,13 +1,13 @@
 /**
- * Hero. Server component.
+ * Hero (home). Server component. Pre-launch mode.
  *
- * Left: badge, H1, subheadline, CTAs, microcopy.
+ * Left: pre-launch badge, H1, subheadline, primary + secondary CTAs, pilot note.
  * Right: a premium CSS mockup (no real screenshots / no invented numbers) with
  * floating cards naming Foocci's role in the order → relationship flow.
- * Allowed sample labels only (see marketing brief).
  */
 
-import { PrimaryCta, WhatsAppCta } from "./Cta";
+import { PrimaryCta, SecondaryCta } from "./Cta";
+import { PRELAUNCH_BADGE } from "./config";
 import { SparklesIcon, UsersIcon, MegaphoneIcon, CartRefreshIcon, RepeatIcon } from "./icons";
 
 export function HeroSection() {
@@ -19,9 +19,9 @@ export function HeroSection() {
       />
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-12 lg:grid-cols-2 lg:gap-10 lg:px-8 lg:pb-24 lg:pt-20">
         <div className="text-center lg:text-left">
-          <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700">
+          <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
             <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-            Hospitalidade digital inteligente para restaurantes
+            {PRELAUNCH_BADGE}
           </span>
 
           <h1 className="mt-5 text-3xl font-bold leading-[1.12] tracking-tight text-[#0B0B0B] sm:text-4xl lg:text-[3.25rem]">
@@ -36,11 +36,11 @@ export function HeroSection() {
 
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
             <PrimaryCta className="w-full sm:w-auto" />
-            <WhatsAppCta className="w-full sm:w-auto" />
+            <SecondaryCta href="#solucoes" className="w-full sm:w-auto" />
           </div>
 
           <p className="mt-4 text-sm text-gray-500">
-            Feita para restaurantes que querem vender melhor sem complicar a operação.
+            Produto em fase piloto. Lançamento comercial em breve.
           </p>
         </div>
 
@@ -57,7 +57,6 @@ export function HeroSection() {
 function HeroMockup() {
   return (
     <div className="relative mx-auto w-full max-w-sm lg:max-w-md">
-      {/* Main surface — mobile order screen */}
       <div className="relative z-10 rounded-3xl border border-gray-200 bg-white p-5 shadow-xl">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
@@ -78,7 +77,6 @@ function HeroMockup() {
             </div>
           ))}
 
-          {/* AI suggestion — the single orange highlight on the surface */}
           <div className="flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-100 text-brand-600">
               <SparklesIcon className="h-4 w-4" />
@@ -100,7 +98,6 @@ function HeroMockup() {
         </div>
       </div>
 
-      {/* Floating cards — desktop only (kept inside bounds, no mobile overflow) */}
       <FloatingCard className="-left-6 top-8 hidden lg:flex" icon={<MegaphoneIcon className="h-4 w-4" />} label="Campanha CRM" />
       <FloatingCard className="-right-4 top-28 hidden lg:flex" icon={<CartRefreshIcon className="h-4 w-4" />} label="Oportunidade recuperada" />
       <FloatingCard className="-bottom-5 left-8 hidden lg:flex" icon={<RepeatIcon className="h-4 w-4" />} label="Cliente recorrente" />

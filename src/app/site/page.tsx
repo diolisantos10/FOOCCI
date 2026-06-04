@@ -27,7 +27,7 @@ import { FinalCTASection } from "@/components/marketing/FinalCTASection";
 
 const TITLE = "Foocci | Sistema inteligente de vendas e CRM para restaurantes";
 const DESCRIPTION =
-  "A Foocci ajuda restaurantes a vender mais, atender melhor no WhatsApp, recuperar clientes e aumentar recorrência com cardápio digital, IA e CRM.";
+  "A Foocci está preparando uma nova forma de ajudar restaurantes a vender mais, atender melhor no WhatsApp, ativar CRM e aumentar recorrência.";
 
 // Override the root layout's `robots: { index: false }` — this public page
 // should be indexable.

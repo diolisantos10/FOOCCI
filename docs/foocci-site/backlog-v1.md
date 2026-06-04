@@ -112,3 +112,22 @@
 | 8 | CMS / conteúdo editável | Escala de conteúdo | Acoplar ao produto |
 | 9 | Integração de leads no CRM | Lead vira oportunidade | Lead perdido / dado errado |
 | 10 | Analytics avançado | Funil completo | Privacidade / dado falso |
+
+---
+
+## Pre-launch mode
+
+> A Foocci está em piloto (abertura comercial ~julho). O site comunica "em breve"
+> e **não** abre vendas. Detalhes em [`pre-launch-mode-v1.md`](./pre-launch-mode-v1.md).
+
+| # | Item | Estado | Observação |
+|---|---|---|---|
+| 1 | Refino premium de design | ✅ feito | Hero, ritmo, cards, CTAs pré-lançamento |
+| 2 | Copy "em breve" / piloto | ✅ feito | Badge, notas, FAQ de pré-lançamento |
+| 3 | Infra de vendas desligada | ✅ feito | Sem WhatsApp, sem lead real, sem preços, sem `/` |
+| 4 | WhatsApp de vendas | ⏳ no lançamento | `WhatsAppCta` reservado; setar `WHATSAPP_SALES_NUMBER` |
+| 5 | Captação de leads | ⏳ no lançamento | `DemoForm` reservado; ligar backend real |
+| 6 | Preços reais | ⏳ no lançamento | Hoje "Em definição para o lançamento" |
+| 7 | Troca `/site` → `/` | ⏳ no lançamento | Fase 6 do roadmap, com gate de aprovação |
+| 8 | Revisão jurídica (legais) | ⏳ antes do lançamento | LGPD / Termos |
+| 9 | Logo / marca reais | ⏳ antes do lançamento | Hoje wordmark em texto |

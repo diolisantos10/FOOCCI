@@ -33,7 +33,7 @@ export function CRMSection() {
             merece atenção e qual oportunidade pode virar venda.
           </p>
           <div className="mt-7">
-            <PrimaryCta label="Quero ativar meu CRM" withArrow />
+            <PrimaryCta withArrow />
           </div>
         </div>
 
