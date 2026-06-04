@@ -22,7 +22,27 @@ import type { EvolutionConfigSnapshot } from "@/lib/evolution/EvolutionClient";
 
 /** Global Evolution base URL from env, if configured (never a restaurant URL). */
 export function getEnvEvolutionBaseUrl(): string | null {
-  return process.env.EVOLUTION_DEFAULT_URL || process.env.EVOLUTION_BASE_URL || null;
+  return normalizeBaseUrl(process.env.EVOLUTION_DEFAULT_URL || process.env.EVOLUTION_BASE_URL || "");
+}
+
+/**
+ * Normalize an Evolution base URL: trims, prefixes https:// when no protocol is
+ * present (the common paste error), strips a trailing slash, and validates it.
+ * Returns null when empty/invalid so callers can show a friendly error instead of
+ * letting `new URL()` throw "Failed to parse URL".
+ */
+export function normalizeBaseUrl(raw: string | null | undefined): string | null {
+  let v = (raw ?? "").trim();
+  if (!v) return null;
+  if (!/^https?:\/\//i.test(v)) v = `https://${v}`;
+  v = v.replace(/\/+$/, "");
+  try {
+    const u = new URL(v);
+    if (!u.hostname || !u.hostname.includes(".")) return null;
+    return v;
+  } catch {
+    return null;
+  }
 }
 
 /** Global Evolution API key from env, if configured. Never returned to the client. */
@@ -86,7 +106,7 @@ export async function getAdminWhatsAppView(): Promise<AdminWhatsAppView> {
   if (source === "saved") {
     try { apiKeyMasked = maskSecret(apiKey ?? ""); } catch { apiKeyMasked = "••••"; }
   }
-  const baseUrl = row?.baseUrl ?? getEnvEvolutionBaseUrl();
+  const baseUrl = normalizeBaseUrl(row?.baseUrl ?? "") ?? getEnvEvolutionBaseUrl();
   const baseUrlSource: "saved" | "env" | "none" = row?.baseUrl ? "saved" : (getEnvEvolutionBaseUrl() ? "env" : "none");
 
   return {
@@ -111,7 +131,8 @@ export async function getAdminWhatsAppView(): Promise<AdminWhatsAppView> {
  */
 export async function getAdminWhatsAppSnapshot(includeWebhookSecret = false): Promise<EvolutionConfigSnapshot | null> {
   const row = await getAdminWhatsAppRow();
-  const baseUrl = row?.baseUrl ?? getEnvEvolutionBaseUrl();
+  // Defensive: rows saved before normalization (or env) may lack the protocol.
+  const baseUrl = normalizeBaseUrl(row?.baseUrl ?? "") ?? getEnvEvolutionBaseUrl();
   const { apiKey } = resolveApiKey(row);
   if (!row?.instanceName || !baseUrl || !apiKey) return null;
   try {
@@ -162,8 +183,10 @@ export async function upsertAdminWhatsApp(input: UpsertAdminWhatsAppInput): Prom
 
     if (!row) {
       const instanceName = (input.instanceName ?? "").trim();
-      const baseUrl = (input.baseUrl ?? getEnvEvolutionBaseUrl() ?? "").trim();
+      const rawBaseUrl = (input.baseUrl ?? "").trim();
+      const baseUrl = rawBaseUrl ? normalizeBaseUrl(rawBaseUrl) : getEnvEvolutionBaseUrl();
       if (!instanceName) return { ok: false, error: "instanceName é obrigatório." };
+      if (rawBaseUrl && !baseUrl) return { ok: false, error: "baseUrl inválida. Use algo como https://evolution-api-production-xxx.up.railway.app" };
       if (!baseUrl) return { ok: false, error: "baseUrl da Evolution é obrigatório (ou configure EVOLUTION_DEFAULT_URL)." };
       // apiKey is optional when EVOLUTION_DEFAULT_API_KEY is set in env. A manual key
       // (encrypted) takes precedence; "" stored means "resolve from env".
@@ -192,7 +215,9 @@ export async function upsertAdminWhatsApp(input: UpsertAdminWhatsAppInput): Prom
     if (input.baseUrl !== undefined) {
       const v = (input.baseUrl ?? "").trim();
       if (!v) return { ok: false, error: "baseUrl não pode ser vazio." };
-      data.baseUrl = v;
+      const normalized = normalizeBaseUrl(v);
+      if (!normalized) return { ok: false, error: "baseUrl inválida. Use algo como https://evolution-api-production-xxx.up.railway.app" };
+      data.baseUrl = normalized;
     }
     if (input.apiKey !== undefined && input.apiKey.trim()) data.apiKey = encrypt(input.apiKey.trim());
     if (input.isEnabled !== undefined) data.isEnabled = input.isEnabled;

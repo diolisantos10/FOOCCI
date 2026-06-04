@@ -84,3 +84,24 @@ describe("decideBuildOsChannel", () => {
     expect(legacy.isAdminInstance).toBe(false);
   });
 });
+
+import { normalizeBaseUrl } from "./AdminWhatsAppConfigService";
+
+describe("normalizeBaseUrl", () => {
+  it("prefixes https:// when the protocol is missing (the paste error)", () => {
+    expect(normalizeBaseUrl("evolution-api-production-636c.up.railway.app"))
+      .toBe("https://evolution-api-production-636c.up.railway.app");
+  });
+  it("keeps an existing http/https protocol", () => {
+    expect(normalizeBaseUrl("http://evo.example.com")).toBe("http://evo.example.com");
+    expect(normalizeBaseUrl("https://evo.example.com")).toBe("https://evo.example.com");
+  });
+  it("strips trailing slashes", () => {
+    expect(normalizeBaseUrl("https://evo.example.com/")).toBe("https://evo.example.com");
+  });
+  it("returns null for empty/invalid", () => {
+    expect(normalizeBaseUrl("")).toBeNull();
+    expect(normalizeBaseUrl("   ")).toBeNull();
+    expect(normalizeBaseUrl("not a url")).toBeNull();
+  });
+});

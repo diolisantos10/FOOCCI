@@ -769,7 +769,8 @@ function MasterChannelCard() {
           <input className={INPUT} value={instanceName} onChange={(e) => setInstanceName(e.target.value)} placeholder="ex.: futi-admin" />
         </Field>
         <Field label={status?.baseUrlSource === "env" ? "baseUrl da Evolution (origem: env)" : "baseUrl da Evolution"}>
-          <input className={INPUT} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://evo.exemplo.com" />
+          <input className={INPUT} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://evolution-api-production-xxx.up.railway.app" />
+          <span className="mt-1 block text-[11px] text-gray-400">ex: https://evolution-api-production-xxx.up.railway.app (o https:// é adicionado automaticamente se faltar)</span>
         </Field>
         <Field label={apiKeyLabel}>
           <input
