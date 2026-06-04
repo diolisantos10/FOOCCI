@@ -23,7 +23,7 @@ const FOOCCI = [
 
 export function ComparisonSection() {
   return (
-    <section className="bg-white py-20">
+    <section className="bg-gray-50 py-20">
       <div className="mx-auto max-w-5xl px-5 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
@@ -33,7 +33,7 @@ export function ComparisonSection() {
 
         <div className="mt-12 grid gap-5 md:grid-cols-2">
           {/* Chatbot */}
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-7">
+          <div className="rounded-2xl border border-gray-200 bg-white p-7">
             <h3 className="text-lg font-semibold text-gray-500">Chatbot comum</h3>
             <ul className="mt-5 space-y-3">
               {CHATBOT.map((item) => (

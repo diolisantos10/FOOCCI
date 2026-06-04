@@ -10,31 +10,31 @@ import { PlusIcon } from "./icons";
 const FAQS = [
   {
     q: "A Foocci é um chatbot?",
-    a: "Não. A Foocci é um sistema de vendas, relacionamento e fidelização. Ela conduz o pedido, registra o cliente e ajuda ele a voltar — não apenas responde mensagens.",
+    a: "Não. A Foocci usa inteligência artificial, mas é um sistema de vendas, relacionamento e fidelização para restaurantes.",
   },
   {
     q: "Preciso trocar meu sistema atual?",
-    a: "Não precisa começar do zero. A Foocci se soma à sua operação para fortalecer o pedido direto, o WhatsApp e o relacionamento com o cliente.",
+    a: "Não necessariamente. A Foocci pode começar como uma camada comercial para melhorar pedido direto, atendimento e relacionamento.",
   },
   {
     q: "A Foocci funciona com WhatsApp?",
-    a: "Sim. Ela ajuda a organizar conversas, direcionar o cliente para o pedido e manter o histórico para o relacionamento continuar.",
+    a: "Sim, o WhatsApp é um dos canais centrais da experiência Foocci, principalmente para atendimento, relacionamento e retorno de clientes.",
   },
   {
     q: "A Foocci substitui meu atendente?",
-    a: "Não. Ela apoia o atendimento, cuida do que é repetitivo e deixa sua equipe livre para focar no que realmente importa.",
+    a: "Não. Ela ajuda a equipe a atender melhor, vender com mais contexto e manter o restaurante no controle.",
   },
   {
     q: "Ela serve para restaurante pequeno?",
-    a: "Sim. A Foocci foi pensada para ser simples e crescer junto com a operação, do restaurante pequeno ao grande.",
+    a: "Sim. A Foocci foi pensada para simplificar vendas, relacionamento e recorrência sem exigir uma operação complexa.",
   },
   {
-    q: "Preciso entender de tecnologia para usar?",
-    a: "Não. A linguagem é simples e a configuração inicial é feita junto com você na demonstração.",
+    q: "Preciso entender tecnologia?",
+    a: "Não. A tecnologia trabalha no bastidor. A experiência precisa ser simples para o dono, a equipe e o cliente.",
   },
   {
     q: "Como funciona a demonstração?",
-    a: "Mostramos a Foocci aplicada ao seu restaurante — com seu cardápio, seus clientes e sua operação — para você ver o valor na prática.",
+    a: "Você mostra um pouco da sua operação e a gente apresenta como a Foocci poderia funcionar no seu restaurante.",
   },
 ];
 
@@ -42,7 +42,7 @@ export function FAQSection() {
   const [open, setOpen] = useState<number | null>(0);
 
   return (
-    <section id="perguntas" className="scroll-mt-20 bg-gray-50 py-20">
+    <section id="perguntas" className="scroll-mt-20 bg-white py-20">
       <div className="mx-auto max-w-3xl px-5 lg:px-8">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">

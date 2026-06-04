@@ -1,5 +1,6 @@
 /**
  * Product modules grid. Server component.
+ * Benefit copy describes capability/direction without overpromising.
  */
 
 import {
@@ -14,14 +15,14 @@ import {
 } from "./icons";
 
 const MODULES = [
-  { icon: MenuBookIcon, title: "Cardápio Digital Inteligente", benefit: "Mostra, organiza e conduz o cliente até o pedido." },
-  { icon: SparklesIcon, title: "Pedido Guiado com IA", benefit: "Ajuda o cliente a montar o pedido e sugere complementos." },
-  { icon: ChatIcon, title: "WhatsApp Inteligente", benefit: "Organiza conversas e direciona para a compra." },
-  { icon: UsersIcon, title: "CRM para Restaurantes", benefit: "Reúne quem comprou, quem voltou e quem sumiu." },
-  { icon: MegaphoneIcon, title: "Campanhas e Reativação", benefit: "Permite criar ações para trazer clientes de volta." },
-  { icon: CartRefreshIcon, title: "Recuperação de Carrinho", benefit: "Ajuda a resgatar pedidos que ficaram pelo caminho." },
-  { icon: ChartIcon, title: "Dashboard Comercial", benefit: "Dá clareza sobre vendas e relacionamento." },
-  { icon: RepeatIcon, title: "Fidelização e Recorrência", benefit: "Constrói o hábito do cliente voltar." },
+  { icon: MenuBookIcon, title: "Cardápio Digital Inteligente", benefit: "Uma experiência de pedido visual, simples e feita para conversão." },
+  { icon: SparklesIcon, title: "Pedido Guiado com IA", benefit: "A Foocci ajuda o cliente a escolher e concluir o pedido com menos atrito." },
+  { icon: ChatIcon, title: "WhatsApp Inteligente", benefit: "Atendimento com mais contexto, organização e continuidade." },
+  { icon: UsersIcon, title: "CRM para Restaurantes", benefit: "Clientes, histórico, recorrência e oportunidades em um só lugar." },
+  { icon: MegaphoneIcon, title: "Campanhas e Reativação", benefit: "Mensagens mais inteligentes para clientes certos, no momento certo." },
+  { icon: CartRefreshIcon, title: "Recuperação de Carrinho", benefit: "Novas chances para clientes que começaram um pedido e não concluíram." },
+  { icon: ChartIcon, title: "Dashboard Comercial", benefit: "Dados simples para entender vendas, clientes e oportunidades." },
+  { icon: RepeatIcon, title: "Fidelização e Recorrência", benefit: "Relacionamento contínuo para clientes comprarem mais vezes." },
 ];
 
 export function ProductModulesSection() {

@@ -42,7 +42,7 @@ export function MarketingHeader() {
 
         <div className="hidden items-center gap-4 lg:flex">
           <Link href={LOGIN_URL} className="text-sm font-semibold text-gray-700 transition-colors hover:text-brand-600">
-            Login
+            Entrar
           </Link>
           <a
             href={DEMO_ANCHOR}
@@ -82,7 +82,7 @@ export function MarketingHeader() {
                 onClick={() => setOpen(false)}
                 className="rounded-lg px-2 py-3 text-base font-semibold text-gray-700 hover:bg-gray-50"
               >
-                Login
+                Entrar
               </Link>
               <a
                 href={DEMO_ANCHOR}

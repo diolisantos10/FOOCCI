@@ -5,6 +5,7 @@
  */
 
 import { UsersIcon, RepeatIcon, CartRefreshIcon, StarIcon, HeartIcon } from "./icons";
+import { PrimaryCta } from "./Cta";
 
 const SEGMENTS = [
   { icon: UsersIcon, label: "Cliente novo", color: "text-sky-600 bg-sky-50" },
@@ -28,9 +29,12 @@ export function CRMSection() {
             quem comprou, quem voltou, quem sumiu e quem pode receber uma campanha especial.
           </p>
           <p className="mt-4 text-base text-gray-500">
-            A Foocci ajuda a organizar esses clientes e permite criar campanhas para o
-            momento certo.
+            CRM para restaurante não precisa ser complicado. Precisa mostrar quem
+            merece atenção e qual oportunidade pode virar venda.
           </p>
+          <div className="mt-7">
+            <PrimaryCta label="Quero ativar meu CRM" withArrow />
+          </div>
         </div>
 
         <div className="rounded-3xl border border-gray-200 bg-gray-50 p-6">

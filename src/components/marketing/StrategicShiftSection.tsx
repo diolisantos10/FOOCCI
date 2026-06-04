@@ -1,22 +1,72 @@
 /**
  * Strategic shift. Server component.
  * Positions Foocci as strengthening direct channels — not attacking marketplaces.
+ * Includes a passive-model vs Foocci comparison.
  */
+
+import { CheckIcon, MinusIcon } from "./icons";
+
+const PASSIVE = [
+  "Link de cardápio",
+  "Atendimento solto",
+  "Cliente sem histórico",
+  "Venda isolada",
+];
+
+const SMART = [
+  "Pedido conduzido",
+  "Cliente identificado",
+  "CRM ativo",
+  "Recorrência construída",
+];
 
 export function StrategicShiftSection() {
   return (
     <section className="bg-white py-20">
-      <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
-        <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
-          Pedido direto não cresce só com link. Cresce com experiência.
-        </h2>
-        <p className="mt-5 text-lg leading-relaxed text-gray-600">
-          Ter um cardápio online é só o começo. O restaurante que quer vender mais
-          precisa conduzir o cliente, entender seu histórico e manter relacionamento
-          depois da compra.
-        </p>
+      <div className="mx-auto max-w-5xl px-5 lg:px-8">
+        <div className="mx-auto max-w-3xl text-center">
+          <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+            Pedido direto não cresce só com link. Cresce com experiência.
+          </h2>
+          <p className="mt-5 text-lg leading-relaxed text-gray-600">
+            Ter um cardápio online é só o começo. O restaurante que quer vender mais
+            precisa conduzir o cliente, entender seu histórico e manter relacionamento
+            depois da compra.
+          </p>
+        </div>
 
-        <figure className="mx-auto mt-10 max-w-xl rounded-2xl border border-gray-200 bg-gray-50 px-6 py-6">
+        {/* Passive vs Foocci */}
+        <div className="mt-12 grid gap-5 md:grid-cols-2">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-7">
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-400">
+              Modelo passivo
+            </h3>
+            <ul className="mt-5 space-y-3">
+              {PASSIVE.map((item) => (
+                <li key={item} className="flex items-center gap-3 text-gray-600">
+                  <MinusIcon className="h-5 w-5 shrink-0 text-gray-400" />
+                  <span className="text-base">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border-2 border-brand-200 bg-white p-7 shadow-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-brand-600">
+              Com a Foocci
+            </h3>
+            <ul className="mt-5 space-y-3">
+              {SMART.map((item) => (
+                <li key={item} className="flex items-center gap-3 text-gray-800">
+                  <CheckIcon className="h-5 w-5 shrink-0 text-brand-500" />
+                  <span className="text-base font-medium">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <figure className="mx-auto mt-12 max-w-xl text-center">
           <blockquote className="text-lg font-semibold text-[#0B0B0B]">
             “Marketplace entrega pedido.{" "}
             <span className="text-brand-500">Relacionamento constrói cliente.</span>”

@@ -4,10 +4,11 @@
  * Left: badge, H1, subheadline, CTAs, microcopy.
  * Right: a premium CSS mockup (no real screenshots / no invented numbers) with
  * floating cards naming Foocci's role in the order → relationship flow.
+ * Allowed sample labels only (see marketing brief).
  */
 
 import { PrimaryCta, WhatsAppCta } from "./Cta";
-import { SparklesIcon, UsersIcon, MegaphoneIcon, CartRefreshIcon } from "./icons";
+import { SparklesIcon, UsersIcon, MegaphoneIcon, CartRefreshIcon, RepeatIcon } from "./icons";
 
 export function HeroSection() {
   return (
@@ -56,7 +57,7 @@ export function HeroSection() {
 function HeroMockup() {
   return (
     <div className="relative mx-auto w-full max-w-sm lg:max-w-md">
-      {/* Main surface */}
+      {/* Main surface — mobile order screen */}
       <div className="relative z-10 rounded-3xl border border-gray-200 bg-white p-5 shadow-xl">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
@@ -66,7 +67,6 @@ function HeroMockup() {
         </div>
 
         <div className="mt-5 space-y-3">
-          {/* order rows */}
           {["Prato principal", "Acompanhamento"].map((label) => (
             <div key={label} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3">
               <div className="h-10 w-10 shrink-0 rounded-lg bg-gray-200" />
@@ -78,12 +78,12 @@ function HeroMockup() {
             </div>
           ))}
 
-          {/* AI suggestion (only orange highlight on the surface) */}
+          {/* AI suggestion — the single orange highlight on the surface */}
           <div className="flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-100 text-brand-600">
               <SparklesIcon className="h-4 w-4" />
             </div>
-            <p className="text-sm font-medium text-brand-700">Sugerir bebida no momento certo</p>
+            <p className="text-sm font-medium text-brand-700">Sugestão de bebida</p>
           </div>
         </div>
 
@@ -95,17 +95,16 @@ function HeroMockup() {
             <span className="text-xs font-medium text-gray-500">Cliente identificado</span>
           </div>
           <span className="rounded-full bg-[#0B0B0B] px-3 py-1.5 text-xs font-semibold text-white">
-            Continuar pedido
+            Histórico salvo
           </span>
         </div>
       </div>
 
       {/* Floating cards — desktop only (kept inside bounds, no mobile overflow) */}
-      <FloatingCard className="-left-6 top-10 hidden lg:flex" icon={<MegaphoneIcon className="h-4 w-4" />} label="Campanha CRM" />
-      <FloatingCard className="-right-4 top-24 hidden lg:flex" icon={<CartRefreshIcon className="h-4 w-4" />} label="Oportunidade recuperada" />
-      <FloatingCard className="-bottom-5 left-10 hidden lg:flex" icon={<UsersIcon className="h-4 w-4" />} label="Cliente identificado" />
+      <FloatingCard className="-left-6 top-8 hidden lg:flex" icon={<MegaphoneIcon className="h-4 w-4" />} label="Campanha CRM" />
+      <FloatingCard className="-right-4 top-28 hidden lg:flex" icon={<CartRefreshIcon className="h-4 w-4" />} label="Oportunidade recuperada" />
+      <FloatingCard className="-bottom-5 left-8 hidden lg:flex" icon={<RepeatIcon className="h-4 w-4" />} label="Cliente recorrente" />
 
-      {/* soft backdrop */}
       <div aria-hidden className="absolute -inset-4 -z-0 rounded-[2rem] bg-gray-50" />
     </div>
   );

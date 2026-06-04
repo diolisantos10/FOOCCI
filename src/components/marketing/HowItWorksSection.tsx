@@ -1,5 +1,6 @@
 /**
- * How it works — first message to next order. Server component.
+ * How it works — first message to next order, as a timeline. Server component.
+ * Vertical timeline (connecting line + numbered badges) — works at all breakpoints.
  */
 
 const STEPS = [
@@ -14,7 +15,7 @@ const STEPS = [
 export function HowItWorksSection() {
   return (
     <section id="como-funciona" className="scroll-mt-20 bg-white py-20">
-      <div className="mx-auto max-w-6xl px-5 lg:px-8">
+      <div className="mx-auto max-w-3xl px-5 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">
             Como funciona
@@ -24,13 +25,18 @@ export function HowItWorksSection() {
           </h2>
         </div>
 
-        <ol className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <ol className="relative mt-12">
+          {/* vertical connecting line */}
+          <span
+            aria-hidden
+            className="absolute left-[18px] top-2 bottom-2 w-px bg-gray-200"
+          />
           {STEPS.map((step, i) => (
-            <li key={step} className="flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-6">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white">
+            <li key={step} className="relative flex gap-5 pb-8 last:pb-0">
+              <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white ring-4 ring-white">
                 {i + 1}
               </span>
-              <p className="text-base leading-relaxed text-gray-700">{step}</p>
+              <p className="pt-1 text-base leading-relaxed text-gray-700">{step}</p>
             </li>
           ))}
         </ol>

@@ -4,19 +4,27 @@
  * Product preview with tabs. Client component (tab state).
  *
  * Premium CSS mockups only — no real screenshots and no fake/specific data
- * (skeleton bars stand in for content).
+ * (skeleton bars stand in for content). Each tab shows a short title + benefit.
  */
 
 import { useState } from "react";
 
-const TABS = ["Pedido", "WhatsApp", "CRM", "Campanhas", "Dados"] as const;
-type Tab = (typeof TABS)[number];
+type TabInfo = { id: string; title: string; benefit: string };
+
+const TABS: TabInfo[] = [
+  { id: "Pedido", title: "Pedido guiado", benefit: "Do cardápio à finalização, com menos atrito para o cliente." },
+  { id: "WhatsApp", title: "WhatsApp com contexto", benefit: "Conversas organizadas e direcionadas para o pedido." },
+  { id: "CRM", title: "Base de clientes viva", benefit: "Quem comprou, voltou, sumiu e merece atenção." },
+  { id: "Campanhas", title: "Reativação inteligente", benefit: "Mensagens para os clientes certos, no momento certo." },
+  { id: "Dados", title: "Clareza comercial", benefit: "Vendas, clientes e oportunidades em um olhar." },
+];
 
 export function DemoSection() {
-  const [tab, setTab] = useState<Tab>("Pedido");
+  const [active, setActive] = useState<string>("Pedido");
+  const current = TABS.find((t) => t.id === active) ?? TABS[0]!;
 
   return (
-    <section id="produto" className="scroll-mt-20 bg-gray-50 py-20">
+    <section id="produto" className="scroll-mt-20 bg-white py-20">
       <div className="mx-auto max-w-5xl px-5 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
@@ -28,25 +36,29 @@ export function DemoSection() {
         <div className="mt-10 flex flex-wrap justify-center gap-2">
           {TABS.map((t) => (
             <button
-              key={t}
+              key={t.id}
               type="button"
-              onClick={() => setTab(t)}
-              aria-pressed={tab === t}
+              onClick={() => setActive(t.id)}
+              aria-pressed={active === t.id}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                tab === t
+                active === t.id
                   ? "bg-brand-500 text-white shadow-sm"
                   : "border border-gray-200 bg-white text-gray-600 hover:border-gray-300"
               }`}
             >
-              {t}
+              {t.id}
             </button>
           ))}
         </div>
 
         {/* Preview surface */}
         <div className="mt-8 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-4 text-center sm:text-left">
+            <h3 className="text-lg font-semibold text-[#0B0B0B]">{current.title}</h3>
+            <p className="mt-1 text-sm text-gray-500">{current.benefit}</p>
+          </div>
           <div className="rounded-2xl bg-gray-50 p-4 sm:p-6">
-            <Preview tab={tab} />
+            <Preview tab={active} />
           </div>
         </div>
       </div>
@@ -54,20 +66,8 @@ export function DemoSection() {
   );
 }
 
-function Preview({ tab }: { tab: Tab }) {
+function Preview({ tab }: { tab: string }) {
   switch (tab) {
-    case "Pedido":
-      return (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <Row key={i} />
-          ))}
-          <div className="flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-3">
-            <div className="h-8 w-8 rounded-lg bg-brand-100" />
-            <div className="h-2.5 w-40 rounded-full bg-brand-200" />
-          </div>
-        </div>
-      );
     case "WhatsApp":
       return (
         <div className="space-y-3">
@@ -109,6 +109,19 @@ function Preview({ tab }: { tab: Tab }) {
           {["h-16", "h-24", "h-20", "h-32", "h-28", "h-36", "h-24"].map((h, i) => (
             <div key={i} className={`flex-1 rounded-t-lg ${i === 5 ? "bg-brand-400" : "bg-gray-200"} ${h}`} />
           ))}
+        </div>
+      );
+    case "Pedido":
+    default:
+      return (
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <Row key={i} />
+          ))}
+          <div className="flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-3">
+            <div className="h-8 w-8 rounded-lg bg-brand-100" />
+            <div className="h-2.5 w-40 rounded-full bg-brand-200" />
+          </div>
         </div>
       );
   }
