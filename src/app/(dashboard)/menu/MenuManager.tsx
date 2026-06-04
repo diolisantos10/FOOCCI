@@ -2798,11 +2798,10 @@ function EditItemModal({
             {/* ── Preços por canal (P0-B) ─────────────────────────────── */}
             <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50/60 p-3">
               <p className="text-[11px] font-semibold text-gray-600">Preços por canal</p>
-              <p className="text-[11px] text-gray-400">Se vazio, usa o preço base.</p>
+              <p className="text-[11px] text-gray-400">Se deixar vazio, usa o preço base.</p>
               {([
                 { key: "priceDelivery" as const, label: "Delivery",   disabled: !form.showInDelivery },
                 { key: "priceDineIn"   as const, label: "Salão / QR", disabled: !form.showInDineIn },
-                { key: "priceIfood"    as const, label: "iFood",      disabled: false },
               ]).map((ch) => (
                 <div key={ch.key} className="space-y-1">
                   <label className="block text-xs font-medium text-gray-600">
@@ -3815,7 +3814,6 @@ export function MenuManager({
       // Channel prices: empty string → null (clear override / use base).
       priceDelivery: patch.priceDelivery.trim() === "" ? null : parseFloat(patch.priceDelivery),
       priceDineIn:   patch.priceDineIn.trim()   === "" ? null : parseFloat(patch.priceDineIn),
-      priceIfood:    patch.priceIfood.trim()    === "" ? null : parseFloat(patch.priceIfood),
       imageUrl: patch.imageUrl,
       showInDelivery: patch.showInDelivery,
       showInDineIn: patch.showInDineIn,
