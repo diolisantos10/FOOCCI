@@ -15,6 +15,7 @@ import { calcDeliveryFeeFromConfig } from "@/lib/delivery";
 import { isOpenFromRow, getPeriodsForRow, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
 import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 import { getRepeatableOrder } from "@/services/order/RepeatOrderService";
+import { channelPrice } from "@/services/menu/MenuPricingService";
 
 export const dynamic = "force-dynamic";
 
@@ -190,7 +191,7 @@ export default async function PedidoPage({
             select: {
               menuItemId: true,
               quantity:   true,
-              menuItem:   { select: { id: true, name: true, price: true, isActive: true, isAvailable: true } },
+              menuItem:   { select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, priceIfood: true, isActive: true, isAvailable: true } },
             },
           },
         },
@@ -201,7 +202,7 @@ export default async function PedidoPage({
           .map((i) => ({
             id:    i.menuItemId!,
             name:  i.menuItem!.name,
-            price: Number(i.menuItem!.price),
+            price: channelPrice(i.menuItem!, "DELIVERY"),
             qty:   i.quantity,
           }));
       }
@@ -279,12 +280,14 @@ export default async function PedidoPage({
         where: { isActive: true, isAvailable: true, showInDelivery: true },
         orderBy: { sortOrder: "asc" },
         select: {
-          id: true, name: true, price: true, description: true, imageUrl: true,
+          id: true, name: true, price: true,
+          priceDelivery: true, priceDineIn: true, priceIfood: true,
+          description: true, imageUrl: true,
           hasVariants: true, ingredients: true, servingSize: true, portionInfo: true,
           variants: {
             where: { isAvailable: true },
             orderBy: { sortOrder: "asc" },
-            select: { id: true, name: true, price: true, portion: true },
+            select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, portion: true },
           },
           extras: {
             where: { isAvailable: true },
@@ -309,13 +312,15 @@ export default async function PedidoPage({
         include: {
           item: {
             select: {
-              id: true, name: true, price: true, description: true, imageUrl: true,
+              id: true, name: true, price: true,
+              priceDelivery: true, priceDineIn: true, priceIfood: true,
+              description: true, imageUrl: true,
               categoryId: true,
               hasVariants: true, ingredients: true, servingSize: true, portionInfo: true,
               variants: {
                 where: { isAvailable: true },
                 orderBy: { sortOrder: "asc" },
-                select: { id: true, name: true, price: true, portion: true },
+                select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, portion: true },
               },
               extras: {
                 where: { isAvailable: true },
@@ -361,8 +366,8 @@ export default async function PedidoPage({
 
   // Collect all raw items with their home categoryId for building the promotion map
   const allRawItems = rawCategories.flatMap((c) => [
-    ...c.items.map((i) => ({ id: i.id, categoryId: c.id, price: Number(i.price) })),
-    ...c.placements.map((p) => ({ id: p.item.id, categoryId: p.item.categoryId, price: Number(p.item.price) })),
+    ...c.items.map((i) => ({ id: i.id, categoryId: c.id, price: channelPrice(i, "DELIVERY") })),
+    ...c.placements.map((p) => ({ id: p.item.id, categoryId: p.item.categoryId, price: channelPrice(p.item, "DELIVERY") })),
   ]);
   const promoMap = buildPromotionMap(allRawItems, activePromotions);
 
@@ -371,7 +376,8 @@ export default async function PedidoPage({
     return {
       id: i.id,
       name: i.name,
-      price: Number(i.price),
+      // Delivery channel: use priceDelivery when set, else base price.
+      price: channelPrice(i, "DELIVERY"),
       description: i.description ?? null,
       imageUrl: i.imageUrl ?? null,
       hasVariants: i.hasVariants,
@@ -379,7 +385,7 @@ export default async function PedidoPage({
       servingSize: i.servingSize ?? null,
       portionInfo: i.portionInfo ?? null,
       promotion: promo,
-      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: Number(v.price), portion: v.portion ?? null })),
+      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: channelPrice(v, "DELIVERY"), portion: v.portion ?? null })),
       extras: i.extras.map((e) => ({ id: e.id, name: e.name, price: Number(e.price), portion: e.portion ?? null, quantity: e.quantity })),
       optionGroups: i.optionGroups.map((g) => ({
         id: g.id, name: g.name, required: g.required, minSelect: g.minSelect, maxSelect: g.maxSelect,

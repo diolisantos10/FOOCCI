@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { QRMenuClient } from "./QRMenuClient";
 import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
+import { channelPrice } from "@/services/menu/MenuPricingService";
 
 export const dynamic = "force-dynamic";
 
@@ -57,12 +58,14 @@ export default async function QRMenuPage({
         where: { isActive: true, showInDineIn: true, isAvailable: true },
         orderBy: { sortOrder: "asc" },
         select: {
-          id: true, name: true, description: true, price: true, imageUrl: true,
+          id: true, name: true, description: true, price: true,
+          priceDelivery: true, priceDineIn: true, priceIfood: true,
+          imageUrl: true,
           isAvailable: true, ingredients: true, servingSize: true, portionInfo: true,
           variants: {
             where: { isAvailable: true },
             orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-            select: { id: true, name: true, price: true, isAvailable: true },
+            select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, isAvailable: true },
           },
           extras: {
             orderBy: { name: "asc" },
@@ -76,13 +79,15 @@ export default async function QRMenuPage({
         include: {
           item: {
             select: {
-              id: true, name: true, description: true, price: true, imageUrl: true,
+              id: true, name: true, description: true, price: true,
+              priceDelivery: true, priceDineIn: true, priceIfood: true,
+              imageUrl: true,
               categoryId: true,
               isAvailable: true, ingredients: true, servingSize: true, portionInfo: true,
               variants: {
                 where: { isAvailable: true },
                 orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-                select: { id: true, name: true, price: true, isAvailable: true },
+                select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, isAvailable: true },
               },
               extras: {
                 orderBy: { name: "asc" },
@@ -118,30 +123,25 @@ export default async function QRMenuPage({
 
   // Build promo map from all raw items with their home categoryId
   const allRawItems = rawCategories.flatMap((c) => [
-    ...c.items.map((i) => ({ id: i.id, categoryId: c.id, price: Number(i.price) })),
-    ...c.placements.map((p) => ({ id: p.item.id, categoryId: p.item.categoryId, price: Number(p.item.price) })),
+    ...c.items.map((i) => ({ id: i.id, categoryId: c.id, price: channelPrice(i, "DINE_IN") })),
+    ...c.placements.map((p) => ({ id: p.item.id, categoryId: p.item.categoryId, price: channelPrice(p.item, "DINE_IN") })),
   ]);
   const promoMap = buildPromotionMap(allRawItems, activePromotions);
 
-  function mapQrItem(i: {
-    id: string; name: string; description: string | null; price: { toNumber?: () => number } | number;
-    imageUrl: string | null; isAvailable: boolean; ingredients: string | null;
-    servingSize: number | null; portionInfo: string | null;
-    variants: { id: string; name: string; price: { toNumber?: () => number } | number; isAvailable: boolean }[];
-    extras: { id: string; name: string; quantity: number; price: { toNumber?: () => number } | number }[];
-  }) {
+  function mapQrItem(i: typeof rawCategories[0]["items"][0]) {
     return {
       id: i.id,
       name: i.name,
       description: i.description ?? null,
-      price: Number(i.price),
+      // QR is the dine-in / salão channel: use priceDineIn when set, else base.
+      price: channelPrice(i, "DINE_IN"),
       imageUrl: i.imageUrl ?? null,
       isAvailable: i.isAvailable,
       ingredients: i.ingredients ?? null,
       servingSize: i.servingSize ?? null,
       portionInfo: i.portionInfo ?? null,
       promotion: promoMap.get(i.id) ?? null,
-      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: Number(v.price), isAvailable: v.isAvailable })),
+      variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: channelPrice(v, "DINE_IN"), isAvailable: v.isAvailable })),
       extras: i.extras.map((e) => ({ id: e.id, name: e.name, quantity: e.quantity, price: Number(e.price) })),
     };
   }
