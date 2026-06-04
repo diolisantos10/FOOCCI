@@ -104,6 +104,66 @@ interface DiagnosisReport {
   hasComparison:      boolean;
 }
 
+// ─── Retention types (W2) ────────────────────────────────────────────────────
+
+interface CohortData {
+  cohortMonth:            string;
+  newCustomers:           number;
+  returned30d:            number;
+  returned60d:            number;
+  returned90d:            number;
+  retention30dPct:        number;
+  retention60dPct:        number;
+  retention90dPct:        number;
+  averageSecondOrderDays: number | null;
+  totalRevenue:           number;
+  repeatRevenue:          number;
+  repeatRevenuePct:       number;
+  maturityNote:           string | null;
+}
+
+interface RetentionReport {
+  period:      { from: string; to: string };
+  cohorts:     CohortData[];
+  summary:     { avgRetention30d: number; avgRetention60d: number; avgRetention90d: number; bestCohort30d: string | null; worstCohort30d: string | null };
+  insights:    string[];
+  limitations: string[];
+  hasData:     boolean;
+}
+
+// ─── Operational Efficiency types (W2) ───────────────────────────────────────
+
+interface Bottleneck {
+  stage:          "FULFILLMENT" | "PAYMENT" | "CANCELLATION";
+  severity:       "INFO" | "WARNING" | "CRITICAL";
+  observedValue:  number;
+  threshold:      string;
+  affectedOrders: number;
+  recommendation: string;
+}
+
+interface OperationalEfficiencyReport {
+  period:      { from: string; to: string };
+  metrics: {
+    ordersWithTiming:         number;
+    avgFulfillmentMinutes:    number;
+    medianFulfillmentMinutes: number;
+    p90FulfillmentMinutes:    number;
+    delayedOrders:            number;
+    delayedRate:              number;
+    totalOrders:              number;
+    cancelledOrders:          number;
+    cancellationRate:         number;
+    awaitingPaymentCount:     number;
+    awaitingPaymentTotal:     number;
+    byType: { type: string; ordersWithTiming: number; avgFulfillmentMinutes: number; delayedOrders: number; delayedRate: number; delayThresholdMinutes: number }[];
+  };
+  bottlenecks: Bottleneck[];
+  insights:    string[];
+  limitations: string[];
+  hasData:     boolean;
+}
+
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
 function toISO(d: Date) {
@@ -797,6 +857,192 @@ function ImportedBaselineSection({ baseline }: { baseline: ImportedBaseline }) {
   );
 }
 
+// ─── W2 panels ────────────────────────────────────────────────────────────────
+
+const SEV_COLOR: Record<string, string> = {
+  CRITICAL: "bg-red-100 text-red-800 border-red-200",
+  WARNING:  "bg-amber-100 text-amber-800 border-amber-200",
+  INFO:     "bg-blue-100 text-blue-800 border-blue-200",
+};
+
+function RetentionPanel({ data, loading }: { data: RetentionReport | null; loading: boolean }) {
+  if (loading) return <Skeleton />;
+  if (!data) return null;
+
+  const { summary, cohorts, insights, limitations } = data;
+
+  return (
+    <div className="rounded-xl border border-purple-100 bg-white p-5 shadow-sm space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🔄</span>
+        <h3 className="text-sm font-bold text-gray-800">Retenção de clientes</h3>
+        {!data.hasData && (
+          <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">Sem dados</span>
+        )}
+      </div>
+
+      {/* Summary KPIs */}
+      {data.hasData && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Retorno 30d", val: `${summary.avgRetention30d.toFixed(1)}%` },
+            { label: "Retorno 60d", val: `${summary.avgRetention60d.toFixed(1)}%` },
+            { label: "Retorno 90d", val: `${summary.avgRetention90d.toFixed(1)}%` },
+          ].map((k) => (
+            <div key={k.label} className="rounded-xl bg-purple-50 p-3 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-500">{k.label}</p>
+              <p className="mt-0.5 text-xl font-bold text-purple-800">{k.val}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Cohort table */}
+      {cohorts.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b text-left text-gray-400">
+                <th className="pb-1.5 pr-3 font-medium">Coorte</th>
+                <th className="pb-1.5 pr-3 font-medium text-right">Novos</th>
+                <th className="pb-1.5 pr-3 font-medium text-right">30d</th>
+                <th className="pb-1.5 pr-3 font-medium text-right">60d</th>
+                <th className="pb-1.5 pr-3 font-medium text-right">90d</th>
+                <th className="pb-1.5 font-medium text-right">2.º pedido</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {cohorts.map((c) => (
+                <tr key={c.cohortMonth}>
+                  <td className="py-1.5 pr-3 font-medium text-gray-800">{c.cohortMonth}</td>
+                  <td className="py-1.5 pr-3 text-right text-gray-600">{c.newCustomers}</td>
+                  <td className="py-1.5 pr-3 text-right text-gray-800">{c.retention30dPct.toFixed(1)}%</td>
+                  <td className="py-1.5 pr-3 text-right text-gray-600">{c.retention60dPct.toFixed(1)}%</td>
+                  <td className="py-1.5 pr-3 text-right text-gray-600">{c.retention90dPct.toFixed(1)}%</td>
+                  <td className="py-1.5 text-right text-gray-500">
+                    {c.averageSecondOrderDays != null ? `${c.averageSecondOrderDays}d` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Insights */}
+      {insights.length > 0 && (
+        <ul className="space-y-1">
+          {insights.map((ins, i) => (
+            <li key={i} className="text-xs text-purple-700">• {ins}</li>
+          ))}
+        </ul>
+      )}
+
+      {/* Limitations */}
+      {limitations.length > 0 && (
+        <div className="rounded-lg bg-gray-50 p-3 space-y-0.5">
+          {limitations.map((l, i) => (
+            <p key={i} className="text-[10px] text-gray-400">{l}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OperationsPanel({ data, loading }: { data: OperationalEfficiencyReport | null; loading: boolean }) {
+  if (loading) return <Skeleton />;
+  if (!data) return null;
+
+  const { metrics, bottlenecks, insights, limitations } = data;
+  const hasTiming = metrics.ordersWithTiming > 0;
+
+  return (
+    <div className="rounded-xl border border-teal-100 bg-white p-5 shadow-sm space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">⚙️</span>
+        <h3 className="text-sm font-bold text-gray-800">Eficiência operacional</h3>
+        {!data.hasData && (
+          <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">Sem dados</span>
+        )}
+      </div>
+
+      {/* KPI grid */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-xl bg-teal-50 p-3 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-teal-500">Tempo médio</p>
+          <p className="mt-0.5 text-xl font-bold text-teal-800">
+            {hasTiming ? `${metrics.avgFulfillmentMinutes}min` : "—"}
+          </p>
+        </div>
+        <div className="rounded-xl bg-teal-50 p-3 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-teal-500">Mediana</p>
+          <p className="mt-0.5 text-xl font-bold text-teal-800">
+            {hasTiming ? `${metrics.medianFulfillmentMinutes}min` : "—"}
+          </p>
+        </div>
+        <div className="rounded-xl bg-amber-50 p-3 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">Atrasados</p>
+          <p className="mt-0.5 text-xl font-bold text-amber-800">
+            {hasTiming ? `${metrics.delayedRate.toFixed(1)}%` : "—"}
+          </p>
+        </div>
+        <div className="rounded-xl bg-rose-50 p-3 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-500">Cancelamentos</p>
+          <p className="mt-0.5 text-xl font-bold text-rose-800">
+            {metrics.cancellationRate > 0 ? `${metrics.cancellationRate.toFixed(1)}%` : "—"}
+          </p>
+        </div>
+      </div>
+
+      {/* Awaiting payment */}
+      {metrics.awaitingPaymentCount > 0 && (
+        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 flex items-center gap-2">
+          <span className="text-amber-500">⏳</span>
+          <p className="text-xs text-amber-800">
+            <strong>{metrics.awaitingPaymentCount}</strong> pedidos aguardando pagamento
+            {metrics.awaitingPaymentTotal > 0 && ` · ${fmtBRL(metrics.awaitingPaymentTotal)}`}
+          </p>
+        </div>
+      )}
+
+      {/* Bottlenecks */}
+      {bottlenecks.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Gargalos identificados</p>
+          {bottlenecks.map((bn, i) => (
+            <div key={i} className={`rounded-lg border px-3 py-2 text-xs ${SEV_COLOR[bn.severity] ?? SEV_COLOR.INFO}`}>
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">{bn.stage}</span>
+                <span className="text-[10px] font-bold uppercase">{bn.severity}</span>
+              </div>
+              <p className="mt-0.5 text-[11px]">{bn.recommendation}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Insights */}
+      {insights.length > 0 && (
+        <ul className="space-y-1">
+          {insights.map((ins, i) => (
+            <li key={i} className="text-xs text-teal-700">• {ins}</li>
+          ))}
+        </ul>
+      )}
+
+      {/* Limitations */}
+      {limitations.length > 0 && (
+        <div className="rounded-lg bg-gray-50 p-3 space-y-0.5">
+          {limitations.slice(0, 2).map((l, i) => (
+            <p key={i} className="text-[10px] text-gray-400">{l}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Analytics Agent components ───────────────────────────────────────────────
 
 const SEVERITY_STYLE: Record<InsightSeverity, {
@@ -1203,7 +1449,8 @@ function UpsellRevenueCard({ upsell }: { upsell: UpsellRevenue | undefined }) {
 // ─── Tab: Visão Geral ─────────────────────────────────────────────────────────
 
 function TabVisaoGeral({
-  data, loading, agentData, agentLoading, diagnosisData, diagnosisLoading, preset,
+  data, loading, agentData, agentLoading, diagnosisData, diagnosisLoading,
+  operationsData, operationsLoading, preset,
 }: {
   data: AnalyticsOverview | null;
   loading: boolean;
@@ -1211,6 +1458,8 @@ function TabVisaoGeral({
   agentLoading: boolean;
   diagnosisData: DiagnosisReport | null;
   diagnosisLoading: boolean;
+  operationsData: OperationalEfficiencyReport | null;
+  operationsLoading: boolean;
   preset: Preset;
 }) {
   const kpi            = data?.kpi;
@@ -1294,6 +1543,9 @@ function TabVisaoGeral({
       {!loading && !hasRealOrders && !hasImported && preset !== "all" && (
         <FallbackPrompt preset={preset} />
       )}
+
+      {/* Operational Efficiency — fulfillment timing + delays (W2) */}
+      <OperationsPanel data={operationsData} loading={operationsLoading} />
 
       {/* Diagnosis Engine — period root-cause + anomalies (W1) */}
       <DiagnosisPanel data={diagnosisData} loading={diagnosisLoading} />
@@ -1831,10 +2083,12 @@ function classifyImportedTemp(
   return "frio";
 }
 
-function TabClientes({ data, loading, preset }: {
+function TabClientes({ data, loading, preset, retentionData, retentionLoading }: {
   data: AnalyticsOverview | null;
   loading: boolean;
   preset: Preset;
+  retentionData: RetentionReport | null;
+  retentionLoading: boolean;
 }) {
   const hasRealCustomers     = (data?.topCustomers.length ?? 0) > 0;
   const hasImportedCustomers = (data?.importedTopCustomers.length ?? 0) > 0;
@@ -1857,6 +2111,9 @@ function TabClientes({ data, loading, preset }: {
 
   return (
     <div className="space-y-6">
+
+      {/* ── Retention cohorts (W2) ────────────────────────────────────────── */}
+      <RetentionPanel data={retentionData} loading={retentionLoading} />
 
       {/* ── Imported customers section (Todo histórico) ─────────────────── */}
       {!loading && showAllMode && hasImportedCustomers && (
@@ -2206,6 +2463,12 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
   const [diagnosisData,    setDiagnosisData]    = useState<DiagnosisReport | null>(null);
   const [diagnosisLoading, setDiagnosisLoading] = useState(false);
 
+  const [retentionData,    setRetentionData]    = useState<RetentionReport | null>(null);
+  const [retentionLoading, setRetentionLoading] = useState(false);
+
+  const [operationsData,    setOperationsData]    = useState<OperationalEfficiencyReport | null>(null);
+  const [operationsLoading, setOperationsLoading] = useState(false);
+
   const load = useCallback(async (f: string, t: string) => {
     setLoading(true);
     setError(null);
@@ -2249,11 +2512,41 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
     }
   }, []);
 
+  const loadRetention = useCallback(async (f: string, t: string) => {
+    setRetentionLoading(true);
+    try {
+      const res  = await fetch(`/api/analytics/retention?from=${f}&to=${t}`);
+      const json = await res.json() as { data?: RetentionReport; error?: string };
+      if (res.ok && json.data) setRetentionData(json.data);
+      else setRetentionData(null);
+    } catch {
+      setRetentionData(null);
+    } finally {
+      setRetentionLoading(false);
+    }
+  }, []);
+
+  const loadOperations = useCallback(async (f: string, t: string) => {
+    setOperationsLoading(true);
+    try {
+      const res  = await fetch(`/api/analytics/operations?from=${f}&to=${t}`);
+      const json = await res.json() as { data?: OperationalEfficiencyReport; error?: string };
+      if (res.ok && json.data) setOperationsData(json.data);
+      else setOperationsData(null);
+    } catch {
+      setOperationsData(null);
+    } finally {
+      setOperationsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void load(from, to);
     void loadAgent(from, to);
     void loadDiagnosis(from, to);
-  }, [from, to, load, loadAgent, loadDiagnosis]);
+    void loadRetention(from, to);
+    void loadOperations(from, to);
+  }, [from, to, load, loadAgent, loadDiagnosis, loadRetention, loadOperations]);
 
   function handlePreset(p: Preset) {
     setPreset(p);
@@ -2357,6 +2650,8 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
             agentLoading={agentLoading}
             diagnosisData={diagnosisData}
             diagnosisLoading={diagnosisLoading}
+            operationsData={operationsData}
+            operationsLoading={operationsLoading}
             preset={preset}
           />
         )}
@@ -2367,7 +2662,13 @@ export function AnalyticsClient({ restaurantSlug = "" }: { restaurantSlug?: stri
           <TabCategorias data={data} loading={loading} preset={preset} />
         )}
         {activeTab === "clientes" && (
-          <TabClientes data={data} loading={loading} preset={preset} />
+          <TabClientes
+            data={data}
+            loading={loading}
+            preset={preset}
+            retentionData={retentionData}
+            retentionLoading={retentionLoading}
+          />
         )}
         {activeTab === "canais" && (
           <TabCanais data={data} loading={loading} />
