@@ -4940,11 +4940,9 @@ export function CRMClient({
     }
   }
 
-  const friasCount = currentStats.frioCustomers + currentStats.mornoCustomers;
-
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: "overview",      label: "Visão Geral" },
-    { id: "campanhas",     label: "Campanhas", badge: friasCount || undefined },
+    { id: "campanhas",     label: "Campanhas" },
     { id: "automacoes",    label: "Automações" },
     { id: "customers",     label: "Clientes" },
     { id: "programa",      label: "Programa de Relacionamento" },
@@ -4959,6 +4957,12 @@ export function CRMClient({
 
   function goToOpportunities() {
     setTab("campanhas");
+  }
+
+  function handleSegmentClick(filter: "quente" | "morno" | "frio" | "novos") {
+    const crmFilter: CRMFilter = filter === "novos" ? "firstTime" : filter;
+    setCustomerFilter(crmFilter);
+    setTab("customers");
   }
 
   return (
@@ -4993,6 +4997,7 @@ export function CRMClient({
           opportunitiesCount={opportunitiesCount}
           actions={initialActions}
           onNavigateToTab={setTab}
+          onSegmentClick={handleSegmentClick}
           loading={statsLoading}
           datePreset={datePreset}
           customFrom={customFrom}

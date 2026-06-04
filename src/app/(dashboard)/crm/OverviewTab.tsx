@@ -39,6 +39,8 @@ const ACTION_ICON: Record<CrmActionType, string> = {
   SAFETY_ISSUE_ALERT:           "⚠️",
 };
 
+const CONFIG_ACTION_TYPES: CrmActionType[] = ["SAFETY_ISSUE_ALERT", "CAMPAIGN_PERFORMANCE_ALERT"];
+
 // ── AI Draft Preview (W6 — draft-only, no send) ──────────────────────────────
 
 interface MessagePreview {
@@ -539,55 +541,82 @@ function ActionCenterSection({
   const [expanded, setExpanded] = useState(false);
   if (actions.length === 0) return null;
 
-  const highCount = actions.filter((a) => a.priority === "HIGH").length;
-  const visible = expanded ? actions : actions.slice(0, 3);
+  const configActions     = actions.filter((a) => CONFIG_ACTION_TYPES.includes(a.type));
+  const commercialActions = actions.filter((a) => !CONFIG_ACTION_TYPES.includes(a.type));
+  const highCount         = commercialActions.filter((a) => a.priority === "HIGH").length;
+  const visible           = expanded ? commercialActions : commercialActions.slice(0, 3);
 
-  // W8: a REVIEW_REQUEST action with no recommended campaign type signals a
-  // missing Google/iFood review link — surface a config CTA to /marca.
   const reviewBlockedNoLink = actions.some(
     (a) => a.type === "REVIEW_REQUEST" && a.recommendedCampaignType === null,
   );
 
   return (
-    <div className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-            Próximas ações recomendadas
+    <div className="space-y-4">
+      {/* ── Configurações pendentes ───────────────────────────────────── */}
+      {(configActions.length > 0 || reviewBlockedNoLink) && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-5 shadow-sm">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-amber-700">
+            Configurações pendentes
           </p>
-          {highCount > 0 && (
-            <p className="text-[10px] text-red-600 mt-0.5">{highCount} de alta prioridade</p>
-          )}
-        </div>
-        <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">
-          {actions.length} ação{actions.length !== 1 ? "ões" : ""}
-        </span>
-      </div>
-      {reviewBlockedNoLink && (
-        <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
-          <p className="text-[11px] text-amber-700">
-            ⭐ Para pedir avaliações, configure o link do Google ou iFood em Marca.
-          </p>
-          <a
-            href="/marca"
-            className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-700 transition-colors"
-          >
-            Configurar link
-          </a>
+          <div className="space-y-3">
+            {configActions.map((action) => (
+              <ActionCard key={action.id} action={action} onNavigateToTab={onNavigateToTab} />
+            ))}
+            {reviewBlockedNoLink && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white px-3 py-2.5">
+                <p className="text-[11px] text-amber-700">
+                  ⭐ Para pedir avaliações, configure o link do Google ou iFood em Marca.
+                </p>
+                <a
+                  href="/marca"
+                  className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-700 transition-colors"
+                >
+                  Configurar link
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       )}
-      <div className="space-y-3">
-        {visible.map((action) => (
-          <ActionCard key={action.id} action={action} onNavigateToTab={onNavigateToTab} />
-        ))}
-      </div>
-      {actions.length > 3 && (
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-3 w-full rounded-lg border border-gray-100 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
-        >
-          {expanded ? "Ver menos" : `Ver mais ${actions.length - 3} ação${actions.length - 3 !== 1 ? "ões" : ""}`}
-        </button>
+
+      {/* ── Oportunidades de receita ──────────────────────────────────── */}
+      {commercialActions.length > 0 && (
+        <div className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                Oportunidades de receita
+              </p>
+              {highCount > 0 && (
+                <p className="mt-0.5 text-[10px] text-red-600">{highCount} de alta prioridade</p>
+              )}
+            </div>
+            {highCount > 0 ? (
+              <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+                {highCount} urgente{highCount !== 1 ? "s" : ""}
+              </span>
+            ) : (
+              <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">
+                {commercialActions.length} {commercialActions.length !== 1 ? "recomendações" : "recomendação"}
+              </span>
+            )}
+          </div>
+          <div className="space-y-3">
+            {visible.map((action) => (
+              <ActionCard key={action.id} action={action} onNavigateToTab={onNavigateToTab} />
+            ))}
+          </div>
+          {commercialActions.length > 3 && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-3 w-full rounded-lg border border-gray-100 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+            >
+              {expanded
+                ? "Ver menos"
+                : `Ver mais ${commercialActions.length - 3} ${commercialActions.length - 3 !== 1 ? "recomendações" : "recomendação"}`}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -601,12 +630,16 @@ function KPICard({
   sub,
   accent,
   loading,
+  onClick,
+  ctaLabel,
 }: {
   label: string;
   value: string | number;
   sub?: string;
   accent?: "green" | "yellow" | "red" | "blue" | "brand";
   loading?: boolean;
+  onClick?: () => void;
+  ctaLabel?: string;
 }) {
   const accentClass = {
     green:  "text-green-700",
@@ -617,7 +650,10 @@ function KPICard({
   }[accent ?? "brand"] ?? "text-brand-700";
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+    <div
+      className={`rounded-2xl border border-gray-100 bg-white p-4 shadow-sm${onClick ? " cursor-pointer hover:border-brand-200 hover:shadow-md transition-all" : ""}`}
+      onClick={onClick}
+    >
       {loading ? (
         <div className="h-8 w-16 animate-pulse rounded bg-gray-100" />
       ) : (
@@ -625,6 +661,9 @@ function KPICard({
       )}
       <p className="mt-0.5 text-xs font-semibold text-gray-600">{label}</p>
       {sub && <p className="mt-1 text-[10px] text-gray-400">{sub}</p>}
+      {ctaLabel && onClick && (
+        <p className="mt-2 text-[10px] font-semibold text-brand-600">{ctaLabel} →</p>
+      )}
     </div>
   );
 }
@@ -636,6 +675,7 @@ export function OverviewTab({
   opportunitiesCount,
   actions = [],
   onNavigateToTab,
+  onSegmentClick,
   loading,
   datePreset,
   customFrom,
@@ -646,6 +686,7 @@ export function OverviewTab({
   opportunitiesCount: number;
   actions?: CrmAction[];
   onNavigateToTab?: (tab: "campanhas" | "customers") => void;
+  onSegmentClick?: (filter: "quente" | "morno" | "frio" | "novos") => void;
   loading: boolean;
   datePreset: DateFilterPreset;
   customFrom: string;
@@ -739,41 +780,60 @@ export function OverviewTab({
       </div>
 
       {/* ── KPI grid (5 cards) ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <KPICard
-          label="Total"
-          value={stats.totalCustomers}
-          accent="brand"
-          loading={loading}
-        />
-        <KPICard
-          label="Quentes"
-          value={stats.ativoCustomers}
-          sub="≤ 30 dias"
-          accent="green"
-          loading={loading}
-        />
-        <KPICard
-          label="Mornos"
-          value={stats.mornoCustomers}
-          sub="31–60 dias"
-          accent="yellow"
-          loading={loading}
-        />
-        <KPICard
-          label="Frios"
-          value={stats.frioCustomers}
-          sub="> 60 dias"
-          accent="red"
-          loading={loading}
-        />
-        <KPICard
-          label={newCustomersLabel}
-          value={stats.newCustomers}
-          accent="blue"
-          loading={loading}
-        />
-      </div>
+      {stats.totalCustomers === 0 && !loading ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+          <p className="text-sm font-semibold text-gray-600">Nenhum cliente cadastrado ainda.</p>
+          <p className="mt-1 text-xs text-gray-400">
+            Importe sua base de clientes ou aguarde os primeiros pedidos para ver as métricas aqui.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <KPICard
+            label="Clientes na base"
+            value={stats.totalCustomers}
+            sub="Inclui Foocci + importados"
+            accent="brand"
+            loading={loading}
+          />
+          <KPICard
+            label="Quentes"
+            value={stats.ativoCustomers}
+            sub="Compraram nos últ. 30 dias"
+            accent="green"
+            loading={loading}
+            onClick={onSegmentClick ? () => onSegmentClick("quente") : undefined}
+            ctaLabel={onSegmentClick ? "Ver clientes quentes" : undefined}
+          />
+          <KPICard
+            label="Mornos"
+            value={stats.mornoCustomers}
+            sub="31–60 dias sem comprar"
+            accent="yellow"
+            loading={loading}
+            onClick={onSegmentClick ? () => onSegmentClick("morno") : undefined}
+            ctaLabel={onSegmentClick ? "Ver clientes mornos" : undefined}
+          />
+          <KPICard
+            label="Frios"
+            value={stats.frioCustomers}
+            sub="Mais de 60 dias sem comprar"
+            accent="red"
+            loading={loading}
+            onClick={onSegmentClick ? () => onSegmentClick("frio") : undefined}
+            ctaLabel={onSegmentClick ? "Ver clientes frios" : undefined}
+          />
+          <KPICard
+            label={newCustomersLabel}
+            value={stats.newCustomers}
+            sub={datePreset === "total" ? "Cadastrados na base" : undefined}
+            accent="blue"
+            loading={loading}
+            onClick={onSegmentClick ? () => onSegmentClick("novos") : undefined}
+            ctaLabel={onSegmentClick ? "Ver novos clientes" : undefined}
+          />
+        </div>
+      )}
 
       {/* ── Action Center ───────────────────────────────────────────────── */}
       {actions.length > 0 && (
