@@ -687,6 +687,20 @@ function MasterChannelCard() {
     } finally { setSaveBusy(false); }
   }
 
+  async function clearSavedKey() {
+    setSaveBusy(true); setErr(null); setMsg(null);
+    try {
+      const res = await fetch("/api/admin/build-os/master-channel", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clearApiKey: true }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao remover a apiKey salva."); return; }
+      setApiKey("");
+      setMsg("apiKey salva removida. Usando a variável de ambiente (EVOLUTION_DEFAULT_API_KEY).");
+      applyStatus(d.status as MasterStatus);
+    } finally { setSaveBusy(false); }
+  }
+
   async function setEnabled(enabled: boolean) {
     setSaveBusy(true); setErr(null);
     try {
@@ -754,6 +768,24 @@ function MasterChannelCard() {
           <strong>{SOURCE_LABEL[status.apiKeySource]}</strong>
           {status.envApiKeyAvailable ? " (EVOLUTION_DEFAULT_API_KEY disponível)" : ""}
         </p>
+      )}
+
+      {/* Saved key is overriding env — offer to remove it */}
+      {status && status.apiKeySource === "saved" && status.envApiKeyAvailable && (
+        <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800">
+          <p className="font-medium">
+            ⚠️ Existe uma apiKey salva manualmente. Ela está sobrescrevendo a variável de ambiente
+            (<code>EVOLUTION_DEFAULT_API_KEY</code>). Se a conexão dá 401/403, a chave salva provavelmente está incorreta.
+          </p>
+          <button
+            type="button"
+            disabled={saveBusy}
+            onClick={clearSavedKey}
+            className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-40"
+          >
+            {saveBusy ? "Removendo…" : "Usar chave do ambiente (remover apiKey salva)"}
+          </button>
+        </div>
       )}
 
       {credsMissing && (
@@ -850,7 +882,7 @@ function MasterChannelCard() {
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prontidão para testar /build</p>
           <ul className="mt-2 space-y-1">
             <ChecklistRow ok={status.readiness.baseUrlAvailable} label="baseUrl Evolution disponível" hint="env EVOLUTION_DEFAULT_URL ou campo acima" />
-            <ChecklistRow ok={status.readiness.apiKeyAvailable} label="apiKey Evolution disponível" hint="env EVOLUTION_DEFAULT_API_KEY ou campo acima" />
+            <ChecklistRow ok={status.readiness.apiKeyAvailable} label={`apiKey Evolution disponível (origem: ${SOURCE_LABEL[status.apiKeySource]})`} hint="env EVOLUTION_DEFAULT_API_KEY ou campo acima" />
             <ChecklistRow ok={status.readiness.instanceNameSaved} label="instanceName salvo" hint="ex.: futi-admin" />
             <ChecklistRow ok={status.readiness.channelEnabled} label="Canal Admin ativo" hint="marque a caixa acima" />
             <ChecklistRow ok={status.readiness.connectionOpen} label="conexão OPEN" hint="conecte via QR" />

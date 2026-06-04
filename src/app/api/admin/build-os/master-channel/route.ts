@@ -36,6 +36,8 @@ const patchSchema = z.object({
   baseUrl: z.string().min(1).max(300).optional(),
   // Plaintext API key — encrypted server-side, never echoed back. Omit to keep.
   apiKey: z.string().min(1).max(500).optional(),
+  // Remove the saved apiKey so resolution falls back to EVOLUTION_DEFAULT_API_KEY.
+  clearApiKey: z.boolean().optional(),
   isEnabled: z.boolean().optional(),
 });
 

@@ -165,6 +165,8 @@ export interface UpsertAdminWhatsAppInput {
   baseUrl?: string | null;
   /** Plaintext API key — encrypted before storage; omitted when unchanged. */
   apiKey?: string;
+  /** Clear the manually-saved apiKey so resolution falls back to EVOLUTION_DEFAULT_API_KEY. */
+  clearApiKey?: boolean;
   isEnabled?: boolean;
 }
 
@@ -219,7 +221,15 @@ export async function upsertAdminWhatsApp(input: UpsertAdminWhatsAppInput): Prom
       if (!normalized) return { ok: false, error: "baseUrl inválida. Use algo como https://evolution-api-production-xxx.up.railway.app" };
       data.baseUrl = normalized;
     }
-    if (input.apiKey !== undefined && input.apiKey.trim()) data.apiKey = encrypt(input.apiKey.trim());
+    // Clear the saved key (revert to env) — takes precedence over a (blank) apiKey.
+    if (input.clearApiKey) {
+      if (!getEnvEvolutionApiKey()) {
+        return { ok: false, error: "Não há EVOLUTION_DEFAULT_API_KEY no ambiente para usar após remover a chave salva." };
+      }
+      data.apiKey = ""; // "" → resolveApiKey falls back to env
+    } else if (input.apiKey !== undefined && input.apiKey.trim()) {
+      data.apiKey = encrypt(input.apiKey.trim());
+    }
     if (input.isEnabled !== undefined) data.isEnabled = input.isEnabled;
     if (!row.webhookSecret) data.webhookSecret = encrypt(randomBytes(24).toString("hex"));
 
