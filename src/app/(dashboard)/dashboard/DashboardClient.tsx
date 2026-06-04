@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import type { CockpitReport, CockpitAlert, CockpitAction, HealthStatus } from "@/services/dashboard/DashboardCockpitService";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -754,6 +755,107 @@ function RealtimeBadge() {
   );
 }
 
+// ── Cockpit: Alerts Strip ──────────────────────────────────────────────────────
+
+const ALERT_STYLE: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+  CRITICAL: { bg: "bg-red-50",   border: "border-red-200",   text: "text-red-800",   dot: "bg-red-500"   },
+  WARNING:  { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-800", dot: "bg-amber-500" },
+  INFO:     { bg: "bg-blue-50",  border: "border-blue-200",  text: "text-blue-800",  dot: "bg-blue-500"  },
+};
+
+function AlertsStrip({ alerts }: { alerts: CockpitAlert[] }) {
+  if (alerts.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {alerts.map(a => {
+        const s = ALERT_STYLE[a.severity] ?? ALERT_STYLE.INFO!;
+        const inner = (
+          <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${s!.bg} ${s!.border} ${s!.text}`}>
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${s!.dot}`} />
+            {a.title}
+          </div>
+        );
+        return a.actionHref ? (
+          <Link key={a.id} href={a.actionHref}>{inner}</Link>
+        ) : (
+          <div key={a.id}>{inner}</div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Cockpit: Actions Section ───────────────────────────────────────────────────
+
+const SOURCE_ICON: Record<string, string> = {
+  OPERATIONS: "⚙️",
+  CRM:        "👥",
+  RECOVERY:   "♻️",
+};
+
+function ActionsSection({ actions }: { actions: CockpitAction[] }) {
+  if (actions.length === 0) return null;
+  return (
+    <Card className="p-4">
+      <SectionHeader title="O que fazer agora" sub="Ações recomendadas com base nos dados de hoje" />
+      <div className="space-y-2.5">
+        {actions.map(a => (
+          <div key={a.id} className="flex items-center gap-3 rounded-xl border border-orange-100 bg-orange-50 p-3">
+            <span className="text-lg shrink-0">{SOURCE_ICON[a.source] ?? "💡"}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-900">{a.title}</p>
+              <p className="text-xs text-gray-500">{a.description}</p>
+            </div>
+            <Link
+              href={a.actionHref}
+              className="shrink-0 rounded-lg bg-orange-500 px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-orange-600"
+            >
+              {a.actionLabel}
+            </Link>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ── Cockpit: Health Row ────────────────────────────────────────────────────────
+
+const HEALTH_STYLE: Record<HealthStatus, { bg: string; dot: string; text: string }> = {
+  HEALTHY:  { bg: "bg-green-50",  dot: "bg-green-500",  text: "text-green-700"  },
+  WARNING:  { bg: "bg-amber-50",  dot: "bg-amber-500",  text: "text-amber-700"  },
+  CRITICAL: { bg: "bg-red-50",    dot: "bg-red-500",    text: "text-red-700"    },
+  NO_DATA:  { bg: "bg-gray-50",   dot: "bg-gray-300",   text: "text-gray-500"   },
+};
+
+const HEALTH_LABELS: Record<string, string> = {
+  sales:      "Vendas",
+  operations: "Operações",
+  crm:        "CRM",
+  recovery:   "Carrinhos",
+};
+
+function HealthRow({ health }: { health: CockpitReport["health"] }) {
+  const entries = (Object.entries(health) as [keyof typeof health, CockpitReport["health"][keyof CockpitReport["health"]]][]);
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {entries.map(([key, ind]) => {
+        const s = HEALTH_STYLE[ind.status];
+        return (
+          <div key={key} className={`flex flex-col gap-0.5 rounded-xl p-3 ${s.bg}`}>
+            <div className="flex items-center gap-1.5">
+              <span className={`h-2 w-2 shrink-0 rounded-full ${s.dot}`} />
+              <span className={`text-[11px] font-bold ${s.text}`}>{ind.label}</span>
+            </div>
+            <p className="text-[10px] leading-tight text-gray-500">{HEALTH_LABELS[key] ?? key}</p>
+            {ind.sub && <p className="text-[10px] leading-tight text-gray-400">{ind.sub}</p>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function DashboardClient({ userName }: { userName: string }) {
@@ -765,6 +867,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
   const [period,      setPeriod]      = useState<PeriodKey>("today");
   const [customStart, setCustomStart] = useState("");
   const [customEnd,   setCustomEnd]   = useState("");
+  const [cockpit,     setCockpit]     = useState<CockpitReport | null>(null);
 
   useEffect(() => {
     setDateStr(
@@ -803,6 +906,23 @@ export default function DashboardClient({ userName }: { userName: string }) {
     const id = period === "today" ? setInterval(() => { void load(); }, 120_000) : null;
     return () => { active = false; if (id) clearInterval(id); };
   }, [period, customStart, customEnd, retryCount]);
+
+  // Cockpit: fetch alerts, actions, health (today-only, non-blocking)
+  useEffect(() => {
+    let active = true;
+    if (period !== "today") { setCockpit(null); return; }
+    async function loadCockpit() {
+      try {
+        const res = await fetch("/api/dashboard/cockpit");
+        if (!res.ok) return;
+        const json = (await res.json()) as { data: CockpitReport };
+        if (active) setCockpit(json.data);
+      } catch { /* non-critical — silently omit cockpit sections */ }
+    }
+    void loadCockpit();
+    const id = setInterval(() => { void loadCockpit(); }, 120_000);
+    return () => { active = false; clearInterval(id); };
+  }, [period, retryCount]);
 
   function handlePeriodChange(p: PeriodKey) {
     if (p !== "custom") {
@@ -845,6 +965,11 @@ export default function DashboardClient({ userName }: { userName: string }) {
         onChange={handlePeriodChange}
         onCustomChange={handleCustomChange}
       />
+
+      {/* Alert chips — today only */}
+      {cockpit && cockpit.urgentAlerts.length > 0 && (
+        <AlertsStrip alerts={cockpit.urgentAlerts} />
+      )}
     </div>
   );
 
@@ -929,6 +1054,11 @@ export default function DashboardClient({ userName }: { userName: string }) {
           pendingPayments={data.pendingPaymentsCount}
         />
 
+        {/* Cockpit: "O que fazer agora" */}
+        {cockpit && cockpit.recommendedActions.length > 0 && (
+          <ActionsSection actions={cockpit.recommendedActions} />
+        )}
+
         {/* Products + Modality */}
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
@@ -963,7 +1093,15 @@ export default function DashboardClient({ userName }: { userName: string }) {
         {/* Foocci upsell + recovery proof */}
         <FoocciProofSection proof={data.foocciProof} periodLabel={pLabel} />
 
-        {/* Analytics link */}
+        {/* Cockpit: health indicators (today only) */}
+        {cockpit && (
+          <Card className="p-4">
+            <SectionHeader title="Saúde do negócio" sub="Indicadores em tempo real · hoje" href="/analytics" hrefLabel="Analytics" />
+            <HealthRow health={cockpit.health} />
+          </Card>
+        )}
+
+        {/* Analytics deep-dive link */}
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-xl">
