@@ -17,6 +17,33 @@ interface Report {
     commitSha: string; branch: string; appVersion: string; nodeEnv: string;
     buildMarker: string; webhookRouteExpected: string; healthEndpoint: string;
   };
+  eventFreshness?: {
+    available: boolean;
+    generatedAt?: string;
+    lastEventAt?: string | null;
+    lastEventAgeMinutes?: number | null;
+    lastEventInstance?: string | null;
+    staleThresholdMinutes?: number;
+    stale?: boolean;
+    expectedInstance?: string | null;
+    perInstance?: Array<{ instanceName: string; lastEventAt: string | null; ageMinutes: number | null; eventCount: number }>;
+    orientation?: string;
+  };
+  buildArrivalCheck?: {
+    available: boolean;
+    lastBuildTraceAt?: string | null;
+    lastBuildTracePrefix?: string | null;
+    lastBuildTraceMaskedPhone?: string | null;
+    lastBuildTraceAuthorized?: boolean | null;
+    lastBuildTraceFailureReason?: string | null;
+    lastBuildTraceFromMe?: boolean | null;
+    lastBuildTraceCanAuthorize?: boolean;
+    lastBuildMessageAt?: string | null;
+    lastBuildAnyAt?: string | null;
+    lastBuildAgeMinutes?: number | null;
+    newBuildSinceLastTrace?: boolean;
+    note?: string;
+  };
   buildOsConfig: { exists: boolean; enabled: boolean; source: string; hardDisabled: boolean; mode: string };
   authorizedSenderCheck: {
     inputPhone: string; normalizedPhone: string; variants: string[];
@@ -249,6 +276,55 @@ export function BuildOsDiagnosticsPanel() {
             <p className="mt-1 text-sm text-gray-700">{report.likelyRootCause.explanation}</p>
             <p className="mt-2 text-sm text-gray-800"><strong>Correção recomendada:</strong> {report.likelyRootCause.recommendedFix}</p>
           </div>
+
+          {/* Event freshness — answers "resent /build but nothing shows" */}
+          {report.eventFreshness?.available && (
+            <div className={`rounded-xl border p-5 ${report.eventFreshness.stale ? "border-red-300 bg-red-50" : "border-green-200 bg-green-50"}`}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Chegada de eventos do WhatsApp (Evolution)</p>
+              <p className="mt-1 text-lg font-bold text-gray-900">
+                {report.eventFreshness.lastEventAgeMinutes === null || report.eventFreshness.lastEventAgeMinutes === undefined
+                  ? "Nenhum evento Evolution registrado"
+                  : `Último evento recebido há ${report.eventFreshness.lastEventAgeMinutes} min`}
+              </p>
+              <p className="mt-1 text-sm text-gray-700">
+                Último evento: {report.eventFreshness.lastEventAt ? new Date(report.eventFreshness.lastEventAt).toLocaleString("pt-BR") : "nunca"}
+                {report.eventFreshness.lastEventInstance ? ` · instância ${report.eventFreshness.lastEventInstance}` : ""}
+                {" · "}gerado em {report.eventFreshness.generatedAt ? new Date(report.eventFreshness.generatedAt).toLocaleString("pt-BR") : "—"}
+              </p>
+              <p className="mt-1 text-sm text-gray-700">
+                Instância esperada para teste: <strong>{report.eventFreshness.expectedInstance ?? "—"}</strong>
+              </p>
+              {report.eventFreshness.stale && (
+                <p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-sm font-medium text-red-800">
+                  ⚠️ {report.eventFreshness.orientation}
+                </p>
+              )}
+              {report.buildArrivalCheck?.available && (
+                <p className="mt-2 text-sm text-gray-800">
+                  <strong>Último /build registrado:</strong>{" "}
+                  {report.buildArrivalCheck.lastBuildAnyAt
+                    ? `${new Date(report.buildArrivalCheck.lastBuildAnyAt).toLocaleString("pt-BR")} (há ${report.buildArrivalCheck.lastBuildAgeMinutes} min)`
+                    : "nenhum"}
+                  {" — "}{report.buildArrivalCheck.note}
+                </p>
+              )}
+              {report.eventFreshness.perInstance && report.eventFreshness.perInstance.length > 0 && (
+                <table className="mt-3 w-full text-xs">
+                  <thead><tr className="text-left text-gray-400"><th className="py-1">Instância</th><th>Último evento</th><th>Há (min)</th><th>Total eventos</th></tr></thead>
+                  <tbody>
+                    {report.eventFreshness.perInstance.map((p) => (
+                      <tr key={p.instanceName} className="border-t border-gray-100">
+                        <td className="py-1 font-mono">{p.instanceName}</td>
+                        <td>{p.lastEventAt ? new Date(p.lastEventAt).toLocaleString("pt-BR") : "—"}</td>
+                        <td>{p.ageMinutes ?? "—"}</td>
+                        <td>{p.eventCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
 
           {/* PASS/FAIL badges */}
           <div className="flex flex-wrap gap-2">
@@ -678,6 +754,23 @@ function buildReportMarkdown(r: Report): string {
   L.push(`- Explicação: ${r.likelyRootCause.explanation}`);
   L.push(`- Correção recomendada: ${r.likelyRootCause.recommendedFix}`);
   L.push("");
+
+  if (r.eventFreshness?.available) {
+    L.push("## Chegada de eventos (Evolution)");
+    L.push(`- Último evento recebido: ${r.eventFreshness.lastEventAt ?? "nunca"} (há ${r.eventFreshness.lastEventAgeMinutes ?? "—"} min, instância ${r.eventFreshness.lastEventInstance ?? "—"})`);
+    L.push(`- Relatório gerado em: ${r.eventFreshness.generatedAt ?? "—"}`);
+    L.push(`- Eventos desatualizados (stale > ${r.eventFreshness.staleThresholdMinutes ?? "?"} min): ${yn(r.eventFreshness.stale)}`);
+    L.push(`- Instância esperada para teste: ${r.eventFreshness.expectedInstance ?? "—"}`);
+    if (r.eventFreshness.stale) L.push(`- ⚠️ ${r.eventFreshness.orientation ?? ""}`);
+    for (const p of r.eventFreshness.perInstance ?? []) {
+      L.push(`  - [${p.instanceName}] último ${p.lastEventAt ?? "—"} (há ${p.ageMinutes ?? "—"} min) · ${p.eventCount} eventos`);
+    }
+    if (r.buildArrivalCheck?.available) {
+      L.push(`- Último /build registrado: ${r.buildArrivalCheck.lastBuildAnyAt ?? "nenhum"} (há ${r.buildArrivalCheck.lastBuildAgeMinutes ?? "—"} min)`);
+      L.push(`- ${r.buildArrivalCheck.note ?? ""}`);
+    }
+    L.push("");
+  }
 
   L.push("## Checks principais");
   L.push(`- Config ativa: ${yn(r.buildOsConfig.enabled && !r.buildOsConfig.hardDisabled)}`);

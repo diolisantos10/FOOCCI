@@ -65,6 +65,8 @@ export async function runBuildOsDiagnostics(opts?: {
   const testMessage = opts?.message?.trim() || DEFAULT_MESSAGE;
   const normalizedPhone = normalizeSenderPhone(inputPhone);
   const variants = Array.from(phoneVariants(normalizedPhone));
+  // Single reference clock for all freshness/age computations in this report.
+  const generatedAt = new Date();
 
   // ── buildOsConfig ──
   const hardDisabled = isBuildOsHardDisabled();
@@ -430,6 +432,107 @@ export async function runBuildOsDiagnostics(opts?: {
   const recentWebhookTraces = await getRecentWebhookTraces(10);
   const lastWebhookAt = recentWebhookTraces[0]?.createdAt ?? null;
 
+  // ── eventFreshness + buildArrivalCheck ──────────────────────────────────────
+  //  Answers the "I resent /build but nothing shows" case WITHOUT telling the user
+  //  to resend again. If no Evolution event of ANY kind arrived after time X, then
+  //  a /build sent after X did not reach THIS app/instance — a delivery problem,
+  //  not a Build OS logic problem. All cross-instance (no filter) so a command that
+  //  landed on a different instance is still visible.
+  const STALE_MINUTES = 5;
+  const nowMs = generatedAt.getTime();
+  const ageMin = (d: Date | null | undefined) =>
+    d ? Math.max(0, Math.round((nowMs - d.getTime()) / 60000)) : null;
+
+  let eventFreshness: Record<string, unknown> = { available: false };
+  let buildArrivalCheck: Record<string, unknown> = { available: false };
+  try {
+    const [latestEvent, perInstance, lastBuildTrace, lastBuildMessage] = await Promise.all([
+      prisma.evolutionWebhookEventLog.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true, instanceName: true, eventName: true, direction: true },
+      }),
+      prisma.evolutionWebhookEventLog.groupBy({
+        by: ["instanceName"],
+        _max: { createdAt: true },
+        _count: { _all: true },
+      }),
+      prisma.buildWebhookTrace.findFirst({
+        where: { prefixDetected: { in: BUILD_PREFIXES } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          createdAt: true, prefixDetected: true, maskedPhone: true,
+          authorized: true, failureReason: true, rawPhone: true, fromMe: true,
+        },
+      }),
+      prisma.message.findFirst({
+        where: { OR: BUILD_PREFIXES.map((p) => ({ content: { startsWith: p } })) },
+        orderBy: { sentAt: "desc" },
+        select: { sentAt: true },
+      }),
+    ]);
+
+    const lastEventAt = latestEvent?.createdAt ?? null;
+    const lastEventAgeMinutes = ageMin(lastEventAt);
+    const stale = lastEventAgeMinutes === null || lastEventAgeMinutes > STALE_MINUTES;
+    const activeInstances = (evolutionInstanceCheck.instances as Array<{ instanceName: string; isActive: boolean }> | undefined) ?? [];
+    const expectedInstance = activeInstances.find((i) => i.isActive)?.instanceName ?? activeInstances[0]?.instanceName ?? null;
+
+    eventFreshness = {
+      available: true,
+      generatedAt: generatedAt.toISOString(),
+      lastEventAt: lastEventAt?.toISOString() ?? null,
+      lastEventAgeMinutes,
+      lastEventInstance: latestEvent?.instanceName ?? null,
+      staleThresholdMinutes: STALE_MINUTES,
+      stale,
+      expectedInstance,
+      perInstance: perInstance
+        .map((g) => ({
+          instanceName: g.instanceName,
+          lastEventAt: g._max.createdAt?.toISOString() ?? null,
+          ageMinutes: ageMin(g._max.createdAt),
+          eventCount: g._count._all,
+        }))
+        .sort((a, b) => (b.lastEventAt ?? "").localeCompare(a.lastEventAt ?? "")),
+      orientation: stale
+        ? `Nenhum evento Evolution chegou nos últimos ${lastEventAgeMinutes ?? "?"} min (último: ${lastEventAt?.toISOString() ?? "nunca"}). Se você enviou /build depois desse horário, ele NÃO chegou nesta instância/app. Verifique: (1) o WhatsApp do teste é a instância conectada (${expectedInstance ?? "—"})? (2) o webhook aponta para este app? (3) a instância continua conectada?`
+        : "Eventos Evolution estão chegando normalmente.",
+    };
+
+    const lastBuildTraceAt = lastBuildTrace?.createdAt ?? null;
+    const lastBuildMessageAt = lastBuildMessage?.sentAt ?? null;
+    const buildDates = [lastBuildTraceAt, lastBuildMessageAt].filter(Boolean) as Date[];
+    const lastBuildAnyAt = buildDates.length ? new Date(Math.max(...buildDates.map((d) => d.getTime()))) : null;
+    const lastBuildAgeMinutes = ageMin(lastBuildAnyAt);
+
+    buildArrivalCheck = {
+      available: true,
+      lastBuildTraceAt: lastBuildTraceAt?.toISOString() ?? null,
+      lastBuildTracePrefix: lastBuildTrace?.prefixDetected ?? null,
+      lastBuildTraceMaskedPhone: lastBuildTrace?.maskedPhone ?? null,
+      lastBuildTraceAuthorized: lastBuildTrace?.authorized ?? null,
+      lastBuildTraceFailureReason: lastBuildTrace?.failureReason ?? null,
+      lastBuildTraceFromMe: lastBuildTrace?.fromMe ?? null,
+      lastBuildTraceCanAuthorize: !!lastBuildTrace?.rawPhone,
+      lastBuildMessageAt: lastBuildMessageAt?.toISOString() ?? null,
+      lastBuildAnyAt: lastBuildAnyAt?.toISOString() ?? null,
+      lastBuildAgeMinutes,
+      // A /build is "recent" only if it arrived at/after the last Evolution event.
+      // If the last /build predates the last event, the recent traffic carried no
+      // /build → the user's new /build was NOT registered by this app.
+      newBuildSinceLastTrace:
+        !!lastEventAt && !!lastBuildAnyAt && lastBuildAnyAt.getTime() >= lastEventAt.getTime() - 1000,
+      note: !lastBuildAnyAt
+        ? "Nenhum /build encontrado (nem trace, nem mensagem). Este app nunca registrou um /build."
+        : lastBuildAgeMinutes !== null && lastBuildAgeMinutes > STALE_MINUTES
+          ? `O /build mais recente registrado foi há ${lastBuildAgeMinutes} min. Um /build enviado depois disso NÃO foi registrado por este app.`
+          : "Há um /build recente registrado.",
+    };
+  } catch {
+    eventFreshness = { available: false };
+    buildArrivalCheck = { available: false };
+  }
+
   // ── deployInfo: lets the admin confirm production runs the trace-capable build.
   //    `buildMarker` is bumped whenever the Build OS webhook path changes, so an
   //    old deploy is obvious without reading commit SHAs.
@@ -445,8 +548,10 @@ export async function runBuildOsDiagnostics(opts?: {
   };
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: generatedAt.toISOString(),
     deployInfo,
+    eventFreshness,
+    buildArrivalCheck,
     buildOsConfig,
     authorizedSenderCheck,
     projectCheck,
