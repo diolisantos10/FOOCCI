@@ -578,6 +578,7 @@ interface MasterStatus {
   enabled: boolean;
   existsInEvolution: boolean;
   expectedWebhookUrl: string;
+  operatorMasked: string | null;
   health: {
     connectionState: string | null;
     connectedNumberMasked: string | null;
@@ -590,6 +591,28 @@ interface MasterStatus {
     issues: string[];
   } | null;
   numbersInvolved: { authorizedOperatorMasked: string | null } | null;
+  readiness: {
+    instanceNameSaved: boolean;
+    instanceExists: boolean;
+    connectionOpen: boolean;
+    webhookOk: boolean;
+    messagesUpsert: boolean;
+    operatorActive: boolean;
+    lastEventReceived: boolean;
+    allReady: boolean;
+  };
+}
+
+function ChecklistRow({ ok, label, hint }: { ok: boolean; label: string; hint?: string }) {
+  return (
+    <li className="flex items-start gap-2 text-xs">
+      <span className={ok ? "text-green-600" : "text-gray-400"}>{ok ? "✅" : "⬜"}</span>
+      <span className={ok ? "text-gray-800" : "text-gray-500"}>
+        {label}
+        {!ok && hint ? <span className="text-gray-400"> — {hint}</span> : null}
+      </span>
+    </li>
+  );
 }
 
 function MasterChannelCard({
@@ -743,6 +766,31 @@ function MasterChannelCard({
                 </ul>
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Readiness checklist — only "Pronto para testar" when ALL items pass */}
+      {status && (
+        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prontidão para testar /build</p>
+          <ul className="mt-2 space-y-1">
+            <ChecklistRow ok={status.readiness.instanceNameSaved} label="instanceName salvo" hint="salve o nome da instância acima" />
+            <ChecklistRow ok={status.readiness.instanceExists} label="instância existe na Evolution" hint="crie/conecte em Integrações → WhatsApp" />
+            <ChecklistRow ok={status.readiness.connectionOpen} label="conexão OPEN" hint="conecte o WhatsApp (QR) da instância Master" />
+            <ChecklistRow ok={status.readiness.webhookOk} label="webhook correto (habilitado + URL esperada)" hint="clique em Sincronizar webhook" />
+            <ChecklistRow ok={status.readiness.messagesUpsert} label="MESSAGES_UPSERT ativo" hint="clique em Sincronizar webhook" />
+            <ChecklistRow ok={status.readiness.operatorActive} label={`operador autorizado ativo${status.operatorMasked ? ` (${status.operatorMasked})` : " (+55***5223)"}`} hint="cadastre o operador Diego" />
+            <ChecklistRow ok={status.readiness.lastEventReceived} label="último evento recebido nesta instância" hint="envie uma mensagem de teste para a instância Master" />
+          </ul>
+          {status.readiness.allReady ? (
+            <p className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-sm font-semibold text-green-800">
+              ✅ Pronto para testar /build — envie &quot;/build teste&quot; do número {status.operatorMasked ?? "+55***5223"} para o número conectado no Canal Master.
+            </p>
+          ) : (
+            <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800">
+              ⏳ Ainda não está pronto. Resolva os itens pendentes acima — o /build NÃO vai funcionar até todos estarem OK.
+            </p>
           )}
         </div>
       )}

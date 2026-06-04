@@ -9,13 +9,25 @@
  * to restaurant instances. No Claude/GitHub/LLM.
  */
 
-import { getBuildOsChannel } from "./BuildOSConfigService";
+import { getBuildOsChannel, countActiveDbSenders } from "./BuildOSConfigService";
 import { runInstanceHealthCheck, type InstanceHealth } from "./BuildOSInstanceHealthService";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { getExpectedEvolutionWebhookUrl } from "@/lib/public-url";
 
 const WEBHOOK_EVENTS = ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"];
+
+/** End-to-end readiness checklist for sending a real /build to the Master channel. */
+export interface MasterChannelReadiness {
+  instanceNameSaved: boolean;
+  instanceExists: boolean;
+  connectionOpen: boolean;
+  webhookOk: boolean;          // enabled AND URL matches the canonical webhook
+  messagesUpsert: boolean;
+  operatorActive: boolean;     // at least one active authorized operator (Diego)
+  lastEventReceived: boolean;
+  allReady: boolean;
+}
 
 export interface MasterChannelStatus {
   configured: boolean;            // instance set AND enabled
@@ -27,13 +39,17 @@ export interface MasterChannelStatus {
   health: InstanceHealth | null;
   /** Masked authorized operator + comparison, from the health report. */
   numbersInvolved: Awaited<ReturnType<typeof runInstanceHealthCheck>>["numbersInvolved"] | null;
+  /** Masked authorized operator (e.g. "+55***5223") — never the full number. */
+  operatorMasked: string | null;
   expectedWebhookUrl: string;
+  readiness: MasterChannelReadiness;
 }
 
 /** Focused status for the Master channel card (reuses the instance-health probe). */
 export async function getMasterChannelStatus(): Promise<MasterChannelStatus> {
   const ch = await getBuildOsChannel();
   const expectedWebhookUrl = getExpectedEvolutionWebhookUrl();
+  const operatorActive = (await countActiveDbSenders()) > 0;
 
   if (!ch.instanceName) {
     return {
@@ -44,12 +60,44 @@ export async function getMasterChannelStatus(): Promise<MasterChannelStatus> {
       existsInEvolution: false,
       health: null,
       numbersInvolved: null,
+      operatorMasked: null,
       expectedWebhookUrl,
+      readiness: {
+        instanceNameSaved: false,
+        instanceExists: false,
+        connectionOpen: false,
+        webhookOk: false,
+        messagesUpsert: false,
+        operatorActive,
+        lastEventReceived: false,
+        allReady: false,
+      },
     };
   }
 
   const report = await runInstanceHealthCheck();
   const health = report.instances.find((i) => i.instanceName === ch.instanceName) ?? null;
+  const operatorMasked = report.numbersInvolved?.authorizedOperatorMasked ?? null;
+
+  const readiness: MasterChannelReadiness = {
+    instanceNameSaved: true,
+    instanceExists: !!health,
+    connectionOpen: health?.connectionState === "open",
+    webhookOk: health?.webhookEnabled === true && health?.urlMatchesExpected === true,
+    messagesUpsert: health?.hasMessagesUpsert === true,
+    operatorActive,
+    lastEventReceived: !!health?.lastEventAt,
+    allReady: false,
+  };
+  readiness.allReady =
+    readiness.instanceNameSaved &&
+    readiness.instanceExists &&
+    readiness.connectionOpen &&
+    readiness.webhookOk &&
+    readiness.messagesUpsert &&
+    readiness.operatorActive &&
+    readiness.lastEventReceived &&
+    ch.enabled;
 
   return {
     configured: ch.configured,
@@ -59,7 +107,9 @@ export async function getMasterChannelStatus(): Promise<MasterChannelStatus> {
     existsInEvolution: !!health,
     health,
     numbersInvolved: report.numbersInvolved,
+    operatorMasked,
     expectedWebhookUrl,
+    readiness,
   };
 }
 
