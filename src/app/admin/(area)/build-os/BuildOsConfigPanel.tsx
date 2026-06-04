@@ -572,6 +572,26 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+interface MasterStatus {
+  configured: boolean;
+  instanceName: string | null;
+  enabled: boolean;
+  existsInEvolution: boolean;
+  expectedWebhookUrl: string;
+  health: {
+    connectionState: string | null;
+    connectedNumberMasked: string | null;
+    webhookUrl: string | null;
+    webhookEnabled: boolean | null;
+    hasMessagesUpsert: boolean;
+    urlMatchesExpected: boolean;
+    lastEventAt: string | null;
+    lastEventAgeMinutes: number | null;
+    issues: string[];
+  } | null;
+  numbersInvolved: { authorizedOperatorMasked: string | null } | null;
+}
+
 function MasterChannelCard({
   channel,
   busy,
@@ -582,14 +602,41 @@ function MasterChannelCard({
   onSave: (body: Record<string, unknown>) => void;
 }) {
   const [instanceName, setInstanceName] = useState(channel.instanceName ?? "");
+  const [status, setStatus] = useState<MasterStatus | null>(null);
+  const [checkBusy, setCheckBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   useEffect(() => { setInstanceName(channel.instanceName ?? ""); }, [channel.instanceName]);
 
+  async function verify() {
+    setCheckBusy(true); setErr(null); setMsg(null);
+    try {
+      const res = await fetch("/api/admin/build-os/master-channel");
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao verificar."); return; }
+      setStatus(d.status as MasterStatus);
+    } finally { setCheckBusy(false); }
+  }
+
+  async function sync() {
+    setSyncBusy(true); setErr(null); setMsg(null);
+    try {
+      const res = await fetch("/api/admin/build-os/master-channel/sync", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao sincronizar webhook."); return; }
+      setMsg(d.result?.note ?? "Webhook sincronizado no Canal Master.");
+      await verify();
+    } finally { setSyncBusy(false); }
+  }
+
+  const h = status?.health;
   return (
     <div className={`rounded-xl border p-5 ${channel.configured ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
       <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Canal WhatsApp Master/Admin</h3>
       <p className="mt-1 text-xs text-gray-600">
-        Este canal recebe comandos internos do Diego/CEO e dos operadores autorizados. Ele é
-        <strong> separado dos WhatsApps dos restaurantes</strong> (sushicazza etc.). Informe o nome da instância
+        Este é o <strong>número receptor dos comandos internos</strong> do Diego/CEO e dos operadores autorizados.
+        Ele é <strong>separado dos WhatsApps dos restaurantes</strong> (sushicazza etc.). Informe o nome da instância
         Evolution dedicada ao Build OS.
       </p>
 
@@ -641,6 +688,64 @@ function MasterChannelCard({
           </span>
         </label>
       </div>
+
+      {/* Actions */}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={verify}
+          disabled={checkBusy || syncBusy}
+          className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-40"
+        >
+          {checkBusy ? "Verificando…" : "Verificar conexão"}
+        </button>
+        <button
+          type="button"
+          onClick={sync}
+          disabled={checkBusy || syncBusy}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-40"
+        >
+          {syncBusy ? "Sincronizando…" : "Sincronizar webhook"}
+        </button>
+      </div>
+
+      {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>}
+      {msg && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">{msg}</p>}
+
+      {/* Live status */}
+      {status && (
+        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
+          {!status.instanceName ? (
+            <p className="text-xs text-amber-700">Defina e salve o nome da instância do Canal Master primeiro.</p>
+          ) : !status.existsInEvolution ? (
+            <div className="text-xs text-red-700">
+              <p className="font-semibold">Canal Master configurado, mas instância &quot;{status.instanceName}&quot; não encontrada na Evolution.</p>
+              <p className="mt-1 text-gray-600">
+                Próximo passo: crie/conecte essa instância na Evolution (página de Integrações → WhatsApp) e depois volte aqui
+                em &quot;Verificar conexão&quot;. Não use instâncias de restaurante como Build OS.
+              </p>
+              <a href="/integracoes/whatsapp" className="mt-1 inline-block font-semibold text-orange-700 underline">
+                Abrir Integrações → WhatsApp
+              </a>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-gray-700 sm:grid-cols-2">
+              <span>Conexão: <strong className={h?.connectionState === "open" ? "text-green-700" : "text-red-700"}>{h?.connectionState?.toUpperCase() ?? "DESCONHECIDA"}</strong></span>
+              <span>Número conectado: <span className="font-mono">{h?.connectedNumberMasked ?? "—"}</span></span>
+              <span>Operador autorizado: <span className="font-mono">{status.numbersInvolved?.authorizedOperatorMasked ?? "—"}</span></span>
+              <span>Webhook habilitado: {h?.webhookEnabled === null || h?.webhookEnabled === undefined ? "—" : String(h.webhookEnabled)}</span>
+              <span>URL bate com a esperada: {String(h?.urlMatchesExpected ?? false)}</span>
+              <span>MESSAGES_UPSERT: {h?.hasMessagesUpsert ? "sim" : "não"}</span>
+              <span className="sm:col-span-2">Último evento: {h?.lastEventAt ? `${new Date(h.lastEventAt).toLocaleString("pt-BR")} (há ${h.lastEventAgeMinutes} min)` : "nunca"}</span>
+              {h?.issues && h.issues.length > 0 && (
+                <ul className="sm:col-span-2 mt-1 list-disc space-y-0.5 pl-5 text-red-700">
+                  {h.issues.map((i, idx) => <li key={idx}>{i}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
         <Meta label="Configurado" value={channel.configured ? "Sim" : "Não"} />

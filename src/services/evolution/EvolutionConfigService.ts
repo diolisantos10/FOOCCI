@@ -93,6 +93,31 @@ export class EvolutionConfigService {
   }
 
   /**
+   * Like getSnapshot but keyed by Evolution instanceName instead of restaurantId.
+   * Used by the Build OS Master channel admin flow, where the Master instance may
+   * belong to any restaurant. Returns 404 when no config has this instanceName.
+   */
+  static async getSnapshotByInstanceName(
+    instanceName: string,
+    includeWebhookSecret = false
+  ): Promise<ServiceResult<EvolutionConfigSnapshot>> {
+    const config = await prisma.evolutionConfig.findFirst({
+      where: { instanceName },
+    });
+
+    if (!config) {
+      return serviceFail(`Evolution config not configured for instance "${instanceName}"`, 404);
+    }
+
+    return serviceOk({
+      instanceName:  config.instanceName,
+      baseUrl:       config.baseUrl,
+      apiKey:        decrypt(config.apiKey),
+      ...(includeWebhookSecret ? { webhookSecret: decrypt(config.webhookSecret) } : {}),
+    });
+  }
+
+  /**
    * Find a restaurant by their Evolution instanceName.
    * Used by the webhook receiver to route inbound events to the right tenant.
    *
