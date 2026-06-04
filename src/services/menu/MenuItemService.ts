@@ -8,6 +8,13 @@ import type {
 } from "@/validators/menu";
 import type { MenuItem } from "@prisma/client";
 
+// Convert an optional channel price (number | null) into a Prisma value:
+// a number → Decimal, explicit null → null (clears the override).
+function toChannelDecimal(v: number | null | undefined): Decimal | null | undefined {
+  if (v === undefined) return undefined; // field not provided → leave unchanged
+  return v === null ? null : new Decimal(v);
+}
+
 export class MenuItemService {
   static async listByCategory(
     restaurantId: string,
@@ -69,6 +76,9 @@ export class MenuItemService {
         description: input.description,
         ingredients: input.ingredients,
         price: new Decimal(input.price),
+        priceDelivery: toChannelDecimal(input.priceDelivery) ?? null,
+        priceDineIn:   toChannelDecimal(input.priceDineIn) ?? null,
+        priceIfood:    toChannelDecimal(input.priceIfood) ?? null,
         imageUrl: input.imageUrl || null,
         sortOrder: input.sortOrder,
         isActive: input.isActive,
@@ -116,6 +126,9 @@ export class MenuItemService {
         ...(input.description !== undefined && { description: input.description }),
         ...(input.ingredients !== undefined && { ingredients: input.ingredients || null }),
         ...(input.price !== undefined && { price: new Decimal(input.price) }),
+        ...(input.priceDelivery !== undefined && { priceDelivery: toChannelDecimal(input.priceDelivery) }),
+        ...(input.priceDineIn   !== undefined && { priceDineIn:   toChannelDecimal(input.priceDineIn) }),
+        ...(input.priceIfood    !== undefined && { priceIfood:    toChannelDecimal(input.priceIfood) }),
         ...(input.imageUrl !== undefined && { imageUrl: input.imageUrl || null }),
         ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),

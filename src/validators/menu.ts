@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+// Optional per-channel price. Accepts a positive number, or null/empty to
+// "use the base price" (channel pricing is backwards compatible).
+const channelPriceField = z.preprocess(
+  (val) => (val === "" || val === null || val === undefined ? null : Number(val)),
+  z.number().positive("Preço deve ser maior que zero").multipleOf(0.01).nullable(),
+).optional();
+
 // ─── Categories ───────────────────────────────────────────────
 
 export const createMenuCategorySchema = z.object({
@@ -34,6 +41,10 @@ export const createMenuItemSchema = z.object({
     .number()
     .positive("Price must be positive")
     .multipleOf(0.01, "Price must have at most 2 decimal places"),
+  // Channel-based pricing (null/omitted = fall back to base price).
+  priceDelivery: channelPriceField,
+  priceDineIn:   channelPriceField,
+  priceIfood:    channelPriceField,
   imageUrl: z.string().nullable().optional().or(z.literal("")),
   sortOrder: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),
@@ -72,6 +83,9 @@ export const createVariantSchema = z.object({
     .number()
     .positive("Preço deve ser maior que zero")
     .multipleOf(0.01, "Preço deve ter no máximo 2 casas decimais"),
+  priceDelivery: channelPriceField,
+  priceDineIn:   channelPriceField,
+  priceIfood:    channelPriceField,
   portion: z.string().max(50).optional(),
   isAvailable: z.boolean().default(true),
   sortOrder: z.number().int().min(0).default(0),

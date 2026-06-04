@@ -8,6 +8,11 @@ import type {
 } from "@/validators/menu";
 import type { MenuItemVariant } from "@prisma/client";
 
+function toChannelDecimal(v: number | null | undefined): Decimal | null | undefined {
+  if (v === undefined) return undefined;
+  return v === null ? null : new Decimal(v);
+}
+
 export class MenuItemVariantService {
   /** Verify that itemId belongs to restaurantId; returns the item or null. */
   private static async resolveItem(restaurantId: string, itemId: string) {
@@ -58,6 +63,9 @@ export class MenuItemVariantService {
         menuItemId: itemId,
         name: input.name.trim(),
         price: new Decimal(input.price),
+        priceDelivery: toChannelDecimal(input.priceDelivery) ?? null,
+        priceDineIn:   toChannelDecimal(input.priceDineIn) ?? null,
+        priceIfood:    toChannelDecimal(input.priceIfood) ?? null,
         portion: input.portion?.trim() ?? null,
         isAvailable: input.isAvailable ?? true,
         sortOrder: input.sortOrder ?? 0,
@@ -79,6 +87,9 @@ export class MenuItemVariantService {
       data: {
         ...(input.name !== undefined && { name: input.name.trim() }),
         ...(input.price !== undefined && { price: new Decimal(input.price) }),
+        ...(input.priceDelivery !== undefined && { priceDelivery: toChannelDecimal(input.priceDelivery) }),
+        ...(input.priceDineIn   !== undefined && { priceDineIn:   toChannelDecimal(input.priceDineIn) }),
+        ...(input.priceIfood    !== undefined && { priceIfood:    toChannelDecimal(input.priceIfood) }),
         ...(input.portion !== undefined && { portion: input.portion?.trim() ?? null }),
         ...(input.isAvailable !== undefined && { isAvailable: input.isAvailable }),
         ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),

@@ -247,7 +247,11 @@ model MenuItem {
   name                  String
   description           String?
   ingredients           String? // composition for AI suggestions
-  price                 Decimal  @db.Decimal(10, 2)
+  price                 Decimal  @db.Decimal(10, 2) // base/fallback price (used when a channel price is null)
+  // ── Channel-based pricing (null = fall back to base `price`) ──────────
+  priceDelivery         Decimal? @db.Decimal(10, 2) // price shown/used on the /pedido delivery channel
+  priceDineIn           Decimal? @db.Decimal(10, 2) // price shown/used on the /qr salão (dine-in) channel
+  priceIfood            Decimal? @db.Decimal(10, 2) // price for iFood (export/admin; integration optional)
   imageUrl              String?
   sortOrder             Int      @default(0)
   isActive              Boolean  @default(true)
@@ -301,7 +305,11 @@ model MenuItemVariant {
   id                    String   @id @default(cuid())
   menuItemId            String
   name                  String // e.g. "350ml", "600ml", "2L"
-  price                 Decimal  @db.Decimal(10, 2)
+  price                 Decimal  @db.Decimal(10, 2) // base/fallback variant price
+  // ── Channel-based pricing for this variant (null = fall back to `price`) ──
+  priceDelivery         Decimal? @db.Decimal(10, 2)
+  priceDineIn           Decimal? @db.Decimal(10, 2)
+  priceIfood            Decimal? @db.Decimal(10, 2)
   portion               String? // e.g. "300g", "500ml"
   isAvailable           Boolean  @default(true)
   sortOrder             Int      @default(0)
@@ -589,12 +597,21 @@ model Conversation {
   customerId    String?
   channel       Channel            @default(WHATSAPP)
   status        ConversationStatus @default(OPEN)
-  aiEnabled     Boolean            @default(true) // false when human has taken over
+  aiEnabled     Boolean            @default(true) // false when human has taken over (temporary)
   sessionId     String? // stable browser session ID for web agent tracking
   customerName  String? // denormalized — set for anonymous web sessions
   customerPhone String? // denormalized — set when customer identifies
   orderId       String?
   orderDraftId  String?
+  // ── Persistent non-customer classification + permanent AI lock (P0-A) ──
+  // Stronger than `aiEnabled=false`: when aiLocked is true the AI NEVER replies
+  // automatically and is NOT re-enabled by any auto-return rule — only an
+  // explicit manual unlock can restore AI.
+  conversationType  ConversationType @default(CUSTOMER)
+  aiLocked          Boolean          @default(false)
+  aiLockedReason    String? // free-text or classification note
+  aiLockedAt        DateTime?
+  aiLockedByUserId  String? // operator who applied the lock
   assignedTo        String?
   contextType       String? // INBOUND | CRM_CAMPAIGN | CRM_AUTOMATION | ORDER_SUPPORT | HUMAN_SUPPORT
   relatedCampaignId String? // denormalized Campaign.id — no FK; avoids cascade complexity
@@ -658,6 +675,18 @@ enum ConversationStatus {
   RESOLVED
   AI_ATENDENDO
   HUMANO_ASSUMIU
+}
+
+// Persistent classification of who is on the other side of a conversation.
+// Anything other than CUSTOMER marks a non-customer context where the AI must
+// stay silent until an operator manually reclassifies / unlocks it (P0-A).
+enum ConversationType {
+  CUSTOMER
+  STAFF
+  SUPPLIER
+  PARTNER
+  INTERNAL
+  OTHER_NON_CUSTOMER
 }
 
 enum Direction {

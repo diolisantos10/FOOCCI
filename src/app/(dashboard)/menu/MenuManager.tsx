@@ -28,6 +28,9 @@ type Variant = {
   id: string;
   name: string;
   price: number;
+  priceDelivery?: number | null;
+  priceDineIn?:   number | null;
+  priceIfood?:    number | null;
   isAvailable: boolean;
   sortOrder: number;
 };
@@ -63,6 +66,9 @@ type Item = {
   description: string | null;
   ingredients: string | null;
   price: number;
+  priceDelivery?: number | null;
+  priceDineIn?:   number | null;
+  priceIfood?:    number | null;
   imageUrl: string | null;
   isActive: boolean;
   sortOrder: number;
@@ -2257,6 +2263,9 @@ type EditModalForm = {
   description: string;
   ingredients: string;
   price: string;
+  priceDelivery: string;
+  priceDineIn:   string;
+  priceIfood:    string;
   imageUrl: string | null;
   showInDelivery: boolean;
   showInDineIn: boolean;
@@ -2295,6 +2304,9 @@ function EditItemModal({
     description: "",
     ingredients: "",
     price: "",
+    priceDelivery: "",
+    priceDineIn:   "",
+    priceIfood:    "",
     imageUrl: null,
     showInDelivery: false,
     showInDineIn: false,
@@ -2355,6 +2367,9 @@ function EditItemModal({
       description: item.description ?? "",
       ingredients: item.ingredients ?? "",
       price: String(item.price),
+      priceDelivery: item.priceDelivery != null ? String(item.priceDelivery) : "",
+      priceDineIn:   item.priceDineIn   != null ? String(item.priceDineIn)   : "",
+      priceIfood:    item.priceIfood    != null ? String(item.priceIfood)    : "",
       imageUrl: item.imageUrl ?? null,
       showInDelivery: item.showInDelivery,
       showInDineIn: item.showInDineIn,
@@ -2778,6 +2793,35 @@ function EditItemModal({
                   className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
                 />
               </div>
+            </div>
+
+            {/* ── Preços por canal (P0-B) ─────────────────────────────── */}
+            <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+              <p className="text-[11px] font-semibold text-gray-600">Preços por canal</p>
+              <p className="text-[11px] text-gray-400">Se vazio, usa o preço base.</p>
+              {([
+                { key: "priceDelivery" as const, label: "Delivery",   disabled: !form.showInDelivery },
+                { key: "priceDineIn"   as const, label: "Salão / QR", disabled: !form.showInDineIn },
+                { key: "priceIfood"    as const, label: "iFood",      disabled: false },
+              ]).map((ch) => (
+                <div key={ch.key} className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">
+                    {ch.label}{ch.disabled && <span className="ml-1 text-[10px] text-gray-400">(canal desativado)</span>}
+                  </label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">R$</span>
+                    <input
+                      value={form[ch.key]}
+                      onChange={(e) => setForm((f) => ({ ...f, [ch.key]: e.target.value }))}
+                      placeholder="usa preço base"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="space-y-1">
@@ -3768,6 +3812,10 @@ export function MenuManager({
       description: patch.description.trim() || undefined,
       ingredients: patch.ingredients.trim() || undefined,
       price: parseFloat(patch.price),
+      // Channel prices: empty string → null (clear override / use base).
+      priceDelivery: patch.priceDelivery.trim() === "" ? null : parseFloat(patch.priceDelivery),
+      priceDineIn:   patch.priceDineIn.trim()   === "" ? null : parseFloat(patch.priceDineIn),
+      priceIfood:    patch.priceIfood.trim()    === "" ? null : parseFloat(patch.priceIfood),
       imageUrl: patch.imageUrl,
       showInDelivery: patch.showInDelivery,
       showInDineIn: patch.showInDineIn,

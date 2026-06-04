@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { channelPrice } from "@/services/menu/MenuPricingService";
 
 export async function GET(
   _req: NextRequest,
@@ -41,6 +42,9 @@ export async function GET(
           name: true,
           description: true,
           price: true,
+          priceDelivery: true,
+          priceDineIn: true,
+          priceIfood: true,
           imageUrl: true,
           isAvailable: true,
         },
@@ -59,7 +63,8 @@ export async function GET(
         id: i.id,
         name: i.name,
         description: i.description ?? null,
-        price: Number(i.price),
+        // QR is the dine-in / salão channel.
+        price: channelPrice(i, "DINE_IN"),
         imageUrl: i.imageUrl ?? null,
         isAvailable: i.isAvailable,
       })),

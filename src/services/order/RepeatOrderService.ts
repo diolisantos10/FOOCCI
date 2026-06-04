@@ -17,6 +17,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { channelPrice } from "@/services/menu/MenuPricingService";
 
 // Statuses that represent a real, confirmed order worth repeating.
 // Excludes PENDING (not yet confirmed), AWAITING_PAYMENT (pending Pix),
@@ -113,11 +114,17 @@ export async function getRepeatableOrder(
           category:       { restaurantId },
         },
         select: {
-          id:          true,
-          name:        true,
-          price:       true,
-          hasVariants: true,
-          variants:    { where: { isAvailable: true }, select: { id: true, name: true, price: true } },
+          id:            true,
+          name:          true,
+          price:         true,
+          priceDelivery: true,
+          priceDineIn:   true,
+          priceIfood:    true,
+          hasVariants:   true,
+          variants:    {
+            where:  { isAvailable: true },
+            select: { id: true, name: true, price: true, priceDelivery: true, priceDineIn: true, priceIfood: true },
+          },
           // Only required option groups matter for finalizability.
           optionGroups: { where: { required: true }, select: { id: true } },
         },
@@ -140,7 +147,9 @@ export async function getRepeatableOrder(
     if (live.optionGroups.length > 0) { unavailableCount += 1; continue; }
 
     let useName     = live.name;
-    let usePrice    = Number(live.price);
+    // Repeat order is a /pedido (delivery) flow — re-price at the current
+    // DELIVERY channel price (falls back to base when no channel price set).
+    let usePrice    = channelPrice(live, "DELIVERY");
     let variantId:   string | undefined;
     let variantName: string | undefined;
 
@@ -153,7 +162,7 @@ export async function getRepeatableOrder(
       variantId   = v.id;
       variantName = v.name;
       useName     = `${live.name} — ${v.name}`;
-      usePrice    = Number(v.price);
+      usePrice    = channelPrice(v, "DELIVERY");
     }
 
     if (Number(oi.price) !== usePrice) priceChanged = true;

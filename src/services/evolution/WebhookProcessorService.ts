@@ -34,6 +34,7 @@ import type { AIOrderService as AIOrderServiceType } from "@/services/ai/AIOrder
 import { markCrmReplyIfApplicable } from "@/services/agents/AgentRoutingService";
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
+import { shouldAiRespond } from "@/services/conversation/ConversationAiPolicyService";
 
 // Resolved conversations older than this are treated as new threads.
 const REOPEN_WINDOW_HOURS = 24;
@@ -219,18 +220,14 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   // originated from a CRM campaign, automation, or cart recovery message.
   // These replies must go to human staff first; operators can manually release
   // AI via the Atendimento panel.
-  const isCrmOrigin =
-    conversation.contextType === "CRM_CAMPAIGN" ||
-    conversation.contextType === "CRM_AUTOMATION";
+  // Central AI policy decision — also enforces the persistent Staff/Supplier
+  // lock (P0-A). A locked / non-customer conversation can NEVER auto-reply.
+  const aiDecision = shouldAiRespond(conversation);
 
   const shouldRespond =
-    conversation.aiEnabled &&
-    !isCrmOrigin &&
+    aiDecision.allowed &&
     !isCartRecovery &&
-    !optedOutThisTurn &&
-    (conversation.status === ConversationStatus.OPEN ||
-     conversation.status === ConversationStatus.BOT ||
-     conversation.status === ConversationStatus.AI_ATENDENDO);
+    !optedOutThisTurn;
 
   if (shouldRespond) {
     // Read agent mode; default to RECEPTIONIST_ONLY if no config row exists.

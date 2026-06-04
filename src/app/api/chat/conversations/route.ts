@@ -68,6 +68,8 @@ async function fetchRows(
       channel:           true,
       status:            true,
       aiEnabled:         true,
+      conversationType:  true,
+      aiLocked:          true,
       customerName:      true,
       customerPhone:     true,
       lastMessageAt:     true,

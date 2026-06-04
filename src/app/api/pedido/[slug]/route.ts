@@ -21,6 +21,7 @@ import type { OrderStage } from "@/lib/agent/types";
 import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { ConversationLogService } from "@/services/conversation/ConversationLogService";
 import { REPEAT_ORDER_INTENT_RE, buildRepeatOrderReply } from "@/services/order/RepeatOrderService";
+import { channelPrice } from "@/services/menu/MenuPricingService";
 import { Channel } from "@prisma/client";
 
 // ── Request shape ─────────────────────────────────────────────────────────────
@@ -74,7 +75,11 @@ export async function GET(
         items: {
           where:   { isActive: true, isAvailable: true, showInDelivery: true },
           orderBy: { sortOrder: "asc" },
-          select:  { id: true, name: true, price: true, description: true, imageUrl: true },
+          select:  {
+            id: true, name: true, price: true,
+            priceDelivery: true, priceDineIn: true, priceIfood: true,
+            description: true, imageUrl: true,
+          },
         },
       },
     });
@@ -89,7 +94,8 @@ export async function GET(
         items: c.items.map((i) => ({
           id:          i.id,
           name:        i.name,
-          price:       Number(i.price),
+          // Delivery channel: use the delivery price when set, else base.
+          price:       channelPrice(i, "DELIVERY"),
           description: i.description,
           imageUrl:    i.imageUrl ?? null,
         })),
@@ -250,7 +256,9 @@ export async function POST(
       where:   { isActive: true, isAvailable: true, showInDelivery: true, category: { restaurantId: restaurant.id } },
       orderBy: { sortOrder: "asc" },
       select:  {
-        id: true, name: true, price: true, description: true, sortOrder: true,
+        id: true, name: true, price: true,
+        priceDelivery: true, priceDineIn: true, priceIfood: true,
+        description: true, sortOrder: true,
         servingSize: true, portionInfo: true,
         tagFunil: true, perfilPaladar: true, harmonizacaoSugerida: true,
         alergenosDetalhados: true, storytellingIA: true,
@@ -261,7 +269,8 @@ export async function POST(
       id:                   i.id,
       name:                 i.name,
       categoryName:         (i.category as { name: string } | null)?.name ?? "",
-      price:                Number(i.price),
+      // /pedido is the delivery channel — Waiter suggests delivery prices.
+      price:                channelPrice(i, "DELIVERY"),
       sortOrder:            i.sortOrder ?? undefined,
       description:          i.description ?? null,
       servingSize:          (i.servingSize as number | null) ?? null,

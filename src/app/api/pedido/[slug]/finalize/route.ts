@@ -35,6 +35,7 @@ import { CustomerMetricsSyncService } from "@/services/crm/CustomerMetricsSyncSe
 import { resolveDeliveryFee } from "@/lib/delivery-fee-resolver";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { getActiveMenuPromotions, resolveMenuItemPromotion } from "@/services/promotions/productPromotionResolver";
+import { channelPrice } from "@/services/menu/MenuPricingService";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { assignOrderNumber } from "@/lib/order-number";
 import { resolveItemUpsell } from "@/lib/upsell-attribution";
@@ -217,10 +218,13 @@ export async function POST(
         category:    { restaurantId, isActive: true },
       },
       select: {
-        id:         true,
-        price:      true,
-        categoryId: true,
-        category:   { select: { name: true } },
+        id:            true,
+        price:         true,
+        priceDelivery: true,
+        priceDineIn:   true,
+        priceIfood:    true,
+        categoryId:    true,
+        category:      { select: { name: true } },
       },
     }),
     allOptionIds.length > 0
@@ -237,8 +241,11 @@ export async function POST(
       : Promise.resolve([]),
   ]);
 
+  // Resolve the menu price for the order's channel (delivery vs salão/QR) so
+  // the server-side price guard matches what the customer saw on the menu.
+  const pricingChannel = parsed.data.deliveryMethod === "delivery" ? "DELIVERY" : "DINE_IN";
   const dbItemMap = new Map(dbItems.map((i) => [i.id, {
-    price:        Number(i.price),
+    price:        channelPrice(i, pricingChannel),
     categoryId:   i.categoryId,
     categoryName: i.category?.name ?? null,
   }]));

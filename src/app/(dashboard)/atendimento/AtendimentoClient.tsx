@@ -42,7 +42,7 @@ type ConvStatus =
 
 type Channel = "WHATSAPP" | "EMAIL" | "SMS" | "QR_AGENT" | "WEB_AGENT" | "MANUAL";
 
-type StatusFilter  = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED" | "CRM_SENT" | "CRM_REPLIED";
+type StatusFilter  = "ALL" | "AI_ON" | "AI_OFF" | "WAITING" | "RESOLVED" | "CRM_SENT" | "CRM_REPLIED" | "LOCKED";
 type SortOption    = "RECENT" | "OLDEST" | "NAME_AZ" | "NAME_ZA" | "CHANNEL";
 
 interface ActiveOrderItem {
@@ -75,11 +75,16 @@ interface ActiveDraft {
   items:           ActiveDraftItem[];
 }
 
+type ConversationType =
+  | "CUSTOMER" | "STAFF" | "SUPPLIER" | "PARTNER" | "INTERNAL" | "OTHER_NON_CUSTOMER";
+
 interface ConvSummary {
   id:                  string;
   status:              ConvStatus;
   channel:             Channel;
   aiEnabled:           boolean;
+  conversationType?:   ConversationType;
+  aiLocked?:           boolean;
   assignedTo:          string | null;
   unreadCount:         number;
   lastMessageAt:       string | null;
@@ -91,6 +96,25 @@ interface ConvSummary {
   customer:            { name: string; phone: string } | null;
   messages:            { content: string; direction: string; senderType: string | null; type: string }[];
 }
+
+// Labels for the non-customer classification chips.
+const CONV_TYPE_LABEL: Record<ConversationType, string> = {
+  CUSTOMER:           "Cliente",
+  STAFF:              "Staff",
+  SUPPLIER:           "Fornecedor",
+  PARTNER:            "Parceiro",
+  INTERNAL:           "Interno",
+  OTHER_NON_CUSTOMER: "Não-cliente",
+};
+
+const CONV_TYPE_OPTIONS: { id: ConversationType; label: string }[] = [
+  { id: "CUSTOMER",           label: "Cliente normal"        },
+  { id: "STAFF",              label: "Staff / equipe"        },
+  { id: "SUPPLIER",           label: "Fornecedor"            },
+  { id: "PARTNER",            label: "Parceiro"              },
+  { id: "INTERNAL",           label: "Interno / administrativo" },
+  { id: "OTHER_NON_CUSTOMER", label: "Outro não-cliente"     },
+];
 
 interface Message {
   id:             string;
@@ -138,6 +162,7 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
   { id: "AI_OFF",      label: "Humano"        },
   { id: "WAITING",     label: "Aguardando"    },
   { id: "RESOLVED",    label: "Resolvidas"    },
+  { id: "LOCKED",      label: "IA bloqueada"  },
   { id: "CRM_SENT",    label: "CRM enviado"   },
   { id: "CRM_REPLIED", label: "Resposta CRM"  },
 ];
@@ -191,6 +216,10 @@ function convPriorityLevel(c: ConvSummary): PriorityLevel {
 type HandlerBadge = { label: string; cls: string };
 
 function getHandlerBadge(c: ConvSummary): HandlerBadge {
+  // Permanent Staff/Supplier lock takes precedence over every other state —
+  // it must never read as "IA ativa".
+  if (c.aiLocked)
+    return { label: "IA bloqueada", cls: "bg-slate-200 text-slate-700 border-slate-300" };
   if (c.status === "RESOLVED")
     return { label: "Resolvida",  cls: "bg-gray-100   text-gray-500  border-gray-200"  };
   if (c.status === "OPEN" && c.unreadCount > 0)
@@ -198,6 +227,13 @@ function getHandlerBadge(c: ConvSummary): HandlerBadge {
   if (!c.aiEnabled || c.status === "HUMAN" || c.status === "HUMANO_ASSUMIU")
     return { label: "Humano",     cls: "bg-green-100  text-green-700 border-green-200" };
   return   { label: "IA ativa",   cls: "bg-purple-100 text-purple-700 border-purple-200" };
+}
+
+// Classification chip for non-customer conversations (Staff/Fornecedor/etc.).
+function getConvTypeBadge(c: ConvSummary): { label: string; cls: string } | null {
+  const t = c.conversationType;
+  if (!t || t === "CUSTOMER") return null;
+  return { label: CONV_TYPE_LABEL[t], cls: "bg-slate-100 text-slate-600 border-slate-200" };
 }
 
 // CRM_CAMPAIGN and CRM_AUTOMATION are handled dynamically in getCrmBadge()
@@ -569,6 +605,9 @@ export function AtendimentoClient({
     } else if (statusFilter === "CRM_REPLIED") {
       // Show only CRM conversations where customer replied.
       items = items.filter((c) => isCrmOrigin(c) && convHasCustomerReply(c));
+    } else if (statusFilter === "LOCKED") {
+      // Show only permanently AI-locked (staff/supplier/non-customer) conversations.
+      items = items.filter((c) => c.aiLocked === true);
     } else if (statusFilter !== "RESOLVED") {
       // Default "Todas": hide CRM outbound-only — they don't need human attention.
       // Conversations where the customer replied (hasCustomerReplied=true OR any
@@ -577,7 +616,8 @@ export function AtendimentoClient({
         items = items.filter((c) => !isCrmOrigin(c) || convHasCustomerReply(c));
       }
       if (statusFilter === "AI_ON") {
-        items = items.filter((c) => c.aiEnabled && c.status !== "RESOLVED");
+        // Locked conversations are never "IA ativa".
+        items = items.filter((c) => c.aiEnabled && !c.aiLocked && c.status !== "RESOLVED");
       }
       if (statusFilter === "AI_OFF") {
         items = items.filter((c) => !c.aiEnabled && c.status !== "RESOLVED");
@@ -641,6 +681,23 @@ export function AtendimentoClient({
     try {
       await fetch(`/api/chat/conversations/${selectedId}/${action}`, {
         method: "POST",
+      });
+      await Promise.all([fetchThread(selectedId), fetchList()]);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // Classify a conversation (staff/supplier/etc.) — applies or lifts the
+  // permanent AI lock via the classify endpoint.
+  async function handleClassify(type: ConversationType) {
+    if (!selectedId) return;
+    setActionLoading(true);
+    try {
+      await fetch(`/api/chat/conversations/${selectedId}/classify`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ type }),
       });
       await Promise.all([fetchThread(selectedId), fetchList()]);
     } finally {
@@ -1102,6 +1159,7 @@ export function AtendimentoClient({
             actionLoading={actionLoading}
             onAction={handleAction}
             onAIAction={handleAIAction}
+            onClassify={handleClassify}
             text={text}
             setText={setText}
             sending={sending}
@@ -1135,6 +1193,7 @@ interface ThreadPanelProps {
   actionLoading:           boolean;
   onAction:                (action: string) => void;
   onAIAction:              (action: "takeover" | "release") => void;
+  onClassify:              (type: ConversationType) => void;
   text:                    string;
   setText:                 (v: string) => void;
   sending:                 boolean;
@@ -1474,6 +1533,7 @@ function ThreadPanel({
   actionLoading,
   onAction,
   onAIAction,
+  onClassify,
   text,
   setText,
   sending,
@@ -1495,10 +1555,13 @@ function ThreadPanel({
 }: ThreadPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const badge          = getHandlerBadge(thread);
+  const typeBadge      = getConvTypeBadge(thread);
   const channel        = CHANNEL_META[thread.channel] ?? { label: thread.channel, icon: "💬" };
   const isResolved     = thread.status === "RESOLVED";
-  const isAIActive     = thread.aiEnabled && !isResolved;
-  const isHumanHandling = !thread.aiEnabled && !isResolved;
+  const isLocked       = thread.aiLocked === true;
+  // A locked conversation is neither AI-active nor a normal temporary takeover.
+  const isAIActive     = thread.aiEnabled && !isResolved && !isLocked;
+  const isHumanHandling = !thread.aiEnabled && !isResolved && !isLocked;
   const isMultichannel = thread.channel === "WHATSAPP" &&
     thread.messages.some((m) => m.senderType === "CUSTOMER_CARDAPIO");
 
@@ -1568,11 +1631,39 @@ function ThreadPanel({
             <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${badge.cls}`}>
               {badge.label}
             </span>
+            {typeBadge && (
+              <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${typeBadge.cls}`}>
+                {typeBadge.label}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Row 2: action buttons */}
         <div className="mt-2 flex gap-1.5 overflow-x-auto scrollbar-hide">
+          {/* Classification dropdown — marks the conversation as a non-customer
+              context and applies/lifts the permanent AI lock. */}
+          <select
+            value={thread.conversationType ?? "CUSTOMER"}
+            onChange={(e) => onClassify(e.target.value as ConversationType)}
+            disabled={actionLoading}
+            title="Classificar conversa"
+            className="shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            {CONV_TYPE_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+          {isLocked && (
+            <button
+              type="button"
+              onClick={() => onClassify("CUSTOMER")}
+              disabled={actionLoading}
+              className="shrink-0 rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50 transition-colors"
+            >
+              Reativar IA
+            </button>
+          )}
           {isAIActive && (
             <button
               type="button"
@@ -1633,6 +1724,18 @@ function ThreadPanel({
             </button>
           )}
         </div>
+
+        {/* Permanent AI lock warning */}
+        {isLocked && (
+          <div className="mt-2 flex items-start gap-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-600">
+            <span>🔒</span>
+            <span>
+              Enquanto estiver marcada como <strong>{CONV_TYPE_LABEL[thread.conversationType ?? "OTHER_NON_CUSTOMER"]}</strong>,
+              a IA não responderá automaticamente. Só volta se você reativar manualmente
+              (selecione “Cliente normal” ou clique em “Reativar IA”). Você ainda pode enviar mensagens manuais.
+            </span>
+          </div>
+        )}
 
         {/* Order created success notice */}
         {orderCreatedId && (
