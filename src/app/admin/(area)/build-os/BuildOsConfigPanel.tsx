@@ -588,6 +588,9 @@ interface MasterStatus {
   baseUrl: string | null;
   apiKeyMasked: string | null;
   hasApiKey: boolean;
+  apiKeySource: "saved" | "env" | "none";
+  baseUrlSource: "saved" | "env" | "none";
+  envApiKeyAvailable: boolean;
   hasWebhookSecret: boolean;
   envBaseUrl: string | null;
   connectionState: string | null;
@@ -601,7 +604,8 @@ interface MasterStatus {
   operatorMasked: string | null;
   expectedWebhookUrl: string;
   readiness: {
-    credentialsConfigured: boolean;
+    baseUrlAvailable: boolean;
+    apiKeyAvailable: boolean;
     instanceNameSaved: boolean;
     channelEnabled: boolean;
     connectionOpen: boolean;
@@ -612,6 +616,12 @@ interface MasterStatus {
     allReady: boolean;
   };
 }
+
+const SOURCE_LABEL: Record<"saved" | "env" | "none", string> = {
+  saved: "configuração salva",
+  env: "variável de ambiente",
+  none: "ausente",
+};
 
 function ChecklistRow({ ok, label, hint }: { ok: boolean; label: string; hint?: string }) {
   return (
@@ -722,6 +732,13 @@ function MasterChannelCard() {
 
   const configured = !!status?.configured;
   const credsMissing = !!status && !status.hasApiKey;
+  const apiKeyLabel = status
+    ? status.apiKeySource === "saved"
+      ? `apiKey/token (origem: configuração salva — ${status.apiKeyMasked ?? "••••"})`
+      : status.apiKeySource === "env"
+        ? "apiKey/token (origem: variável de ambiente) — opcional"
+        : "apiKey/token da Evolution"
+    : "apiKey/token da Evolution";
   return (
     <div className={`rounded-xl border p-5 ${configured ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
       <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Canal WhatsApp Master/Admin do Foocci</h3>
@@ -731,10 +748,18 @@ function MasterChannelCard() {
         (ex.: <code>futi-admin</code>) — independente das integrações de restaurante.
       </p>
 
+      {status && (
+        <p className="mt-2 text-[11px] text-gray-500">
+          Origem das credenciais — baseUrl: <strong>{SOURCE_LABEL[status.baseUrlSource]}</strong> · apiKey:{" "}
+          <strong>{SOURCE_LABEL[status.apiKeySource]}</strong>
+          {status.envApiKeyAvailable ? " (EVOLUTION_DEFAULT_API_KEY disponível)" : ""}
+        </p>
+      )}
+
       {credsMissing && (
         <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-800">
-          ⚠️ Credenciais Evolution globais do Admin não configuradas. Informe baseUrl + apiKey/token abaixo para habilitar
-          o QR e a conexão. {status?.envBaseUrl ? `Sugestão de baseUrl (env): ${status.envBaseUrl}` : ""}
+          ⚠️ Credenciais Evolution globais do Admin não configuradas. Defina <code>EVOLUTION_DEFAULT_API_KEY</code> no
+          ambiente ou informe uma apiKey manual no card. {status?.envBaseUrl ? `(baseUrl env: ${status.envBaseUrl})` : ""}
         </p>
       )}
 
@@ -743,11 +768,17 @@ function MasterChannelCard() {
         <Field label="instanceName do Admin">
           <input className={INPUT} value={instanceName} onChange={(e) => setInstanceName(e.target.value)} placeholder="ex.: futi-admin" />
         </Field>
-        <Field label="baseUrl da Evolution">
+        <Field label={status?.baseUrlSource === "env" ? "baseUrl da Evolution (origem: env)" : "baseUrl da Evolution"}>
           <input className={INPUT} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://evo.exemplo.com" />
         </Field>
-        <Field label={status?.hasApiKey ? `apiKey/token (salvo: ${status.apiKeyMasked ?? "••••"})` : "apiKey/token da Evolution"}>
-          <input className={INPUT} type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={status?.hasApiKey ? "deixe vazio para manter" : "token do servidor"} />
+        <Field label={apiKeyLabel}>
+          <input
+            className={INPUT}
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={status?.apiKeySource === "env" ? "usando env — preencha só p/ sobrepor" : status?.hasApiKey ? "deixe vazio para manter" : "token do servidor (ou use env)"}
+          />
         </Field>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -817,7 +848,8 @@ function MasterChannelCard() {
         <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prontidão para testar /build</p>
           <ul className="mt-2 space-y-1">
-            <ChecklistRow ok={status.readiness.credentialsConfigured} label="credenciais Evolution do Admin (baseUrl + apiKey)" hint="preencha e salve acima" />
+            <ChecklistRow ok={status.readiness.baseUrlAvailable} label="baseUrl Evolution disponível" hint="env EVOLUTION_DEFAULT_URL ou campo acima" />
+            <ChecklistRow ok={status.readiness.apiKeyAvailable} label="apiKey Evolution disponível" hint="env EVOLUTION_DEFAULT_API_KEY ou campo acima" />
             <ChecklistRow ok={status.readiness.instanceNameSaved} label="instanceName salvo" hint="ex.: futi-admin" />
             <ChecklistRow ok={status.readiness.channelEnabled} label="Canal Admin ativo" hint="marque a caixa acima" />
             <ChecklistRow ok={status.readiness.connectionOpen} label="conexão OPEN" hint="conecte via QR" />

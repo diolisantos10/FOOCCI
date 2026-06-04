@@ -52,7 +52,8 @@ function findInstanceEntry(list: unknown[], instanceName: string): Record<string
 }
 
 export interface MasterChannelReadiness {
-  credentialsConfigured: boolean; // baseUrl + apiKey saved
+  baseUrlAvailable: boolean;
+  apiKeyAvailable: boolean;       // resolved from saved OR env
   instanceNameSaved: boolean;
   channelEnabled: boolean;
   connectionOpen: boolean;
@@ -65,12 +66,16 @@ export interface MasterChannelReadiness {
 
 export interface MasterChannelStatus {
   // Admin config (masked).
-  configured: boolean;            // credentials saved
+  configured: boolean;            // instanceName + baseUrl + apiKey resolvable
   enabled: boolean;
   instanceName: string | null;
   baseUrl: string | null;
   apiKeyMasked: string | null;
   hasApiKey: boolean;
+  /** Where the effective apiKey comes from — never the value. */
+  apiKeySource: "saved" | "env" | "none";
+  baseUrlSource: "saved" | "env" | "none";
+  envApiKeyAvailable: boolean;
   hasWebhookSecret: boolean;
   envBaseUrl: string | null;
   // Live status (null when not configured / unreachable).
@@ -101,6 +106,9 @@ export async function getMasterChannelStatus(): Promise<MasterChannelStatus> {
     baseUrl: view.baseUrl,
     apiKeyMasked: view.apiKeyMasked,
     hasApiKey: view.hasApiKey,
+    apiKeySource: view.apiKeySource,
+    baseUrlSource: view.baseUrlSource,
+    envApiKeyAvailable: view.envApiKeyAvailable,
     hasWebhookSecret: view.hasWebhookSecret,
     envBaseUrl: view.envBaseUrl,
     connectionState: null,
@@ -114,7 +122,8 @@ export async function getMasterChannelStatus(): Promise<MasterChannelStatus> {
     operatorMasked,
     expectedWebhookUrl,
     readiness: {
-      credentialsConfigured: view.configured,
+      baseUrlAvailable: !!view.baseUrl,
+      apiKeyAvailable: view.hasApiKey,
       instanceNameSaved: !!view.instanceName,
       channelEnabled: view.isEnabled,
       connectionOpen: false,
@@ -170,7 +179,7 @@ export async function getMasterChannelStatus(): Promise<MasterChannelStatus> {
   r.messagesUpsert = base.hasMessagesUpsert === true;
   r.lastEventReceived = !!base.lastEventAt;
   r.allReady =
-    r.credentialsConfigured && r.instanceNameSaved && r.channelEnabled &&
+    r.baseUrlAvailable && r.apiKeyAvailable && r.instanceNameSaved && r.channelEnabled &&
     r.connectionOpen && r.webhookOk && r.messagesUpsert && r.operatorActive && r.lastEventReceived;
 
   return base;

@@ -25,6 +25,31 @@ export function getEnvEvolutionBaseUrl(): string | null {
   return process.env.EVOLUTION_DEFAULT_URL || process.env.EVOLUTION_BASE_URL || null;
 }
 
+/** Global Evolution API key from env, if configured. Never returned to the client. */
+export function getEnvEvolutionApiKey(): string | null {
+  const v = process.env.EVOLUTION_DEFAULT_API_KEY;
+  return v && v.trim() ? v.trim() : null;
+}
+
+/** Where the effective apiKey comes from. */
+export type ApiKeySource = "saved" | "env" | "none";
+
+/**
+ * Resolve the effective apiKey + its source, in priority order:
+ *   1. apiKey saved (encrypted) on BuildOSMasterWhatsAppConfig
+ *   2. EVOLUTION_DEFAULT_API_KEY (env)
+ *   3. none
+ * The decrypted key is server-only; callers must never return it to the client.
+ */
+function resolveApiKey(row: { apiKey: string | null } | null): { apiKey: string | null; source: ApiKeySource } {
+  if (row?.apiKey) {
+    try { return { apiKey: decrypt(row.apiKey), source: "saved" }; } catch { /* fall through */ }
+  }
+  const env = getEnvEvolutionApiKey();
+  if (env) return { apiKey: env, source: "env" };
+  return { apiKey: null, source: "none" };
+}
+
 /** Load the authoritative admin WhatsApp config row (most recent), or null. */
 export async function getAdminWhatsAppRow() {
   try {
@@ -35,46 +60,65 @@ export async function getAdminWhatsAppRow() {
 }
 
 export interface AdminWhatsAppView {
-  configured: boolean;       // instanceName + baseUrl + apiKey present
+  configured: boolean;       // instanceName + baseUrl present AND an apiKey is resolvable
   instanceName: string | null;
   baseUrl: string | null;
+  /** Masked apiKey when saved manually; null when the key comes from env/none. */
   apiKeyMasked: string | null;
+  /** True when an apiKey is available (saved OR env). */
   hasApiKey: boolean;
+  /** Where the effective apiKey comes from — never the value itself. */
+  apiKeySource: ApiKeySource;
   hasWebhookSecret: boolean;
   isEnabled: boolean;
-  envBaseUrl: string | null; // suggested default from env (if any)
+  baseUrlSource: "saved" | "env" | "none";
+  envBaseUrl: string | null;        // suggested default from env (if any)
+  envApiKeyAvailable: boolean;      // EVOLUTION_DEFAULT_API_KEY is set
   updatedAt: string | null;
 }
 
 /** Masked, UI-safe view of the admin WhatsApp config. Never exposes secrets. */
 export async function getAdminWhatsAppView(): Promise<AdminWhatsAppView> {
   const row = await getAdminWhatsAppRow();
+  const { apiKey, source } = resolveApiKey(row);
+  // Mask only when the key was saved manually; for env we expose origin, not value.
   let apiKeyMasked: string | null = null;
-  if (row?.apiKey) {
-    try { apiKeyMasked = maskSecret(decrypt(row.apiKey)); } catch { apiKeyMasked = "••••"; }
+  if (source === "saved") {
+    try { apiKeyMasked = maskSecret(apiKey ?? ""); } catch { apiKeyMasked = "••••"; }
   }
+  const baseUrl = row?.baseUrl ?? getEnvEvolutionBaseUrl();
+  const baseUrlSource: "saved" | "env" | "none" = row?.baseUrl ? "saved" : (getEnvEvolutionBaseUrl() ? "env" : "none");
+
   return {
-    configured: !!(row?.instanceName && row?.baseUrl && row?.apiKey),
+    configured: !!(row?.instanceName && baseUrl && apiKey),
     instanceName: row?.instanceName ?? null,
-    baseUrl: row?.baseUrl ?? null,
+    baseUrl: baseUrl ?? null,
     apiKeyMasked,
-    hasApiKey: !!row?.apiKey,
+    hasApiKey: !!apiKey,
+    apiKeySource: source,
     hasWebhookSecret: !!row?.webhookSecret,
     isEnabled: !!row?.isEnabled,
+    baseUrlSource,
     envBaseUrl: getEnvEvolutionBaseUrl(),
+    envApiKeyAvailable: !!getEnvEvolutionApiKey(),
     updatedAt: row?.updatedAt.toISOString() ?? null,
   };
 }
 
-/** Decrypted snapshot for Evolution calls (server-only). null when not configured. */
+/**
+ * Decrypted snapshot for Evolution calls (server-only). Resolves apiKey/baseUrl
+ * from saved config → env. null when instanceName, baseUrl or apiKey is missing.
+ */
 export async function getAdminWhatsAppSnapshot(includeWebhookSecret = false): Promise<EvolutionConfigSnapshot | null> {
   const row = await getAdminWhatsAppRow();
-  if (!row?.instanceName || !row?.baseUrl || !row?.apiKey) return null;
+  const baseUrl = row?.baseUrl ?? getEnvEvolutionBaseUrl();
+  const { apiKey } = resolveApiKey(row);
+  if (!row?.instanceName || !baseUrl || !apiKey) return null;
   try {
     return {
       instanceName: row.instanceName,
-      baseUrl: row.baseUrl,
-      apiKey: decrypt(row.apiKey),
+      baseUrl,
+      apiKey,
       ...(includeWebhookSecret && row.webhookSecret ? { webhookSecret: decrypt(row.webhookSecret) } : {}),
     };
   } catch {
@@ -121,12 +165,17 @@ export async function upsertAdminWhatsApp(input: UpsertAdminWhatsAppInput): Prom
       const baseUrl = (input.baseUrl ?? getEnvEvolutionBaseUrl() ?? "").trim();
       if (!instanceName) return { ok: false, error: "instanceName é obrigatório." };
       if (!baseUrl) return { ok: false, error: "baseUrl da Evolution é obrigatório (ou configure EVOLUTION_DEFAULT_URL)." };
-      if (!input.apiKey || !input.apiKey.trim()) return { ok: false, error: "apiKey/token da Evolution é obrigatório no primeiro cadastro." };
+      // apiKey is optional when EVOLUTION_DEFAULT_API_KEY is set in env. A manual key
+      // (encrypted) takes precedence; "" stored means "resolve from env".
+      const manualKey = input.apiKey?.trim();
+      if (!manualKey && !getEnvEvolutionApiKey()) {
+        return { ok: false, error: "Defina EVOLUTION_DEFAULT_API_KEY no ambiente ou informe uma apiKey manual no card." };
+      }
       await prisma.buildOSMasterWhatsAppConfig.create({
         data: {
           instanceName,
           baseUrl,
-          apiKey: encrypt(input.apiKey.trim()),
+          apiKey: manualKey ? encrypt(manualKey) : "",
           webhookSecret: encrypt(randomBytes(24).toString("hex")),
           isEnabled: input.isEnabled ?? false,
         },
