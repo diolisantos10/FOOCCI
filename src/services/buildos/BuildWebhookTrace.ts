@@ -12,6 +12,8 @@ export interface WebhookTraceInput {
   maskedPhone?: string | null;
   /** Full normalized E.164 phone — stored server-side only, never logged/exposed. */
   rawPhone?: string | null;
+  /** Evolution instance the event arrived on (Master vs restaurant channel). */
+  instanceName?: string | null;
   prefixDetected?: string | null;
   configEnabled?: boolean | null;
   configSource?: string | null;
@@ -37,6 +39,7 @@ export async function recordWebhookTrace(input: WebhookTraceInput): Promise<void
       data: {
         maskedPhone: input.maskedPhone ?? null,
         rawPhone: input.rawPhone ?? null,
+        instanceName: input.instanceName ?? null,
         prefixDetected: input.prefixDetected ?? null,
         configEnabled: input.configEnabled ?? null,
         configSource: input.configSource ?? null,
@@ -67,6 +70,7 @@ export interface WebhookTraceView {
    */
   canAuthorize: boolean;
   maskedPhone: string | null;
+  instanceName: string | null;
   prefixDetected: string | null;
   configEnabled: boolean | null;
   configSource: string | null;
@@ -93,6 +97,7 @@ export async function getRecentWebhookTraces(limit = 10): Promise<WebhookTraceVi
       // Boolean only — never the phone. Derived from whether a full number is stored.
       canAuthorize: !!r.rawPhone,
       maskedPhone: r.maskedPhone,
+      instanceName: r.instanceName,
       prefixDetected: r.prefixDetected,
       configEnabled: r.configEnabled,
       configSource: r.configSource,

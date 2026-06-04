@@ -20,6 +20,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isInternalCommandText } from "@/services/buildos/BuildCommandRouter";
+import { resolveBuildOsChannel } from "@/services/buildos/BuildOSConfigService";
 import { EvolutionConfigService } from "./EvolutionConfigService";
 import type {
   ParsedEvent,
@@ -91,6 +92,14 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   // throws or Build OS is disabled. isInternalCommandText() is synchronous and
   // never throws, so the pre-flight below is the hard gate; handleBuildCommand
   // is best-effort (logging/recording only from this point).
+  // Channel gate: Build OS only runs on the configured Master/Admin instance (or an
+  // explicit legacy fallback). Restaurant instances never act as Build OS by default.
+  const channel = await resolveBuildOsChannel(event.instanceName);
+
+  // Hard suppression invariant: ANY internal command prefix (/build, /cmd, /prompt)
+  // is intercepted BEFORE customer flow even if handleBuildCommand throws. On the
+  // Master channel it becomes a BuildCommand; on a restaurant instance it is
+  // suppressed but NOT executed (handleBuildCommand enforces the channel gate).
   if (event.messageType === "TEXT" && isInternalCommandText(event.content)) {
     try {
       const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
@@ -100,15 +109,21 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
         senderName: event.senderName,
         content: event.content,
         fromMe: false,
+        instanceName: event.instanceName,
+        isBuildOsChannel: channel.isBuildOsChannel,
+        masterConfigured: channel.masterConfigured,
       });
     } catch (err) {
       console.error("[WebhookProcessor] Build OS branch error (suppressed anyway):", err);
     }
-    return { handled: true, action: "buildos_command", detail: event.externalMessageId };
+    return {
+      handled: true,
+      action: channel.isBuildOsChannel ? "buildos_command" : "buildos_ignored_non_master",
+      detail: event.externalMessageId,
+    };
   }
-  // Non-command text: still offer Build OS the chance to handle confirmation
-  // replies (ENVIAR/CANCELAR/etc.) from authorized senders.
-  if (event.messageType === "TEXT") {
+  // Confirmation replies (ENVIAR/CANCELAR/etc.) — ONLY on the Build OS channel.
+  if (event.messageType === "TEXT" && channel.isBuildOsChannel) {
     try {
       const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
       const buildResult = await handleBuildCommand({
@@ -117,6 +132,9 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
         senderName: event.senderName,
         content: event.content,
         fromMe: false,
+        instanceName: event.instanceName,
+        isBuildOsChannel: true,
+        masterConfigured: channel.masterConfigured,
       });
       if (buildResult.isBuildCommand) {
         return { handled: true, action: "buildos_reply", detail: event.externalMessageId };
@@ -306,6 +324,7 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
   // command is authorized against — and any trace's recoverable rawPhone is —
   // the operator, never the customer they happened to message.
   const operatorPhone = event.instanceOwnerPhone ?? "";
+  const channel = await resolveBuildOsChannel(event.instanceName);
   if (event.messageType === "TEXT" && isInternalCommandText(event.content)) {
     try {
       const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
@@ -314,13 +333,20 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
         phone: operatorPhone,
         content: event.content,
         fromMe: true,
+        instanceName: event.instanceName,
+        isBuildOsChannel: channel.isBuildOsChannel,
+        masterConfigured: channel.masterConfigured,
       });
     } catch (err) {
       console.error("[WebhookProcessor] Build OS (fromMe) branch error (suppressed anyway):", err);
     }
-    return { handled: true, action: "buildos_command_fromme", detail: event.externalMessageId };
+    return {
+      handled: true,
+      action: channel.isBuildOsChannel ? "buildos_command_fromme" : "buildos_ignored_non_master",
+      detail: event.externalMessageId,
+    };
   }
-  if (event.messageType === "TEXT") {
+  if (event.messageType === "TEXT" && channel.isBuildOsChannel) {
     try {
       const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
       const buildResult = await handleBuildCommand({
@@ -328,6 +354,9 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
         phone: operatorPhone,
         content: event.content,
         fromMe: true,
+        instanceName: event.instanceName,
+        isBuildOsChannel: true,
+        masterConfigured: channel.masterConfigured,
       });
       if (buildResult.isBuildCommand) {
         return { handled: true, action: "buildos_reply_fromme", detail: event.externalMessageId };

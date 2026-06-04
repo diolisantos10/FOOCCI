@@ -46,6 +46,8 @@ export interface EffectiveBuildOsStatus {
   activeDbSenderCount: number;
   envPhoneFallbackActive: boolean;
   updatedAt: string | null;
+  // ── Build OS WhatsApp Master/Admin channel ──
+  whatsappChannel: BuildOsChannelConfig;
 }
 
 /** Load the authoritative BuildOSConfig row (most recent), or null. */
@@ -55,6 +57,62 @@ export async function getBuildOSConfigRow() {
   } catch {
     return null;
   }
+}
+
+// ── Build OS WhatsApp Master/Admin channel ──────────────────────────────────────
+
+export interface BuildOsChannelConfig {
+  /** True when a Master instance is configured AND enabled. */
+  configured: boolean;
+  instanceName: string | null;
+  enabled: boolean;
+  legacyFallbackEnabled: boolean;
+}
+
+/** Read the Build OS Master channel config (separate from restaurant WhatsApp). */
+export async function getBuildOsChannel(): Promise<BuildOsChannelConfig> {
+  const row = await getBuildOSConfigRow();
+  const instanceName = row?.whatsappInstanceName?.trim() || null;
+  const enabled = !!row?.whatsappEnabled;
+  return {
+    configured: !!instanceName && enabled,
+    instanceName,
+    enabled,
+    legacyFallbackEnabled: !!row?.legacyRestaurantInstanceFallbackEnabled,
+  };
+}
+
+export interface BuildOsChannelDecision {
+  /** True if Build OS command logic should run for this instance. */
+  isBuildOsChannel: boolean;
+  /** True if a Master instance is configured + enabled at all. */
+  masterConfigured: boolean;
+  /** True if this decision came from the explicit legacy restaurant fallback. */
+  viaLegacyFallback: boolean;
+  masterInstanceName: string | null;
+}
+
+/**
+ * Decide whether an incoming Evolution instance is the Build OS command channel.
+ *
+ *   • Master instance configured + enabled + matches → YES (the normal path).
+ *   • No Master configured BUT legacy restaurant fallback explicitly ON → YES
+ *     (temporary; the UI labels it "fallback legado").
+ *   • Otherwise → NO. Restaurant instances never act as Build OS by default.
+ */
+export async function resolveBuildOsChannel(instanceName: string | null | undefined): Promise<BuildOsChannelDecision> {
+  const ch = await getBuildOsChannel();
+  const masterConfigured = ch.configured;
+  const matchesMaster = !!instanceName && !!ch.instanceName && ch.enabled && instanceName === ch.instanceName;
+
+  if (matchesMaster) {
+    return { isBuildOsChannel: true, masterConfigured, viaLegacyFallback: false, masterInstanceName: ch.instanceName };
+  }
+  // Legacy fallback ONLY when no Master is configured and it was explicitly enabled.
+  if (!masterConfigured && ch.legacyFallbackEnabled) {
+    return { isBuildOsChannel: true, masterConfigured, viaLegacyFallback: true, masterInstanceName: ch.instanceName };
+  }
+  return { isBuildOsChannel: false, masterConfigured, viaLegacyFallback: false, masterInstanceName: ch.instanceName };
 }
 
 /**
@@ -147,6 +205,12 @@ export async function getEffectiveBuildOsStatus(): Promise<EffectiveBuildOsStatu
     activeDbSenderCount,
     envPhoneFallbackActive,
     updatedAt: row?.updatedAt.toISOString() ?? null,
+    whatsappChannel: {
+      configured: !!(row?.whatsappInstanceName?.trim()) && !!row?.whatsappEnabled,
+      instanceName: row?.whatsappInstanceName?.trim() || null,
+      enabled: !!row?.whatsappEnabled,
+      legacyFallbackEnabled: !!row?.legacyRestaurantInstanceFallbackEnabled,
+    },
   };
 }
 
@@ -157,6 +221,9 @@ export interface UpdateConfigInput {
   mode?: "INTERNAL_ONLY" | "PRODUCT";
   defaultProjectId?: string | null;
   allowEnvAuthorizedPhonesFallback?: boolean;
+  whatsappInstanceName?: string | null;
+  whatsappEnabled?: boolean;
+  legacyRestaurantInstanceFallbackEnabled?: boolean;
 }
 
 /** Upsert the singleton config (creates the first row if none exists). */
@@ -169,6 +236,9 @@ export async function updateBuildOSConfig(input: UpdateConfigInput): Promise<voi
         mode: (input.mode ?? "INTERNAL_ONLY") as never,
         defaultProjectId: input.defaultProjectId ?? null,
         allowEnvAuthorizedPhonesFallback: input.allowEnvAuthorizedPhonesFallback ?? true,
+        whatsappInstanceName: input.whatsappInstanceName?.trim() || null,
+        whatsappEnabled: input.whatsappEnabled ?? false,
+        legacyRestaurantInstanceFallbackEnabled: input.legacyRestaurantInstanceFallbackEnabled ?? false,
       },
     });
     return;
@@ -179,6 +249,13 @@ export async function updateBuildOSConfig(input: UpdateConfigInput): Promise<voi
   if (input.defaultProjectId !== undefined) data.defaultProjectId = input.defaultProjectId;
   if (input.allowEnvAuthorizedPhonesFallback !== undefined) {
     data.allowEnvAuthorizedPhonesFallback = input.allowEnvAuthorizedPhonesFallback;
+  }
+  if (input.whatsappInstanceName !== undefined) {
+    data.whatsappInstanceName = input.whatsappInstanceName?.trim() || null;
+  }
+  if (input.whatsappEnabled !== undefined) data.whatsappEnabled = input.whatsappEnabled;
+  if (input.legacyRestaurantInstanceFallbackEnabled !== undefined) {
+    data.legacyRestaurantInstanceFallbackEnabled = input.legacyRestaurantInstanceFallbackEnabled;
   }
   await prisma.buildOSConfig.update({ where: { id: row.id }, data });
 }

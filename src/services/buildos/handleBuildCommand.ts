@@ -47,6 +47,18 @@ export interface BuildCommandHandlingInput {
   content: string;      // raw inbound text
   /** True when Evolution flagged the message as sent by the connected number. */
   fromMe?: boolean;
+  /** Evolution instance the event arrived on (for tracing + channel gating). */
+  instanceName?: string;
+  /**
+   * True when this instance is the configured Build OS Master channel (or an
+   * explicit legacy fallback). When false, internal commands are SUPPRESSED but
+   * never executed — restaurant instances must not act as the Build OS channel.
+   * Defaults to true ONLY for callers that don't pass it (back-compat: internal
+   * simulators/tests), so the webhook MUST always pass an explicit value.
+   */
+  isBuildOsChannel?: boolean;
+  /** Whether a Build OS Master channel is configured at all (for the trace reason). */
+  masterConfigured?: boolean;
 }
 
 export interface BuildCommandHandlingResult {
@@ -65,6 +77,7 @@ export async function handleBuildCommand(
     received: true,
     prefixDetected: null as string | null,
     normalizedPhone: maskPhone(input.phone),
+    instanceName: input.instanceName ?? null,
     fromMe: input.fromMe ?? null,
     configEnabled: null as boolean | null,
     configSource: null as string | null,
@@ -81,7 +94,28 @@ export async function handleBuildCommand(
   const detected = detectBuildCommand(input.content);
   diag.prefixDetected = detected?.prefix ?? null;
 
-  // 0. Enable gate — DB-first (admin config), env bootstrap fallback, hard kill.
+  // 0a. CHANNEL gate — Build OS commands are only processed on the configured
+  //     Build OS Master/Admin instance (or an explicit legacy fallback). On a
+  //     restaurant instance an internal command is SUPPRESSED (never echoed to the
+  //     customer/AI) but NEVER executed and NEVER attributed to a /build operator.
+  //     `isBuildOsChannel` defaults to true only for internal callers that omit it
+  //     (simulators/tests); the webhook always passes an explicit value.
+  const isBuildOsChannel = input.isBuildOsChannel ?? true;
+  if (!isBuildOsChannel) {
+    if (detected) {
+      diag.shortCircuited = true;
+      diag.failureReason = input.masterConfigured
+        ? "wrong_instance_for_buildos"
+        : "buildos_master_not_configured";
+      // Do NOT persist rawPhone here — on a restaurant instance the sender may be a
+      // customer; this is not an authorizable Build OS operator.
+      logDiag(diag, null);
+      return { isBuildCommand: true }; // suppress: a command prefix must never reach the AI
+    }
+    return NOT_BUILD; // normal restaurant flow is untouched
+  }
+
+  // 0b. Enable gate — DB-first (admin config), env bootstrap fallback, hard kill.
   //    Honors BUILDOS_HARD_DISABLED → BuildOSConfig.isEnabled → BUILDOS_ENABLED.
   const enabled = await resolveBuildOsEnabled();
   diag.configEnabled = enabled.enabled;
@@ -188,6 +222,7 @@ function logDiag(diag: Record<string, unknown>, rawPhone?: string | null): void 
   recordWebhookTrace({
     maskedPhone: diag.normalizedPhone as string | null,
     rawPhone: rawPhone ?? null,
+    instanceName: diag.instanceName as string | null,
     prefixDetected: diag.prefixDetected as string | null,
     configEnabled: diag.configEnabled as boolean | null,
     configSource: diag.configSource as string | null,

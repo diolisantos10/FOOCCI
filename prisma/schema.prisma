@@ -2379,6 +2379,19 @@ model BuildOSConfig {
   /// DB senders exist. When false, DB authorized senders are the sole source once any exist.
   allowEnvAuthorizedPhonesFallback Boolean @default(true)
 
+  /// ── Build OS WhatsApp Master/Admin channel (separate from restaurant WhatsApp) ──
+  /// The Evolution instanceName dedicated to internal Build OS commands (Diego/CEO).
+  /// NULL = no Master channel configured yet → diagnostics must say "não configurado"
+  /// and must NOT assume a restaurant instance (e.g. sushicazza) is the Build OS channel.
+  whatsappInstanceName String?
+  /// Whether the Master channel is active. When false, Build OS won't process commands
+  /// even from the configured instance.
+  whatsappEnabled Boolean @default(false)
+  /// EMERGENCY/TEMPORARY only: allow restaurant instances to act as the Build OS channel.
+  /// Default OFF — restaurant WhatsApp must never be the Build OS command channel unless
+  /// this is explicitly enabled (and the UI labels it "fallback legado — não recomendado").
+  legacyRestaurantInstanceFallbackEnabled Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2443,6 +2456,9 @@ model BuildCommandEvent {
 /// webhook. Trimmed by keeping only recent rows in the admin view.
 model BuildWebhookTrace {
   id              String   @id @default(cuid())
+  /// Evolution instanceName the event arrived on — lets diagnostics show whether a
+  /// /build came from the Build OS Master channel or a restaurant instance.
+  instanceName    String?
   /// Masked phone (e.g. "+55***0692"). Never the full number.
   maskedPhone     String?
   /// Full normalized E.164 sender, stored SERVER-SIDE ONLY so the admin can
