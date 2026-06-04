@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid payload", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const phone = parsed.data.phone ?? "+5511989400692";
+  const phone = parsed.data.phone ?? "+5511940595223";
   const message = parsed.data.message ?? "/build Faz um RAIO-X do checkout Pix. Não implemente nada ainda.";
   const dryRun = parsed.data.dryRun ?? false;
 

@@ -7,9 +7,10 @@
  * command (dry-run or real). No console/fetch/Railway needed. No Claude/GitHub/LLM.
  */
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
-const DEFAULT_PHONE = "+5511989400692";
+// Fallback ONLY — the test phone is prefilled from the active operator on mount.
+const DEFAULT_PHONE = "+5511940595223";
 const DEFAULT_MESSAGE = "/build Faz um RAIO-X do checkout Pix. Não implemente nada ainda.";
 
 interface Report {
@@ -299,7 +300,33 @@ function InstanceHealthCard({
 
 export function BuildOsDiagnosticsPanel() {
   const [phone, setPhone] = useState(DEFAULT_PHONE);
+  const [phonePrefilled, setPhonePrefilled] = useState(false);
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
+
+  // Prefill the test phone from the CURRENT active operator (DB), so the diagnostic
+  // tests whoever is authorized now — never a stale hardcoded number. Only fills
+  // while the user hasn't started editing.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/build-os/authorized-senders");
+        const d = await res.json().catch(() => ({}));
+        const senders: Array<{ phone: string; rawPhone: string | null; isActive: boolean; lastUsedAt: string | null }> =
+          d.senders ?? d.data ?? [];
+        const active = senders.filter((s) => s.isActive);
+        const pick = active.sort((a, b) => (b.lastUsedAt ?? "").localeCompare(a.lastUsedAt ?? ""))[0];
+        if (!cancelled && pick && !phonePrefilled) {
+          setPhone(pick.rawPhone || pick.phone);
+          setPhonePrefilled(true);
+        }
+      } catch {
+        /* keep fallback default */
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [report, setReport] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

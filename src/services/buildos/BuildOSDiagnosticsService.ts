@@ -30,8 +30,26 @@ import { generateTechnicalPromptDraft, buildPromptPreview, type PromptSourceComm
 import { resolveBuildProjectFromMessage } from "./BuildProjectService";
 import { getRecentWebhookTraces } from "./BuildWebhookTrace";
 
-const DEFAULT_PHONE = "+5511989400692";
+// Last-resort fallback ONLY when there is no active operator in the DB. The real
+// default is resolved at runtime from the active BuildAuthorizedSender so the
+// diagnostic always tests the CURRENT operator, never a hardcoded/stale number.
+const FALLBACK_PHONE = "+5511940595223";
 const DEFAULT_MESSAGE = "/build Faz um RAIO-X do checkout Pix. Não implemente nada ainda.";
+
+/** Resolve the phone the diagnostic should test by default: the active DB operator. */
+async function resolveDefaultDiagnosticPhone(): Promise<string> {
+  try {
+    const active = await prisma.buildAuthorizedSender.findFirst({
+      where: { isActive: true },
+      orderBy: [{ lastUsedAt: "desc" }, { updatedAt: "desc" }],
+      select: { phone: true },
+    });
+    if (active?.phone) return active.phone;
+  } catch {
+    /* fall through to constant */
+  }
+  return FALLBACK_PHONE;
+}
 
 export type RootCause =
   | "CONFIG_DISABLED"
@@ -61,7 +79,7 @@ export async function runBuildOsDiagnostics(opts?: {
   phone?: string;
   message?: string;
 }): Promise<Record<string, unknown>> {
-  const inputPhone = opts?.phone?.trim() || DEFAULT_PHONE;
+  const inputPhone = opts?.phone?.trim() || (await resolveDefaultDiagnosticPhone());
   const testMessage = opts?.message?.trim() || DEFAULT_MESSAGE;
   const normalizedPhone = normalizeSenderPhone(inputPhone);
   const variants = Array.from(phoneVariants(normalizedPhone));
