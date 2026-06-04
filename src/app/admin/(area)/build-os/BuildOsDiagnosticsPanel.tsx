@@ -578,10 +578,10 @@ export function BuildOsDiagnosticsPanel() {
                 </>
               ) : (
                 <>
-                  <p className="mt-1 text-lg font-bold text-amber-800">Canal Build OS Master não configurado</p>
+                  <p className="mt-1 text-lg font-bold text-amber-800">Canal Admin/Sistema do Build OS não configurado</p>
                   <p className="mt-1 text-sm text-amber-800">
-                    Comandos internos NÃO devem usar instâncias de restaurante (ex.: sushicazza). Configure o canal em{" "}
-                    <strong>Configuração → Canal WhatsApp Master/Admin</strong>.
+                    Comandos internos pertencem ao centro administrativo do Foocci e NÃO usam instâncias de restaurante.
+                    Configure o canal em <strong>Configuração → Canal WhatsApp Master/Admin do Foocci</strong>.
                   </p>
                 </>
               )}

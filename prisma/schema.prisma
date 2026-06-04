@@ -2366,6 +2366,28 @@ enum BuildOSMode {
   PRODUCT
 }
 
+/// ADMIN/SYSTEM-level WhatsApp channel for Build OS — the Foocci/Futi Admin
+/// command line. Completely independent of any restaurant/tenant: it has NO
+/// restaurantId. Diego/CEO sends internal commands here and names the target
+/// (restaurant/agent/area) inside the message. Credentials are stored encrypted
+/// and never tied to a Restaurant row. Singleton-ish (most recent row wins).
+model BuildOSMasterWhatsAppConfig {
+  id            String   @id @default(cuid())
+  /// Evolution instance dedicated to the Admin channel, e.g. "futi-admin".
+  instanceName  String   @unique
+  /// Evolution server base URL, e.g. https://evo.example.com
+  baseUrl       String
+  /// AES-256-GCM encrypted Evolution API key/token. Never returned in full.
+  apiKey        String
+  /// AES-256-GCM encrypted webhook secret used to verify inbound webhook signatures.
+  webhookSecret String
+  isEnabled     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("buildos_master_whatsapp_config")
+}
+
 /// Singleton-ish runtime configuration for Build OS, editable from the admin UI
 /// WITHOUT touching env vars / Railway. Env vars remain bootstrap/emergency only.
 /// There is normally exactly one active row (the most recent is authoritative).

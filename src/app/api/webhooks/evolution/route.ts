@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { WebhookParserService } from "@/services/evolution/WebhookParserService";
 import { WebhookProcessorService } from "@/services/evolution/WebhookProcessorService";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { findAdminWhatsAppByInstance } from "@/services/buildos/AdminWhatsAppConfigService";
 import { prisma } from "@/lib/prisma";
 import {
   verifyWebhookAuth,
@@ -50,15 +51,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let isActive = false;
 
   try {
-    const configResult = await EvolutionConfigService.findRestaurantByInstance(instanceName);
-    if (!configResult.ok) {
-      console.warn(`[webhook/evolution] Unknown instance: ${instanceName}`);
-      void persistLog(null, instanceName, logMeta, false, false, "unknown_instance");
-      return NextResponse.json({ received: true }, { status: 200 });
+    // ADMIN/SYSTEM Build OS channel takes precedence and is NOT a restaurant.
+    // restaurantId stays null; WebhookProcessorService routes it to Build OS only.
+    const admin = await findAdminWhatsAppByInstance(instanceName);
+    if (admin) {
+      webhookSecret = admin.webhookSecret;
+      isActive      = admin.isEnabled;
+    } else {
+      const configResult = await EvolutionConfigService.findRestaurantByInstance(instanceName);
+      if (!configResult.ok) {
+        console.warn(`[webhook/evolution] Unknown instance: ${instanceName}`);
+        void persistLog(null, instanceName, logMeta, false, false, "unknown_instance");
+        return NextResponse.json({ received: true }, { status: 200 });
+      }
+      restaurantId  = configResult.data.restaurantId;
+      webhookSecret = configResult.data.webhookSecret;
+      isActive      = configResult.data.isActive;
     }
-    restaurantId  = configResult.data.restaurantId;
-    webhookSecret = configResult.data.webhookSecret;
-    isActive      = configResult.data.isActive;
   } catch (err) {
     console.error("[webhook/evolution] Config lookup failed (check ENCRYPTION_KEY):", err);
     void persistLog(null, instanceName, logMeta, false, false, "config_lookup_error");

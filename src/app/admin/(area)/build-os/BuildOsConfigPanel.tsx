@@ -227,13 +227,22 @@ export function BuildOsConfigPanel() {
         </div>
       )}
 
-      {/* Build OS WhatsApp Master/Admin channel */}
+      {/* Build OS WhatsApp Master/Admin channel (system-level — self-contained) */}
+      <MasterChannelCard />
+      {/* Legacy restaurant-fallback toggle (default OFF; system-level config) */}
       {status && (
-        <MasterChannelCard
-          channel={status.whatsappChannel}
-          busy={busy}
-          onSave={(body) => patchConfig(body)}
-        />
+        <label className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={status.whatsappChannel.legacyFallbackEnabled}
+            onChange={(e) => patchConfig({ legacyRestaurantInstanceFallbackEnabled: e.target.checked })}
+          />
+          <span>
+            Permitir <strong>fallback legado — não recomendado</strong>: tratar uma instância de restaurante como canal
+            Build OS apenas quando NÃO houver Canal Admin configurado.
+          </span>
+        </label>
       )}
 
       {/* Authorized operators */}
@@ -574,26 +583,27 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 interface MasterStatus {
   configured: boolean;
-  instanceName: string | null;
   enabled: boolean;
-  existsInEvolution: boolean;
-  expectedWebhookUrl: string;
+  instanceName: string | null;
+  baseUrl: string | null;
+  apiKeyMasked: string | null;
+  hasApiKey: boolean;
+  hasWebhookSecret: boolean;
+  envBaseUrl: string | null;
+  connectionState: string | null;
+  connectedNumberMasked: string | null;
+  webhookUrl: string | null;
+  webhookEnabled: boolean | null;
+  hasMessagesUpsert: boolean;
+  urlMatchesExpected: boolean;
+  lastEventAt: string | null;
+  lastEventAgeMinutes: number | null;
   operatorMasked: string | null;
-  health: {
-    connectionState: string | null;
-    connectedNumberMasked: string | null;
-    webhookUrl: string | null;
-    webhookEnabled: boolean | null;
-    hasMessagesUpsert: boolean;
-    urlMatchesExpected: boolean;
-    lastEventAt: string | null;
-    lastEventAgeMinutes: number | null;
-    issues: string[];
-  } | null;
-  numbersInvolved: { authorizedOperatorMasked: string | null } | null;
+  expectedWebhookUrl: string;
   readiness: {
+    credentialsConfigured: boolean;
     instanceNameSaved: boolean;
-    instanceExists: boolean;
+    channelEnabled: boolean;
     connectionOpen: boolean;
     webhookOk: boolean;
     messagesUpsert: boolean;
@@ -601,7 +611,6 @@ interface MasterStatus {
     lastEventReceived: boolean;
     allReady: boolean;
   };
-  availableInstances: Array<{ instanceName: string; restaurant: string | null }>;
 }
 
 function ChecklistRow({ ok, label, hint }: { ok: boolean; label: string; hint?: string }) {
@@ -616,24 +625,90 @@ function ChecklistRow({ ok, label, hint }: { ok: boolean; label: string; hint?: 
   );
 }
 
-function MasterChannelCard({
-  channel,
-  busy,
-  onSave,
-}: {
-  channel: { configured: boolean; instanceName: string | null; enabled: boolean; legacyFallbackEnabled: boolean };
-  busy: boolean;
-  onSave: (body: Record<string, unknown>) => void;
-}) {
-  const [instanceName, setInstanceName] = useState(channel.instanceName ?? "");
+/**
+ * Canal WhatsApp Master/Admin do Foocci — SYSTEM-level WhatsApp config. Self-
+ * contained: talks only to /api/admin/build-os/master-channel (admin config),
+ * never to restaurant integration. No restaurant instances, no sushicazza.
+ */
+function MasterChannelCard() {
   const [status, setStatus] = useState<MasterStatus | null>(null);
+  const [instanceName, setInstanceName] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [saveBusy, setSaveBusy] = useState(false);
   const [checkBusy, setCheckBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [qrBusy, setQrBusy] = useState(false);
   const [qr, setQr] = useState<{ connected?: boolean; base64?: string | null; pairingCode?: string | null; note?: string } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { setInstanceName(channel.instanceName ?? ""); }, [channel.instanceName]);
+
+  function applyStatus(s: MasterStatus) {
+    setStatus(s);
+    setInstanceName(s.instanceName ?? "");
+    setBaseUrl(s.baseUrl ?? s.envBaseUrl ?? "");
+  }
+
+  async function load() {
+    try {
+      const res = await fetch("/api/admin/build-os/master-channel");
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.ok) applyStatus(d.status as MasterStatus);
+    } catch { /* ignore */ }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    setSaveBusy(true); setErr(null); setMsg(null);
+    try {
+      const body: Record<string, unknown> = {
+        instanceName: instanceName.trim(),
+        baseUrl: baseUrl.trim(),
+      };
+      if (apiKey.trim()) body.apiKey = apiKey.trim();
+      const res = await fetch("/api/admin/build-os/master-channel", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao salvar."); return; }
+      setApiKey(""); // never keep the plaintext key in state after saving
+      setMsg("Configuração salva.");
+      applyStatus(d.status as MasterStatus);
+    } finally { setSaveBusy(false); }
+  }
+
+  async function setEnabled(enabled: boolean) {
+    setSaveBusy(true); setErr(null);
+    try {
+      const res = await fetch("/api/admin/build-os/master-channel", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isEnabled: enabled }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao atualizar."); return; }
+      applyStatus(d.status as MasterStatus);
+    } finally { setSaveBusy(false); }
+  }
+
+  async function verify() {
+    setCheckBusy(true); setErr(null); setMsg(null);
+    try {
+      const res = await fetch("/api/admin/build-os/master-channel");
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao verificar."); return; }
+      applyStatus(d.status as MasterStatus);
+    } finally { setCheckBusy(false); }
+  }
+
+  async function sync() {
+    setSyncBusy(true); setErr(null); setMsg(null);
+    try {
+      const res = await fetch("/api/admin/build-os/master-channel/sync", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao sincronizar webhook."); return; }
+      setMsg(d.result?.note ?? "Webhook sincronizado no Canal Admin.");
+      await verify();
+    } finally { setSyncBusy(false); }
+  }
 
   async function loadQr() {
     setQrBusy(true); setErr(null); setMsg(null); setQr(null);
@@ -645,161 +720,72 @@ function MasterChannelCard({
     } finally { setQrBusy(false); }
   }
 
-  // Load status once on mount so the instance dropdown + checklist are populated
-  // without the user having to click "Verificar conexão" first.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/build-os/master-channel");
-        const d = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok && d.ok) setStatus(d.status as MasterStatus);
-      } catch { /* ignore */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  async function verify() {
-    setCheckBusy(true); setErr(null); setMsg(null);
-    try {
-      const res = await fetch("/api/admin/build-os/master-channel");
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao verificar."); return; }
-      setStatus(d.status as MasterStatus);
-    } finally { setCheckBusy(false); }
-  }
-
-  async function sync() {
-    setSyncBusy(true); setErr(null); setMsg(null);
-    try {
-      const res = await fetch("/api/admin/build-os/master-channel/sync", { method: "POST" });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao sincronizar webhook."); return; }
-      setMsg(d.result?.note ?? "Webhook sincronizado no Canal Master.");
-      await verify();
-    } finally { setSyncBusy(false); }
-  }
-
-  const h = status?.health;
+  const configured = !!status?.configured;
+  const credsMissing = !!status && !status.hasApiKey;
   return (
-    <div className={`rounded-xl border p-5 ${channel.configured ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Canal WhatsApp Master/Admin</h3>
+    <div className={`rounded-xl border p-5 ${configured ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Canal WhatsApp Master/Admin do Foocci</h3>
       <p className="mt-1 text-xs text-gray-600">
-        Este é o <strong>número receptor dos comandos internos</strong> do Diego/CEO e dos operadores autorizados.
-        Ele é <strong>separado dos WhatsApps dos restaurantes</strong> (sushicazza etc.). Informe o nome da instância
-        Evolution dedicada ao Build OS.
+        Este canal pertence ao <strong>centro administrativo do Foocci</strong>. Ele recebe comandos do Diego/CEO e
+        <strong> não pertence a nenhum restaurante</strong>. Configure aqui a instância Evolution dedicada do Admin
+        (ex.: <code>futi-admin</code>) — independente das integrações de restaurante.
       </p>
 
-      {!channel.configured && (
+      {credsMissing && (
         <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-800">
-          ⚠️ Canal Build OS Master não configurado. Comandos internos NÃO devem usar instâncias de restaurante.
+          ⚠️ Credenciais Evolution globais do Admin não configuradas. Informe baseUrl + apiKey/token abaixo para habilitar
+          o QR e a conexão. {status?.envBaseUrl ? `Sugestão de baseUrl (env): ${status.envBaseUrl}` : ""}
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-end gap-3">
-        {status && status.availableInstances.length > 0 && (
-          <Field label="Usar uma instância existente">
-            <select
-              className={INPUT + " w-56"}
-              value={status.availableInstances.some((i) => i.instanceName === instanceName) ? instanceName : ""}
-              onChange={(e) => { if (e.target.value) setInstanceName(e.target.value); }}
-            >
-              <option value="">— escolher —</option>
-              {status.availableInstances.map((i) => (
-                <option key={i.instanceName} value={i.instanceName}>
-                  {i.instanceName}{i.restaurant ? ` (${i.restaurant})` : ""}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
-        <Field label="Nome da instância (Evolution) do Build OS">
-          <input
-            className={INPUT + " w-64"}
-            value={instanceName}
-            onChange={(e) => setInstanceName(e.target.value)}
-            placeholder="ex.: futi-admin"
-          />
+      {/* Config form */}
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Field label="instanceName do Admin">
+          <input className={INPUT} value={instanceName} onChange={(e) => setInstanceName(e.target.value)} placeholder="ex.: futi-admin" />
         </Field>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onSave({ whatsappInstanceName: instanceName.trim() || null })}
-          className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
-        >
-          Salvar instância
-        </button>
+        <Field label="baseUrl da Evolution">
+          <input className={INPUT} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://evo.exemplo.com" />
+        </Field>
+        <Field label={status?.hasApiKey ? `apiKey/token (salvo: ${status.apiKeyMasked ?? "••••"})` : "apiKey/token da Evolution"}>
+          <input className={INPUT} type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={status?.hasApiKey ? "deixe vazio para manter" : "token do servidor"} />
+        </Field>
       </div>
-
-      <div className="mt-3 flex flex-col gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button type="button" disabled={saveBusy} onClick={save} className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40">
+          {saveBusy ? "Salvando…" : "Salvar configuração"}
+        </button>
         <label className="flex items-center gap-2 text-xs text-gray-700">
-          <input
-            type="checkbox"
-            disabled={busy}
-            checked={channel.enabled}
-            onChange={(e) => onSave({ whatsappEnabled: e.target.checked })}
-          />
-          Canal Master ativo (processa comandos Build OS desta instância)
-        </label>
-        <label className="flex items-center gap-2 text-xs text-gray-700">
-          <input
-            type="checkbox"
-            disabled={busy}
-            checked={channel.legacyFallbackEnabled}
-            onChange={(e) => onSave({ legacyRestaurantInstanceFallbackEnabled: e.target.checked })}
-          />
-          <span>
-            Permitir <strong>fallback legado — não recomendado</strong> (tratar instâncias de restaurante como canal
-            Build OS quando não houver Master configurado)
-          </span>
+          <input type="checkbox" disabled={saveBusy || !status?.hasApiKey} checked={!!status?.enabled} onChange={(e) => setEnabled(e.target.checked)} />
+          Canal Admin ativo (processa comandos Build OS desta instância)
         </label>
       </div>
 
       {/* Actions */}
       <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={verify}
-          disabled={checkBusy || syncBusy}
-          className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-40"
-        >
+        <button type="button" onClick={verify} disabled={checkBusy || syncBusy} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-40">
           {checkBusy ? "Verificando…" : "Verificar conexão"}
         </button>
-        <button
-          type="button"
-          onClick={sync}
-          disabled={checkBusy || syncBusy}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-40"
-        >
+        <button type="button" onClick={sync} disabled={checkBusy || syncBusy || credsMissing} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-40">
           {syncBusy ? "Sincronizando…" : "Sincronizar webhook"}
         </button>
-        <button
-          type="button"
-          onClick={loadQr}
-          disabled={checkBusy || syncBusy || qrBusy}
-          className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40"
-        >
-          {qrBusy ? "Gerando QR…" : "Conectar Canal Master (QR)"}
+        <button type="button" onClick={loadQr} disabled={checkBusy || syncBusy || qrBusy || credsMissing} className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40">
+          {qrBusy ? "Gerando QR…" : "Conectar Canal Admin (QR)"}
         </button>
       </div>
-      <p className="mt-1 text-[11px] text-gray-400">
-        &quot;Conectar Canal Master (QR)&quot; gera o QR Code para conectar o número receptor do <strong>Futi Admin</strong> —
-        aqui mesmo, sem abrir a integração do restaurante.
-      </p>
 
-      {/* QR / pairing for the Master number — Build OS context only */}
+      {/* QR */}
       {qr && (
         <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50 p-3 text-xs">
           {qr.connected ? (
-            <p className="font-semibold text-green-700">✅ Canal Master já conectado.</p>
+            <p className="font-semibold text-green-700">✅ Canal Admin já conectado.</p>
           ) : qr.base64 ? (
             <div className="flex flex-col items-start gap-2">
               <p className="text-gray-700">
                 Escaneie com o WhatsApp do <strong>número receptor do Futi Admin</strong> (Aparelhos conectados →
-                Conectar aparelho). Este número é interno do Admin — <strong>não</strong> é WhatsApp de restaurante.
+                Conectar aparelho). É um número interno do Admin — <strong>não</strong> é WhatsApp de restaurante.
               </p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qr.base64} alt="QR Code do Canal Master" className="h-56 w-56 rounded bg-white p-2" />
+              <img src={qr.base64} alt="QR Code do Canal Admin" className="h-56 w-56 rounded bg-white p-2" />
               {qr.pairingCode && <p className="font-mono text-sm">Código: {qr.pairingCode}</p>}
             </div>
           ) : qr.pairingCode ? (
@@ -815,68 +801,42 @@ function MasterChannelCard({
 
       {/* Live status */}
       {status && (
-        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
-          {!status.instanceName ? (
-            <p className="text-xs text-amber-700">Defina e salve o nome da instância do Canal Master primeiro.</p>
-          ) : !status.existsInEvolution ? (
-            <div className="text-xs text-red-700">
-              <p className="font-semibold">Canal Master configurado, mas instância &quot;{status.instanceName}&quot; não encontrada na Evolution.</p>
-              <p className="mt-1 text-gray-600">
-                Próximo passo: escolha uma instância <strong>existente</strong> no seletor acima (ela já tem credenciais
-                Evolution) e clique em &quot;Conectar Canal Master (QR)&quot; aqui mesmo. Uma instância dedicada totalmente nova
-                (sem credenciais) ainda não pode ser criada por esta tela — <strong>não</strong> use a integração do
-                restaurante. Depois volte e clique em &quot;Verificar conexão&quot;.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-gray-700 sm:grid-cols-2">
-              <span>Conexão: <strong className={h?.connectionState === "open" ? "text-green-700" : "text-red-700"}>{h?.connectionState?.toUpperCase() ?? "DESCONHECIDA"}</strong></span>
-              <span>Número conectado: <span className="font-mono">{h?.connectedNumberMasked ?? "—"}</span></span>
-              <span>Operador autorizado: <span className="font-mono">{status.numbersInvolved?.authorizedOperatorMasked ?? "—"}</span></span>
-              <span>Webhook habilitado: {h?.webhookEnabled === null || h?.webhookEnabled === undefined ? "—" : String(h.webhookEnabled)}</span>
-              <span>URL bate com a esperada: {String(h?.urlMatchesExpected ?? false)}</span>
-              <span>MESSAGES_UPSERT: {h?.hasMessagesUpsert ? "sim" : "não"}</span>
-              <span className="sm:col-span-2">Último evento: {h?.lastEventAt ? `${new Date(h.lastEventAt).toLocaleString("pt-BR")} (há ${h.lastEventAgeMinutes} min)` : "nunca"}</span>
-              {h?.issues && h.issues.length > 0 && (
-                <ul className="sm:col-span-2 mt-1 list-disc space-y-0.5 pl-5 text-red-700">
-                  {h.issues.map((i, idx) => <li key={idx}>{i}</li>)}
-                </ul>
-              )}
-            </div>
-          )}
+        <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 sm:grid-cols-2">
+          <span>Conexão: <strong className={status.connectionState === "open" ? "text-green-700" : "text-red-700"}>{status.connectionState?.toUpperCase() ?? "DESCONHECIDA"}</strong></span>
+          <span>Número conectado: <span className="font-mono">{status.connectedNumberMasked ?? "—"}</span></span>
+          <span>Operador autorizado: <span className="font-mono">{status.operatorMasked ?? "—"}</span></span>
+          <span>Webhook habilitado: {status.webhookEnabled === null ? "—" : String(status.webhookEnabled)}</span>
+          <span>URL bate com a esperada: {String(status.urlMatchesExpected)}</span>
+          <span>MESSAGES_UPSERT: {status.hasMessagesUpsert ? "sim" : "não"}</span>
+          <span className="sm:col-span-2">Último evento: {status.lastEventAt ? `${new Date(status.lastEventAt).toLocaleString("pt-BR")} (há ${status.lastEventAgeMinutes} min)` : "nunca"}</span>
         </div>
       )}
 
-      {/* Readiness checklist — only "Pronto para testar" when ALL items pass */}
+      {/* Readiness checklist */}
       {status && (
         <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prontidão para testar /build</p>
           <ul className="mt-2 space-y-1">
-            <ChecklistRow ok={status.readiness.instanceNameSaved} label="instanceName salvo" hint="salve o nome da instância acima" />
-            <ChecklistRow ok={status.readiness.instanceExists} label="instância existe na Evolution" hint="crie/conecte em Integrações → WhatsApp" />
-            <ChecklistRow ok={status.readiness.connectionOpen} label="conexão OPEN" hint="conecte o WhatsApp (QR) da instância Master" />
+            <ChecklistRow ok={status.readiness.credentialsConfigured} label="credenciais Evolution do Admin (baseUrl + apiKey)" hint="preencha e salve acima" />
+            <ChecklistRow ok={status.readiness.instanceNameSaved} label="instanceName salvo" hint="ex.: futi-admin" />
+            <ChecklistRow ok={status.readiness.channelEnabled} label="Canal Admin ativo" hint="marque a caixa acima" />
+            <ChecklistRow ok={status.readiness.connectionOpen} label="conexão OPEN" hint="conecte via QR" />
             <ChecklistRow ok={status.readiness.webhookOk} label="webhook correto (habilitado + URL esperada)" hint="clique em Sincronizar webhook" />
             <ChecklistRow ok={status.readiness.messagesUpsert} label="MESSAGES_UPSERT ativo" hint="clique em Sincronizar webhook" />
             <ChecklistRow ok={status.readiness.operatorActive} label={`operador autorizado ativo${status.operatorMasked ? ` (${status.operatorMasked})` : " (+55***5223)"}`} hint="cadastre o operador Diego" />
-            <ChecklistRow ok={status.readiness.lastEventReceived} label="último evento recebido nesta instância" hint="envie uma mensagem de teste para a instância Master" />
+            <ChecklistRow ok={status.readiness.lastEventReceived} label="último evento recebido no Canal Admin" hint="envie uma mensagem de teste" />
           </ul>
           {status.readiness.allReady ? (
             <p className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-sm font-semibold text-green-800">
-              ✅ Pronto para testar /build — envie &quot;/build teste&quot; do número {status.operatorMasked ?? "+55***5223"} para o número conectado no Canal Master.
+              ✅ Pronto para testar /build — envie &quot;/build teste&quot; do número {status.operatorMasked ?? "+55***5223"} para o número conectado no Canal Admin.
             </p>
           ) : (
             <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800">
-              ⏳ Ainda não está pronto. Resolva os itens pendentes acima — o /build NÃO vai funcionar até todos estarem OK.
+              ⏳ Ainda não está pronto. Resolva os itens pendentes — o /build NÃO vai funcionar até todos estarem OK.
             </p>
           )}
         </div>
       )}
-
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
-        <Meta label="Configurado" value={channel.configured ? "Sim" : "Não"} />
-        <Meta label="Instância" value={channel.instanceName ?? "—"} />
-        <Meta label="Ativo" value={channel.enabled ? "Sim" : "Não"} />
-      </dl>
     </div>
   );
 }

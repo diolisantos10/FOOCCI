@@ -11,24 +11,33 @@
  */
 
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
-import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { EvolutionClient, type EvolutionConfigSnapshot } from "@/lib/evolution/EvolutionClient";
+import { getAdminWhatsAppSnapshot } from "./AdminWhatsAppConfigService";
 
 /**
- * Send a plain-text WhatsApp reply to `phone` using the Evolution instance of
- * the given restaurant (the instance that received the webhook). `phone` is the
- * normalized E.164 ("+5511…"); the Evolution API wants it without the "+".
+ * Send a plain-text WhatsApp reply to `phone`. When `restaurantId` is null the
+ * reply goes out via the ADMIN/SYSTEM-level Build OS WhatsApp instance (the Admin
+ * channel) — NOT via any restaurant. Otherwise it uses that restaurant's instance
+ * (the instance that received the webhook). `phone` is normalized E.164 ("+5511…");
+ * the Evolution API wants it without the "+".
  */
 export async function sendBuildConfirmation(
-  restaurantId: string,
+  restaurantId: string | null,
   phone: string,
   text: string,
 ): Promise<boolean> {
   try {
-    const snapshot = await EvolutionConfigService.getSnapshot(restaurantId);
-    if (!snapshot.ok) return false;
+    let snapshot: EvolutionConfigSnapshot | null = null;
+    if (restaurantId) {
+      const res = await EvolutionConfigService.getSnapshot(restaurantId);
+      snapshot = res.ok ? res.data : null;
+    } else {
+      snapshot = await getAdminWhatsAppSnapshot();
+    }
+    if (!snapshot) return false;
 
     const to = phone.replace(/^\+/, "");
-    await EvolutionClient.sendTextMessage(snapshot.data, to, text);
+    await EvolutionClient.sendTextMessage(snapshot, to, text);
     return true;
   } catch {
     return false;

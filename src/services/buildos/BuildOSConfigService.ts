@@ -21,6 +21,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { getAdminWhatsAppRow } from "./AdminWhatsAppConfigService";
 import {
   isBuildOsEnabled as isEnvBuildOsEnabled,
   isAuthorizedBuildSender as isEnvAuthorizedSender,
@@ -69,16 +70,21 @@ export interface BuildOsChannelConfig {
   legacyFallbackEnabled: boolean;
 }
 
-/** Read the Build OS Master channel config (separate from restaurant WhatsApp). */
+/**
+ * Read the Build OS Master/Admin channel config. The instanceName + enabled come
+ * from the SYSTEM-level admin WhatsApp config (BuildOSMasterWhatsAppConfig) —
+ * NEVER from a restaurant EvolutionConfig. The legacy restaurant fallback flag
+ * stays on BuildOSConfig (default off).
+ */
 export async function getBuildOsChannel(): Promise<BuildOsChannelConfig> {
-  const row = await getBuildOSConfigRow();
-  const instanceName = row?.whatsappInstanceName?.trim() || null;
-  const enabled = !!row?.whatsappEnabled;
+  const [adminRow, cfgRow] = await Promise.all([getAdminWhatsAppRow(), getBuildOSConfigRow()]);
+  const instanceName = adminRow?.instanceName?.trim() || null;
+  const enabled = !!adminRow?.isEnabled;
   return {
     configured: !!instanceName && enabled,
     instanceName,
     enabled,
-    legacyFallbackEnabled: !!row?.legacyRestaurantInstanceFallbackEnabled,
+    legacyFallbackEnabled: !!cfgRow?.legacyRestaurantInstanceFallbackEnabled,
   };
 }
 
@@ -89,6 +95,8 @@ export interface BuildOsChannelDecision {
   masterConfigured: boolean;
   /** True if this decision came from the explicit legacy restaurant fallback. */
   viaLegacyFallback: boolean;
+  /** True when the instance IS the system-level Admin instance (not a restaurant). */
+  isAdminInstance: boolean;
   masterInstanceName: string | null;
 }
 
@@ -117,13 +125,13 @@ export function decideBuildOsChannel(
   const matchesMaster = !!instanceName && !!ch.instanceName && ch.enabled && instanceName === ch.instanceName;
 
   if (matchesMaster) {
-    return { isBuildOsChannel: true, masterConfigured, viaLegacyFallback: false, masterInstanceName: ch.instanceName };
+    return { isBuildOsChannel: true, masterConfigured, viaLegacyFallback: false, isAdminInstance: true, masterInstanceName: ch.instanceName };
   }
   // Legacy fallback ONLY when no Master is configured and it was explicitly enabled.
   if (!masterConfigured && ch.legacyFallbackEnabled) {
-    return { isBuildOsChannel: true, masterConfigured, viaLegacyFallback: true, masterInstanceName: ch.instanceName };
+    return { isBuildOsChannel: true, masterConfigured, viaLegacyFallback: true, isAdminInstance: false, masterInstanceName: ch.instanceName };
   }
-  return { isBuildOsChannel: false, masterConfigured, viaLegacyFallback: false, masterInstanceName: ch.instanceName };
+  return { isBuildOsChannel: false, masterConfigured, viaLegacyFallback: false, isAdminInstance: false, masterInstanceName: ch.instanceName };
 }
 
 /**
@@ -204,6 +212,7 @@ export async function getEffectiveBuildOsStatus(): Promise<EffectiveBuildOsStatu
   const { enabled, source } = await resolveBuildOsEnabled();
   const allowEnvPhonesFallback = row ? row.allowEnvAuthorizedPhonesFallback : true;
   const envPhoneFallbackActive = (allowEnvPhonesFallback || activeDbSenderCount === 0);
+  const whatsappChannel = await getBuildOsChannel();
 
   return {
     enabled,
@@ -216,12 +225,7 @@ export async function getEffectiveBuildOsStatus(): Promise<EffectiveBuildOsStatu
     activeDbSenderCount,
     envPhoneFallbackActive,
     updatedAt: row?.updatedAt.toISOString() ?? null,
-    whatsappChannel: {
-      configured: !!(row?.whatsappInstanceName?.trim()) && !!row?.whatsappEnabled,
-      instanceName: row?.whatsappInstanceName?.trim() || null,
-      enabled: !!row?.whatsappEnabled,
-      legacyFallbackEnabled: !!row?.legacyRestaurantInstanceFallbackEnabled,
-    },
+    whatsappChannel,
   };
 }
 

@@ -1,170 +1,211 @@
 /**
- * BuildOSMasterChannelService — admin-safe setup/validation for the Build OS
- * WhatsApp Master/Admin channel (separate from restaurant WhatsApp).
+ * BuildOSMasterChannelService — status/QR/sync for the Foocci/Futi ADMIN WhatsApp
+ * channel (the Build OS command line). Built ENTIRELY on the system-level admin
+ * config (BuildOSMasterWhatsAppConfig) — it never reads a restaurant
+ * EvolutionConfig, never lists restaurant instances, never uses sushicazza.
  *
- * Read path reuses runInstanceHealthCheck() (single source of truth for live
- * connection/number/webhook/last-event), focused on the configured Master
- * instance. Sync path re-applies the canonical webhook config to the Master
- * instance only. No tokens/secrets/full phones are ever returned. No mutations
- * to restaurant instances. No Claude/GitHub/LLM.
+ * Live Evolution calls use the admin snapshot and are time-bounded so an
+ * unreachable server can't hang the request. No tokens/secrets/full phones are
+ * ever returned. No Claude/GitHub/LLM.
  */
 
-import { getBuildOsChannel, countActiveDbSenders } from "./BuildOSConfigService";
-import { runInstanceHealthCheck, type InstanceHealth } from "./BuildOSInstanceHealthService";
-import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
+import { prisma } from "@/lib/prisma";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { getExpectedEvolutionWebhookUrl } from "@/lib/public-url";
-import { prisma } from "@/lib/prisma";
+import { countActiveDbSenders } from "./BuildOSConfigService";
+import {
+  getAdminWhatsAppView,
+  getAdminWhatsAppSnapshot,
+} from "./AdminWhatsAppConfigService";
 
 const WEBHOOK_EVENTS = ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"];
+const LIVE_CALL_TIMEOUT_MS = 6000;
 
-/** End-to-end readiness checklist for sending a real /build to the Master channel. */
+async function bounded<T>(p: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await Promise.race([
+      p,
+      new Promise<T>((resolve) => setTimeout(() => resolve(fallback), LIVE_CALL_TIMEOUT_MS)),
+    ]);
+  } catch {
+    return fallback;
+  }
+}
+
+/** Mask any phone/JID to "+55***5223" — never the full number. */
+function maskNumber(raw: unknown): string | null {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  if (digits.length < 6) return null;
+  const e164 = `+${digits}`;
+  return `${e164.slice(0, 3)}***${e164.slice(-4)}`;
+}
+
+function findInstanceEntry(list: unknown[], instanceName: string): Record<string, unknown> | null {
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const nested = (o.instance && typeof o.instance === "object" ? o.instance : null) as Record<string, unknown> | null;
+    const name = (o.name ?? o.instanceName ?? nested?.instanceName ?? nested?.name) as string | undefined;
+    if (name === instanceName) return o;
+  }
+  return null;
+}
+
 export interface MasterChannelReadiness {
+  credentialsConfigured: boolean; // baseUrl + apiKey saved
   instanceNameSaved: boolean;
-  instanceExists: boolean;
+  channelEnabled: boolean;
   connectionOpen: boolean;
-  webhookOk: boolean;          // enabled AND URL matches the canonical webhook
+  webhookOk: boolean;             // enabled AND URL matches canonical
   messagesUpsert: boolean;
-  operatorActive: boolean;     // at least one active authorized operator (Diego)
+  operatorActive: boolean;
   lastEventReceived: boolean;
   allReady: boolean;
 }
 
 export interface MasterChannelStatus {
-  configured: boolean;            // instance set AND enabled
-  instanceName: string | null;
+  // Admin config (masked).
+  configured: boolean;            // credentials saved
   enabled: boolean;
-  legacyFallbackEnabled: boolean;
-  existsInEvolution: boolean;     // is the Master a configured Evolution instance?
-  /** Live health of the Master instance (null when not found / not configured). */
-  health: InstanceHealth | null;
-  /** Masked authorized operator + comparison, from the health report. */
-  numbersInvolved: Awaited<ReturnType<typeof runInstanceHealthCheck>>["numbersInvolved"] | null;
-  /** Masked authorized operator (e.g. "+55***5223") — never the full number. */
+  instanceName: string | null;
+  baseUrl: string | null;
+  apiKeyMasked: string | null;
+  hasApiKey: boolean;
+  hasWebhookSecret: boolean;
+  envBaseUrl: string | null;
+  // Live status (null when not configured / unreachable).
+  connectionState: string | null;
+  connectedNumberMasked: string | null;
+  webhookUrl: string | null;
+  webhookEnabled: boolean | null;
+  hasMessagesUpsert: boolean;
+  urlMatchesExpected: boolean;
+  lastEventAt: string | null;
+  lastEventAgeMinutes: number | null;
+  // Operator + checklist.
   operatorMasked: string | null;
   expectedWebhookUrl: string;
   readiness: MasterChannelReadiness;
-  /** Existing Evolution instances the admin can designate as Master (names only). */
-  availableInstances: Array<{ instanceName: string; restaurant: string | null }>;
 }
 
-/** Focused status for the Master channel card (reuses the instance-health probe). */
 export async function getMasterChannelStatus(): Promise<MasterChannelStatus> {
-  const ch = await getBuildOsChannel();
+  const view = await getAdminWhatsAppView();
   const expectedWebhookUrl = getExpectedEvolutionWebhookUrl();
   const operatorActive = (await countActiveDbSenders()) > 0;
+  const operatorMasked = await getActiveOperatorMasked();
 
-  // Existing Evolution instances (names only) so the admin can DESIGNATE one as
-  // Master from a dropdown instead of typing a name that doesn't exist.
-  let availableInstances: Array<{ instanceName: string; restaurant: string | null }> = [];
-  try {
-    const rows = await prisma.evolutionConfig.findMany({
-      select: { instanceName: true, restaurant: { select: { slug: true, name: true } } },
-      orderBy: { createdAt: "desc" },
-    });
-    availableInstances = rows.map((r) => ({
-      instanceName: r.instanceName,
-      restaurant: r.restaurant?.slug ?? r.restaurant?.name ?? null,
-    }));
-  } catch {
-    availableInstances = [];
-  }
-
-  if (!ch.instanceName) {
-    return {
-      configured: ch.configured,
-      instanceName: null,
-      enabled: ch.enabled,
-      legacyFallbackEnabled: ch.legacyFallbackEnabled,
-      existsInEvolution: false,
-      health: null,
-      numbersInvolved: null,
-      operatorMasked: null,
-      expectedWebhookUrl,
-      readiness: {
-        instanceNameSaved: false,
-        instanceExists: false,
-        connectionOpen: false,
-        webhookOk: false,
-        messagesUpsert: false,
-        operatorActive,
-        lastEventReceived: false,
-        allReady: false,
-      },
-      availableInstances,
-    };
-  }
-
-  const report = await runInstanceHealthCheck();
-  const health = report.instances.find((i) => i.instanceName === ch.instanceName) ?? null;
-  const operatorMasked = report.numbersInvolved?.authorizedOperatorMasked ?? null;
-
-  const readiness: MasterChannelReadiness = {
-    instanceNameSaved: true,
-    instanceExists: !!health,
-    connectionOpen: health?.connectionState === "open",
-    webhookOk: health?.webhookEnabled === true && health?.urlMatchesExpected === true,
-    messagesUpsert: health?.hasMessagesUpsert === true,
-    operatorActive,
-    lastEventReceived: !!health?.lastEventAt,
-    allReady: false,
-  };
-  readiness.allReady =
-    readiness.instanceNameSaved &&
-    readiness.instanceExists &&
-    readiness.connectionOpen &&
-    readiness.webhookOk &&
-    readiness.messagesUpsert &&
-    readiness.operatorActive &&
-    readiness.lastEventReceived &&
-    ch.enabled;
-
-  return {
-    configured: ch.configured,
-    instanceName: ch.instanceName,
-    enabled: ch.enabled,
-    legacyFallbackEnabled: ch.legacyFallbackEnabled,
-    existsInEvolution: !!health,
-    health,
-    numbersInvolved: report.numbersInvolved,
+  const base: MasterChannelStatus = {
+    configured: view.configured,
+    enabled: view.isEnabled,
+    instanceName: view.instanceName,
+    baseUrl: view.baseUrl,
+    apiKeyMasked: view.apiKeyMasked,
+    hasApiKey: view.hasApiKey,
+    hasWebhookSecret: view.hasWebhookSecret,
+    envBaseUrl: view.envBaseUrl,
+    connectionState: null,
+    connectedNumberMasked: null,
+    webhookUrl: null,
+    webhookEnabled: null,
+    hasMessagesUpsert: false,
+    urlMatchesExpected: false,
+    lastEventAt: null,
+    lastEventAgeMinutes: null,
     operatorMasked,
     expectedWebhookUrl,
-    readiness,
-    availableInstances,
+    readiness: {
+      credentialsConfigured: view.configured,
+      instanceNameSaved: !!view.instanceName,
+      channelEnabled: view.isEnabled,
+      connectionOpen: false,
+      webhookOk: false,
+      messagesUpsert: false,
+      operatorActive,
+      lastEventReceived: false,
+      allReady: false,
+    },
   };
+
+  // Last event this instance delivered (DB only).
+  if (view.instanceName) {
+    try {
+      const last = await prisma.evolutionWebhookEventLog.findFirst({
+        where: { instanceName: view.instanceName },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      });
+      base.lastEventAt = last?.createdAt.toISOString() ?? null;
+      base.lastEventAgeMinutes = last ? Math.max(0, Math.round((Date.now() - last.createdAt.getTime()) / 60000)) : null;
+    } catch { /* tolerate */ }
+  }
+
+  // Live Evolution calls via the ADMIN snapshot (never a restaurant snapshot).
+  const snapshot = await getAdminWhatsAppSnapshot();
+  if (snapshot) {
+    const state = await bounded(EvolutionClient.getInstanceStatus(snapshot).then((s) => s.state).catch(() => null), null);
+    base.connectionState = state;
+
+    const list = await bounded(EvolutionClient.fetchInstances(snapshot).catch(() => [] as unknown[]), [] as unknown[]);
+    const entry = Array.isArray(list) ? findInstanceEntry(list, snapshot.instanceName) : null;
+    if (entry) {
+      const nested = (entry.instance && typeof entry.instance === "object" ? entry.instance : null) as Record<string, unknown> | null;
+      const owner = entry.ownerJid ?? entry.owner ?? entry.number ?? nested?.owner ?? nested?.ownerJid;
+      base.connectedNumberMasked = maskNumber(owner);
+      if (!base.connectionState) base.connectionState = (entry.connectionStatus ?? entry.state ?? nested?.status ?? null) as string | null;
+    }
+
+    const raw = await bounded(EvolutionClient.getWebhook(snapshot).catch(() => ({} as Record<string, unknown>)), {} as Record<string, unknown>);
+    const wh = (raw.webhook && typeof raw.webhook === "object" ? (raw.webhook as Record<string, unknown>) : raw) as Record<string, unknown>;
+    const url = (wh.url as string | undefined) ?? null;
+    base.webhookUrl = url ? (url.split("?")[0] ?? null) : null;
+    base.webhookEnabled = (wh.enabled as boolean | undefined) ?? null;
+    const events = Array.isArray(wh.events) ? (wh.events as string[]) : [];
+    base.hasMessagesUpsert = events.some((e) => e === "MESSAGES_UPSERT");
+    base.urlMatchesExpected = !!base.webhookUrl && base.webhookUrl.trim() === expectedWebhookUrl;
+  }
+
+  const r = base.readiness;
+  r.connectionOpen = base.connectionState === "open";
+  r.webhookOk = base.webhookEnabled === true && base.urlMatchesExpected === true;
+  r.messagesUpsert = base.hasMessagesUpsert === true;
+  r.lastEventReceived = !!base.lastEventAt;
+  r.allReady =
+    r.credentialsConfigured && r.instanceNameSaved && r.channelEnabled &&
+    r.connectionOpen && r.webhookOk && r.messagesUpsert && r.operatorActive && r.lastEventReceived;
+
+  return base;
+}
+
+async function getActiveOperatorMasked(): Promise<string | null> {
+  try {
+    const sender = await prisma.buildAuthorizedSender.findFirst({
+      where: { isActive: true },
+      orderBy: [{ lastUsedAt: "desc" }, { updatedAt: "desc" }],
+      select: { phone: true },
+    });
+    return sender?.phone ? maskNumber(sender.phone) : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface MasterSyncResult {
   ok: boolean;
   error?: string;
   instanceName?: string;
-  webhookUrlConfigured?: string; // base URL only — token stripped
+  webhookUrlConfigured?: string;
   events?: string[];
   enabled?: boolean | null;
   hasMessagesUpsert?: boolean;
   note?: string;
 }
 
-/**
- * Re-apply the canonical webhook config to the Master instance ONLY.
- * The URL is always the canonical one (never the Railway proxy host); the token
- * is appended server-side and never returned.
- */
+/** Re-apply the canonical webhook to the ADMIN instance (admin snapshot only). */
 export async function syncMasterWebhook(): Promise<MasterSyncResult> {
-  const ch = await getBuildOsChannel();
-  if (!ch.instanceName) {
-    return { ok: false, error: "Canal Master não configurado (defina o instanceName primeiro)." };
+  const snapshot = await getAdminWhatsAppSnapshot(true);
+  if (!snapshot) {
+    return { ok: false, error: "Credenciais Evolution do Canal Admin não configuradas. Configure baseUrl + apiKey primeiro." };
   }
-
-  const snapResult = await EvolutionConfigService.getSnapshotByInstanceName(ch.instanceName, true);
-  if (!snapResult.ok) {
-    return {
-      ok: false,
-      error: `A instância "${ch.instanceName}" não existe na Evolution (nenhuma config encontrada). Crie/conecte essa instância antes de sincronizar.`,
-      instanceName: ch.instanceName,
-    };
-  }
-  const snapshot = snapResult.data;
 
   const baseUrl = getExpectedEvolutionWebhookUrl();
   let finalUrl = baseUrl;
@@ -178,10 +219,9 @@ export async function syncMasterWebhook(): Promise<MasterSyncResult> {
     await EvolutionClient.setWebhook(snapshot, finalUrl, WEBHOOK_EVENTS, snapshot.webhookSecret || undefined);
   } catch (err) {
     const msg = err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200);
-    return { ok: false, error: `Falha ao configurar o webhook: ${msg}`, instanceName: ch.instanceName };
+    return { ok: false, error: `Falha ao configurar o webhook: ${msg}`, instanceName: snapshot.instanceName };
   }
 
-  // Read back to confirm (masked; token stripped).
   const raw = await EvolutionClient.getWebhook(snapshot).catch(() => ({} as Record<string, unknown>));
   const wh = (raw.webhook && typeof raw.webhook === "object" ? (raw.webhook as Record<string, unknown>) : raw) as Record<string, unknown>;
   const url = (wh.url as string | undefined) ?? null;
@@ -191,13 +231,13 @@ export async function syncMasterWebhook(): Promise<MasterSyncResult> {
 
   return {
     ok: true,
-    instanceName: ch.instanceName,
+    instanceName: snapshot.instanceName,
     webhookUrlConfigured: url ? url.split("?")[0] : baseUrl,
     events,
     enabled,
     hasMessagesUpsert,
     note: hasMessagesUpsert
-      ? "Webhook sincronizado no Canal Master. Envie /build novamente para validar a entrega."
+      ? "Webhook sincronizado no Canal Admin. Envie /build para validar a entrega."
       : "Webhook configurado, mas MESSAGES_UPSERT não apareceu na releitura — verifique a versão da Evolution.",
   };
 }
@@ -206,72 +246,52 @@ export interface MasterQrResult {
   ok: boolean;
   error?: string;
   instanceName?: string;
-  /** True when the Master instance is already connected (no QR needed). */
   connected?: boolean;
-  base64?: string | null;       // data:image/png;... QR image
-  pairingCode?: string | null;  // 8-digit pairing code (alternative to QR)
+  base64?: string | null;
+  pairingCode?: string | null;
   state?: string | null;
   note?: string;
 }
 
-/**
- * Fetch the QR / pairing code to connect the Build OS MASTER number — admin-only,
- * by instanceName, with NO restaurant context. Reuses the restaurant-agnostic
- * EvolutionClient.getQRCode/getInstanceStatus. Requires that the Master instance
- * already exists as an Evolution config (creds live there); otherwise returns an
- * honest "instance not configured" — we never fall back to a restaurant screen.
- */
+/** QR / pairing to connect the ADMIN number — admin snapshot only, no restaurant. */
 export async function getMasterChannelQr(): Promise<MasterQrResult> {
-  const ch = await getBuildOsChannel();
-  if (!ch.instanceName) {
-    return { ok: false, error: "Defina e salve o instanceName do Canal Master primeiro." };
+  const snapshot = await getAdminWhatsAppSnapshot();
+  if (!snapshot) {
+    return { ok: false, error: "Credenciais Evolution do Canal Admin não configuradas. Configure baseUrl + apiKey + instanceName primeiro." };
   }
 
-  const snapResult = await EvolutionConfigService.getSnapshotByInstanceName(ch.instanceName, false);
-  if (!snapResult.ok) {
-    return {
-      ok: false,
-      instanceName: ch.instanceName,
-      error: `A instância "${ch.instanceName}" ainda não existe na Evolution (sem credenciais). Selecione uma instância existente no seletor, ou conecte uma instância dedicada do Futi Admin. NÃO use a integração do restaurante.`,
-    };
-  }
-  const snapshot = snapResult.data;
-
-  // Already connected? No QR needed.
   try {
     const status = await EvolutionClient.getInstanceStatus(snapshot);
     if (status.state === "open") {
-      return { ok: true, instanceName: ch.instanceName, connected: true, state: "open", note: "Canal Master já conectado." };
+      return { ok: true, instanceName: snapshot.instanceName, connected: true, state: "open", note: "Canal Admin já conectado." };
     }
-  } catch {
-    /* fall through to QR attempt */
-  }
+  } catch { /* fall through */ }
 
   try {
     const qr = await EvolutionClient.getQRCode(snapshot);
     if (qr.instanceState === "open") {
-      return { ok: true, instanceName: ch.instanceName, connected: true, state: "open", note: "Canal Master já conectado." };
+      return { ok: true, instanceName: snapshot.instanceName, connected: true, state: "open", note: "Canal Admin já conectado." };
     }
     if (qr.base64 || qr.pairingCode) {
       return {
         ok: true,
-        instanceName: ch.instanceName,
+        instanceName: snapshot.instanceName,
         connected: false,
         base64: qr.base64,
         pairingCode: qr.pairingCode,
         state: qr.instanceState ?? null,
-        note: "Escaneie o QR Code com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados).",
+        note: "Escaneie o QR com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados).",
       };
     }
     return {
       ok: false,
-      instanceName: ch.instanceName,
+      instanceName: snapshot.instanceName,
       error: qr.countOnly
         ? "A Evolution está gerando um novo QR — tente novamente em alguns segundos."
-        : "Não foi possível obter o QR da instância Master agora.",
+        : "Não foi possível obter o QR do Canal Admin agora.",
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200);
-    return { ok: false, instanceName: ch.instanceName, error: `Falha ao obter QR: ${msg}` };
+    return { ok: false, instanceName: snapshot.instanceName, error: `Falha ao obter QR: ${msg}` };
   }
 }

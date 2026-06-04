@@ -41,7 +41,12 @@ import { handleBuildReply } from "./BuildReplyHandler";
 import { recordWebhookTrace } from "./BuildWebhookTrace";
 
 export interface BuildCommandHandlingInput {
-  restaurantId: string; // Evolution instance owner — used only to send the reply
+  /**
+   * Evolution instance owner used only to send the reply. NULL for the
+   * ADMIN/SYSTEM Build OS channel (reply goes via the admin WhatsApp instance,
+   * never a restaurant).
+   */
+  restaurantId: string | null;
   phone: string;        // normalized E.164 sender
   senderName?: string;
   content: string;      // raw inbound text

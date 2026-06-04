@@ -67,4 +67,20 @@ describe("decideBuildOsChannel", () => {
     expect(decideBuildOsChannel(cfg(), "").isBuildOsChannel).toBe(false);
     expect(decideBuildOsChannel(cfg(), "some-other").isBuildOsChannel).toBe(false);
   });
+
+  // isAdminInstance drives the processor's "Build OS only, no restaurant flow" path.
+  it("flags the Admin instance (system channel), NOT restaurant or legacy fallback", () => {
+    // Admin/system instance → isAdminInstance true (routes Build OS, no restaurant)
+    expect(decideBuildOsChannel(cfg(), MASTER).isAdminInstance).toBe(true);
+    // Restaurant instance with Master configured → not admin, not Build OS
+    expect(decideBuildOsChannel(cfg(), RESTAURANT).isAdminInstance).toBe(false);
+    expect(decideBuildOsChannel(cfg(), RESTAURANT).isBuildOsChannel).toBe(false);
+    // Legacy fallback routes Build OS but is NOT the admin instance
+    const legacy = decideBuildOsChannel(
+      cfg({ configured: false, instanceName: null, enabled: false, legacyFallbackEnabled: true }),
+      RESTAURANT,
+    );
+    expect(legacy.isBuildOsChannel).toBe(true);
+    expect(legacy.isAdminInstance).toBe(false);
+  });
 });

@@ -73,7 +73,36 @@ export class WebhookProcessorService {
 async function handleInboundMessage(event: InboundMessageEvent): Promise<ProcessResult> {
   const t0 = Date.now();
 
-  // 1. Resolve restaurant from instanceName
+  // Channel gate: Build OS only runs on the configured Master/Admin instance (or an
+  // explicit legacy fallback). Restaurant instances never act as Build OS by default.
+  const channel = await resolveBuildOsChannel(event.instanceName);
+
+  // 0. ADMIN/SYSTEM Build OS channel — has NO restaurant. Handle Build OS ONLY and
+  //    return; never resolve a restaurant, never create Customer/Conversation/
+  //    Message, never reach Waiter/CRM/Atendimento. The reply goes via the admin
+  //    WhatsApp instance (restaurantId: null).
+  if (channel.isAdminInstance) {
+    if (event.messageType === "TEXT") {
+      try {
+        const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
+        await handleBuildCommand({
+          restaurantId: null,
+          phone: event.phone,
+          senderName: event.senderName,
+          content: event.content,
+          fromMe: false,
+          instanceName: event.instanceName,
+          isBuildOsChannel: true,
+          masterConfigured: channel.masterConfigured,
+        });
+      } catch (err) {
+        console.error("[WebhookProcessor] Build OS (admin channel) error:", err);
+      }
+    }
+    return { handled: true, action: "buildos_admin_channel", detail: event.externalMessageId };
+  }
+
+  // 1. Resolve restaurant from instanceName (restaurant instances only).
   const configResult = await EvolutionConfigService.findRestaurantByInstance(event.instanceName);
   if (!configResult.ok) {
     console.warn(
@@ -84,17 +113,10 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   }
   const { restaurantId } = configResult.data;
 
-  // 1b. Build OS command interception (Priority 1.1).
-  // BEFORE any customer/conversation/message record is created.
-  //
-  // Safety invariant: if content is an internal command prefix (/build, /cmd,
-  // /prompt), this message MUST be suppressed — even if handleBuildCommand
-  // throws or Build OS is disabled. isInternalCommandText() is synchronous and
-  // never throws, so the pre-flight below is the hard gate; handleBuildCommand
-  // is best-effort (logging/recording only from this point).
-  // Channel gate: Build OS only runs on the configured Master/Admin instance (or an
-  // explicit legacy fallback). Restaurant instances never act as Build OS by default.
-  const channel = await resolveBuildOsChannel(event.instanceName);
+  // 1b. Build OS command interception on a restaurant instance (legacy fallback or
+  //     hard-suppression of an internal command). Hard suppression invariant: ANY
+  //     internal command prefix is intercepted BEFORE customer flow even if
+  //     handleBuildCommand throws.
 
   // Hard suppression invariant: ANY internal command prefix (/build, /cmd, /prompt)
   // is intercepted BEFORE customer flow even if handleBuildCommand throws. On the
@@ -318,6 +340,29 @@ type _AIRef = AIOrderServiceType;
  * conversation from an outbound-only event.
  */
 async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent): Promise<ProcessResult> {
+  const channel = await resolveBuildOsChannel(event.instanceName);
+
+  // 0. ADMIN/SYSTEM Build OS channel — no restaurant, no customer flow.
+  if (channel.isAdminInstance) {
+    if (event.messageType === "TEXT") {
+      try {
+        const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
+        await handleBuildCommand({
+          restaurantId: null,
+          phone: event.instanceOwnerPhone ?? "",
+          content: event.content,
+          fromMe: true,
+          instanceName: event.instanceName,
+          isBuildOsChannel: true,
+          masterConfigured: channel.masterConfigured,
+        });
+      } catch (err) {
+        console.error("[WebhookProcessor] Build OS (admin channel, fromMe) error:", err);
+      }
+    }
+    return { handled: true, action: "buildos_admin_channel", detail: event.externalMessageId };
+  }
+
   // 1. Resolve restaurant
   const configResult = await EvolutionConfigService.findRestaurantByInstance(event.instanceName);
   if (!configResult.ok) return { handled: false, detail: `Unknown instance: ${event.instanceName}` };
@@ -333,7 +378,6 @@ async function handleExternalOutboundMessage(event: ExternalOutboundMessageEvent
   // command is authorized against — and any trace's recoverable rawPhone is —
   // the operator, never the customer they happened to message.
   const operatorPhone = event.instanceOwnerPhone ?? "";
-  const channel = await resolveBuildOsChannel(event.instanceName);
   if (event.messageType === "TEXT" && isInternalCommandText(event.content)) {
     try {
       const { handleBuildCommand } = await import("@/services/buildos/handleBuildCommand");
