@@ -118,6 +118,114 @@ function Badge({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
+interface InstanceHealth {
+  instanceName: string;
+  restaurant: string | null;
+  isActiveDb: boolean;
+  reachable: boolean;
+  connectionState: string | null;
+  connectedNumberMasked: string | null;
+  profileName: string | null;
+  webhookUrl: string | null;
+  webhookEnabled: boolean | null;
+  events: string[];
+  hasMessagesUpsert: boolean;
+  urlMatchesExpected: boolean;
+  lastEventAt: string | null;
+  lastEventAgeMinutes: number | null;
+  lastInboundAt: string | null;
+  issues: string[];
+  error: string | null;
+}
+
+interface InstanceHealthReport {
+  generatedAt: string;
+  expectedWebhookUrl: string;
+  expectedInstance: string | null;
+  instances: InstanceHealth[];
+}
+
+function InstanceHealthCard({
+  health, busy, error, onCheck,
+}: {
+  health: InstanceHealthReport | null;
+  busy: boolean;
+  error: string | null;
+  onCheck: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Saúde da instância Evolution (entrega de eventos)</p>
+          <p className="text-xs text-gray-500">
+            Verifica conexão, número conectado (mascarado), webhook e o último evento recebido — sem console/Railway. Read-only.
+          </p>
+        </div>
+        <button
+          onClick={onCheck}
+          disabled={busy}
+          className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
+        >
+          {busy ? "Verificando…" : "Verificar conexão Evolution"}
+        </button>
+      </div>
+
+      {error && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+      {health && (
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-gray-500">
+            Verificado em {new Date(health.generatedAt).toLocaleString("pt-BR")} · URL esperada do webhook:{" "}
+            <span className="font-mono">{health.expectedWebhookUrl}</span> · instância esperada:{" "}
+            <strong>{health.expectedInstance ?? "—"}</strong>
+          </p>
+          {health.instances.length === 0 && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              Nenhuma instância Evolution configurada.
+            </p>
+          )}
+          {health.instances.map((h) => {
+            const connected = h.connectionState === "open";
+            return (
+              <div key={h.instanceName} className={`rounded-lg border p-3 ${connected ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-mono text-sm font-semibold text-gray-900">
+                    {h.instanceName}
+                    {h.restaurant ? <span className="ml-2 text-xs font-normal text-gray-500">({h.restaurant})</span> : null}
+                  </p>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${connected ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                    {h.connectionState ? `Conexão: ${h.connectionState.toUpperCase()}` : "Conexão: DESCONHECIDA"}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-gray-700 sm:grid-cols-2">
+                  <span>Número conectado: <span className="font-mono">{h.connectedNumberMasked ?? "—"}</span>{h.profileName ? ` · ${h.profileName}` : ""}</span>
+                  <span>Ativa no banco: {String(h.isActiveDb)}</span>
+                  <span>Webhook habilitado: {h.webhookEnabled === null ? "—" : String(h.webhookEnabled)}</span>
+                  <span>URL bate com a esperada: {String(h.urlMatchesExpected)}</span>
+                  <span>MESSAGES_UPSERT: {h.hasMessagesUpsert ? "sim" : "não"}</span>
+                  <span>Último evento: {h.lastEventAt ? `${new Date(h.lastEventAt).toLocaleString("pt-BR")} (há ${h.lastEventAgeMinutes} min)` : "nunca"}</span>
+                  <span className="sm:col-span-2 font-mono text-[11px] text-gray-500">webhook: {h.webhookUrl ?? "—"}</span>
+                  <span className="sm:col-span-2 text-[11px] text-gray-500">eventos: {h.events.length ? h.events.join(", ") : "—"}</span>
+                </div>
+                {h.error && <p className="mt-2 text-xs text-red-600">{h.error}</p>}
+                {h.issues.length > 0 && (
+                  <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-red-700">
+                    {h.issues.map((iss, i) => <li key={i}>{iss}</li>)}
+                  </ul>
+                )}
+                {connected && h.issues.length === 0 && (
+                  <p className="mt-2 text-xs text-green-700">Conectada e entregando eventos normalmente.</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function BuildOsDiagnosticsPanel() {
   const [phone, setPhone] = useState(DEFAULT_PHONE);
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
@@ -127,6 +235,11 @@ export function BuildOsDiagnosticsPanel() {
   const [simResult, setSimResult] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [copyFallback, setCopyFallback] = useState<string | null>(null);
+
+  // ── Evolution instance health (connection + connected number + webhook delivery) ──
+  const [health, setHealth] = useState<InstanceHealthReport | null>(null);
+  const [healthBusy, setHealthBusy] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
 
   // ── "Autorizar este remetente" (one-click authorize from an unauthorized trace) ──
   // Only a traceId ever leaves the browser; the real phone is recovered server-side.
@@ -208,12 +321,30 @@ export function BuildOsDiagnosticsPanel() {
     } finally { setBusy(false); }
   }
 
+  async function checkInstanceHealth() {
+    setHealthBusy(true); setHealthError(null);
+    try {
+      const res = await fetch("/api/admin/build-os/diagnostics/instance-health");
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setHealthError(d.error ?? "Falha ao verificar a instância."); return; }
+      setHealth(d.report as InstanceHealthReport);
+    } finally { setHealthBusy(false); }
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
         Diagnóstico <strong>interno/admin</strong> do caminho de comando do WhatsApp. Roda no
         ambiente do app (sem console, sem Railway, sem credenciais). Não envia nada a Claude/GitHub.
       </div>
+
+      {/* Saúde da instância Evolution — entrega de eventos (conexão + número + webhook) */}
+      <InstanceHealthCard
+        health={health}
+        busy={healthBusy}
+        error={healthError}
+        onCheck={checkInstanceHealth}
+      />
 
       {/* Webhook Evolution — corrective action lives where the problem is diagnosed */}
       <WebhookCard />
