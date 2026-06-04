@@ -102,6 +102,17 @@ export interface BuildOsChannelDecision {
  */
 export async function resolveBuildOsChannel(instanceName: string | null | undefined): Promise<BuildOsChannelDecision> {
   const ch = await getBuildOsChannel();
+  return decideBuildOsChannel(ch, instanceName);
+}
+
+/**
+ * Pure routing decision (no DB) — exported for testing. Given the Master channel
+ * config and an incoming instance, decide whether Build OS should run.
+ */
+export function decideBuildOsChannel(
+  ch: BuildOsChannelConfig,
+  instanceName: string | null | undefined,
+): BuildOsChannelDecision {
   const masterConfigured = ch.configured;
   const matchesMaster = !!instanceName && !!ch.instanceName && ch.enabled && instanceName === ch.instanceName;
 

@@ -21,6 +21,12 @@ interface EffectiveStatus {
   activeDbSenderCount: number;
   envPhoneFallbackActive: boolean;
   updatedAt: string | null;
+  whatsappChannel: {
+    configured: boolean;
+    instanceName: string | null;
+    enabled: boolean;
+    legacyFallbackEnabled: boolean;
+  };
 }
 
 interface Sender {
@@ -219,6 +225,15 @@ export function BuildOsConfigPanel() {
             Precedência de ativação: BUILDOS_HARD_DISABLED → configuração do banco → BUILDOS_ENABLED.
           </p>
         </div>
+      )}
+
+      {/* Build OS WhatsApp Master/Admin channel */}
+      {status && (
+        <MasterChannelCard
+          channel={status.whatsappChannel}
+          busy={busy}
+          onSave={(body) => patchConfig(body)}
+        />
       )}
 
       {/* Authorized operators */}
@@ -554,6 +569,85 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-1 block text-xs font-medium text-gray-600">{label}</span>
       {children}
     </label>
+  );
+}
+
+function MasterChannelCard({
+  channel,
+  busy,
+  onSave,
+}: {
+  channel: { configured: boolean; instanceName: string | null; enabled: boolean; legacyFallbackEnabled: boolean };
+  busy: boolean;
+  onSave: (body: Record<string, unknown>) => void;
+}) {
+  const [instanceName, setInstanceName] = useState(channel.instanceName ?? "");
+  useEffect(() => { setInstanceName(channel.instanceName ?? ""); }, [channel.instanceName]);
+
+  return (
+    <div className={`rounded-xl border p-5 ${channel.configured ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Canal WhatsApp Master/Admin</h3>
+      <p className="mt-1 text-xs text-gray-600">
+        Este canal recebe comandos internos do Diego/CEO e dos operadores autorizados. Ele é
+        <strong> separado dos WhatsApps dos restaurantes</strong> (sushicazza etc.). Informe o nome da instância
+        Evolution dedicada ao Build OS.
+      </p>
+
+      {!channel.configured && (
+        <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-800">
+          ⚠️ Canal Build OS Master não configurado. Comandos internos NÃO devem usar instâncias de restaurante.
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <Field label="Nome da instância (Evolution) do Build OS">
+          <input
+            className={INPUT + " w-64"}
+            value={instanceName}
+            onChange={(e) => setInstanceName(e.target.value)}
+            placeholder="ex.: futi-admin"
+          />
+        </Field>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onSave({ whatsappInstanceName: instanceName.trim() || null })}
+          className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-40"
+        >
+          Salvar instância
+        </button>
+      </div>
+
+      <div className="mt-3 flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-xs text-gray-700">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={channel.enabled}
+            onChange={(e) => onSave({ whatsappEnabled: e.target.checked })}
+          />
+          Canal Master ativo (processa comandos Build OS desta instância)
+        </label>
+        <label className="flex items-center gap-2 text-xs text-gray-700">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={channel.legacyFallbackEnabled}
+            onChange={(e) => onSave({ legacyRestaurantInstanceFallbackEnabled: e.target.checked })}
+          />
+          <span>
+            Permitir <strong>fallback legado — não recomendado</strong> (tratar instâncias de restaurante como canal
+            Build OS quando não houver Master configurado)
+          </span>
+        </label>
+      </div>
+
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+        <Meta label="Configurado" value={channel.configured ? "Sim" : "Não"} />
+        <Meta label="Instância" value={channel.instanceName ?? "—"} />
+        <Meta label="Ativo" value={channel.enabled ? "Sim" : "Não"} />
+      </dl>
+    </div>
   );
 }
 

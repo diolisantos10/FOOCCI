@@ -37,6 +37,9 @@ export async function GET(req: NextRequest) {
           mode: row.mode,
           defaultProjectId: row.defaultProjectId,
           allowEnvAuthorizedPhonesFallback: row.allowEnvAuthorizedPhonesFallback,
+          whatsappInstanceName: row.whatsappInstanceName,
+          whatsappEnabled: row.whatsappEnabled,
+          legacyRestaurantInstanceFallbackEnabled: row.legacyRestaurantInstanceFallbackEnabled,
         }
       : null,
   });
@@ -47,6 +50,10 @@ const patchSchema = z.object({
   mode: z.enum(["INTERNAL_ONLY", "PRODUCT"]).optional(),
   defaultProjectId: z.string().nullable().optional(),
   allowEnvAuthorizedPhonesFallback: z.boolean().optional(),
+  // Build OS WhatsApp Master/Admin channel (separate from restaurant WhatsApp).
+  whatsappInstanceName: z.string().max(120).nullable().optional(),
+  whatsappEnabled: z.boolean().optional(),
+  legacyRestaurantInstanceFallbackEnabled: z.boolean().optional(),
 });
 
 export async function PATCH(req: NextRequest) {

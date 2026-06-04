@@ -16,6 +16,7 @@ import {
   isBuildOsHardDisabled,
   resolveBuildOsEnabled,
   getBuildOSConfigRow,
+  getBuildOsChannel,
   authorizeSender,
   countActiveDbSenders,
 } from "./BuildOSConfigService";
@@ -478,7 +479,7 @@ export async function runBuildOsDiagnostics(opts?: {
         where: { prefixDetected: { in: BUILD_PREFIXES } },
         orderBy: { createdAt: "desc" },
         select: {
-          createdAt: true, prefixDetected: true, maskedPhone: true,
+          createdAt: true, prefixDetected: true, maskedPhone: true, instanceName: true,
           authorized: true, failureReason: true, rawPhone: true, fromMe: true,
         },
       }),
@@ -492,8 +493,10 @@ export async function runBuildOsDiagnostics(opts?: {
     const lastEventAt = latestEvent?.createdAt ?? null;
     const lastEventAgeMinutes = ageMin(lastEventAt);
     const stale = lastEventAgeMinutes === null || lastEventAgeMinutes > STALE_MINUTES;
-    const activeInstances = (evolutionInstanceCheck.instances as Array<{ instanceName: string; isActive: boolean }> | undefined) ?? [];
-    const expectedInstance = activeInstances.find((i) => i.isActive)?.instanceName ?? activeInstances[0]?.instanceName ?? null;
+    // EXPECTED instance is the Build OS MASTER channel — NEVER a restaurant instance.
+    // null when the Master channel is not configured (the UI shows "não configurado").
+    const masterChannel = await getBuildOsChannel();
+    const expectedInstance = masterChannel.instanceName;
 
     eventFreshness = {
       available: true,
@@ -503,18 +506,22 @@ export async function runBuildOsDiagnostics(opts?: {
       lastEventInstance: latestEvent?.instanceName ?? null,
       staleThresholdMinutes: STALE_MINUTES,
       stale,
-      expectedInstance,
+      expectedInstance,                       // Master instance (or null)
+      masterChannelConfigured: masterChannel.configured,
       perInstance: perInstance
         .map((g) => ({
           instanceName: g.instanceName,
           lastEventAt: g._max.createdAt?.toISOString() ?? null,
           ageMinutes: ageMin(g._max.createdAt),
           eventCount: g._count._all,
+          isBuildOsMaster: !!expectedInstance && g.instanceName === expectedInstance,
         }))
         .sort((a, b) => (b.lastEventAt ?? "").localeCompare(a.lastEventAt ?? "")),
-      orientation: stale
-        ? `Nenhum evento Evolution chegou nos últimos ${lastEventAgeMinutes ?? "?"} min (último: ${lastEventAt?.toISOString() ?? "nunca"}). Se você enviou /build depois desse horário, ele NÃO chegou nesta instância/app. Verifique: (1) o WhatsApp do teste é a instância conectada (${expectedInstance ?? "—"})? (2) o webhook aponta para este app? (3) a instância continua conectada?`
-        : "Eventos Evolution estão chegando normalmente.",
+      orientation: !masterChannel.configured
+        ? "Canal Build OS Master não configurado. Comandos internos NÃO devem usar instâncias de restaurante. Configure o Canal WhatsApp Master/Admin em /admin/build-os → Configuração."
+        : stale
+          ? `Nenhum evento Evolution chegou nos últimos ${lastEventAgeMinutes ?? "?"} min (último: ${lastEventAt?.toISOString() ?? "nunca"}). Se você enviou /build depois desse horário, ele NÃO chegou no Canal Master (${expectedInstance}). Verifique: (1) você enviou para o número conectado no Canal Master? (2) o webhook aponta para este app? (3) a instância Master continua conectada?`
+          : "Eventos Evolution estão chegando normalmente.",
     };
 
     const lastBuildTraceAt = lastBuildTrace?.createdAt ?? null;
@@ -531,6 +538,9 @@ export async function runBuildOsDiagnostics(opts?: {
       lastBuildTraceAuthorized: lastBuildTrace?.authorized ?? null,
       lastBuildTraceFailureReason: lastBuildTrace?.failureReason ?? null,
       lastBuildTraceFromMe: lastBuildTrace?.fromMe ?? null,
+      lastBuildTraceInstance: lastBuildTrace?.instanceName ?? null,
+      lastBuildTraceFromMasterChannel:
+        !!lastBuildTrace?.instanceName && !!masterChannel.instanceName && lastBuildTrace.instanceName === masterChannel.instanceName,
       lastBuildTraceCanAuthorize: !!lastBuildTrace?.rawPhone,
       lastBuildMessageAt: lastBuildMessageAt?.toISOString() ?? null,
       lastBuildAnyAt: lastBuildAnyAt?.toISOString() ?? null,
@@ -551,6 +561,17 @@ export async function runBuildOsDiagnostics(opts?: {
     buildArrivalCheck = { available: false };
   }
 
+  // ── buildOsChannel: the dedicated Build OS WhatsApp Master/Admin channel status.
+  //    Restaurant instances are NEVER the Build OS channel unless explicit legacy
+  //    fallback is on. When not configured, the UI must say "não configurado".
+  const channel = await getBuildOsChannel();
+  const buildOsChannel = {
+    configured: channel.configured,
+    instanceName: channel.instanceName,
+    enabled: channel.enabled,
+    legacyFallbackEnabled: channel.legacyFallbackEnabled,
+  };
+
   // ── deployInfo: lets the admin confirm production runs the trace-capable build.
   //    `buildMarker` is bumped whenever the Build OS webhook path changes, so an
   //    old deploy is obvious without reading commit SHAs.
@@ -568,6 +589,7 @@ export async function runBuildOsDiagnostics(opts?: {
   return {
     generatedAt: generatedAt.toISOString(),
     deployInfo,
+    buildOsChannel,
     eventFreshness,
     buildArrivalCheck,
     buildOsConfig,

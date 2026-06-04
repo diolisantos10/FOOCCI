@@ -18,6 +18,7 @@ import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigServ
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { getExpectedEvolutionWebhookUrl } from "@/lib/public-url";
 import { normalizeSenderPhone, phoneVariants } from "./BuildCommandRouter";
+import { getBuildOsChannel } from "./BuildOSConfigService";
 
 const LIVE_CALL_TIMEOUT_MS = 6000;
 const BUILD_PREFIXES = ["/build", "/cmd", "/prompt"];
@@ -58,6 +59,8 @@ export interface InstanceHealth {
   instanceName: string;
   restaurant: string | null;
   isActiveDb: boolean;
+  /** True when this instance IS the configured Build OS Master channel. */
+  isBuildOsMaster: boolean;
   reachable: boolean;
   connectionState: string | null;       // open | close | connecting | null
   connectedNumberMasked: string | null;  // masked, never full
@@ -93,7 +96,10 @@ export interface NumbersInvolved {
 export interface InstanceHealthReport {
   generatedAt: string;
   expectedWebhookUrl: string;
-  expectedInstance: string | null;
+  expectedInstance: string | null;       // the Build OS MASTER instance (or null)
+  masterChannelConfigured: boolean;
+  masterInstanceName: string | null;
+  masterInstanceExistsInEvolution: boolean; // is the Master a configured Evolution instance?
   numbersInvolved: NumbersInvolved;
   instances: InstanceHealth[];
 }
@@ -104,6 +110,11 @@ export async function runInstanceHealthCheck(): Promise<InstanceHealthReport> {
   const ageMin = (d: Date | null | undefined) =>
     d ? Math.max(0, Math.round((now.getTime() - d.getTime()) / 60000)) : null;
 
+  // The Build OS MASTER channel — restaurant instances are never the Build OS
+  // channel by default. expectedInstance is the Master, NOT the first active one.
+  const channel = await getBuildOsChannel();
+  const masterInstanceName = channel.instanceName;
+
   let configs: Array<{ restaurantId: string; instanceName: string; isActive: boolean; restaurant: { slug: string | null; name: string | null } | null }> = [];
   try {
     configs = await prisma.evolutionConfig.findMany({
@@ -112,6 +123,7 @@ export async function runInstanceHealthCheck(): Promise<InstanceHealthReport> {
   } catch {
     configs = [];
   }
+  const masterInstanceExistsInEvolution = !!masterInstanceName && configs.some((c) => c.instanceName === masterInstanceName);
 
   // Connected raw digits per instance (server-side only — used to compare against
   // the operator number; NEVER returned in full).
@@ -123,6 +135,7 @@ export async function runInstanceHealthCheck(): Promise<InstanceHealthReport> {
       instanceName: cfg.instanceName,
       restaurant: cfg.restaurant?.slug ?? cfg.restaurant?.name ?? null,
       isActiveDb: cfg.isActive,
+      isBuildOsMaster: !!masterInstanceName && cfg.instanceName === masterInstanceName,
       reachable: false,
       connectionState: null,
       connectedNumberMasked: null,
@@ -225,10 +238,11 @@ export async function runInstanceHealthCheck(): Promise<InstanceHealthReport> {
     instances.push(h);
   }
 
-  // Expected test instance: the active one (or the first configured).
-  const expectedInstance = instances.find((i) => i.isActiveDb)?.instanceName ?? instances[0]?.instanceName ?? null;
+  // Expected instance is the Build OS MASTER channel — never a restaurant instance.
+  const expectedInstance = masterInstanceName;
 
   // ── numbersInvolved: the three numbers that get confused in this flow ──
+  // The "connected" number compared is the MASTER's connected number (if any).
   const numbersInvolved = await buildNumbersInvolved(
     expectedInstance ? (connectedDigitsByInstance[expectedInstance] ?? null) : null,
     expectedInstance ? (instances.find((i) => i.instanceName === expectedInstance)?.connectedNumberMasked ?? null) : null,
@@ -238,6 +252,9 @@ export async function runInstanceHealthCheck(): Promise<InstanceHealthReport> {
     generatedAt: now.toISOString(),
     expectedWebhookUrl,
     expectedInstance,
+    masterChannelConfigured: channel.configured,
+    masterInstanceName,
+    masterInstanceExistsInEvolution,
     numbersInvolved,
     instances,
   };

@@ -18,6 +18,12 @@ interface Report {
     commitSha: string; branch: string; appVersion: string; nodeEnv: string;
     buildMarker: string; webhookRouteExpected: string; healthEndpoint: string;
   };
+  buildOsChannel?: {
+    configured: boolean;
+    instanceName: string | null;
+    enabled: boolean;
+    legacyFallbackEnabled: boolean;
+  };
   eventFreshness?: {
     available: boolean;
     generatedAt?: string;
@@ -27,7 +33,8 @@ interface Report {
     staleThresholdMinutes?: number;
     stale?: boolean;
     expectedInstance?: string | null;
-    perInstance?: Array<{ instanceName: string; lastEventAt: string | null; ageMinutes: number | null; eventCount: number }>;
+    masterChannelConfigured?: boolean;
+    perInstance?: Array<{ instanceName: string; lastEventAt: string | null; ageMinutes: number | null; eventCount: number; isBuildOsMaster?: boolean }>;
     orientation?: string;
   };
   buildArrivalCheck?: {
@@ -38,6 +45,8 @@ interface Report {
     lastBuildTraceAuthorized?: boolean | null;
     lastBuildTraceFailureReason?: string | null;
     lastBuildTraceFromMe?: boolean | null;
+    lastBuildTraceInstance?: string | null;
+    lastBuildTraceFromMasterChannel?: boolean;
     lastBuildTraceCanAuthorize?: boolean;
     lastBuildMessageAt?: string | null;
     lastBuildAnyAt?: string | null;
@@ -123,6 +132,7 @@ interface InstanceHealth {
   instanceName: string;
   restaurant: string | null;
   isActiveDb: boolean;
+  isBuildOsMaster: boolean;
   reachable: boolean;
   connectionState: string | null;
   connectedNumberMasked: string | null;
@@ -158,6 +168,9 @@ interface InstanceHealthReport {
   generatedAt: string;
   expectedWebhookUrl: string;
   expectedInstance: string | null;
+  masterChannelConfigured: boolean;
+  masterInstanceName: string | null;
+  masterInstanceExistsInEvolution: boolean;
   numbersInvolved: NumbersInvolved;
   instances: InstanceHealth[];
 }
@@ -221,9 +234,22 @@ function InstanceHealthCard({
         <div className="mt-3 space-y-3">
           <p className="text-xs text-gray-500">
             Verificado em {new Date(health.generatedAt).toLocaleString("pt-BR")} · URL esperada do webhook:{" "}
-            <span className="font-mono">{health.expectedWebhookUrl}</span> · instância esperada:{" "}
-            <strong>{health.expectedInstance ?? "—"}</strong>
+            <span className="font-mono">{health.expectedWebhookUrl}</span> · Canal Master:{" "}
+            <strong>{health.masterInstanceName ?? "não configurado"}</strong>
           </p>
+
+          {!health.masterChannelConfigured && (
+            <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800">
+              ⚠️ Canal Build OS Master não configurado. As instâncias abaixo são de restaurante — não devem ser usadas
+              como canal de comandos internos. Configure em Configuração → Canal WhatsApp Master/Admin.
+            </p>
+          )}
+          {health.masterChannelConfigured && !health.masterInstanceExistsInEvolution && (
+            <p className="rounded-lg bg-red-100 px-3 py-2 text-sm font-medium text-red-800">
+              ⚠️ O Canal Master &quot;{health.masterInstanceName}&quot; não corresponde a nenhuma instância Evolution
+              configurada — o webhook não vai reconhecê-la. Crie/conecte essa instância na Evolution.
+            </p>
+          )}
 
           {/* Números envolvidos — resolve a confusão entre os 3 números */}
           {ni && (
@@ -259,7 +285,10 @@ function InstanceHealthCard({
                     {h.instanceName}
                     {h.restaurant ? <span className="ml-2 text-xs font-normal text-gray-500">({h.restaurant})</span> : null}
                   </p>
-                  <span className="flex gap-1.5">
+                  <span className="flex flex-wrap gap-1.5">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${h.isBuildOsMaster ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-500"}`}>
+                      {h.isBuildOsMaster ? "Canal Build OS Master" : "Restaurante"}
+                    </span>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${connected ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                       {h.connectionState ? `Conexão: ${h.connectionState.toUpperCase()}` : "Conexão: DESCONHECIDA"}
                     </span>
@@ -534,6 +563,35 @@ export function BuildOsDiagnosticsPanel() {
             <p className="mt-1 text-sm text-gray-700">{report.likelyRootCause.explanation}</p>
             <p className="mt-2 text-sm text-gray-800"><strong>Correção recomendada:</strong> {report.likelyRootCause.recommendedFix}</p>
           </div>
+
+          {/* Build OS Master channel — must NOT be a restaurant instance */}
+          {report.buildOsChannel && (
+            <div className={`rounded-xl border p-5 ${report.buildOsChannel.configured ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Canal WhatsApp Master/Admin (Build OS)</p>
+              {report.buildOsChannel.configured ? (
+                <>
+                  <p className="mt-1 text-lg font-bold text-gray-900">Configurado: {report.buildOsChannel.instanceName}</p>
+                  <p className="mt-1 text-sm text-gray-700">
+                    Este é o canal interno do Build OS — separado dos WhatsApps de restaurante. Ativo:{" "}
+                    {String(report.buildOsChannel.enabled)}.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-lg font-bold text-amber-800">Canal Build OS Master não configurado</p>
+                  <p className="mt-1 text-sm text-amber-800">
+                    Comandos internos NÃO devem usar instâncias de restaurante (ex.: sushicazza). Configure o canal em{" "}
+                    <strong>Configuração → Canal WhatsApp Master/Admin</strong>.
+                  </p>
+                </>
+              )}
+              {report.buildOsChannel.legacyFallbackEnabled && (
+                <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-800">
+                  ⚠️ Fallback legado ativo — instâncias de restaurante podem agir como canal Build OS. Não recomendado.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Event freshness — answers "resent /build but nothing shows" */}
           {report.eventFreshness?.available && (
@@ -1013,6 +1071,16 @@ function buildReportMarkdown(r: Report): string {
   L.push(`- Correção recomendada: ${r.likelyRootCause.recommendedFix}`);
   L.push("");
 
+  if (r.buildOsChannel) {
+    L.push("## Canal WhatsApp Master/Admin (Build OS)");
+    L.push(`- Configurado: ${yn(r.buildOsChannel.configured)}`);
+    L.push(`- Instância: ${r.buildOsChannel.instanceName ?? "—"}`);
+    L.push(`- Ativo: ${yn(r.buildOsChannel.enabled)}`);
+    L.push(`- Fallback legado (restaurante como Build OS): ${yn(r.buildOsChannel.legacyFallbackEnabled)}`);
+    if (!r.buildOsChannel.configured) L.push("- ⚠️ Canal Master não configurado — comandos internos NÃO devem usar instâncias de restaurante.");
+    L.push("");
+  }
+
   if (r.eventFreshness?.available) {
     L.push("## Chegada de eventos (Evolution)");
     L.push(`- Último evento recebido: ${r.eventFreshness.lastEventAt ?? "nunca"} (há ${r.eventFreshness.lastEventAgeMinutes ?? "—"} min, instância ${r.eventFreshness.lastEventInstance ?? "—"})`);
@@ -1025,6 +1093,7 @@ function buildReportMarkdown(r: Report): string {
     }
     if (r.buildArrivalCheck?.available) {
       L.push(`- Último /build registrado: ${r.buildArrivalCheck.lastBuildAnyAt ?? "nenhum"} (há ${r.buildArrivalCheck.lastBuildAgeMinutes ?? "—"} min)`);
+      L.push(`- Último /build veio do Canal Master: ${yn(r.buildArrivalCheck.lastBuildTraceFromMasterChannel)} (instância: ${r.buildArrivalCheck.lastBuildTraceInstance ?? "—"})`);
       L.push(`- ${r.buildArrivalCheck.note ?? ""}`);
     }
     L.push("");
