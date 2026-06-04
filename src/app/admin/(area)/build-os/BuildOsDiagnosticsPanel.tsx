@@ -134,25 +134,58 @@ interface InstanceHealth {
   lastEventAt: string | null;
   lastEventAgeMinutes: number | null;
   lastInboundAt: string | null;
+  lastUpsertAt: string | null;
+  lastUpsertAgeMinutes: number | null;
+  lastConnectionUpdateAt: string | null;
+  lastConnectionUpdateAgeMinutes: number | null;
+  deliveryStatus: "healthy" | "stale" | "stopped";
   issues: string[];
   error: string | null;
+}
+
+interface NumbersInvolved {
+  connectedNumberMasked: string | null;
+  authorizedOperatorMasked: string | null;
+  lastBuildAttemptMasked: string | null;
+  activeOperatorCount: number;
+  connectedMatchesOperator: boolean | null;
+  verdict: string;
+  guidance: string;
 }
 
 interface InstanceHealthReport {
   generatedAt: string;
   expectedWebhookUrl: string;
   expectedInstance: string | null;
+  numbersInvolved: NumbersInvolved;
   instances: InstanceHealth[];
 }
 
+const DELIVERY_BADGE: Record<string, string> = {
+  healthy: "bg-green-100 text-green-700",
+  stale: "bg-amber-100 text-amber-700",
+  stopped: "bg-red-100 text-red-700",
+};
+const DELIVERY_LABEL: Record<string, string> = {
+  healthy: "Entrega: SAUDÁVEL",
+  stale: "Entrega: STALE",
+  stopped: "Entrega: PARADA",
+};
+
 function InstanceHealthCard({
-  health, busy, error, onCheck,
+  health, busy, error, onCheck, onSync, syncBusy, syncMsg,
 }: {
   health: InstanceHealthReport | null;
   busy: boolean;
   error: string | null;
   onCheck: () => void;
+  onSync: () => void;
+  syncBusy: boolean;
+  syncMsg: string | null;
 }) {
+  const ni = health?.numbersInvolved;
+  const allStopped = !!health && health.instances.length > 0 && health.instances.every((i) => i.deliveryStatus !== "healthy");
+  const anyOpen = !!health && health.instances.some((i) => i.connectionState === "open");
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -162,16 +195,26 @@ function InstanceHealthCard({
             Verifica conexão, número conectado (mascarado), webhook e o último evento recebido — sem console/Railway. Read-only.
           </p>
         </div>
-        <button
-          onClick={onCheck}
-          disabled={busy}
-          className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
-        >
-          {busy ? "Verificando…" : "Verificar conexão Evolution"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={onCheck}
+            disabled={busy || syncBusy}
+            className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
+          >
+            {busy ? "Verificando…" : "Verificar conexão Evolution"}
+          </button>
+          <button
+            onClick={onSync}
+            disabled={busy || syncBusy}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {syncBusy ? "Sincronizando…" : "Sincronizar webhook e revalidar"}
+          </button>
+        </div>
       </div>
 
       {error && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {syncMsg && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">{syncMsg}</p>}
 
       {health && (
         <div className="mt-3 space-y-3">
@@ -180,6 +223,27 @@ function InstanceHealthCard({
             <span className="font-mono">{health.expectedWebhookUrl}</span> · instância esperada:{" "}
             <strong>{health.expectedInstance ?? "—"}</strong>
           </p>
+
+          {/* Números envolvidos — resolve a confusão entre os 3 números */}
+          {ni && (
+            <div className={`rounded-lg border p-3 ${ni.connectedMatchesOperator === false ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50"}`}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Números envolvidos</p>
+              <div className="mt-1 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-gray-700 sm:grid-cols-3">
+                <span>Conectado na instância: <span className="font-mono font-semibold">{ni.connectedNumberMasked ?? "—"}</span></span>
+                <span>Operador autorizado: <span className="font-mono font-semibold">{ni.authorizedOperatorMasked ?? "—"}</span>{ni.activeOperatorCount > 1 ? ` (+${ni.activeOperatorCount - 1})` : ""}</span>
+                <span>Último que tentou /build: <span className="font-mono font-semibold">{ni.lastBuildAttemptMasked ?? "—"}</span></span>
+              </div>
+              <p className="mt-2 text-sm font-medium text-gray-800">{ni.verdict}</p>
+              <p className="mt-1 text-xs text-gray-700">➡️ {ni.guidance}</p>
+            </div>
+          )}
+
+          {allStopped && anyOpen && (
+            <p className="rounded-lg bg-red-100 px-3 py-2 text-sm font-medium text-red-800">
+              ⚠️ Instância OPEN, webhook correto, mas sem delivery de mensagens. Provável problema interno Evolution/conexão do número — o próximo passo seguro é reconectar/reiniciar a instância (não executado automaticamente).
+            </p>
+          )}
+
           {health.instances.length === 0 && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
               Nenhuma instância Evolution configurada.
@@ -194,8 +258,13 @@ function InstanceHealthCard({
                     {h.instanceName}
                     {h.restaurant ? <span className="ml-2 text-xs font-normal text-gray-500">({h.restaurant})</span> : null}
                   </p>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${connected ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                    {h.connectionState ? `Conexão: ${h.connectionState.toUpperCase()}` : "Conexão: DESCONHECIDA"}
+                  <span className="flex gap-1.5">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${connected ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                      {h.connectionState ? `Conexão: ${h.connectionState.toUpperCase()}` : "Conexão: DESCONHECIDA"}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${DELIVERY_BADGE[h.deliveryStatus]}`}>
+                      {DELIVERY_LABEL[h.deliveryStatus]}
+                    </span>
                   </span>
                 </div>
                 <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-gray-700 sm:grid-cols-2">
@@ -204,7 +273,9 @@ function InstanceHealthCard({
                   <span>Webhook habilitado: {h.webhookEnabled === null ? "—" : String(h.webhookEnabled)}</span>
                   <span>URL bate com a esperada: {String(h.urlMatchesExpected)}</span>
                   <span>MESSAGES_UPSERT: {h.hasMessagesUpsert ? "sim" : "não"}</span>
-                  <span>Último evento: {h.lastEventAt ? `${new Date(h.lastEventAt).toLocaleString("pt-BR")} (há ${h.lastEventAgeMinutes} min)` : "nunca"}</span>
+                  <span>Último evento (qualquer): {h.lastEventAt ? `${new Date(h.lastEventAt).toLocaleString("pt-BR")} (há ${h.lastEventAgeMinutes} min)` : "nunca"}</span>
+                  <span>Último messages.upsert: {h.lastUpsertAt ? `${new Date(h.lastUpsertAt).toLocaleString("pt-BR")} (há ${h.lastUpsertAgeMinutes} min)` : "nunca"}</span>
+                  <span>Último connection.update: {h.lastConnectionUpdateAt ? `${new Date(h.lastConnectionUpdateAt).toLocaleString("pt-BR")} (há ${h.lastConnectionUpdateAgeMinutes} min)` : "nunca"}</span>
                   <span className="sm:col-span-2 font-mono text-[11px] text-gray-500">webhook: {h.webhookUrl ?? "—"}</span>
                   <span className="sm:col-span-2 text-[11px] text-gray-500">eventos: {h.events.length ? h.events.join(", ") : "—"}</span>
                 </div>
@@ -240,6 +311,8 @@ export function BuildOsDiagnosticsPanel() {
   const [health, setHealth] = useState<InstanceHealthReport | null>(null);
   const [healthBusy, setHealthBusy] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   // ── "Autorizar este remetente" (one-click authorize from an unauthorized trace) ──
   // Only a traceId ever leaves the browser; the real phone is recovered server-side.
@@ -321,14 +394,38 @@ export function BuildOsDiagnosticsPanel() {
     } finally { setBusy(false); }
   }
 
-  async function checkInstanceHealth() {
+  async function checkInstanceHealth(): Promise<InstanceHealthReport | null> {
     setHealthBusy(true); setHealthError(null);
     try {
       const res = await fetch("/api/admin/build-os/diagnostics/instance-health");
       const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.ok) { setHealthError(d.error ?? "Falha ao verificar a instância."); return; }
-      setHealth(d.report as InstanceHealthReport);
+      if (!res.ok || !d.ok) { setHealthError(d.error ?? "Falha ao verificar a instância."); return null; }
+      const report = d.report as InstanceHealthReport;
+      setHealth(report);
+      return report;
     } finally { setHealthBusy(false); }
+  }
+
+  async function syncAndRevalidate() {
+    setSyncBusy(true); setSyncMsg(null); setHealthError(null);
+    try {
+      // 1) Re-apply the webhook config on the connected instance (OWNER-only route,
+      //    same one the Webhook card uses). Does NOT touch the WhatsApp session.
+      const res = await fetch("/api/evolution/sync-webhook", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || d.success === false) {
+        setSyncMsg(`⚠️ Falha ao sincronizar o webhook: ${d.error ?? "erro desconhecido"}.`);
+        return;
+      }
+      // 2) Re-probe delivery health to see whether anything changed.
+      const report = await checkInstanceHealth();
+      const stillStale = !report || report.instances.every((i) => i.deliveryStatus !== "healthy");
+      setSyncMsg(
+        stillStale
+          ? "Webhook sincronizado, mas ainda sem evento novo. Instância OPEN e webhook correto, porém sem delivery de mensagens — provável problema interno da Evolution/conexão do número. Próximo passo seguro: reconectar/reiniciar a instância."
+          : "✅ Webhook sincronizado e eventos voltaram a chegar.",
+      );
+    } finally { setSyncBusy(false); }
   }
 
   return (
@@ -344,6 +441,9 @@ export function BuildOsDiagnosticsPanel() {
         busy={healthBusy}
         error={healthError}
         onCheck={checkInstanceHealth}
+        onSync={syncAndRevalidate}
+        syncBusy={syncBusy}
+        syncMsg={syncMsg}
       />
 
       {/* Webhook Evolution — corrective action lives where the problem is diagnosed */}
