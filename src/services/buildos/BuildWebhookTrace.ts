@@ -10,6 +10,8 @@ import { prisma } from "@/lib/prisma";
 
 export interface WebhookTraceInput {
   maskedPhone?: string | null;
+  /** Full normalized E.164 phone — stored server-side only, never logged/exposed. */
+  rawPhone?: string | null;
   prefixDetected?: string | null;
   configEnabled?: boolean | null;
   configSource?: string | null;
@@ -34,6 +36,7 @@ export async function recordWebhookTrace(input: WebhookTraceInput): Promise<void
     await prisma.buildWebhookTrace.create({
       data: {
         maskedPhone: input.maskedPhone ?? null,
+        rawPhone: input.rawPhone ?? null,
         prefixDetected: input.prefixDetected ?? null,
         configEnabled: input.configEnabled ?? null,
         configSource: input.configSource ?? null,
@@ -52,7 +55,10 @@ export async function recordWebhookTrace(input: WebhookTraceInput): Promise<void
 }
 
 export interface WebhookTraceView {
+  /** Short, display-only id (last 6 chars, uppercased). */
   id: string;
+  /** Full trace id — the ONLY token the admin "Autorizar" action sends back. */
+  traceId: string;
   maskedPhone: string | null;
   prefixDetected: string | null;
   configEnabled: boolean | null;
@@ -76,6 +82,7 @@ export async function getRecentWebhookTraces(limit = 10): Promise<WebhookTraceVi
     });
     return rows.map((r) => ({
       id: r.id.slice(-6).toUpperCase(),
+      traceId: r.id,
       maskedPhone: r.maskedPhone,
       prefixDetected: r.prefixDetected,
       configEnabled: r.configEnabled,

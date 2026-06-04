@@ -2416,6 +2416,10 @@ model BuildWebhookTrace {
   id              String   @id @default(cuid())
   /// Masked phone (e.g. "+55***0692"). Never the full number.
   maskedPhone     String?
+  /// Full normalized E.164 sender, stored SERVER-SIDE ONLY so the admin can
+  /// authorize an unauthorized /build sender by traceId without the full number
+  /// ever leaving the backend. NEVER returned in any API/view — masked only.
+  rawPhone        String?
   prefixDetected  String?
   configEnabled   Boolean?
   configSource    String?

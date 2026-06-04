@@ -7,7 +7,7 @@
  * command (dry-run or real). No console/fetch/Railway needed. No Claude/GitHub/LLM.
  */
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 const DEFAULT_PHONE = "+5511989400692";
 const DEFAULT_MESSAGE = "/build Faz um RAIO-X do checkout Pix. Não implemente nada ainda.";
@@ -72,7 +72,7 @@ interface Report {
   webhookReceivedRealBuild: boolean;
   lastWebhookAt: string | null;
   recentWebhookTraces: Array<{
-    id: string; maskedPhone: string | null; prefixDetected: string | null;
+    id: string; traceId: string; maskedPhone: string | null; prefixDetected: string | null;
     configEnabled: boolean | null; authorized: boolean | null; fromMe: boolean | null;
     commandCreated: boolean; responseSent: boolean; shortCircuited: boolean;
     failureReason: string | null; createdAt: string;
@@ -99,6 +99,40 @@ export function BuildOsDiagnosticsPanel() {
   const [simResult, setSimResult] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [copyFallback, setCopyFallback] = useState<string | null>(null);
+
+  // ── "Autorizar este remetente" (one-click authorize from an unauthorized trace) ──
+  // Only a traceId ever leaves the browser; the real phone is recovered server-side.
+  const [authTraceId, setAuthTraceId] = useState<string | null>(null); // which row's form is open
+  const [authName, setAuthName] = useState("Operador Build OS");
+  const [authRole, setAuthRole] = useState<"owner" | "admin">("owner");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authDone, setAuthDone] = useState<string | null>(null); // success message
+
+  function openAuthForm(traceId: string) {
+    setAuthTraceId(traceId);
+    setAuthName("Operador Build OS");
+    setAuthRole("owner");
+    setAuthError(null);
+    setAuthDone(null);
+  }
+
+  async function confirmAuthorize(traceId: string) {
+    setAuthBusy(true); setAuthError(null);
+    try {
+      const res = await fetch("/api/admin/build-os/diagnostics/authorize-sender", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ traceId, name: authName, role: authRole }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setAuthError(d.error ?? "Falha ao autorizar."); return; }
+      setAuthTraceId(null);
+      setAuthDone(d.message ?? "Remetente autorizado. Envie /build novamente no WhatsApp.");
+      // Refresh the report so the trace/authorization status reflects the change.
+      runDiagnostic().catch(() => {});
+    } finally { setAuthBusy(false); }
+  }
 
   async function copyDiagnostic() {
     if (!report) return;
@@ -416,26 +450,101 @@ export function BuildOsDiagnosticsPanel() {
           {/* Webhook traces */}
           {report.recentWebhookTraces.length > 0 && (
             <Card title={`Tentativas reais do webhook (${report.recentWebhookTraces.length})`}>
+              {authDone && (
+                <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                  ✅ {authDone}
+                </div>
+              )}
               <table className="w-full text-xs">
                 <thead><tr className="text-left text-gray-400">
                   <th className="py-1">#</th><th>Telefone</th><th>Prefixo</th><th>fromMe</th>
-                  <th>Config</th><th>Autoriz.</th><th>Criou</th><th>Respondeu</th><th>Falha</th><th>Quando</th>
+                  <th>Config</th><th>Autoriz.</th><th>Criou</th><th>Respondeu</th><th>Falha</th><th>Quando</th><th>Ação</th>
                 </tr></thead>
                 <tbody>
-                  {report.recentWebhookTraces.map((t) => (
-                    <tr key={t.id} className="border-t border-gray-100">
-                      <td className="py-1 font-mono">{t.id}</td>
-                      <td className="font-mono">{t.maskedPhone ?? "—"}</td>
-                      <td>{t.prefixDetected ?? "—"}</td>
-                      <td>{t.fromMe === null ? "—" : String(t.fromMe)}</td>
-                      <td>{t.configEnabled === null ? "—" : String(t.configEnabled)}</td>
-                      <td>{t.authorized === null ? "—" : String(t.authorized)}</td>
-                      <td>{String(t.commandCreated)}</td>
-                      <td>{String(t.responseSent)}</td>
-                      <td className="text-red-600">{t.failureReason ?? "—"}</td>
-                      <td>{new Date(t.createdAt).toLocaleString("pt-BR")}</td>
-                    </tr>
-                  ))}
+                  {report.recentWebhookTraces.map((t) => {
+                    const eligible =
+                      ["/build", "/cmd", "/prompt"].includes((t.prefixDetected ?? "").toLowerCase()) &&
+                      t.authorized === false &&
+                      t.failureReason === "unauthorized_sender";
+                    const formOpen = authTraceId === t.traceId;
+                    return (
+                      <Fragment key={t.id}>
+                        <tr className="border-t border-gray-100">
+                          <td className="py-1 font-mono">{t.id}</td>
+                          <td className="font-mono">{t.maskedPhone ?? "—"}</td>
+                          <td>{t.prefixDetected ?? "—"}</td>
+                          <td>{t.fromMe === null ? "—" : String(t.fromMe)}</td>
+                          <td>{t.configEnabled === null ? "—" : String(t.configEnabled)}</td>
+                          <td>{t.authorized === null ? "—" : String(t.authorized)}</td>
+                          <td>{String(t.commandCreated)}</td>
+                          <td>{String(t.responseSent)}</td>
+                          <td className="text-red-600">{t.failureReason ?? "—"}</td>
+                          <td>{new Date(t.createdAt).toLocaleString("pt-BR")}</td>
+                          <td>
+                            {eligible && !formOpen && (
+                              <button
+                                onClick={() => openAuthForm(t.traceId)}
+                                className="rounded-md bg-orange-600 px-2 py-1 text-xs font-semibold text-white hover:bg-orange-700"
+                              >
+                                Autorizar
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                        {formOpen && (
+                          <tr className="bg-orange-50">
+                            <td colSpan={11} className="px-3 py-3">
+                              <div className="space-y-2">
+                                <p className="text-sm font-semibold text-gray-800">
+                                  Autorizar este número como operador do Build OS?
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  Telefone (mascarado): <span className="font-mono">{t.maskedPhone ?? "—"}</span>.
+                                  O número completo é recuperado com segurança no servidor — nunca é exibido nem enviado pelo navegador.
+                                </p>
+                                <div className="flex flex-wrap items-end gap-3">
+                                  <label className="text-xs text-gray-600">
+                                    Nome
+                                    <input
+                                      value={authName}
+                                      onChange={(e) => setAuthName(e.target.value)}
+                                      className="mt-1 block w-56 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                                    />
+                                  </label>
+                                  <label className="text-xs text-gray-600">
+                                    Função
+                                    <select
+                                      value={authRole}
+                                      onChange={(e) => setAuthRole(e.target.value as "owner" | "admin")}
+                                      className="mt-1 block w-40 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                                    >
+                                      <option value="owner">OWNER</option>
+                                      <option value="admin">ADMIN</option>
+                                    </select>
+                                  </label>
+                                  <button
+                                    onClick={() => confirmAuthorize(t.traceId)}
+                                    disabled={authBusy}
+                                    className="rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                                  >
+                                    {authBusy ? "Autorizando…" : "Confirmar autorização"}
+                                  </button>
+                                  <button
+                                    onClick={() => setAuthTraceId(null)}
+                                    disabled={authBusy}
+                                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                                {authError && <p className="text-xs text-red-600">{authError}</p>}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </Card>

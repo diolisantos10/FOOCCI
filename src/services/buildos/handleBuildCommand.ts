@@ -96,7 +96,7 @@ export async function handleBuildCommand(
       // internal command prefix.
       diag.shortCircuited = true;
       diag.failureReason = `config_disabled:${enabled.source}`;
-      logDiag(diag);
+      logDiag(diag, input.phone);
       return { isBuildCommand: true };
     }
     return NOT_BUILD;
@@ -111,7 +111,7 @@ export async function handleBuildCommand(
     if (!auth.authorized) {
       diag.shortCircuited = true;
       diag.failureReason = "unauthorized_sender";
-      logDiag(diag);
+      logDiag(diag, input.phone);
       return { isBuildCommand: true };
     }
     if (auth.senderId) touchSenderLastUsed(auth.senderId).catch(() => {});
@@ -121,7 +121,7 @@ export async function handleBuildCommand(
     diag.responseSent = outcome.responseSent;
     diag.shortCircuited = true;
     if (!outcome.responseSent) diag.failureReason = outcome.failureReason ?? "response_send_failed";
-    logDiag(diag);
+    logDiag(diag, input.phone);
     return { isBuildCommand: true };
   }
 
@@ -140,7 +140,7 @@ export async function handleBuildCommand(
         diag.authorized = true;
         diag.shortCircuited = true;
         diag.responseSent = !!result.reply;
-        logDiag(diag);
+        logDiag(diag, input.phone);
         return { isBuildCommand: true };
       }
     } catch (err) {
@@ -154,14 +154,20 @@ export async function handleBuildCommand(
     diag.authorized = true;
     diag.shortCircuited = false;
     diag.failureReason = "authorized_sender_no_command_detected";
-    logDiag(diag);
+    logDiag(diag, input.phone);
   }
 
   return NOT_BUILD;
 }
 
-/** Emit a compact, secret-free diagnostic line AND persist a trace row. */
-function logDiag(diag: Record<string, unknown>): void {
+/**
+ * Emit a compact, secret-free diagnostic line AND persist a trace row.
+ *
+ * `rawPhone` (full E.164) is persisted SERVER-SIDE on the trace so an admin can
+ * later authorize an unauthorized /build sender by traceId — it is NEVER part of
+ * the logged `diag` line (which only carries the masked phone).
+ */
+function logDiag(diag: Record<string, unknown>, rawPhone?: string | null): void {
   try {
     console.log(`[BUILD_OS_WHATSAPP] ${JSON.stringify(diag)}`);
   } catch {
@@ -171,6 +177,7 @@ function logDiag(diag: Record<string, unknown>): void {
   // without console/Railway access. Best-effort, fire-and-forget.
   recordWebhookTrace({
     maskedPhone: diag.normalizedPhone as string | null,
+    rawPhone: rawPhone ?? null,
     prefixDetected: diag.prefixDetected as string | null,
     configEnabled: diag.configEnabled as boolean | null,
     configSource: diag.configSource as string | null,

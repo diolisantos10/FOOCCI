@@ -307,6 +307,135 @@ export async function updateAuthorizedSender(
   }
 }
 
+/** Internal command prefixes that make a trace eligible for one-click authorize. */
+const AUTHORIZABLE_TRACE_PREFIXES = ["/build", "/cmd", "/prompt"];
+
+export interface AuthorizeFromTraceInput {
+  /** Full BuildWebhookTrace id (the only token the browser sends). */
+  traceId: string;
+  /** Optional operator name (default "Operador Build OS"). */
+  name?: string | null;
+  /** Optional role label (e.g. "owner"/"admin"); defaults to "owner". */
+  role?: string | null;
+}
+
+export interface AuthorizeFromTraceResult {
+  ok: boolean;
+  error?: string;
+  /** Masked phone only — the full number is NEVER returned to the caller. */
+  maskedPhone?: string;
+  /** Whether an existing sender was reactivated vs a new one created. */
+  action?: "created" | "reactivated";
+}
+
+/**
+ * Authorize the REAL sender behind an unauthorized /build webhook trace.
+ *
+ * Security model:
+ *   • The browser only ever sends a `traceId` — never a phone. The full number
+ *     is recovered SERVER-SIDE from the trace's `rawPhone` and is never returned.
+ *   • Only traces that genuinely failed as `unauthorized_sender` for an internal
+ *     command prefix are eligible — this can't be used to authorize arbitrary
+ *     numbers, only ones that actually tried to run /build and were rejected.
+ *   • Existing operators are never deleted; a matching one is reactivated.
+ *   • Build OS config is kept enabled (never disabled here).
+ *
+ * Defensive: returns a structured error instead of throwing.
+ */
+export async function authorizeSenderFromTrace(
+  input: AuthorizeFromTraceInput,
+): Promise<AuthorizeFromTraceResult> {
+  let trace;
+  try {
+    trace = await prisma.buildWebhookTrace.findUnique({ where: { id: input.traceId } });
+  } catch {
+    return { ok: false, error: "Não foi possível ler o registro de diagnóstico." };
+  }
+  if (!trace) return { ok: false, error: "Registro de diagnóstico não encontrado." };
+
+  // Eligibility: must be a genuine unauthorized internal-command attempt.
+  const prefix = (trace.prefixDetected ?? "").toLowerCase();
+  const isInternalPrefix = AUTHORIZABLE_TRACE_PREFIXES.includes(prefix);
+  if (!isInternalPrefix || trace.authorized !== false || trace.failureReason !== "unauthorized_sender") {
+    return { ok: false, error: "Este registro não corresponde a um remetente não autorizado de comando interno." };
+  }
+
+  if (!trace.rawPhone) {
+    // Trace predates the rawPhone column → no full number to recover. The flow
+    // self-heals: the operator just needs to send /build again to generate a new
+    // (authorizable) trace.
+    return {
+      ok: false,
+      error: "Este registro é anterior à atualização e não guardou o número. Envie /build novamente no WhatsApp e tente outra vez.",
+    };
+  }
+
+  const normalized = normalizeSenderPhone(trace.rawPhone);
+  if (!normalized || normalized.length < 8) {
+    return { ok: false, error: "Número do registro inválido." };
+  }
+  const masked = `${normalized.slice(0, 3)}***${normalized.slice(-4)}`;
+  const variants = Array.from(phoneVariants(normalized));
+  const name = (input.name ?? "").trim() || "Operador Build OS";
+  const role = (input.role ?? "").trim().toLowerCase() || "owner";
+
+  try {
+    // Reactivate a matching sender (any 9th-digit variant) instead of duplicating.
+    const existing = await prisma.buildAuthorizedSender.findFirst({
+      where: { phone: { in: variants } },
+      select: { id: true, isActive: true },
+    });
+
+    let action: "created" | "reactivated";
+    if (existing) {
+      await prisma.buildAuthorizedSender.update({
+        where: { id: existing.id },
+        data: { isActive: true, name, role },
+      });
+      action = "reactivated";
+    } else {
+      await prisma.buildAuthorizedSender.create({
+        data: {
+          phone: normalized,
+          rawPhone: trace.rawPhone,
+          name,
+          role,
+          isActive: true,
+          allowedProjectIds: [] as Prisma.InputJsonValue,
+        },
+      });
+      action = "created";
+    }
+
+    // Keep Build OS enabled so the next /build is actually processed. Never disables.
+    const cfg = await getBuildOSConfigRow();
+    if (!cfg) {
+      await prisma.buildOSConfig.create({ data: { isEnabled: true } });
+    } else if (!cfg.isEnabled) {
+      await prisma.buildOSConfig.update({ where: { id: cfg.id }, data: { isEnabled: true } });
+    }
+
+    // Audit line — masked only, never the full number.
+    try {
+      console.log(
+        `[BUILD_OS_ADMIN] ${JSON.stringify({
+          event: "authorized_sender_via_trace",
+          traceId: input.traceId,
+          maskedPhone: masked,
+          action,
+          role,
+        })}`,
+      );
+    } catch {
+      /* logging must never throw */
+    }
+
+    return { ok: true, maskedPhone: masked, action };
+  } catch {
+    return { ok: false, error: "Não foi possível autorizar o remetente agora." };
+  }
+}
+
 /** Soft-deactivate (default) — safer than delete; keeps audit/history intact. */
 export async function deactivateAuthorizedSender(id: string): Promise<SenderMutationResult> {
   try {
