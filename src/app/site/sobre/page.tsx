@@ -1,0 +1,109 @@
+/**
+ * /site/sobre — short institutional page. Inherits /site/layout.tsx.
+ */
+
+import type { Metadata } from "next";
+import { PageHero } from "@/components/marketing/PageHero";
+import { CtaBand } from "@/components/marketing/CtaBand";
+import {
+  TrendingUpIcon,
+  HeartIcon,
+  UsersIcon,
+  SparklesIcon,
+  RepeatIcon,
+  ChartIcon,
+  MinusIcon,
+} from "@/components/marketing/icons";
+
+const TITLE = "Sobre a Foocci | Hospitalidade digital inteligente para restaurantes";
+const DESCRIPTION =
+  "Conheça a Foocci, sistema inteligente de vendas, relacionamento e fidelização para restaurantes.";
+
+export const metadata: Metadata = {
+  title: { absolute: TITLE },
+  description: DESCRIPTION,
+  robots: { index: true, follow: true },
+  openGraph: { type: "website", locale: "pt_BR", siteName: "Foocci", title: TITLE, description: DESCRIPTION },
+};
+
+const REPRESENTS = [
+  { icon: TrendingUpIcon, label: "Inteligência comercial" },
+  { icon: HeartIcon, label: "Hospitalidade digital" },
+  { icon: UsersIcon, label: "Relacionamento" },
+  { icon: SparklesIcon, label: "Experiência" },
+  { icon: RepeatIcon, label: "Recorrência" },
+  { icon: ChartIcon, label: "Crescimento sustentável" },
+];
+
+const IS_NOT = [
+  "Chatbot genérico",
+  "Software frio",
+  "ERP complexo",
+  "Automação robótica",
+  "Dashboard enterprise",
+];
+
+export default function SobrePage() {
+  return (
+    <>
+      <PageHero
+        badge="Sobre a Foocci"
+        title="Tecnologia, relacionamento e hospitalidade para restaurantes criarem experiências que fidelizam."
+        subtitle="A Foocci nasceu para ajudar restaurantes a transformar atendimento digital em venda, experiência e recorrência."
+      />
+
+      {/* 1. What we believe */}
+      <section className="bg-gray-50 py-20">
+        <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
+          <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+            Restaurante bom não precisa perder cliente por falta de relacionamento.
+          </h2>
+          <p className="mt-5 text-lg leading-relaxed text-gray-600">
+            A experiência do restaurante deveria continuar depois do pedido. É por isso
+            que a Foocci conecta venda, atendimento e relacionamento — para o cliente
+            voltar, não desaparecer.
+          </p>
+        </div>
+      </section>
+
+      {/* 2. What Foocci represents */}
+      <section className="bg-white py-20">
+        <div className="mx-auto max-w-5xl px-5 lg:px-8">
+          <h2 className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+            O que a Foocci representa
+          </h2>
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {REPRESENTS.map(({ icon: Icon, label }) => (
+              <div key={label} className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-5">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <span className="text-base font-semibold text-[#0B0B0B]">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 3. What Foocci is not */}
+      <section className="bg-gray-50 py-20">
+        <div className="mx-auto max-w-3xl px-5 lg:px-8">
+          <h2 className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+            O que a Foocci não é
+          </h2>
+          <ul className="mx-auto mt-10 max-w-xl space-y-3">
+            {IS_NOT.map((item) => (
+              <li key={item} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4">
+                <MinusIcon className="h-5 w-5 shrink-0 text-gray-400" />
+                <span className="text-base font-medium text-gray-700">{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* 4. CTA */}
+      <CtaBand title="Quer construir uma operação mais inteligente para seu restaurante?" label="Ver demonstração" />
+    </>
+  );
+}

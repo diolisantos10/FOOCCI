@@ -1,29 +1,26 @@
 /**
  * Marketing footer. Server component.
- *
- * Links point only to real routes or on-page anchors. Pages that do not exist
- * yet (Sobre, Política de privacidade, Termos de uso) use "#" — documented as
- * missing in the build report. "Contato" points to the on-page demo section.
+ * All links point to real routes or on-page anchors (no "#" placeholders).
  */
 
+import Link from "next/link";
+
 const PRODUTO = [
-  { href: "#como-funciona", label: "Como funciona" },
-  { href: "#solucoes", label: "Soluções" },
-  { href: "#crm", label: "CRM" },
-  { href: "#precos", label: "Preços" },
-  { href: "#demonstracao", label: "Demonstração" },
+  { href: "/site/como-funciona", label: "Como funciona" },
+  { href: "/site#solucoes", label: "Soluções" },
+  { href: "/site#crm", label: "CRM" },
+  { href: "/site/precos", label: "Preços" },
+  { href: "/site/demonstracao", label: "Demonstração" },
 ];
 
-// "Sobre" page does not exist yet → "#". "Contato" → on-page demo section.
 const EMPRESA = [
-  { href: "#", label: "Sobre" },
-  { href: "#demonstracao", label: "Contato" },
+  { href: "/site/sobre", label: "Sobre" },
+  { href: "/site/demonstracao", label: "Contato" },
 ];
 
-// Legal pages do not exist yet → "#".
 const LEGAL = [
-  { href: "#", label: "Política de privacidade" },
-  { href: "#", label: "Termos de uso" },
+  { href: "/site/politica-de-privacidade", label: "Política de privacidade" },
+  { href: "/site/termos-de-uso", label: "Termos de uso" },
 ];
 
 function Column({ title, links }: { title: string; links: { href: string; label: string }[] }) {
@@ -33,9 +30,9 @@ function Column({ title, links }: { title: string; links: { href: string; label:
       <ul className="mt-4 space-y-3">
         {links.map((l) => (
           <li key={l.label}>
-            <a href={l.href} className="text-sm text-gray-600 hover:text-brand-600">
+            <Link href={l.href} className="text-sm text-gray-600 hover:text-brand-600">
               {l.label}
-            </a>
+            </Link>
           </li>
         ))}
       </ul>
@@ -51,7 +48,9 @@ export function MarketingFooter() {
       <div className="mx-auto max-w-6xl px-5 py-14 lg:px-8">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-1">
-            <span className="text-xl font-bold tracking-tight text-[#0B0B0B]">Foocci</span>
+            <Link href="/site" className="text-xl font-bold tracking-tight text-[#0B0B0B]">
+              Foocci
+            </Link>
             <p className="mt-3 max-w-sm text-sm leading-relaxed text-gray-600">
               Foocci — sistema inteligente de vendas, relacionamento e fidelização
               para restaurantes.

@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { DEMO_ANCHOR, PRIMARY_CTA_LABEL, WHATSAPP_CTA_LABEL, ctaTarget, whatsappUrl } from "./config";
+import { DEMO_URL, PRIMARY_CTA_LABEL, WHATSAPP_CTA_LABEL, ctaTarget, whatsappUrl } from "./config";
 import { WhatsAppIcon } from "./icons";
 
 export function StickyMobileCta() {
@@ -22,13 +22,13 @@ export function StickyMobileCta() {
 
   if (!show) return null;
 
-  const waHref = whatsappUrl() ?? DEMO_ANCHOR;
+  const waHref = whatsappUrl() ?? DEMO_URL;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 p-3 backdrop-blur-md lg:hidden">
       <div className="mx-auto flex max-w-md items-center gap-2">
         <a
-          href={DEMO_ANCHOR}
+          href={DEMO_URL}
           className="inline-flex flex-1 items-center justify-center rounded-full bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
         >
           {PRIMARY_CTA_LABEL}

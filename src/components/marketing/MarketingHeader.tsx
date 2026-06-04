@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * Sticky marketing header. Client component: tracks scroll (subtle border once
- * scrolled) and toggles the mobile menu.
+ * Sticky marketing header (shared across /site and /site/*). Client component:
+ * tracks scroll (subtle border once scrolled) and toggles the mobile menu.
  */
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { LOGIN_URL, NAV_LINKS, PRIMARY_CTA_LABEL, DEMO_ANCHOR } from "./config";
+import { LOGIN_URL, NAV_LINKS, PRIMARY_CTA_LABEL, DEMO_URL } from "./config";
 import { MenuIcon, CloseIcon } from "./icons";
 
 export function MarketingHeader() {
@@ -34,9 +34,9 @@ export function MarketingHeader() {
 
         <nav className="hidden items-center gap-8 lg:flex">
           {NAV_LINKS.map((l) => (
-            <a key={l.href} href={l.href} className="text-sm font-medium text-gray-600 transition-colors hover:text-[#0B0B0B]">
+            <Link key={l.href} href={l.href} className="text-sm font-medium text-gray-600 transition-colors hover:text-[#0B0B0B]">
               {l.label}
-            </a>
+            </Link>
           ))}
         </nav>
 
@@ -44,12 +44,12 @@ export function MarketingHeader() {
           <Link href={LOGIN_URL} className="text-sm font-semibold text-gray-700 transition-colors hover:text-brand-600">
             Entrar
           </Link>
-          <a
-            href={DEMO_ANCHOR}
+          <Link
+            href={DEMO_URL}
             className="inline-flex items-center rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600"
           >
             {PRIMARY_CTA_LABEL}
-          </a>
+          </Link>
         </div>
 
         <button
@@ -67,14 +67,14 @@ export function MarketingHeader() {
         <div className="border-t border-gray-200 bg-white lg:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col px-5 py-3">
             {NAV_LINKS.map((l) => (
-              <a
+              <Link
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
                 className="rounded-lg px-2 py-3 text-base font-medium text-gray-700 hover:bg-gray-50"
               >
                 {l.label}
-              </a>
+              </Link>
             ))}
             <div className="mt-2 flex flex-col gap-2 border-t border-gray-100 pt-3">
               <Link
@@ -84,13 +84,13 @@ export function MarketingHeader() {
               >
                 Entrar
               </Link>
-              <a
-                href={DEMO_ANCHOR}
+              <Link
+                href={DEMO_URL}
                 onClick={() => setOpen(false)}
                 className="inline-flex items-center justify-center rounded-full bg-brand-500 px-4 py-3 text-base font-semibold text-white hover:bg-brand-600"
               >
                 {PRIMARY_CTA_LABEL}
-              </a>
+              </Link>
             </div>
           </nav>
         </div>

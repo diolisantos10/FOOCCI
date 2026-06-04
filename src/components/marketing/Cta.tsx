@@ -6,7 +6,7 @@
  */
 
 import {
-  DEMO_ANCHOR,
+  DEMO_URL,
   PRIMARY_CTA_LABEL,
   WHATSAPP_CTA_LABEL,
   ctaTarget,
@@ -25,7 +25,7 @@ type PrimaryProps = {
 export function PrimaryCta({
   className = "",
   label = PRIMARY_CTA_LABEL,
-  href = DEMO_ANCHOR,
+  href = DEMO_URL,
   withArrow = true,
   block = false,
 }: PrimaryProps) {
@@ -46,14 +46,21 @@ type WhatsAppProps = {
   className?: string;
   label?: string;
   block?: boolean;
+  /** Where to send the user when no WhatsApp number is configured. */
+  fallbackHref?: string;
 };
 
 /**
  * "Falar no WhatsApp" — opens WhatsApp when a sales number is configured,
- * otherwise scrolls to the on-page demo section (documented fallback).
+ * otherwise routes to the demo page (or a custom fallback).
  */
-export function WhatsAppCta({ className = "", label = WHATSAPP_CTA_LABEL, block = false }: WhatsAppProps) {
-  const href = whatsappUrl() ?? DEMO_ANCHOR;
+export function WhatsAppCta({
+  className = "",
+  label = WHATSAPP_CTA_LABEL,
+  block = false,
+  fallbackHref = DEMO_URL,
+}: WhatsAppProps) {
+  const href = whatsappUrl() ?? fallbackHref;
   return (
     <a
       {...ctaTarget(href)}

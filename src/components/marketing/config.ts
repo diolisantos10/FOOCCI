@@ -1,13 +1,13 @@
 /**
- * Shared config for the public marketing site (/site).
+ * Shared config for the public marketing site (/site and /site/*).
  *
  * Single source of truth for CTAs, navigation and contact destinations so the
  * restaurant owner can wire real values in one place.
  *
  * NOTE (documented, intentional): no Foocci sales WhatsApp number is configured
- * yet. While `WHATSAPP_SALES_NUMBER` is null, every "Falar no WhatsApp" CTA and
- * the demo-form submit fall back to scrolling to the on-page demo section. Set a
- * number (international format, digits only) to activate WhatsApp everywhere.
+ * yet. While `WHATSAPP_SALES_NUMBER` is null, every "Falar no WhatsApp" CTA falls
+ * back to the demo page. Set a number (international format, digits only) to
+ * activate WhatsApp everywhere.
  */
 
 export const LOGIN_URL = "/login";
@@ -15,7 +15,8 @@ export const LOGIN_URL = "/login";
 /** TODO(owner): set the real Foocci sales WhatsApp (e.g. "5511999999999"). */
 export const WHATSAPP_SALES_NUMBER: string | null = null;
 
-export const DEMO_ANCHOR = "#demonstracao";
+/** Canonical conversion destination — the dedicated demo page. */
+export const DEMO_URL = "/site/demonstracao";
 
 export const PRIMARY_CTA_LABEL = "Quero ver a Foocci funcionando";
 export const WHATSAPP_CTA_LABEL = "Falar no WhatsApp";
@@ -28,7 +29,7 @@ export function whatsappUrl(message: string = DEFAULT_WA_MESSAGE): string | null
   return `https://wa.me/${WHATSAPP_SALES_NUMBER}?text=${encodeURIComponent(message)}`;
 }
 
-/** Props for a link that is external (WhatsApp) when configured, else an anchor. */
+/** Props for a link that is external (WhatsApp) when configured, else internal. */
 export function ctaTarget(href: string): { href: string } & Record<string, string> {
   const external = href.startsWith("http");
   return external
@@ -37,9 +38,9 @@ export function ctaTarget(href: string): { href: string } & Record<string, strin
 }
 
 export const NAV_LINKS: { href: string; label: string }[] = [
-  { href: "#como-funciona", label: "Como funciona" },
-  { href: "#solucoes", label: "Soluções" },
-  { href: "#crm", label: "CRM" },
-  { href: "#precos", label: "Preços" },
-  { href: "#demonstracao", label: "Demonstração" },
+  { href: "/site/como-funciona", label: "Como funciona" },
+  { href: "/site#solucoes", label: "Soluções" },
+  { href: "/site#crm", label: "CRM" },
+  { href: "/site/precos", label: "Preços" },
+  { href: "/site/demonstracao", label: "Demonstração" },
 ];
