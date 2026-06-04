@@ -399,6 +399,12 @@ export function AtendimentoClient({
     const params = new URLSearchParams({ limit: "100" });
     // Server-side status filter only for RESOLVED (reduces payload)
     if (statusFilter === "RESOLVED") params.set("status", "RESOLVED");
+    // CRM filters need server-side contextType filtering. CRM outbound-only
+    // conversations have lastMessageAt=null and are sorted/deduped to the bottom,
+    // so they fall outside the default loaded window — a purely client-side
+    // filter would find nothing. crm=1 returns CRM-origin conversations directly,
+    // independent of channel. The SENT vs REPLIED split stays client-side below.
+    if (statusFilter === "CRM_SENT" || statusFilter === "CRM_REPLIED") params.set("crm", "1");
 
     try {
       // Use /api/chat/conversations: supports channel, all status values, aiEnabled
@@ -963,7 +969,11 @@ export function AtendimentoClient({
           ) : displayed.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-gray-400">
               <span className="text-2xl">💬</span>
-              <p>Nenhuma conversa encontrada.</p>
+              <p>
+                {statusFilter === "CRM_SENT" || statusFilter === "CRM_REPLIED"
+                  ? "Nenhuma mensagem de CRM encontrada neste filtro."
+                  : "Nenhuma conversa encontrada."}
+              </p>
             </div>
           ) : (
             <ul className="divide-y divide-gray-100">

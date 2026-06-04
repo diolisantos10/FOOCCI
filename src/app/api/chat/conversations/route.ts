@@ -16,7 +16,8 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
-import { Channel, ConversationStatus, Prisma } from "@prisma/client";
+import { ConversationStatus, Prisma } from "@prisma/client";
+import { buildConversationWhere } from "@/services/conversation/conversationListFilter";
 
 // ── Dedup rank: lower = higher priority when multiple conversations share a customer ──
 //
@@ -103,29 +104,14 @@ export async function GET(req: NextRequest) {
     const status  = sp.get("status")  ?? undefined;
     const channel = sp.get("channel") ?? undefined;
     const search  = sp.get("search")  ?? undefined;
+    // crm=1 restricts to CRM-origin conversations (contextType-based, channel
+    // independent) so "CRM enviado" works without also selecting WhatsApp.
+    const crm     = sp.get("crm")     ?? undefined;
     const page    = Math.max(1, parseInt(sp.get("page")  ?? "1", 10));
     const limit   = Math.min(100, Math.max(1, parseInt(sp.get("limit") ?? "30", 10)));
     const skip    = (page - 1) * limit;
 
-    const where: Prisma.ConversationWhereInput = {
-      restaurantId: ctx.restaurantId,
-      ...(status && Object.values(ConversationStatus).includes(status as ConversationStatus)
-        ? { status: status as ConversationStatus }
-        : {}),
-      ...(channel && Object.values(Channel).includes(channel as Channel)
-        ? { channel: channel as Channel }
-        : {}),
-      ...(search ? {
-        OR: [
-          { customerName:  { contains: search, mode: "insensitive" } },
-          { customerPhone: { contains: search } },
-          { customer: { OR: [
-            { name:  { contains: search, mode: "insensitive" } },
-            { phone: { contains: search } },
-          ]}},
-        ],
-      } : {}),
-    };
+    const where = buildConversationWhere(ctx.restaurantId, { status, channel, search, crm });
 
     // Fetch more rows than requested so deduplication leaves enough results.
     const fetchLimit = Math.min(limit * 4, 400);
