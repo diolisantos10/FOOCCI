@@ -14,11 +14,11 @@ const PLANS = [
 
 export function PricingTeaserSection() {
   return (
-    <section id="precos" className="scroll-mt-20 bg-gray-50 py-20">
+    <section id="precos" aria-labelledby="planos-title" className="scroll-mt-20 bg-gray-50 py-20">
       <div className="mx-auto max-w-6xl px-5 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Planos</span>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="planos-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Planos serão apresentados no lançamento comercial.
           </h2>
           <p className="mt-4 text-lg text-gray-600">

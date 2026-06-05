@@ -5,6 +5,7 @@
  */
 
 import { ArrowRightIcon } from "./icons";
+import { SectionHeading } from "./SectionHeading";
 
 const FLOW = ["Oportunidade", "Mensagem", "Retorno", "Pedido"];
 
@@ -18,17 +19,14 @@ const EXAMPLES = [
 
 export function RecoverySection() {
   return (
-    <section className="bg-white py-20">
+    <section aria-labelledby="recuperacao-title" className="bg-white py-20">
       <div className="mx-auto max-w-5xl px-5 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            Nem todo pedido perdido precisa continuar perdido.
-          </h2>
-          <p className="mt-5 text-lg leading-relaxed text-gray-600">
-            A Foocci ajuda a identificar oportunidades de recuperação, como clientes
-            que começaram um pedido, sumiram ou ficaram muito tempo sem comprar.
-          </p>
-        </div>
+        <SectionHeading
+          id="recuperacao-title"
+          eyebrow="Recuperação"
+          title="Nem todo pedido perdido precisa continuar perdido."
+          subtitle="A Foocci ajuda a identificar oportunidades de recuperação, como clientes que começaram um pedido, sumiram ou ficaram muito tempo sem comprar."
+        />
 
         {/* Flow: Oportunidade → Mensagem → Retorno → Pedido */}
         <div className="mt-12 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center">

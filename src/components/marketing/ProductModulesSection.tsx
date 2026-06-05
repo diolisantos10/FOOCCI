@@ -27,13 +27,13 @@ const MODULES = [
 
 export function ProductModulesSection() {
   return (
-    <section id="solucoes" className="scroll-mt-20 bg-gray-50 py-20">
+    <section id="solucoes" aria-labelledby="solucoes-title" className="scroll-mt-20 bg-gray-50 py-20">
       <div className="mx-auto max-w-6xl px-5 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">
             Soluções
           </span>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="solucoes-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Tudo conectado para o restaurante vender melhor.
           </h2>
         </div>
@@ -42,7 +42,7 @@ export function ProductModulesSection() {
           {MODULES.map(({ icon: Icon, title, benefit }) => (
             <div
               key={title}
-              className="group rounded-2xl border border-gray-200 bg-white p-6 transition-shadow hover:shadow-md"
+              className="group rounded-2xl border border-gray-200 bg-white p-6 ring-1 ring-gray-900/[0.02] transition-shadow hover:shadow-md"
             >
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-100">
                 <Icon className="h-5 w-5" />

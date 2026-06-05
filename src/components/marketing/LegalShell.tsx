@@ -18,7 +18,7 @@ export function LegalShell({
 }) {
   return (
     <>
-      <section className="relative overflow-hidden bg-white">
+      <section aria-labelledby="legal-title" className="relative overflow-hidden bg-white">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-48 bg-gradient-to-b from-gray-50 to-white"
@@ -28,7 +28,7 @@ export function LegalShell({
             <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
             Legal
           </span>
-          <h1 className="mt-5 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">{title}</h1>
+          <h1 id="legal-title" className="mt-5 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">{title}</h1>
           <p className="mt-3 text-sm text-gray-500">Última atualização: {lastUpdated}</p>
         </div>
       </section>

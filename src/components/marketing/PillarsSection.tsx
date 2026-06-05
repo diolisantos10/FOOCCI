@@ -3,6 +3,7 @@
  */
 
 import { TrendingUpIcon, UsersIcon, RepeatIcon } from "./icons";
+import { SectionHeading } from "./SectionHeading";
 
 const PILLARS = [
   {
@@ -24,17 +25,20 @@ const PILLARS = [
 
 export function PillarsSection() {
   return (
-    <section className="bg-gray-50 py-20">
+    <section aria-labelledby="pilares-title" className="bg-gray-50 py-20">
       <div className="mx-auto max-w-6xl px-5 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            Venda, relacionamento e fidelização trabalhando juntos.
-          </h2>
-        </div>
+        <SectionHeading
+          id="pilares-title"
+          eyebrow="Por que Foocci"
+          title="Venda, relacionamento e fidelização trabalhando juntos."
+        />
 
         <div className="mt-12 grid gap-6 md:grid-cols-3">
           {PILLARS.map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="rounded-2xl border border-gray-200 bg-white p-7">
+            <div
+              key={title}
+              className="rounded-2xl border border-gray-200 bg-white p-7 ring-1 ring-gray-900/[0.02] transition-shadow hover:shadow-md"
+            >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                 <Icon className="h-6 w-6" />
               </div>

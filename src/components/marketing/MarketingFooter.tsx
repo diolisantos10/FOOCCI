@@ -23,6 +23,8 @@ const LEGAL = [
   { href: "/site/termos-de-uso", label: "Termos de uso" },
 ];
 
+const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2";
+
 function Column({ title, links }: { title: string; links: { href: string; label: string }[] }) {
   return (
     <div>
@@ -30,7 +32,7 @@ function Column({ title, links }: { title: string; links: { href: string; label:
       <ul className="mt-4 space-y-3">
         {links.map((l) => (
           <li key={l.label}>
-            <Link href={l.href} className="text-sm text-gray-600 hover:text-brand-600">
+            <Link href={l.href} className={`rounded-md text-sm text-gray-600 hover:text-brand-600 ${FOCUS}`}>
               {l.label}
             </Link>
           </li>
@@ -48,12 +50,18 @@ export function MarketingFooter() {
       <div className="mx-auto max-w-6xl px-5 py-14 lg:px-8">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-1">
-            <Link href="/site" className="text-xl font-bold tracking-tight text-[#0B0B0B]">
-              Foocci
+            <Link href="/site" className={`inline-flex items-center gap-2 rounded-md ${FOCUS}`}>
+              <span className="text-xl font-bold tracking-tight text-[#0B0B0B]">Foocci</span>
+              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-600">
+                em breve
+              </span>
             </Link>
             <p className="mt-3 max-w-sm text-sm leading-relaxed text-gray-600">
               Foocci — sistema inteligente de vendas, relacionamento e fidelização
               para restaurantes.
+            </p>
+            <p className="mt-3 text-xs font-medium text-gray-400">
+              Em fase piloto · Lançamento comercial em breve.
             </p>
           </div>
 

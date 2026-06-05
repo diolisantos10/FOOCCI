@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { ArrowRightIcon } from "@/components/marketing/icons";
+import { OrderMockup } from "@/components/marketing/mockups";
 import { PROPOSTA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
 const TITLE = "Como funciona a Foocci | Sistema inteligente para restaurantes";
@@ -43,9 +44,9 @@ export default function ComoFuncionaPage() {
       />
 
       {/* 1. The journey */}
-      <section className="bg-gray-50 py-20">
+      <section aria-labelledby="jornada-title" className="bg-gray-50 py-20">
         <div className="mx-auto max-w-3xl px-5 lg:px-8">
-          <h2 className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="jornada-title" className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
             A jornada, passo a passo
           </h2>
           <ol className="relative mt-12">
@@ -66,23 +67,29 @@ export default function ComoFuncionaPage() {
       </section>
 
       {/* 2. Backstage */}
-      <section className="bg-white py-20">
-        <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
-          <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            A tecnologia trabalha no bastidor. A experiência aparece para o cliente.
-          </h2>
-          <p className="mt-5 text-lg leading-relaxed text-gray-600">
-            A Foocci não rouba o protagonismo do restaurante. Ela apoia a experiência:
-            o cliente vê a sua marca e o seu atendimento, enquanto a inteligência
-            comercial trabalha por trás para conduzir a venda e manter o relacionamento.
-          </p>
+      <section aria-labelledby="bastidor-title" className="bg-white py-20">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 lg:grid-cols-2 lg:px-8">
+          <div>
+            <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Bastidor</span>
+            <h2 id="bastidor-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+              A tecnologia trabalha no bastidor. A experiência aparece para o cliente.
+            </h2>
+            <p className="mt-5 text-lg leading-relaxed text-gray-600">
+              A Foocci não rouba o protagonismo do restaurante. Ela apoia a experiência:
+              o cliente vê a sua marca e o seu atendimento, enquanto a inteligência
+              comercial trabalha por trás para conduzir a venda e manter o relacionamento.
+            </p>
+          </div>
+          <div className="lg:pl-6">
+            <OrderMockup />
+          </div>
         </div>
       </section>
 
       {/* 3. Visual flow */}
-      <section className="bg-gray-50 py-20">
+      <section aria-labelledby="fluxo-title" className="bg-gray-50 py-20">
         <div className="mx-auto max-w-5xl px-5 lg:px-8">
-          <h2 className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="fluxo-title" className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Do atendimento ao retorno
           </h2>
           <div className="mt-12 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center">
@@ -103,8 +110,8 @@ export default function ComoFuncionaPage() {
       {/* 4. CTA */}
       <CtaBand
         title="A Foocci está sendo preparada para restaurantes como o seu."
-        label="Voltar para a página principal"
-        href="/site"
+        label="Conhecer a proposta"
+        href={PROPOSTA_URL}
       />
     </>
   );

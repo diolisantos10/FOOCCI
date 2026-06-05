@@ -14,13 +14,13 @@ const STEPS = [
 
 export function HowItWorksSection() {
   return (
-    <section id="como-funciona" className="scroll-mt-20 bg-white py-20">
+    <section id="como-funciona" aria-labelledby="como-funciona-title" className="scroll-mt-20 bg-white py-20">
       <div className="mx-auto max-w-3xl px-5 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">
             Como funciona
           </span>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="como-funciona-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Da primeira mensagem ao próximo pedido.
           </h2>
         </div>

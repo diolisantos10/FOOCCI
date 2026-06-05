@@ -57,9 +57,9 @@ export default function SobrePage() {
       />
 
       {/* 1. What we believe */}
-      <section className="bg-gray-50 py-20">
+      <section aria-labelledby="crenca-title" className="bg-gray-50 py-20">
         <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
-          <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="crenca-title" className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Restaurante bom não precisa perder cliente por falta de relacionamento.
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">
@@ -71,14 +71,14 @@ export default function SobrePage() {
       </section>
 
       {/* 2. What Foocci represents */}
-      <section className="bg-white py-20">
+      <section aria-labelledby="representa-title" className="bg-white py-20">
         <div className="mx-auto max-w-5xl px-5 lg:px-8">
-          <h2 className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="representa-title" className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
             O que a Foocci representa
           </h2>
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {REPRESENTS.map(({ icon: Icon, label }) => (
-              <div key={label} className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-5">
+              <div key={label} className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-5 ring-1 ring-gray-900/[0.02]">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                   <Icon className="h-5 w-5" />
                 </span>
@@ -90,9 +90,9 @@ export default function SobrePage() {
       </section>
 
       {/* 3. What Foocci is not */}
-      <section className="bg-gray-50 py-20">
+      <section aria-labelledby="naoe-title" className="bg-gray-50 py-20">
         <div className="mx-auto max-w-3xl px-5 lg:px-8">
-          <h2 className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="naoe-title" className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
             O que a Foocci não é
           </h2>
           <ul className="mx-auto mt-10 max-w-xl space-y-3">

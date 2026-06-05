@@ -26,7 +26,7 @@ export function StickyMobileCta() {
       <div className="mx-auto max-w-md">
         <a
           href={COMO_FUNCIONA_URL}
-          className="inline-flex w-full items-center justify-center rounded-full bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+          className="inline-flex w-full items-center justify-center rounded-full bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
         >
           {PRIMARY_CTA_LABEL}
         </a>

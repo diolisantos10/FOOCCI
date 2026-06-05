@@ -78,7 +78,7 @@ export function WhatsAppCta({
   return (
     <a
       {...ctaTarget(href)}
-      className={`inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-6 py-3.5 text-base font-semibold text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50 ${
+      className={`inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-6 py-3.5 text-base font-semibold text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${
         block ? "w-full" : ""
       } ${className}`}
     >

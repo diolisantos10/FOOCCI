@@ -19,6 +19,7 @@ import { ProductModulesSection } from "@/components/marketing/ProductModulesSect
 import { CRMSection } from "@/components/marketing/CRMSection";
 import { WhatsAppSection } from "@/components/marketing/WhatsAppSection";
 import { RecoverySection } from "@/components/marketing/RecoverySection";
+import { EssenceBand } from "@/components/marketing/EssenceBand";
 import { ComparisonSection } from "@/components/marketing/ComparisonSection";
 import { DemoSection } from "@/components/marketing/DemoSection";
 import { PricingTeaserSection } from "@/components/marketing/PricingTeaserSection";
@@ -61,6 +62,7 @@ export default function SitePage() {
       <CRMSection />
       <WhatsAppSection />
       <RecoverySection />
+      <EssenceBand />
       <ComparisonSection />
       <DemoSection />
       <PricingTeaserSection />

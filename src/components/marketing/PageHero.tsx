@@ -30,18 +30,22 @@ export function PageHero({
 }: PageHeroProps) {
   const hasCta = Boolean(primaryLabel || secondaryLabel);
   return (
-    <section className="relative overflow-hidden bg-white">
+    <section aria-labelledby="page-hero-title" className="relative overflow-hidden bg-white">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b from-gray-50 to-white"
       />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(249,115,22,0.07),transparent)]"
+      />
       <div className="mx-auto max-w-3xl px-5 pb-12 pt-16 text-center lg:px-8 lg:pb-16 lg:pt-20">
-        <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+        <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 ring-1 ring-brand-100">
           <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
           {badge}
         </span>
 
-        <h1 className="mt-5 text-3xl font-bold leading-[1.15] tracking-tight text-[#0B0B0B] sm:text-4xl lg:text-5xl">
+        <h1 id="page-hero-title" className="mt-5 text-3xl font-bold leading-[1.15] tracking-tight text-[#0B0B0B] sm:text-4xl lg:text-5xl">
           {title}
         </h1>
 

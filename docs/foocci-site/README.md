@@ -32,6 +32,8 @@ marketplace nem automação genérica de WhatsApp.
 | [`backlog-v1.md`](./backlog-v1.md) | Backlog priorizado (P0–P3) com critérios de aceite |
 | [`implementation-roadmap-v1.md`](./implementation-roadmap-v1.md) | Roadmap em 6 fases, com riscos e validação |
 | [`copy-decisions-v1.md`](./copy-decisions-v1.md) | Posicionamento, CTAs, palavras a usar/evitar, claims com cautela |
+| [`pre-launch-mode-v1.md`](./pre-launch-mode-v1.md) | Modo pré-lançamento: o que está desligado e o checklist de lançamento |
+| [`design-qa-v1.md`](./design-qa-v1.md) | Auditoria de design sênior + refino premium (linguagem de mockup, ritmo, a11y) |
 
 ## Princípios inegociáveis
 

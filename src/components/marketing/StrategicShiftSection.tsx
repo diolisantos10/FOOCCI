@@ -5,6 +5,7 @@
  */
 
 import { CheckIcon, MinusIcon } from "./icons";
+import { SectionHeading } from "./SectionHeading";
 
 const PASSIVE = [
   "Link de cardápio",
@@ -22,18 +23,14 @@ const SMART = [
 
 export function StrategicShiftSection() {
   return (
-    <section className="bg-white py-20">
+    <section aria-labelledby="shift-title" className="bg-white py-20">
       <div className="mx-auto max-w-5xl px-5 lg:px-8">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            Pedido direto não cresce só com link. Cresce com experiência.
-          </h2>
-          <p className="mt-5 text-lg leading-relaxed text-gray-600">
-            Ter um cardápio online é só o começo. O restaurante que quer vender mais
-            precisa conduzir o cliente, entender seu histórico e manter relacionamento
-            depois da compra.
-          </p>
-        </div>
+        <SectionHeading
+          id="shift-title"
+          eyebrow="Mudança estratégica"
+          title="Pedido direto não cresce só com link. Cresce com experiência."
+          subtitle="Ter um cardápio online é só o começo. O restaurante que quer vender mais precisa conduzir o cliente, entender seu histórico e manter relacionamento depois da compra."
+        />
 
         {/* Passive vs Foocci */}
         <div className="mt-12 grid gap-5 md:grid-cols-2">

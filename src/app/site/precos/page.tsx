@@ -53,14 +53,16 @@ export default function PrecosPage() {
       />
 
       {/* Plan directions (no prices) */}
-      <section className="bg-gray-50 py-20">
+      <section aria-label="Direções de planos" className="bg-gray-50 py-20">
         <div className="mx-auto max-w-6xl px-5 lg:px-8">
           <div className="grid gap-6 lg:grid-cols-3">
             {PLANS.map((plan) => (
               <div
                 key={plan.name}
                 className={`relative flex flex-col rounded-2xl border bg-white p-7 ${
-                  plan.highlighted ? "border-brand-200 shadow-md ring-1 ring-brand-100" : "border-gray-200"
+                  plan.highlighted
+                    ? "border-brand-200 shadow-md ring-1 ring-brand-100"
+                    : "border-gray-200 ring-1 ring-gray-900/[0.02]"
                 }`}
               >
                 <h2 className="text-xl font-bold text-[#0B0B0B]">{plan.name}</h2>
@@ -78,9 +80,9 @@ export default function PrecosPage() {
       </section>
 
       {/* Why plans are defined at launch */}
-      <section className="bg-white py-20">
+      <section aria-labelledby="planos-porque-title" className="bg-white py-20">
         <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
-          <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="planos-porque-title" className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Por que os planos serão definidos no lançamento?
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">

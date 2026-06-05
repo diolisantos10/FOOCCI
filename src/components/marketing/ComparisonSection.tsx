@@ -4,6 +4,7 @@
  */
 
 import { CheckIcon, MinusIcon } from "./icons";
+import { SectionHeading } from "./SectionHeading";
 
 const CHATBOT = [
   "Responde perguntas",
@@ -23,13 +24,13 @@ const FOOCCI = [
 
 export function ComparisonSection() {
   return (
-    <section className="bg-gray-50 py-20">
+    <section aria-labelledby="comparacao-title" className="bg-gray-50 py-20">
       <div className="mx-auto max-w-5xl px-5 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            A Foocci não é um chatbot. É uma operação comercial inteligente.
-          </h2>
-        </div>
+        <SectionHeading
+          id="comparacao-title"
+          eyebrow="Comparação"
+          title="A Foocci não é um chatbot. É uma operação comercial inteligente."
+        />
 
         <div className="mt-12 grid gap-5 md:grid-cols-2">
           {/* Chatbot */}
