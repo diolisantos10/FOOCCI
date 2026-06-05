@@ -4898,6 +4898,22 @@ export function CRMClient({
   const [datePreset, setDatePreset] = useState<DateFilterPreset>("total");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo,   setCustomTo]   = useState("");
+  const [revenueSummary, setRevenueSummary] = useState<{
+    totalRevenue: number;
+    totalSent: number;
+    totalResponded: number;
+    totalConverted: number;
+    campaignCount: number;
+  } | null>(null);
+  const [revenueSummaryLoading, setRevenueSummaryLoading] = useState(false);
+
+  // Load initial revenue summary (all-time) on mount
+  useEffect(() => {
+    fetch("/api/crm/revenue-summary")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => { if (json?.data) setRevenueSummary(json.data); })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleDateChange(
     preset: DateFilterPreset,
@@ -4910,33 +4926,50 @@ export function CRMClient({
 
     if (preset === "custom" && (!cfrom || !cto)) return;
 
-    let url = "/api/crm/overview-stats";
+    const now = new Date();
+    let fromIso: string | undefined;
+    let toIso: string | undefined;
+
     if (preset !== "total") {
-      const now = new Date();
-      let from: string;
-      let to: string;
-      if (preset === "month") {
-        from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        to   = now.toISOString();
+      toIso = now.toISOString();
+      if (preset === "today") {
+        fromIso = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      } else if (preset === "week7") {
+        fromIso = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+      } else if (preset === "week") {
+        const day = now.getDay();
+        const daysSinceMonday = day === 0 ? 6 : day - 1;
+        fromIso = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday).toISOString();
+      } else if (preset === "month") {
+        fromIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       } else if (preset === "year") {
-        from = new Date(now.getFullYear(), 0, 1).toISOString();
-        to   = now.toISOString();
+        fromIso = new Date(now.getFullYear(), 0, 1).toISOString();
       } else {
-        from = new Date(cfrom!).toISOString();
-        to   = new Date(cto!  ).toISOString();
+        fromIso = new Date(cfrom!).toISOString();
+        toIso   = new Date(cto!).toISOString();
       }
-      url += `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
     }
 
+    const qs = fromIso && toIso ? `?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}` : "";
+
     setStatsLoading(true);
+    setRevenueSummaryLoading(true);
     try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const json = await res.json();
+      const [statsRes, revenueRes] = await Promise.all([
+        fetch(`/api/crm/overview-stats${qs}`),
+        fetch(`/api/crm/revenue-summary${qs}`),
+      ]);
+      if (statsRes.ok) {
+        const json = await statsRes.json();
         setCurrentStats(json.data);
+      }
+      if (revenueRes.ok) {
+        const rJson = await revenueRes.json();
+        setRevenueSummary(rJson.data);
       }
     } finally {
       setStatsLoading(false);
+      setRevenueSummaryLoading(false);
     }
   }
 
@@ -5003,6 +5036,8 @@ export function CRMClient({
           customFrom={customFrom}
           customTo={customTo}
           onDateChange={handleDateChange}
+          revenueSummary={revenueSummary}
+          revenueSummaryLoading={revenueSummaryLoading}
         />
       )}
       {tab === "campanhas" && (

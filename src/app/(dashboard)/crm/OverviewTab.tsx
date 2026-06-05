@@ -804,7 +804,7 @@ export function OverviewTab({
   return (
     <div className="space-y-6">
 
-      {/* ── Date filter ──────────────────────────────────────────────────── */}
+      {/* 1. Date filter */}
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
           {DATE_PRESETS.map((p) => (
@@ -848,111 +848,124 @@ export function OverviewTab({
         )}
       </div>
 
-      {/* ── KPI grid (5 cards) ───────────────────────────────────────────── */}
-      {stats.totalCustomers === 0 && !loading ? (
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-          <p className="text-sm font-semibold text-gray-600">Nenhum cliente cadastrado ainda.</p>
-          <p className="mt-1 text-xs text-gray-400">
-            Importe sua base de clientes ou aguarde os primeiros pedidos para ver as métricas aqui.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <KPICard
-            label="Clientes na base"
-            value={stats.totalCustomers}
-            sub="Inclui Foocci + importados"
-            accent="brand"
-            loading={loading}
-          />
-          <KPICard
-            label="Quentes"
-            value={stats.ativoCustomers}
-            sub="Compraram nos últ. 30 dias"
-            accent="green"
-            loading={loading}
-            onClick={onSegmentClick ? () => onSegmentClick("quente") : undefined}
-            ctaLabel={onSegmentClick ? "Ver clientes quentes" : undefined}
-          />
-          <KPICard
-            label="Mornos"
-            value={stats.mornoCustomers}
-            sub="31–60 dias sem comprar"
-            accent="yellow"
-            loading={loading}
-            onClick={onSegmentClick ? () => onSegmentClick("morno") : undefined}
-            ctaLabel={onSegmentClick ? "Ver clientes mornos" : undefined}
-          />
-          <KPICard
-            label="Frios"
-            value={stats.frioCustomers}
-            sub="Mais de 60 dias sem comprar"
-            accent="red"
-            loading={loading}
-            onClick={onSegmentClick ? () => onSegmentClick("frio") : undefined}
-            ctaLabel={onSegmentClick ? "Ver clientes frios" : undefined}
-          />
-          <KPICard
-            label={newCustomersLabel}
-            value={stats.newCustomers}
-            sub={datePreset === "total" ? "Cadastrados na base" : undefined}
-            accent="blue"
-            loading={loading}
-            onClick={onSegmentClick ? () => onSegmentClick("novos") : undefined}
-            ctaLabel={onSegmentClick ? "Ver novos clientes" : undefined}
-          />
-        </div>
-      )}
-
-      {/* ── Oportunidades de receita (compact) ───────────────────────────── */}
-      {actions.length > 0 && (
-        <CompactOpportunitiesSection
-          actions={actions}
-          onNavigateToTab={onNavigateToTab ?? (() => {})}
-        />
-      )}
-
-      {/* ── Configurações pendentes (bottom) ─────────────────────────────── */}
-      {actions.length > 0 && (
-        <ConfigAlertsSection
-          actions={actions}
-          onNavigateToTab={onNavigateToTab ?? (() => {})}
-        />
-      )}
-
-      {/* ── Temperatura da base ──────────────────────────────────────────── */}
+      {/* 2. Temperatura da base */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-          Temperatura da base
-        </p>
+        <div className="mb-1 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Temperatura da base
+          </p>
+          <span className="text-xs text-gray-400">{stats.totalCustomers.toLocaleString("pt-BR")} clientes</span>
+        </div>
+
+        {tempTotal > 0 && frioPct + perdidoPct > 50 && (
+          <p className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            ⚠️ Sua base está fria: {frioPct}% dos clientes com pedidos estão sem comprar há mais de {WARM_DAYS} dias.
+          </p>
+        )}
+
         {tempTotal === 0 ? (
           <p className="text-sm text-gray-400">Nenhum cliente com pedidos ainda.</p>
         ) : (
           <>
-            <div className="flex h-3 w-full overflow-hidden rounded-full bg-gray-100">
+            <div className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100 mb-3">
               <div className="bg-green-500 transition-all"  style={{ width: `${ativoPct}%` }} />
               <div className="bg-yellow-400 transition-all" style={{ width: `${mornoPct}%` }} />
               <div className="bg-red-400 transition-all"    style={{ width: `${frioPct}%`  }} />
             </div>
-            <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                🔥 Quente: {ativoPct}% ({stats.ativoCustomers})
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-yellow-400" />
-                🟡 Morno: {mornoPct}% ({stats.mornoCustomers})
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-red-400" />
-                🔴 Frio: {frioPct}% ({stats.frioCustomers})
-              </span>
+
+            <div className="space-y-1.5">
+              {([
+                { icon: "🔥", label: "Quentes",  count: stats.ativoCustomers,  pct: ativoPct,   color: "text-green-700",  sub: `Compraram nos últ. ${HOT_DAYS} dias`,                            onClick: () => onSegmentClick?.("quente") },
+                { icon: "🌡️", label: "Mornos",   count: stats.mornoCustomers,  pct: mornoPct,   color: "text-yellow-600", sub: `${HOT_DAYS + 1}–${WARM_DAYS} dias sem comprar`,                 onClick: () => onSegmentClick?.("morno") },
+                { icon: "🥶", label: "Frios",    count: stats.frioCustomers,   pct: frioPct,    color: "text-red-600",    sub: `Mais de ${WARM_DAYS} dias sem comprar`,                          onClick: () => onSegmentClick?.("frio") },
+                { icon: "👻", label: "Perdidos", count: perdidosCustomers,     pct: perdidoPct, color: "text-gray-500",   sub: `Dentro dos frios, há mais de ${LOST_DAYS} dias sem comprar`, onClick: undefined as (() => void) | undefined },
+              ] as const).map(({ icon, label, count, pct, color, sub, onClick }) => (
+                <div
+                  key={label}
+                  className={`flex items-center gap-3 rounded-lg px-2 py-1.5 ${onClick ? "cursor-pointer hover:bg-gray-50" : ""}`}
+                  onClick={onClick}
+                >
+                  <span className="w-5 text-sm">{icon}</span>
+                  <span className="w-20 shrink-0 text-xs font-semibold text-gray-700">{label}</span>
+                  <span className={`w-14 shrink-0 text-sm font-bold ${color}`}>{count.toLocaleString("pt-BR")}</span>
+                  <span className="w-10 shrink-0 text-xs text-gray-400">{pct}%</span>
+                  <span className="truncate text-[10px] text-gray-400">{sub}</span>
+                  {onClick && <span className="ml-auto text-[10px] text-brand-600 shrink-0">Ver →</span>}
+                </div>
+              ))}
             </div>
+
+            {perdidosCustomers > 0 && (
+              <p className="mt-2 text-[10px] text-gray-400 border-t border-gray-100 pt-2">
+                * Perdidos são um subconjunto dos frios que estão há mais de {LOST_DAYS} dias sem comprar.
+              </p>
+            )}
           </>
         )}
       </div>
 
-      {/* ── Canal de pedidos (por clientes únicos) ────────────────────────── */}
+      {/* 3. Base overview: Clientes + Novos */}
+      <div className="grid grid-cols-2 gap-3">
+        <KPICard
+          label="Clientes na base"
+          value={stats.totalCustomers.toLocaleString("pt-BR")}
+          sub="Inclui Foocci + importados"
+          accent="brand"
+          loading={loading}
+        />
+        <KPICard
+          label={newCustomersLabel}
+          value={stats.newCustomers}
+          sub={newCustomersSub}
+          accent="blue"
+          loading={loading}
+          onClick={onSegmentClick ? () => onSegmentClick("novos") : undefined}
+          ctaLabel={onSegmentClick ? "Ver novos" : undefined}
+        />
+      </div>
+
+      {/* 4. Programa de relacionamento */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
+          Programa de relacionamento
+        </p>
+        {totalSegmented === 0 ? (
+          <p className="text-sm text-gray-400">Nenhum cliente ainda.</p>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {stats.segments.map(({ tier, count }) => {
+                const cfg = TIER_CONFIG[tier];
+                const pct = totalSegmented > 0 ? Math.round((count / totalSegmented) * 100) : 0;
+                return (
+                  <div key={tier} className="flex items-center gap-3">
+                    <span className="w-[80px] shrink-0 text-xs font-semibold text-gray-600">
+                      {cfg.icon} {cfg.label}
+                    </span>
+                    <span className={`text-sm font-bold ${cfg.text} w-16 shrink-0`}>
+                      {count.toLocaleString("pt-BR")}
+                    </span>
+                    <span className="text-xs text-gray-400 w-10 shrink-0">{pct}%</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${cfg.bar} transition-all`}
+                        style={{ width: count > 0 ? `${Math.max(pct, 2)}%` : "0%" }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {stats.segments.find((s) => s.tier === "BRONZE")?.count === totalSegmented && totalSegmented > 0 && (
+              <p className="mt-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                💡 Quase toda a base ainda está no Bronze. Há oportunidade de desenvolver clientes recorrentes.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* 5. Canal de pedidos */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
           Canal de pedidos
@@ -981,42 +994,73 @@ export function OverviewTab({
         )}
       </div>
 
-      {/* ── Segmentos ────────────────────────────────────────────────────── */}
+      {/* 6. Receita gerada pelo CRM */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
-          Distribuição por segmento
-        </p>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Receita gerada pelo CRM
+          </p>
+          {revenueSummaryLoading && (
+            <span className="text-[10px] text-gray-400">Carregando…</span>
+          )}
+        </div>
 
-        {totalSegmented === 0 ? (
-          <p className="text-sm text-gray-400">Nenhum cliente ainda.</p>
+        {!revenueSummaryLoading && !revenueSummary ? (
+          <p className="text-sm text-gray-400">Sem dados de receita para o período.</p>
+        ) : revenueSummary ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl bg-green-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 mb-1">Receita atribuída</p>
+              <p className="text-lg font-extrabold text-green-700">
+                R$ {revenueSummary.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-[10px] text-green-400 mt-0.5">Campanhas + automações</p>
+            </div>
+            <div className="rounded-xl bg-blue-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-1">Mensagens enviadas</p>
+              <p className="text-lg font-extrabold text-blue-700">{revenueSummary.totalSent.toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-blue-400 mt-0.5">{revenueSummary.campaignCount} campanha{revenueSummary.campaignCount !== 1 ? "s" : ""}</p>
+            </div>
+            <div className="rounded-xl bg-purple-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1">Responderam</p>
+              <p className="text-lg font-extrabold text-purple-700">{revenueSummary.totalResponded.toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-purple-400 mt-0.5">
+                {revenueSummary.totalSent > 0 ? `${Math.round((revenueSummary.totalResponded / revenueSummary.totalSent) * 100)}% de engajamento` : "—"}
+              </p>
+            </div>
+            <div className="rounded-xl bg-orange-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600 mb-1">Converteram</p>
+              <p className="text-lg font-extrabold text-orange-700">{revenueSummary.totalConverted.toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-orange-400 mt-0.5">
+                {revenueSummary.totalResponded > 0 ? `${Math.round((revenueSummary.totalConverted / revenueSummary.totalResponded) * 100)}% de conversão` : "—"}
+              </p>
+            </div>
+          </div>
         ) : (
-          <div className="space-y-3">
-            {stats.segments.map(({ tier, count }) => {
-              const cfg = TIER_CONFIG[tier];
-              const pct = totalSegmented > 0 ? Math.round((count / totalSegmented) * 100) : 0;
-              return (
-                <div key={tier} className="flex items-center gap-3">
-                  <span className="w-[68px] shrink-0 text-xs font-semibold text-gray-600">
-                    {cfg.icon} {cfg.label}
-                  </span>
-                  <div className="flex-1 h-2.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${cfg.bar} transition-all`}
-                      style={{ width: count > 0 ? `${Math.max(pct, 2)}%` : "0%" }}
-                    />
-                  </div>
-                  <span className={`w-8 shrink-0 text-right text-xs font-bold ${cfg.text}`}>
-                    {count}
-                  </span>
-                  <span className="w-8 shrink-0 text-right text-[10px] text-gray-400">
-                    {pct}%
-                  </span>
-                </div>
-              );
-            })}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}
           </div>
         )}
+        <p className="mt-2 text-[10px] text-gray-400">
+          * Receita calculada por atribuição de campanhas. Metodologia: pedidos realizados após envio da campanha.
+        </p>
       </div>
+
+      {/* 7. Oportunidades de receita (compact) */}
+      {actions.length > 0 && (
+        <CompactOpportunitiesSection
+          actions={actions}
+          onNavigateToTab={onNavigateToTab ?? (() => {})}
+        />
+      )}
+
+      {/* 8. Configurações pendentes (bottom) */}
+      {actions.length > 0 && (
+        <ConfigAlertsSection
+          actions={actions}
+          onNavigateToTab={onNavigateToTab ?? (() => {})}
+        />
+      )}
 
     </div>
   );
