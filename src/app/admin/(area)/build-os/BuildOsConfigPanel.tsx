@@ -247,6 +247,11 @@ export function BuildOsConfigPanel() {
 
       {/* Authorized operators */}
       <div className="rounded-xl border border-gray-200 bg-white p-5">
+        <p className="mb-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+          Operador principal atual do Build OS: <strong className="font-mono">+55***5223</strong> (Diego/CEO, OWNER).
+          Outros números <strong>inativos</strong> não enviam comandos. O número WhatsApp Business
+          <span className="font-mono"> +55***0692</span> <strong>não</strong> é o operador principal.
+        </p>
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">
             Operadores autorizados ({senders.length})
@@ -323,26 +328,35 @@ export function BuildOsConfigPanel() {
         )}
       </div>
 
-      {/* Test instructions */}
+      {/* Test instructions — Admin channel only, never restaurant WhatsApp */}
       <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-900">Como testar</h3>
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-900">Como testar o /build</h3>
+        <div className="mb-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+          <div className="rounded-lg bg-gray-50 px-3 py-2">
+            <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Quem ENVIA o comando</span>
+            <span className="font-mono text-gray-800">Operador autorizado — Diego +55***5223</span>
+          </div>
+          <div className="rounded-lg bg-gray-50 px-3 py-2">
+            <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Quem RECEBE o comando</span>
+            <span className="text-gray-800">Número conectado no Canal WhatsApp Master/Admin (aparece quando OPEN)</span>
+          </div>
+        </div>
         <p className="mb-2 text-sm text-gray-600">
-          Com o Build OS <strong>ativado</strong> e o seu número como operador ativo, envie no WhatsApp do
-          restaurante (do seu celular autorizado):
+          Envie o comando a partir do <strong>número autorizado do Diego (+55***5223)</strong> para o
+          <strong> número conectado no Canal WhatsApp Master/Admin</strong>. <strong>Não</strong> envie para WhatsApp de
+          restaurante — o Build OS não usa WhatsApp de restaurante.
         </p>
         <CopyableCommand text="/build Teste de comando interno do Build OS." />
         <ul className="mt-3 space-y-1 text-xs text-gray-500">
-          <li>• Deve chegar uma confirmação no WhatsApp com o rascunho do prompt.</li>
+          <li>• Deve chegar uma confirmação no WhatsApp do Diego com o rascunho do prompt.</li>
           <li>• O comando aparece na aba <strong>Comandos</strong>.</li>
           <li>• Responda ENVIAR / CANCELAR / AJUSTAR: [correção] / STATUS para conduzir.</li>
-          <li>• Não vira conversa de cliente e não aciona Waiter/Claude/GitHub/IA.</li>
+          <li>• Não vira conversa de cliente e não aciona Waiter/CRM/Claude/GitHub/IA.</li>
         </ul>
-        <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-          A configuração também pode ser inicializada por <strong>script interno seguro</strong> para
-          ambientes de desenvolvimento/admin — sem Railway/UI. Ex.:{" "}
-          <code className="rounded bg-gray-200 px-1">npm run buildos:bootstrap</code>,{" "}
-          <code className="rounded bg-gray-200 px-1">npm run buildos:verify</code> (ver{" "}
-          <code>docs/BUILDOS_BOOTSTRAP.md</code>).
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          ⚠️ A prontidão é mostrada na checklist do card <strong>Canal WhatsApp Master/Admin</strong> acima. Enquanto o
+          Canal Admin não estiver <strong>OPEN</strong> e a checklist verde, <strong>ainda não é possível testar</strong> —
+          conecte primeiro o Canal WhatsApp Master/Admin.
         </p>
       </div>
     </div>
@@ -896,8 +910,8 @@ function MasterChannelCard() {
       {status && (
         <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 sm:grid-cols-2">
           <span>Conexão: <strong className={status.connectionState === "open" ? "text-green-700" : "text-red-700"}>{status.connectionState?.toUpperCase() ?? "DESCONHECIDA"}</strong></span>
-          <span>Número conectado: <span className="font-mono">{status.connectedNumberMasked ?? "—"}</span></span>
-          <span>Operador autorizado: <span className="font-mono">{status.operatorMasked ?? "—"}</span></span>
+          <span>Canal Admin conectado (RECEBE): <span className="font-mono">{status.connectedNumberMasked ?? "—"}</span></span>
+          <span>Operador autorizado (ENVIA): <span className="font-mono">{status.operatorMasked ?? "—"}</span></span>
           <span>Webhook habilitado: {status.webhookEnabled === null ? "—" : String(status.webhookEnabled)}</span>
           <span>URL bate com a esperada: {String(status.urlMatchesExpected)}</span>
           <span>MESSAGES_UPSERT: {status.hasMessagesUpsert ? "sim" : "não"}</span>
