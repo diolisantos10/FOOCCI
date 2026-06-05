@@ -353,6 +353,7 @@ export function AtendimentoClient({
   // ── State ──────────────────────────────────────────────────────────────────
   const [conversations, setConversations] = useState<ConvSummary[]>([]);
   const [loadingList,   setLoadingList]   = useState(true);
+  const [fetchError,    setFetchError]    = useState<string | null>(null);
 
   const [selectedId,    setSelectedId]    = useState<string | null>(null);
   const [thread,        setThread]        = useState<ConvDetail | null>(null);
@@ -409,11 +410,12 @@ export function AtendimentoClient({
     try {
       // Use /api/chat/conversations: supports channel, all status values, aiEnabled
       const res = await fetch(`/api/chat/conversations?${params}`);
-      if (!res.ok) return;
+      if (!res.ok) { setFetchError("Falha ao carregar conversas."); return; }
       const json = await res.json();
       const items: ConvSummary[] = json.data?.data ?? json.data ?? [];
       if (!Array.isArray(items)) return;
 
+      setFetchError(null);
       setConversations(items);
 
       // ── Human-handoff sound detection ──────────────────────────────────────
@@ -454,7 +456,7 @@ export function AtendimentoClient({
         }
       }
     } catch {
-      // network error — keep current state
+      setFetchError("Falha ao carregar conversas.");
     } finally {
       setLoadingList(false);
     }
@@ -966,6 +968,18 @@ export function AtendimentoClient({
             <div className="flex items-center justify-center py-12 text-sm text-gray-400">
               Carregando…
             </div>
+          ) : fetchError ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-sm text-red-500">
+              <span className="text-2xl">⚠️</span>
+              <p>{fetchError}</p>
+              <button
+                type="button"
+                onClick={fetchList}
+                className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+              >
+                Tentar novamente
+              </button>
+            </div>
           ) : displayed.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-gray-400">
               <span className="text-2xl">💬</span>
@@ -987,8 +1001,9 @@ export function AtendimentoClient({
                     ? `[${lastMsg.type.toLowerCase()}]`
                     : (lastMsg.content?.slice(0, 60) ?? "")
                   : "Sem mensagens";
-                const badge      = getHandlerBadge(conv);
-                const crmBadge   = getCrmBadge(conv);
+                const badge        = getHandlerBadge(conv);
+                const crmBadge     = getCrmBadge(conv);
+                const convTypeBadge = getConvTypeBadge(conv);
                 const isSelected = conv.id === selectedId;
                 const isWaiting  = conv.status === "OPEN" && conv.unreadCount > 0;
                 const priority   = convPriorityLevel(conv);
@@ -1081,6 +1096,12 @@ export function AtendimentoClient({
                             ) : conv.contextType && CONTEXT_BADGE[conv.contextType] && (
                               <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${CONTEXT_BADGE[conv.contextType]!.cls}`}>
                                 {CONTEXT_BADGE[conv.contextType]!.label}
+                              </span>
+                            )}
+                            {/* Conversation type badge — Staff / Fornecedor / etc. */}
+                            {convTypeBadge && (
+                              <span className={`rounded-full border px-1.5 py-px text-[9px] font-bold leading-none ${convTypeBadge.cls}`}>
+                                {convTypeBadge.label}
                               </span>
                             )}
                           </div>
@@ -1671,7 +1692,7 @@ function ThreadPanel({
               disabled={actionLoading}
               className="shrink-0 rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50 transition-colors"
             >
-              Reativar IA
+              Voltar a tratar como cliente (reativa IA)
             </button>
           )}
           {isAIActive && (
@@ -1818,7 +1839,7 @@ function ThreadPanel({
       )}
 
       {/* ── Composer ─────────────────────────────────────────────────── */}
-      {isHumanHandling ? (
+      {(!isResolved && (isHumanHandling || isLocked)) ? (
         <form
           onSubmit={onSend}
           className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 space-y-2"
@@ -2128,10 +2149,13 @@ function MessageBubble({
   const isOutbound  = msg.direction === "OUTBOUND";
   const isHumanMsg  = isOutbound && (msg.senderType === "HUMAN" || msg.senderType === "HUMAN_EXTERNAL");
   const msgSource   = msg.metadata?.source; // "CARDAPIO" | "WHATSAPP" | undefined
+  const crmCtx      = msg.metadata?.contextType as string | undefined;
+  const crmActorLabel = crmCtx === "CRM_CAMPAIGN" ? "Campanha" : crmCtx === "CRM_AUTOMATION" ? "Automação" : "CRM";
   const senderLabel = isOutbound
     ? (msg.senderType === "AI"
         ? (msgSource === "CARDAPIO" ? "IA · Cardápio" : "IA · WhatsApp")
         : msg.senderType === "HUMAN_EXTERNAL" ? "WhatsApp externo"
+        : msg.senderType === "CRM" ? crmActorLabel
         : msg.senderType === "HUMAN"
           ? (msgSource === "CARDAPIO" ? "Operador · Cardápio" : "Operador · WhatsApp")
           : "Operador")
@@ -2141,7 +2165,9 @@ function MessageBubble({
         ? "bg-orange-50 border border-orange-200 text-orange-600"
         : msg.senderType === "HUMAN_EXTERNAL"
           ? "bg-teal-50 border border-teal-200 text-teal-700"
-          : "bg-gray-700 border border-gray-600 text-white")
+          : msg.senderType === "CRM"
+            ? "bg-violet-50 border border-violet-200 text-violet-700"
+            : "bg-gray-700 border border-gray-600 text-white")
     : (msg.senderType === "CUSTOMER_CARDAPIO"
         ? "bg-purple-50 border border-purple-200 text-purple-700"
         : "bg-green-50 border border-green-200 text-green-700");
