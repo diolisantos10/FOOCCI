@@ -6,6 +6,7 @@
 import type { Metadata } from "next";
 import { PageHero } from "@/components/marketing/PageHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
+import { DotGrid } from "@/components/marketing/premium";
 import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
 const TITLE = "Preços Foocci | Planos em definição para lançamento";
@@ -52,18 +53,24 @@ export default function PrecosPage() {
       />
 
       {/* Plan directions (no prices) */}
-      <section aria-label="Direções de planos" className="bg-gray-50 py-20">
-        <div className="mx-auto max-w-6xl px-5 lg:px-8">
+      <section aria-label="Direções de planos" className="relative overflow-hidden bg-gray-50 py-20 lg:py-24">
+        <DotGrid className="[mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
+        <div className="relative mx-auto max-w-6xl px-5 lg:px-8">
           <div className="grid gap-6 lg:grid-cols-3">
             {PLANS.map((plan) => (
               <div
                 key={plan.name}
-                className={`relative flex flex-col rounded-2xl border bg-white p-7 ${
+                className={`relative flex flex-col rounded-2xl border bg-white p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_14px_34px_-20px_rgba(15,23,42,0.22)] ${
                   plan.highlighted
-                    ? "border-brand-200 shadow-md ring-1 ring-brand-100"
-                    : "border-gray-200 ring-1 ring-gray-900/[0.02]"
+                    ? "border-brand-200 ring-1 ring-brand-100"
+                    : "border-gray-200/80 ring-1 ring-gray-900/[0.02]"
                 }`}
               >
+                {plan.highlighted && (
+                  <span className="absolute right-6 top-7 rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-600 ring-1 ring-brand-100">
+                    Destaque
+                  </span>
+                )}
                 <h2 className="text-xl font-semibold text-[#0B0B0B]">{plan.name}</h2>
                 <p className="mt-3 text-sm text-gray-500">
                   <span className="font-semibold text-gray-700">Para:</span> {plan.forWho}

@@ -35,6 +35,7 @@ marketplace nem automação genérica de WhatsApp.
 | [`pre-launch-mode-v1.md`](./pre-launch-mode-v1.md) | Modo pré-lançamento: o que está desligado e o checklist de lançamento |
 | [`private-preview-v1.md`](./private-preview-v1.md) | Prévia privada: gate de senha + rota `/preview` (`foocci.com.br/preview`) |
 | [`brand-implementation-v1.md`](./brand-implementation-v1.md) | Aplicação do Brand Book oficial: logo, mascote, favicon, paleta, tipografia |
+| [`premium-visual-upgrade-v2.md`](./premium-visual-upgrade-v2.md) | Upgrade de direção de arte V2: hero em camadas, hospitalidade digital, mascote, profundidade |
 | [`design-qa-v1.md`](./design-qa-v1.md) | Auditoria de design sênior + refino premium (linguagem de mockup, ritmo, a11y) |
 | [`visual-signoff-checklist-v1.md`](./visual-signoff-checklist-v1.md) | Checklist de QA visual (390/768/1440) a aprovar antes de `/site` → `/` |
 

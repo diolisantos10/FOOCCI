@@ -13,6 +13,8 @@ import {
   ChartIcon,
   RepeatIcon,
 } from "./icons";
+import { SectionHeading } from "./SectionHeading";
+import { DotGrid, Halo, PremiumCard } from "./premium";
 
 const MODULES = [
   { icon: MenuBookIcon, title: "Cardápio Digital Inteligente", benefit: "Uma experiência de pedido visual, simples e feita para conversão." },
@@ -27,29 +29,26 @@ const MODULES = [
 
 export function ProductModulesSection() {
   return (
-    <section id="solucoes" aria-labelledby="solucoes-title" className="scroll-mt-20 bg-gray-50 py-20">
-      <div className="mx-auto max-w-6xl px-5 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
-          <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">
-            Soluções
-          </span>
-          <h2 id="solucoes-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            Tudo conectado para o restaurante vender melhor.
-          </h2>
-        </div>
+    <section id="solucoes" aria-labelledby="solucoes-title" className="relative scroll-mt-20 overflow-hidden bg-gray-50 py-20 lg:py-24">
+      <DotGrid className="[mask-image:radial-gradient(ellipse_at_center,black,transparent_72%)]" />
+      <Halo className="left-1/2 top-0 h-64 w-[40rem] -translate-x-1/2" color="rgba(249,115,22,0.07)" />
+      <div className="relative mx-auto max-w-6xl px-5 lg:px-8">
+        <SectionHeading
+          id="solucoes-title"
+          eyebrow="Soluções"
+          title="Tudo conectado para o restaurante vender melhor."
+          subtitle="Um só sistema — do cardápio ao retorno do cliente — sem ferramentas soltas."
+        />
 
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {MODULES.map(({ icon: Icon, title, benefit }) => (
-            <div
-              key={title}
-              className="group rounded-2xl border border-gray-200 bg-white p-6 ring-1 ring-gray-900/[0.02] transition-shadow hover:shadow-md"
-            >
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-100">
+            <PremiumCard key={title} hover className="group p-6">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-brand-100 transition-colors group-hover:bg-brand-100">
                 <Icon className="h-5 w-5" />
               </div>
               <h3 className="mt-4 text-base font-semibold text-[#0B0B0B]">{title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-gray-600">{benefit}</p>
-            </div>
+            </PremiumCard>
           ))}
         </div>
       </div>

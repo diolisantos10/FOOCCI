@@ -14,6 +14,7 @@ import { HeroSection } from "@/components/marketing/HeroSection";
 import { ProblemSection } from "@/components/marketing/ProblemSection";
 import { StrategicShiftSection } from "@/components/marketing/StrategicShiftSection";
 import { PillarsSection } from "@/components/marketing/PillarsSection";
+import { HospitalitySection } from "@/components/marketing/HospitalitySection";
 import { HowItWorksSection } from "@/components/marketing/HowItWorksSection";
 import { ProductModulesSection } from "@/components/marketing/ProductModulesSection";
 import { CRMSection } from "@/components/marketing/CRMSection";
@@ -57,6 +58,7 @@ export default function SitePage() {
       <ProblemSection />
       <StrategicShiftSection />
       <PillarsSection />
+      <HospitalitySection />
       <HowItWorksSection />
       <ProductModulesSection />
       <CRMSection />

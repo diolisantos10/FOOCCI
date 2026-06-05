@@ -12,6 +12,7 @@ import { PageHero } from "@/components/marketing/PageHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { CheckIcon } from "@/components/marketing/icons";
 import { OrderMockup, CrmProfileMockup, InsightMockup } from "@/components/marketing/mockups";
+import { DotGrid, Halo } from "@/components/marketing/premium";
 import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
 
 const TITLE = "Demonstração Foocci em breve | Conheça a proposta";
@@ -46,8 +47,10 @@ export default function DemonstracaoPage() {
       />
 
       {/* Illustrative product preview */}
-      <section aria-labelledby="previa-title" className="bg-gray-50 py-20">
-        <div className="mx-auto max-w-5xl px-5 lg:px-8">
+      <section aria-labelledby="previa-title" className="relative overflow-hidden bg-gray-50 py-20 lg:py-24">
+        <DotGrid className="[mask-image:radial-gradient(ellipse_at_center,black,transparent_72%)]" />
+        <Halo className="left-1/2 top-0 h-64 w-[40rem] -translate-x-1/2" color="rgba(249,115,22,0.07)" />
+        <div className="relative mx-auto max-w-5xl px-5 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Prévia</span>
             <h2 id="previa-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
