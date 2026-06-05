@@ -35,7 +35,7 @@ export function SectionHeading({
       )}
       <h2
         id={id}
-        className={`text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl ${
+        className={`text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl ${
           eyebrow ? "mt-3" : ""
         }`}
       >

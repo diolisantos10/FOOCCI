@@ -32,8 +32,8 @@ export function MarketingHeader() {
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 lg:px-8">
         <Link href="/site" className={`flex items-center gap-2 rounded-md ${FOCUS}`} aria-label="Foocci — início">
-          <span className="text-xl font-bold tracking-tight text-[#0B0B0B]">Foocci</span>
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-600">
+          <span className="text-xl font-semibold tracking-tight text-[#0B0B0B]">Foocci</span>
+          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
             em breve
           </span>
         </Link>

@@ -36,7 +36,7 @@ export function DemoSection() {
       <div className="mx-auto max-w-5xl px-5 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Produto</span>
-          <h2 id="produto-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="produto-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Veja a Foocci trabalhando no dia a dia do restaurante.
           </h2>
         </div>
@@ -70,7 +70,7 @@ export function DemoSection() {
             <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
               {current.id}
             </span>
-            <h3 className="mt-4 text-2xl font-bold text-[#0B0B0B]">{current.title}</h3>
+            <h3 className="mt-4 text-2xl font-semibold text-[#0B0B0B]">{current.title}</h3>
             <p className="mx-auto mt-2 max-w-sm text-base leading-relaxed text-gray-600 lg:mx-0">
               {current.benefit}
             </p>

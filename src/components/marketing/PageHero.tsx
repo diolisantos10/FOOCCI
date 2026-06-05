@@ -45,7 +45,7 @@ export function PageHero({
           {badge}
         </span>
 
-        <h1 id="page-hero-title" className="mt-5 text-3xl font-bold leading-[1.15] tracking-tight text-[#0B0B0B] sm:text-4xl lg:text-5xl">
+        <h1 id="page-hero-title" className="mt-5 text-3xl font-semibold leading-[1.15] tracking-tight text-[#0B0B0B] sm:text-4xl lg:text-5xl">
           {title}
         </h1>
 

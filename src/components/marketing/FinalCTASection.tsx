@@ -12,7 +12,7 @@ export function FinalCTASection() {
   return (
     <section aria-labelledby="fechamento-title" className="bg-gray-50 py-20 lg:py-24">
       <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
-        <h2 id="fechamento-title" className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+        <h2 id="fechamento-title" className="text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
           Uma nova forma de vender, relacionar e fidelizar está chegando.
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-gray-600">

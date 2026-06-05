@@ -16,7 +16,6 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: { absolute: TITLE },
   description: DESCRIPTION,
-  robots: { index: true, follow: true },
   openGraph: { type: "website", locale: "pt_BR", siteName: "Foocci", title: TITLE, description: DESCRIPTION },
 };
 
@@ -46,14 +45,14 @@ export default function ComoFuncionaPage() {
       {/* 1. The journey */}
       <section aria-labelledby="jornada-title" className="bg-gray-50 py-20">
         <div className="mx-auto max-w-3xl px-5 lg:px-8">
-          <h2 id="jornada-title" className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="jornada-title" className="text-center text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             A jornada, passo a passo
           </h2>
           <ol className="relative mt-12">
             <span aria-hidden className="absolute left-[18px] top-2 bottom-2 w-px bg-gray-200" />
             {STEPS.map((step, i) => (
               <li key={step.title} className="relative flex gap-5 pb-8 last:pb-0">
-                <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white ring-4 ring-gray-50">
+                <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-semibold text-white ring-4 ring-gray-50">
                   {i + 1}
                 </span>
                 <div className="pt-0.5">
@@ -71,7 +70,7 @@ export default function ComoFuncionaPage() {
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 lg:grid-cols-2 lg:px-8">
           <div>
             <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Bastidor</span>
-            <h2 id="bastidor-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+            <h2 id="bastidor-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
               A tecnologia trabalha no bastidor. A experiência aparece para o cliente.
             </h2>
             <p className="mt-5 text-lg leading-relaxed text-gray-600">
@@ -89,7 +88,7 @@ export default function ComoFuncionaPage() {
       {/* 3. Visual flow */}
       <section aria-labelledby="fluxo-title" className="bg-gray-50 py-20">
         <div className="mx-auto max-w-5xl px-5 lg:px-8">
-          <h2 id="fluxo-title" className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="fluxo-title" className="text-center text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Do atendimento ao retorno
           </h2>
           <div className="mt-12 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center">

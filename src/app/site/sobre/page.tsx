@@ -23,7 +23,6 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: { absolute: TITLE },
   description: DESCRIPTION,
-  robots: { index: true, follow: true },
   openGraph: { type: "website", locale: "pt_BR", siteName: "Foocci", title: TITLE, description: DESCRIPTION },
 };
 
@@ -59,7 +58,7 @@ export default function SobrePage() {
       {/* 1. What we believe */}
       <section aria-labelledby="crenca-title" className="bg-gray-50 py-20">
         <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
-          <h2 id="crenca-title" className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="crenca-title" className="text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Restaurante bom não precisa perder cliente por falta de relacionamento.
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">
@@ -73,7 +72,7 @@ export default function SobrePage() {
       {/* 2. What Foocci represents */}
       <section aria-labelledby="representa-title" className="bg-white py-20">
         <div className="mx-auto max-w-5xl px-5 lg:px-8">
-          <h2 id="representa-title" className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="representa-title" className="text-center text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             O que a Foocci representa
           </h2>
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -92,7 +91,7 @@ export default function SobrePage() {
       {/* 3. What Foocci is not */}
       <section aria-labelledby="naoe-title" className="bg-gray-50 py-20">
         <div className="mx-auto max-w-3xl px-5 lg:px-8">
-          <h2 id="naoe-title" className="text-center text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="naoe-title" className="text-center text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             O que a Foocci não é
           </h2>
           <ul className="mx-auto mt-10 max-w-xl space-y-3">

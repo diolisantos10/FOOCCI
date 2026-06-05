@@ -18,7 +18,7 @@ export function PricingTeaserSection() {
       <div className="mx-auto max-w-6xl px-5 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Planos</span>
-          <h2 id="planos-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="planos-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Planos serão apresentados no lançamento comercial.
           </h2>
           <p className="mt-4 text-lg text-gray-600">
@@ -35,7 +35,7 @@ export function PricingTeaserSection() {
                 plan.highlighted ? "border-brand-200 shadow-md ring-1 ring-brand-100" : "border-gray-200"
               }`}
             >
-              <h3 className="text-xl font-bold text-[#0B0B0B]">{plan.name}</h3>
+              <h3 className="text-xl font-semibold text-[#0B0B0B]">{plan.name}</h3>
               <p className="mt-2 text-base text-gray-600">{plan.desc}</p>
               <p className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-600">
                 Em definição para o lançamento

@@ -33,7 +33,7 @@ export function ProductModulesSection() {
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">
             Soluções
           </span>
-          <h2 id="solucoes-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="solucoes-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Tudo conectado para o restaurante vender melhor.
           </h2>
         </div>

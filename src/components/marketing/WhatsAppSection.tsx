@@ -66,7 +66,7 @@ export function WhatsAppSection() {
 
         <div className="order-1 lg:order-2">
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">WhatsApp</span>
-          <h2 id="whatsapp-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="whatsapp-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             WhatsApp como canal de relacionamento e pedido direto.
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">

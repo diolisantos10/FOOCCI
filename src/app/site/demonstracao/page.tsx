@@ -21,7 +21,6 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: { absolute: TITLE },
   description: DESCRIPTION,
-  robots: { index: true, follow: true },
   openGraph: { type: "website", locale: "pt_BR", siteName: "Foocci", title: TITLE, description: DESCRIPTION },
 };
 
@@ -51,7 +50,7 @@ export default function DemonstracaoPage() {
         <div className="mx-auto max-w-5xl px-5 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Prévia</span>
-            <h2 id="previa-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+            <h2 id="previa-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
               Uma prévia de como a Foocci se parece.
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-gray-600">

@@ -40,7 +40,7 @@ export function HeroSection() {
 
           <h1
             id="hero-title"
-            className="mt-5 text-[2rem] font-bold leading-[1.1] tracking-tight text-[#0B0B0B] sm:text-4xl lg:text-[3.25rem]"
+            className="mt-5 text-[2rem] font-semibold leading-[1.1] tracking-tight text-[#0B0B0B] sm:text-4xl lg:text-[3.25rem]"
           >
             O sistema inteligente que ajuda restaurantes a vender mais e fazer{" "}
             <span className="text-brand-500">clientes voltarem.</span>

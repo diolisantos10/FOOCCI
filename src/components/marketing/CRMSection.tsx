@@ -23,7 +23,7 @@ export function CRMSection() {
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 lg:grid-cols-2 lg:px-8">
         <div>
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">CRM</span>
-          <h2 id="crm-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="crm-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Seus clientes não deveriam desaparecer depois do pedido.
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">

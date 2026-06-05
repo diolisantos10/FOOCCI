@@ -51,8 +51,8 @@ export function MarketingFooter() {
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-1">
             <Link href="/site" className={`inline-flex items-center gap-2 rounded-md ${FOCUS}`}>
-              <span className="text-xl font-bold tracking-tight text-[#0B0B0B]">Foocci</span>
-              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-600">
+              <span className="text-xl font-semibold tracking-tight text-[#0B0B0B]">Foocci</span>
+              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
                 em breve
               </span>
             </Link>

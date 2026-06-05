@@ -48,7 +48,7 @@ export function ComparisonSection() {
 
           {/* Foocci */}
           <div className="rounded-2xl border-2 border-brand-200 bg-white p-7 shadow-sm">
-            <h3 className="text-lg font-bold text-[#0B0B0B]">Foocci</h3>
+            <h3 className="text-lg font-semibold text-[#0B0B0B]">Foocci</h3>
             <ul className="mt-5 space-y-3">
               {FOOCCI.map((item) => (
                 <li key={item} className="flex items-start gap-3 text-gray-800">

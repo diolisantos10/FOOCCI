@@ -29,7 +29,7 @@ export function EssenceBand() {
         </span>
         <h2
           id="essence-title"
-          className="mt-4 text-3xl font-bold leading-tight tracking-tight text-white sm:text-4xl lg:text-[2.75rem]"
+          className="mt-4 text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl lg:text-[2.75rem]"
         >
           Transformando pedidos em experiências que fazem{" "}
           <span className="text-brand-400">clientes voltarem.</span>

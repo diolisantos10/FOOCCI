@@ -1,8 +1,9 @@
 /**
  * /site/termos-de-uso — plain-language starter terms of use.
  *
- * TODO(legal): starter document, NOT legal advice. Requires final legal review
- * before production use.
+ * Starter legal content — requires legal review before public launch.
+ * Wording reflects PRE-LAUNCH reality: no active forms, WhatsApp or lead capture.
+ * TODO(legal): NOT legal advice. Requires final legal review before launch.
  */
 
 import type { Metadata } from "next";
@@ -14,7 +15,6 @@ const DESCRIPTION = "Veja os termos básicos de uso do site público da Foocci."
 export const metadata: Metadata = {
   title: { absolute: TITLE },
   description: DESCRIPTION,
-  robots: { index: true, follow: true },
   openGraph: { type: "website", locale: "pt_BR", siteName: "Foocci", title: TITLE, description: DESCRIPTION },
 };
 
@@ -30,16 +30,20 @@ export default function TermosPage() {
 
       <LegalBlock heading="Finalidade do site">
         <p>
-          Este é o site institucional e comercial da Foocci, destinado a apresentar o
-          produto e permitir solicitações de demonstração e contato.
+          Este é o site institucional da Foocci, destinado a apresentar o produto e a
+          proposta da empresa.
         </p>
       </LegalBlock>
 
-      <LegalBlock heading="Solicitações de demonstração e contato">
+      <LegalBlock heading="Status de pré-lançamento">
         <p>
-          Os formulários e canais de contato servem para você solicitar uma demonstração
-          ou falar com a Foocci. As informações enviadas são tratadas conforme a Política
-          de Privacidade.
+          A Foocci está em fase piloto e pré-lançamento. Neste momento, o site não
+          disponibiliza formulários, captação de leads, agendamento de demonstração ou
+          canais de venda ativos.
+        </p>
+        <p>
+          Caso esses recursos sejam ativados futuramente, as informações enviadas por você
+          serão tratadas conforme a Política de Privacidade.
         </p>
       </LegalBlock>
 
@@ -66,7 +70,7 @@ export default function TermosPage() {
 
       <LegalBlock heading="Links externos">
         <p>
-          O site pode conter links para serviços de terceiros, como o WhatsApp. Não nos
+          Eventualmente, o site poderá conter links para serviços de terceiros. Não nos
           responsabilizamos pelo conteúdo ou pelas práticas desses serviços.
         </p>
       </LegalBlock>

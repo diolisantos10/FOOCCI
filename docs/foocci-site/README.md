@@ -34,6 +34,7 @@ marketplace nem automação genérica de WhatsApp.
 | [`copy-decisions-v1.md`](./copy-decisions-v1.md) | Posicionamento, CTAs, palavras a usar/evitar, claims com cautela |
 | [`pre-launch-mode-v1.md`](./pre-launch-mode-v1.md) | Modo pré-lançamento: o que está desligado e o checklist de lançamento |
 | [`design-qa-v1.md`](./design-qa-v1.md) | Auditoria de design sênior + refino premium (linguagem de mockup, ritmo, a11y) |
+| [`visual-signoff-checklist-v1.md`](./visual-signoff-checklist-v1.md) | Checklist de QA visual (390/768/1440) a aprovar antes de `/site` → `/` |
 
 ## Princípios inegociáveis
 

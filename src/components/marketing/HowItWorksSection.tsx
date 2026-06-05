@@ -20,7 +20,7 @@ export function HowItWorksSection() {
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">
             Como funciona
           </span>
-          <h2 id="como-funciona-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="como-funciona-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Da primeira mensagem ao próximo pedido.
           </h2>
         </div>
@@ -33,7 +33,7 @@ export function HowItWorksSection() {
           />
           {STEPS.map((step, i) => (
             <li key={step} className="relative flex gap-5 pb-8 last:pb-0">
-              <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white ring-4 ring-white">
+              <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-semibold text-white ring-4 ring-white">
                 {i + 1}
               </span>
               <p className="pt-1 text-base leading-relaxed text-gray-700">{step}</p>

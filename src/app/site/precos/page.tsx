@@ -15,7 +15,6 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: { absolute: TITLE },
   description: DESCRIPTION,
-  robots: { index: true, follow: true },
   openGraph: { type: "website", locale: "pt_BR", siteName: "Foocci", title: TITLE, description: DESCRIPTION },
 };
 
@@ -65,7 +64,7 @@ export default function PrecosPage() {
                     : "border-gray-200 ring-1 ring-gray-900/[0.02]"
                 }`}
               >
-                <h2 className="text-xl font-bold text-[#0B0B0B]">{plan.name}</h2>
+                <h2 className="text-xl font-semibold text-[#0B0B0B]">{plan.name}</h2>
                 <p className="mt-3 text-sm text-gray-500">
                   <span className="font-semibold text-gray-700">Para:</span> {plan.forWho}
                 </p>
@@ -82,7 +81,7 @@ export default function PrecosPage() {
       {/* Why plans are defined at launch */}
       <section aria-labelledby="planos-porque-title" className="bg-white py-20">
         <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
-          <h2 id="planos-porque-title" className="text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="planos-porque-title" className="text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Por que os planos serão definidos no lançamento?
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-gray-600">

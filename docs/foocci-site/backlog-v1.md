@@ -129,5 +129,25 @@
 | 5 | Captação de leads | ⏳ no lançamento | `DemoForm` reservado; ligar backend real |
 | 6 | Preços reais | ⏳ no lançamento | Hoje "Em definição para o lançamento" |
 | 7 | Troca `/site` → `/` | ⏳ no lançamento | Fase 6 do roadmap, com gate de aprovação |
-| 8 | Revisão jurídica (legais) | ⏳ antes do lançamento | LGPD / Termos |
+| 8 | Revisão jurídica (legais) | ⏳ antes do lançamento | LGPD / Termos (copy já reflete pré-lançamento) |
 | 9 | Logo / marca reais | ⏳ antes do lançamento | Hoje wordmark em texto |
+| 10 | Indexação `/site` | ✅ `noindex,follow` temporário | Centralizado em `site/layout.tsx`; vira `index` no lançamento |
+| 11 | Copy legal alinhada ao pré-lançamento | ✅ feito | Sem implicar forms/WhatsApp/venda ativos |
+| 12 | Tipografia sem bold sintético | ✅ feito | `font-semibold` (Inter 600 real) no marketing |
+
+### Antes do lançamento
+
+> Gate de aprovação humana antes de abrir comercialmente. Detalhes operacionais em
+> [`pre-launch-mode-v1.md`](./pre-launch-mode-v1.md) e
+> [`visual-signoff-checklist-v1.md`](./visual-signoff-checklist-v1.md).
+
+- [ ] QA visual final aprovado (390/768/1440) — `visual-signoff-checklist-v1.md`.
+- [ ] Logo/favicon/assets reais aplicados.
+- [ ] Screenshots reais do produto (se substituir os mockups CSS).
+- [ ] Revisão jurídica final das páginas legais (LGPD/Termos).
+- [ ] Metadata de lançamento (`noindex,follow` → `index,follow` em `site/layout.tsx`).
+- [ ] Troca `/site` → `/` com matriz de rotas validada (sem afetar produto).
+- [ ] Ativar CTAs de vendas (pré-lançamento → comercial).
+- [ ] Ativar captação de leads (`DemoForm` + backend real).
+- [ ] Ativar WhatsApp (`WHATSAPP_SALES_NUMBER` configurado e testado).
+- [ ] Analytics/tracking de conversão configurado.

@@ -54,7 +54,7 @@ export function FAQSection() {
       <div className="mx-auto max-w-3xl px-5 lg:px-8">
         <div className="text-center">
           <span className="text-sm font-semibold uppercase tracking-widest text-brand-500">Dúvidas</span>
-          <h2 id="perguntas-title" className="mt-3 text-3xl font-bold tracking-tight text-[#0B0B0B] sm:text-4xl">
+          <h2 id="perguntas-title" className="mt-3 text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
             Perguntas frequentes
           </h2>
         </div>
