@@ -55,9 +55,10 @@ describe("Agent registry (code-defined defaults)", () => {
     }
   });
 
-  it("only the Waiter is ACTIVE in Phase 1; others are DRAFT placeholders", () => {
+  it("the fully-defined agents (Waiter, CRM) are ACTIVE; the rest are DRAFT placeholders", () => {
+    const ACTIVE_SLUGS = new Set(["waiter", "crm"]);
     for (const profile of getDefaultAgentProfiles()) {
-      if (profile.slug === "waiter") expect(profile.status).toBe("ACTIVE");
+      if (ACTIVE_SLUGS.has(profile.slug)) expect(profile.status).toBe("ACTIVE");
       else expect(profile.status).toBe("DRAFT");
     }
   });

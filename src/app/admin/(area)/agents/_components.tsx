@@ -93,6 +93,120 @@ export function AreaBadge({ area }: { area: AgentArea }) {
   );
 }
 
+// ── Phase 1: grouping (Produto/Runtime vs Build OS/Admin), maturity, bridges ──────
+
+export type AgentGroup = "product" | "buildos";
+
+/** Map an agent area to its conceptual group. Pure UI taxonomy — no runtime change. */
+export function agentGroupOf(area: AgentArea): AgentGroup {
+  switch (area) {
+    case "WAITER":
+    case "CRM":
+    case "WHATSAPP":
+    case "ANALYTICS":
+      return "product";
+    default:
+      // ORCHESTRATOR, SECURITY, UI_UX, MANUAL, QA, INTEGRATION, BRANDING, GENERAL
+      return "buildos";
+  }
+}
+
+export const GROUP_META: Record<AgentGroup, { label: string; cls: string; dot: string; blurb: string }> = {
+  product: {
+    label: "Produto / Runtime",
+    cls: "bg-blue-50 text-blue-700",
+    dot: "bg-blue-500",
+    blurb: "Agentes de Produto operam dentro do Foocci para restaurantes/clientes.",
+  },
+  buildos: {
+    label: "Build OS / Admin",
+    cls: "bg-violet-50 text-violet-700",
+    dot: "bg-violet-500",
+    blurb: "Agentes Build OS/Admin ajudam a construir, auditar e evoluir o sistema.",
+  },
+};
+
+export function GroupBadge({ area }: { area: AgentArea }) {
+  const g = GROUP_META[agentGroupOf(area)];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${g.cls}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${g.dot}`} />
+      {g.label}
+    </span>
+  );
+}
+
+export type Maturity = "active" | "draft" | "planned";
+
+/**
+ * Maturity is an HONEST view derived from status + whether the profile has real
+ * content. ACTIVE → Ativo; DRAFT with content → Rascunho; DRAFT empty placeholder
+ * → Planejado; ARCHIVED → Arquivado.
+ */
+export function maturityOf(agent: AdminAgentProfileView): Maturity | "archived" {
+  if (agent.status === "ARCHIVED") return "archived";
+  if (agent.status === "ACTIVE") return "active";
+  const hasContent = !!(agent.mission || agent.description) || (agent.objectives?.length ?? 0) > 0;
+  return hasContent ? "draft" : "planned";
+}
+
+const MATURITY_STYLES: Record<Maturity | "archived", { label: string; cls: string; dot: string }> = {
+  active: { label: "Ativo", cls: "bg-green-50 text-green-700", dot: "bg-green-500" },
+  draft: { label: "Rascunho", cls: "bg-amber-50 text-amber-700", dot: "bg-amber-400" },
+  planned: { label: "Planejado", cls: "bg-gray-100 text-gray-500", dot: "bg-gray-400" },
+  archived: { label: "Arquivado", cls: "bg-gray-100 text-gray-400", dot: "bg-gray-300" },
+};
+
+export function MaturityBadge({ agent }: { agent: AdminAgentProfileView }) {
+  const m = MATURITY_STYLES[maturityOf(agent)];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${m.cls}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />
+      {m.label}
+    </span>
+  );
+}
+
+export interface AgentBridge {
+  label: string;
+  href: string;
+}
+
+/** Existing-route shortcuts per agent — never creates new routes. */
+export function agentBridges(agent: AdminAgentProfileView): AgentBridge[] {
+  const bridges: AgentBridge[] = [];
+  // Test labs (existing routes) for the agents that have them.
+  const TEST_ROUTES: Record<string, string> = {
+    waiter: "/admin/agentes/waiter/testes",
+    crm: "/admin/agentes/crm/testes",
+    "analytics-product": "/admin/agentes/analytics/testes",
+  };
+  if (TEST_ROUTES[agent.slug]) bridges.push({ label: "Abrir testes", href: TEST_ROUTES[agent.slug]! });
+  // Manual / Constituição → the Operational Manual.
+  if (agent.slug === "manual-constitution") bridges.push({ label: "Abrir Manual Operacional", href: "/admin/manual-operacional" });
+  // Build OS / Admin agents → command/diagnose via Build OS.
+  if (agentGroupOf(agent.area) === "buildos") bridges.push({ label: "Comandar via Build OS", href: "/admin/build-os" });
+  return bridges;
+}
+
+export function AgentBridges({ agent }: { agent: AdminAgentProfileView }) {
+  const bridges = agentBridges(agent);
+  if (bridges.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {bridges.map((b) => (
+        <Link
+          key={b.href + b.label}
+          href={b.href}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-orange-300 hover:text-orange-700"
+        >
+          {b.label} →
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 // ── Detail section renderers ─────────────────────────────────────────────────────
 
 /** A titled block wrapper used across the detail view. */
@@ -417,7 +531,12 @@ export function AgentDashboard({ agent }: { agent: AdminAgentProfileView }) {
           <StatusBadge status={agent.status} />
         </div>
         {agent.title && <p className="text-base text-gray-600">{agent.title}</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          <GroupBadge area={agent.area} />
+          <MaturityBadge agent={agent} />
+        </div>
         <AgentStatusRow agent={agent} />
+        <AgentBridges agent={agent} />
       </header>
 
       {isPlaceholder && !isSecurity && (

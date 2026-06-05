@@ -16,10 +16,13 @@ import Link from "next/link";
 import type { AdminAgentProfileView } from "@/services/agents/types";
 import {
   AGENT_TAB_ORDER,
+  AgentBridges,
   AgentDashboard,
   AreaBadge,
-  RuntimeBadge,
-  StatusBadge,
+  GROUP_META,
+  GroupBadge,
+  MaturityBadge,
+  agentGroupOf,
 } from "./_components";
 
 interface Props {
@@ -126,101 +129,49 @@ function GeralOverview({
   onOpen: (key: string) => void;
 }) {
   const total = agents.length;
+  const product = agents.filter((a) => agentGroupOf(a.area) === "product");
+  const buildos = agents.filter((a) => agentGroupOf(a.area) === "buildos");
   const activeCount = agents.filter((a) => a.status === "ACTIVE").length;
-  const draftCount = agents.filter((a) => a.status === "DRAFT").length;
-  const runtimeCount = agents.filter((a) => a.isRuntimeEnabled).length;
-
-  const waiter = agents.find((a) => a.slug === "waiter");
-  const security = agents.find((a) => a.slug === "security-governance");
-  const orchestrator = agents.find((a) => a.slug === "orchestrator");
+  const plannedCount = agents.filter((a) => a.status === "DRAFT").length;
 
   return (
     <div className="space-y-6">
-      {/* KPI row */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* KPI row — honest counts; no misleading "Runtime ON=0" */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Kpi label="Agentes" value={total} />
+        <Kpi label="Produto / Runtime" value={product.length} accent="blue" />
+        <Kpi label="Build OS / Admin" value={buildos.length} accent="violet" />
         <Kpi label="Ativos" value={activeCount} accent="green" />
-        <Kpi label="Rascunhos" value={draftCount} accent="amber" />
-        <Kpi label="Runtime ON" value={runtimeCount} accent="orange" />
+        <Kpi label="Rascunho / Planejados" value={plannedCount} accent="amber" />
       </div>
 
-      {/* Read-only / safety notice */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-        Este é o <strong>centro de comando interno dos agentes de IA</strong>. Nesta fase a área é{" "}
-        <strong>somente visualização</strong>: nada aqui altera prompts, regras de segurança ou o
-        comportamento em produção. As <em>regras de segurança</em> e <em>ações proibidas</em> são
-        visíveis apenas aqui (master) e nunca expostas a usuários do restaurante.{" "}
-        {dbOrigin ? "Origem dos dados: banco." : "Origem dos dados: registro de código (runtime DB desligado)."}
+      {/* Read-only / runtime notice */}
+      <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
+        <p>
+          Este é o <strong>centro de comando interno dos agentes de IA</strong>.{" "}
+          <strong>Esta página é read-only nesta fase. Alterações de comportamento/runtime virão em fase posterior.</strong>{" "}
+          As <em>regras de segurança</em> e <em>ações proibidas</em> são visíveis apenas aqui (master) e nunca expostas a
+          usuários do restaurante.
+        </p>
+        <p className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-gray-400" /> Runtime DB: desligado / Fase 1
+          </span>
+          {dbOrigin ? "Origem dos dados: banco." : "Origem dos dados: registro de código."}
+        </p>
       </div>
 
-      {/* Highlight cards */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {waiter && (
-          <HighlightCard
-            tone="orange"
-            kicker="Prioridade · Ativo"
-            title={waiter.name}
-            subtitle={waiter.title ?? "Garçom digital e especialista em vendas"}
-            text="Único agente com perfil profissional completo. Vende como um garçom, lê o cardápio real e conduz o pedido."
-            onClick={() => onOpen("waiter")}
-          />
-        )}
-        {security && (
-          <HighlightCard
-            tone="red"
-            kicker="Governança mandatória (futuro)"
-            title={security.name}
-            subtitle="Guardião de Segurança e Governança"
-            text="Camada futura obrigatória antes de qualquer automação de execução: veto, risco, segredos, permissões e portões de aprovação."
-            onClick={() => onOpen("security-governance")}
-          />
-        )}
-        {orchestrator && (
-          <HighlightCard
-            tone="gray"
-            kicker="Roteamento (futuro)"
-            title={orchestrator.name}
-            subtitle="Camada de orquestração"
-            text="Coordenará os demais agentes, roteando conversas e arbitrando prioridades entre eles."
-            onClick={() => onOpen("orchestrator")}
-          />
-        )}
-      </div>
-
-      {/* Compact list of all agents */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-900">
-          Todos os agentes
-        </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {agents.map((agent) => (
-            <button
-              key={agent.slug}
-              type="button"
-              onClick={() => onOpen(agent.slug)}
-              className="group flex flex-col rounded-xl border border-gray-200 bg-white p-4 text-left transition-colors hover:border-orange-300 hover:shadow-sm"
-            >
-              <div className="mb-2 flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="truncate font-semibold text-gray-900">{agent.name}</h3>
-                  {agent.title && <p className="truncate text-xs text-gray-500">{agent.title}</p>}
-                </div>
-                <StatusBadge status={agent.status} />
-              </div>
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                <AreaBadge area={agent.area} />
-                <RuntimeBadge enabled={agent.isRuntimeEnabled} />
-              </div>
-              <p className="mb-3 line-clamp-2 flex-1 text-sm text-gray-600">
-                {agent.mission || agent.description || "Sem descrição definida."}
-              </p>
-              <span className="text-xs font-medium text-orange-600 group-hover:underline">
-                Abrir painel →
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Grouped sections */}
+      <AgentGroupSection
+        group="product"
+        agents={product}
+        onOpen={onOpen}
+      />
+      <AgentGroupSection
+        group="buildos"
+        agents={buildos}
+        onOpen={onOpen}
+      />
 
       {/* Deep-link hint (read-only) */}
       <p className="text-xs text-gray-400">
@@ -234,6 +185,69 @@ function GeralOverview({
   );
 }
 
+// ── Grouped section: Produto/Runtime vs Build OS/Admin ──────────────────────────
+
+function AgentGroupSection({
+  group,
+  agents,
+  onOpen,
+}: {
+  group: "product" | "buildos";
+  agents: AdminAgentProfileView[];
+  onOpen: (key: string) => void;
+}) {
+  const meta = GROUP_META[group];
+  return (
+    <section>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold ${meta.cls}`}>
+          <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+          {meta.label}
+        </span>
+        <span className="text-xs text-gray-500">{meta.blurb}</span>
+      </div>
+      {agents.length === 0 ? (
+        <p className="text-sm text-gray-400">Nenhum agente neste grupo.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {agents.map((agent) => (
+            <div
+              key={agent.slug}
+              className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-orange-300 hover:shadow-sm"
+            >
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <button type="button" onClick={() => onOpen(agent.slug)} className="min-w-0 text-left">
+                  <h3 className="truncate font-semibold text-gray-900 hover:underline">{agent.name}</h3>
+                  {agent.title && <p className="truncate text-xs text-gray-500">{agent.title}</p>}
+                </button>
+                <MaturityBadge agent={agent} />
+              </div>
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                <GroupBadge area={agent.area} />
+                <AreaBadge area={agent.area} />
+              </div>
+              <p className="mb-3 line-clamp-2 flex-1 text-sm text-gray-600">
+                {agent.mission || agent.description || "Perfil planejado — conteúdo será preenchido em fase futura."}
+              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpen(agent.slug)}
+                  className="text-xs font-medium text-orange-600 hover:underline"
+                >
+                  Abrir painel →
+                </button>
+                <AgentBridges agent={agent} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+
 // ── Small presentational helpers (client-local) ─────────────────────────────────
 
 function Kpi({
@@ -243,60 +257,20 @@ function Kpi({
 }: {
   label: string;
   value: number;
-  accent?: "gray" | "green" | "amber" | "orange";
+  accent?: "gray" | "green" | "amber" | "orange" | "blue" | "violet";
 }) {
   const accentCls = {
     gray: "text-gray-900",
     green: "text-green-700",
     amber: "text-amber-700",
     orange: "text-orange-600",
+    blue: "text-blue-700",
+    violet: "text-violet-700",
   }[accent];
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <p className={`text-3xl font-bold ${accentCls}`}>{value}</p>
       <p className="mt-1 text-xs uppercase tracking-wide text-gray-400">{label}</p>
     </div>
-  );
-}
-
-function HighlightCard({
-  tone,
-  kicker,
-  title,
-  subtitle,
-  text,
-  onClick,
-}: {
-  tone: "orange" | "red" | "gray";
-  kicker: string;
-  title: string;
-  subtitle: string;
-  text: string;
-  onClick: () => void;
-}) {
-  const toneCls = {
-    orange: "border-orange-200 bg-orange-50",
-    red: "border-red-200 bg-red-50",
-    gray: "border-gray-200 bg-gray-50",
-  }[tone];
-  const kickerCls = {
-    orange: "text-orange-700",
-    red: "text-red-700",
-    gray: "text-gray-500",
-  }[tone];
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex flex-col rounded-xl border p-4 text-left transition-shadow hover:shadow-sm ${toneCls}`}
-    >
-      <span className={`text-[11px] font-semibold uppercase tracking-wide ${kickerCls}`}>
-        {kicker}
-      </span>
-      <h3 className="mt-1 font-bold text-gray-900">{title}</h3>
-      <p className="text-xs text-gray-600">{subtitle}</p>
-      <p className="mt-2 flex-1 text-sm text-gray-700">{text}</p>
-      <span className="mt-3 text-xs font-medium text-orange-600">Abrir painel →</span>
-    </button>
   );
 }
