@@ -2446,16 +2446,105 @@ function CampanhasAtivasSection({
   if (active.length === 0) return null;
 
   return (
-    <div>
-      <div className="mb-3">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-brand-600">Campanhas ativas</h3>
-        <p className="mt-1 text-xs text-gray-400">Console de performance · campanhas em execução, recorrentes ou agendadas.</p>
+    <div data-testid="campanhas-ativas-section">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-brand-600">Campanhas ativas</h3>
+          <p className="mt-0.5 text-xs text-gray-400">Campanhas em execução, agendadas ou recorrentes.</p>
+        </div>
+        <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">{active.length}</span>
       </div>
-      <CampaignPerformanceSummary campaigns={campaigns} />
-      <div className="space-y-4">
-        {active.map((c) => (
-          <ActiveCampaignCard key={c.id} campaign={c} onDetail={onDetail} onAction={onAction} />
-        ))}
+      <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <table className="w-full text-left text-xs">
+          <thead className="border-b border-gray-100 bg-gray-50">
+            <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+              <th className="py-2.5 pl-4 pr-2 font-semibold">Status</th>
+              <th className="py-2.5 px-2 font-semibold">Nome</th>
+              <th className="py-2.5 px-2 font-semibold">Tipo</th>
+              <th className="py-2.5 px-2 font-semibold">Público</th>
+              <th className="py-2.5 px-2 font-semibold text-right">Enviados</th>
+              <th className="py-2.5 px-2 font-semibold text-right">Respostas</th>
+              <th className="py-2.5 px-2 font-semibold text-right">Tx.</th>
+              <th className="py-2.5 px-2 font-semibold text-right">Pedidos</th>
+              <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
+              <th className="py-2.5 px-2 font-semibold text-right">Falhas</th>
+              <th className="py-2.5 px-2 font-semibold">Janela</th>
+              <th className="py-2.5 pl-2 pr-4 font-semibold">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {active.map((c) => {
+              const sc          = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+              const cfg         = c.scheduleConfig as ScheduleCfg | null;
+              const isRecurring = cfg?.mode === "RECURRING";
+              const controllable = ["ACTIVE", "SCHEDULED", "PAUSED"].includes(c.status);
+              const responseRate = c.totalSent > 0 ? ((c.totalResponded / c.totalSent) * 100).toFixed(1) : null;
+              const janela = isRecurring && cfg?.timeWindow
+                ? `${cfg.timeWindow.start}–${cfg.timeWindow.end}`
+                : c.scheduledAt
+                  ? new Date(c.scheduledAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+                  : "—";
+
+              return (
+                <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="py-3 pl-4 pr-2">
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap ${sc.bg} ${sc.text}`}>
+                      {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
+                    </span>
+                  </td>
+                  <td className="py-3 px-2 max-w-[140px]">
+                    <p className="font-semibold text-gray-900 truncate">{c.name}</p>
+                    {c.objective && (
+                      <p className="text-[10px] text-gray-400 truncate">{OBJECTIVE_LABELS[c.objective] ?? c.objective}</p>
+                    )}
+                  </td>
+                  <td className="py-3 px-2 whitespace-nowrap">
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${isRecurring ? "bg-purple-50 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
+                      {isRecurring ? "Recorrente" : "Pontual"}
+                    </span>
+                  </td>
+                  <td className="py-3 px-2 max-w-[110px]">
+                    <span className="text-gray-600 truncate block text-[11px]">
+                      {c.targetSegment ? (SEGMENT_LABELS[c.targetSegment] ?? c.targetSegment) : "—"}
+                    </span>
+                  </td>
+                  <td className="py-3 px-2 text-right tabular-nums text-blue-700">{c.totalSent > 0 ? c.totalSent : "—"}</td>
+                  <td className="py-3 px-2 text-right tabular-nums text-indigo-700">{c.totalResponded > 0 ? c.totalResponded : "—"}</td>
+                  <td className="py-3 px-2 text-right tabular-nums">{responseRate ? `${responseRate}%` : "—"}</td>
+                  <td className="py-3 px-2 text-right tabular-nums text-green-700">{c.totalConverted > 0 ? c.totalConverted : "—"}</td>
+                  <td className="py-3 px-2 text-right tabular-nums font-semibold text-green-700">
+                    {Number(c.totalRevenue) > 0 ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}
+                  </td>
+                  <td className="py-3 px-2 text-right tabular-nums text-red-500">{c.totalFailed > 0 ? c.totalFailed : "—"}</td>
+                  <td className="py-3 px-2 text-gray-500 whitespace-nowrap text-[11px]">{janela}</td>
+                  <td className="py-3 pl-2 pr-4">
+                    <div className="flex items-center gap-1 justify-end">
+                      <button
+                        onClick={() => onDetail(c.id)}
+                        className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-brand-700 transition-colors whitespace-nowrap"
+                      >
+                        Gerenciar
+                      </button>
+                      {controllable && (
+                        c.status === "PAUSED" ? (
+                          <button
+                            onClick={() => onAction(c.id, "resume")}
+                            className="rounded-lg bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                          >Retomar</button>
+                        ) : (
+                          <button
+                            onClick={() => onAction(c.id, "pause")}
+                            className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
+                          >Pausar</button>
+                        )
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -2558,10 +2647,11 @@ const PERFORMANCE_PERIODS: { value: string; label: string }[] = [
 ];
 
 function CampaignCouponPerformance() {
-  const [period,      setPeriod]      = useState("30d");
-  const [data,        setData]        = useState<CampaignCouponMetricsResponse | null>(null);
-  const [attribution, setAttribution] = useState<Map<string, AttributionRowClient>>(new Map());
-  const [loading,     setLoading]     = useState(true);
+  const [period,         setPeriod]         = useState("30d");
+  const [data,           setData]           = useState<CampaignCouponMetricsResponse | null>(null);
+  const [attribution,    setAttribution]    = useState<Map<string, AttributionRowClient>>(new Map());
+  const [loading,        setLoading]        = useState(true);
+  const [showAllCoupons, setShowAllCoupons] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -2636,42 +2726,52 @@ function CampaignCouponPerformance() {
                 Nenhum cupom cadastrado.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="text-[10px] uppercase tracking-wide text-gray-400">
-                      <th className="py-1.5 pr-2 font-semibold">Cupom</th>
-                      <th className="py-1.5 px-2 font-semibold text-right">Usos</th>
-                      <th className="py-1.5 px-2 font-semibold text-right">Pedidos</th>
-                      <th className="py-1.5 px-2 font-semibold text-right">Receita</th>
-                      <th className="py-1.5 px-2 font-semibold text-right">Desconto</th>
-                      <th className="py-1.5 pl-2 font-semibold text-right">Ticket médio</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {data.coupons.rows.map((r) => (
-                      <tr key={r.promotionId} className="text-gray-700">
-                        <td className="py-2 pr-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-gray-900">{r.couponCode ?? "—"}</span>
-                            {r.status !== "ACTIVE" && (
-                              <span className="rounded bg-gray-100 px-1 py-0.5 text-[9px] font-semibold text-gray-400">
-                                {r.status}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-gray-400">{r.name}</span>
-                        </td>
-                        <td className="py-2 px-2 text-right tabular-nums">{r.orderCount}</td>
-                        <td className="py-2 px-2 text-right tabular-nums">{r.uniqueCustomers} clientes</td>
-                        <td className="py-2 px-2 text-right tabular-nums font-semibold text-green-700">R$ {formatCurrency(r.revenue)}</td>
-                        <td className="py-2 px-2 text-right tabular-nums text-gray-500">R$ {formatCurrency(r.discount)}</td>
-                        <td className="py-2 pl-2 text-right tabular-nums">R$ {formatCurrency(r.averageTicket)}</td>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+                        <th className="py-1.5 pr-2 font-semibold">Cupom</th>
+                        <th className="py-1.5 px-2 font-semibold text-right">Usos</th>
+                        <th className="py-1.5 px-2 font-semibold text-right">Pedidos</th>
+                        <th className="py-1.5 px-2 font-semibold text-right">Receita</th>
+                        <th className="py-1.5 px-2 font-semibold text-right">Desconto</th>
+                        <th className="py-1.5 pl-2 font-semibold text-right">Ticket médio</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {(showAllCoupons ? data.coupons.rows : data.coupons.rows.slice(0, 5)).map((r) => (
+                        <tr key={r.promotionId} className="text-gray-700">
+                          <td className="py-2 pr-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-gray-900">{r.couponCode ?? "—"}</span>
+                              {r.status !== "ACTIVE" && (
+                                <span className="rounded bg-gray-100 px-1 py-0.5 text-[9px] font-semibold text-gray-400">
+                                  {r.status}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-gray-400">{r.name}</span>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums">{r.orderCount}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{r.uniqueCustomers} clientes</td>
+                          <td className="py-2 px-2 text-right tabular-nums font-semibold text-green-700">R$ {formatCurrency(r.revenue)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-gray-500">R$ {formatCurrency(r.discount)}</td>
+                          <td className="py-2 pl-2 text-right tabular-nums">R$ {formatCurrency(r.averageTicket)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {data.coupons.rows.length > 5 && (
+                  <button
+                    onClick={() => setShowAllCoupons((v) => !v)}
+                    className="mt-2 text-[11px] font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+                  >
+                    {showAllCoupons ? "Ver menos" : `Ver todos (${data.coupons.rows.length})`}
+                  </button>
+                )}
+              </>
             )}
           </div>
 
@@ -2836,14 +2936,11 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
     return null;
   }
 
-  const summaryCards = [
-    { emoji: "🔥", label: "Quentes",     count: stats.ativoCustomers, color: "bg-orange-50 border-orange-100", textColor: "text-orange-700" },
-    { emoji: "🌡️", label: "Mornos",      count: stats.mornoCustomers, color: "bg-amber-50 border-amber-100",   textColor: "text-amber-700"  },
-    { emoji: "🥶", label: "Frios",       count: stats.frioCustomers,  color: "bg-blue-50 border-blue-100",     textColor: "text-blue-700"   },
-    { emoji: "🆕", label: "Novos (mês)", count: stats.newCustomers,   color: "bg-green-50 border-green-100",   textColor: "text-green-700"  },
-    { emoji: "👑", label: "VIP",          count: vipCount,             color: "bg-cyan-50 border-cyan-100",     textColor: "text-cyan-700"   },
-    { emoji: "🥤", label: "Bebidas",      count: null,                 color: "bg-gray-50 border-gray-100",     textColor: "text-gray-400"   },
-  ];
+  const [showMoreTemplates, setShowMoreTemplates] = useState(false);
+  const [showHistory,       setShowHistory]       = useState(false);
+
+  const visibleTemplates = showMoreTemplates ? ACTION_TEMPLATES : ACTION_TEMPLATES.slice(0, 6);
+  const historyRows = campaigns.filter((c) => HISTORY_STATUSES.has(c.status));
 
   return (
     <div className="space-y-6">
@@ -2874,22 +2971,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-        {summaryCards.map((card) => (
-          <div
-            key={card.label}
-            className={`rounded-2xl border px-3 py-3 text-center ${card.color}`}
-          >
-            <p className="text-base leading-none">{card.emoji}</p>
-            <p className={`mt-1.5 text-lg font-bold leading-none ${card.textColor}`}>
-              {card.count !== null ? card.count : "—"}
-            </p>
-            <p className="mt-0.5 text-[10px] font-medium text-gray-500">{card.label}</p>
-          </div>
-        ))}
-      </div>
-
       {/* ── Performance de campanhas e cupons ────────────────────────────────── */}
       <CampaignCouponPerformance />
 
@@ -2910,7 +2991,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
 
       {/* Action templates grid */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {ACTION_TEMPLATES.map((tpl) => {
+        {visibleTemplates.map((tpl) => {
           const rc  = READINESS_CONFIG[tpl.readiness];
           const count = getAudienceCount(tpl.audienceKey);
           return (
@@ -2956,131 +3037,128 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         })}
       </div>{/* end templates grid */}
 
+      {ACTION_TEMPLATES.length > 6 && (
+        <div className="mt-3 text-center">
+          <button
+            onClick={() => setShowMoreTemplates((v) => !v)}
+            className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+          >
+            {showMoreTemplates
+              ? "Ver menos modelos"
+              : `Ver mais modelos (${ACTION_TEMPLATES.length - 6} restantes)`}
+          </button>
+        </div>
+      )}
+
       </div>{/* end Ações sugeridas section */}
 
-      {/* ── Histórico de ações ─────────────────────────────────────────────── */}
-      {(!loadingHistory) && (
-        <div>
-          <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">
-            Histórico de campanhas
-          </h3>
-          {loadingHistory ? (
-            <div className="py-4 text-center text-sm text-gray-400">Carregando…</div>
-          ) : campaigns.filter((c) => HISTORY_STATUSES.has(c.status)).length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-gray-100 py-6 text-center text-xs text-gray-400">
-              Nenhuma campanha concluída ainda.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {campaigns.filter((c) => HISTORY_STATUSES.has(c.status)).map((c) => {
-                const sc         = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
-                const cfg        = c.scheduleConfig as { mode?: string; weekdays?: number[]; timeWindow?: { start: string; end: string }; dailyLimit?: number } | null;
-                const isRecurring = cfg?.mode === "RECURRING";
-                const displayDate = c.sentAt
-                  ? new Date(c.sentAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
-                  : c.scheduledAt
-                    ? `Prog. ${new Date(c.scheduledAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })}`
-                    : new Date(c.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
-                const isDeletable  = c.status === "DRAFT" || c.status === "CANCELLED";
-                const isControllable = isRecurring && ["ACTIVE", "SCHEDULED", "PAUSED"].includes(c.status);
-                const convRate     = c.totalSent > 0
-                  ? Math.round((c.totalConverted / c.totalSent) * 100)
-                  : null;
-                const showStats = ["SENT", "SENDING", "ACTIVE", "PAUSED", "COMPLETED"].includes(c.status) && c.totalSent > 0;
-                return (
-                  <div key={c.id} className="rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          {isRecurring ? "Recorrente · WhatsApp" : `WhatsApp · ${displayDate}`}
-                        </p>
-                      </div>
-                      <div className="shrink-0 flex items-center gap-2">
-                        <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
-                          {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
-                        </span>
-                        <button
-                          onClick={() => setDetailId(c.id)}
-                          className="rounded-lg bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
-                        >
-                          Ver detalhes
-                        </button>
-                        {isDeletable && (
-                          <button
-                            title="Excluir"
-                            onClick={async () => {
-                              if (!confirm("Excluir esta ação?")) return;
-                              const res = await fetch(`/api/crm/campaigns/${c.id}`, { method: "DELETE" });
-                              if (res.ok) setCampaigns((prev) => prev.filter((x) => x.id !== c.id));
-                            }}
-                            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                          >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+      {/* ── Histórico de campanhas (collapsed by default) ────────────────────── */}
+      {!loadingHistory && (
+        <div data-testid="history-section">
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <svg
+              className={`h-3.5 w-3.5 transition-transform ${showHistory ? "rotate-90" : ""}`}
+              fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+            Ver histórico
+            {historyRows.length > 0 && (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                {historyRows.length}
+              </span>
+            )}
+          </button>
+
+          {showHistory && (
+            <div className="mt-3">
+              {historyRows.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-gray-100 py-6 text-center text-xs text-gray-400">
+                  Nenhuma campanha concluída ainda.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {historyRows.map((c) => {
+                    const sc         = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                    const cfg        = c.scheduleConfig as { mode?: string; weekdays?: number[]; timeWindow?: { start: string; end: string }; dailyLimit?: number } | null;
+                    const isRecurring = cfg?.mode === "RECURRING";
+                    const displayDate = c.sentAt
+                      ? new Date(c.sentAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
+                      : c.scheduledAt
+                        ? `Prog. ${new Date(c.scheduledAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })}`
+                        : new Date(c.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+                    const isDeletable = c.status === "DRAFT" || c.status === "CANCELLED";
+                    const convRate    = c.totalSent > 0
+                      ? Math.round((c.totalConverted / c.totalSent) * 100)
+                      : null;
+                    const showStats = ["SENT", "SENDING", "ACTIVE", "PAUSED", "COMPLETED"].includes(c.status) && c.totalSent > 0;
+                    return (
+                      <div key={c.id} className="rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {isRecurring ? "Recorrente · WhatsApp" : `WhatsApp · ${displayDate}`}
+                            </p>
+                          </div>
+                          <div className="shrink-0 flex items-center gap-2">
+                            <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.bg} ${sc.text}`}>
+                              {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
+                            </span>
+                            <button
+                              onClick={() => setDetailId(c.id)}
+                              className="rounded-lg bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
+                            >
+                              Ver detalhes
+                            </button>
+                            {isDeletable && (
+                              <button
+                                title="Excluir"
+                                onClick={async () => {
+                                  if (!confirm("Excluir esta ação?")) return;
+                                  const res = await fetch(`/api/crm/campaigns/${c.id}`, { method: "DELETE" });
+                                  if (res.ok) setCampaigns((prev) => prev.filter((x) => x.id !== c.id));
+                                }}
+                                className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                              >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {isRecurring && cfg && (
+                          <div className="mt-1.5 text-[10px] text-gray-500">
+                            {cfg.weekdays && cfg.weekdays.map((d: number) => WEEKDAY_LABELS[d]).join(", ")}
+                            {cfg.timeWindow && ` · ${cfg.timeWindow.start}–${cfg.timeWindow.end}`}
+                            {cfg.dailyLimit && ` · ${cfg.dailyLimit}/dia`}
+                          </div>
+                        )}
+
+                        {showStats && (
+                          <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-gray-500 border-t border-gray-50 pt-2">
+                            <span>{c.totalSent} enviados</span>
+                            {c.totalFailed > 0 && <span className="text-red-500">{c.totalFailed} falhas</span>}
+                            {c.totalResponded > 0 && <span className="text-blue-600">{c.totalResponded} responderam</span>}
+                            {c.totalConverted > 0 && (
+                              <span className="text-green-600 font-semibold">
+                                {c.totalConverted} conversões
+                                {convRate !== null && ` (${convRate}%)`}
+                                {" · R$"}{Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
-                    </div>
-
-                    {/* Recurring schedule summary */}
-                    {isRecurring && cfg && (
-                      <div className="mt-1.5 text-[10px] text-gray-500">
-                        {cfg.weekdays && cfg.weekdays.map((d: number) => WEEKDAY_LABELS[d]).join(", ")}
-                        {cfg.timeWindow && ` · ${cfg.timeWindow.start}–${cfg.timeWindow.end}`}
-                        {cfg.dailyLimit && ` · ${cfg.dailyLimit}/dia`}
-                      </div>
-                    )}
-
-                    {/* Stats row */}
-                    {showStats && (
-                      <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-gray-500 border-t border-gray-50 pt-2">
-                        <span>{c.totalSent} enviados</span>
-                        {c.totalFailed > 0 && <span className="text-red-500">{c.totalFailed} falhas</span>}
-                        {c.totalResponded > 0 && <span className="text-blue-600">{c.totalResponded} responderam</span>}
-                        {c.totalConverted > 0 && (
-                          <span className="text-green-600 font-semibold">
-                            {c.totalConverted} conversões
-                            {convRate !== null && ` (${convRate}%)`}
-                            {" · R$"}{Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Recurring controls: pause / resume / cancel */}
-                    {isControllable && (
-                      <div className="mt-2 flex gap-2 border-t border-gray-50 pt-2">
-                        {c.status === "PAUSED" ? (
-                          <button
-                            onClick={() => handleCampaignAction(c.id, "resume")}
-                            className="rounded-lg bg-green-50 px-3 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
-                          >
-                            Retomar
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleCampaignAction(c.id, "pause")}
-                            className="rounded-lg bg-yellow-50 px-3 py-1 text-[10px] font-semibold text-yellow-700 hover:bg-yellow-100 transition-colors"
-                          >
-                            Pausar
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            if (!confirm("Cancelar esta campanha recorrente permanentemente?")) return;
-                            handleCampaignAction(c.id, "cancel");
-                          }}
-                          className="rounded-lg bg-red-50 px-3 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-100 transition-colors"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
