@@ -1,7 +1,12 @@
 # Foocci — Site em Prévia Privada (Private Staging)
 
-> Versão 1 · 2026-06-05 · Aplica-se a `/site` e `/site/*`.
+> Versão 1 · 2026-06-05 (atualizado 2026-06-05) · Aplica-se a `/preview`, `/site` e `/site/*`.
 > Status: **pré-lançamento (piloto).** O site é real, mas **privado** até o lançamento (~julho).
+
+> **URL oficial de revisão:** **`https://foocci.com.br/preview`**
+> `/preview` redireciona para `/site` (mesmo gate de senha, mesmo `noindex`). Não usar
+> `preview.fute.com.br` agora; **não mexer em DNS, domínio ou Railway Networking** — o
+> domínio `foocci.com.br` voltou a funcionar e é o que usamos.
 
 ## 1. Propósito
 
@@ -19,25 +24,33 @@ permanece **`noindex`**.
 - A raiz `/` continua sendo o gateway de produto (redireciona para `/dashboard` ou
   `/login`) — intocada.
 
-## 3. Domínio de revisão recomendado
+## 3. Rota de revisão (atual) — `/preview` no domínio existente
 
-- **`preview.fute.com.br`** (preferido) — subdomínio privado de revisão.
-- Alternativa: `site.fute.com.br`.
-- A prévia é acessada em **`https://preview.fute.com.br/site`**.
+- **Revisar em `https://foocci.com.br/preview`.** É a rota privada oficial de revisão.
+- `/preview` (e `/preview/<algo>`) **redireciona** para `/site` (corresponde o subpath:
+  `/preview/precos` → `/site/precos`). Implementado **no middleware**, escopado exatamente
+  a `/preview` — não toca rotas de produto.
+- `/site` continua sendo a rota interna/marketing; o gate de senha e o `noindex` vivem nele.
+- **Sem mexer em DNS, domínio, `www`, subdomínio ou Railway custom domain.** O domínio
+  `foocci.com.br` voltou a funcionar e é o usado.
+- **`preview.fute.com.br`/`site.fute.com.br`: NÃO usar agora** (decisão revertida). O
+  passo a passo de DNS/subdomínio abaixo (seção 7) fica **arquivado** para uma decisão
+  futura — não executar.
 
-## 4. Por que NÃO usar a raiz `fute.com.br` ainda
+## 4. Por que o conteúdo não fica na raiz `/` ainda
 
 - A raiz pública não está aprovada para ir ao ar (lançamento comercial é ~julho).
-- Em `fute.com.br/`, a aplicação mostra o **gateway de produto** (`/login`), não o
-  marketing — a vitrine vive em `/site`.
-- Manter a raiz "parqueada"/não-pública evita expor o produto e a marca antes da hora.
+- Em `foocci.com.br/`, a aplicação mostra o **gateway de produto** (`/login`), não o
+  marketing — a vitrine vive em `/site`, revisada via `/preview`.
+- O lançamento público (mover `/site` → `/`, remover gate, `index`) será decidido depois.
 
 ## 5. Estratégia de proteção de acesso (implementada)
 
-**Gate de senha único e compartilhado** (Opção A), escopo **estrito a `/site`**:
+**Gate de senha único e compartilhado**, escopo **estrito a `/site` e `/preview`**:
 
 | Camada | O que faz |
 |---|---|
+| **Entrada `/preview`** (`src/middleware.ts`) | `/preview` e `/preview/<algo>` → **redireciona para `/site`** (subpath correspondente). É só o ponto de entrada amigável; toda a proteção real fica em `/site`. |
 | **Middleware** (`src/middleware.ts`) | Gate primário. Para páginas `/site` (exceto `/site/entrar`, `/site/acesso`, `/site/sair`), sem cookie válido → **redireciona para `/site/entrar` ANTES de renderizar** (nada de conteúdo vaza). Escopo estrito a `/site`; rotas de produto **não** são afetadas. |
 | **Route group `(gated)`** | Páginas de marketing ficam em `src/app/site/(gated)/` com `layout.tsx` que provê header/footer e uma checagem secundária (defense-in-depth). URLs **não mudam**. |
 | **Gate page** `/site/entrar` | Tela de senha premium (branca, texto preto, CTA laranja). Fora do grupo gated, então é acessível sem cookie. |
@@ -67,7 +80,11 @@ MARKETING_PREVIEW_PASSWORD=<uma senha forte para a prévia>
 - Para dev local: adicionar em `.env.local`.
 - Trocar a senha **invalida** todos os cookies antigos automaticamente.
 
-## 7. Setup de DNS / Railway (passo a passo)
+## 7. Setup de DNS / Railway (ARQUIVADO — NÃO executar agora)
+
+> ⚠️ **Decisão revertida (2026-06-05):** não mexer em DNS/domínio/Railway Networking.
+> A revisão usa `https://foocci.com.br/preview` (seção 3). Mantido apenas como
+> referência caso um subdomínio dedicado seja aprovado no futuro.
 
 1. **Railway → serviço da app → Settings → Networking → Custom Domain** → adicionar
    `preview.fute.com.br`. O Railway exibirá um alvo CNAME (algo como

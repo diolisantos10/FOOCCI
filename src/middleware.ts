@@ -96,6 +96,16 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Private preview entry point — /preview (and /preview/*) sends the reviewer to
+  // the gated marketing site at /site, where the password gate + noindex already
+  // live. Scoped EXACTLY to /preview; product routes are never touched.
+  if (pathname === "/preview" || pathname.startsWith("/preview/")) {
+    const dest = req.nextUrl.clone();
+    dest.pathname = pathname.replace(/^\/preview/, "/site");
+    dest.search = "";
+    return NextResponse.redirect(dest);
+  }
+
   // Explicit early exit for setup/recover — must never require auth, even behind proxies
   if (
     pathname === "/setup" ||
