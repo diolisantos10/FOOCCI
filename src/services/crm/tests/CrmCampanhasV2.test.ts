@@ -17,16 +17,18 @@ const PERFORMANCE_PERIODS = [
   { value: "all", label: "Tudo"    },
 ];
 
+// v3: added "Frequência" column (recurring cadence) before "Ações".
 const ACTIVE_TABLE_COLUMNS = [
   "Status", "Nome", "Tipo", "Público",
   "Enviados", "Respostas", "Tx.",
   "Pedidos", "Receita", "Falhas",
-  "Janela", "Ações",
+  "Janela", "Frequência", "Ações",
 ];
 
+// v3: the "Performance de campanhas e cupons" block was removed from the
+// Campanhas tab (it may resurface in Analytics). Order no longer has "performance".
 const CAMPANHAS_TAB_SECTION_ORDER = [
   "header",
-  "performance",
   "ativas",
   "templates",
   "historico",
@@ -114,10 +116,10 @@ describe("A — segment panel removed from CampanhasTab", () => {
     expect(hasSegmentPanel).toBe(false);
   });
 
-  it("performance section comes first after header (no segment panel in between)", () => {
-    const headerIdx      = CAMPANHAS_TAB_SECTION_ORDER.indexOf("header");
-    const performanceIdx = CAMPANHAS_TAB_SECTION_ORDER.indexOf("performance");
-    expect(performanceIdx).toBe(headerIdx + 1);
+  it("active campaigns section comes first after header (no segment panel in between)", () => {
+    const headerIdx = CAMPANHAS_TAB_SECTION_ORDER.indexOf("header");
+    const ativasIdx = CAMPANHAS_TAB_SECTION_ORDER.indexOf("ativas");
+    expect(ativasIdx).toBe(headerIdx + 1);
   });
 });
 
@@ -204,10 +206,10 @@ describe("D — active campaigns section empty state", () => {
 // ── E — Active campaigns table columns ───────────────────────────────────────
 
 describe("E — active campaigns table has required columns", () => {
-  const REQUIRED = ["Status", "Nome", "Tipo", "Público", "Enviados", "Respostas", "Tx.", "Pedidos", "Receita", "Falhas", "Janela", "Ações"];
+  const REQUIRED = ["Status", "Nome", "Tipo", "Público", "Enviados", "Respostas", "Tx.", "Pedidos", "Receita", "Falhas", "Janela", "Frequência", "Ações"];
 
-  it("has all 12 required columns", () => {
-    expect(ACTIVE_TABLE_COLUMNS).toHaveLength(12);
+  it("has all 13 required columns", () => {
+    expect(ACTIVE_TABLE_COLUMNS).toHaveLength(13);
   });
 
   for (const col of REQUIRED) {
@@ -451,9 +453,8 @@ describe("K — campaign action routing", () => {
 // ── L — Section order in CampanhasTab ────────────────────────────────────────
 
 describe("L — section order in CampanhasTab", () => {
-  it("performance comes before active campaigns", () => {
-    expect(CAMPANHAS_TAB_SECTION_ORDER.indexOf("performance"))
-      .toBeLessThan(CAMPANHAS_TAB_SECTION_ORDER.indexOf("ativas"));
+  it("performance block is no longer in the Campanhas tab", () => {
+    expect(CAMPANHAS_TAB_SECTION_ORDER).not.toContain("performance");
   });
 
   it("active campaigns come before templates", () => {

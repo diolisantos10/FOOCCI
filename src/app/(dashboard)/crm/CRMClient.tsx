@@ -487,7 +487,7 @@ function CreateActionModal({
           <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
             <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-bold text-gray-600 shrink-0">Rascunho</span>
             <p className="text-xs text-amber-700">
-              Salvo como modelo. Para enviar mensagens, crie uma <strong>Campanha</strong> ou configure uma <strong>Automação</strong>.
+              Salvo como modelo. Para enviar mensagens, crie uma <strong>Campanha</strong> — única ou recorrente.
             </p>
           </div>
         </div>
@@ -1094,12 +1094,12 @@ function ActionConfigDrawer({
 
           {/* Scheduling section */}
           <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Quando enviar</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Tipo de campanha</p>
 
-              {/* Mode selector */}
+              {/* Mode selector — envio único / agendada / recorrente */}
               <div className="flex gap-1.5">
                 {(["now", "scheduled_once", "recurring"] as const).map((mode) => {
-                  const labels = { now: "Agora", scheduled_once: "Uma vez", recurring: "Recorrente" };
+                  const labels = { now: "Envio único", scheduled_once: "Agendada", recurring: "Recorrente" };
                   return (
                     <button
                       key={mode}
@@ -1115,6 +1115,15 @@ function ActionConfigDrawer({
                   );
                 })}
               </div>
+
+              {/* Friendly explainer per type */}
+              <p className="text-[11px] text-gray-500">
+                {sendMode === "now"
+                  ? "Envia uma vez, agora, para o público selecionado."
+                  : sendMode === "scheduled_once"
+                    ? "Envia uma vez, na data e hora escolhidas."
+                    : "Roda automaticamente e envia nos dias e horários definidos. Você pode pausar ou retomar quando quiser."}
+              </p>
 
               {/* Scheduled once: date + time */}
               {sendMode === "scheduled_once" && (
@@ -2285,6 +2294,54 @@ function getOperationalStatus(c: CampaignHistoryRow): { text: string; color: str
 const ACTIVE_STATUSES = new Set(["ACTIVE", "SENDING", "SCHEDULED", "PAUSED"]);
 const HISTORY_STATUSES = new Set(["SENT", "COMPLETED", "CANCELLED", "DRAFT"]);
 
+type CampaignTipo = "Única" | "Agendada" | "Recorrente";
+
+const TIPO_BADGE: Record<CampaignTipo, string> = {
+  "Única":      "bg-gray-100 text-gray-600",
+  "Agendada":   "bg-amber-50 text-amber-700",
+  "Recorrente": "bg-purple-50 text-purple-700",
+};
+
+/** Execution type: recurring (automation) vs scheduled-once vs single send. */
+function campaignTipo(c: CampaignHistoryRow): CampaignTipo {
+  const cfg = c.scheduleConfig as ScheduleCfg | null;
+  if (cfg?.mode === "RECURRING") return "Recorrente";
+  if (c.scheduledAt || c.status === "SCHEDULED") return "Agendada";
+  return "Única";
+}
+
+/** Human-friendly cadence for recurring campaigns; "—" for one-off sends. */
+function campaignFrequencia(c: CampaignHistoryRow): string {
+  const cfg = c.scheduleConfig as ScheduleCfg | null;
+  if (cfg?.mode !== "RECURRING") return "—";
+  const days = cfg.weekdays ?? [];
+  if (days.length === 0 || days.length === 7) return "Diária";
+  if (days.length === 1) return WEEKDAY_LABELS[days[0]!] ?? "Semanal";
+  if (days.length <= 3) return days.map((d) => WEEKDAY_LABELS[d]).join(", ");
+  return `${days.length}× por semana`;
+}
+
+/**
+ * Recommended execution type per template — surfaces in the Templates grid so the
+ * owner sees which models are meant to run automatically (recurring) vs. one-off.
+ * Recurring templates cover what used to live in the separate "Automações" tab
+ * (aniversário, recuperação de frios/mornos, segunda compra, avaliação, VIPs parados).
+ */
+const TEMPLATE_RECOMMENDED_TYPE: Record<string, CampaignTipo> = {
+  "recuperar-frios":     "Recorrente",
+  "reativar-mornos":     "Recorrente",
+  "segunda-compra":      "Recorrente",
+  "clientes-vip":        "Recorrente",
+  "pedido-avaliacao":    "Recorrente",
+  "aniversariantes":     "Recorrente",
+  "recorrente-sumido":   "Recorrente",
+  "carrinho-abandonado": "Recorrente",
+  "aumentar-sobremesas": "Única",
+  "aumentar-bebidas":    "Única",
+  "produto-favorito":    "Única",
+  "alto-ticket":         "Única",
+};
+
 // ── Campaign Performance Summary ──────────────────────────────────────────────
 
 function CampaignPerformanceSummary({ campaigns }: { campaigns: CampaignHistoryRow[] }) {
@@ -2469,6 +2526,7 @@ function CampanhasAtivasSection({
               <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
               <th className="py-2.5 px-2 font-semibold text-right">Falhas</th>
               <th className="py-2.5 px-2 font-semibold">Janela</th>
+              <th className="py-2.5 px-2 font-semibold">Frequência</th>
               <th className="py-2.5 pl-2 pr-4 font-semibold">Ações</th>
             </tr>
           </thead>
@@ -2499,9 +2557,14 @@ function CampanhasAtivasSection({
                     )}
                   </td>
                   <td className="py-3 px-2 whitespace-nowrap">
-                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${isRecurring ? "bg-purple-50 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
-                      {isRecurring ? "Recorrente" : "Pontual"}
-                    </span>
+                    {(() => {
+                      const tipo = campaignTipo(c);
+                      return (
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE[tipo]}`}>
+                          {tipo}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="py-3 px-2 max-w-[110px]">
                     <span className="text-gray-600 truncate block text-[11px]">
@@ -2517,6 +2580,7 @@ function CampanhasAtivasSection({
                   </td>
                   <td className="py-3 px-2 text-right tabular-nums text-red-500">{c.totalFailed > 0 ? c.totalFailed : "—"}</td>
                   <td className="py-3 px-2 text-gray-500 whitespace-nowrap text-[11px]">{janela}</td>
+                  <td className="py-3 px-2 text-gray-500 whitespace-nowrap text-[11px]">{campaignFrequencia(c)}</td>
                   <td className="py-3 pl-2 pr-4">
                     <div className="flex items-center gap-1 justify-end">
                       <button
@@ -2971,9 +3035,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         </div>
       </div>
 
-      {/* ── Performance de campanhas e cupons ────────────────────────────────── */}
-      <CampaignCouponPerformance />
-
       {/* ── Campanhas ativas ─────────────────────────────────────────────────── */}
       {!loadingHistory && (
         <CampanhasAtivasSection
@@ -2994,17 +3055,21 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         {visibleTemplates.map((tpl) => {
           const rc  = READINESS_CONFIG[tpl.readiness];
           const count = getAudienceCount(tpl.audienceKey);
+          const recommendedType = TEMPLATE_RECOMMENDED_TYPE[tpl.id] ?? "Única";
           return (
             <div
               key={tpl.id}
               className="flex flex-col rounded-2xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
             >
-              {/* Icon + title */}
+              {/* Icon + title + recommended type */}
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2.5">
                   <span className="text-xl">{tpl.emoji}</span>
                   <p className="text-sm font-bold text-gray-900 leading-tight">{tpl.title}</p>
                 </div>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE[recommendedType]}`}>
+                  {recommendedType}
+                </span>
               </div>
 
               {/* Description */}
@@ -3172,7 +3237,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           </h3>
           <p className="mt-1 text-xs text-gray-400">
             Rascunhos de mensagens para referência.{" "}
-            <span className="font-semibold text-gray-500">Para enviar mensagens, use Campanhas ou Automações.</span>
+            <span className="font-semibold text-gray-500">Para enviar mensagens, use uma Campanha — única ou recorrente.</span>
           </p>
         </div>
 
@@ -4668,17 +4733,17 @@ function CrmConfiguracoes() {
         </p>
       </CfgCard>
 
-      {/* E — Automações */}
+      {/* E — Campanhas recorrentes */}
       <CfgCard
-        title="Automações"
-        subtitle="As automações (reativação, aniversário, pós-pedido) também respeitam o horário quieto e o cap diário."
+        title="Campanhas recorrentes"
+        subtitle="Campanhas que rodam automaticamente (reativação, aniversário, pós-pedido) também respeitam o horário quieto e o cap diário."
       >
         <ul className="space-y-2.5">
           {[
-            { icon: "🔄", text: "Reativação: enviada após o número de dias configurado em cada automação" },
-            { icon: "🎂", text: "Aniversário: enviada no dia do aniversário do cliente. Não entra na régua de cooldown — é enviada mesmo que o cliente tenha recebido outra campanha recentemente. Opt-out e segurança do WhatsApp continuam sendo respeitados." },
-            { icon: "⭐", text: "Pós-pedido: enviada após o número de horas configurado na automação" },
-            { icon: "🛡️", text: "Reativação e pós-pedido respeitam o cooldown por cliente e o cap diário global" },
+            { icon: "🔄", text: "Recuperação de frios/mornos: envia para clientes sem pedido há X dias, no ritmo definido na campanha" },
+            { icon: "🎂", text: "Aniversário: envia no dia do aniversário do cliente. Não entra na régua de cooldown — é enviada mesmo que o cliente tenha recebido outra campanha recentemente. Opt-out e segurança do WhatsApp continuam sendo respeitados." },
+            { icon: "⭐", text: "Pós-pedido / avaliação: envia depois da compra, no intervalo configurado na campanha" },
+            { icon: "🛡️", text: "Todas as campanhas recorrentes respeitam o cooldown por cliente e o cap diário global" },
           ].map((item) => (
             <li key={item.text} className="flex items-start gap-2.5 text-sm text-gray-700">
               <span className="shrink-0">{item.icon}</span>
@@ -4687,8 +4752,8 @@ function CrmConfiguracoes() {
           ))}
         </ul>
         <p className="mt-3 text-xs text-gray-400">
-          Para ajustar os horários e intervalos de cada automação, acesse a aba{" "}
-          <button type="button" className="text-brand-600 underline" onClick={(e) => { e.preventDefault(); }}>Automações</button>.
+          Para criar ou ajustar uma campanha que roda automaticamente, abra a aba <strong>Campanhas</strong> e
+          escolha o tipo <strong>Recorrente</strong>.
         </p>
       </CfgCard>
 
@@ -5072,10 +5137,12 @@ export function CRMClient({
     }
   }
 
+  // Automações recorrentes agora vivem dentro de Campanhas (campanha recorrente).
+  // A aba separada foi removida da navegação; o backend de automações segue
+  // intacto e as automações já configuradas continuam rodando.
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: "overview",      label: "Visão Geral" },
     { id: "campanhas",     label: "Campanhas" },
-    { id: "automacoes",    label: "Automações" },
     { id: "customers",     label: "Clientes" },
     { id: "programa",      label: "Programa de Relacionamento" },
     { id: "avaliacoes",    label: "Avaliações" },
