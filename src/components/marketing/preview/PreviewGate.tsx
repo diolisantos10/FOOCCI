@@ -10,6 +10,7 @@
  */
 
 import { useState } from "react";
+import Image from "next/image";
 
 export function PreviewGate({ configured, next = "/site" }: { configured: boolean; next?: string }) {
   const [password, setPassword] = useState("");
@@ -46,11 +47,16 @@ export function PreviewGate({ configured, next = "/site" }: { configured: boolea
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-white px-5 py-16">
       <div className="w-full max-w-sm">
-        {/* Wordmark */}
-        <div className="mb-8 flex items-center justify-center gap-2">
-          <span className="text-2xl font-semibold tracking-tight text-[#0B0B0B]">Foocci</span>
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
-            em breve
+        {/* Mascot + wordmark */}
+        <div className="mb-8 flex flex-col items-center">
+          <span className="mb-4 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gray-50 ring-1 ring-gray-900/[0.03]">
+            <Image src="/brand/foocci/foocci-mascot.png" alt="" aria-hidden width={196} height={321} className="h-16 w-auto" />
+          </span>
+          <span className="flex items-center gap-2.5">
+            <Image src="/brand/foocci/foocci-wordmark.png" alt="Foocci" width={200} height={50} priority className="h-7 w-auto" />
+            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+              em breve
+            </span>
           </span>
         </div>
 

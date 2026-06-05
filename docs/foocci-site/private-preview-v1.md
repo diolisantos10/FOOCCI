@@ -7,6 +7,9 @@
 > `/preview` redireciona para `/site` (mesmo gate de senha, mesmo `noindex`). Não usar
 > `preview.fute.com.br` agora; **não mexer em DNS, domínio ou Railway Networking** — o
 > domínio `foocci.com.br` voltou a funcionar e é o que usamos.
+>
+> A **aplicação do branding oficial** (logo, mascote, favicon, paleta) é revisada por aqui —
+> ver [`brand-implementation-v1.md`](./brand-implementation-v1.md).
 
 ## 1. Propósito
 

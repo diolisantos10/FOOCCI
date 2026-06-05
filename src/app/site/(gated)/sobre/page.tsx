@@ -3,6 +3,7 @@
  */
 
 import type { Metadata } from "next";
+import Image from "next/image";
 import { PageHero } from "@/components/marketing/PageHero";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { COMO_FUNCIONA_URL, PRELAUNCH_NOTE } from "@/components/marketing/config";
@@ -55,17 +56,32 @@ export default function SobrePage() {
         note={PRELAUNCH_NOTE}
       />
 
-      {/* 1. What we believe */}
+      {/* 1. What we believe — institutional, warmed with the official mascot */}
       <section aria-labelledby="crenca-title" className="bg-gray-50 py-20">
-        <div className="mx-auto max-w-3xl px-5 text-center lg:px-8">
-          <h2 id="crenca-title" className="text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
-            Restaurante bom não precisa perder cliente por falta de relacionamento.
-          </h2>
-          <p className="mt-5 text-lg leading-relaxed text-gray-600">
-            A experiência do restaurante deveria continuar depois do pedido. É por isso
-            que a Foocci conecta venda, atendimento e relacionamento — para o cliente
-            voltar, não desaparecer.
-          </p>
+        <div className="mx-auto grid max-w-5xl items-center gap-10 px-5 lg:grid-cols-2 lg:gap-12 lg:px-8">
+          <div className="order-1 flex justify-center lg:order-none lg:justify-start">
+            <Image
+              src="/brand/foocci/foocci-mascot.png"
+              alt="Mascote da Foocci"
+              width={196}
+              height={321}
+              className="h-52 w-auto sm:h-60"
+            />
+          </div>
+          <div className="text-center lg:text-left">
+            <h2 id="crenca-title" className="text-3xl font-semibold tracking-tight text-[#0B0B0B] sm:text-4xl">
+              Restaurante bom não precisa perder cliente por falta de relacionamento.
+            </h2>
+            <p className="mt-5 text-lg leading-relaxed text-gray-600">
+              A experiência do restaurante deveria continuar depois do pedido. É por isso
+              que a Foocci conecta venda, atendimento e relacionamento — para o cliente
+              voltar, não desaparecer.
+            </p>
+            <p className="mt-4 text-base text-gray-500">
+              A tecnologia trabalha no bastidor. Quem aparece para o cliente é o seu
+              restaurante.
+            </p>
+          </div>
         </div>
       </section>
 

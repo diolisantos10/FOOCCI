@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { LOGIN_URL, NAV_LINKS, PRIMARY_CTA_LABEL, COMO_FUNCIONA_URL } from "./config";
 import { MenuIcon, CloseIcon } from "./icons";
 
@@ -31,8 +32,15 @@ export function MarketingHeader() {
       }`}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 lg:px-8">
-        <Link href="/site" className={`flex items-center gap-2 rounded-md ${FOCUS}`} aria-label="Foocci — início">
-          <span className="text-xl font-semibold tracking-tight text-[#0B0B0B]">Foocci</span>
+        <Link href="/site" className={`flex items-center gap-2.5 rounded-md ${FOCUS}`} aria-label="Foocci — início">
+          <Image
+            src="/brand/foocci/foocci-wordmark.png"
+            alt="Foocci"
+            width={200}
+            height={50}
+            priority
+            className="h-[22px] w-auto"
+          />
           <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
             em breve
           </span>
