@@ -4914,11 +4914,18 @@ export function CRMClient({
   } | null>(null);
   const [revenueSummaryLoading, setRevenueSummaryLoading] = useState(false);
 
-  // Load initial revenue summary (all-time) on mount
+  const [topCustomers, setTopCustomers] = useState<import("@/services/crm/CRMService").TopCustomersResult | null>(null);
+  const [topCustomersLoading, setTopCustomersLoading] = useState(false);
+
+  // Load initial revenue summary + top customers (all-time) on mount
   useEffect(() => {
     fetch("/api/crm/revenue-summary")
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => { if (json?.data) setRevenueSummary(json.data); })
+      .catch(() => {});
+    fetch("/api/crm/top-customers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => { if (json?.data) setTopCustomers(json.data); })
       .catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -4961,10 +4968,12 @@ export function CRMClient({
 
     setStatsLoading(true);
     setRevenueSummaryLoading(true);
+    setTopCustomersLoading(true);
     try {
-      const [statsRes, revenueRes] = await Promise.all([
+      const [statsRes, revenueRes, topRes] = await Promise.all([
         fetch(`/api/crm/overview-stats${qs}`),
         fetch(`/api/crm/revenue-summary${qs}`),
+        fetch(`/api/crm/top-customers${qs}`),
       ]);
       if (statsRes.ok) {
         const json = await statsRes.json();
@@ -4974,9 +4983,14 @@ export function CRMClient({
         const rJson = await revenueRes.json();
         setRevenueSummary(rJson.data);
       }
+      if (topRes.ok) {
+        const tJson = await topRes.json();
+        setTopCustomers(tJson.data);
+      }
     } finally {
       setStatsLoading(false);
       setRevenueSummaryLoading(false);
+      setTopCustomersLoading(false);
     }
   }
 
@@ -5045,6 +5059,8 @@ export function CRMClient({
           onDateChange={handleDateChange}
           revenueSummary={revenueSummary}
           revenueSummaryLoading={revenueSummaryLoading}
+          topCustomers={topCustomers}
+          topCustomersLoading={topCustomersLoading}
         />
       )}
       {tab === "campanhas" && (

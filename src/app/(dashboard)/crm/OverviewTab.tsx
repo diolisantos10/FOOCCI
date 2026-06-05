@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { OverviewStats, CustomerTier } from "@/services/crm/CRMService";
+import type { OverviewStats, CustomerTier, TopCustomersResult, TopCustomerSegment } from "@/services/crm/CRMService";
 import type { CrmAction, CrmActionType, ActionPriority } from "@/services/crm/CrmActionCenterService";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -951,6 +951,123 @@ function RevenueBlock({
   );
 }
 
+// ── Top customers (most valuable) ─────────────────────────────────────────────
+
+const TOP_SEGMENT_BADGE: Record<TopCustomerSegment, { label: string; cls: string }> = {
+  QUENTE:      { label: "Quente",   cls: "bg-green-50 text-green-700"  },
+  MORNO:       { label: "Morno",    cls: "bg-yellow-50 text-yellow-700" },
+  FRIO:        { label: "Frio",     cls: "bg-red-50 text-red-600"      },
+  PERDIDO:     { label: "Perdido",  cls: "bg-gray-100 text-gray-500"   },
+  SEM_PEDIDOS: { label: "Sem pedidos", cls: "bg-gray-100 text-gray-400" },
+};
+
+// Literal tier badge classes (Tailwind scans these at build — no dynamic strings).
+const TOP_TIER_BADGE: Record<CustomerTier, string> = {
+  DIAMANTE: "bg-cyan-100 text-cyan-700",
+  OURO:     "bg-amber-100 text-amber-700",
+  PRATA:    "bg-gray-200 text-gray-700",
+  BRONZE:   "bg-orange-100 text-orange-700",
+};
+
+function topRelativeDate(iso: string | null): string {
+  if (!iso) return "sem pedidos";
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0)  return "último pedido hoje";
+  if (days === 1) return "último pedido ontem";
+  if (days < 30)  return `último pedido há ${days} dias`;
+  if (days < 365) return `último pedido há ${Math.floor(days / 30)} ${Math.floor(days / 30) === 1 ? "mês" : "meses"}`;
+  return `último pedido há ${Math.floor(days / 365)} ${Math.floor(days / 365) === 1 ? "ano" : "anos"}`;
+}
+
+function TopCustomersBlock({
+  data,
+  loading,
+}: {
+  data: TopCustomersResult | null;
+  loading: boolean;
+}) {
+  const customers = data?.customers ?? [];
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="mb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+          Clientes mais valiosos
+        </p>
+        <p className="mt-0.5 text-[11px] text-gray-400">Quem mais gastou com o restaurante</p>
+      </div>
+
+      {loading && !data ? (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {[1, 2, 3, 4].map((i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />)}
+        </div>
+      ) : customers.length === 0 ? (
+        <p className="text-sm text-gray-400">
+          Sem dados suficientes para listar clientes valiosos neste período.
+        </p>
+      ) : (
+        <>
+          {data?.fallbackUsed && (
+            <p className="mb-3 rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+              Mostrando os clientes que mais gastaram nos últimos 12 meses.
+            </p>
+          )}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {customers.map((c, i) => {
+              const tier = TIER_CONFIG[c.tier];
+              const seg  = TOP_SEGMENT_BADGE[c.segment];
+              return (
+                <div
+                  key={c.customerId}
+                  className="flex items-center gap-3 rounded-xl border border-gray-100 px-3 py-2.5"
+                >
+                  <span className="w-5 shrink-0 text-center text-sm font-bold text-gray-300">{i + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={`/customers/${c.customerId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate text-sm font-semibold text-gray-900 hover:text-brand-600 hover:underline"
+                        title={c.name}
+                      >
+                        {c.name}
+                      </a>
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-gray-500">
+                      <span className="font-semibold text-green-700">
+                        R$ {c.totalSpent.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      {" · "}{c.orderCount} pedido{c.orderCount !== 1 ? "s" : ""}
+                      {" · "}{topRelativeDate(c.lastOrderAt)}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${TOP_TIER_BADGE[c.tier]}`}>
+                        {tier.icon} {tier.label}
+                      </span>
+                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${seg.cls}`}>
+                        {seg.label}
+                      </span>
+                    </div>
+                  </div>
+                  <a
+                    href={`/customers/${c.customerId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+                  >
+                    Ver ficha →
+                  </a>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export function OverviewTab({
@@ -966,6 +1083,8 @@ export function OverviewTab({
   onDateChange,
   revenueSummary,
   revenueSummaryLoading,
+  topCustomers,
+  topCustomersLoading,
 }: {
   stats: OverviewStats;
   opportunitiesCount: number;
@@ -992,6 +1111,8 @@ export function OverviewTab({
     granularity?: "hour" | "day" | "month";
   } | null;
   revenueSummaryLoading?: boolean;
+  topCustomers?: TopCustomersResult | null;
+  topCustomersLoading?: boolean;
 }) {
   const [localFrom, setLocalFrom] = useState(customFrom);
   const [localTo,   setLocalTo]   = useState(customTo);
@@ -1158,35 +1279,8 @@ export function OverviewTab({
         revenueSummaryLoading={!!revenueSummaryLoading}
       />
 
-      {/* 4. Temperatura da base — compact strip + diagnostic */}
-      {tempTotal > 0 && (
-        <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-              Temperatura da base
-            </p>
-            <span className="text-[10px] text-gray-400">{tempTotal.toLocaleString("pt-BR")} com pedidos</span>
-          </div>
-          <div className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100">
-            <div className="bg-green-500 transition-all"  style={{ width: `${ativoPct}%` }} title={`Quentes ${ativoPct}%`} />
-            <div className="bg-yellow-400 transition-all" style={{ width: `${mornoPct}%` }} title={`Mornos ${mornoPct}%`} />
-            <div className="bg-red-400 transition-all"    style={{ width: `${frioPct}%` }}  title={`Frios ${frioPct}%`} />
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-gray-500">
-            <span><span className="font-semibold text-green-700">{ativoPct}%</span> quentes</span>
-            <span><span className="font-semibold text-yellow-600">{mornoPct}%</span> mornos</span>
-            <span><span className="font-semibold text-red-600">{frioPct}%</span> frios</span>
-            {perdidosCustomers > 0 && (
-              <span><span className="font-semibold text-gray-500">{perdidoPct}%</span> perdidos</span>
-            )}
-          </div>
-          {frioPct + perdidoPct > 50 && (
-            <p className="mt-2 text-[11px] text-amber-700">
-              ⚠️ Base fria: {frioPct}% sem comprar há mais de {WARM_DAYS} dias — recomendamos uma campanha de reativação.
-            </p>
-          )}
-        </div>
-      )}
+      {/* 4. Clientes mais valiosos (replaces redundant temperature strip) */}
+      <TopCustomersBlock data={topCustomers ?? null} loading={!!topCustomersLoading} />
 
       {/* 5. Programa de relacionamento */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">

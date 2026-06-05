@@ -384,25 +384,30 @@ describe("S — segment KPI cards show count and percentage", () => {
 
 // T — Section order: revenue chart appears below the KPI bar, above temperature
 describe("T — overview section order", () => {
-  // Mirror of the rendered section order in OverviewTab.
+  // Mirror of the rendered section order in OverviewTab (v2.2).
+  // The redundant temperature strip and the channel block were removed; the
+  // "most valuable customers" block now sits where temperature used to be.
   const ORDER = [
     "filters",
     "kpi-bar",
     "revenue",
-    "temperature",
+    "top-customers",
     "program",
-    "channel",
     "opportunities",
     "config",
   ];
   it("kpi-bar comes before revenue", () => {
     expect(ORDER.indexOf("kpi-bar")).toBeLessThan(ORDER.indexOf("revenue"));
   });
-  it("revenue comes before temperature", () => {
-    expect(ORDER.indexOf("revenue")).toBeLessThan(ORDER.indexOf("temperature"));
+  it("revenue comes before top-customers", () => {
+    expect(ORDER.indexOf("revenue")).toBeLessThan(ORDER.indexOf("top-customers"));
   });
-  it("temperature comes before program", () => {
-    expect(ORDER.indexOf("temperature")).toBeLessThan(ORDER.indexOf("program"));
+  it("top-customers comes before program", () => {
+    expect(ORDER.indexOf("top-customers")).toBeLessThan(ORDER.indexOf("program"));
+  });
+  it("redundant temperature and channel sections are gone", () => {
+    expect(ORDER).not.toContain("temperature");
+    expect(ORDER).not.toContain("channel");
   });
   it("opportunities comes before config", () => {
     expect(ORDER.indexOf("opportunities")).toBeLessThan(ORDER.indexOf("config"));

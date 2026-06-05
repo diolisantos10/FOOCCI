@@ -2,8 +2,15 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "@/lib/prisma";
 import { serviceOk, serviceFail, type ServiceResult } from "@/types";
 import { pickSuggestedMessage } from "@/lib/crm-messages";
-import { getSegmentConfig } from "@/lib/crm-segments";
-import type { AutomationTrigger } from "@prisma/client";
+import { getSegmentConfig, type SegmentConfig } from "@/lib/crm-segments";
+import { OrderStatus, type AutomationTrigger } from "@prisma/client";
+
+// Orders in these states never count as realized revenue (mirrors revenue-summary).
+const REVENUE_EXCLUDED_STATUSES: OrderStatus[] = [
+  OrderStatus.CANCELLED,
+  OrderStatus.AWAITING_PAYMENT,
+  OrderStatus.PENDING,
+];
 
 // ── Tier thresholds (aligned with CustomerProfileClient) ──────────────────────
 // Diamond ≥ R$2000 | Gold ≥ R$800 | Silver ≥ R$300 | Bronze < R$300
@@ -130,6 +137,49 @@ export type OverviewStats = {
   dineInOnlyCustomers:    number; // ordered only presencially
   bothChannelsCustomers:  number; // ordered via both channels
 };
+
+// ── Top customers (most valuable) ─────────────────────────────────────────────
+
+export type TopCustomerSegment = "QUENTE" | "MORNO" | "FRIO" | "PERDIDO" | "SEM_PEDIDOS";
+
+/** Data provenance for a top-customer row (real Foocci orders vs imported history). */
+export type TopCustomerSource = "FOCCI_ONLY" | "IMPORTED_INCLUDED" | "MIXED";
+
+export type TopCustomer = {
+  customerId:  string;
+  name:        string;
+  phone:       string;
+  totalSpent:  number;       // spend within the basis window (period / 12m / all-time)
+  orderCount:  number;       // orders within the basis window
+  lastOrderAt: string | null; // overall last order (real or imported), for recency
+  tier:        CustomerTier;
+  segment:     TopCustomerSegment;
+  source:      TopCustomerSource;
+};
+
+/** How the top-customers list was computed, so the UI can label it honestly. */
+export type TopCustomersBasis = "PERIOD" | "LOOKBACK_12M" | "ALL_TIME";
+
+export type TopCustomersResult = {
+  customers:    TopCustomer[];
+  basis:        TopCustomersBasis;
+  fallbackUsed: boolean;   // true when a short period fell back to the last 12 months
+};
+
+/**
+ * Pure classification of a customer into a temperature segment by recency.
+ * PERDIDO is the subset of FRIO that is past the lost threshold. Exported for tests.
+ */
+export function classifyTopSegment(
+  daysSinceLastOrder: number | null,
+  cfg: Pick<SegmentConfig, "hotMaxDays" | "warmMaxDays" | "lostMinDays">,
+): TopCustomerSegment {
+  if (daysSinceLastOrder === null) return "SEM_PEDIDOS";
+  if (daysSinceLastOrder <= cfg.hotMaxDays)  return "QUENTE";
+  if (daysSinceLastOrder <= cfg.warmMaxDays) return "MORNO";
+  if (daysSinceLastOrder >= cfg.lostMinDays) return "PERDIDO";
+  return "FRIO";
+}
 
 // ── Automation shape ──────────────────────────────────────────────────────────
 
@@ -571,5 +621,148 @@ export class CRMService {
       dineInOnlyCustomers,
       bothChannelsCustomers,
     });
+  }
+
+  // ── Top customers (most valuable) ────────────────────────────────────────────
+  //
+  // Honest, read-only ranking of the restaurant's biggest spenders.
+  //   • With a date range → spend from real orders inside that window.
+  //   • Short windows (≤ 8 days: Hoje / 7 dias / Esta semana) that return too few
+  //     spenders fall back to the last 12 months, clearly flagged for the UI.
+  //   • No range (Total) → all-time spend using denormalized Customer totals,
+  //     including imported history (importedTotalSpent) when the customer has no
+  //     real Foocci orders yet.
+  // Guests, cancelled and unpaid orders are excluded. Never invents spend.
+  static async getTopCustomers(
+    restaurantId: string,
+    dateRange?: { from: Date; to: Date },
+    opts?: { limit?: number; minResults?: number },
+  ): Promise<ServiceResult<TopCustomersResult>> {
+    const limit      = opts?.limit      ?? 10;
+    const minResults = opts?.minResults ?? 3;
+    const cfg        = await getSegmentConfig(restaurantId);
+    const now        = Date.now();
+
+    const overallDays = (real: Date | null, imported: Date | null): number | null => {
+      const d = real ?? imported ?? null;
+      return d ? Math.floor((now - d.getTime()) / 86_400_000) : null;
+    };
+
+    // Build a TopCustomer row from a customer record + window spend/orders/last.
+    const buildRow = (
+      c: {
+        id: string; name: string; phone: string | null;
+        totalSpend: Decimal | number; totalOrders: number;
+        lastOrderAt: Date | null;
+        importedTotalSpent: Decimal | number | null;
+        importedOrderCount: number | null;
+        importedLastOrderAt: Date | null;
+      },
+      windowSpent: number,
+      windowOrders: number,
+    ): TopCustomer => {
+      const realOrders   = c.totalOrders;
+      const realSpend    = Number(c.totalSpend);
+      const impSpend     = c.importedTotalSpent != null ? Number(c.importedTotalSpent) : 0;
+      const impOrders    = c.importedOrderCount ?? 0;
+      const allTimeSpend = realOrders > 0 ? realSpend : impSpend;
+      const hasReal      = realOrders > 0;
+      const hasImported  = impOrders > 0 || impSpend > 0;
+      const source: TopCustomerSource =
+        hasReal && hasImported ? "MIXED" : hasReal ? "FOCCI_ONLY" : "IMPORTED_INCLUDED";
+      const days = overallDays(c.lastOrderAt, c.importedLastOrderAt);
+      return {
+        customerId:  c.id,
+        name:        c.name,
+        phone:       c.phone ?? "",
+        totalSpent:  windowSpent,
+        orderCount:  windowOrders,
+        lastOrderAt: (c.lastOrderAt ?? c.importedLastOrderAt)?.toISOString() ?? null,
+        tier:        getTier(allTimeSpend),
+        segment:     classifyTopSegment(days, cfg),
+        source,
+      };
+    };
+
+    // Aggregate real-order spend within [from, to], top N spenders (guests excluded).
+    const aggregatePeriod = async (from: Date, to: Date): Promise<TopCustomer[]> => {
+      const grouped = await prisma.order.groupBy({
+        by: ["customerId"],
+        where: {
+          restaurantId,
+          status:    { notIn: REVENUE_EXCLUDED_STATUSES },
+          createdAt: { gte: from, lte: to },
+          customer:  { isGuest: false },
+        },
+        _sum:    { total: true },
+        _count:  { _all: true },
+        orderBy: { _sum: { total: "desc" } },
+        take:    limit,
+      });
+
+      const ids = grouped.map((g) => g.customerId);
+      if (ids.length === 0) return [];
+
+      const custs = await prisma.customer.findMany({
+        where:  { id: { in: ids }, restaurantId },
+        select: {
+          id: true, name: true, phone: true,
+          totalSpend: true, totalOrders: true, lastOrderAt: true,
+          importedTotalSpent: true, importedOrderCount: true, importedLastOrderAt: true,
+        },
+      });
+      const byId = new Map(custs.map((c) => [c.id, c]));
+
+      return grouped
+        .map((g) => {
+          const c = byId.get(g.customerId);
+          const spent = Number(g._sum.total ?? 0);
+          if (!c || spent <= 0) return null;
+          return buildRow(c, spent, g._count._all);
+        })
+        .filter((r): r is TopCustomer => r !== null);
+    };
+
+    // ── All-time (no range) ────────────────────────────────────────────────────
+    if (!dateRange) {
+      const rows = await prisma.$queryRaw<Array<{
+        id: string; name: string; phone: string | null;
+        totalSpend: Decimal; totalOrders: number; lastOrderAt: Date | null;
+        importedTotalSpent: Decimal | null; importedOrderCount: number | null;
+        importedLastOrderAt: Date | null;
+      }>>`
+        SELECT id, name, phone, "totalSpend", "totalOrders", "lastOrderAt",
+               "importedTotalSpent", "importedOrderCount", "importedLastOrderAt"
+        FROM customers
+        WHERE "restaurantId" = ${restaurantId} AND "isGuest" = false
+        ORDER BY (CASE WHEN "totalOrders" > 0 THEN "totalSpend"
+                       ELSE COALESCE("importedTotalSpent", 0) END) DESC
+        LIMIT ${limit}
+      `;
+      const customers = rows
+        .map((c) => {
+          const allTimeSpend  = c.totalOrders > 0 ? Number(c.totalSpend) : Number(c.importedTotalSpent ?? 0);
+          const allTimeOrders = c.totalOrders > 0 ? c.totalOrders : (c.importedOrderCount ?? 0);
+          if (allTimeSpend <= 0) return null;
+          return buildRow(c, allTimeSpend, allTimeOrders);
+        })
+        .filter((r): r is TopCustomer => r !== null);
+      return serviceOk({ customers, basis: "ALL_TIME", fallbackUsed: false });
+    }
+
+    // ── Period, with short-window fallback to last 12 months ───────────────────
+    const periodCustomers = await aggregatePeriod(dateRange.from, dateRange.to);
+    const rangeDays = (dateRange.to.getTime() - dateRange.from.getTime()) / 86_400_000;
+
+    if (periodCustomers.length < minResults && rangeDays <= 8) {
+      const from12 = new Date(now - 365 * 86_400_000);
+      const to12   = new Date(now);
+      const lookback = await aggregatePeriod(from12, to12);
+      if (lookback.length > periodCustomers.length) {
+        return serviceOk({ customers: lookback, basis: "LOOKBACK_12M", fallbackUsed: true });
+      }
+    }
+
+    return serviceOk({ customers: periodCustomers, basis: "PERIOD", fallbackUsed: false });
   }
 }
