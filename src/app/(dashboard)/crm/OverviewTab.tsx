@@ -542,7 +542,8 @@ function CompactOpportunitiesSection({
   const commercialActions = actions.filter((a) => !CONFIG_ACTION_TYPES.includes(a.type));
   if (commercialActions.length === 0) return null;
 
-  const top = expanded ? commercialActions : commercialActions.slice(0, 4);
+  const COMPACT_LIMIT = 6;
+  const top = expanded ? commercialActions : commercialActions.slice(0, COMPACT_LIMIT);
   const highCount = commercialActions.filter((a) => a.priority === "HIGH").length;
 
   return (
@@ -599,14 +600,14 @@ function CompactOpportunitiesSection({
         })}
       </div>
 
-      {commercialActions.length > 4 && (
+      {commercialActions.length > COMPACT_LIMIT && (
         <button
           onClick={() => setExpanded((v) => !v)}
           className="mt-3 w-full rounded-lg border border-gray-100 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
         >
           {expanded
             ? "Ver menos"
-            : `Ver mais oportunidades (${commercialActions.length - 4} restantes)`}
+            : `Ver mais oportunidades (${commercialActions.length - COMPACT_LIMIT} restantes)`}
         </button>
       )}
     </div>
@@ -743,6 +744,9 @@ export function OverviewTab({
     totalResponded: number;
     totalConverted: number;
     campaignCount: number;
+    couponRevenue?: number;
+    couponOrders?: number;
+    couponCodesTracked?: number;
   } | null;
   revenueSummaryLoading?: boolean;
 }) {
@@ -1008,41 +1012,59 @@ export function OverviewTab({
         {!revenueSummaryLoading && !revenueSummary ? (
           <p className="text-sm text-gray-400">Sem dados de receita para o período.</p>
         ) : revenueSummary ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl bg-green-50 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 mb-1">Receita atribuída</p>
-              <p className="text-lg font-extrabold text-green-700">
-                R$ {revenueSummary.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-              <p className="text-[10px] text-green-400 mt-0.5">Campanhas + automações</p>
-            </div>
-            <div className="rounded-xl bg-blue-50 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-1">Mensagens enviadas</p>
-              <p className="text-lg font-extrabold text-blue-700">{revenueSummary.totalSent.toLocaleString("pt-BR")}</p>
-              <p className="text-[10px] text-blue-400 mt-0.5">{revenueSummary.campaignCount} campanha{revenueSummary.campaignCount !== 1 ? "s" : ""}</p>
-            </div>
-            <div className="rounded-xl bg-purple-50 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1">Responderam</p>
-              <p className="text-lg font-extrabold text-purple-700">{revenueSummary.totalResponded.toLocaleString("pt-BR")}</p>
-              <p className="text-[10px] text-purple-400 mt-0.5">
-                {revenueSummary.totalSent > 0 ? `${Math.round((revenueSummary.totalResponded / revenueSummary.totalSent) * 100)}% de engajamento` : "—"}
-              </p>
-            </div>
-            <div className="rounded-xl bg-orange-50 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600 mb-1">Converteram</p>
-              <p className="text-lg font-extrabold text-orange-700">{revenueSummary.totalConverted.toLocaleString("pt-BR")}</p>
-              <p className="text-[10px] text-orange-400 mt-0.5">
-                {revenueSummary.totalResponded > 0 ? `${Math.round((revenueSummary.totalConverted / revenueSummary.totalResponded) * 100)}% de conversão` : "—"}
-              </p>
-            </div>
-          </div>
+          (() => {
+            const hasAnySignal =
+              revenueSummary.totalRevenue > 0 ||
+              revenueSummary.totalSent > 0 ||
+              (revenueSummary.couponRevenue ?? 0) > 0 ||
+              (revenueSummary.couponOrders ?? 0) > 0;
+            if (!hasAnySignal) {
+              return (
+                <p className="text-sm text-gray-400">
+                  Sem dados suficientes de campanhas neste período.
+                </p>
+              );
+            }
+            return (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-xl bg-green-50 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 mb-1">Receita atribuída</p>
+                  <p className="text-lg font-extrabold text-green-700">
+                    R$ {revenueSummary.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[10px] text-green-400 mt-0.5">Campanhas + automações</p>
+                </div>
+                <div className="rounded-xl bg-blue-50 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-1">Mensagens enviadas</p>
+                  <p className="text-lg font-extrabold text-blue-700">{revenueSummary.totalSent.toLocaleString("pt-BR")}</p>
+                  <p className="text-[10px] text-blue-400 mt-0.5">{revenueSummary.campaignCount} campanha{revenueSummary.campaignCount !== 1 ? "s" : ""}</p>
+                </div>
+                <div className="rounded-xl bg-purple-50 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1">Converteram</p>
+                  <p className="text-lg font-extrabold text-purple-700">{revenueSummary.totalConverted.toLocaleString("pt-BR")}</p>
+                  <p className="text-[10px] text-purple-400 mt-0.5">
+                    {revenueSummary.totalResponded > 0 ? `${Math.round((revenueSummary.totalConverted / revenueSummary.totalResponded) * 100)}% das respostas` : `${revenueSummary.totalResponded} responderam`}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-orange-50 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600 mb-1">Cupons usados</p>
+                  <p className="text-lg font-extrabold text-orange-700">{(revenueSummary.couponOrders ?? 0).toLocaleString("pt-BR")}</p>
+                  <p className="text-[10px] text-orange-400 mt-0.5">
+                    {(revenueSummary.couponRevenue ?? 0) > 0
+                      ? `R$ ${(revenueSummary.couponRevenue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : (revenueSummary.couponCodesTracked ?? 0) > 0 ? "Nenhum resgatado" : "Sem cupom vinculado"}
+                  </p>
+                </div>
+              </div>
+            );
+          })()
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}
           </div>
         )}
         <p className="mt-2 text-[10px] text-gray-400">
-          * Receita calculada por atribuição de campanhas. Metodologia: pedidos realizados após envio da campanha.
+          * Receita estimada com base em campanhas e cupons vinculados. Pedidos realizados após o envio da campanha.
         </p>
       </div>
 

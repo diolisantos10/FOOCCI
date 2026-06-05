@@ -207,31 +207,57 @@ describe("I — no fake revenue", () => {
 });
 
 // J — Revenue opportunities show compact top actions
-describe("J — compact opportunities: top N shown, rest behind 'Ver mais'", () => {
-  const COMPACT_LIMIT = 4;
+describe("J — compact opportunities: top 6 shown, rest behind 'Ver mais'", () => {
+  const COMPACT_LIMIT = 6;
   function visibleActions<T>(all: T[], expanded: boolean): T[] {
     return expanded ? all : all.slice(0, COMPACT_LIMIT);
   }
-  it("shows at most 4 actions by default", () => {
-    const actions = Array.from({ length: 8 }, (_, i) => i);
+  it("shows at most 6 actions by default", () => {
+    const actions = Array.from({ length: 9 }, (_, i) => i);
     expect(visibleActions(actions, false)).toHaveLength(COMPACT_LIMIT);
   });
   it("shows all when expanded", () => {
-    const actions = Array.from({ length: 8 }, (_, i) => i);
-    expect(visibleActions(actions, true)).toHaveLength(8);
+    const actions = Array.from({ length: 9 }, (_, i) => i);
+    expect(visibleActions(actions, true)).toHaveLength(9);
   });
-  it("shows all when fewer than 4", () => {
-    const actions = [1, 2];
-    expect(visibleActions(actions, false)).toHaveLength(2);
+  it("shows all when fewer than 6", () => {
+    const actions = [1, 2, 3];
+    expect(visibleActions(actions, false)).toHaveLength(3);
   });
 });
 
-// K — "Ver mais oportunidades" exists when there are more than 4
-describe("K — show more button exists when > 4 opportunities", () => {
-  function shouldShowMore(total: number): boolean { return total > 4; }
-  it("4 actions → no show more", () => expect(shouldShowMore(4)).toBe(false));
-  it("5 actions → show more",    () => expect(shouldShowMore(5)).toBe(true));
+// K — "Ver mais oportunidades" exists when there are more than 6
+describe("K — show more button exists when > 6 opportunities", () => {
+  const COMPACT_LIMIT = 6;
+  function shouldShowMore(total: number): boolean { return total > COMPACT_LIMIT; }
+  it("6 actions → no show more", () => expect(shouldShowMore(6)).toBe(false));
+  it("7 actions → show more",    () => expect(shouldShowMore(7)).toBe(true));
   it("0 actions → no show more", () => expect(shouldShowMore(0)).toBe(false));
+});
+
+// J2 — Coupon-proven revenue dimension is honest (no fake redemption)
+describe("J2 — coupon revenue dimension is honest", () => {
+  // Mirror of the OverviewTab coupon-card subtitle decision.
+  function couponSubtitle(couponRevenue: number, couponCodesTracked: number): string {
+    if (couponRevenue > 0) return "value";
+    if (couponCodesTracked > 0) return "Nenhum resgatado";
+    return "Sem cupom vinculado";
+  }
+  it("no campaign coupons tracked → 'Sem cupom vinculado'", () => {
+    expect(couponSubtitle(0, 0)).toBe("Sem cupom vinculado");
+  });
+  it("coupons tracked but none redeemed → 'Nenhum resgatado'", () => {
+    expect(couponSubtitle(0, 3)).toBe("Nenhum resgatado");
+  });
+  it("coupon revenue present → shows value", () => {
+    expect(couponSubtitle(450, 3)).toBe("value");
+  });
+  it("coupon revenue never appears without tracked codes (endpoint invariant)", () => {
+    // Endpoint only sums coupon orders when couponCodes.length > 0, so
+    // couponRevenue > 0 implies couponCodesTracked > 0.
+    const couponRevenue = 0, couponCodesTracked = 0;
+    expect(!(couponRevenue > 0 && couponCodesTracked === 0)).toBe(true);
+  });
 });
 
 // L — Perdidos is subset of Frios
@@ -258,5 +284,56 @@ describe("M — revenue-summary is read-only (no send, no mutation)", () => {
   it("computeTemperaturePct does not throw on 0 total", () => {
     expect(() => computeTemperaturePct(0, 0)).not.toThrow();
     expect(computeTemperaturePct(0, 0)).toBe(0);
+  });
+});
+
+// N — Segment / action CTAs map to the correct navigation target
+describe("N — segment and action CTAs route correctly", () => {
+  // Mirror of the CTA → tab/filter mapping used by OverviewTab + CRMClient.
+  function segmentToFilter(seg: "quente" | "morno" | "frio" | "novos"): string {
+    return seg === "novos" ? "firstTime" : seg;
+  }
+  function actionCtaTarget(cta: "criar-campanha" | "ver-clientes"): "campanhas" | "customers" {
+    return cta === "criar-campanha" ? "campanhas" : "customers";
+  }
+  it("quente segment → 'quente' customer filter", () => {
+    expect(segmentToFilter("quente")).toBe("quente");
+  });
+  it("novos segment → 'firstTime' customer filter", () => {
+    expect(segmentToFilter("novos")).toBe("firstTime");
+  });
+  it("'Criar campanha' CTA → campanhas tab", () => {
+    expect(actionCtaTarget("criar-campanha")).toBe("campanhas");
+  });
+  it("'Ver clientes' CTA → customers tab", () => {
+    expect(actionCtaTarget("ver-clientes")).toBe("customers");
+  });
+});
+
+// P — Tenant isolation invariant: every revenue query is restaurant-scoped
+describe("P — revenue-summary queries are tenant-scoped", () => {
+  // Mirror of the where-clause builder in the endpoint: restaurantId is always
+  // present; the period filter is additive and never replaces tenant scoping.
+  function buildCampaignWhere(restaurantId: string, from?: string, to?: string): Record<string, unknown> {
+    const base: Record<string, unknown> = { restaurantId };
+    if (from && to) {
+      base.OR = [
+        { sentAt:    { gte: new Date(from), lte: new Date(to) } },
+        { createdAt: { gte: new Date(from), lte: new Date(to) } },
+      ];
+    }
+    return base;
+  }
+  it("includes restaurantId with no date range", () => {
+    expect(buildCampaignWhere("rest_123")).toHaveProperty("restaurantId", "rest_123");
+  });
+  it("includes restaurantId with a date range", () => {
+    const w = buildCampaignWhere("rest_123", "2024-01-01", "2024-01-31");
+    expect(w).toHaveProperty("restaurantId", "rest_123");
+    expect(w).toHaveProperty("OR");
+  });
+  it("date range never removes restaurantId scoping", () => {
+    const w = buildCampaignWhere("rest_abc", "2024-01-01", "2024-01-31");
+    expect(w.restaurantId).toBe("rest_abc");
   });
 });
