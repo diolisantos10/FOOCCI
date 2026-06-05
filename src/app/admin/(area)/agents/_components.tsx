@@ -513,6 +513,69 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
+const MATURITY_LABELS: Record<Maturity | "archived", string> = {
+  active: "Ativo",
+  draft: "Rascunho",
+  planned: "Planejado",
+  archived: "Arquivado",
+};
+
+/** Big block heading used to group the operational sheet sections. */
+function BlockHeading({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="border-b border-gray-200 pb-1">
+      <h2 className="text-base font-bold text-gray-900">{title}</h2>
+      {hint && <p className="text-xs text-gray-500">{hint}</p>}
+    </div>
+  );
+}
+
+/** "Status operacional" — the at-a-glance operational facts (read-only). */
+function StatusOperacional({ agent }: { agent: AdminAgentProfileView }) {
+  const group = GROUP_META[agentGroupOf(agent.area)];
+  const maturity = maturityOf(agent);
+  return (
+    <Section title="Status operacional">
+      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <Meta label="Grupo" value={group.label} />
+        <Meta label="Maturidade" value={MATURITY_LABELS[maturity]} />
+        <Meta label="Runtime DB" value={agent.isRuntimeEnabled ? "Ligado" : "Desligado (Fase 1)"} />
+        <Meta label="Origem dos dados" value={agent.origin === "db" ? "Banco (db)" : "Código (code)"} />
+        <Meta label="Visibilidade" value={agent.visibility.toLowerCase()} />
+        <Meta label="Versão" value={`v${agent.version}`} />
+        <Meta label="Fonte" value={agent.source ?? "—"} />
+        <Meta
+          label="Última atualização"
+          value={agent.updatedAt ? new Date(agent.updatedAt).toLocaleString("pt-BR") : "—"}
+        />
+      </dl>
+    </Section>
+  );
+}
+
+/** "Próximos passos" — placeholder-aware operational guidance (read-only). */
+function NextSteps({ agent }: { agent: AdminAgentProfileView }) {
+  const maturity = maturityOf(agent);
+  const isPlanned = maturity === "planned";
+  return (
+    <Section title="Próximos passos">
+      {isPlanned ? (
+        <ul className="space-y-1.5 text-sm text-gray-700">
+          <li className="flex gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gray-400" /> Completar as diretrizes (missão, objetivos, responsabilidades, regras).</li>
+          <li className="flex gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gray-400" /> Vincular ao Manual Operacional.</li>
+          <li className="flex gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gray-400" /> Criar testes para o agente.</li>
+          <li className="flex gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gray-400" /> Ativar runtime em fase futura (controlado, fora desta fase).</li>
+        </ul>
+      ) : (
+        <p className="text-sm text-gray-600">
+          Perfil definido no registry. O runtime DB permanece <strong>desligado nesta fase</strong> — a edição de
+          diretrizes e a ativação de runtime virão em fase posterior, com versionamento e governança.
+        </p>
+      )}
+    </Section>
+  );
+}
+
 /**
  * Full read-only dashboard for a single agent. Shared by the dashboard tabs and
  * the /admin/agents/[slug] deep-link page. Pure render — no hooks, no mutations.
@@ -521,114 +584,148 @@ export function AgentDashboard({ agent }: { agent: AdminAgentProfileView }) {
   const isWaiter   = agent.slug === "waiter";
   const isSecurity = agent.slug === "security-governance";
   const isCrm      = agent.slug === "crm";
-  const isPlaceholder = agent.status === "DRAFT";
+  const maturity   = maturityOf(agent);
+  const isPlanned  = maturity === "planned"; // empty placeholder (no content yet)
+  const isActive   = agent.status === "ACTIVE";
 
   return (
     <div className="space-y-6">
+      {/* ── Header ── */}
       <header className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-xl font-bold text-gray-900">{agent.name}</h2>
-          <StatusBadge status={agent.status} />
+          {isActive && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Ativo no registry
+            </span>
+          )}
         </div>
         {agent.title && <p className="text-base text-gray-600">{agent.title}</p>}
         <div className="flex flex-wrap items-center gap-2">
           <GroupBadge area={agent.area} />
           <MaturityBadge agent={agent} />
+          <AreaBadge area={agent.area} />
+          <VisibilityBadge visibility={agent.visibility} />
         </div>
-        <AgentStatusRow agent={agent} />
         <AgentBridges agent={agent} />
       </header>
 
-      {isPlaceholder && !isSecurity && (
+      {/* ── Planned/placeholder warning (do NOT look functional) ── */}
+      {isPlanned && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          Este agente é um <strong>rascunho / placeholder</strong>. O conteúdo estruturado será
-          preenchido em fases futuras. Ele aparece no quadro porque faz parte da arquitetura
-          planejada do Build OS.
+          <strong>Este agente ainda é um perfil planejado.</strong> Ele não executa ações em produção. Aparece no
+          quadro porque faz parte da arquitetura planejada do Build OS — as diretrizes serão preenchidas em fase futura.
         </div>
       )}
 
+      {/* ── Agent-specific callouts (Waiter/CRM/Security) ── */}
       {isWaiter    && <WaiterCallout />}
       {isSecurity  && <SecurityCallout />}
       {isCrm       && <CrmCallout />}
 
-      <Section title="Identidade">
-        <TextBlock text={agent.description} />
-      </Section>
-
-      <Section title="Missão">
-        <TextBlock text={agent.mission} />
-      </Section>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Section title="Objetivos">
-          <BulletList items={agent.objectives} />
-        </Section>
-        <Section title="Responsabilidades">
-          <BulletList items={agent.responsibilities} />
-        </Section>
-        <Section title="Habilidades">
-          <BulletList items={agent.skills} />
-        </Section>
-        <Section title="Ações permitidas">
-          <BulletList items={agent.allowedActions} />
-        </Section>
-        {/* INTERNAL-ONLY safety sections */}
-        <Section title="Ações proibidas" internal>
-          <BulletList items={agent.forbiddenActions} />
-        </Section>
-        <Section title="Regras de segurança" internal>
-          <BulletList items={agent.safetyRules} />
-        </Section>
-        <Section title="Ferramentas">
-          <BulletList items={agent.tools} />
-        </Section>
-        <Section title="Áreas de conhecimento">
-          <BulletList items={agent.knowledgeAreas} />
-        </Section>
-        <Section title="Regras de negócio">
-          <BulletList items={agent.businessRules} />
-        </Section>
-        <Section title="Regras de escalonamento">
-          <BulletList items={agent.escalationRules} />
-        </Section>
-        <Section title="Regras de saída">
-          <BulletList items={agent.outputRules} />
-        </Section>
-        <Section title="Critérios de avaliação">
-          <BulletList items={agent.evaluationCriteria} />
+      {/* ── Bloco: Identidade ── */}
+      <div className="space-y-3">
+        <BlockHeading title="Identidade" hint="O que é este agente." />
+        <Section title="Descrição">
+          <TextBlock text={agent.description} />
         </Section>
       </div>
 
-      <Section title="Contexto de interface">
-        <TextBlock text={agent.interfaceContext} />
-      </Section>
+      {/* ── Bloco: Missão ── */}
+      <div className="space-y-3">
+        <BlockHeading title="Missão" hint="Para que serve." />
+        <Section title="Missão">
+          <TextBlock text={agent.mission} />
+        </Section>
+      </div>
 
-      {/* INTERNAL-ONLY raw prompt directive */}
-      <Section title="Instruções de prompt (diretiva compilada)" internal>
-        <CodeBlock text={agent.promptInstructions} />
-      </Section>
+      {/* ── Bloco: Status operacional ── */}
+      <div className="space-y-3">
+        <BlockHeading title="Status operacional" hint="Grupo, maturidade, runtime e origem (read-only)." />
+        <StatusOperacional agent={agent} />
+      </div>
 
-      <ExtendedSections sections={agent.extendedSections} />
+      {/* For empty placeholders, skip the wall of empty sections — show a compact note. */}
+      {isPlanned ? (
+        <div className="space-y-3">
+          <BlockHeading title="Diretrizes" />
+          <div className="rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-400">
+            Diretrizes ainda não configuradas (perfil planejado). Responsabilidades, capacidades, limites e regras
+            serão preenchidos em fase futura.
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ── Bloco: Responsabilidades ── */}
+          <div className="space-y-3">
+            <BlockHeading title="Responsabilidades" hint="Pelo que o agente responde." />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Section title="Objetivos"><BulletList items={agent.objectives} /></Section>
+              <Section title="Responsabilidades"><BulletList items={agent.responsibilities} /></Section>
+            </div>
+          </div>
 
-      {/* Read-only status footer — badges/values only, never a control */}
-      <Section title="Status de runtime / versão">
-        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Meta label="Versão" value={`v${agent.version}`} />
-          <Meta label="Status" value={agent.status} />
-          <Meta label="Visibilidade" value={agent.visibility} />
-          <Meta
-            label="Runtime"
-            value={agent.isRuntimeEnabled ? "Habilitado" : "Desligado (Fase 2)"}
-          />
-          <Meta label="Origem dos dados" value={agent.origin === "db" ? "Banco" : "Código"} />
-          <Meta label="Fonte" value={agent.source ?? "—"} />
-          <Meta label="Default global" value={agent.isGlobalDefault ? "Sim" : "Não"} />
-          <Meta
-            label="Atualizado"
-            value={agent.updatedAt ? new Date(agent.updatedAt).toLocaleString("pt-BR") : "—"}
-          />
-        </dl>
-      </Section>
+          {/* ── Bloco: Capacidades ── */}
+          <div className="space-y-3">
+            <BlockHeading title="Capacidades" hint="O que o agente pode fazer." />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Section title="Habilidades"><BulletList items={agent.skills} /></Section>
+              <Section title="Ações permitidas"><BulletList items={agent.allowedActions} /></Section>
+              <Section title="Ferramentas"><BulletList items={agent.tools} /></Section>
+              <Section title="Áreas de conhecimento"><BulletList items={agent.knowledgeAreas} /></Section>
+            </div>
+          </div>
+
+          {/* ── Bloco: Limites / Ações proibidas ── */}
+          <div className="space-y-3">
+            <BlockHeading title="Limites / Ações proibidas" hint="O que o agente NÃO pode fazer." />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Section title="Ações proibidas" internal><BulletList items={agent.forbiddenActions} /></Section>
+              <Section title="Regras de negócio"><BulletList items={agent.businessRules} /></Section>
+              <Section title="Regras de escalonamento"><BulletList items={agent.escalationRules} /></Section>
+            </div>
+          </div>
+
+          {/* ── Bloco: Entradas e saídas ── */}
+          <div className="space-y-3">
+            <BlockHeading title="Entradas e saídas" hint="Contexto de interface, formato de resposta e avaliação." />
+            <Section title="Contexto de interface"><TextBlock text={agent.interfaceContext} /></Section>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Section title="Regras de saída"><BulletList items={agent.outputRules} /></Section>
+              <Section title="Critérios de avaliação"><BulletList items={agent.evaluationCriteria} /></Section>
+            </div>
+          </div>
+
+          {/* ── Bloco: Segurança e governança (INTERNAL) ── */}
+          <div className="space-y-3">
+            <BlockHeading title="Segurança e governança" hint="Visível apenas aqui (master) — nunca exposto ao restaurante." />
+            <Section title="Regras de segurança" internal><BulletList items={agent.safetyRules} /></Section>
+            <Section title="Instruções de prompt (diretiva compilada)" internal>
+              <CodeBlock text={agent.promptInstructions} />
+            </Section>
+          </div>
+
+          <ExtendedSections sections={agent.extendedSections} />
+        </>
+      )}
+
+      {/* ── Bloco: Pontes úteis ── */}
+      <div className="space-y-3">
+        <BlockHeading title="Pontes úteis" hint="Atalhos para testes, manual e Build OS (read-only)." />
+        <Section title="Atalhos">
+          {agentBridges(agent).length > 0 ? (
+            <AgentBridges agent={agent} />
+          ) : (
+            <p className="text-sm text-gray-400">Nenhuma ponte disponível para este agente ainda.</p>
+          )}
+        </Section>
+      </div>
+
+      {/* ── Bloco: Próximos passos ── */}
+      <div className="space-y-3">
+        <BlockHeading title="Próximos passos" />
+        <NextSteps agent={agent} />
+      </div>
     </div>
   );
 }
