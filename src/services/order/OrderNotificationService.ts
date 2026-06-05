@@ -20,7 +20,7 @@ import { prisma } from "@/lib/prisma";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 
-type NotifyStatus =
+export type NotifyStatus =
   | "CONFIRMED"
   | "PREPARING"
   | "READY"
@@ -28,7 +28,7 @@ type NotifyStatus =
   | "DELIVERED"
   | "CANCELLED";
 
-function buildMessage(
+export function buildMessage(
   status: NotifyStatus,
   firstName: string,
   orderNum: string,

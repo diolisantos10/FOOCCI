@@ -581,7 +581,11 @@ export async function POST(
           restaurantId,
           customerId:     customer.id,
           orderNumber,
-          status:         "PENDING",
+          // pay_now (Pix/online): start as AWAITING_PAYMENT so the order is
+          // invisible to the restaurant dashboard until payment is confirmed.
+          // PENDING is visible and has a "Confirmar" button — that would send
+          // the premature "pedido aceito" WhatsApp before Pix is paid.
+          status: paymentMode === "pay_now" ? "AWAITING_PAYMENT" : "PENDING",
           type:           deliveryMethod === "delivery" ? "DELIVERY" : "PICKUP",
           source:         "pedido",
           subtotal:       new Decimal(subtotal),
@@ -730,24 +734,20 @@ export async function POST(
       }
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.payment.create({
-        data: {
-          orderId:           orderId,
-          method:            "ONLINE",
-          status:            "LINK_SENT",
-          amount:            new Decimal(finalTotal),
-          paymentMode:       "PAY_NOW",
-          providerName,
-          providerReference,
-          paymentUrl,
-          expiresAt:         new Date(expiresAtStr),
-        },
-      });
-      await tx.order.update({
-        where: { id: orderId },
-        data:  { status: "AWAITING_PAYMENT" },
-      });
+    // Order is already AWAITING_PAYMENT (set in phase-1 transaction above).
+    // Only need to persist the payment record.
+    await prisma.payment.create({
+      data: {
+        orderId:           orderId,
+        method:            "ONLINE",
+        status:            "LINK_SENT",
+        amount:            new Decimal(finalTotal),
+        paymentMode:       "PAY_NOW",
+        providerName,
+        providerReference,
+        paymentUrl,
+        expiresAt:         new Date(expiresAtStr),
+      },
     });
 
     // Return Pix data when available (MP); fallback to paymentUrl redirect (Stone)

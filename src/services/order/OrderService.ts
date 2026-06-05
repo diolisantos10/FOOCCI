@@ -32,7 +32,7 @@ export type OrderWithDetails = Order & {
 };
 
 // Legal forward transitions only
-const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+export const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   PENDING: ["AWAITING_PAYMENT", "CONFIRMED", "CANCELLED"],
   AWAITING_PAYMENT: ["CONFIRMED", "CANCELLED"],
   CONFIRMED: ["PREPARING", "CANCELLED"],
@@ -175,12 +175,25 @@ export class OrderService {
     }
 
     // Fire-and-forget: notify customer via WhatsApp on key status changes.
-    OrderNotificationService.notifyCustomerOnStatusChange(
-      restaurantId,
-      orderId,
-      input.status,
-      input.cancelReason ? { cancelReason: input.cancelReason } : undefined
-    ).catch((e) => console.error("[OrderNotification] fire-and-forget failed:", e));
+    // Defense-in-depth: if advancing to CONFIRMED while payment is still LINK_SENT
+    // (online Pix not yet paid), suppress the notification — a restaurant operator
+    // should never be able to confirm an unpaid Pix order, but this guard prevents
+    // a premature "pedido aceito" WhatsApp in any edge case.
+    void (async () => {
+      if (input.status === "CONFIRMED") {
+        const pmt = await prisma.payment.findUnique({ where: { orderId }, select: { status: true } });
+        if (pmt?.status === "LINK_SENT") {
+          console.warn("[OrderNotification] blocked CONFIRMED notify — payment still LINK_SENT (Pix not paid)", { orderId });
+          return;
+        }
+      }
+      OrderNotificationService.notifyCustomerOnStatusChange(
+        restaurantId,
+        orderId,
+        input.status,
+        input.cancelReason ? { cancelReason: input.cancelReason } : undefined,
+      ).catch((e) => console.error("[OrderNotification] fire-and-forget failed:", e));
+    })();
 
     return serviceOk(updated);
   }
