@@ -726,29 +726,76 @@ function KPICard({
 function RevenueChart({
   series,
   granularity,
+  type = "bar",
 }: {
   series: Array<{ key: string; label: string; revenue: number; orders: number }>;
   granularity?: "hour" | "day" | "month";
+  type?: "bar" | "line";
 }) {
   const max = Math.max(0, ...series.map((b) => b.revenue));
-  // Thin the x-axis labels when there are many buckets so they stay legible.
   const labelEvery = series.length > 16 ? Math.ceil(series.length / 12) : 1;
   const fmt = (v: number) =>
     v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const allZero = max === 0;
+
+  if (type === "line") {
+    // SVG polyline — simple, no deps.
+    const W = 600;
+    const H = 96;
+    const pad = 4;
+    const pts = series.map((b, i) => {
+      const x = series.length > 1
+        ? pad + (i / (series.length - 1)) * (W - pad * 2)
+        : W / 2;
+      const y = allZero ? H - pad : H - pad - ((b.revenue / max) * (H - pad * 2));
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    return (
+      <div>
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-24" preserveAspectRatio="none">
+          {!allZero && (
+            <polyline
+              points={pts.join(" ")}
+              fill="none"
+              stroke="#22c55e"
+              strokeWidth="2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          )}
+          {allZero && (
+            <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="#e5e7eb" strokeWidth="1.5" />
+          )}
+        </svg>
+        <div className="mt-1 flex items-center justify-between text-[9px] text-gray-300">
+          <span>R$ 0</span>
+          <span className="capitalize">
+            {granularity === "hour" ? "por hora" : granularity === "month" ? "por mês" : "por dia"}
+          </span>
+          <span>{allZero ? "R$ 0" : `R$ ${fmt(max)}`}</span>
+        </div>
+        {allZero && (
+          <p className="mt-1 text-center text-[10px] text-gray-400">
+            Nenhuma conversão comprovada no período
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div className="flex h-32 items-end gap-1">
+      <div className="flex h-24 items-end gap-[2px]">
         {series.map((b, i) => {
           const h = max > 0 ? Math.round((b.revenue / max) * 100) : 0;
           return (
-            <div key={b.key} className="flex flex-1 flex-col items-center justify-end" style={{ minWidth: 4 }}>
+            <div key={b.key} className="flex flex-1 flex-col items-center justify-end" style={{ minWidth: 3 }}>
               <div
                 className={`w-full rounded-t transition-all ${b.revenue > 0 ? "bg-green-500" : "bg-gray-100"}`}
-                style={{ height: `${b.revenue > 0 ? Math.max(h, 3) : 2}%` }}
+                style={{ height: `${b.revenue > 0 ? Math.max(h, 4) : 3}%` }}
                 title={`${b.label}: R$ ${b.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${b.orders} pedido${b.orders !== 1 ? "s" : ""}`}
               />
-              <span className="mt-1 h-3 text-[8px] leading-none text-gray-400">
+              <span className="mt-0.5 h-3 text-[7px] leading-none text-gray-400">
                 {i % labelEvery === 0 ? b.label : ""}
               </span>
             </div>
@@ -760,8 +807,146 @@ function RevenueChart({
         <span className="capitalize">
           {granularity === "hour" ? "por hora" : granularity === "month" ? "por mês" : "por dia"}
         </span>
-        <span>R$ {fmt(max)}</span>
+        <span>{allZero ? "R$ 0" : `R$ ${fmt(max)}`}</span>
       </div>
+      {allZero && (
+        <p className="mt-1 text-center text-[10px] text-gray-400">
+          Nenhuma conversão comprovada no período
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Revenue block (chart protagonist + summary cards) ────────────────────────
+
+function RevenueBlock({
+  revenueSummary,
+  revenueSummaryLoading,
+}: {
+  revenueSummary: {
+    totalRevenue: number;
+    totalSent: number;
+    totalResponded: number;
+    totalConverted: number;
+    campaignCount: number;
+    couponRevenue?: number;
+    couponOrders?: number;
+    couponCodesTracked?: number;
+    series?: Array<{ key: string; label: string; revenue: number; orders: number }>;
+    seriesRevenue?: number;
+    seriesOrders?: number;
+    granularity?: "hour" | "day" | "month";
+  } | null;
+  revenueSummaryLoading: boolean;
+}) {
+  const [chartType, setChartType] = useState<"bar" | "line">("bar");
+
+  const series = revenueSummary?.series ?? [];
+  const seriesRevenue = revenueSummary?.seriesRevenue ?? 0;
+  const hasChartData = series.length > 0;
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+          Receita gerada pelo CRM
+        </p>
+        <div className="flex items-center gap-2">
+          {hasChartData && (
+            <div className="flex rounded-lg border border-gray-100 overflow-hidden">
+              <button
+                onClick={() => setChartType("bar")}
+                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${chartType === "bar" ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+              >
+                Barras
+              </button>
+              <button
+                onClick={() => setChartType("line")}
+                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${chartType === "line" ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+              >
+                Linha
+              </button>
+            </div>
+          )}
+          {revenueSummaryLoading && (
+            <span className="text-[10px] text-gray-400">Carregando…</span>
+          )}
+        </div>
+      </div>
+
+      {revenueSummaryLoading && !revenueSummary ? (
+        <div className="space-y-3">
+          <div className="h-28 animate-pulse rounded-xl bg-gray-100" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}
+          </div>
+        </div>
+      ) : !revenueSummary ? (
+        <p className="text-sm text-gray-400">Ainda não há receita atribuída ao CRM neste período.</p>
+      ) : (
+        <div className="space-y-4">
+          {/* Chart — always shown when series data exists */}
+          {hasChartData ? (
+            <div>
+              <div className="mb-2 flex items-baseline justify-between">
+                <p className="text-[11px] font-semibold text-gray-500">
+                  {seriesRevenue > 0 ? "Receita comprovada por conversão" : "Conversões comprovadas no período"}
+                </p>
+                {seriesRevenue > 0 && (
+                  <p className="text-sm font-extrabold text-green-700">
+                    R$ {seriesRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                )}
+              </div>
+              <RevenueChart series={series} granularity={revenueSummary.granularity} type={chartType} />
+            </div>
+          ) : (
+            <div className="flex h-24 items-center justify-center rounded-xl bg-gray-50">
+              <p className="text-[11px] text-gray-400">
+                Gráfico disponível após as primeiras conversões comprovadas
+              </p>
+            </div>
+          )}
+
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl bg-green-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 mb-1">Receita atribuída</p>
+              <p className="text-lg font-extrabold text-green-700">
+                R$ {revenueSummary.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-[10px] text-green-400 mt-0.5">Campanhas + automações</p>
+            </div>
+            <div className="rounded-xl bg-blue-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-1">Mensagens enviadas</p>
+              <p className="text-lg font-extrabold text-blue-700">{revenueSummary.totalSent.toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-blue-400 mt-0.5">{revenueSummary.campaignCount} campanha{revenueSummary.campaignCount !== 1 ? "s" : ""}</p>
+            </div>
+            <div className="rounded-xl bg-purple-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1">Converteram</p>
+              <p className="text-lg font-extrabold text-purple-700">{revenueSummary.totalConverted.toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-purple-400 mt-0.5">
+                {revenueSummary.totalResponded > 0
+                  ? `${Math.round((revenueSummary.totalConverted / revenueSummary.totalResponded) * 100)}% das respostas`
+                  : `${revenueSummary.totalResponded} responderam`}
+              </p>
+            </div>
+            <div className="rounded-xl bg-orange-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600 mb-1">Cupons usados</p>
+              <p className="text-lg font-extrabold text-orange-700">{(revenueSummary.couponOrders ?? 0).toLocaleString("pt-BR")}</p>
+              <p className="text-[10px] text-orange-400 mt-0.5">
+                {(revenueSummary.couponRevenue ?? 0) > 0
+                  ? `R$ ${(revenueSummary.couponRevenue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : (revenueSummary.couponCodesTracked ?? 0) > 0 ? "Nenhum resgatado" : "Sem cupom vinculado"}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      <p className="mt-3 text-[10px] text-gray-400">
+        * Receita estimada com base em campanhas e cupons vinculados. O gráfico usa conversões comprovadas (pedido após o envio).
+      </p>
     </div>
   );
 }
@@ -824,9 +1009,6 @@ export function OverviewTab({
 
   const perdidosCustomers = stats.perdidosCustomers ?? 0;
   const perdidoPct = tempTotal > 0 ? Math.round((perdidosCustomers / tempTotal) * 100) : 0;
-
-  // Channel calculations
-  const totalChannelCustomers = stats.deliveryOnlyCustomers + stats.dineInOnlyCustomers + stats.bothChannelsCustomers;
 
   const totalSegmented = stats.segments.reduce((s, x) => s + x.count, 0);
 
@@ -971,157 +1153,40 @@ export function OverviewTab({
       </div>
 
       {/* 3. Receita gerada pelo CRM (chart + summary) */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-            Receita gerada pelo CRM
-          </p>
-          {revenueSummaryLoading && (
-            <span className="text-[10px] text-gray-400">Carregando…</span>
+      <RevenueBlock
+        revenueSummary={revenueSummary ?? null}
+        revenueSummaryLoading={!!revenueSummaryLoading}
+      />
+
+      {/* 4. Temperatura da base — compact strip + diagnostic */}
+      {tempTotal > 0 && (
+        <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Temperatura da base
+            </p>
+            <span className="text-[10px] text-gray-400">{tempTotal.toLocaleString("pt-BR")} com pedidos</span>
+          </div>
+          <div className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100">
+            <div className="bg-green-500 transition-all"  style={{ width: `${ativoPct}%` }} title={`Quentes ${ativoPct}%`} />
+            <div className="bg-yellow-400 transition-all" style={{ width: `${mornoPct}%` }} title={`Mornos ${mornoPct}%`} />
+            <div className="bg-red-400 transition-all"    style={{ width: `${frioPct}%` }}  title={`Frios ${frioPct}%`} />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-gray-500">
+            <span><span className="font-semibold text-green-700">{ativoPct}%</span> quentes</span>
+            <span><span className="font-semibold text-yellow-600">{mornoPct}%</span> mornos</span>
+            <span><span className="font-semibold text-red-600">{frioPct}%</span> frios</span>
+            {perdidosCustomers > 0 && (
+              <span><span className="font-semibold text-gray-500">{perdidoPct}%</span> perdidos</span>
+            )}
+          </div>
+          {frioPct + perdidoPct > 50 && (
+            <p className="mt-2 text-[11px] text-amber-700">
+              ⚠️ Base fria: {frioPct}% sem comprar há mais de {WARM_DAYS} dias — recomendamos uma campanha de reativação.
+            </p>
           )}
         </div>
-
-        {revenueSummaryLoading && !revenueSummary ? (
-          <div className="space-y-3">
-            <div className="h-32 animate-pulse rounded-xl bg-gray-100" />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}
-            </div>
-          </div>
-        ) : !revenueSummary ? (
-          <p className="text-sm text-gray-400">Ainda não há receita atribuída ao CRM neste período.</p>
-        ) : (() => {
-            const series = revenueSummary.series ?? [];
-            const seriesRevenue = revenueSummary.seriesRevenue ?? 0;
-            const hasChartData = series.length > 0 && seriesRevenue > 0;
-            const hasAnySignal =
-              hasChartData ||
-              revenueSummary.totalRevenue > 0 ||
-              revenueSummary.totalSent > 0 ||
-              (revenueSummary.couponRevenue ?? 0) > 0 ||
-              (revenueSummary.couponOrders ?? 0) > 0;
-
-            if (!hasAnySignal) {
-              return (
-                <p className="text-sm text-gray-400">
-                  Ainda não há receita atribuída ao CRM neste período.
-                </p>
-              );
-            }
-
-            return (
-              <div className="space-y-4">
-                {/* Chart — proven conversions over time */}
-                {hasChartData ? (
-                  <div>
-                    <div className="mb-2 flex items-baseline justify-between">
-                      <p className="text-[11px] font-semibold text-gray-500">Receita comprovada por conversão</p>
-                      <p className="text-sm font-extrabold text-green-700">
-                        R$ {seriesRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                    <RevenueChart series={series} granularity={revenueSummary.granularity} />
-                  </div>
-                ) : (
-                  <p className="rounded-xl bg-gray-50 px-3 py-2 text-[11px] text-gray-400">
-                    Sem receita comprovada por conversão de campanha neste período. Os números abaixo são estimativas por campanha e cupom.
-                  </p>
-                )}
-
-                {/* Summary cards */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <div className="rounded-xl bg-green-50 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 mb-1">Receita atribuída</p>
-                    <p className="text-lg font-extrabold text-green-700">
-                      R$ {revenueSummary.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-[10px] text-green-400 mt-0.5">Campanhas + automações</p>
-                  </div>
-                  <div className="rounded-xl bg-blue-50 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-1">Mensagens enviadas</p>
-                    <p className="text-lg font-extrabold text-blue-700">{revenueSummary.totalSent.toLocaleString("pt-BR")}</p>
-                    <p className="text-[10px] text-blue-400 mt-0.5">{revenueSummary.campaignCount} campanha{revenueSummary.campaignCount !== 1 ? "s" : ""}</p>
-                  </div>
-                  <div className="rounded-xl bg-purple-50 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1">Converteram</p>
-                    <p className="text-lg font-extrabold text-purple-700">{revenueSummary.totalConverted.toLocaleString("pt-BR")}</p>
-                    <p className="text-[10px] text-purple-400 mt-0.5">
-                      {revenueSummary.totalResponded > 0 ? `${Math.round((revenueSummary.totalConverted / revenueSummary.totalResponded) * 100)}% das respostas` : `${revenueSummary.totalResponded} responderam`}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-orange-50 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600 mb-1">Cupons usados</p>
-                    <p className="text-lg font-extrabold text-orange-700">{(revenueSummary.couponOrders ?? 0).toLocaleString("pt-BR")}</p>
-                    <p className="text-[10px] text-orange-400 mt-0.5">
-                      {(revenueSummary.couponRevenue ?? 0) > 0
-                        ? `R$ ${(revenueSummary.couponRevenue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        : (revenueSummary.couponCodesTracked ?? 0) > 0 ? "Nenhum resgatado" : "Sem cupom vinculado"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        <p className="mt-3 text-[10px] text-gray-400">
-          * Receita estimada com base em campanhas e cupons vinculados. O gráfico usa conversões comprovadas (pedido após o envio).
-        </p>
-      </div>
-
-      {/* 4. Temperatura da base */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <div className="mb-1 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-            Temperatura da base
-          </p>
-          <span className="text-xs text-gray-400">{stats.totalCustomers.toLocaleString("pt-BR")} clientes</span>
-        </div>
-
-        {tempTotal > 0 && frioPct + perdidoPct > 50 && (
-          <p className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-            ⚠️ Sua base está fria: {frioPct}% dos clientes com pedidos estão sem comprar há mais de {WARM_DAYS} dias.
-          </p>
-        )}
-
-        {tempTotal === 0 ? (
-          <p className="text-sm text-gray-400">Nenhum cliente com pedidos ainda.</p>
-        ) : (
-          <>
-            <div className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100 mb-3">
-              <div className="bg-green-500 transition-all"  style={{ width: `${ativoPct}%` }} />
-              <div className="bg-yellow-400 transition-all" style={{ width: `${mornoPct}%` }} />
-              <div className="bg-red-400 transition-all"    style={{ width: `${frioPct}%`  }} />
-            </div>
-
-            <div className="space-y-1.5">
-              {([
-                { icon: "🔥", label: "Quentes",  count: stats.ativoCustomers,  pct: ativoPct,   color: "text-green-700",  sub: `Compraram nos últ. ${HOT_DAYS} dias`,                            onClick: () => onSegmentClick?.("quente") },
-                { icon: "🌡️", label: "Mornos",   count: stats.mornoCustomers,  pct: mornoPct,   color: "text-yellow-600", sub: `${HOT_DAYS + 1}–${WARM_DAYS} dias sem comprar`,                 onClick: () => onSegmentClick?.("morno") },
-                { icon: "🥶", label: "Frios",    count: stats.frioCustomers,   pct: frioPct,    color: "text-red-600",    sub: `Mais de ${WARM_DAYS} dias sem comprar`,                          onClick: () => onSegmentClick?.("frio") },
-                { icon: "👻", label: "Perdidos", count: perdidosCustomers,     pct: perdidoPct, color: "text-gray-500",   sub: `Dentro dos frios, há mais de ${LOST_DAYS} dias sem comprar`, onClick: undefined as (() => void) | undefined },
-              ] as const).map(({ icon, label, count, pct, color, sub, onClick }) => (
-                <div
-                  key={label}
-                  className={`flex items-center gap-3 rounded-lg px-2 py-1.5 ${onClick ? "cursor-pointer hover:bg-gray-50" : ""}`}
-                  onClick={onClick}
-                >
-                  <span className="w-5 text-sm">{icon}</span>
-                  <span className="w-20 shrink-0 text-xs font-semibold text-gray-700">{label}</span>
-                  <span className={`w-14 shrink-0 text-sm font-bold ${color}`}>{count.toLocaleString("pt-BR")}</span>
-                  <span className="w-10 shrink-0 text-xs text-gray-400">{pct}%</span>
-                  <span className="truncate text-[10px] text-gray-400">{sub}</span>
-                  {onClick && <span className="ml-auto text-[10px] text-brand-600 shrink-0">Ver →</span>}
-                </div>
-              ))}
-            </div>
-
-            {perdidosCustomers > 0 && (
-              <p className="mt-2 text-[10px] text-gray-400 border-t border-gray-100 pt-2">
-                * Perdidos são um subconjunto dos frios que estão há mais de {LOST_DAYS} dias sem comprar.
-              </p>
-            )}
-          </>
-        )}
-      </div>
+      )}
 
       {/* 5. Programa de relacionamento */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -1164,36 +1229,7 @@ export function OverviewTab({
         )}
       </div>
 
-      {/* 6. Canal de pedidos */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-          Canal de pedidos
-        </p>
-        <p className="text-[10px] text-gray-400 mb-3">Clientes únicos por canal preferido</p>
-        {totalChannelCustomers === 0 ? (
-          <p className="text-sm text-gray-400">Nenhum pedido registrado ainda.</p>
-        ) : (
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-xl bg-blue-50 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-500 mb-1">🛵 Só Delivery</p>
-              <p className="text-xl font-extrabold text-blue-700">{stats.deliveryOnlyCustomers.toLocaleString("pt-BR")}</p>
-              <p className="text-[10px] text-blue-400">clientes</p>
-            </div>
-            <div className="rounded-xl bg-amber-50 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 mb-1">🍽️ Só Presencial</p>
-              <p className="text-xl font-extrabold text-amber-700">{stats.dineInOnlyCustomers.toLocaleString("pt-BR")}</p>
-              <p className="text-[10px] text-amber-500">clientes</p>
-            </div>
-            <div className="rounded-xl bg-purple-50 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1">🔀 Ambos</p>
-              <p className="text-xl font-extrabold text-purple-700">{stats.bothChannelsCustomers.toLocaleString("pt-BR")}</p>
-              <p className="text-[10px] text-purple-400">clientes</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 7. Oportunidades de receita (compact) */}
+      {/* 6. Oportunidades de receita (compact) */}
       {actions.length > 0 && (
         <CompactOpportunitiesSection
           actions={actions}
@@ -1201,7 +1237,7 @@ export function OverviewTab({
         />
       )}
 
-      {/* 8. Configurações pendentes (bottom) */}
+      {/* 7. Configurações pendentes (bottom) */}
       {actions.length > 0 && (
         <ConfigAlertsSection
           actions={actions}
