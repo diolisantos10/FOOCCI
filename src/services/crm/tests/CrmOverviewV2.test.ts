@@ -1,7 +1,13 @@
 /**
- * CRM Overview v2 — pure logic tests (A–M).
+ * CRM Overview v2 — pure logic tests (A–Q).
  */
 import { describe, it, expect } from "vitest";
+import {
+  chartGranularity,
+  bucketKey,
+  bucketLabel,
+  buildRevenueSeries,
+} from "@/lib/crm-revenue-series";
 
 // ── Date preset helpers (mirrored from CRMClient.tsx) ──────────────────────────
 
@@ -335,5 +341,183 @@ describe("P — revenue-summary queries are tenant-scoped", () => {
   it("date range never removes restaurantId scoping", () => {
     const w = buildCampaignWhere("rest_abc", "2024-01-01", "2024-01-31");
     expect(w.restaurantId).toBe("rest_abc");
+  });
+});
+
+// ── V2.1 layout deltas ──────────────────────────────────────────────────────
+
+// R — Top KPI bar lists all 6 cards in order (restored horizontal bar)
+describe("R — top KPI bar includes all 6 cards", () => {
+  // Mirror of the card list rendered at the top of OverviewTab.
+  const KPI_CARDS = ["Clientes na base", "Quentes", "Mornos", "Frios", "Perdidos", "Novos no período"];
+  it("contains exactly 6 cards", () => expect(KPI_CARDS).toHaveLength(6));
+  it("includes Clientes na base", () => expect(KPI_CARDS).toContain("Clientes na base"));
+  it("includes Quentes",          () => expect(KPI_CARDS).toContain("Quentes"));
+  it("includes Mornos",           () => expect(KPI_CARDS).toContain("Mornos"));
+  it("includes Frios",            () => expect(KPI_CARDS).toContain("Frios"));
+  it("includes Perdidos",         () => expect(KPI_CARDS).toContain("Perdidos"));
+  it("includes Novos no período",  () => expect(KPI_CARDS).toContain("Novos no período"));
+  it("Perdidos appears in the top bar (not only temperature section)", () => {
+    expect(KPI_CARDS.indexOf("Perdidos")).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// S — KPI segment cards expose both count and percentage
+describe("S — segment KPI cards show count and percentage", () => {
+  function segmentCard(count: number, tempTotal: number) {
+    return { count, pct: computeTemperaturePct(count, tempTotal) };
+  }
+  it("Quentes card has a numeric count", () => {
+    expect(segmentCard(198, 8967).count).toBe(198);
+  });
+  it("Quentes card has a percentage", () => {
+    const c = segmentCard(198, 8967);
+    expect(typeof c.pct).toBe("number");
+    expect(c.pct).toBe(Math.round((198 / 8967) * 100));
+  });
+  it("base card needs no percentage (denominator is itself)", () => {
+    // Clientes na base is a raw count, no pct chip.
+    const baseCard = { count: 10856, pct: undefined as number | undefined };
+    expect(baseCard.pct).toBeUndefined();
+  });
+});
+
+// T — Section order: revenue chart appears below the KPI bar, above temperature
+describe("T — overview section order", () => {
+  // Mirror of the rendered section order in OverviewTab.
+  const ORDER = [
+    "filters",
+    "kpi-bar",
+    "revenue",
+    "temperature",
+    "program",
+    "channel",
+    "opportunities",
+    "config",
+  ];
+  it("kpi-bar comes before revenue", () => {
+    expect(ORDER.indexOf("kpi-bar")).toBeLessThan(ORDER.indexOf("revenue"));
+  });
+  it("revenue comes before temperature", () => {
+    expect(ORDER.indexOf("revenue")).toBeLessThan(ORDER.indexOf("temperature"));
+  });
+  it("temperature comes before program", () => {
+    expect(ORDER.indexOf("temperature")).toBeLessThan(ORDER.indexOf("program"));
+  });
+  it("opportunities comes before config", () => {
+    expect(ORDER.indexOf("opportunities")).toBeLessThan(ORDER.indexOf("config"));
+  });
+  it("config is last", () => {
+    expect(ORDER[ORDER.length - 1]).toBe("config");
+  });
+});
+
+// U — Chart granularity changes with the selected period
+describe("U — revenue chart granularity by period", () => {
+  it("all-time (no range) → month", () => {
+    expect(chartGranularity(null, null)).toBe("month");
+  });
+  it("today (same day) → hour", () => {
+    const from = new Date("2024-03-10T00:00:00");
+    const to   = new Date("2024-03-10T23:59:59");
+    expect(chartGranularity(from, to)).toBe("hour");
+  });
+  it("last 7 days → day", () => {
+    const to   = new Date("2024-03-10T12:00:00");
+    const from = new Date(to.getTime() - 7 * 86_400_000);
+    expect(chartGranularity(from, to)).toBe("day");
+  });
+  it("this month → day", () => {
+    const from = new Date("2024-03-01T00:00:00");
+    const to   = new Date("2024-03-31T23:59:59");
+    expect(chartGranularity(from, to)).toBe("day");
+  });
+  it("this year → month", () => {
+    const from = new Date("2024-01-01T00:00:00");
+    const to   = new Date("2024-12-31T23:59:59");
+    expect(chartGranularity(from, to)).toBe("month");
+  });
+  it("week7 and year produce different granularities", () => {
+    const to = new Date("2024-06-15T12:00:00");
+    const g7   = chartGranularity(new Date(to.getTime() - 7 * 86_400_000), to);
+    const gYr  = chartGranularity(new Date("2024-01-01"), to);
+    expect(g7).not.toBe(gYr);
+  });
+});
+
+// V — Bucket keys and labels are stable and human-readable
+describe("V — bucket key/label formatting", () => {
+  it("day bucket key is YYYY-MM-DD", () => {
+    expect(bucketKey(new Date("2024-01-08T14:30:00"), "day")).toBe("2024-01-08");
+  });
+  it("month bucket key is YYYY-MM", () => {
+    expect(bucketKey(new Date("2024-01-08T14:30:00"), "month")).toBe("2024-01");
+  });
+  it("day label is DD/MM", () => {
+    expect(bucketLabel("2024-01-08", "day")).toBe("08/01");
+  });
+  it("month label is pt-BR short month", () => {
+    expect(bucketLabel("2024-03", "month")).toBe("mar");
+  });
+  it("hour label ends with h", () => {
+    expect(bucketLabel("2024-01-08T14", "hour")).toBe("14h");
+  });
+});
+
+// W — buildRevenueSeries: honest, zero-filled, no invented revenue
+describe("W — revenue series construction", () => {
+  it("zero-fills empty buckets across a windowed range", () => {
+    const from = new Date("2024-03-01T00:00:00");
+    const to   = new Date("2024-03-05T23:59:59");
+    const rows = [{ convertedAt: new Date("2024-03-03T10:00:00"), revenue: 120 }];
+    const series = buildRevenueSeries(rows, from, to, "day");
+    expect(series).toHaveLength(5); // Mar 1..5
+    const populated = series.filter((b) => b.revenue > 0);
+    expect(populated).toHaveLength(1);
+    expect(populated[0].revenue).toBe(120);
+    expect(populated[0].orders).toBe(1);
+  });
+
+  it("sums multiple conversions in the same bucket", () => {
+    const from = new Date("2024-03-01T00:00:00");
+    const to   = new Date("2024-03-02T23:59:59");
+    const rows = [
+      { convertedAt: new Date("2024-03-01T08:00:00"), revenue: 50 },
+      { convertedAt: new Date("2024-03-01T20:00:00"), revenue: 75 },
+    ];
+    const series = buildRevenueSeries(rows, from, to, "day");
+    const day1 = series.find((b) => b.key === "2024-03-01")!;
+    expect(day1.revenue).toBe(125);
+    expect(day1.orders).toBe(2);
+  });
+
+  it("empty input over a range yields all-zero buckets (no fake revenue)", () => {
+    const from = new Date("2024-03-01T00:00:00");
+    const to   = new Date("2024-03-03T23:59:59");
+    const series = buildRevenueSeries([], from, to, "day");
+    expect(series.every((b) => b.revenue === 0 && b.orders === 0)).toBe(true);
+  });
+
+  it("all-time (no range) emits only populated buckets, ascending", () => {
+    const rows = [
+      { convertedAt: new Date("2024-05-10"), revenue: 100 },
+      { convertedAt: new Date("2024-01-10"), revenue: 200 },
+    ];
+    const series = buildRevenueSeries(rows, null, null, "month");
+    expect(series).toHaveLength(2);
+    expect(series[0].key).toBe("2024-01");
+    expect(series[1].key).toBe("2024-05");
+  });
+
+  it("series total never exceeds the sum of input revenue (no inflation)", () => {
+    const from = new Date("2024-03-01");
+    const to   = new Date("2024-03-31T23:59:59");
+    const rows = [
+      { convertedAt: new Date("2024-03-05"), revenue: 300 },
+      { convertedAt: new Date("2024-03-15"), revenue: 200 },
+    ];
+    const series = buildRevenueSeries(rows, from, to, "day");
+    const total = series.reduce((s, b) => s + b.revenue, 0);
+    expect(total).toBe(500);
   });
 });

@@ -4,11 +4,13 @@
  * Period-scoped CRM revenue aggregate. Accepts ?from=ISO&to=ISO; without params
  * returns all-time totals.
  *
- * Two honest revenue dimensions (never invented):
+ * Three honest revenue dimensions (never invented):
  *   - campaignRevenue: sum of Campaign.totalRevenue for campaigns active in the
  *     period (attributed by CampaignAttributionService when orders convert).
  *   - couponRevenue / couponOrders: real orders in the period whose couponCode
  *     matches a CRM campaign couponCode — coupon-proven attribution.
+ *   - series: period-accurate, time-bucketed revenue from CampaignExecution
+ *     proven conversions (convertedAt + revenue) — drives the overview chart.
  *
  * Read-only. No LLM. No send. No mutation.
  */
@@ -16,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantId } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { OrderStatus } from "@prisma/client";
+import { chartGranularity, buildRevenueSeries } from "@/lib/crm-revenue-series";
 
 // Orders in these states never count as realized revenue (mirrors promotions metrics).
 const REVENUE_EXCLUDED_STATUSES: OrderStatus[] = [
@@ -86,6 +89,31 @@ export async function GET(req: NextRequest) {
     couponOrders  = couponAgg._count._all;
   }
 
+  // ── Time-series: proven CampaignExecution conversions (convertedAt + revenue) ─
+  // Period-accurate by conversion date, tenant-scoped through the campaign relation
+  // (CampaignExecution.restaurantId is a nullable denormalization). Never invented:
+  // only rows that actually converted with a recorded revenue contribute.
+  const granularity = chartGranularity(fromDate, toDate);
+  const conversionRows = await prisma.campaignExecution.findMany({
+    where: {
+      converted:   true,
+      revenue:     { not: null },
+      convertedAt: hasRange ? { gte: fromDate!, lte: toDate! } : { not: null },
+      campaign:    { restaurantId },
+    },
+    select: { convertedAt: true, revenue: true },
+  });
+  const series = buildRevenueSeries(
+    conversionRows
+      .filter((r): r is { convertedAt: Date; revenue: typeof r.revenue } => r.convertedAt !== null)
+      .map((r) => ({ convertedAt: r.convertedAt, revenue: Number(r.revenue ?? 0) })),
+    fromDate,
+    toDate,
+    granularity,
+  );
+  const seriesRevenue = series.reduce((s, b) => s + b.revenue, 0);
+  const seriesOrders  = series.reduce((s, b) => s + b.orders, 0);
+
   const campaignRevenue = Number(agg._sum.totalRevenue ?? 0);
   const totalSent       = Number(agg._sum.totalSent      ?? 0);
   const totalResponded  = Number(agg._sum.totalResponded ?? 0);
@@ -99,10 +127,15 @@ export async function GET(req: NextRequest) {
       totalResponded,
       totalConverted,
       campaignCount:  agg._count._all,
-      // New coupon-proven dimension:
+      // Coupon-proven dimension:
       couponRevenue,
       couponOrders,
       couponCodesTracked: couponCodes.length,
+      // Time-series (proven conversions) for the overview chart:
+      series,
+      seriesRevenue,
+      seriesOrders,
+      granularity,
     },
   });
 }

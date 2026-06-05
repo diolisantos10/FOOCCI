@@ -4904,6 +4904,13 @@ export function CRMClient({
     totalResponded: number;
     totalConverted: number;
     campaignCount: number;
+    couponRevenue?: number;
+    couponOrders?: number;
+    couponCodesTracked?: number;
+    series?: Array<{ key: string; label: string; revenue: number; orders: number }>;
+    seriesRevenue?: number;
+    seriesOrders?: number;
+    granularity?: "hour" | "day" | "month";
   } | null>(null);
   const [revenueSummaryLoading, setRevenueSummaryLoading] = useState(false);
 

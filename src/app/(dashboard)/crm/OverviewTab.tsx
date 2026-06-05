@@ -676,14 +676,17 @@ function KPICard({
   loading,
   onClick,
   ctaLabel,
+  pct,
 }: {
   label: string;
   value: string | number;
   sub?: string;
-  accent?: "green" | "yellow" | "red" | "blue" | "brand";
+  accent?: "green" | "yellow" | "red" | "blue" | "brand" | "gray";
   loading?: boolean;
   onClick?: () => void;
   ctaLabel?: string;
+  /** Optional share-of-base percentage, shown as a chip next to the value. */
+  pct?: number;
 }) {
   const accentClass = {
     green:  "text-green-700",
@@ -691,23 +694,74 @@ function KPICard({
     red:    "text-red-600",
     blue:   "text-blue-700",
     brand:  "text-brand-700",
+    gray:   "text-gray-700",
   }[accent ?? "brand"] ?? "text-brand-700";
 
   return (
     <div
-      className={`rounded-2xl border border-gray-100 bg-white p-4 shadow-sm${onClick ? " cursor-pointer hover:border-brand-200 hover:shadow-md transition-all" : ""}`}
+      className={`flex flex-col rounded-2xl border border-gray-100 bg-white p-4 shadow-sm${onClick ? " cursor-pointer hover:border-brand-200 hover:shadow-md transition-all" : ""}`}
       onClick={onClick}
     >
       {loading ? (
         <div className="h-8 w-16 animate-pulse rounded bg-gray-100" />
       ) : (
-        <p className={`text-2xl font-extrabold ${accentClass}`}>{value}</p>
+        <div className="flex items-baseline gap-1.5">
+          <p className={`text-2xl font-extrabold ${accentClass}`}>{value}</p>
+          {pct !== undefined && (
+            <span className="text-xs font-semibold text-gray-400">{pct}%</span>
+          )}
+        </div>
       )}
       <p className="mt-0.5 text-xs font-semibold text-gray-600">{label}</p>
       {sub && <p className="mt-1 text-[10px] text-gray-400">{sub}</p>}
       {ctaLabel && onClick && (
-        <p className="mt-2 text-[10px] font-semibold text-brand-600">{ctaLabel} →</p>
+        <p className="mt-auto pt-2 text-[10px] font-semibold text-brand-600">{ctaLabel} →</p>
       )}
+    </div>
+  );
+}
+
+// ── Revenue chart (proven CRM conversions over time) ──────────────────────────
+
+function RevenueChart({
+  series,
+  granularity,
+}: {
+  series: Array<{ key: string; label: string; revenue: number; orders: number }>;
+  granularity?: "hour" | "day" | "month";
+}) {
+  const max = Math.max(0, ...series.map((b) => b.revenue));
+  // Thin the x-axis labels when there are many buckets so they stay legible.
+  const labelEvery = series.length > 16 ? Math.ceil(series.length / 12) : 1;
+  const fmt = (v: number) =>
+    v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+  return (
+    <div>
+      <div className="flex h-32 items-end gap-1">
+        {series.map((b, i) => {
+          const h = max > 0 ? Math.round((b.revenue / max) * 100) : 0;
+          return (
+            <div key={b.key} className="flex flex-1 flex-col items-center justify-end" style={{ minWidth: 4 }}>
+              <div
+                className={`w-full rounded-t transition-all ${b.revenue > 0 ? "bg-green-500" : "bg-gray-100"}`}
+                style={{ height: `${b.revenue > 0 ? Math.max(h, 3) : 2}%` }}
+                title={`${b.label}: R$ ${b.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${b.orders} pedido${b.orders !== 1 ? "s" : ""}`}
+              />
+              <span className="mt-1 h-3 text-[8px] leading-none text-gray-400">
+                {i % labelEvery === 0 ? b.label : ""}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1 flex items-center justify-between text-[9px] text-gray-300">
+        <span>R$ 0</span>
+        <span className="capitalize">
+          {granularity === "hour" ? "por hora" : granularity === "month" ? "por mês" : "por dia"}
+        </span>
+        <span>R$ {fmt(max)}</span>
+      </div>
     </div>
   );
 }
@@ -747,6 +801,10 @@ export function OverviewTab({
     couponRevenue?: number;
     couponOrders?: number;
     couponCodesTracked?: number;
+    series?: Array<{ key: string; label: string; revenue: number; orders: number }>;
+    seriesRevenue?: number;
+    seriesOrders?: number;
+    granularity?: "hour" | "day" | "month";
   } | null;
   revenueSummaryLoading?: boolean;
 }) {
@@ -852,7 +910,164 @@ export function OverviewTab({
         )}
       </div>
 
-      {/* 2. Temperatura da base */}
+      {/* 2. Top KPI bar — full base status at a glance */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <KPICard
+          label="Clientes na base"
+          value={stats.totalCustomers.toLocaleString("pt-BR")}
+          sub="Inclui Foocci + importados"
+          accent="brand"
+          loading={loading}
+        />
+        <KPICard
+          label="Quentes"
+          value={stats.ativoCustomers.toLocaleString("pt-BR")}
+          pct={ativoPct}
+          sub={`Compraram nos últ. ${HOT_DAYS} dias`}
+          accent="green"
+          loading={loading}
+          onClick={onSegmentClick ? () => onSegmentClick("quente") : undefined}
+          ctaLabel={onSegmentClick ? "Ver quentes" : undefined}
+        />
+        <KPICard
+          label="Mornos"
+          value={stats.mornoCustomers.toLocaleString("pt-BR")}
+          pct={mornoPct}
+          sub={`${HOT_DAYS + 1}–${WARM_DAYS} dias sem comprar`}
+          accent="yellow"
+          loading={loading}
+          onClick={onSegmentClick ? () => onSegmentClick("morno") : undefined}
+          ctaLabel={onSegmentClick ? "Ver mornos" : undefined}
+        />
+        <KPICard
+          label="Frios"
+          value={stats.frioCustomers.toLocaleString("pt-BR")}
+          pct={frioPct}
+          sub={`Mais de ${WARM_DAYS} dias sem comprar`}
+          accent="red"
+          loading={loading}
+          onClick={onSegmentClick ? () => onSegmentClick("frio") : undefined}
+          ctaLabel={onSegmentClick ? "Ver frios" : undefined}
+        />
+        <KPICard
+          label="Perdidos"
+          value={perdidosCustomers.toLocaleString("pt-BR")}
+          pct={perdidoPct}
+          sub={`Mais de ${LOST_DAYS} dias sem comprar`}
+          accent="gray"
+          loading={loading}
+          onClick={onSegmentClick ? () => onSegmentClick("frio") : undefined}
+          ctaLabel={onSegmentClick ? "Ver frios" : undefined}
+        />
+        <KPICard
+          label={newCustomersLabel}
+          value={stats.newCustomers.toLocaleString("pt-BR")}
+          sub={newCustomersSub}
+          accent="blue"
+          loading={loading}
+          onClick={onSegmentClick ? () => onSegmentClick("novos") : undefined}
+          ctaLabel={onSegmentClick ? "Ver novos" : undefined}
+        />
+      </div>
+
+      {/* 3. Receita gerada pelo CRM (chart + summary) */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Receita gerada pelo CRM
+          </p>
+          {revenueSummaryLoading && (
+            <span className="text-[10px] text-gray-400">Carregando…</span>
+          )}
+        </div>
+
+        {revenueSummaryLoading && !revenueSummary ? (
+          <div className="space-y-3">
+            <div className="h-32 animate-pulse rounded-xl bg-gray-100" />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}
+            </div>
+          </div>
+        ) : !revenueSummary ? (
+          <p className="text-sm text-gray-400">Ainda não há receita atribuída ao CRM neste período.</p>
+        ) : (() => {
+            const series = revenueSummary.series ?? [];
+            const seriesRevenue = revenueSummary.seriesRevenue ?? 0;
+            const hasChartData = series.length > 0 && seriesRevenue > 0;
+            const hasAnySignal =
+              hasChartData ||
+              revenueSummary.totalRevenue > 0 ||
+              revenueSummary.totalSent > 0 ||
+              (revenueSummary.couponRevenue ?? 0) > 0 ||
+              (revenueSummary.couponOrders ?? 0) > 0;
+
+            if (!hasAnySignal) {
+              return (
+                <p className="text-sm text-gray-400">
+                  Ainda não há receita atribuída ao CRM neste período.
+                </p>
+              );
+            }
+
+            return (
+              <div className="space-y-4">
+                {/* Chart — proven conversions over time */}
+                {hasChartData ? (
+                  <div>
+                    <div className="mb-2 flex items-baseline justify-between">
+                      <p className="text-[11px] font-semibold text-gray-500">Receita comprovada por conversão</p>
+                      <p className="text-sm font-extrabold text-green-700">
+                        R$ {seriesRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <RevenueChart series={series} granularity={revenueSummary.granularity} />
+                  </div>
+                ) : (
+                  <p className="rounded-xl bg-gray-50 px-3 py-2 text-[11px] text-gray-400">
+                    Sem receita comprovada por conversão de campanha neste período. Os números abaixo são estimativas por campanha e cupom.
+                  </p>
+                )}
+
+                {/* Summary cards */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl bg-green-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 mb-1">Receita atribuída</p>
+                    <p className="text-lg font-extrabold text-green-700">
+                      R$ {revenueSummary.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-[10px] text-green-400 mt-0.5">Campanhas + automações</p>
+                  </div>
+                  <div className="rounded-xl bg-blue-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-1">Mensagens enviadas</p>
+                    <p className="text-lg font-extrabold text-blue-700">{revenueSummary.totalSent.toLocaleString("pt-BR")}</p>
+                    <p className="text-[10px] text-blue-400 mt-0.5">{revenueSummary.campaignCount} campanha{revenueSummary.campaignCount !== 1 ? "s" : ""}</p>
+                  </div>
+                  <div className="rounded-xl bg-purple-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1">Converteram</p>
+                    <p className="text-lg font-extrabold text-purple-700">{revenueSummary.totalConverted.toLocaleString("pt-BR")}</p>
+                    <p className="text-[10px] text-purple-400 mt-0.5">
+                      {revenueSummary.totalResponded > 0 ? `${Math.round((revenueSummary.totalConverted / revenueSummary.totalResponded) * 100)}% das respostas` : `${revenueSummary.totalResponded} responderam`}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-orange-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600 mb-1">Cupons usados</p>
+                    <p className="text-lg font-extrabold text-orange-700">{(revenueSummary.couponOrders ?? 0).toLocaleString("pt-BR")}</p>
+                    <p className="text-[10px] text-orange-400 mt-0.5">
+                      {(revenueSummary.couponRevenue ?? 0) > 0
+                        ? `R$ ${(revenueSummary.couponRevenue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : (revenueSummary.couponCodesTracked ?? 0) > 0 ? "Nenhum resgatado" : "Sem cupom vinculado"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        <p className="mt-3 text-[10px] text-gray-400">
+          * Receita estimada com base em campanhas e cupons vinculados. O gráfico usa conversões comprovadas (pedido após o envio).
+        </p>
+      </div>
+
+      {/* 4. Temperatura da base */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <div className="mb-1 flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
@@ -908,27 +1123,7 @@ export function OverviewTab({
         )}
       </div>
 
-      {/* 3. Base overview: Clientes + Novos */}
-      <div className="grid grid-cols-2 gap-3">
-        <KPICard
-          label="Clientes na base"
-          value={stats.totalCustomers.toLocaleString("pt-BR")}
-          sub="Inclui Foocci + importados"
-          accent="brand"
-          loading={loading}
-        />
-        <KPICard
-          label={newCustomersLabel}
-          value={stats.newCustomers}
-          sub={newCustomersSub}
-          accent="blue"
-          loading={loading}
-          onClick={onSegmentClick ? () => onSegmentClick("novos") : undefined}
-          ctaLabel={onSegmentClick ? "Ver novos" : undefined}
-        />
-      </div>
-
-      {/* 4. Programa de relacionamento */}
+      {/* 5. Programa de relacionamento */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
           Programa de relacionamento
@@ -969,7 +1164,7 @@ export function OverviewTab({
         )}
       </div>
 
-      {/* 5. Canal de pedidos */}
+      {/* 6. Canal de pedidos */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
           Canal de pedidos
@@ -996,76 +1191,6 @@ export function OverviewTab({
             </div>
           </div>
         )}
-      </div>
-
-      {/* 6. Receita gerada pelo CRM */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-            Receita gerada pelo CRM
-          </p>
-          {revenueSummaryLoading && (
-            <span className="text-[10px] text-gray-400">Carregando…</span>
-          )}
-        </div>
-
-        {!revenueSummaryLoading && !revenueSummary ? (
-          <p className="text-sm text-gray-400">Sem dados de receita para o período.</p>
-        ) : revenueSummary ? (
-          (() => {
-            const hasAnySignal =
-              revenueSummary.totalRevenue > 0 ||
-              revenueSummary.totalSent > 0 ||
-              (revenueSummary.couponRevenue ?? 0) > 0 ||
-              (revenueSummary.couponOrders ?? 0) > 0;
-            if (!hasAnySignal) {
-              return (
-                <p className="text-sm text-gray-400">
-                  Sem dados suficientes de campanhas neste período.
-                </p>
-              );
-            }
-            return (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-xl bg-green-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 mb-1">Receita atribuída</p>
-                  <p className="text-lg font-extrabold text-green-700">
-                    R$ {revenueSummary.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-[10px] text-green-400 mt-0.5">Campanhas + automações</p>
-                </div>
-                <div className="rounded-xl bg-blue-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-1">Mensagens enviadas</p>
-                  <p className="text-lg font-extrabold text-blue-700">{revenueSummary.totalSent.toLocaleString("pt-BR")}</p>
-                  <p className="text-[10px] text-blue-400 mt-0.5">{revenueSummary.campaignCount} campanha{revenueSummary.campaignCount !== 1 ? "s" : ""}</p>
-                </div>
-                <div className="rounded-xl bg-purple-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1">Converteram</p>
-                  <p className="text-lg font-extrabold text-purple-700">{revenueSummary.totalConverted.toLocaleString("pt-BR")}</p>
-                  <p className="text-[10px] text-purple-400 mt-0.5">
-                    {revenueSummary.totalResponded > 0 ? `${Math.round((revenueSummary.totalConverted / revenueSummary.totalResponded) * 100)}% das respostas` : `${revenueSummary.totalResponded} responderam`}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-orange-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-600 mb-1">Cupons usados</p>
-                  <p className="text-lg font-extrabold text-orange-700">{(revenueSummary.couponOrders ?? 0).toLocaleString("pt-BR")}</p>
-                  <p className="text-[10px] text-orange-400 mt-0.5">
-                    {(revenueSummary.couponRevenue ?? 0) > 0
-                      ? `R$ ${(revenueSummary.couponRevenue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : (revenueSummary.couponCodesTracked ?? 0) > 0 ? "Nenhum resgatado" : "Sem cupom vinculado"}
-                  </p>
-                </div>
-              </div>
-            );
-          })()
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}
-          </div>
-        )}
-        <p className="mt-2 text-[10px] text-gray-400">
-          * Receita estimada com base em campanhas e cupons vinculados. Pedidos realizados após o envio da campanha.
-        </p>
       </div>
 
       {/* 7. Oportunidades de receita (compact) */}
