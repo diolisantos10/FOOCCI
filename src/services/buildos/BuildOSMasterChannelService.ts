@@ -258,9 +258,13 @@ export interface MasterQrResult {
   connected?: boolean;
   /** True when the instance was just created on the Evolution server. */
   created?: boolean;
+  /** True when the instance was restarting (QR not ready yet) — caller should refresh. */
+  restarting?: boolean;
   base64?: string | null;
   pairingCode?: string | null;
   state?: string | null;
+  /** When this QR was fetched (ISO) — QRs expire fast, so the UI shows the age. */
+  generatedAt?: string;
   note?: string;
 }
 
@@ -328,47 +332,109 @@ export async function getMasterChannelQr(): Promise<MasterQrResult> {
     return { ok: false, error: "Credenciais Evolution do Canal Admin não configuradas. Configure baseUrl + apiKey + instanceName primeiro." };
   }
 
-  // 1. Ensure the instance exists (the real cause of the 404).
+  // 1. Ensure the instance exists (the real cause of the original 404).
   let prep: { existed: boolean; created: boolean; connected: boolean };
   try {
     prep = await ensureAdminInstance(snapshot);
   } catch (err) {
     return { ok: false, instanceName: snapshot.instanceName, error: friendlyEvolutionError(err, snapshot.instanceName) };
   }
-
   if (prep.connected) {
     return { ok: true, instanceName: snapshot.instanceName, connected: true, created: prep.created, state: "open", note: "Canal Admin já conectado." };
   }
 
-  // 2. Now that it exists, fetch the QR / pairing code.
+  // 2. State-aware QR (mirrors the working restaurant flow): a stale/expired QR on
+  //    a "close" instance causes WhatsApp's "Can't link new devices" — restart to
+  //    force a FRESH QR instead of returning the cached one.
+  let state: "open" | "close" | "connecting" | null = null;
+  try {
+    state = (await EvolutionClient.getInstanceStatus(snapshot)).state;
+  } catch { /* fall through to QR attempt */ }
+
+  if (state === "open") {
+    return { ok: true, instanceName: snapshot.instanceName, connected: true, created: prep.created, state: "open", note: "Canal Admin já conectado." };
+  }
+  if (state === "close") {
+    try { await EvolutionClient.restartInstance(snapshot); } catch { /* best effort */ }
+    return {
+      ok: true,
+      instanceName: snapshot.instanceName,
+      connected: false,
+      restarting: true,
+      state: "close",
+      generatedAt: new Date().toISOString(),
+      note: "Instância estava desconectada — reiniciei para gerar um QR novo. Clique em \"Atualizar QR\" em alguns segundos.",
+    };
+  }
+
+  // state connecting (or unknown) → fetch a fresh QR now.
+  return fetchFreshQr(snapshot, prep.created);
+}
+
+/** Fetch a fresh QR from /instance/connect and shape the masked result. */
+async function fetchFreshQr(snapshot: EvolutionConfigSnapshot, created: boolean): Promise<MasterQrResult> {
   try {
     const qr = await EvolutionClient.getQRCode(snapshot);
     if (qr.instanceState === "open") {
-      return { ok: true, instanceName: snapshot.instanceName, connected: true, created: prep.created, state: "open", note: "Canal Admin já conectado." };
+      return { ok: true, instanceName: snapshot.instanceName, connected: true, created, state: "open", note: "Canal Admin já conectado." };
     }
     if (qr.base64 || qr.pairingCode) {
       return {
         ok: true,
         instanceName: snapshot.instanceName,
         connected: false,
-        created: prep.created,
+        created,
         base64: qr.base64,
         pairingCode: qr.pairingCode,
         state: qr.instanceState ?? null,
-        note: prep.created
-          ? "Instância futi-admin criada. Escaneie o QR com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados)."
-          : "Escaneie o QR com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados).",
+        generatedAt: new Date().toISOString(),
+        note: created
+          ? "Instância futi-admin criada. Escaneie o QR AGORA (ele expira em segundos). Se falhar, clique em \"Atualizar QR\"."
+          : "Escaneie o QR AGORA com o WhatsApp do número receptor do Futi Admin (Aparelhos conectados). Ele expira em segundos — se falhar, clique em \"Atualizar QR\".",
       };
     }
     return {
-      ok: false,
+      ok: true,
       instanceName: snapshot.instanceName,
-      created: prep.created,
-      error: qr.countOnly
-        ? "A Evolution está gerando o QR — clique novamente em alguns segundos."
-        : "Instância pronta, mas a Evolution não retornou o QR agora. Tente novamente em instantes.",
+      connected: false,
+      restarting: true,
+      generatedAt: new Date().toISOString(),
+      note: qr.countOnly
+        ? "A Evolution está gerando o QR — clique em \"Atualizar QR\" em alguns segundos."
+        : "QR ainda não pronto. Clique em \"Atualizar QR\" em alguns segundos; se persistir, use \"Resetar instância\".",
     };
   } catch (err) {
-    return { ok: false, instanceName: snapshot.instanceName, created: prep.created, error: friendlyEvolutionError(err, snapshot.instanceName) };
+    return { ok: false, instanceName: snapshot.instanceName, created, error: friendlyEvolutionError(err, snapshot.instanceName) };
   }
+}
+
+/**
+ * Hard reset of the Admin instance (logout → delete → create) then fresh QR.
+ * For a stuck/inconsistent instance whose QR keeps failing ("Can't link new
+ * devices"). Admin snapshot only; mirrors the restaurant hard-reset contract.
+ */
+export async function resetMasterChannel(): Promise<MasterQrResult> {
+  const snapshot = await getAdminWhatsAppSnapshot(true);
+  if (!snapshot) {
+    return { ok: false, error: "Credenciais Evolution do Canal Admin não configuradas." };
+  }
+  // logout + delete are best-effort (the instance may be in any state).
+  try { await EvolutionClient.logoutInstance(snapshot); } catch { /* ignore */ }
+  try { await EvolutionClient.deleteInstance(snapshot); } catch { /* ignore */ }
+  await new Promise((r) => setTimeout(r, 1200));
+
+  try {
+    await EvolutionClient.createInstance(snapshot, {
+      instanceName: snapshot.instanceName,
+      integration: "WHATSAPP-BAILEYS",
+      webhookUrl: adminWebhookUrl(snapshot),
+      webhookByEvents: false,
+      webhookEvents: WEBHOOK_EVENTS,
+      webhookSecret: snapshot.webhookSecret,
+    });
+  } catch (err) {
+    return { ok: false, instanceName: snapshot.instanceName, error: friendlyEvolutionError(err, snapshot.instanceName) };
+  }
+  await new Promise((r) => setTimeout(r, 800));
+  return fetchFreshQr(snapshot, true);
 }

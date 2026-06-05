@@ -649,7 +649,8 @@ function MasterChannelCard() {
   const [checkBusy, setCheckBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [qrBusy, setQrBusy] = useState(false);
-  const [qr, setQr] = useState<{ connected?: boolean; base64?: string | null; pairingCode?: string | null; note?: string } | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [qr, setQr] = useState<{ connected?: boolean; restarting?: boolean; base64?: string | null; pairingCode?: string | null; state?: string | null; generatedAt?: string; note?: string } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -737,11 +738,24 @@ function MasterChannelCard() {
   async function loadQr() {
     setQrBusy(true); setErr(null); setMsg(null); setQr(null);
     try {
-      const res = await fetch("/api/admin/build-os/master-channel/qr");
+      // no-store + cache-buster: the QR expires fast and must never be cached.
+      const res = await fetch(`/api/admin/build-os/master-channel/qr?ts=${Date.now()}`, { cache: "no-store" });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao gerar QR."); return; }
       setQr(d.result);
     } finally { setQrBusy(false); }
+  }
+
+  async function resetInstance() {
+    if (!window.confirm("Resetar a instância futi-admin (logout + delete + recriar) e gerar um QR novo? Isso desconecta qualquer sessão atual do número do Admin.")) return;
+    setResetBusy(true); setErr(null); setMsg(null); setQr(null);
+    try {
+      const res = await fetch("/api/admin/build-os/master-channel/reset", { method: "POST", cache: "no-store" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { setErr(d.error ?? "Falha ao resetar a instância."); return; }
+      setQr(d.result);
+      setMsg("Instância resetada. Escaneie o QR novo agora.");
+    } finally { setResetBusy(false); }
   }
 
   const configured = !!status?.configured;
@@ -832,8 +846,16 @@ function MasterChannelCard() {
         <button type="button" onClick={sync} disabled={checkBusy || syncBusy || credsMissing} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-40">
           {syncBusy ? "Sincronizando…" : "Sincronizar webhook"}
         </button>
-        <button type="button" onClick={loadQr} disabled={checkBusy || syncBusy || qrBusy || credsMissing} className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40">
+        <button type="button" onClick={loadQr} disabled={checkBusy || syncBusy || qrBusy || resetBusy || credsMissing} className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40">
           {qrBusy ? "Preparando…" : "Preparar/Conectar Canal Admin"}
+        </button>
+        {qr && !qr.connected && (
+          <button type="button" onClick={loadQr} disabled={qrBusy || resetBusy} className="rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-50 disabled:opacity-40">
+            {qrBusy ? "Atualizando…" : "Atualizar QR"}
+          </button>
+        )}
+        <button type="button" onClick={resetInstance} disabled={qrBusy || resetBusy || credsMissing} className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-40">
+          {resetBusy ? "Resetando…" : "Resetar instância futi-admin e gerar QR novo"}
         </button>
       </div>
 
@@ -851,11 +873,18 @@ function MasterChannelCard() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qr.base64} alt="QR Code do Canal Admin" className="h-56 w-56 rounded bg-white p-2" />
               {qr.pairingCode && <p className="font-mono text-sm">Código: {qr.pairingCode}</p>}
+              {qr.generatedAt && (
+                <p className="text-[11px] text-gray-500">
+                  QR gerado em {new Date(qr.generatedAt).toLocaleTimeString("pt-BR")} — expira em segundos. Se o WhatsApp
+                  disser &quot;não é possível conectar novos dispositivos&quot;, é QR expirado/instância inconsistente:
+                  clique <strong>Atualizar QR</strong>; se persistir, <strong>Resetar instância</strong>.
+                </p>
+              )}
             </div>
           ) : qr.pairingCode ? (
             <p>Código de pareamento: <span className="font-mono text-sm font-semibold">{qr.pairingCode}</span></p>
           ) : (
-            <p className="text-gray-600">{qr.note ?? "QR indisponível."}</p>
+            <p className="text-gray-600">{qr.note ?? "QR indisponível."}{qr.restarting ? " (instância reiniciando)" : ""}</p>
           )}
         </div>
       )}
