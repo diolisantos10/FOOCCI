@@ -14,6 +14,7 @@ import type {
   AgentStatus,
   AgentVisibility,
 } from "@/services/agents/types";
+import { WaiterRoom } from "./WaiterRoom";
 
 // ── Label maps (internal/master tone, plain Portuguese) ─────────────────────────
 
@@ -581,6 +582,12 @@ function NextSteps({ agent }: { agent: AdminAgentProfileView }) {
  * the /admin/agents/[slug] deep-link page. Pure render — no hooks, no mutations.
  */
 export function AgentDashboard({ agent }: { agent: AdminAgentProfileView }) {
+  // Waiter Room v1 — the first dedicated "agent room" (read-only). Other agents
+  // keep the generic operational sheet below.
+  if (agent.slug === "waiter") {
+    return <WaiterRoom agent={agent} />;
+  }
+
   const isWaiter   = agent.slug === "waiter";
   const isSecurity = agent.slug === "security-governance";
   const isCrm      = agent.slug === "crm";
