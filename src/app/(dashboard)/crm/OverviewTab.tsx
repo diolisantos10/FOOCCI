@@ -15,7 +15,7 @@ const TIER_CONFIG: Record<CustomerTier, { label: string; icon: string; bar: stri
 
 // ── Date filter ───────────────────────────────────────────────────────────────
 
-export type DateFilterPreset = "total" | "month" | "year" | "custom";
+export type DateFilterPreset = "today" | "week7" | "week" | "total" | "month" | "year" | "custom";
 
 // ── Action Center config ──────────────────────────────────────────────────────
 
@@ -531,7 +531,7 @@ function ActionCard({
   );
 }
 
-function ActionCenterSection({
+function CompactOpportunitiesSection({
   actions,
   onNavigateToTab,
 }: {
@@ -539,85 +539,128 @@ function ActionCenterSection({
   onNavigateToTab: (tab: "campanhas" | "customers") => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  if (actions.length === 0) return null;
-
-  const configActions     = actions.filter((a) => CONFIG_ACTION_TYPES.includes(a.type));
   const commercialActions = actions.filter((a) => !CONFIG_ACTION_TYPES.includes(a.type));
-  const highCount         = commercialActions.filter((a) => a.priority === "HIGH").length;
-  const visible           = expanded ? commercialActions : commercialActions.slice(0, 3);
+  if (commercialActions.length === 0) return null;
 
+  const top = expanded ? commercialActions : commercialActions.slice(0, 4);
+  const highCount = commercialActions.filter((a) => a.priority === "HIGH").length;
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Oportunidades de receita
+          </p>
+          {highCount > 0 && (
+            <p className="mt-0.5 text-[10px] text-red-600">{highCount} de alta prioridade</p>
+          )}
+        </div>
+        {highCount > 0 ? (
+          <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+            {highCount} urgente{highCount !== 1 ? "s" : ""}
+          </span>
+        ) : (
+          <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">
+            {commercialActions.length} {commercialActions.length !== 1 ? "recomendações" : "recomendação"}
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        {top.map((action) => {
+          const ps = PRIORITY_STYLE[action.priority];
+          const icon = ACTION_ICON[action.type];
+          return (
+            <div
+              key={action.id}
+              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${ps.border} ${ps.bg}`}
+            >
+              <span className={`h-2 w-2 shrink-0 rounded-full ${ps.dot}`} />
+              <span className="text-sm">{icon}</span>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-xs font-semibold text-gray-800">{action.title}</p>
+                {action.eligibleCount > 0 && (
+                  <p className="text-[10px] text-gray-500">
+                    {action.eligibleCount} cliente{action.eligibleCount !== 1 ? "s" : ""}
+                    {action.estimatedRevenueOpportunity > 0 && ` · ~R$ ${action.estimatedRevenueOpportunity.toLocaleString("pt-BR")}`}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => onNavigateToTab("campanhas")}
+                disabled={action.safetyStatus === "BLOCKED"}
+                className="shrink-0 rounded-lg bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-700 disabled:opacity-40"
+              >
+                Criar campanha
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {commercialActions.length > 4 && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-3 w-full rounded-lg border border-gray-100 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+        >
+          {expanded
+            ? "Ver menos"
+            : `Ver mais oportunidades (${commercialActions.length - 4} restantes)`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ConfigAlertsSection({
+  actions,
+  onNavigateToTab,
+}: {
+  actions: CrmAction[];
+  onNavigateToTab: (tab: "campanhas" | "customers") => void;
+}) {
+  const configActions = actions.filter((a) => CONFIG_ACTION_TYPES.includes(a.type));
   const reviewBlockedNoLink = actions.some(
     (a) => a.type === "REVIEW_REQUEST" && a.recommendedCampaignType === null,
   );
+  if (configActions.length === 0 && !reviewBlockedNoLink) return null;
+  const total = configActions.length + (reviewBlockedNoLink ? 1 : 0);
 
   return (
-    <div className="space-y-4">
-      {/* ── Configurações pendentes ───────────────────────────────────── */}
-      {(configActions.length > 0 || reviewBlockedNoLink) && (
-        <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-5 shadow-sm">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-amber-700">
-            Configurações pendentes
-          </p>
-          <div className="space-y-3">
-            {configActions.map((action) => (
-              <ActionCard key={action.id} action={action} onNavigateToTab={onNavigateToTab} />
-            ))}
-            {reviewBlockedNoLink && (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white px-3 py-2.5">
-                <p className="text-[11px] text-amber-700">
-                  ⭐ Para pedir avaliações, configure o link do Google ou iFood em Marca.
-                </p>
-                <a
-                  href="/marca"
-                  className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-700 transition-colors"
-                >
-                  Configurar link
-                </a>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Oportunidades de receita ──────────────────────────────────── */}
-      {commercialActions.length > 0 && (
-        <div className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-                Oportunidades de receita
-              </p>
-              {highCount > 0 && (
-                <p className="mt-0.5 text-[10px] text-red-600">{highCount} de alta prioridade</p>
-              )}
-            </div>
-            {highCount > 0 ? (
-              <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
-                {highCount} urgente{highCount !== 1 ? "s" : ""}
-              </span>
-            ) : (
-              <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">
-                {commercialActions.length} {commercialActions.length !== 1 ? "recomendações" : "recomendação"}
-              </span>
-            )}
-          </div>
-          <div className="space-y-3">
-            {visible.map((action) => (
-              <ActionCard key={action.id} action={action} onNavigateToTab={onNavigateToTab} />
-            ))}
-          </div>
-          {commercialActions.length > 3 && (
+    <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4 shadow-sm">
+      <div className="mb-2 flex items-center gap-2">
+        <p className="text-xs font-semibold uppercase tracking-widest text-amber-700">
+          Configurações pendentes
+        </p>
+        <span className="rounded-full bg-amber-100 px-2 py-px text-[10px] font-semibold text-amber-700">
+          {total} ajuste{total !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {configActions.map((action) => (
+          <div key={action.id} className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white px-3 py-2">
+            <p className="text-[11px] text-amber-800 flex-1 min-w-0">{ACTION_ICON[action.type]} {action.title}</p>
             <button
-              onClick={() => setExpanded((v) => !v)}
-              className="mt-3 w-full rounded-lg border border-gray-100 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+              onClick={() => onNavigateToTab("campanhas")}
+              className="shrink-0 rounded-lg border border-amber-200 px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100"
             >
-              {expanded
-                ? "Ver menos"
-                : `Ver mais ${commercialActions.length - 3} ${commercialActions.length - 3 !== 1 ? "recomendações" : "recomendação"}`}
+              Ver
             </button>
-          )}
-        </div>
-      )}
+          </div>
+        ))}
+        {reviewBlockedNoLink && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white px-3 py-2">
+            <p className="text-[11px] text-amber-800 flex-1">⭐ Configure o link do Google ou iFood para pedir avaliações.</p>
+            <a
+              href="/marca"
+              className="shrink-0 rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-700"
+            >
+              Configurar
+            </a>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -681,6 +724,8 @@ export function OverviewTab({
   customFrom,
   customTo,
   onDateChange,
+  revenueSummary,
+  revenueSummaryLoading,
 }: {
   stats: OverviewStats;
   opportunitiesCount: number;
@@ -692,9 +737,22 @@ export function OverviewTab({
   customFrom: string;
   customTo: string;
   onDateChange: (preset: DateFilterPreset, customFrom?: string, customTo?: string) => void;
+  revenueSummary?: {
+    totalRevenue: number;
+    totalSent: number;
+    totalResponded: number;
+    totalConverted: number;
+    campaignCount: number;
+  } | null;
+  revenueSummaryLoading?: boolean;
 }) {
   const [localFrom, setLocalFrom] = useState(customFrom);
   const [localTo,   setLocalTo]   = useState(customTo);
+
+  // Use hardcoded defaults for display labels (actual thresholds enforced server-side)
+  const HOT_DAYS  = 30;
+  const WARM_DAYS = 60;
+  const LOST_DAYS = 120;
 
   // Temperature bar calculations
   const tempTotal = stats.ativoCustomers + stats.mornoCustomers + stats.frioCustomers;
@@ -702,16 +760,22 @@ export function OverviewTab({
   const mornoPct  = tempTotal > 0 ? Math.round((stats.mornoCustomers / tempTotal) * 100) : 0;
   const frioPct   = tempTotal > 0 ? Math.round((stats.frioCustomers  / tempTotal) * 100) : 0;
 
+  const perdidosCustomers = stats.perdidosCustomers ?? 0;
+  const perdidoPct = tempTotal > 0 ? Math.round((perdidosCustomers / tempTotal) * 100) : 0;
+
   // Channel calculations
   const totalChannelCustomers = stats.deliveryOnlyCustomers + stats.dineInOnlyCustomers + stats.bothChannelsCustomers;
 
   const totalSegmented = stats.segments.reduce((s, x) => s + x.count, 0);
 
   const DATE_PRESETS: { id: DateFilterPreset; label: string }[] = [
-    { id: "total",  label: "Total"         },
-    { id: "month",  label: "Este mês"      },
-    { id: "year",   label: "Este ano"      },
-    { id: "custom", label: "Personalizado" },
+    { id: "today",  label: "Hoje"           },
+    { id: "week7",  label: "Últimos 7 dias" },
+    { id: "week",   label: "Esta semana"    },
+    { id: "month",  label: "Este mês"       },
+    { id: "year",   label: "Este ano"       },
+    { id: "total",  label: "Total"          },
+    { id: "custom", label: "Personalizado"  },
   ];
 
   function handlePreset(preset: DateFilterPreset) {
@@ -727,10 +791,15 @@ export function OverviewTab({
   }
 
   const newCustomersLabel =
-    datePreset === "month"  ? "Novos (mês)"     :
-    datePreset === "year"   ? "Novos (ano)"      :
-    datePreset === "custom" ? "Novos (período)"  :
+    datePreset === "today"  ? "Novos hoje"           :
+    datePreset === "week7"  ? "Novos (7 dias)"        :
+    datePreset === "week"   ? "Novos esta semana"     :
+    datePreset === "month"  ? "Novos este mês"        :
+    datePreset === "year"   ? "Novos este ano"        :
+    datePreset === "custom" ? "Novos no período"      :
                               "Novos clientes";
+  const newCustomersSub =
+    datePreset === "total" ? "Total de cadastros" : "Cadastrados no período selecionado";
 
   return (
     <div className="space-y-6">
@@ -835,9 +904,17 @@ export function OverviewTab({
         </div>
       )}
 
-      {/* ── Action Center ───────────────────────────────────────────────── */}
+      {/* ── Oportunidades de receita (compact) ───────────────────────────── */}
       {actions.length > 0 && (
-        <ActionCenterSection
+        <CompactOpportunitiesSection
+          actions={actions}
+          onNavigateToTab={onNavigateToTab ?? (() => {})}
+        />
+      )}
+
+      {/* ── Configurações pendentes (bottom) ─────────────────────────────── */}
+      {actions.length > 0 && (
+        <ConfigAlertsSection
           actions={actions}
           onNavigateToTab={onNavigateToTab ?? (() => {})}
         />

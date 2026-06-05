@@ -123,6 +123,7 @@ export type OverviewStats = {
   ativoCustomers:         number; // lastOrderAt ≤ 30 days
   mornoCustomers:         number; // lastOrderAt 31-60 days
   frioCustomers:          number; // lastOrderAt > 60 days
+  perdidosCustomers:      number; // lastOrderAt ≥ lostMinDays days (default 120d) — subset of frioCustomers
   newCustomers:           number; // created within selected date range
   segments: Array<{ tier: CustomerTier; count: number }>;
   deliveryOnlyCustomers:  number; // ordered only via delivery
@@ -458,6 +459,7 @@ export class CRMService {
     const segCfg = await getSegmentConfig(restaurantId);
     const hotCutoff  = new Date(now.getTime() - segCfg.hotMaxDays  * 86_400_000);
     const warmCutoff = new Date(now.getTime() - segCfg.warmMaxDays * 86_400_000);
+    const lostCutoff = new Date(now.getTime() - segCfg.lostMinDays * 86_400_000);
 
     const newCustomersFilter = dateRange
       ? { gte: dateRange.from, lte: dateRange.to }
@@ -472,6 +474,7 @@ export class CRMService {
       tierRows,
       newCustomers,
       channelData,
+      perdidoRows,
     ] = await Promise.all([
       prisma.customer.count({ where: { restaurantId, isGuest: false } }),
       prisma.$queryRaw<Array<{ bucket: string; cnt: bigint }>>`
@@ -508,6 +511,14 @@ export class CRMService {
         where: { restaurantId },
         _count: { _all: true },
       }),
+      prisma.$queryRaw<Array<{ cnt: bigint }>>`
+        SELECT COUNT(*)::bigint AS cnt
+        FROM customers
+        WHERE "restaurantId" = ${restaurantId}
+          AND "isGuest" = false
+          AND COALESCE("lastOrderAt", "importedLastOrderAt") IS NOT NULL
+          AND COALESCE("lastOrderAt", "importedLastOrderAt") < ${lostCutoff}
+      `,
     ]);
 
     const bucketNum = (bucket: string) => {
@@ -517,6 +528,7 @@ export class CRMService {
     const ativoCustomers = bucketNum("ativo");
     const mornoCustomers = bucketNum("morno");
     const frioCustomers  = bucketNum("frio");
+    const perdidosCustomers = perdidoRows[0] ? Number(perdidoRows[0].cnt) : 0;
 
     const tierNum = (bucket: string) => {
       const found = tierRows.find(r => r.bucket === bucket);
@@ -547,6 +559,7 @@ export class CRMService {
       ativoCustomers,
       mornoCustomers,
       frioCustomers,
+      perdidosCustomers,
       newCustomers,
       segments: [
         { tier: "DIAMANTE" as CustomerTier, count: diamante },
