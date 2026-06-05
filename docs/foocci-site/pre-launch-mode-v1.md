@@ -26,8 +26,17 @@ a proposta, gerar desejo, confiança e expectativa — **sem abrir operação de
 | Preços | ❌ Sem valores | "Em definição para o lançamento" |
 | Raiz de produção `/` | ❌ Não trocada | Site permanece em `/site` |
 | Indexação (SEO) | ❌ `noindex, follow` temporário | Centralizado em `src/app/site/layout.tsx` |
+| Acesso público | ❌ Gate de senha (prévia privada) | `MARKETING_PREVIEW_PASSWORD` + middleware escopado a `/site` |
 
-Nenhum formulário finge envio. Nenhum CTA implica disponibilidade imediata.
+Nenhum formulário finge envio. Nenhum CTA implica disponibilidade imediata. O único
+formulário é o **gate de senha** em `/site/entrar` (acesso à prévia, não é venda/lead).
+
+### Revisão pelo site privado ao vivo (não por screenshots)
+
+A revisão do site deve acontecer no **site privado ao vivo** (`/site` atrás do gate de
+senha), e **não** apenas por screenshots. O fundador abre a URL real, navega, testa no
+mobile e pede ajustes. Screenshots podem apoiar, mas a fonte de verdade é o site rodando.
+Detalhes em [`private-preview-v1.md`](./private-preview-v1.md).
 
 ### Indexabilidade (decisão de negócio · 2026-06-05)
 
