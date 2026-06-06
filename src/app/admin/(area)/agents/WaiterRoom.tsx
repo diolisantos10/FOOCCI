@@ -3,16 +3,21 @@
  * every other agent. READ-ONLY: an operational dashboard of the agent like the
  * department of an AI employee, organized into internal tabs (no new routes).
  *
+ * v1.3 — Documental merge with the real runtime. Each real Waiter piece
+ * (constitution, brains, prompt builder, orchestrator, /pedido, APIs, Test
+ * Center, library) is MIRRORED here with metadata: role, in-production?,
+ * deterministic vs LLM, source-of-truth?, risk of touching, status. This is a
+ * documentation overlay — it does NOT read, import, or change any runtime code.
+ *
  * Tabs: Dashboard · Perfil · Operação · Brain & Skills · Library · Runtime &
- * Testes · Governança. Results/performance first; theory & technical formation
- * live in their own tabs to cut scroll and clutter.
+ * Testes · Governança.
  *
  * Data sources:
  *   • Live registry facts from `agent` (AdminAgentProfileView, derived from the
  *     code constitution src/services/ai/waiter/WaiterAgentProfile.ts): status,
  *     version, isRuntimeEnabled, origin.
- *   • Curated room copy is explanatory text synthesizing the constitution +
- *     runtime audit — it does NOT change behavior.
+ *   • RUNTIME_MAP below: a static, audited description of the real architecture
+ *     (file paths + traits). Strings only — no runtime import.
  *
  * Strictly read-only: no editor, no DB writes, no runtime change. Nothing here
  * touches WaiterBrain/WaiterBrainV2/PromptBuilderService/AIOrderService/`/pedido`.
@@ -92,7 +97,7 @@ function KpiCard({ label, hint }: { label: string; hint?: string }) {
   );
 }
 
-// ── tabs ──────────────────────────────────────────────────────────────────────
+// ── runtime architecture map (static documentation overlay) ─────────────────────
 
 const TABS = [
   "Dashboard",
@@ -105,18 +110,193 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number];
 
+type Kind = "Determinístico" | "LLM" | "Misto" | "UI" | "Dados";
+type Risk = "Alto" | "Médio" | "Baixo";
+type Truth = "Sim" | "Não" | "Parcial";
+type PieceStatus = "Ativo" | "Legado" | "Planejado" | "Futuro editável";
+
+interface RuntimePiece {
+  name: string;
+  file: string;
+  /** Primary home tab for the detailed card. */
+  tab: Tab;
+  role: string;
+  prod: boolean;
+  kind: Kind;
+  truth: Truth;
+  risk: Risk;
+  status: PieceStatus;
+}
+
+/**
+ * Audited snapshot of the real Waiter architecture. Strings only — this array
+ * never imports or executes runtime code. Keep in sync manually with the audit.
+ */
+const RUNTIME_MAP: readonly RuntimePiece[] = [
+  {
+    name: "WaiterAgentProfile.ts",
+    file: "src/services/ai/waiter/WaiterAgentProfile.ts",
+    tab: "Perfil",
+    role: "Constituição do agente: identidade, missão, responsabilidades, skills, princípios de venda, regras de cardápio e exemplos. buildWaiterProfileDirective() compila tudo num bloco compacto de prompt.",
+    prod: true,
+    kind: "Determinístico",
+    truth: "Sim",
+    risk: "Alto",
+    status: "Futuro editável",
+  },
+  {
+    name: "WaiterBrainV2",
+    file: "src/services/ai/WaiterBrainV2.ts",
+    tab: "Brain & Skills",
+    role: "Motor event-driven do web /pedido. Reage a eventos da UI (ON_ENTRY, ON_ITEM_ADDED, ON_CART_UPDATED…) e retorna { message, cards }. Produtos sempre via cards, nunca em texto.",
+    prod: true,
+    kind: "Determinístico",
+    truth: "Sim",
+    risk: "Alto",
+    status: "Ativo",
+  },
+  {
+    name: "WaiterBrain (v1)",
+    file: "src/services/ai/WaiterBrain.ts",
+    tab: "Brain & Skills",
+    role: "Camada de decisão por intenção do caminho WhatsApp (AIOrderService.processTurn). Funções puras que produzem um directive injetado no prompt.",
+    prod: true,
+    kind: "Determinístico",
+    truth: "Parcial",
+    risk: "Alto",
+    status: "Ativo",
+  },
+  {
+    name: "PromptBuilderService",
+    file: "src/services/ai/PromptBuilderService.ts",
+    tab: "Runtime & Testes",
+    role: "Monta o array de mensagens OpenAI: identidade/marca, cardápio real com IDs e preços (âncora anti-alucinação), draft do pedido, perfil do cliente e regras de segurança.",
+    prod: true,
+    kind: "Determinístico",
+    truth: "Parcial",
+    risk: "Alto",
+    status: "Ativo",
+  },
+  {
+    name: "AIOrderService",
+    file: "src/services/ai/AIOrderService.ts",
+    tab: "Operação",
+    role: "Orquestrador do turno: runWebTurn (web /pedido) e processTurn (WhatsApp). Injeta a constituição + diretivas, executa tool-calls (máx. 6), faz fallback/handoff e loga.",
+    prod: true,
+    kind: "Misto",
+    truth: "Não",
+    risk: "Alto",
+    status: "Ativo",
+  },
+  {
+    name: "/pedido (UI)",
+    file: "src/app/pedido/[slug]/PedidoClient.tsx",
+    tab: "Operação",
+    role: "A interface do cliente — o salão onde o Waiter trabalha. Cards, carrinho, variantes, adicionais e revisão; emite eventos para a API. Checkout/pagamento são da UI.",
+    prod: true,
+    kind: "UI",
+    truth: "Não",
+    risk: "Alto",
+    status: "Ativo",
+  },
+  {
+    name: "APIs do pedido",
+    file: "src/app/api/pedido/[slug]/route.ts",
+    tab: "Operação",
+    role: "POST /api/pedido/[slug] aciona runWebTurn (coração do runtime web). Sub-rotas: draft, finalize, delivery-quote, validate-coupon, identify-customer, repeat-order, payment-status, pix-payment.",
+    prod: true,
+    kind: "Determinístico",
+    truth: "Não",
+    risk: "Alto",
+    status: "Ativo",
+  },
+  {
+    name: "Waiter Test Center",
+    file: "src/app/api/admin/ai/waiter-tests/run/route.ts",
+    tab: "Runtime & Testes",
+    role: "Suíte determinística contra o catálogo real (waiterScenarios + waiterEvaluator). Sem OpenAI, sem gravar no banco, sem WhatsApp. Gera score de qualidade.",
+    prod: true,
+    kind: "Determinístico",
+    truth: "Sim",
+    risk: "Baixo",
+    status: "Ativo",
+  },
+  {
+    name: "waiterLibrary.ts",
+    file: "src/app/admin/(area)/agents/waiterLibrary.ts",
+    tab: "Library",
+    role: "Dados curados de formação técnica (gavetas + técnicas). Data-only do admin: NÃO é lido pelo runtime e não altera nenhum prompt.",
+    prod: false,
+    kind: "Dados",
+    truth: "Não",
+    risk: "Baixo",
+    status: "Planejado",
+  },
+];
+
+/** Supporting runtime modules that the orchestrator depends on (read-only note). */
+const RUNTIME_DEPS: readonly string[] = [
+  "AITools (definições + executor de tools)",
+  "UpsellEngine (candidatos de upsell)",
+  "ConversationGuardrails (limites de bebida/sobremesa)",
+  "BehaviorEngine (tokens / blocos de comportamento)",
+  "SalesProfile (perfil de venda)",
+  "bestSellers (ordenação por mais vendidos)",
+  "BrandConfigService (RestaurantBrandConfig)",
+];
+
+function riskTone(r: Risk): Tone {
+  return r === "Alto" ? "red" : r === "Médio" ? "amber" : "green";
+}
+function statusTone(s: PieceStatus): Tone {
+  return s === "Ativo" ? "green" : s === "Legado" ? "gray" : s === "Planejado" ? "amber" : "violet";
+}
+function truthTone(t: Truth): Tone {
+  return t === "Sim" ? "blue" : t === "Parcial" ? "amber" : "gray";
+}
+
+/** Detailed mirror card for one real runtime piece. */
+function PieceCard({ p }: { p: RuntimePiece }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-gray-900">{p.name}</p>
+          <p className="truncate font-mono text-[10px] text-gray-400">{p.file}</p>
+        </div>
+        <Pill tone={statusTone(p.status)}>{p.status}</Pill>
+      </div>
+      <p className="mt-1.5 text-sm leading-snug text-gray-700">{p.role}</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <Pill tone={p.prod ? "green" : "gray"}>{p.prod ? "Em produção" : "Fora do runtime"}</Pill>
+        <Pill tone="violet">{p.kind}</Pill>
+        <Pill tone={truthTone(p.truth)}>Fonte da verdade: {p.truth}</Pill>
+        <Pill tone={riskTone(p.risk)}>Risco: {p.risk}</Pill>
+      </div>
+    </div>
+  );
+}
+
+function piecesFor(tab: Tab): RuntimePiece[] {
+  return RUNTIME_MAP.filter((p) => p.tab === tab);
+}
+
 // ── room ────────────────────────────────────────────────────────────────────────
 
 export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
   const active = agent.status === "ACTIVE";
   const [tab, setTab] = useState<Tab>("Dashboard");
 
+  const inProd = RUNTIME_MAP.filter((p) => p.prod).length;
+  const truthPieces = RUNTIME_MAP.filter((p) => p.truth === "Sim").length;
+
   return (
     <div className="space-y-4">
       {/* read-only banner */}
       <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] text-gray-600">
-        🔒 Sala do agente <strong>read-only</strong> nesta fase: nada aqui altera prompts, runtime ou comportamento em
-        produção. Cards de KPI exibem dados reais quando a telemetria for conectada — sem números fictícios.
+        🔒 Sala do agente <strong>read-only</strong> nesta fase: este é um <strong>espelho documental</strong> do runtime
+        real — não lê, importa nem altera código de produção. KPIs exibem dados reais só quando a telemetria for
+        conectada (sem números fictícios).
       </div>
 
       {/* compact header — always visible across tabs */}
@@ -175,6 +355,34 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
               <Link href="/admin/manual-operacional" className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50">
                 📖 Manual Operacional
               </Link>
+            </div>
+          </RoomCard>
+
+          <RoomCard title="Estado real do Waiter (arquitetura)" hint="Resumo do runtime espelhado nesta sala." badge={<Pill tone="green">Espelho documental</Pill>}>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { label: "Peças mapeadas", value: String(RUNTIME_MAP.length) },
+                { label: "Em produção", value: String(inProd) },
+                { label: "Fontes da verdade", value: String(truthPieces) },
+                { label: "Runtime DB", value: "Desligado" },
+              ].map((k) => (
+                <div key={k.label} className="rounded-lg border border-gray-200 bg-white p-3">
+                  <p className="text-lg font-bold text-gray-900">{k.value}</p>
+                  <p className="text-[11px] uppercase tracking-wide text-gray-400">{k.label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+              <div className="rounded-lg bg-gray-50 p-3 text-xs text-gray-700">
+                <p className="mb-1 font-semibold uppercase tracking-wide text-gray-500">Caminhos de runtime</p>
+                <p>• <strong>Web /pedido</strong> → <span className="font-mono">runWebTurn</span> + <strong>WaiterBrainV2</strong> (event-driven).</p>
+                <p>• <strong>WhatsApp</strong> → <span className="font-mono">processTurn</span> + <strong>WaiterBrain v1</strong> (intenção).</p>
+                <p className="mt-1">Constituição injetada no prompt do <strong>web</strong>; LLM só gera texto curto.</p>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-3 text-xs text-gray-700">
+                <p className="mb-1 font-semibold uppercase tracking-wide text-gray-500">Fonte da verdade</p>
+                <p><span className="font-mono">WaiterAgentProfile.ts</span> alimenta o runtime <strong>e</strong> esta sala (via registry). O mapa completo está na aba <strong>Runtime &amp; Testes</strong>.</p>
+              </div>
             </div>
           </RoomCard>
 
@@ -253,6 +461,12 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
               </div>
             </div>
           </RoomCard>
+
+          <RoomCard title="Constituição no runtime" hint="A peça real que define a identidade — espelhada da arquitetura.">
+            <div className="grid grid-cols-1 gap-2.5">
+              {piecesFor("Perfil").map((p) => <PieceCard key={p.file} p={p} />)}
+            </div>
+          </RoomCard>
         </div>
       )}
 
@@ -310,6 +524,12 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
               ))}
             </div>
           </RoomCard>
+
+          <RoomCard title="Peças de operação no runtime" hint="UI, APIs e orquestrador reais — espelhados da arquitetura.">
+            <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+              {piecesFor("Operação").map((p) => <PieceCard key={p.file} p={p} />)}
+            </div>
+          </RoomCard>
         </div>
       )}
 
@@ -325,6 +545,15 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
           </RoomCard>
           <RoomCard title="Skills · habilidades operacionais" hint="O que ele sabe fazer na prática.">
             <Checks mark="✓" color="text-green-600" items={["Leitura de intenção", "Recomendação de produto", "Upsell contextual", "Condução de pedido", "Leitura de cardápio", "Restrições alimentares", "Fechamento comercial", "Uso de cards visuais"]} />
+          </RoomCard>
+          <RoomCard title="Motores de decisão no runtime" hint="Os cérebros reais — espelhados da arquitetura.">
+            <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+              {piecesFor("Brain & Skills").map((p) => <PieceCard key={p.file} p={p} />)}
+            </div>
+            <p className="mt-2 text-[11px] text-gray-400">
+              Há dois caminhos: <strong>WaiterBrainV2</strong> no web <span className="font-mono">/pedido</span> e
+              <strong> WaiterBrain v1</strong> no WhatsApp. Ambos são determinísticos; o LLM apenas redige o texto curto.
+            </p>
           </RoomCard>
         </div>
       )}
@@ -406,15 +635,59 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
         <div className="space-y-4">
           <RoomCard title="Runtime atual" hint="Fatos do código (somente leitura).">
             <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm text-gray-800 sm:grid-cols-2 lg:grid-cols-4">
-              <div><dt className="text-xs uppercase tracking-wide text-gray-400">Motor</dt><dd className="font-mono font-medium">WaiterBrainV2</dd></div>
+              <div><dt className="text-xs uppercase tracking-wide text-gray-400">Motor (web)</dt><dd className="font-mono font-medium">WaiterBrainV2</dd></div>
+              <div><dt className="text-xs uppercase tracking-wide text-gray-400">Motor (WhatsApp)</dt><dd className="font-mono font-medium">WaiterBrain v1</dd></div>
               <div><dt className="text-xs uppercase tracking-wide text-gray-400">Constituição</dt><dd className="font-mono font-medium">WaiterAgentProfile.ts</dd></div>
+              <div><dt className="text-xs uppercase tracking-wide text-gray-400">Prompt</dt><dd className="font-mono font-medium">PromptBuilderService</dd></div>
+              <div><dt className="text-xs uppercase tracking-wide text-gray-400">Orquestrador</dt><dd className="font-mono font-medium">AIOrderService</dd></div>
               <div><dt className="text-xs uppercase tracking-wide text-gray-400">LLM</dt><dd className="font-medium">Apenas texto curto / controlado</dd></div>
-              <div><dt className="text-xs uppercase tracking-wide text-gray-400">UI</dt><dd className="font-mono font-medium">/pedido</dd></div>
               <div><dt className="text-xs uppercase tracking-wide text-gray-400">Fonte de produtos</dt><dd className="font-medium">Catálogo real</dd></div>
               <div><dt className="text-xs uppercase tracking-wide text-gray-400">Runtime DB</dt><dd className="font-medium">Desligado{agent.isRuntimeEnabled ? " (flag ON!)" : ""}</dd></div>
-              <div><dt className="text-xs uppercase tracking-wide text-gray-400">Editor</dt><dd className="font-medium">Indisponível nesta fase</dd></div>
-              <div><dt className="text-xs uppercase tracking-wide text-gray-400">Versão do perfil</dt><dd className="font-medium">v{agent.version} · {agent.origin === "db" ? "Banco" : "Código"}</dd></div>
             </dl>
+          </RoomCard>
+
+          <RoomCard title="Mapa de arquitetura" hint="Cada peça real do Waiter, espelhada (read-only)." badge={<Pill tone="green">{RUNTIME_MAP.length} peças</Pill>}>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-400">
+                    <th className="py-1.5 pr-3 font-semibold">Peça / arquivo</th>
+                    <th className="px-2 font-semibold">Aba</th>
+                    <th className="px-2 font-semibold">Prod</th>
+                    <th className="px-2 font-semibold">Tipo</th>
+                    <th className="px-2 font-semibold">Verdade</th>
+                    <th className="px-2 font-semibold">Risco</th>
+                    <th className="pl-2 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {RUNTIME_MAP.map((p) => (
+                    <tr key={p.file} className="border-b border-gray-100 align-top">
+                      <td className="py-1.5 pr-3">
+                        <p className="font-semibold text-gray-900">{p.name}</p>
+                        <p className="font-mono text-[10px] text-gray-400">{p.file}</p>
+                      </td>
+                      <td className="px-2 text-gray-700">{p.tab}</td>
+                      <td className="px-2">{p.prod ? "✓" : "—"}</td>
+                      <td className="px-2 text-gray-700">{p.kind}</td>
+                      <td className="px-2 text-gray-700">{p.truth}</td>
+                      <td className="px-2"><span className={p.risk === "Alto" ? "font-semibold text-red-600" : p.risk === "Médio" ? "text-amber-600" : "text-green-600"}>{p.risk}</span></td>
+                      <td className="pl-2 text-gray-700">{p.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </RoomCard>
+
+          <RoomCard title="Peças de runtime / prompt" hint="Montagem do prompt e suíte de testes — espelhadas da arquitetura.">
+            <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+              {piecesFor("Runtime & Testes").map((p) => <PieceCard key={p.file} p={p} />)}
+            </div>
+            <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Dependências de runtime</p>
+            <div className="flex flex-wrap gap-1.5">
+              {RUNTIME_DEPS.map((d) => <Pill key={d} tone="gray">{d}</Pill>)}
+            </div>
           </RoomCard>
 
           <RoomCard
@@ -456,10 +729,28 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
             />
           </RoomCard>
 
+          <RoomCard title="Hardcoded vs. editável" hint="O que é fixo no código hoje e o que pode virar editável no futuro.">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-red-700">Hardcoded hoje</p>
+                <Checks mark="•" color="text-gray-400" items={["Constituição (WaiterAgentProfile.ts)", "Lógica WaiterBrainV2 / v1", "Montagem do prompt", "Tools e guardrails"]} />
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-violet-700">Futuro editável</p>
+                <Checks mark="→" color="text-violet-500" items={["Seções da constituição via DB", "Biblioteca técnica conectada", "Parâmetros de venda por restaurante", "Perfil versionado (origin=db)"]} />
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-blue-700">Trava de segurança</p>
+                <Checks mark="✓" color="text-green-600" items={["isRuntimeEnabled desligado", "Sem editor nesta fase", "Sala 100% read-only", "Library não conectada ao runtime"]} />
+              </div>
+            </div>
+          </RoomCard>
+
           <RoomCard title="Próximos passos / governança" hint="Caminho até template oficial + editor + runtime versionado.">
             <ul className="space-y-1 text-sm text-gray-700">
               {[
                 "Promover esta sala a Agent Room Template oficial (reutilizável por outros agentes)",
+                "Derivar a sala da constituição (sem duplicar texto à mão) — read-only",
                 "Conectar KPIs reais (telemetria do Waiter) no lugar de \"Aguardando tracking\"",
                 "Trazer regras implícitas do WaiterBrainV2 para a constituição",
                 "Criar versionamento do perfil (rollback/histórico) antes do editor",
