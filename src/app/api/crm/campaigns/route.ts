@@ -79,7 +79,31 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return ok(enriched);
+    // Batch-compute failure breakdowns for campaigns that have failures.
+    // Grouped at the DB level — one round-trip regardless of campaign count.
+    const failedCampaignIds = enriched.filter((c) => c.totalFailed > 0).map((c) => c.id);
+    const failureBreakdowns: Record<string, Record<string, number>> = {};
+
+    if (failedCampaignIds.length > 0) {
+      const failGroups = await prisma.campaignExecution.groupBy({
+        by:    ["campaignId", "failedReason"],
+        where: { campaignId: { in: failedCampaignIds }, status: "FAILED" },
+        _count: { id: true },
+      });
+      for (const g of failGroups) {
+        if (!failureBreakdowns[g.campaignId]) failureBreakdowns[g.campaignId] = {};
+        const reason = g.failedReason ?? "BLOCKED";
+        failureBreakdowns[g.campaignId]![reason] =
+          (failureBreakdowns[g.campaignId]![reason] ?? 0) + g._count.id;
+      }
+    }
+
+    const withBreakdowns = enriched.map((c) => ({
+      ...c,
+      failureBreakdown: failureBreakdowns[c.id] ?? null,
+    }));
+
+    return ok(withBreakdowns);
   } catch (err) {
     console.error("[GET /api/crm/campaigns]", err);
     return serverError();

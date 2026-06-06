@@ -17,12 +17,12 @@ const PERFORMANCE_PERIODS = [
   { value: "all", label: "Tudo"    },
 ];
 
-// v3: added "Frequência" column (recurring cadence) before "Ações".
+// v3.1: simplified to 9 columns — Respostas, Tx., Pedidos, Janela, Frequência removed.
+// Falhas now shows failure diagnostics (breakdown tooltip). Agenda merges window+cadence.
 const ACTIVE_TABLE_COLUMNS = [
   "Status", "Nome", "Tipo", "Público",
-  "Enviados", "Respostas", "Tx.",
-  "Pedidos", "Receita", "Falhas",
-  "Janela", "Frequência", "Ações",
+  "Enviados", "Falhas", "Receita",
+  "Agenda", "Ações",
 ];
 
 // v3: the "Performance de campanhas e cupons" block was removed from the
@@ -206,10 +206,10 @@ describe("D — active campaigns section empty state", () => {
 // ── E — Active campaigns table columns ───────────────────────────────────────
 
 describe("E — active campaigns table has required columns", () => {
-  const REQUIRED = ["Status", "Nome", "Tipo", "Público", "Enviados", "Respostas", "Tx.", "Pedidos", "Receita", "Falhas", "Janela", "Frequência", "Ações"];
+  const REQUIRED = ["Status", "Nome", "Tipo", "Público", "Enviados", "Falhas", "Receita", "Agenda", "Ações"];
 
-  it("has all 13 required columns", () => {
-    expect(ACTIVE_TABLE_COLUMNS).toHaveLength(13);
+  it("has all 9 required columns", () => {
+    expect(ACTIVE_TABLE_COLUMNS).toHaveLength(9);
   });
 
   for (const col of REQUIRED) {
@@ -218,7 +218,19 @@ describe("E — active campaigns table has required columns", () => {
     });
   }
 
-  it("'Tx.' column abbreviates response rate", () => {
+  it("does not include removed columns (Respostas, Tx., Pedidos)", () => {
+    expect(ACTIVE_TABLE_COLUMNS).not.toContain("Respostas");
+    expect(ACTIVE_TABLE_COLUMNS).not.toContain("Tx.");
+    expect(ACTIVE_TABLE_COLUMNS).not.toContain("Pedidos");
+  });
+
+  it("'Falhas' column shows failure diagnostics (breakdown in detail modal)", () => {
+    // Failure breakdown is computed from executions in the detail modal,
+    // or from the failureBreakdown API field on the list row.
+    expect(ACTIVE_TABLE_COLUMNS).toContain("Falhas");
+  });
+
+  it("response rate computation still works (shown in detail modal)", () => {
     // 20 responses out of 100 sent = 20.0%
     const rate = computeResponseRate(100, 20);
     expect(rate).toBe("20.0");
@@ -383,9 +395,9 @@ describe("I — campaign status classification", () => {
   });
 });
 
-// ── J — Janela column computation ────────────────────────────────────────────
+// ── J — Agenda column computation ────────────────────────────────────────────
 
-describe("J — 'Janela' column in active table", () => {
+describe("J — 'Agenda' column in active table (primary = window/date)", () => {
   it("recurring campaign shows time window", () => {
     const cfg = { mode: "RECURRING", timeWindow: { start: "10:00", end: "18:00" } };
     expect(computeJanela(cfg, null)).toBe("10:00–18:00");

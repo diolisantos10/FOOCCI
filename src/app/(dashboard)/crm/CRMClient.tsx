@@ -138,6 +138,8 @@ type CampaignHistoryRow = {
   sentAt:         string | null;
   /** Live execution count for SENDING campaigns — messages still in PENDING state. */
   pendingCount?:  number;
+  /** Per-reason failure count, populated by the campaigns list API. */
+  failureBreakdown?: Record<string, number> | null;
 };
 
 type CampaignExecutionRow = {
@@ -1612,6 +1614,29 @@ const EXEC_STATUS_LABELS: Record<string, string> = {
   CONVERTED: "Convertido",
 };
 
+const FAILURE_REASON_LABELS: Record<string, string> = {
+  CUSTOMER_OPTED_OUT:          "Opt-out (LGPD)",
+  CUSTOMER_NOT_CONTACTABLE:    "Não contactável",
+  MISSING_PHONE:               "Sem telefone",
+  INVALID_PHONE_FORMAT:        "Telefone inválido",
+  NO_EVOLUTION_CONFIG:         "WhatsApp desconectado",
+  QUIET_HOURS:                 "Horário silencioso",
+  WEEKEND_BLOCKED:             "Bloqueio fim de semana",
+  OUTSIDE_SENDING_WINDOW:      "Fora da janela de envio",
+  DAILY_GLOBAL_CAP_REACHED:    "Limite diário atingido",
+  CUSTOMER_COOLDOWN_ACTIVE:    "Cliente em cooldown",
+  CUSTOMER_WEEKLY_CAP_REACHED: "Limite semanal do cliente",
+  RECENT_CRM_MESSAGE_24H:      "Mensagem recente (24h)",
+  DUPLICATE_CAMPAIGN_RECIPIENT:"Destinatário duplicado",
+  RESTAURANT_CLOSED:           "Restaurante fechado",
+  DUPLICATE_24H_SKIP:          "Dedup 24h",
+  BLOCKED:                     "Bloqueado",
+  UNKNOWN_ERROR:               "Erro desconhecido",
+  "Cliente opt-out":           "Opt-out",
+  "Telefone inválido ou ausente": "Telefone inválido",
+  "Mensagem vazia":            "Mensagem vazia",
+};
+
 const EXEC_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   PENDING:   { bg: "bg-gray-100",   text: "text-gray-600"  },
   SENT:      { bg: "bg-blue-50",    text: "text-blue-700"  },
@@ -1930,6 +1955,33 @@ function CampaignManageModal({
                         </div>
                       )}
                     </div>
+
+                    {/* Failure breakdown */}
+                    {detail.totalFailed > 0 && (() => {
+                      const map: Record<string, number> = {};
+                      for (const ex of detail.executions) {
+                        if (ex.status !== "FAILED") continue;
+                        const r = ex.failedReason ?? "BLOCKED";
+                        map[r] = (map[r] ?? 0) + 1;
+                      }
+                      const entries = Object.entries(map).sort(([, a], [, b]) => b - a);
+                      return (
+                        <div className="rounded-2xl border border-red-100 bg-red-50 p-4 space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Diagnóstico de falhas</p>
+                          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                            {entries.map(([reason, count]) => (
+                              <div key={reason} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 border border-red-100">
+                                <span className="text-xs text-gray-700 truncate">{FAILURE_REASON_LABELS[reason] ?? reason}</span>
+                                <span className="text-xs font-bold text-red-600 shrink-0">{count}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {isRecurring && (
+                            <p className="text-[10px] text-red-400 leading-snug">Campanhas recorrentes acumulam falhas entre ciclos — o total pode exceder o público atual.</p>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Operational status quick view */}
                     {debug && !loadingDebug && (
@@ -2322,6 +2374,40 @@ function campaignFrequencia(c: CampaignHistoryRow): string {
 }
 
 /**
+ * Combined agenda info for the compact table: primary (time window or date),
+ * secondary (cadence for recurring, null otherwise).
+ */
+function campaignAgenda(c: CampaignHistoryRow): { primary: string; secondary: string | null } {
+  const cfg = c.scheduleConfig as ScheduleCfg | null;
+  if (cfg?.mode === "RECURRING") {
+    const win  = cfg.timeWindow ? `${cfg.timeWindow.start}–${cfg.timeWindow.end}` : null;
+    const freq = campaignFrequencia(c);
+    return { primary: win ?? freq, secondary: win ? freq : null };
+  }
+  if (c.scheduledAt) {
+    return {
+      primary: new Date(c.scheduledAt).toLocaleString("pt-BR", {
+        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+      }),
+      secondary: null,
+    };
+  }
+  return { primary: "—", secondary: null };
+}
+
+/** Human-readable title tooltip text for a failure cell. */
+function failureTitleText(breakdown: Record<string, number>, isRecurring: boolean): string {
+  const lines = Object.entries(breakdown)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 6)
+    .map(([r, n]) => `${FAILURE_REASON_LABELS[r] ?? r}: ${n}`);
+  if (isRecurring) {
+    lines.push("(campanhas recorrentes acumulam falhas entre ciclos)");
+  }
+  return lines.join("\n");
+}
+
+/**
  * Recommended execution type per template — surfaces in the Templates grid so the
  * owner sees which models are meant to run automatically (recurring) vs. one-off.
  * Recurring templates cover what used to live in the separate "Automações" tab
@@ -2511,8 +2597,10 @@ function CampanhasAtivasSection({
         </div>
         <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">{active.length}</span>
       </div>
+      {/* 9 columns — fits 1280px+ without horizontal scroll.
+          Respostas/Tx./Pedidos moved to the Gerenciar detail modal. */}
       <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <table className="w-full text-left text-xs">
+        <table className="w-full min-w-[860px] text-left text-xs">
           <thead className="border-b border-gray-100 bg-gray-50">
             <tr className="text-[10px] uppercase tracking-wide text-gray-400">
               <th className="py-2.5 pl-4 pr-2 font-semibold">Status</th>
@@ -2520,67 +2608,91 @@ function CampanhasAtivasSection({
               <th className="py-2.5 px-2 font-semibold">Tipo</th>
               <th className="py-2.5 px-2 font-semibold">Público</th>
               <th className="py-2.5 px-2 font-semibold text-right">Enviados</th>
-              <th className="py-2.5 px-2 font-semibold text-right">Respostas</th>
-              <th className="py-2.5 px-2 font-semibold text-right">Tx.</th>
-              <th className="py-2.5 px-2 font-semibold text-right">Pedidos</th>
-              <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
               <th className="py-2.5 px-2 font-semibold text-right">Falhas</th>
-              <th className="py-2.5 px-2 font-semibold">Janela</th>
-              <th className="py-2.5 px-2 font-semibold">Frequência</th>
+              <th className="py-2.5 px-2 font-semibold text-right">Receita</th>
+              <th className="py-2.5 px-2 font-semibold">Agenda</th>
               <th className="py-2.5 pl-2 pr-4 font-semibold">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {active.map((c) => {
-              const sc          = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
-              const cfg         = c.scheduleConfig as ScheduleCfg | null;
-              const isRecurring = cfg?.mode === "RECURRING";
+              const sc           = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+              const cfg          = c.scheduleConfig as ScheduleCfg | null;
+              const isRecurring  = cfg?.mode === "RECURRING";
               const controllable = ["ACTIVE", "SCHEDULED", "PAUSED"].includes(c.status);
-              const responseRate = c.totalSent > 0 ? ((c.totalResponded / c.totalSent) * 100).toFixed(1) : null;
-              const janela = isRecurring && cfg?.timeWindow
-                ? `${cfg.timeWindow.start}–${cfg.timeWindow.end}`
-                : c.scheduledAt
-                  ? new Date(c.scheduledAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-                  : "—";
+              const agenda       = campaignAgenda(c);
+              const tipo         = campaignTipo(c);
+              const failTitle    = c.totalFailed > 0 && c.failureBreakdown && Object.keys(c.failureBreakdown).length > 0
+                ? failureTitleText(c.failureBreakdown, isRecurring)
+                : undefined;
 
               return (
                 <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                  {/* Status */}
                   <td className="py-3 pl-4 pr-2">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap ${sc.bg} ${sc.text}`}>
                       {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
                     </span>
                   </td>
-                  <td className="py-3 px-2 max-w-[140px]">
+
+                  {/* Nome */}
+                  <td className="py-3 px-2 max-w-[160px]">
                     <p className="font-semibold text-gray-900 truncate">{c.name}</p>
                     {c.objective && (
                       <p className="text-[10px] text-gray-400 truncate">{OBJECTIVE_LABELS[c.objective] ?? c.objective}</p>
                     )}
                   </td>
+
+                  {/* Tipo */}
                   <td className="py-3 px-2 whitespace-nowrap">
-                    {(() => {
-                      const tipo = campaignTipo(c);
-                      return (
-                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE[tipo]}`}>
-                          {tipo}
-                        </span>
-                      );
-                    })()}
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE[tipo]}`}>
+                      {tipo}
+                    </span>
                   </td>
-                  <td className="py-3 px-2 max-w-[110px]">
+
+                  {/* Público */}
+                  <td className="py-3 px-2 max-w-[100px]">
                     <span className="text-gray-600 truncate block text-[11px]">
                       {c.targetSegment ? (SEGMENT_LABELS[c.targetSegment] ?? c.targetSegment) : "—"}
                     </span>
                   </td>
-                  <td className="py-3 px-2 text-right tabular-nums text-blue-700">{c.totalSent > 0 ? c.totalSent : "—"}</td>
-                  <td className="py-3 px-2 text-right tabular-nums text-indigo-700">{c.totalResponded > 0 ? c.totalResponded : "—"}</td>
-                  <td className="py-3 px-2 text-right tabular-nums">{responseRate ? `${responseRate}%` : "—"}</td>
-                  <td className="py-3 px-2 text-right tabular-nums text-green-700">{c.totalConverted > 0 ? c.totalConverted : "—"}</td>
-                  <td className="py-3 px-2 text-right tabular-nums font-semibold text-green-700">
-                    {Number(c.totalRevenue) > 0 ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}
+
+                  {/* Enviados */}
+                  <td className="py-3 px-2 text-right tabular-nums text-blue-700">
+                    {c.totalSent > 0 ? c.totalSent : "—"}
                   </td>
-                  <td className="py-3 px-2 text-right tabular-nums text-red-500">{c.totalFailed > 0 ? c.totalFailed : "—"}</td>
-                  <td className="py-3 px-2 text-gray-500 whitespace-nowrap text-[11px]">{janela}</td>
-                  <td className="py-3 px-2 text-gray-500 whitespace-nowrap text-[11px]">{campaignFrequencia(c)}</td>
+
+                  {/* Falhas — hover title shows breakdown; click "Gerenciar" for full detail */}
+                  <td className="py-3 px-2 text-right" title={failTitle}>
+                    {c.totalFailed > 0 ? (
+                      <button
+                        onClick={() => onDetail(c.id)}
+                        className="inline-flex items-center gap-0.5 font-semibold text-red-500 hover:text-red-700 transition-colors"
+                      >
+                        <span className="tabular-nums">{c.totalFailed}</span>
+                        {failTitle && <span className="text-[10px] leading-none">ⓘ</span>}
+                      </button>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
+
+                  {/* Receita */}
+                  <td className="py-3 px-2 text-right tabular-nums font-semibold text-green-700">
+                    {Number(c.totalRevenue) > 0
+                      ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                      : <span className="text-gray-300 font-normal">—</span>}
+                  </td>
+
+                  {/* Agenda: time window on line 1, cadence on line 2 */}
+                  <td className="py-3 px-2 text-[11px]">
+                    <p className="text-gray-600 whitespace-nowrap">{agenda.primary}</p>
+                    {agenda.secondary && (
+                      <p className="text-gray-400 whitespace-nowrap">{agenda.secondary}</p>
+                    )}
+                  </td>
+
+                  {/* Ações */}
                   <td className="py-3 pl-2 pr-4">
                     <div className="flex items-center gap-1 justify-end">
                       <button
