@@ -73,11 +73,11 @@ interface DashboardData {
   activeCampaigns:  Campaign[];
 
   foocciProof: {
-    upsellRevenue:    number;
-    upsellItemCount:  number;
-    recoveryTotal:    number;
+    upsellRevenue:     number;
+    upsellItemCount:   number;
+    recoveryTotal:     number;
     recoveryConverted: number;
-    recoveryRate:     number | null;
+    recoveryRate:      number | null;
   };
 
   crmSegments: {
@@ -129,14 +129,20 @@ function Pulse({ className }: { className: string }) {
 function LoadingSkeleton() {
   return (
     <div className="space-y-4 px-4 pb-8 pt-2">
+      {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {[0, 1, 2, 3, 4, 5].map(i => <Pulse key={i} className="h-24" />)}
       </div>
+      {/* Sales chart */}
       <Pulse className="h-44" />
+      {/* Foocci em ação */}
+      <Pulse className="h-28" />
+      {/* Mais vendidos + modalidade */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Pulse className="h-56 lg:col-span-2" />
         <Pulse className="h-56" />
       </div>
+      {/* Channel + pipeline */}
       <Pulse className="h-24" />
       <Pulse className="h-24" />
     </div>
@@ -159,17 +165,16 @@ function PeriodFilter({
   period, customStart, customEnd, loading,
   onChange, onCustomChange,
 }: {
-  period:       PeriodKey;
-  customStart:  string;
-  customEnd:    string;
-  loading:      boolean;
-  onChange:     (p: PeriodKey) => void;
+  period:         PeriodKey;
+  customStart:    string;
+  customEnd:      string;
+  loading:        boolean;
+  onChange:       (p: PeriodKey) => void;
   onCustomChange: (start: string, end: string) => void;
 }) {
   const [localStart, setLocalStart] = useState(customStart);
   const [localEnd,   setLocalEnd]   = useState(customEnd);
 
-  // Sync outer → inner when period resets
   useEffect(() => { setLocalStart(customStart); setLocalEnd(customEnd); }, [customStart, customEnd]);
 
   function applyCustom() {
@@ -707,7 +712,7 @@ function SalesChart({
   );
 }
 
-// ── Active Campaigns ───────────────────────────────────────────────────────────
+// ── Foocci em ação ─────────────────────────────────────────────────────────────
 
 const CAMP_STATUS: Record<string, { label: string; cls: string }> = {
   ACTIVE:    { label: "Ativo",    cls: "bg-green-100 text-green-700" },
@@ -715,98 +720,125 @@ const CAMP_STATUS: Record<string, { label: string; cls: string }> = {
   SENDING:   { label: "Enviando", cls: "bg-blue-100  text-blue-700"  },
 };
 
-function CampaignSection({ campaigns }: { campaigns: Campaign[] }) {
-  if (campaigns.length === 0) return null;
-
-  return (
-    <Card className="p-4">
-      <SectionHeader
-        title="Campanhas ativas"
-        sub={`${campaigns.length} em execução`}
-        href="/crm"
-        hrefLabel="Gerenciar"
-      />
-      <div className="space-y-2.5">
-        {campaigns.map(c => {
-          const txResp   = c.totalSent > 0 ? `${((c.totalResponded / c.totalSent) * 100).toFixed(1)}%` : null;
-          const statusMeta = CAMP_STATUS[c.status] ?? { label: c.status, cls: "bg-gray-100 text-gray-600" };
-          return (
-            <div key={c.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-              <div className="flex items-start justify-between gap-2">
-                <p className="min-w-0 truncate text-sm font-semibold text-gray-900">{c.name}</p>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${statusMeta.cls}`}>
-                  {statusMeta.label}
-                </span>
-              </div>
-              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
-                <span>Público: <b className="text-gray-700">{fmtNum(c.totalAudience)}</b></span>
-                <span>Enviados: <b className="text-gray-700">{fmtNum(c.totalSent)}</b></span>
-                {c.totalFailed > 0 && (
-                  <span>Falhas: <b className="text-red-600">{fmtNum(c.totalFailed)}</b></span>
-                )}
-                {c.totalResponded > 0 && (
-                  <span>
-                    Respostas: <b className="text-gray-700">{fmtNum(c.totalResponded)}</b>
-                    {txResp && <span className="font-semibold text-green-600"> ({txResp})</span>}
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </Card>
-  );
-}
-
-// ── Foocci Proof ──────────────────────────────────────────────────────────────
-
-function FoocciProofSection({
-  proof, periodLabel,
+function FoocciEmAcaoSection({
+  proof, campaigns, periodLabel,
 }: {
-  proof: DashboardData["foocciProof"];
+  proof:       DashboardData["foocciProof"];
+  campaigns:   Campaign[];
   periodLabel: string;
 }) {
-  const hasData = proof.upsellRevenue > 0 || proof.recoveryTotal > 0;
+  const hasProof     = proof.upsellRevenue > 0 || proof.recoveryTotal > 0;
+  const hasCampaigns = campaigns.length > 0;
+
+  if (!hasProof && !hasCampaigns) return null;
 
   return (
     <Card className="p-4">
-      <SectionHeader
-        title="Foocci em ação"
-        sub={`${periodLabel} · upsell e recuperação gerados pela IA`}
-        href="/analytics"
-        hrefLabel="Analytics"
-      />
-      {!hasData ? (
-        <p className="py-3 text-center text-xs text-gray-400">Nenhum dado de upsell ou recuperação no período</p>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="flex flex-col items-center rounded-xl bg-orange-50 p-3 text-center">
-            <span className="text-lg">🚀</span>
-            <span className="mt-1 text-lg font-bold text-orange-700">{fmtCurrency(proof.upsellRevenue)}</span>
-            <span className="text-[10px] leading-tight text-gray-500">Receita upsell</span>
-          </div>
-          <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
-            <span className="text-lg">🛒</span>
-            <span className="mt-1 text-lg font-bold text-gray-900">{proof.upsellItemCount}</span>
-            <span className="text-[10px] leading-tight text-gray-500">Itens upsell</span>
-          </div>
-          <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
-            <span className="text-lg">♻️</span>
-            <span className="mt-1 text-lg font-bold text-gray-900">
-              {proof.recoveryConverted}/{proof.recoveryTotal}
-            </span>
-            <span className="text-[10px] leading-tight text-gray-500">Recuperações</span>
-          </div>
-          <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
-            <span className="text-lg">📈</span>
-            <span className={`mt-1 text-lg font-bold ${proof.recoveryRate !== null && proof.recoveryRate > 0 ? "text-green-700" : "text-gray-400"}`}>
-              {proof.recoveryRate !== null ? `${proof.recoveryRate}%` : "—"}
-            </span>
-            <span className="text-[10px] leading-tight text-gray-500">Taxa recuperação</span>
-          </div>
+      {/* Header */}
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800">Foocci em ação</h3>
+          <p className="mt-0.5 text-xs text-gray-400">
+            {periodLabel} · O que a inteligência está movimentando no período.
+          </p>
         </div>
-      )}
+        <div className="flex shrink-0 items-center gap-3">
+          {hasCampaigns && (
+            <Link href="/crm" className="text-xs font-medium text-orange-500 hover:underline">
+              Campanhas
+            </Link>
+          )}
+          <Link href="/crm" className="text-xs font-medium text-orange-500 hover:underline">
+            Ver CRM
+          </Link>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {/* Upsell + Recovery proof metrics */}
+        {hasProof && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {proof.upsellRevenue > 0 && (
+              <div className="flex flex-col items-center rounded-xl bg-orange-50 p-3 text-center">
+                <span className="text-base">🚀</span>
+                <span className="mt-1 text-base font-bold text-orange-700">
+                  {fmtCurrency(proof.upsellRevenue)}
+                </span>
+                <span className="text-[10px] leading-tight text-gray-500">Receita upsell</span>
+              </div>
+            )}
+            {proof.upsellItemCount > 0 && (
+              <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
+                <span className="text-base">🛒</span>
+                <span className="mt-1 text-base font-bold text-gray-900">{proof.upsellItemCount}</span>
+                <span className="text-[10px] leading-tight text-gray-500">Itens sugeridos</span>
+              </div>
+            )}
+            {proof.recoveryTotal > 0 && (
+              <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
+                <span className="text-base">♻️</span>
+                <span className="mt-1 text-base font-bold text-gray-900">
+                  {proof.recoveryConverted}/{proof.recoveryTotal}
+                </span>
+                <span className="text-[10px] leading-tight text-gray-500">Carrinhos recuperados</span>
+              </div>
+            )}
+            {proof.recoveryTotal > 0 && (
+              <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3 text-center">
+                <span className="text-base">📈</span>
+                <span className={`mt-1 text-base font-bold ${proof.recoveryRate !== null && proof.recoveryRate > 0 ? "text-green-700" : "text-gray-400"}`}>
+                  {proof.recoveryRate !== null ? `${proof.recoveryRate}%` : "—"}
+                </span>
+                <span className="text-[10px] leading-tight text-gray-500">Taxa de recuperação</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Active campaigns */}
+        {hasCampaigns && (
+          <div>
+            {hasProof && (
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                Campanhas ativas
+              </p>
+            )}
+            <div className="space-y-2">
+              {campaigns.map(c => {
+                const txResp     = c.totalSent > 0
+                  ? `${((c.totalResponded / c.totalSent) * 100).toFixed(1)}%`
+                  : null;
+                const statusMeta = CAMP_STATUS[c.status] ?? { label: c.status, cls: "bg-gray-100 text-gray-600" };
+                return (
+                  <div key={c.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm font-semibold text-gray-900">{c.name}</p>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${statusMeta.cls}`}>
+                        {statusMeta.label}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                      <span>Público: <b className="text-gray-700">{fmtNum(c.totalAudience)}</b></span>
+                      {c.totalSent > 0 && (
+                        <span>Enviados: <b className="text-gray-700">{fmtNum(c.totalSent)}</b></span>
+                      )}
+                      {c.totalFailed > 0 && (
+                        <span>Falhas: <b className="text-red-600">{fmtNum(c.totalFailed)}</b></span>
+                      )}
+                      {c.totalResponded > 0 && (
+                        <span>
+                          Respostas: <b className="text-gray-700">{fmtNum(c.totalResponded)}</b>
+                          {txResp && <span className="font-semibold text-green-600"> ({txResp})</span>}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
@@ -814,19 +846,19 @@ function FoocciProofSection({
 // ── CRM Opportunities ─────────────────────────────────────────────────────────
 
 const SEG_META = [
-  { key: "quente",    label: "Ativos",          icon: "🔥", bg: "bg-red-50",    text: "text-red-700",    desc: "Compraram recentemente" },
-  { key: "morno",     label: "Mornos",           icon: "☀️", bg: "bg-amber-50",  text: "text-amber-700",  desc: "Algum tempo sem comprar" },
-  { key: "frio",      label: "Em risco",         icon: "❄️", bg: "bg-blue-50",   text: "text-blue-700",   desc: "Inativos — acionar CRM"  },
-  { key: "semPedidos",label: "Sem pedidos",       icon: "👤", bg: "bg-gray-50",   text: "text-gray-500",   desc: "Nunca compraram"         },
+  { key: "quente",    label: "Ativos",     icon: "🔥", bg: "bg-red-50",    text: "text-red-700",    desc: "Compraram recentemente" },
+  { key: "morno",     label: "Mornos",     icon: "☀️", bg: "bg-amber-50",  text: "text-amber-700",  desc: "Algum tempo sem comprar" },
+  { key: "frio",      label: "Em risco",   icon: "❄️", bg: "bg-blue-50",   text: "text-blue-700",   desc: "Inativos — acionar CRM"  },
+  { key: "semPedidos",label: "Sem pedidos",icon: "👤", bg: "bg-gray-50",   text: "text-gray-500",   desc: "Nunca compraram"         },
 ] as const;
 
 function CrmOpportunitiesSection({
   segments, totalCustomers,
 }: {
-  segments: DashboardData["crmSegments"];
+  segments:       DashboardData["crmSegments"];
   totalCustomers: number;
 }) {
-  const rows = SEG_META.map(m => ({ ...m, count: segments[m.key as keyof typeof segments] }));
+  const rows   = SEG_META.map(m => ({ ...m, count: segments[m.key as keyof typeof segments] }));
   const atRisk = segments.frio;
 
   return (
@@ -864,10 +896,10 @@ function CrmOpportunitiesSection({
 // ── Quick Actions ──────────────────────────────────────────────────────────────
 
 const QUICK_ACTIONS = [
-  { label: "Pedidos",     href: "/orders",      icon: "📋", bg: "bg-blue-50   text-blue-700"   },
-  { label: "Atendimento", href: "/atendimento",  icon: "💬", bg: "bg-green-50  text-green-700"  },
-  { label: "CRM",         href: "/crm",          icon: "👥", bg: "bg-violet-50 text-violet-700" },
-  { label: "Cardápio",    href: "/menu",         icon: "🍽", bg: "bg-orange-50 text-orange-700" },
+  { label: "Pedidos",     href: "/orders",     icon: "📋", bg: "bg-blue-50   text-blue-700"   },
+  { label: "Atendimento", href: "/atendimento", icon: "💬", bg: "bg-green-50  text-green-700"  },
+  { label: "CRM",         href: "/crm",         icon: "👥", bg: "bg-violet-50 text-violet-700" },
+  { label: "Cardápio",    href: "/menu",        icon: "🍽", bg: "bg-orange-50 text-orange-700" },
 ] as const;
 
 function QuickActions() {
@@ -1078,14 +1110,13 @@ export default function DashboardClient({ userName }: { userName: string }) {
   function handleCustomChange(start: string, end: string) {
     setCustomStart(start);
     setCustomEnd(end);
-    // Trigger reload via retryCount
     setRetryCount(c => c + 1);
   }
 
   const greeting = getGreeting();
   const pLabel   = data?.periodLabel ?? "Hoje";
 
-  // Header always visible
+  // Header always visible (alerts stay high — critical blockers surface here)
   const header = (
     <div className="space-y-2 p-4 pb-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1108,8 +1139,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
         onChange={handlePeriodChange}
         onCustomChange={handleCustomChange}
       />
-
-      {/* Alert chips — today only */}
+      {/* Critical alert chips — kept high to surface blocking issues immediately */}
       {cockpit && cockpit.urgentAlerts.length > 0 && (
         <AlertsStrip alerts={cockpit.urgentAlerts} />
       )}
@@ -1154,7 +1184,8 @@ export default function DashboardClient({ userName }: { userName: string }) {
       {header}
 
       <div className="space-y-4 px-4 pb-10">
-        {/* KPI Row — 6 cards */}
+
+        {/* ① KPI Row — 6 cards */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <KpiCard
             label={`Receita · ${pLabel}`}
@@ -1194,7 +1225,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
           />
         </div>
 
-        {/* Sales chart — revenue over time with period comparison */}
+        {/* ② Gráfico principal de vendas com comparação de período */}
         <SalesChart
           buckets={data.chartBuckets}
           bucketsPrev={data.chartBucketsPrev}
@@ -1203,50 +1234,47 @@ export default function DashboardClient({ userName }: { userName: string }) {
           granularity={data.granularity}
         />
 
-        {/* Real-time note for non-today periods */}
-        {data.period !== "today" && (
-          <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-500">
-            <RealtimeBadge />
-            <span>Pipeline, atrasados e pagamentos pendentes são sempre em tempo real.</span>
-          </div>
-        )}
-
-        {/* Pipeline */}
-        <PipelineSection
-          pipeline={data.pipeline}
-          delayed={data.delayedCount}
-          pendingPayments={data.pendingPaymentsCount}
+        {/* ③ Foocci em ação — upsell, recuperação e campanhas ativas */}
+        <FoocciEmAcaoSection
+          proof={data.foocciProof}
+          campaigns={data.activeCampaigns}
+          periodLabel={pLabel}
         />
 
-        {/* Cockpit: "O que fazer agora" */}
-        {cockpit && cockpit.recommendedActions.length > 0 && (
-          <ActionsSection actions={cockpit.recommendedActions} />
-        )}
-
-        {/* Products + Modality */}
+        {/* ④ Mais vendidos e canais — produtos, modalidade, origem */}
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <TopProductsSection products={data.topProducts} periodLabel={pLabel} />
           </div>
           <OrderTypesSection types={data.ordersByType} total={data.ordersPeriod} periodLabel={pLabel} />
         </div>
-
-        {/* Channel origin split */}
         <ChannelSection sources={data.ordersBySource} total={data.ordersPeriod} periodLabel={pLabel} />
 
-        {/* Active campaigns */}
-        <CampaignSection campaigns={data.activeCampaigns} />
+        {/* ⑤ Operação em tempo real */}
+        {data.period !== "today" && (
+          <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-500">
+            <RealtimeBadge />
+            <span>Pipeline, atrasados e pagamentos pendentes são sempre em tempo real.</span>
+          </div>
+        )}
+        <PipelineSection
+          pipeline={data.pipeline}
+          delayed={data.delayedCount}
+          pendingPayments={data.pendingPaymentsCount}
+        />
 
-        {/* CRM base + segment opportunities */}
+        {/* ⑥ Próximas ações recomendadas (cockpit — hoje apenas) */}
+        {cockpit && cockpit.recommendedActions.length > 0 && (
+          <ActionsSection actions={cockpit.recommendedActions} />
+        )}
+
+        {/* ⑦ Base de clientes / CRM */}
         <CrmOpportunitiesSection
           segments={data.crmSegments}
           totalCustomers={data.totalCustomers}
         />
 
-        {/* Foocci upsell + recovery proof */}
-        <FoocciProofSection proof={data.foocciProof} periodLabel={pLabel} />
-
-        {/* Cockpit: health indicators (today only) */}
+        {/* ⑧ Saúde do negócio (cockpit — hoje apenas) */}
         {cockpit && (
           <Card className="p-4">
             <SectionHeader title="Saúde do negócio" sub="Indicadores em tempo real · hoje" href="/analytics" hrefLabel="Analytics" />
@@ -1254,7 +1282,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
           </Card>
         )}
 
-        {/* Analytics deep-dive link */}
+        {/* ⑨ Analytics deep-dive */}
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-xl">
@@ -1272,6 +1300,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
             </Link>
           </div>
         </Card>
+
       </div>
     </div>
   );
