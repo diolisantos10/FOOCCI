@@ -199,14 +199,15 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
       const serverMessage = typeof data.message === "string" ? data.message : null;
       const stage = typeof data.stage === "string" ? data.stage : "";
 
+      const withStage = (m: string) => (stage ? `${m} (estágio: ${stage})` : m);
       if (outcome === "success") {
         setNotice(serverMessage || "Fonte criada.");
       } else if (outcome === "partial") {
         // Source exists — keep the upload, warn (yellow), and select it.
-        setWarn(serverMessage || `Fonte criada, mas a extração falhou no estágio ${stage}.`);
+        setWarn(withStage(serverMessage || "Fonte criada, mas a extração falhou."));
       } else {
         // Fatal — nothing was created.
-        setErr(friendlyUploadMessage(res.status, serverMessage));
+        setErr(withStage(friendlyUploadMessage(res.status, serverMessage)));
         return;
       }
 

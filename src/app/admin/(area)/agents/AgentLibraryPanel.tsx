@@ -163,9 +163,10 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
       const serverMessage = typeof data.message === "string" ? data.message : null;
       const stage = typeof data.stage === "string" ? data.stage : "";
 
+      const withStage = (m: string) => (stage ? `${m} (estágio: ${stage})` : m);
       if (outcome === "success") setNotice(serverMessage || "Fonte criada.");
-      else if (outcome === "partial") setWarn(serverMessage || `Fonte criada, mas a extração falhou no estágio ${stage}.`);
-      else { setErr(friendlyUploadMessage(res.status, serverMessage)); return; }
+      else if (outcome === "partial") setWarn(withStage(serverMessage || "Fonte criada, mas a extração falhou."));
+      else { setErr(withStage(friendlyUploadMessage(res.status, serverMessage))); return; }
 
       resetForm(); setShowForm(false);
       await loadList();

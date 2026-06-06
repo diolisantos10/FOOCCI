@@ -17,7 +17,33 @@ import {
   friendlyUploadMessage,
   classifyUploadOutcome,
   buildUploadResponse,
+  buildOuterCatchResponse,
 } from "./agentLibraryHelpers";
+
+describe("agentLibraryHelpers — outer catch is ReferenceError-proof", () => {
+  it("without sourceId → fatal 500, stage preserved, no sourceId", () => {
+    const { status, body } = buildOuterCatchResponse("init", undefined);
+    expect(status).toBe(500);
+    expect(body.ok).toBe(false);
+    expect(body.stage).toBe("init");
+    expect("sourceId" in body).toBe(false);
+    expect(body.message).toContain("antes de criar");
+  });
+
+  it("with sourceId → partial 200, keeps the source id", () => {
+    const { status, body } = buildOuterCatchResponse("pdfParse", "src_123");
+    expect(status).toBe(200);
+    expect(body.ok).toBe(false);
+    expect(body.stage).toBe("pdfParse");
+    expect(body.sourceId).toBe("src_123");
+    expect(body.message).toContain("Fonte criada");
+  });
+
+  it("uses only its two args — never throws on null/empty", () => {
+    expect(() => buildOuterCatchResponse("init", null)).not.toThrow();
+    expect(buildOuterCatchResponse("init", "").status).toBe(500);
+  });
+});
 
 describe("agentLibraryHelpers — upload response contract (source-first)", () => {
   it("buildUploadResponse always carries ok + stage + message; omits empty sourceId", () => {

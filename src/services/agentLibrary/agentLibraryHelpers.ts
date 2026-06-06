@@ -281,6 +281,7 @@ export function isMissingTableError(err: unknown): boolean {
 
 /** Stages of the upload pipeline — included in every upload response as `stage`. */
 export type UploadStage =
+  | "init"
   | "auth"
   | "formData"
   | "fileValidation"
@@ -312,6 +313,39 @@ export function buildUploadResponse(p: {
   if (p.sourceId) body.sourceId = p.sourceId;
   if (typeof p.created === "number") body.created = p.created;
   return body;
+}
+
+/**
+ * Safe last-resort response for the upload route's OUTER catch.
+ *
+ * Uses ONLY the two values that are guaranteed to exist (top-level `stage` and
+ * `sourceId`) — never any local object — so the catch itself can never throw a
+ * ReferenceError. If the source was already created, it is a partial success
+ * (HTTP 200, keep + select it in the UI); otherwise it is fatal (HTTP 500).
+ */
+export function buildOuterCatchResponse(
+  stage: UploadStage,
+  sourceId?: string | null,
+): { status: number; body: UploadResponseBody } {
+  if (sourceId) {
+    return {
+      status: 200,
+      body: buildUploadResponse({
+        ok: false,
+        stage,
+        sourceId,
+        message: "Fonte criada, mas ocorreu erro interno no processamento. Você pode tentar extrair novamente.",
+      }),
+    };
+  }
+  return {
+    status: 500,
+    body: buildUploadResponse({
+      ok: false,
+      stage,
+      message: "Erro interno antes de criar a fonte.",
+    }),
+  };
 }
 
 /**
