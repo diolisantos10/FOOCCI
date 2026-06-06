@@ -564,7 +564,11 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
           <RoomCard
             title="Library v0.2 · Formação técnica"
             hint="A formação profissional do Waiter: organiza fontes técnicas em gavetas de conhecimento, técnicas aplicáveis e testes de qualidade."
-            badge={<Pill tone="amber">Em formação · não conectado ao runtime</Pill>}
+            badge={
+              <Link href="/admin/agents/library?agent=waiter" className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700">
+                Abrir Agent Library →
+              </Link>
+            }
           >
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
               A Library é a formação profissional do Waiter. Ela organiza fontes técnicas em gavetas de conhecimento,

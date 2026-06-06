@@ -2600,3 +2600,95 @@ model StrategyRoomSession {
 
   @@map("strategy_room_sessions")
 }
+
+// ═══════════════════════════════════════════
+//  AGENT LIBRARY — Workbench v1 (additive, read-only vs. runtime)
+//  The "private university" of the agents. Stores curated technical FORMATION
+//  (sources + techniques) per agent. NOT read by any runtime: WaiterBrain,
+//  WaiterBrainV2, PromptBuilderService and AIOrderService are untouched.
+//  Copyright-safe: store syntheses/techniques, never full reproductions.
+// ═══════════════════════════════════════════
+
+enum AgentLibrarySourceType {
+  BOOK
+  PDF
+  ARTICLE
+  MANUAL
+  TRAINING
+  PLAYBOOK
+  INTERNAL_NOTE
+}
+
+enum AgentLibraryExtractionStatus {
+  PENDING
+  EXTRACTING
+  EXTRACTED
+  FAILED
+}
+
+enum AgentLibrarySourceStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum AgentLibraryTechniqueStatus {
+  EXTRACTED
+  IN_REVIEW
+  ACTIVE
+  ARCHIVED
+}
+
+model AgentLibrarySource {
+  id          String                 @id @default(cuid())
+  agentSlug   String
+  title       String
+  author      String?
+  sourceType  AgentLibrarySourceType @default(INTERNAL_NOTE)
+  category    String?
+  description String?
+  // Pasted content (synthesis/notes). Never store full copyrighted works here.
+  rawText     String?
+  // Optional original file (kept PRIVATE) — reserved for a future upload phase.
+  fileUrl          String?
+  storageKey       String?
+  fileName         String?
+  mimeType         String?
+  fileSize         Int?
+  extractionStatus AgentLibraryExtractionStatus @default(PENDING)
+  status           AgentLibrarySourceStatus     @default(DRAFT)
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  techniques AgentLibraryTechnique[]
+
+  @@index([agentSlug])
+  @@index([status])
+  @@map("agent_library_sources")
+}
+
+model AgentLibraryTechnique {
+  id            String                      @id @default(cuid())
+  agentSlug     String
+  sourceId      String
+  category      String?
+  techniqueName String
+  purpose       String?
+  principle     String?
+  application   String?
+  usageRule     String?
+  qualityTest   String?
+  goodExample   String?
+  badExample    String?
+  confidence    Float?
+  status        AgentLibraryTechniqueStatus @default(EXTRACTED)
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  source AgentLibrarySource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([agentSlug])
+  @@index([sourceId])
+  @@index([status])
+  @@map("agent_library_techniques")
+}
