@@ -21,6 +21,7 @@ interface Campaign {
   name:           string;
   status:         string;
   totalSent:      number;
+  totalFailed:    number;
   totalResponded: number;
   totalAudience:  number;
 }
@@ -59,7 +60,9 @@ interface DashboardData {
   trendDays:     { date: string; revenue: number; orders: number }[];
   revenueTrend:  number;
 
-  activeCampaigns: Campaign[];
+  cancelledPeriod:  number;
+  ordersBySource:   Record<string, number>;
+  activeCampaigns:  Campaign[];
 
   foocciProof: {
     upsellRevenue:    number;
@@ -118,8 +121,8 @@ function Pulse({ className }: { className: string }) {
 function LoadingSkeleton() {
   return (
     <div className="space-y-4 px-4 pb-8 pt-2">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[0, 1, 2, 3].map(i => <Pulse key={i} className="h-24" />)}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {[0, 1, 2, 3, 4, 5].map(i => <Pulse key={i} className="h-24" />)}
       </div>
       <Pulse className="h-32" />
       <div className="grid gap-4 lg:grid-cols-3">
@@ -135,11 +138,13 @@ function LoadingSkeleton() {
 // ── Period Filter ──────────────────────────────────────────────────────────────
 
 const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
-  { key: "today",      label: "Hoje"          },
-  { key: "yesterday",  label: "Ontem"         },
-  { key: "this_week",  label: "Esta semana"   },
-  { key: "7d",         label: "Últimos 7 dias" },
-  { key: "custom",     label: "Personalizado"  },
+  { key: "today",         label: "Hoje"             },
+  { key: "yesterday",     label: "Ontem"            },
+  { key: "this_week",     label: "Esta semana"      },
+  { key: "7d",            label: "Últimos 7 dias"   },
+  { key: "current_month", label: "Este mês"         },
+  { key: "30d",           label: "Últimos 30 dias"  },
+  { key: "custom",        label: "Personalizado"    },
 ];
 
 function PeriodFilter({
@@ -443,11 +448,57 @@ function OrderTypesSection({ types, total, periodLabel }: {
   );
 }
 
+// ── Channel Split ──────────────────────────────────────────────────────────────
+
+const SOURCE_META: { key: string; label: string; icon: string; color: string }[] = [
+  { key: "pedido",   label: "Cardápio online", icon: "🛒", color: "bg-orange-400" },
+  { key: "qr",       label: "QR / Mesa",       icon: "📱", color: "bg-violet-400" },
+  { key: "whatsapp", label: "WhatsApp",         icon: "💬", color: "bg-green-400"  },
+  { key: "manual",   label: "Manual",           icon: "✏️", color: "bg-gray-400"   },
+  { key: "import",   label: "Importado",        icon: "📥", color: "bg-blue-400"   },
+];
+
+function ChannelSection({ sources, total, periodLabel }: {
+  sources: Record<string, number>; total: number; periodLabel: string;
+}) {
+  const hasData = Object.values(sources).some(v => v > 0);
+  if (!hasData) return null;
+
+  const rows = SOURCE_META.map(m => ({ ...m, count: sources[m.key] ?? 0 }))
+    .filter(r => r.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  return (
+    <Card className="p-4">
+      <SectionHeader title="Canais de origem" sub={`${periodLabel} · onde vieram os pedidos`} href="/analytics" hrefLabel="Analytics" />
+      <div className="space-y-3">
+        {rows.map(r => {
+          const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
+          return (
+            <div key={r.key}>
+              <div className="mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1 text-xs text-gray-600">
+                  <span>{r.icon}</span> {r.label}
+                </span>
+                <span className="text-xs font-semibold text-gray-800">{r.count} <span className="font-normal text-gray-400">({pct}%)</span></span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                <div className={`h-full rounded-full ${r.color}`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 // ── Hourly Chart ───────────────────────────────────────────────────────────────
 
-function HourlyChart({ hourlyOrders }: { hourlyOrders: DashboardData["hourlyOrders"] }) {
+function HourlyChart({ hourlyOrders, period }: { hourlyOrders: DashboardData["hourlyOrders"]; period: PeriodKey }) {
   const nowBRTHour = ((new Date().getUTCHours() - 3) + 24) % 24;
-  const endHour    = Math.min(23, Math.max(nowBRTHour, 20));
+  // For yesterday (completed day) show all hours; for today cut off at current hour (min 20)
+  const endHour    = period === "yesterday" ? 23 : Math.min(23, Math.max(nowBRTHour, 20));
   const display    = hourlyOrders.filter(h => h.hour >= 7 && h.hour <= endHour);
   const maxOrders  = Math.max(1, ...display.map(h => h.orders));
   const peakHour   = display.reduce<{ hour: number; orders: number } | null>(
@@ -458,7 +509,7 @@ function HourlyChart({ hourlyOrders }: { hourlyOrders: DashboardData["hourlyOrde
   return (
     <Card className="p-4">
       <SectionHeader
-        title="Ritmo do dia"
+        title={period === "yesterday" ? "Ritmo de ontem" : "Ritmo do dia"}
         sub={hasData && peakHour && peakHour.orders > 0
           ? `Pico: ${peakHour.hour}h (${peakHour.orders} pedido${peakHour.orders !== 1 ? "s" : ""})`
           : "Pedidos por hora"}
@@ -599,8 +650,11 @@ function CampaignSection({ campaigns }: { campaigns: Campaign[] }) {
                 </span>
               </div>
               <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
-                <span>Audiência: <b className="text-gray-700">{fmtNum(c.totalAudience)}</b></span>
+                <span>Público: <b className="text-gray-700">{fmtNum(c.totalAudience)}</b></span>
                 <span>Enviados: <b className="text-gray-700">{fmtNum(c.totalSent)}</b></span>
+                {c.totalFailed > 0 && (
+                  <span>Falhas: <b className="text-red-600">{fmtNum(c.totalFailed)}</b></span>
+                )}
                 {c.totalResponded > 0 && (
                   <span>
                     Respostas: <b className="text-gray-700">{fmtNum(c.totalResponded)}</b>
@@ -1011,8 +1065,8 @@ export default function DashboardClient({ userName }: { userName: string }) {
       {header}
 
       <div className="space-y-4 px-4 pb-10">
-        {/* KPI Row */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {/* KPI Row — 6 cards */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <KpiCard
             label={`Receita · ${pLabel}`}
             value={fmtCurrency(data.revenuePeriod)}
@@ -1030,6 +1084,18 @@ export default function DashboardClient({ userName }: { userName: string }) {
             label="Ticket médio"
             value={data.ordersPeriod > 0 ? fmtCurrency(data.avgTicket) : "—"}
             sub={data.ordersPeriod > 0 ? "por pedido" : "sem pedidos no período"}
+          />
+          <KpiCard
+            label="Pix pendente"
+            value={fmtNum(data.pendingPaymentsCount)}
+            sub={data.pendingPaymentsCount > 0 ? "aguardando confirmação" : "todos confirmados"}
+            href={data.pendingPaymentsCount > 0 ? "/orders" : undefined}
+          />
+          <KpiCard
+            label={`Cancelados · ${pLabel}`}
+            value={fmtNum(data.cancelledPeriod)}
+            sub={data.cancelledPeriod > 0 ? "pedidos cancelados" : "sem cancelamentos"}
+            href={data.cancelledPeriod > 0 ? "/orders" : undefined}
           />
           <KpiCard
             label="Em andamento"
@@ -1067,9 +1133,12 @@ export default function DashboardClient({ userName }: { userName: string }) {
           <OrderTypesSection types={data.ordersByType} total={data.ordersPeriod} periodLabel={pLabel} />
         </div>
 
-        {/* Hourly rhythm (today only) */}
-        {data.period === "today" && data.hourlyOrders.length > 0 && (
-          <HourlyChart hourlyOrders={data.hourlyOrders} />
+        {/* Channel origin split */}
+        <ChannelSection sources={data.ordersBySource} total={data.ordersPeriod} periodLabel={pLabel} />
+
+        {/* Hourly rhythm — today + yesterday (adaptive granularity) */}
+        {(data.period === "today" || data.period === "yesterday") && data.hourlyOrders.length > 0 && (
+          <HourlyChart hourlyOrders={data.hourlyOrders} period={data.period} />
         )}
 
         {/* Trend chart */}

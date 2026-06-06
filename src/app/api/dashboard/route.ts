@@ -176,6 +176,8 @@ export async function GET(req: NextRequest) {
       activeCampaigns,
       recoveryStats,
       crmSegmentCounts,
+      cancelledPeriodCount,
+      orderSourceCounts,
     ] = await Promise.all([
       // 1. Period orders (KPIs + products + types + hourly/daily)
       prisma.order.findMany({
@@ -185,7 +187,7 @@ export async function GET(req: NextRequest) {
           status:       { in: REVENUE_STATUS },
         },
         select: {
-          total: true, type: true, createdAt: true,
+          total: true, type: true, createdAt: true, source: true,
           items: {
             select: {
               name: true, menuItemId: true, quantity: true, total: true, categoryName: true,
@@ -228,7 +230,7 @@ export async function GET(req: NextRequest) {
       // 7. Active/scheduled campaigns (real-time)
       prisma.campaign.findMany({
         where:   { restaurantId: ctx.restaurantId, status: { in: ACTIVE_CAMP } },
-        select:  { id: true, name: true, status: true, totalSent: true, totalResponded: true, totalAudience: true },
+        select:  { id: true, name: true, status: true, totalSent: true, totalFailed: true, totalResponded: true, totalAudience: true },
         orderBy: { createdAt: "desc" },
         take:    3,
       }),
@@ -245,6 +247,24 @@ export async function GET(req: NextRequest) {
       prisma.customer.groupBy({
         by:    ["segment"],
         where: { restaurantId: ctx.restaurantId, isGuest: false, isActive: true },
+        _count: { id: true },
+      }),
+      // 10. Cancelled orders in period
+      prisma.order.count({
+        where: {
+          restaurantId: ctx.restaurantId,
+          createdAt:    { gte: rangeStart, lte: rangeEnd },
+          status:       "CANCELLED",
+        },
+      }),
+      // 11. Order source breakdown (channel attribution) for period
+      prisma.order.groupBy({
+        by:    ["source"],
+        where: {
+          restaurantId: ctx.restaurantId,
+          createdAt:    { gte: rangeStart, lte: rangeEnd },
+          status:       { in: REVENUE_STATUS },
+        },
         _count: { id: true },
       }),
     ]);
@@ -289,9 +309,9 @@ export async function GET(req: NextRequest) {
       .slice(0, 5)
       .map(p => ({ ...p, revenue: Math.round(p.revenue * 100) / 100 }));
 
-    // ── Hourly breakdown (only for "today" period) ─────────────────────────────
+    // ── Hourly breakdown (today + yesterday — adaptive granularity) ───────────
     const hourlyOrders = (() => {
-      if (!isToday) return [];
+      if (!isToday && periodKey !== "yesterday") return [];
       const hourlyMap = new Map<number, { orders: number; revenue: number }>();
       for (const order of periodOrders) {
         const hour = new Date(order.createdAt.getTime() - 3 * 3_600_000).getUTCHours();
@@ -374,6 +394,13 @@ export async function GET(req: NextRequest) {
       segMap[row.segment] = row._count.id;
     }
 
+    // ── Order source / channel breakdown (period) ──────────────────────────────
+    const sourceMap: Record<string, number> = {};
+    for (const row of orderSourceCounts) {
+      const key = row.source ?? "manual";
+      sourceMap[key] = (sourceMap[key] ?? 0) + row._count.id;
+    }
+
     return ok({
       // Period metadata
       period:        periodKey,
@@ -402,12 +429,19 @@ export async function GET(req: NextRequest) {
       trendDays:    isToday ? trend7DaysBase : trendDays,
       revenueTrend: Math.round(revenueTrend * 100) / 100,
 
+      // Period: cancelled count
+      cancelledPeriod: cancelledPeriodCount,
+
+      // Period: order source / channel attribution
+      ordersBySource: sourceMap,
+
       // Campaigns (real-time)
       activeCampaigns: activeCampaigns.map(c => ({
         id:             c.id,
         name:           c.name,
         status:         c.status as string,
         totalSent:      c.totalSent,
+        totalFailed:    c.totalFailed,
         totalResponded: c.totalResponded,
         totalAudience:  c.totalAudience,
       })),

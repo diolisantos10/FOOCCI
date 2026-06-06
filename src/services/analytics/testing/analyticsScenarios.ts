@@ -186,17 +186,18 @@ function opsKpi(p: Partial<RawKpiHints> = {}): RawKpiHints {
 
 function cockpitRaw(p: Partial<CockpitRawData> = {}): CockpitRawData {
   return {
-    todayRevenue:    p.todayRevenue    ?? 0,
-    todayOrders:     p.todayOrders     ?? 0,
-    cancelledToday:  p.cancelledToday  ?? 0,
-    avg7DayRevenue:  p.avg7DayRevenue  ?? 0,
-    hasSevenDayData: p.hasSevenDayData ?? false,
-    pendingPayments: p.pendingPayments ?? 0,
-    delayedOrders:   p.delayedOrders   ?? 0,
-    crmFrio:         p.crmFrio         ?? 0,
-    crmTotal:        p.crmTotal        ?? 0,
-    vipCustomers:    p.vipCustomers    ?? 0,
-    pendingRecovery: p.pendingRecovery ?? 0,
+    todayRevenue:           p.todayRevenue           ?? 0,
+    todayOrders:            p.todayOrders            ?? 0,
+    cancelledToday:         p.cancelledToday         ?? 0,
+    avg7DayRevenue:         p.avg7DayRevenue         ?? 0,
+    hasSevenDayData:        p.hasSevenDayData        ?? false,
+    pendingPayments:        p.pendingPayments        ?? 0,
+    delayedOrders:          p.delayedOrders          ?? 0,
+    crmFrio:                p.crmFrio                ?? 0,
+    crmTotal:               p.crmTotal               ?? 0,
+    vipCustomers:           p.vipCustomers           ?? 0,
+    pendingRecovery:        p.pendingRecovery        ?? 0,
+    mpWebhookSecretMissing: p.mpWebhookSecretMissing ?? false,
   };
 }
 

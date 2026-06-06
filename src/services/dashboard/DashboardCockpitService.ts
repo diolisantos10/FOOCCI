@@ -85,6 +85,7 @@ export interface CockpitRawData {
   vipCustomers:     number;  // customers with tier OURO or DIAMANTE
 
   pendingRecovery:  number;  // OPEN drafts >20 min old, no recovery attempt, has items
+  mpWebhookSecretMissing: boolean; // true when MERCADO_PAGO_WEBHOOK_SECRET env var is absent
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -97,6 +98,17 @@ function fmtPct(n: number): string {
 
 export function buildAlerts(d: CockpitRawData): CockpitAlert[] {
   const alerts: CockpitAlert[] = [];
+
+  if (d.mpWebhookSecretMissing) {
+    alerts.push({
+      id:          "mp-webhook-secret-missing",
+      severity:    "WARNING",
+      title:       "Webhook Pix não configurado",
+      description: "Confirmações de pagamento Pix podem não ser processadas automaticamente.",
+      actionLabel: "Configurar",
+      actionHref:  "/settings",
+    });
+  }
 
   if (d.delayedOrders > 0) {
     const n = d.delayedOrders;
@@ -343,15 +355,16 @@ export async function getCockpitReport(restaurantId: string): Promise<CockpitRep
   const raw: CockpitRawData = {
     todayRevenue,
     todayOrders,
-    cancelledToday:  cancelledTodayCount,
+    cancelledToday:       cancelledTodayCount,
     avg7DayRevenue,
     hasSevenDayData,
-    pendingPayments: pendingPaymentsCount,
+    pendingPayments:      pendingPaymentsCount,
     delayedOrders,
     crmFrio,
     crmTotal,
-    vipCustomers:    vipCount,
-    pendingRecovery: staleDraftCount,
+    vipCustomers:         vipCount,
+    pendingRecovery:      staleDraftCount,
+    mpWebhookSecretMissing: !process.env.MERCADO_PAGO_WEBHOOK_SECRET,
   };
 
   const limitations: string[] = [
