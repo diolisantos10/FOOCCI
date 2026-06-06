@@ -258,10 +258,10 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
               </div>
               <dl className="space-y-1 text-xs text-gray-700">
                 <div><dt className="inline font-semibold text-gray-500">Fonte: </dt><dd className="inline">{t.source}</dd></div>
-                <div><dt className="inline font-semibold text-gray-500">Princípio: </dt><dd className="inline">{t.principle}</dd></div>
-                <div><dt className="inline font-semibold text-gray-500">Aplicação no Foocci: </dt><dd className="inline">{t.foocciApplication}</dd></div>
-                <div><dt className="inline font-semibold text-red-600">Limite: </dt><dd className="inline">{t.operationalLimit}</dd></div>
-                <div><dt className="inline font-semibold text-blue-600">Teste: </dt><dd className="inline">{t.suggestedTest}</dd></div>
+                <div><dt className="inline font-semibold text-gray-500">Para que serve: </dt><dd className="inline">{t.purpose}</dd></div>
+                <div><dt className="inline font-semibold text-gray-500">Como o Waiter aplica: </dt><dd className="inline">{t.application}</dd></div>
+                <div><dt className="inline font-semibold text-amber-600">Regra de uso: </dt><dd className="inline">{t.usageRule}</dd></div>
+                <div><dt className="inline font-semibold text-blue-600">Teste de qualidade: </dt><dd className="inline">{t.qualityTest}</dd></div>
               </dl>
               <div className="mt-2">
                 <Pill tone="amber">{t.status}</Pill>
