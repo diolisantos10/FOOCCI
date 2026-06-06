@@ -213,7 +213,7 @@ export class CRMService {
 
   static async getCustomers(
     restaurantId: string,
-    filter?: "inactive" | "neverOrdered" | "quente" | "morno" | "frio" | "vip" | "recent" | "all" | "firstTime",
+    filter?: "inactive" | "neverOrdered" | "quente" | "morno" | "frio" | "recent" | "all" | "firstTime" | "tier-bronze" | "tier-prata" | "tier-ouro" | "tier-diamante",
     search?: string
   ): Promise<ServiceResult<CRMCustomer[]>> {
     const now = new Date();
@@ -253,15 +253,14 @@ export class CRMService {
         isActive: true,
         totalOrders: 0,
       };
-    } else if (filter === "vip") {
-      where = {
-        ...where,
-        isActive: true,
-        OR: [
-          { totalSpend: { gte: new Decimal(800) } },
-          { totalOrders: { gte: 10 } },
-        ],
-      };
+    } else if (filter === "tier-bronze") {
+      where = { ...where, isActive: true, tier: "BRONZE" };
+    } else if (filter === "tier-prata") {
+      where = { ...where, isActive: true, tier: "PRATA" };
+    } else if (filter === "tier-ouro") {
+      where = { ...where, isActive: true, tier: "OURO" };
+    } else if (filter === "tier-diamante") {
+      where = { ...where, isActive: true, tier: "DIAMANTE" };
     } else if (filter === "firstTime") {
       where = {
         ...where,

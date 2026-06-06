@@ -27,15 +27,18 @@ const PRIORITY_CONFIG: Record<string, { label: string; dot: string }> = {
 };
 
 const CUSTOMER_FILTER_LABELS: Record<string, string> = {
-  all:          "Todos os clientes",
-  quente:       "🔥 Quentes (≤30d)",
-  morno:        "🌡️ Mornos (31–60d)",
-  frio:         "🥶 Frios (60d+)",
-  inactive:     "Inativos 30d+",
-  neverOrdered: "Nunca pediu",
-  vip:          "Clientes VIP",
-  firstTime:    "1º pedido",
-  recent:       "Recentes",
+  all:           "Todos os clientes",
+  quente:        "🔥 Quentes (≤30d)",
+  morno:         "🌡️ Mornos (31–60d)",
+  frio:          "🥶 Frios (60d+)",
+  inactive:      "Inativos 30d+",
+  neverOrdered:  "Nunca pediu",
+  firstTime:     "1º pedido",
+  recent:        "Recentes",
+  "tier-diamante": "💎 Diamante",
+  "tier-ouro":     "🥇 Ouro",
+  "tier-prata":    "🥈 Prata",
+  "tier-bronze":   "🥉 Bronze",
 };
 
 type CRMSortKey = "spend" | "orders" | "lastOrder" | "name";
@@ -3812,7 +3815,7 @@ function WhatsAppSendModal({
 
 // ── Customers Tab ─────────────────────────────────────────────────────────────
 
-type CRMFilter = "all" | "inactive" | "quente" | "morno" | "frio" | "neverOrdered" | "vip" | "firstTime" | "recent";
+type CRMFilter = "all" | "inactive" | "quente" | "morno" | "frio" | "neverOrdered" | "firstTime" | "recent" | "tier-bronze" | "tier-prata" | "tier-ouro" | "tier-diamante";
 
 function CustomersTab({
   initialCustomers,
@@ -3902,10 +3905,28 @@ function CustomersTab({
 
       {/* Filter pills + actions */}
       <div className="flex flex-wrap items-center gap-2">
-        {filterKeys.map((f) => (
+        {filterKeys.filter((f) => !f.startsWith("tier-")).map((f) => (
           <button
             key={f}
             onClick={() => applyFilter(f)}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
+              filter === f
+                ? "bg-brand-600 text-white shadow-sm"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {CUSTOMER_FILTER_LABELS[f]}
+          </button>
+        ))}
+        <span
+          className="text-[10px] font-bold uppercase tracking-wide text-gray-400 pl-1"
+          title="Os níveis Bronze, Prata, Ouro e Diamante são definidos no Programa de Relacionamento."
+        >Nível:</span>
+        {filterKeys.filter((f) => f.startsWith("tier-")).map((f) => (
+          <button
+            key={f}
+            onClick={() => applyFilter(f)}
+            title="Os níveis são definidos no Programa de Relacionamento."
             className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
               filter === f
                 ? "bg-brand-600 text-white shadow-sm"
