@@ -4700,13 +4700,13 @@ function CrmConfiguracoes() {
 
       {/* A — Segurança de envio WhatsApp */}
       <CfgCard
-        title="Segurança de Envio WhatsApp"
-        subtitle="Limites e proteções aplicados a todas as campanhas manuais e automações."
+        title="Segurança de envio WhatsApp"
+        subtitle="Essas regras evitam excesso de mensagens, reduzem risco de bloqueio e protegem a experiência do cliente."
       >
         <div className="grid gap-5 sm:grid-cols-2">
           <CfgField
-            label="Cap global diário"
-            hint="Máx. mensagens CRM em 24h, somando todas as campanhas. 0 = sem limite."
+            label="Limite diário de mensagens"
+            hint="Máximo de mensagens de CRM que podem ser enviadas por dia. 0 = sem limite."
           >
             <input
               type="number" min={0} max={10000}
@@ -4717,8 +4717,8 @@ function CrmConfiguracoes() {
           </CfgField>
 
           <CfgField
-            label="Cooldown por cliente (horas)"
-            hint="Intervalo mínimo entre mensagens ao mesmo cliente."
+            label="Intervalo mínimo por cliente"
+            hint="Tempo mínimo entre uma mensagem e outra para o mesmo cliente (em horas)."
           >
             <input
               type="number" min={1} max={720}
@@ -4729,8 +4729,8 @@ function CrmConfiguracoes() {
           </CfgField>
 
           <CfgField
-            label="Limite semanal por cliente"
-            hint="Máx. mensagens ao mesmo cliente em 7 dias. 0 = sem limite."
+            label="Máximo por cliente na semana"
+            hint="Evita que o mesmo cliente receba mensagens demais em 7 dias. 0 = sem limite."
           >
             <input
               type="number" min={0} max={100}
@@ -4743,18 +4743,18 @@ function CrmConfiguracoes() {
 
         <div className="mt-5 space-y-4 border-t border-gray-100 pt-5">
           <CfgToggle
-            label="Ativar horário quieto"
-            desc="Bloqueia envios durante o período definido."
+            label="Horário sem envios"
+            desc="Bloqueia campanhas durante horários em que o restaurante não quer incomodar clientes."
             checked={cfg.quietHoursEnabled}
             onChange={(v) => set("quietHoursEnabled", v)}
           />
 
           {cfg.quietHoursEnabled && (
             <div className="grid gap-4 sm:grid-cols-3">
-              <CfgField label="Início do silêncio">
+              <CfgField label="Início do bloqueio">
                 <input type="time" value={cfg.quietHoursStart} onChange={(e) => set("quietHoursStart", e.target.value)} className={CFG_INPUT} />
               </CfgField>
-              <CfgField label="Fim do silêncio">
+              <CfgField label="Fim do bloqueio">
                 <input type="time" value={cfg.quietHoursEnd} onChange={(e) => set("quietHoursEnd", e.target.value)} className={CFG_INPUT} />
               </CfgField>
               <CfgField label="Fuso horário">
@@ -4766,11 +4766,28 @@ function CrmConfiguracoes() {
           )}
 
           <CfgToggle
-            label="Permitir envios no fim de semana"
-            desc="Quando desativado, campanhas e automações são bloqueadas no sábado e domingo."
+            label="Permitir campanhas no fim de semana"
+            desc="Desative se o restaurante não atende ou não quer campanhas no sábado e domingo."
             checked={cfg.sendOnWeekends}
             onChange={(v) => set("sendOnWeekends", v)}
           />
+        </div>
+
+        {/* Safety summary */}
+        <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <p className="font-semibold text-blue-700 mb-1">Resumo de segurança</p>
+          <p className="text-xs leading-relaxed text-blue-700">
+            {cfg.dailyGlobalCap > 0
+              ? `O CRM pode enviar até ${cfg.dailyGlobalCap} mensagens por dia`
+              : "O CRM pode enviar mensagens sem limite diário"}
+            {cfg.maxPerWeekPerCustomer > 0
+              ? `, no máximo ${cfg.maxPerWeekPerCustomer} por cliente por semana`
+              : ""}
+            {`, respeitando ${cfg.customerCooldownHours}h entre mensagens para o mesmo cliente`}
+            {cfg.quietHoursEnabled
+              ? `. Bloqueio ativo de ${cfg.quietHoursStart} às ${cfg.quietHoursEnd}.`
+              : "."}
+          </p>
         </div>
       </CfgCard>
 
@@ -4809,21 +4826,19 @@ function CrmConfiguracoes() {
         </div>
       </CfgCard>
 
-      {/* C — Opt-out */}
+      {/* C — Palavras de descadastro */}
       <CfgCard
-        title="Opt-out"
-        subtitle="Palavras-chave que identificam pedidos de exclusão inbound via WhatsApp."
+        title="Palavras de descadastro"
+        subtitle="Quando o cliente responder uma dessas palavras, ele sai automaticamente das campanhas."
       >
-        <ul className="space-y-2.5">
-          {["parar", "sair", "remover", "não quero", "nao quero"].map((word) => (
-            <li key={word} className="flex items-center gap-2 text-sm text-gray-700">
-              <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">{word}</span>
-            </li>
+        <div className="flex flex-wrap gap-2">
+          {["SAIR", "PARAR", "CANCELAR", "REMOVER", "NÃO QUERO"].map((word) => (
+            <span key={word} className="inline-flex items-center rounded-full bg-red-50 border border-red-200 px-3 py-1 text-xs font-semibold text-red-700">{word}</span>
           ))}
-        </ul>
+        </div>
         <p className="mt-3 text-xs text-gray-400">
-          Quando um cliente envia uma dessas palavras, ele é marcado como opt-out e excluído de todos os envios futuros.
-          A detecção é automática via webhook do WhatsApp.
+          A detecção é automática via webhook do WhatsApp. Clientes com opt-out são excluídos de todos os envios futuros de CRM.
+          A lista de palavras é gerenciada pela plataforma e não pode ser editada aqui.
         </p>
       </CfgCard>
 
