@@ -1,20 +1,18 @@
 "use client";
 
 /**
- * LibraryWorkbench — the Agent Library bench (client).
+ * AgentLibraryPanel — the live Agent Library embedded inside an Agent Room tab.
  *
- * "Universidade privada dos agentes": cadastra fontes de formação técnica e suas
- * técnicas, por agente. Leituras vêm do server (props); mutações vão pelas rotas
- * admin (/api/admin/agents/library/*). Nada aqui toca runtime — o contador
- * "ativas no runtime" é sempre 0 nesta fase.
+ * Self-contained: fetches its own data (GET sources/stats + detail) and performs
+ * mutations via the existing admin API routes (upload / techniques / extract).
+ * Fixed to a single agent (e.g. waiter) — this is that agent's "private
+ * university". Read-only vs. runtime: "ativas no runtime" is always 0.
  *
- * Copyright-safe: a UI foca em essência/técnica/aplicação; o texto colado é
- * exibido apenas como prévia curta (privado), nunca a obra inteira.
+ * Upload First: PDF/TXT/MD upload is the primary flow; the source is created
+ * first and survives parsing/AI failures (yellow partial state + retry).
  */
 
-import { useRef, useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   SOURCE_TYPES,
   SOURCE_TYPE_LABELS,
@@ -24,93 +22,30 @@ import {
   libraryAgentName,
   friendlyUploadMessage,
   classifyUploadOutcome,
-  type LibraryAgent,
 } from "@/services/agentLibrary/agentLibraryHelpers";
 
-// ── DTOs (plain, serializable) ──────────────────────────────────────────────────
+// ── DTOs (mirror the API responses) ─────────────────────────────────────────────
 
-export interface StatsDTO {
-  sources: number;
-  techniques: number;
-  activeInRuntime: number;
-  pendingExtraction: number;
+interface StatsDTO { sources: number; techniques: number; activeInRuntime: number; pendingExtraction: number; }
+interface SourceDTO {
+  id: string; title: string; author: string | null; sourceType: string; category: string | null;
+  status: string; extractionStatus: string; techniqueCount: number; createdAt: string;
+}
+interface TechniqueDTO {
+  id: string; techniqueName: string; category: string | null; purpose: string | null; principle: string | null;
+  application: string | null; usageRule: string | null; qualityTest: string | null; goodExample: string | null;
+  badExample: string | null; confidence: number | null; status: string;
+}
+interface SourceDetailDTO {
+  id: string; title: string; author: string | null; sourceType: string; category: string | null;
+  description: string | null; fileName: string | null; rawTextPreview: string | null; rawTextTruncated: boolean;
+  status: string; extractionStatus: string; createdAt: string; techniques: TechniqueDTO[];
 }
 
-export interface SourceDTO {
-  id: string;
-  title: string;
-  author: string | null;
-  sourceType: string;
-  category: string | null;
-  status: string;
-  extractionStatus: string;
-  techniqueCount: number;
-  createdAt: string;
-}
+// ── small UI helpers ────────────────────────────────────────────────────────────
 
-export interface TechniqueDTO {
-  id: string;
-  techniqueName: string;
-  category: string | null;
-  purpose: string | null;
-  principle: string | null;
-  application: string | null;
-  usageRule: string | null;
-  qualityTest: string | null;
-  goodExample: string | null;
-  badExample: string | null;
-  confidence: number | null;
-  status: string;
-}
-
-export interface SourceDetailDTO {
-  id: string;
-  title: string;
-  author: string | null;
-  sourceType: string;
-  category: string | null;
-  description: string | null;
-  rawTextPreview: string | null;
-  rawTextTruncated: boolean;
-  status: string;
-  extractionStatus: string;
-  createdAt: string;
-  techniques: TechniqueDTO[];
-}
-
-interface Props {
-  agents: LibraryAgent[];
-  agentSlug: string;
-  stats: StatsDTO;
-  sources: SourceDTO[];
-  selected: SourceDetailDTO | null;
-  dbError: boolean;
-}
-
-// ── small helpers ───────────────────────────────────────────────────────────────
-
-async function postJSON(url: string, body: unknown): Promise<Record<string, unknown>> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!res.ok || data.ok !== true) {
-    throw new Error(typeof data.error === "string" ? data.error : "Falha na operação.");
-  }
-  return data;
-}
-
-function fmtDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("pt-BR");
-  } catch {
-    return iso;
-  }
-}
-
-function Pill({ children, tone = "gray" }: { children: React.ReactNode; tone?: "gray" | "green" | "amber" | "blue" | "violet" }) {
+type Tone = "gray" | "green" | "amber" | "blue" | "violet";
+function Pill({ children, tone = "gray" }: { children: React.ReactNode; tone?: Tone }) {
   const cls = {
     gray: "bg-gray-100 text-gray-600",
     green: "bg-green-50 text-green-700",
@@ -120,34 +55,46 @@ function Pill({ children, tone = "gray" }: { children: React.ReactNode; tone?: "
   }[tone];
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{children}</span>;
 }
-
-function extractionTone(s: string): "gray" | "green" | "amber" {
+function extractionTone(s: string): Tone {
   return s === "EXTRACTED" ? "green" : s === "FAILED" ? "amber" : s === "EXTRACTING" ? "amber" : "gray";
+}
+function fmtDate(iso: string): string {
+  try { return new Date(iso).toLocaleDateString("pt-BR"); } catch { return iso; }
+}
+async function postJSON(url: string, body: unknown): Promise<Record<string, unknown>> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || data.ok !== true) throw new Error(typeof data.error === "string" ? data.error : "Falha na operação.");
+  return data;
 }
 
 // ── component ───────────────────────────────────────────────────────────────────
 
-export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, dbError }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
+export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
+  const [loading, setLoading] = useState(true);
+  const [dbError, setDbError] = useState(false);
+  const [stats, setStats] = useState<StatsDTO>({ sources: 0, techniques: 0, activeInRuntime: 0, pendingExtraction: 0 });
+  const [sources, setSources] = useState<SourceDTO[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<SourceDetailDTO | null>(null);
 
-  const [showNewSource, setShowNewSource] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);     // red — fatal
-  const [warn, setWarn] = useState<string | null>(null);   // yellow — partial (source created)
-  const [notice, setNotice] = useState<string | null>(null); // green — success
+  const [err, setErr] = useState<string | null>(null);
+  const [warn, setWarn] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
 
-  // new source form (Upload First)
+  // upload form
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [nsFileName, setNsFileName] = useState<string>("");
-  const [nsTitle, setNsTitle] = useState("");
-  const [nsAuthor, setNsAuthor] = useState("");
-  const [nsType, setNsType] = useState<string>("INTERNAL_NOTE");
-  const [nsCategory, setNsCategory] = useState("");
-  const [nsDescription, setNsDescription] = useState("");
-  const [nsRawText, setNsRawText] = useState("");
+  const [fName, setFName] = useState("");
+  const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
+  const [type, setType] = useState("BOOK");
+  const [category, setCategory] = useState("");
+  const [description, setDescription] = useState("");
+  const [rawText, setRawText] = useState("");
 
-  // add technique form
+  // manual technique form
   const [showAddTech, setShowAddTech] = useState(false);
   const [tName, setTName] = useState("");
   const [tCategory, setTCategory] = useState("");
@@ -156,64 +103,73 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
   const [tUsageRule, setTUsageRule] = useState("");
   const [tQualityTest, setTQualityTest] = useState("");
 
-  function resetNewSource() {
-    setNsTitle(""); setNsAuthor(""); setNsType("INTERNAL_NOTE");
-    setNsCategory(""); setNsDescription(""); setNsRawText(""); setNsFileName("");
+  const loadList = useCallback(async () => {
+    setLoading(true); setDbError(false);
+    try {
+      const res = await fetch(`/api/admin/agents/library/sources?agentSlug=${agentSlug}`);
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (res.status === 503 || data.dbError === true) { setDbError(true); return; }
+      if (!res.ok || data.ok !== true) { setErr(typeof data.error === "string" ? data.error : "Falha ao carregar a Library."); return; }
+      setStats(data.stats as StatsDTO);
+      setSources((data.sources as SourceDTO[]) ?? []);
+    } catch {
+      setErr("Falha ao carregar a Library.");
+    } finally {
+      setLoading(false);
+    }
+  }, [agentSlug]);
+
+  const loadDetail = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/agents/library/sources/${id}`);
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (res.ok && data.ok === true) setSelected(data.source as SourceDetailDTO);
+    } catch { /* keep previous */ }
+  }, []);
+
+  useEffect(() => { loadList(); }, [loadList]);
+  useEffect(() => { if (selectedId) loadDetail(selectedId); else setSelected(null); }, [selectedId, loadDetail]);
+
+  function resetForm() {
+    setTitle(""); setAuthor(""); setType("BOOK"); setCategory(""); setDescription(""); setRawText(""); setFName("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
   function resetTech() {
     setTName(""); setTCategory(""); setTPurpose(""); setTApplication(""); setTUsageRule(""); setTQualityTest("");
   }
 
-  /**
-   * Upload First: send file (optional) + fields as multipart; optionally extract.
-   * Three outcomes (classifyUploadOutcome): success (green), partial (yellow —
-   * source created but a later stage failed → select it), fatal (red — nothing
-   * created). The response always carries { ok, stage, message, sourceId? }.
-   */
   async function submitUpload(extract: boolean) {
     setErr(null); setWarn(null); setNotice(null); setBusy(true);
     try {
       const fd = new FormData();
       fd.append("agentSlug", agentSlug);
-      fd.append("sourceType", nsType);
-      fd.append("title", nsTitle);
-      fd.append("author", nsAuthor);
-      fd.append("category", nsCategory);
-      fd.append("description", nsDescription);
-      fd.append("rawText", nsRawText);
+      fd.append("sourceType", type);
+      fd.append("title", title);
+      fd.append("author", author);
+      fd.append("category", category);
+      fd.append("description", description);
+      fd.append("rawText", rawText);
       fd.append("extract", extract ? "1" : "0");
       const f = fileInputRef.current?.files?.[0];
       if (f) fd.append("file", f);
 
       let res: Response;
-      try {
-        res = await fetch("/api/admin/agents/library/upload", { method: "POST", body: fd });
-      } catch {
-        setErr(friendlyUploadMessage(0));
-        return;
-      }
+      try { res = await fetch("/api/admin/agents/library/upload", { method: "POST", body: fd }); }
+      catch { setErr(friendlyUploadMessage(0)); return; }
+
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       const outcome = classifyUploadOutcome(data);
-      const sourceId = typeof data.sourceId === "string" ? data.sourceId : null;
+      const newId = typeof data.sourceId === "string" ? data.sourceId : null;
       const serverMessage = typeof data.message === "string" ? data.message : null;
       const stage = typeof data.stage === "string" ? data.stage : "";
 
-      if (outcome === "success") {
-        setNotice(serverMessage || "Fonte criada.");
-      } else if (outcome === "partial") {
-        // Source exists — keep the upload, warn (yellow), and select it.
-        setWarn(serverMessage || `Fonte criada, mas a extração falhou no estágio ${stage}.`);
-      } else {
-        // Fatal — nothing was created.
-        setErr(friendlyUploadMessage(res.status, serverMessage));
-        return;
-      }
+      if (outcome === "success") setNotice(serverMessage || "Fonte criada.");
+      else if (outcome === "partial") setWarn(serverMessage || `Fonte criada, mas a extração falhou no estágio ${stage}.`);
+      else { setErr(friendlyUploadMessage(res.status, serverMessage)); return; }
 
-      resetNewSource();
-      setShowNewSource(false);
-      if (sourceId) router.push(`${pathname}?agent=${agentSlug}&source=${sourceId}`);
-      router.refresh();
+      resetForm(); setShowForm(false);
+      await loadList();
+      if (newId) setSelectedId(newId);
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Erro ao enviar conteúdo.");
     } finally {
@@ -223,15 +179,15 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
 
   async function submitTechnique(e: React.FormEvent) {
     e.preventDefault();
-    if (!selected) return;
-    setErr(null); setNotice(null); setBusy(true);
+    if (!selectedId) return;
+    setErr(null); setWarn(null); setNotice(null); setBusy(true);
     try {
       await postJSON("/api/admin/agents/library/techniques", {
-        sourceId: selected.id, techniqueName: tName, category: tCategory,
+        sourceId: selectedId, techniqueName: tName, category: tCategory,
         purpose: tPurpose, application: tApplication, usageRule: tUsageRule, qualityTest: tQualityTest,
       });
       resetTech(); setShowAddTech(false); setNotice("Técnica adicionada.");
-      router.refresh();
+      await Promise.all([loadList(), loadDetail(selectedId)]);
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Erro ao criar técnica.");
     } finally {
@@ -240,13 +196,13 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
   }
 
   async function runExtraction() {
-    if (!selected) return;
+    if (!selectedId) return;
     setErr(null); setWarn(null); setNotice(null); setBusy(true);
     try {
-      const data = await postJSON(`/api/admin/agents/library/sources/${selected.id}/extract`, {});
+      const data = await postJSON(`/api/admin/agents/library/sources/${selectedId}/extract`, {});
       const created = typeof data.created === "number" ? data.created : 0;
       setNotice(created > 0 ? `${created} técnica(s) extraída(s) por IA.` : "Nenhuma técnica extraída — revise o conteúdo.");
-      router.refresh();
+      await Promise.all([loadList(), loadDetail(selectedId)]);
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Erro na extração.");
     } finally {
@@ -254,146 +210,109 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
     }
   }
 
+  const agentName = libraryAgentName(agentSlug);
+
   return (
-    <div className="min-h-full space-y-5 bg-white px-8 py-6 text-gray-900">
-      {/* Topo */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Agent Library</h1>
-          <p className="text-sm text-gray-500">Universidade privada dos agentes · formação técnica (read-only vs. runtime)</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => { setShowNewSource((v) => !v); setErr(null); }}
-          className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700"
-        >
-          {showNewSource ? "Fechar" : "+ Adicionar conteúdo"}
-        </button>
-      </header>
-
-      {/* This is the cross-agent OVERVIEW. The primary per-agent flow lives inside
-          each Agent Room (e.g. /admin/agents/waiter → aba Library). */}
-      <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-        ℹ️ Visão geral multi-agente. O fluxo principal de cada agente fica dentro da sua sala —
-        ex.: <Link href="/admin/agents/waiter" className="font-semibold underline">/admin/agents/waiter → aba Library</Link>.
-      </div>
-
-      {/* seletor de agente */}
-      <nav className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1">
-        {agents.map((a) => {
-          const isActive = a.slug === agentSlug;
-          return (
-            <Link
-              key={a.slug}
-              href={`${pathname}?agent=${a.slug}`}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                isActive ? "bg-orange-600 text-white" : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              {a.name}
-            </Link>
-          );
-        })}
-      </nav>
-
-      {dbError && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          As tabelas da Library ainda não estão disponíveis neste ambiente (migration pendente). A tela carrega vazia
-          até a migration <span className="font-mono">add_agent_library</span> ser aplicada.
-        </div>
-      )}
-      {err && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
-      {warn && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">⚠️ {warn}</div>}
-      {notice && <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{notice}</div>}
-
-      {/* Dashboard */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "Fontes cadastradas", value: stats.sources },
-          { label: "Técnicas extraídas", value: stats.techniques },
-          { label: "Ativas no runtime", value: stats.activeInRuntime },
-          { label: "Fontes pendentes", value: stats.pendingExtraction },
-        ].map((k) => (
-          <div key={k.label} className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-2xl font-bold">{k.value}</p>
-            <p className="text-[11px] uppercase tracking-wide text-gray-400">{k.label}</p>
+    <div className="space-y-4">
+      {/* 1. Biblioteca do {agente} — resumo */}
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Biblioteca do {agentName}</h3>
+            <p className="text-xs text-gray-500">A universidade privada do {agentName} — fontes e técnicas (read-only vs. runtime).</p>
           </div>
-        ))}
-      </div>
+          <button type="button" onClick={() => { setShowForm((v) => !v); setErr(null); setWarn(null); }}
+            className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700">
+            {showForm ? "Fechar" : "+ Adicionar conteúdo"}
+          </button>
+        </div>
 
-      {/* Adicionar conteúdo à Library (Upload First) */}
-      {showNewSource && (
+        {dbError && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Migration da Agent Library ainda não aplicada. Rode <span className="font-mono">prisma migrate deploy</span>.
+          </div>
+        )}
+        {err && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
+        {warn && <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">⚠️ {warn}</div>}
+        {notice && <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{notice}</div>}
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            { label: "Fontes cadastradas", value: stats.sources },
+            { label: "Técnicas extraídas", value: stats.techniques },
+            { label: "Ativas no runtime", value: stats.activeInRuntime },
+            { label: "Fontes pendentes", value: stats.pendingExtraction },
+          ].map((k) => (
+            <div key={k.label} className="rounded-lg border border-gray-200 bg-white p-3">
+              <p className="text-xl font-bold text-gray-900">{k.value}</p>
+              <p className="text-[11px] uppercase tracking-wide text-gray-400">{k.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 2. Adicionar conteúdo ao {agente} */}
+      {showForm && (
         <form onSubmit={(e) => e.preventDefault()} className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <p className="text-sm font-semibold">
-            Adicionar conteúdo à Library de <span className="text-orange-600">{libraryAgentName(agentSlug)}</span>
-          </p>
+          <p className="text-sm font-semibold">Adicionar conteúdo ao <span className="text-orange-600">{agentName}</span></p>
 
-          {/* 1) Upload (fluxo principal) */}
           <label className="block rounded-lg border-2 border-dashed border-orange-300 bg-white p-3 text-xs font-medium text-gray-700">
             📎 Upload de arquivo (PDF, TXT ou MD) — fluxo principal
-            <input
-              ref={fileInputRef}
-              type="file"
+            <input ref={fileInputRef} type="file"
               accept=".pdf,.txt,.md,.markdown,application/pdf,text/plain,text/markdown"
-              onChange={(e) => setNsFileName(e.target.files?.[0]?.name ?? "")}
-              className="mt-1 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:bg-orange-700"
-            />
-            {nsFileName && <span className="mt-1 block text-[11px] text-gray-500">Selecionado: {nsFileName}</span>}
+              onChange={(e) => setFName(e.target.files?.[0]?.name ?? "")}
+              className="mt-1 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:bg-orange-700" />
+            {fName && <span className="mt-1 block text-[11px] text-gray-500">Selecionado: {fName}</span>}
           </label>
 
-          {/* 2) Metadados (complemento opcional) */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="text-xs font-medium text-gray-600">
               Tipo da fonte
-              <select value={nsType} onChange={(e) => setNsType(e.target.value)}
+              <select value={type} onChange={(e) => setType(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
                 {SOURCE_TYPES.map((t) => <option key={t} value={t}>{SOURCE_TYPE_LABELS[t]}</option>)}
               </select>
             </label>
             <label className="text-xs font-medium text-gray-600">
               Categoria
-              <input value={nsCategory} onChange={(e) => setNsCategory(e.target.value)}
+              <input value={category} onChange={(e) => setCategory(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
             </label>
             <label className="text-xs font-medium text-gray-600">
               Título (opcional — detectado do arquivo)
-              <input value={nsTitle} onChange={(e) => setNsTitle(e.target.value)} maxLength={200}
+              <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
             </label>
             <label className="text-xs font-medium text-gray-600">
               Autor (opcional)
-              <input value={nsAuthor} onChange={(e) => setNsAuthor(e.target.value)}
+              <input value={author} onChange={(e) => setAuthor(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
             </label>
           </div>
           <label className="block text-xs font-medium text-gray-600">
             Descrição / essência (opcional)
-            <input value={nsDescription} onChange={(e) => setNsDescription(e.target.value)}
+            <input value={description} onChange={(e) => setDescription(e.target.value)}
               className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
           </label>
-
-          {/* 3) Colar conteúdo (opcional — alternativa ao upload) */}
           <label className="block text-xs font-medium text-gray-600">
             Ou cole o conteúdo / manualmente (opcional — síntese/notas, não obras inteiras)
-            <textarea value={nsRawText} onChange={(e) => setNsRawText(e.target.value)} rows={4}
+            <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} rows={4}
               className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
           </label>
-
           <p className="text-[11px] text-gray-400">
             🔒 O arquivo original <strong>não é armazenado</strong> (fica privado): o sistema extrai apenas o texto
             (amostra inicial em PDFs grandes) para gerar a síntese e as técnicas. Nada vai para o runtime.
           </p>
-
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => submitUpload(false)} disabled={busy}
               className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-              {busy ? "Processando…" : "Salvar fonte"}
+              {busy ? "Processando…" : "Salvar"}
             </button>
             <button type="button" onClick={() => submitUpload(true)} disabled={busy}
               className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">
               {busy ? "Processando…" : "Salvar e extrair técnicas"}
             </button>
-            <button type="button" onClick={() => { setShowNewSource(false); resetNewSource(); }}
+            <button type="button" onClick={() => { setShowForm(false); resetForm(); }}
               className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
               Cancelar
             </button>
@@ -404,20 +323,18 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Lista de fontes */}
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Fontes ({sources.length})</h2>
-          {sources.length === 0 && !dbError && (
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Fontes ({sources.length})</h3>
+          {loading && <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">Carregando…</p>}
+          {!loading && sources.length === 0 && !dbError && (
             <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
-              Nenhuma fonte para {libraryAgentName(agentSlug)} ainda. Use “+ Adicionar conteúdo”.
+              Nenhuma fonte para {agentName} ainda. Use “+ Adicionar conteúdo”.
             </p>
           )}
           {sources.map((s) => {
-            const isSel = selected?.id === s.id;
+            const isSel = selectedId === s.id;
             return (
-              <Link
-                key={s.id}
-                href={`${pathname}?agent=${agentSlug}&source=${s.id}`}
-                className={`block rounded-xl border bg-white p-3 transition hover:border-orange-300 ${isSel ? "border-orange-400 ring-1 ring-orange-200" : "border-gray-200"}`}
-              >
+              <button key={s.id} type="button" onClick={() => setSelectedId(s.id)}
+                className={`block w-full rounded-xl border bg-white p-3 text-left transition hover:border-orange-300 ${isSel ? "border-orange-400 ring-1 ring-orange-200" : "border-gray-200"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold">{s.title}</p>
@@ -426,20 +343,19 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
                   <Pill tone={extractionTone(s.extractionStatus)}>{EXTRACTION_STATUS_LABELS[s.extractionStatus] ?? s.extractionStatus}</Pill>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <Pill tone="blue">{libraryAgentName(agentSlug)}</Pill>
                   {s.category && <Pill tone="violet">{s.category}</Pill>}
                   <Pill tone="gray">{SOURCE_STATUS_LABELS[s.status] ?? s.status}</Pill>
                   <Pill tone="green">{s.techniqueCount} técnica(s)</Pill>
                   <span className="ml-auto text-[11px] text-gray-400">{fmtDate(s.createdAt)}</span>
                 </div>
-              </Link>
+              </button>
             );
           })}
         </section>
 
         {/* Detalhe da fonte */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Detalhe da fonte</h2>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Detalhe da fonte</h3>
           {!selected && (
             <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
               Selecione uma fonte para ver a essência e as técnicas.
@@ -451,7 +367,10 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-base font-bold">{selected.title}</p>
-                    <p className="text-xs text-gray-500">{selected.author || "—"} · {SOURCE_TYPE_LABELS[selected.sourceType as keyof typeof SOURCE_TYPE_LABELS] ?? selected.sourceType}</p>
+                    <p className="text-xs text-gray-500">
+                      {selected.author || "—"} · {SOURCE_TYPE_LABELS[selected.sourceType as keyof typeof SOURCE_TYPE_LABELS] ?? selected.sourceType}
+                      {selected.fileName ? ` · ${selected.fileName}` : ""}
+                    </p>
                   </div>
                   <Pill tone={extractionTone(selected.extractionStatus)}>{EXTRACTION_STATUS_LABELS[selected.extractionStatus] ?? selected.extractionStatus}</Pill>
                 </div>
@@ -463,7 +382,7 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
                 )}
                 {selected.rawTextPreview && (
                   <>
-                    <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Conteúdo colado (prévia · privado)</p>
+                    <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Conteúdo extraído (prévia · privado)</p>
                     <p className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-2 text-xs text-gray-600">
                       {selected.rawTextPreview}{selected.rawTextTruncated ? "…" : ""}
                     </p>
@@ -471,18 +390,13 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
                 )}
                 {selected.extractionStatus === "FAILED" && (
                   <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                    A última extração falhou. A fonte está salva — você pode tentar extrair novamente ou adicionar
-                    técnicas manualmente.
+                    A última extração falhou. A fonte está salva — tente extrair novamente ou adicione técnicas manualmente.
                   </p>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" onClick={runExtraction} disabled={busy}
                     className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50">
-                    {busy
-                      ? "Processando…"
-                      : selected.extractionStatus === "FAILED"
-                        ? "↻ Tentar extrair novamente"
-                        : "✨ Gerar técnicas com IA"}
+                    {busy ? "Processando…" : selected.extractionStatus === "FAILED" ? "↻ Tentar extrair novamente" : "✨ Gerar técnicas com IA"}
                   </button>
                   <button type="button" onClick={() => { setShowAddTech((v) => !v); setErr(null); }}
                     className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
@@ -547,8 +461,8 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
       </div>
 
       <p className="text-[11px] text-gray-400">
-        🔒 A Library é a formação dos agentes e <strong>não está conectada ao runtime</strong> (Waiter/CRM/WhatsApp).
-        “Ativas no runtime” permanece 0. Sínteses e técnicas são curadas — sem reprodução de obras completas.
+        🔒 A Library é a formação do {agentName} e <strong>não está conectada ao runtime</strong>. “Ativas no runtime”
+        permanece 0. Sínteses e técnicas são curadas — sem reprodução de obras completas.
       </p>
     </div>
   );

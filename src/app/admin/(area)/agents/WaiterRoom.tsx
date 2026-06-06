@@ -29,7 +29,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { AdminAgentProfileView } from "@/services/agents/types";
-import { WAITER_LIBRARY, WAITER_LIBRARY_CATEGORIES } from "./waiterLibrary";
+import { AgentLibraryPanel } from "./AgentLibraryPanel";
 
 // ── small presentational helpers (room-local) ──────────────────────────────────
 
@@ -558,81 +558,8 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
         </div>
       )}
 
-      {/* ── Library (v0.2 — content unchanged) ──────────────────────────────── */}
-      {tab === "Library" && (
-        <div className="space-y-4">
-          <RoomCard
-            title="Library v0.2 · Formação técnica"
-            hint="A formação profissional do Waiter: organiza fontes técnicas em gavetas de conhecimento, técnicas aplicáveis e testes de qualidade."
-            badge={
-              <Link href="/admin/agents/library?agent=waiter" className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700">
-                Abrir Agent Library →
-              </Link>
-            }
-          >
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-              A Library é a formação profissional do Waiter. Ela organiza fontes técnicas em gavetas de conhecimento,
-              técnicas aplicáveis e testes de qualidade. <strong>Ainda não altera o runtime.</strong>
-            </p>
-
-            {/* mini KPIs */}
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {[
-                { label: "Técnicas mapeadas", value: String(WAITER_LIBRARY.length) },
-                { label: "Gavetas / categorias", value: String(WAITER_LIBRARY_CATEGORIES.length) },
-                { label: "Ativas no runtime", value: "0" },
-                { label: "Status geral", value: "Em formação" },
-              ].map((k) => (
-                <div key={k.label} className="rounded-lg border border-gray-200 bg-white p-3">
-                  <p className="text-lg font-bold text-gray-900">{k.value}</p>
-                  <p className="text-[11px] uppercase tracking-wide text-gray-400">{k.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* gavetas de conhecimento */}
-            <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Gavetas de conhecimento</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              {WAITER_LIBRARY_CATEGORIES.map((c) => {
-                const n = WAITER_LIBRARY.filter((t) => t.category === c).length;
-                return (
-                  <div key={c} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                    <p className="text-sm font-semibold text-gray-900">{c}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">{n} {n === 1 ? "técnica" : "técnicas"}</p>
-                    <span className="mt-1.5 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">Em formação</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* técnicas — cards compactos */}
-            <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Técnicas</p>
-            <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
-              {WAITER_LIBRARY.map((t) => (
-                <div key={t.source + t.technique} className="rounded-lg border border-gray-200 bg-white p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-bold leading-tight text-gray-900">{t.technique}</p>
-                    <Pill tone="violet">{t.category}</Pill>
-                  </div>
-                  <p className="mt-1 text-sm text-gray-800">{t.application}</p>
-                  <dl className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-gray-600">
-                    <div><dt className="inline font-semibold text-gray-400">Fonte: </dt><dd className="inline">{t.source}</dd></div>
-                    <div><dt className="inline font-semibold text-gray-400">Para que serve: </dt><dd className="inline">{t.purpose}</dd></div>
-                    <div><dt className="inline font-semibold text-amber-600">Regra de uso: </dt><dd className="inline">{t.usageRule}</dd></div>
-                    <div><dt className="inline font-semibold text-blue-600">Teste de qualidade: </dt><dd className="inline">{t.qualityTest}</dd></div>
-                  </dl>
-                  <span className="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">{t.status}</span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-[11px] text-gray-400">
-              Sínteses operacionais curadas (sem trechos longos de obras). Quando houver muitas técnicas, esta aba
-              passará a mostrar um resumo com &quot;Ver tudo&quot; e gavetas por categoria. A ativação no runtime virá em
-              fase futura, com revisão, testes e governança.
-            </p>
-          </RoomCard>
-        </div>
-      )}
+      {/* ── Library — live workbench embedded (fonte de verdade real do agente) ── */}
+      {tab === "Library" && <AgentLibraryPanel agentSlug="waiter" />}
 
       {/* ── Runtime & Testes ────────────────────────────────────────────────── */}
       {tab === "Runtime & Testes" && (
