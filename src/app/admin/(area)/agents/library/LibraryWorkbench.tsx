@@ -22,6 +22,7 @@ import {
   EXTRACTION_STATUS_LABELS,
   TECHNIQUE_STATUS_LABELS,
   libraryAgentName,
+  friendlyUploadMessage,
   type LibraryAgent,
 } from "@/services/agentLibrary/agentLibraryHelpers";
 
@@ -178,17 +179,27 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
       const f = fileInputRef.current?.files?.[0];
       if (f) fd.append("file", f);
 
-      const res = await fetch("/api/admin/agents/library/upload", { method: "POST", body: fd });
+      let res: Response;
+      try {
+        res = await fetch("/api/admin/agents/library/upload", { method: "POST", body: fd });
+      } catch {
+        throw new Error(friendlyUploadMessage(0));
+      }
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok || data.ok !== true) {
-        throw new Error(typeof data.error === "string" ? data.error : "Falha no upload.");
+        const serverError = typeof data.error === "string" ? data.error : null;
+        throw new Error(friendlyUploadMessage(res.status, serverError));
       }
 
       const created = typeof data.created === "number" ? data.created : 0;
       const note = typeof data.note === "string" ? data.note : "";
       const extractError = typeof data.extractError === "string" ? data.extractError : "";
       let msg = "Fonte criada.";
-      if (extract) msg += extractError ? ` Extração falhou: ${extractError}` : ` ${created} técnica(s) extraída(s).`;
+      if (extract) {
+        msg += extractError
+          ? ` Fonte criada, mas a extração por IA falhou: ${extractError} Você pode gerar técnicas novamente no detalhe.`
+          : ` ${created} técnica(s) extraída(s).`;
+      }
       if (note) msg += ` ${note}`;
       setNotice(msg);
 

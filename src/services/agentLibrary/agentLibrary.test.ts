@@ -13,7 +13,33 @@ import {
   deriveTitleFromFileName,
   capStoredText,
   MAX_STORED_TEXT_CHARS,
+  isMissingTableError,
+  friendlyUploadMessage,
 } from "./agentLibraryHelpers";
+
+describe("agentLibraryHelpers — upload error handling", () => {
+  it("detects the 'migration not applied' (missing table) error", () => {
+    expect(isMissingTableError({ code: "P2021" })).toBe(true);
+    expect(isMissingTableError({ message: "The table `public.agent_library_sources` does not exist in the current database." })).toBe(true);
+    expect(isMissingTableError(new Error("relation \"agent_library_sources\" does not exist"))).toBe(true);
+    expect(isMissingTableError(new Error("network timeout"))).toBe(false);
+    expect(isMissingTableError(null)).toBe(false);
+  });
+
+  it("prefers the server message, else maps HTTP status to a friendly message", () => {
+    // server-provided specific error wins
+    expect(friendlyUploadMessage(400, "Tipo de arquivo não suportado. Use PDF, TXT ou MD.")).toContain("não suportado");
+    // status-derived fallbacks (no generic 'Falha no upload' for known statuses)
+    expect(friendlyUploadMessage(0)).toContain("servidor");
+    expect(friendlyUploadMessage(401)).toContain("Sessão admin");
+    expect(friendlyUploadMessage(403)).toContain("ADMIN_SECRET");
+    expect(friendlyUploadMessage(413)).toContain("grande");
+    expect(friendlyUploadMessage(503)).toContain("Migration");
+    expect(friendlyUploadMessage(500)).toContain("Erro interno");
+    // last-resort generic only for truly unknown
+    expect(friendlyUploadMessage(418)).toBe("Falha no upload.");
+  });
+});
 
 describe("agentLibraryHelpers — upload (Upload First)", () => {
   it("detects pdf vs text vs unsupported", () => {

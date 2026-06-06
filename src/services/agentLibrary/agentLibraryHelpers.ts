@@ -265,3 +265,30 @@ export function capStoredText(text: string): { text: string; truncated: boolean 
   if (t.length <= MAX_STORED_TEXT_CHARS) return { text: t, truncated: false };
   return { text: t.slice(0, MAX_STORED_TEXT_CHARS), truncated: true };
 }
+
+// ── error classification + friendly messages ─────────────────────────────────────
+
+/** True when an error means the Library tables are not migrated yet. */
+export function isMissingTableError(err: unknown): boolean {
+  const e = err as { code?: string; message?: string } | null;
+  if (!e) return false;
+  if (e.code === "P2021") return true; // Prisma: table does not exist
+  const m = (e.message ?? "").toLowerCase();
+  return m.includes("does not exist in the current database") || (m.includes("relation") && m.includes("does not exist"));
+}
+
+/**
+ * Map an upload API outcome to a specific, friendly Portuguese message.
+ * Prefers the server-provided error; otherwise derives from the HTTP status.
+ */
+export function friendlyUploadMessage(status: number, serverError?: string | null): string {
+  if (serverError && serverError.trim()) return serverError.trim();
+  if (status === 0) return "Não foi possível falar com o servidor. Verifique a conexão.";
+  if (status === 401) return "Sessão admin expirada. Faça login novamente.";
+  if (status === 403) return "Endpoint desabilitado (ADMIN_SECRET ausente no servidor).";
+  if (status === 413) return "Arquivo grande demais para o servidor.";
+  if (status === 400) return "Requisição inválida no upload.";
+  if (status === 503) return "Migration da Agent Library ainda não aplicada.";
+  if (status >= 500) return "Erro interno ao processar o upload. Veja os logs do servidor.";
+  return "Falha no upload.";
+}

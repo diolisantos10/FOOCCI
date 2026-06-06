@@ -41,8 +41,17 @@ interface PdfParseCtor {
 }
 
 async function extractPdf(buffer: Buffer): Promise<ExtractResult> {
-  const mod = (await import("pdf-parse")) as unknown as { PDFParse: PdfParseCtor };
-  const parser = new mod.PDFParse({ data: new Uint8Array(buffer) });
+  // pdf-parse is externalized (next.config.js) and loaded at runtime. Resolve the
+  // PDFParse constructor whether it is a named export or under `default` (CJS interop).
+  const mod = (await import("pdf-parse")) as unknown as {
+    PDFParse?: PdfParseCtor;
+    default?: { PDFParse?: PdfParseCtor };
+  };
+  const PdfParse = mod.PDFParse ?? mod.default?.PDFParse;
+  if (typeof PdfParse !== "function") {
+    throw new Error("Leitor de PDF indisponível no servidor (pdf-parse não carregou).");
+  }
+  const parser = new PdfParse({ data: new Uint8Array(buffer) });
   try {
     const result = await parser.getText({ first: MAX_PDF_PAGES });
     const total = result.total ?? 0;
