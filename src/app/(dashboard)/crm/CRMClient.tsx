@@ -8,6 +8,7 @@ import type { CrmAction } from "@/services/crm/CrmActionCenterService";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, type DateFilterPreset } from "./OverviewTab";
 import { ProgramaTab } from "./ProgramaTab";
+import { ReviewRequestModal } from "./ReviewRequestModal";
 import { NewCustomerButton } from "@/app/(dashboard)/customers/NewCustomerButton";
 import { isGuestIdentifier } from "@/lib/guest";
 
@@ -3828,15 +3829,17 @@ function CustomersTab({
   onImportOpen: () => void;
   reviewLinks: { google: string | null; ifood: string | null };
 }) {
-  const [filter,    setFilter]    = useState<CRMFilter>(initialFilter);
-  const [customers, setCustomers] = useState<CRMCustomer[]>(
+  const [filter,     setFilter]     = useState<CRMFilter>(initialFilter);
+  const [customers,  setCustomers]  = useState<CRMCustomer[]>(
     initialFilter === "all" ? initialCustomers : []
   );
-  const [loading,   setLoading]   = useState(initialFilter !== "all");
-  const [sortValue, setSortValue] = useState("spend-desc");
-  const [search,    setSearch]    = useState("");
-  const [debSearch, setDebSearch] = useState("");
-  const [waSend,    setWaSend]    = useState<CRMCustomer | null>(null);
+  const [loading,    setLoading]    = useState(initialFilter !== "all");
+  const [sortValue,  setSortValue]  = useState("spend-desc");
+  const [search,     setSearch]     = useState("");
+  const [debSearch,  setDebSearch]  = useState("");
+  const [waSend,     setWaSend]     = useState<CRMCustomer | null>(null);
+  const [reviewReq,  setReviewReq]  = useState<CRMCustomer | null>(null);
+  const hasReviewLink = !!(reviewLinks.google || reviewLinks.ifood);
 
   // Debounce search → debSearch triggers the API call
   useEffect(() => {
@@ -3874,6 +3877,12 @@ function CustomersTab({
     <div className="space-y-4">
       {waSend && (
         <WhatsAppSendModal customer={waSend} onClose={() => setWaSend(null)} />
+      )}
+      {reviewReq && reviewReq.phone && (
+        <ReviewRequestModal
+          customer={{ id: reviewReq.id, name: reviewReq.name, phone: reviewReq.phone }}
+          onClose={() => setReviewReq(null)}
+        />
       )}
 
       {/* Search box */}
@@ -4055,16 +4064,27 @@ function CustomersTab({
                       ) : !c.phone || c.contactStatus === "SEM_TELEFONE" ? (
                         <span className="text-[10px] text-gray-400 italic">Sem telefone</span>
                       ) : (
-                        <button
-                          onClick={() => setWaSend(c)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
-                        >
-                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347Z"/>
-                            <path d="M11.955 2C6.469 2 2 6.469 2 11.955c0 1.92.525 3.716 1.44 5.26L2 22l4.94-1.418A9.913 9.913 0 0 0 11.955 22C17.44 22 22 17.531 22 12.045 22 6.559 17.44 2 11.955 2Zm0 18.18a8.205 8.205 0 0 1-4.19-1.146l-.3-.178-3.107.893.893-3.026-.196-.312A8.178 8.178 0 0 1 3.82 12.045c0-4.489 3.647-8.135 8.135-8.135 4.489 0 8.135 3.646 8.135 8.135 0 4.489-3.646 8.135-8.135 8.135Z"/>
-                          </svg>
-                          WhatsApp
-                        </button>
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            onClick={() => setWaSend(c)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                          >
+                            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347Z"/>
+                              <path d="M11.955 2C6.469 2 2 6.469 2 11.955c0 1.92.525 3.716 1.44 5.26L2 22l4.94-1.418A9.913 9.913 0 0 0 11.955 22C17.44 22 22 17.531 22 12.045 22 6.559 17.44 2 11.955 2Zm0 18.18a8.205 8.205 0 0 1-4.19-1.146l-.3-.178-3.107.893.893-3.026-.196-.312A8.178 8.178 0 0 1 3.82 12.045c0-4.489 3.647-8.135 8.135-8.135 4.489 0 8.135 3.646 8.135 8.135 0 4.489-3.646 8.135-8.135 8.135Z"/>
+                            </svg>
+                            WhatsApp
+                          </button>
+                          {hasReviewLink && (
+                            <button
+                              onClick={() => setReviewReq(c)}
+                              title="Pedir avaliação"
+                              className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+                            >
+                              ⭐
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
