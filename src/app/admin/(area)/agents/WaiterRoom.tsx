@@ -231,47 +231,70 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
         <Checks mark="✓" color="text-green-600" items={["Leitura de intenção", "Recomendação de produto", "Upsell contextual", "Condução de pedido", "Leitura de cardápio", "Restrições alimentares", "Fechamento comercial", "Uso de cards visuais"]} />
       </RoomCard>
 
-      {/* 9. Library v0.1 — agent technical formation (read-only) */}
+      {/* 9. Library v0.2 — formation mini-dashboard (gavetas + técnicas), read-only */}
       <RoomCard
-        title="Library v0.1 · Formação técnica"
-        hint="Fontes externas → técnicas aplicáveis no escopo do Waiter. Base futura da universidade privada do agente."
-        badge={<Pill tone="amber">Read-only · não conectado ao runtime</Pill>}
+        title="Library v0.2 · Formação técnica"
+        hint="A formação profissional do Waiter: organiza fontes técnicas em gavetas de conhecimento, técnicas aplicáveis e testes de qualidade."
+        badge={<Pill tone="amber">Em formação · não conectado ao runtime</Pill>}
       >
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-          ⚠️ Library v0.1 é formação técnica <strong>read-only</strong>. Ainda <strong>não altera o comportamento</strong> do Waiter.
+          A Library é a formação profissional do Waiter. Ela organiza fontes técnicas em gavetas de conhecimento,
+          técnicas aplicáveis e testes de qualidade. <strong>Ainda não altera o runtime.</strong>
         </p>
 
-        {/* category drawers */}
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {WAITER_LIBRARY_CATEGORIES.map((c) => (
-            <Pill key={c} tone="gray">{c}</Pill>
-          ))}
-        </div>
-
-        {/* dense technique cards */}
-        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {WAITER_LIBRARY.map((t) => (
-            <div key={t.source + t.technique} className="rounded-lg border border-gray-200 bg-white p-3">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
-                <span className="text-sm font-semibold text-gray-900">{t.technique}</span>
-                <Pill tone="violet">{t.category}</Pill>
-              </div>
-              <dl className="space-y-1 text-xs text-gray-700">
-                <div><dt className="inline font-semibold text-gray-500">Fonte: </dt><dd className="inline">{t.source}</dd></div>
-                <div><dt className="inline font-semibold text-gray-500">Para que serve: </dt><dd className="inline">{t.purpose}</dd></div>
-                <div><dt className="inline font-semibold text-gray-500">Como o Waiter aplica: </dt><dd className="inline">{t.application}</dd></div>
-                <div><dt className="inline font-semibold text-amber-600">Regra de uso: </dt><dd className="inline">{t.usageRule}</dd></div>
-                <div><dt className="inline font-semibold text-blue-600">Teste de qualidade: </dt><dd className="inline">{t.qualityTest}</dd></div>
-              </dl>
-              <div className="mt-2">
-                <Pill tone="amber">{t.status}</Pill>
-              </div>
+        {/* mini KPIs */}
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            { label: "Técnicas mapeadas", value: String(WAITER_LIBRARY.length) },
+            { label: "Gavetas / categorias", value: String(WAITER_LIBRARY_CATEGORIES.length) },
+            { label: "Ativas no runtime", value: "0" },
+            { label: "Status geral", value: "Em formação" },
+          ].map((k) => (
+            <div key={k.label} className="rounded-lg border border-gray-200 bg-white p-3">
+              <p className="text-lg font-bold text-gray-900">{k.value}</p>
+              <p className="text-[11px] uppercase tracking-wide text-gray-400">{k.label}</p>
             </div>
           ))}
         </div>
-        <p className="mt-3 text-xs text-gray-400">
-          Estas técnicas são sínteses operacionais curadas (sem trechos longos de obras). A ativação no runtime virá em
-          fase futura, com revisão, testes e governança.
+
+        {/* gavetas de conhecimento */}
+        <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Gavetas de conhecimento</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {WAITER_LIBRARY_CATEGORIES.map((c) => {
+            const n = WAITER_LIBRARY.filter((t) => t.category === c).length;
+            return (
+              <div key={c} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-sm font-semibold text-gray-900">{c}</p>
+                <p className="mt-0.5 text-xs text-gray-500">{n} {n === 1 ? "técnica" : "técnicas"}</p>
+                <span className="mt-1.5 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">Em formação</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* técnicas — cards compactos */}
+        <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Técnicas</p>
+        <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+          {WAITER_LIBRARY.map((t) => (
+            <div key={t.source + t.technique} className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-bold leading-tight text-gray-900">{t.technique}</p>
+                <Pill tone="violet">{t.category}</Pill>
+              </div>
+              <p className="mt-1 text-sm text-gray-800">{t.application}</p>
+              <dl className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-gray-600">
+                <div><dt className="inline font-semibold text-gray-400">Fonte: </dt><dd className="inline">{t.source}</dd></div>
+                <div><dt className="inline font-semibold text-gray-400">Para que serve: </dt><dd className="inline">{t.purpose}</dd></div>
+                <div><dt className="inline font-semibold text-amber-600">Regra de uso: </dt><dd className="inline">{t.usageRule}</dd></div>
+                <div><dt className="inline font-semibold text-blue-600">Teste de qualidade: </dt><dd className="inline">{t.qualityTest}</dd></div>
+              </dl>
+              <span className="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">{t.status}</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-[11px] text-gray-400">
+          Sínteses operacionais curadas (sem trechos longos de obras). A ativação no runtime virá em fase futura, com
+          revisão, testes e governança.
         </p>
       </RoomCard>
 
