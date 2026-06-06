@@ -18,6 +18,7 @@
 
 import Link from "next/link";
 import type { AdminAgentProfileView } from "@/services/agents/types";
+import { WAITER_LIBRARY, WAITER_LIBRARY_CATEGORIES } from "./waiterLibrary";
 
 // ── small presentational helpers (room-local) ──────────────────────────────────
 
@@ -230,29 +231,48 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
         <Checks mark="✓" color="text-green-600" items={["Leitura de intenção", "Recomendação de produto", "Upsell contextual", "Condução de pedido", "Leitura de cardápio", "Restrições alimentares", "Fechamento comercial", "Uso de cards visuais"]} />
       </RoomCard>
 
-      {/* 9. Library */}
-      <RoomCard title="Library · Fontes técnicas" badge={<Pill tone="amber">Planejado · não conectado ao runtime</Pill>}>
-        <p className="text-sm text-gray-700">
-          A biblioteca é a <strong>formação técnica</strong> do agente: livros, frameworks, técnicas e princípios
-          profissionais convertidos em regras aplicáveis dentro do escopo do Waiter.
+      {/* 9. Library v0.1 — agent technical formation (read-only) */}
+      <RoomCard
+        title="Library v0.1 · Formação técnica"
+        hint="Fontes externas → técnicas aplicáveis no escopo do Waiter. Base futura da universidade privada do agente."
+        badge={<Pill tone="amber">Read-only · não conectado ao runtime</Pill>}
+      >
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          ⚠️ Library v0.1 é formação técnica <strong>read-only</strong>. Ainda <strong>não altera o comportamento</strong> do Waiter.
         </p>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {[
-            ["Vendas consultivas", "Diagnóstico antes de oferta; recomendar com motivo."],
-            ["Persuasão ética", "Ancoragem e gatilhos sem pressão; respeitar recusa."],
-            ["Psicologia de decisão", "Reduzir paralisia de escolha; opções claras."],
-            ["Atendimento ao cliente", "Tom acolhedor, objetivo e cordial."],
-            ["Upsell / cross-sell", "Harmonização (bebida/sobremesa) no momento certo."],
-            ["Gastronomia japonesa", "Leitura de leve/pesado, cru/frito, combos."],
-            ["Leitura de cardápio", "Interpretar intenção vs. busca literal."],
-          ].map(([t, d]) => (
-            <div key={t} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-              <p className="text-sm font-semibold text-gray-900">{t}</p>
-              <p className="text-xs text-gray-600">{d}</p>
+
+        {/* category drawers */}
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {WAITER_LIBRARY_CATEGORIES.map((c) => (
+            <Pill key={c} tone="gray">{c}</Pill>
+          ))}
+        </div>
+
+        {/* dense technique cards */}
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {WAITER_LIBRARY.map((t) => (
+            <div key={t.source + t.technique} className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
+                <span className="text-sm font-semibold text-gray-900">{t.technique}</span>
+                <Pill tone="violet">{t.category}</Pill>
+              </div>
+              <dl className="space-y-1 text-xs text-gray-700">
+                <div><dt className="inline font-semibold text-gray-500">Fonte: </dt><dd className="inline">{t.source}</dd></div>
+                <div><dt className="inline font-semibold text-gray-500">Princípio: </dt><dd className="inline">{t.principle}</dd></div>
+                <div><dt className="inline font-semibold text-gray-500">Aplicação no Foocci: </dt><dd className="inline">{t.foocciApplication}</dd></div>
+                <div><dt className="inline font-semibold text-red-600">Limite: </dt><dd className="inline">{t.operationalLimit}</dd></div>
+                <div><dt className="inline font-semibold text-blue-600">Teste: </dt><dd className="inline">{t.suggestedTest}</dd></div>
+              </dl>
+              <div className="mt-2">
+                <Pill tone="amber">{t.status}</Pill>
+              </div>
             </div>
           ))}
         </div>
-        <p className="mt-3 text-xs text-amber-700">⚠️ A biblioteca <strong>ainda não altera o comportamento</strong> do Waiter — é um plano de formação para fases futuras.</p>
+        <p className="mt-3 text-xs text-gray-400">
+          Estas técnicas são sínteses operacionais curadas (sem trechos longos de obras). A ativação no runtime virá em
+          fase futura, com revisão, testes e governança.
+        </p>
       </RoomCard>
 
       {/* 10. Ferramentas */}
