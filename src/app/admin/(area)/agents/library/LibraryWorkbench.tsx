@@ -23,6 +23,7 @@ import {
   TECHNIQUE_STATUS_LABELS,
   libraryAgentName,
   friendlyUploadMessage,
+  classifyUploadOutcome,
   type LibraryAgent,
 } from "@/services/agentLibrary/agentLibraryHelpers";
 
@@ -132,8 +133,9 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
 
   const [showNewSource, setShowNewSource] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);     // red — fatal
+  const [warn, setWarn] = useState<string | null>(null);   // yellow — partial (source created)
+  const [notice, setNotice] = useState<string | null>(null); // green — success
 
   // new source form (Upload First)
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -163,9 +165,14 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
     setTName(""); setTCategory(""); setTPurpose(""); setTApplication(""); setTUsageRule(""); setTQualityTest("");
   }
 
-  /** Upload First: send file (optional) + fields as multipart; optionally extract. */
+  /**
+   * Upload First: send file (optional) + fields as multipart; optionally extract.
+   * Three outcomes (classifyUploadOutcome): success (green), partial (yellow —
+   * source created but a later stage failed → select it), fatal (red — nothing
+   * created). The response always carries { ok, stage, message, sourceId? }.
+   */
   async function submitUpload(extract: boolean) {
-    setErr(null); setNotice(null); setBusy(true);
+    setErr(null); setWarn(null); setNotice(null); setBusy(true);
     try {
       const fd = new FormData();
       fd.append("agentSlug", agentSlug);
@@ -183,30 +190,29 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
       try {
         res = await fetch("/api/admin/agents/library/upload", { method: "POST", body: fd });
       } catch {
-        throw new Error(friendlyUploadMessage(0));
+        setErr(friendlyUploadMessage(0));
+        return;
       }
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      if (!res.ok || data.ok !== true) {
-        const serverError = typeof data.error === "string" ? data.error : null;
-        throw new Error(friendlyUploadMessage(res.status, serverError));
+      const outcome = classifyUploadOutcome(data);
+      const sourceId = typeof data.sourceId === "string" ? data.sourceId : null;
+      const serverMessage = typeof data.message === "string" ? data.message : null;
+      const stage = typeof data.stage === "string" ? data.stage : "";
+
+      if (outcome === "success") {
+        setNotice(serverMessage || "Fonte criada.");
+      } else if (outcome === "partial") {
+        // Source exists — keep the upload, warn (yellow), and select it.
+        setWarn(serverMessage || `Fonte criada, mas a extração falhou no estágio ${stage}.`);
+      } else {
+        // Fatal — nothing was created.
+        setErr(friendlyUploadMessage(res.status, serverMessage));
+        return;
       }
 
-      const created = typeof data.created === "number" ? data.created : 0;
-      const note = typeof data.note === "string" ? data.note : "";
-      const extractError = typeof data.extractError === "string" ? data.extractError : "";
-      let msg = "Fonte criada.";
-      if (extract) {
-        msg += extractError
-          ? ` Fonte criada, mas a extração por IA falhou: ${extractError} Você pode gerar técnicas novamente no detalhe.`
-          : ` ${created} técnica(s) extraída(s).`;
-      }
-      if (note) msg += ` ${note}`;
-      setNotice(msg);
-
-      const newId = typeof data.sourceId === "string" ? data.sourceId : null;
       resetNewSource();
       setShowNewSource(false);
-      if (newId) router.push(`${pathname}?agent=${agentSlug}&source=${newId}`);
+      if (sourceId) router.push(`${pathname}?agent=${agentSlug}&source=${sourceId}`);
       router.refresh();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Erro ao enviar conteúdo.");
@@ -235,7 +241,7 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
 
   async function runExtraction() {
     if (!selected) return;
-    setErr(null); setNotice(null); setBusy(true);
+    setErr(null); setWarn(null); setNotice(null); setBusy(true);
     try {
       const data = await postJSON(`/api/admin/agents/library/sources/${selected.id}/extract`, {});
       const created = typeof data.created === "number" ? data.created : 0;
@@ -290,6 +296,7 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
         </div>
       )}
       {err && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
+      {warn && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">⚠️ {warn}</div>}
       {notice && <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{notice}</div>}
 
       {/* Dashboard */}
@@ -455,10 +462,20 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
                     </p>
                   </>
                 )}
+                {selected.extractionStatus === "FAILED" && (
+                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                    A última extração falhou. A fonte está salva — você pode tentar extrair novamente ou adicionar
+                    técnicas manualmente.
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" onClick={runExtraction} disabled={busy}
                     className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50">
-                    {busy ? "Processando…" : "✨ Gerar técnicas com IA"}
+                    {busy
+                      ? "Processando…"
+                      : selected.extractionStatus === "FAILED"
+                        ? "↻ Tentar extrair novamente"
+                        : "✨ Gerar técnicas com IA"}
                   </button>
                   <button type="button" onClick={() => { setShowAddTech((v) => !v); setErr(null); }}
                     className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">

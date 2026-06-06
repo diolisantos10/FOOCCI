@@ -110,6 +110,19 @@ export class AgentLibraryService {
     });
   }
 
+  /** Replace a source's extracted/raw text (after parsing the uploaded file). */
+  static async setRawText(id: string, rawText: string) {
+    return prisma.agentLibrarySource.update({ where: { id }, data: { rawText } });
+  }
+
+  /** Update only the extraction status (PENDING/EXTRACTING/EXTRACTED/FAILED). */
+  static async setExtractionStatus(
+    id: string,
+    status: "PENDING" | "EXTRACTING" | "EXTRACTED" | "FAILED",
+  ) {
+    return prisma.agentLibrarySource.update({ where: { id }, data: { extractionStatus: status } });
+  }
+
   /** Add one technique to a source (manual or extracted). */
   static async createTechnique(sourceId: string, input: TechniqueInput) {
     const source = await prisma.agentLibrarySource.findUnique({

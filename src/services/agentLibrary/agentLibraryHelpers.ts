@@ -277,6 +277,57 @@ export function isMissingTableError(err: unknown): boolean {
   return m.includes("does not exist in the current database") || (m.includes("relation") && m.includes("does not exist"));
 }
 
+// ── upload response contract (source-first flow) ─────────────────────────────────
+
+/** Stages of the upload pipeline — included in every upload response as `stage`. */
+export type UploadStage =
+  | "auth"
+  | "formData"
+  | "fileValidation"
+  | "migration"
+  | "dbCreateSource"
+  | "pdfParse"
+  | "aiExtraction"
+  | "created"
+  | "done";
+
+export interface UploadResponseBody {
+  ok: boolean;
+  stage: UploadStage;
+  message: string;
+  /** Present once the source row exists — even on partial failure. */
+  sourceId?: string;
+  created?: number;
+}
+
+/** Build the canonical upload JSON body (always carries ok + stage + message). */
+export function buildUploadResponse(p: {
+  ok: boolean;
+  stage: UploadStage;
+  message: string;
+  sourceId?: string | null;
+  created?: number;
+}): UploadResponseBody {
+  const body: UploadResponseBody = { ok: p.ok, stage: p.stage, message: p.message };
+  if (p.sourceId) body.sourceId = p.sourceId;
+  if (typeof p.created === "number") body.created = p.created;
+  return body;
+}
+
+/**
+ * How the UI should treat an upload response:
+ *   • "success" — green, fully done
+ *   • "partial" — yellow warning, source created but a later stage failed (select it)
+ *   • "fatal"   — red, nothing was created (auth/type/db/migration)
+ */
+export type UploadOutcome = "success" | "partial" | "fatal";
+
+export function classifyUploadOutcome(body: { ok?: unknown; sourceId?: unknown }): UploadOutcome {
+  if (body?.ok === true) return "success";
+  if (typeof body?.sourceId === "string" && body.sourceId.length > 0) return "partial";
+  return "fatal";
+}
+
 /**
  * Map an upload API outcome to a specific, friendly Portuguese message.
  * Prefers the server-provided error; otherwise derives from the HTTP status.

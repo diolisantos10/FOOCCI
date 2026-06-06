@@ -15,7 +15,35 @@ import {
   MAX_STORED_TEXT_CHARS,
   isMissingTableError,
   friendlyUploadMessage,
+  classifyUploadOutcome,
+  buildUploadResponse,
 } from "./agentLibraryHelpers";
+
+describe("agentLibraryHelpers — upload response contract (source-first)", () => {
+  it("buildUploadResponse always carries ok + stage + message; omits empty sourceId", () => {
+    const fatal = buildUploadResponse({ ok: false, stage: "dbCreateSource", message: "Falha no banco." });
+    expect(fatal.stage).toBe("dbCreateSource");
+    expect(fatal.ok).toBe(false);
+    expect("sourceId" in fatal).toBe(false);
+
+    const partial = buildUploadResponse({ ok: false, stage: "pdfParse", message: "parse falhou", sourceId: "src_1" });
+    expect(partial.sourceId).toBe("src_1");
+    expect(partial.stage).toBe("pdfParse");
+
+    const ok = buildUploadResponse({ ok: true, stage: "done", message: "ok", sourceId: "src_2", created: 4 });
+    expect(ok.created).toBe(4);
+    expect(ok.sourceId).toBe("src_2");
+  });
+
+  it("classifyUploadOutcome: success / partial (sourceId) / fatal", () => {
+    expect(classifyUploadOutcome({ ok: true, sourceId: "x" })).toBe("success");
+    // source created but a later stage failed → keep upload, warn (yellow)
+    expect(classifyUploadOutcome({ ok: false, sourceId: "src_1" })).toBe("partial");
+    // nothing created → red fatal
+    expect(classifyUploadOutcome({ ok: false })).toBe("fatal");
+    expect(classifyUploadOutcome({ ok: false, sourceId: "" })).toBe("fatal");
+  });
+});
 
 describe("agentLibraryHelpers — upload error handling", () => {
   it("detects the 'migration not applied' (missing table) error", () => {

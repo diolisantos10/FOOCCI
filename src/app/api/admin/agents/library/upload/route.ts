@@ -1,14 +1,18 @@
 /**
- * POST /api/admin/agents/library/upload — Upload First flow.
+ * POST /api/admin/agents/library/upload — Upload First flow (source-first).
  *
- * Multipart form-data. Primary field: `file` (PDF/TXT/MD). Server extracts text
- * (page-limited, capped), creates the source with metadata + synthesis, and —
- * when `extract=1` — runs AI technique extraction. The original binary is NOT
- * persisted (kept private). Never stores/serves the full work.
+ * Multipart form-data. Primary field: `file` (PDF/TXT/MD).
  *
- * Robustness: the WHOLE handler is wrapped so every failure returns a specific
- * JSON error (never an unhandled 500 / generic "Falha no upload"). Safe logs
- * only (stage + sizes + error name) — never file content or secrets.
+ * Order of operations (resilient):
+ *   A. validate input (agent + file/text + supported type)   → fatal, no source
+ *   B. CREATE THE SOURCE FIRST (metadata + pasted text)      → fatal if DB fails
+ *   C. parse the file text; on failure mark source FAILED    → partial (sourceId)
+ *   D. run AI extraction; on failure mark source FAILED      → partial (sourceId)
+ *   E. success → source EXTRACTED + techniques
+ *
+ * The source survives parsing/AI failures so the admin can retry. The original
+ * binary is NOT persisted (kept private). Every response is JSON and carries a
+ * `stage`. Safe logs only (stage + sizes + error name) — never content/secrets.
  *
  * Auth: x-admin-secret header OR foocci-admin-token cookie.
  * Node runtime (pdf-parse). Does NOT touch any agent runtime.
@@ -25,14 +29,20 @@ import {
   isValidLibraryAgent,
   isValidSourceType,
   isMissingTableError,
+  buildUploadResponse,
   MAX_UPLOAD_BYTES,
+  type UploadStage,
 } from "@/services/agentLibrary/agentLibraryHelpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function fail(error: string, status: number) {
-  return NextResponse.json({ ok: false, error }, { status });
+/** Always-JSON response helper carrying ok + stage + message (+ sourceId/created). */
+function respond(
+  status: number,
+  p: { ok: boolean; stage: UploadStage; message: string; sourceId?: string | null; created?: number },
+) {
+  return NextResponse.json(buildUploadResponse(p), { status });
 }
 
 /** Safe server log — no file content, no secrets. */
@@ -41,38 +51,43 @@ function log(stage: string, extra?: Record<string, unknown>) {
 }
 
 export async function POST(req: NextRequest) {
+  // Tracks the created source so the outer guard can still return its id.
+  let sourceId: string | null = null;
+
   try {
+    // ── auth ──────────────────────────────────────────────────────────────────
     if (!process.env.ADMIN_SECRET) {
-      return fail("Endpoint desabilitado (ADMIN_SECRET ausente no servidor).", 403);
+      return respond(403, { ok: false, stage: "auth", message: "Endpoint desabilitado (ADMIN_SECRET ausente no servidor)." });
     }
     if (!checkAdminRequest(req)) {
-      return fail("Sessão admin expirada. Faça login novamente.", 401);
+      return respond(401, { ok: false, stage: "auth", message: "Sessão admin expirada. Faça login novamente." });
     }
 
+    // ── formData ──────────────────────────────────────────────────────────────
     let form: FormData;
     try {
       form = await req.formData();
     } catch {
-      return fail("Envio inválido (esperado multipart/form-data).", 400);
+      return respond(400, { ok: false, stage: "formData", message: "Envio inválido (esperado multipart/form-data)." });
     }
-
     const str = (k: string) => {
       const v = form.get(k);
       return typeof v === "string" ? v.trim() : "";
     };
 
+    // ── A. validate input ───────────────────────────────────────────────────────
     const agentSlug = str("agentSlug");
-    if (!isValidLibraryAgent(agentSlug)) return fail("Agente inválido.", 400);
+    if (!isValidLibraryAgent(agentSlug)) {
+      return respond(400, { ok: false, stage: "fileValidation", message: "Agente inválido." });
+    }
 
     const file = form.get("file");
     const hasFile = file instanceof File && file.size > 0;
+    const pastedText = str("rawText");
 
-    // ── extract text from the file (if any) ────────────────────────────────────
-    let extractedText: string | null = null;
     let fileName: string | null = null;
     let mimeType: string | null = null;
     let fileSize: number | null = null;
-    let extractNote: string | undefined;
 
     if (hasFile) {
       const f = file as File;
@@ -82,41 +97,23 @@ export async function POST(req: NextRequest) {
       log("file-received", { fileSize, mimeType, ext: fileName.split(".").pop() });
 
       if (f.size > MAX_UPLOAD_BYTES) {
-        return fail("PDF grande demais para processar nesta fase (máx. 15 MB).", 400);
+        return respond(400, { ok: false, stage: "fileValidation", message: "Arquivo grande demais para processar nesta fase (máx. 15 MB)." });
       }
       if (!detectUploadKind(fileName, mimeType)) {
-        return fail("Tipo de arquivo não suportado. Use PDF, TXT ou MD.", 400);
+        return respond(400, { ok: false, stage: "fileValidation", message: "Tipo de arquivo não suportado. Use PDF, TXT ou MD." });
       }
-
-      try {
-        const buffer = Buffer.from(await f.arrayBuffer());
-        const result = await extractTextFromUpload(buffer, fileName, mimeType);
-        extractedText = result.text;
-        extractNote = result.note;
-        log("text-extracted", { pages: result.totalPages, parsed: result.pagesParsed, chars: result.text.length });
-      } catch (err) {
-        const name = err instanceof Error ? err.name : "Error";
-        const message = err instanceof Error ? err.message : "Falha ao ler o arquivo.";
-        log("extract-text-failed", { errName: name });
-        return fail(`Não foi possível extrair texto deste arquivo. ${message}`, 400);
-      }
+    } else if (!pastedText) {
+      return respond(400, { ok: false, stage: "fileValidation", message: "Envie um arquivo (PDF/TXT/MD) ou cole o conteúdo." });
     }
 
-    // ── build + validate the source payload ────────────────────────────────────
-    const sourceTypeRaw = str("sourceType");
     const kind = hasFile ? detectUploadKind(fileName!, mimeType!) : null;
+    const sourceTypeRaw = str("sourceType");
     const sourceType = isValidSourceType(sourceTypeRaw)
       ? sourceTypeRaw
       : kind === "pdf"
         ? "PDF"
         : "INTERNAL_NOTE";
-
     const title = str("title") || (hasFile ? deriveTitleFromFileName(fileName!) : "");
-    const pastedText = str("rawText");
-
-    if (!hasFile && !pastedText) {
-      return fail("Envie um arquivo (PDF/TXT/MD) ou cole o conteúdo.", 400);
-    }
 
     const parsed = validateSourceInput({
       agentSlug,
@@ -128,60 +125,87 @@ export async function POST(req: NextRequest) {
       rawText: pastedText,
     });
     if (!parsed.ok || !parsed.value) {
-      return fail(parsed.errors.join(" ") || "Dados da fonte inválidos.", 400);
+      return respond(400, { ok: false, stage: "fileValidation", message: parsed.errors.join(" ") || "Dados da fonte inválidos." });
     }
 
-    // ── create the source ──────────────────────────────────────────────────────
-    let source;
+    // ── B. create the source FIRST (survives later failures) ────────────────────
     try {
-      source = await AgentLibraryService.createSourceFromUpload({
+      const source = await AgentLibraryService.createSourceFromUpload({
         input: parsed.value,
-        extractedText,
+        extractedText: null, // text (if any) is applied after parsing, below
         fileName,
         mimeType,
         fileSize,
       });
-      log("source-created", { sourceId: source.id });
+      sourceId = source.id;
+      log("source-created", { sourceId });
     } catch (err) {
       if (isMissingTableError(err)) {
         log("db-missing-table");
-        return fail("Migration da Agent Library ainda não aplicada. Rode a migration add_agent_library.", 503);
+        return respond(503, { ok: false, stage: "migration", message: "Migration da Agent Library ainda não aplicada. Rode prisma migrate deploy." });
       }
-      const name = err instanceof Error ? err.name : "Error";
-      log("create-source-failed", { errName: name });
-      return fail("Falha ao criar a fonte no banco.", 500);
+      log("create-source-failed", { errName: err instanceof Error ? err.name : "Error" });
+      return respond(500, { ok: false, stage: "dbCreateSource", message: "Falha ao criar a fonte no banco." });
     }
 
-    // ── optional AI extraction (never loses the upload) ─────────────────────────
-    const wantExtract = str("extract") === "1";
-    let created = 0;
-    let extractError: string | undefined;
-    if (wantExtract) {
+    // ── C. parse file text (source already saved) ───────────────────────────────
+    let textForAI = pastedText;
+    let extractNote: string | undefined;
+    if (hasFile) {
       try {
-        const r = await AgentLibraryService.extractTechniques(source.id);
-        created = r.created;
-        log("extraction-done", { sourceId: source.id, created });
+        const buffer = Buffer.from(await (file as File).arrayBuffer());
+        const result = await extractTextFromUpload(buffer, fileName!, mimeType!);
+        textForAI = result.text;
+        extractNote = result.note;
+        await AgentLibraryService.setRawText(sourceId, result.text);
+        log("text-extracted", { sourceId, pages: result.totalPages, parsed: result.pagesParsed, chars: result.text.length });
       } catch (err) {
-        extractError = err instanceof Error ? err.message : "Falha na extração por IA.";
-        log("extraction-failed", { sourceId: source.id });
+        log("pdf-parse-failed", { sourceId, errName: err instanceof Error ? err.name : "Error" });
+        await AgentLibraryService.setExtractionStatus(sourceId, "FAILED").catch(() => {});
+        const detail = err instanceof Error ? err.message : "";
+        return respond(200, {
+          ok: false,
+          stage: "pdfParse",
+          sourceId,
+          message: `Fonte criada, mas não foi possível extrair texto do arquivo. ${detail}`.trim(),
+        });
       }
     }
 
-    return NextResponse.json({
-      ok: true,
-      sourceId: source.id,
-      extracted: wantExtract,
-      created,
-      note: extractNote,
-      extractError,
-    });
-  } catch (err) {
-    // Last-resort guard: ALWAYS return JSON, never an unhandled 500.
-    const name = err instanceof Error ? err.name : "Error";
-    console.error("[library/upload] unhandled", name);
-    if (isMissingTableError(err)) {
-      return fail("Migration da Agent Library ainda não aplicada. Rode a migration add_agent_library.", 503);
+    // ── D. AI extraction (optional; source already saved) ───────────────────────
+    const wantExtract = str("extract") === "1";
+    if (wantExtract) {
+      if (!textForAI.trim()) {
+        await AgentLibraryService.setExtractionStatus(sourceId, "FAILED").catch(() => {});
+        return respond(200, { ok: false, stage: "aiExtraction", sourceId, message: "Fonte criada, mas não há texto para extrair. Adicione técnicas manualmente." });
+      }
+      try {
+        const r = await AgentLibraryService.extractTechniques(sourceId);
+        log("extraction-done", { sourceId, created: r.created });
+        const baseMsg = r.created > 0 ? `${r.created} técnica(s) extraída(s).` : "Nenhuma técnica foi extraída — revise o conteúdo ou adicione manualmente.";
+        return respond(200, { ok: r.created > 0, stage: r.created > 0 ? "done" : "aiExtraction", sourceId, created: r.created, message: (extractNote ? `${extractNote} ` : "") + baseMsg });
+      } catch (err) {
+        log("extraction-failed", { sourceId, errName: err instanceof Error ? err.name : "Error" });
+        const detail = err instanceof Error ? err.message : "";
+        return respond(200, { ok: false, stage: "aiExtraction", sourceId, message: `Fonte criada, mas a extração por IA falhou. Você pode tentar novamente. ${detail}`.trim() });
+      }
     }
-    return fail("Erro interno ao processar o upload. Veja os logs do servidor.", 500);
+
+    // ── E. created (no extraction requested) ────────────────────────────────────
+    return respond(200, { ok: true, stage: "created", sourceId, message: (extractNote ? `${extractNote} ` : "") + "Fonte criada." });
+  } catch (err) {
+    // Last-resort guard: ALWAYS return JSON, preserving sourceId if it exists.
+    console.error("[library/upload] unhandled", err instanceof Error ? err.name : "Error");
+    if (isMissingTableError(err)) {
+      return respond(503, { ok: false, stage: "migration", sourceId, message: "Migration da Agent Library ainda não aplicada. Rode prisma migrate deploy." });
+    }
+    return respond(500, {
+      ok: false,
+      stage: sourceId ? "pdfParse" : "dbCreateSource",
+      sourceId,
+      message: sourceId
+        ? "Fonte criada, mas o processamento falhou. Você pode tentar extrair novamente."
+        : "Erro interno ao processar o upload. Veja os logs do servidor.",
+    });
   }
 }
