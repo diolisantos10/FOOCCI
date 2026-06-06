@@ -26,6 +26,13 @@ interface Campaign {
   totalAudience:  number;
 }
 
+interface ChartBucket {
+  bucketKey: string;
+  label:     string;
+  revenue:   number;
+  orders:    number;
+}
+
 interface DashboardData {
   // Period metadata
   period:             PeriodKey;
@@ -54,11 +61,12 @@ interface DashboardData {
   pendingPaymentsCount: number;
 
   // Charts
-  topProducts:   TopProduct[];
-  hourlyOrders:  { hour: number; orders: number; revenue: number }[];
-  ordersByType:  { DELIVERY: number; PICKUP: number; DINE_IN: number };
-  trendDays:     { date: string; revenue: number; orders: number }[];
-  revenueTrend:  number;
+  topProducts:      TopProduct[];
+  chartBuckets:     ChartBucket[];
+  chartBucketsPrev: ChartBucket[];
+  prevPeriodLabel:  string;
+  granularity:      "hour" | "day";
+  ordersByType:     { DELIVERY: number; PICKUP: number; DINE_IN: number };
 
   cancelledPeriod:  number;
   ordersBySource:   Record<string, number>;
@@ -124,7 +132,7 @@ function LoadingSkeleton() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {[0, 1, 2, 3, 4, 5].map(i => <Pulse key={i} className="h-24" />)}
       </div>
-      <Pulse className="h-32" />
+      <Pulse className="h-44" />
       <div className="grid gap-4 lg:grid-cols-3">
         <Pulse className="h-56 lg:col-span-2" />
         <Pulse className="h-56" />
@@ -493,127 +501,208 @@ function ChannelSection({ sources, total, periodLabel }: {
   );
 }
 
-// ── Hourly Chart ───────────────────────────────────────────────────────────────
+// ── Sales Chart ────────────────────────────────────────────────────────────────
 
-function HourlyChart({ hourlyOrders, period }: { hourlyOrders: DashboardData["hourlyOrders"]; period: PeriodKey }) {
-  const nowBRTHour = ((new Date().getUTCHours() - 3) + 24) % 24;
-  // For yesterday (completed day) show all hours; for today cut off at current hour (min 20)
-  const endHour    = period === "yesterday" ? 23 : Math.min(23, Math.max(nowBRTHour, 20));
-  const display    = hourlyOrders.filter(h => h.hour >= 7 && h.hour <= endHour);
-  const maxOrders  = Math.max(1, ...display.map(h => h.orders));
-  const peakHour   = display.reduce<{ hour: number; orders: number } | null>(
-    (best, h) => best === null || h.orders > best.orders ? h : best, null
-  );
-  const hasData = display.some(h => h.orders > 0);
-
-  return (
-    <Card className="p-4">
-      <SectionHeader
-        title={period === "yesterday" ? "Ritmo de ontem" : "Ritmo do dia"}
-        sub={hasData && peakHour && peakHour.orders > 0
-          ? `Pico: ${peakHour.hour}h (${peakHour.orders} pedido${peakHour.orders !== 1 ? "s" : ""})`
-          : "Pedidos por hora"}
-      />
-      {!hasData ? (
-        <div className="flex h-12 items-center justify-center text-xs text-gray-400">
-          Nenhum pedido ainda hoje
-        </div>
-      ) : (
-        <div className="flex items-end gap-0.5" style={{ height: 48 }}>
-          {display.map(h => {
-            const barH    = h.orders > 0 ? Math.max(4, Math.round((h.orders / maxOrders) * 40)) : 2;
-            const isPeak  = peakHour?.hour === h.hour && h.orders > 0;
-            const isCurr  = h.hour === nowBRTHour;
-            const bg      = isPeak ? "bg-orange-500" : isCurr ? "bg-orange-300" : h.orders > 0 ? "bg-orange-200" : "bg-gray-100";
-            return (
-              <div key={h.hour} className="flex flex-1 flex-col items-center gap-0.5"
-                title={`${h.hour}h: ${h.orders} pedidos · ${fmtCurrency(h.revenue)}`}>
-                <div className={`w-full rounded-t-sm ${bg}`} style={{ height: barH }} />
-                {h.hour % 3 === 0 && <span className="text-[8px] leading-none text-gray-400">{h.hour}h</span>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Card>
-  );
+function toSvgPoints(buckets: ChartBucket[], maxRev: number, w: number, h: number): string {
+  if (buckets.length === 0) return "";
+  const n    = buckets.length;
+  const step = n > 1 ? w / (n - 1) : 0;
+  return buckets
+    .map((b, i) => {
+      const x = n > 1 ? i * step : w / 2;
+      const y = maxRev > 0 ? h - (b.revenue / maxRev) * h : h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
 }
 
-// ── Trend Chart (daily bars — works for any period length) ─────────────────────
+function toSvgAreaPath(buckets: ChartBucket[], maxRev: number, w: number, h: number): string {
+  if (buckets.length === 0) return "";
+  const n    = buckets.length;
+  const step = n > 1 ? w / (n - 1) : 0;
+  const pts  = buckets.map((b, i) => {
+    const x = n > 1 ? i * step : w / 2;
+    const y = maxRev > 0 ? h - (b.revenue / maxRev) * h : h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const lastX = (n > 1 ? (n - 1) * step : w / 2).toFixed(1);
+  return `M ${pts.join(" L ")} L ${lastX},${h} L 0,${h} Z`;
+}
 
-const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
-
-function TrendChart({
-  trend, totalRevenue, periodLabel, days, period,
+function SalesChart({
+  buckets, bucketsPrev, prevLabel, period, granularity,
 }: {
-  trend:        DashboardData["trendDays"];
-  totalRevenue: number;
-  periodLabel:  string;
-  days:         number;
-  period:       PeriodKey;
+  buckets:     ChartBucket[];
+  bucketsPrev: ChartBucket[];
+  prevLabel:   string;
+  period:      PeriodKey;
+  granularity: "hour" | "day";
 }) {
-  if (trend.length === 0) return null;
+  const [mode, setMode] = useState<"bar" | "line">("bar");
 
-  // Only the "today" view renders a rolling 7-day base where the final bar IS today.
-  // Other single-day periods (e.g. "Ontem") must NOT highlight their bar as "Hoje".
-  const isTodayView = period === "today";
+  const nowBRTHour = ((new Date().getUTCHours() - 3) + 24) % 24;
+  const endHour    = granularity === "hour"
+    ? (period === "yesterday" ? 23 : Math.min(23, Math.max(nowBRTHour, 20)))
+    : 0;
 
-  const maxRev = Math.max(1, ...trend.map(d => d.revenue));
-  // For many bars, only show label every N days so they don't overlap
-  const labelEvery = trend.length <= 7 ? 1 : trend.length <= 14 ? 2 : trend.length <= 21 ? 3 : 5;
+  const filterH = (bkts: ChartBucket[]) =>
+    bkts.filter(b => { const h = parseInt(b.bucketKey, 10); return h >= 7 && h <= endHour; });
+
+  const display     = granularity === "hour" ? filterH(buckets)     : buckets;
+  const displayPrev = granularity === "hour" ? filterH(bucketsPrev) : bucketsPrev;
+
+  const currentRevenue = buckets.reduce((s, b) => s + b.revenue, 0);
+  const prevRevenue    = bucketsPrev.reduce((s, b) => s + b.revenue, 0);
+  const pctDiff        = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : null;
+  const isUp           = pctDiff !== null && pctDiff >= 0;
+
+  const maxRev     = Math.max(1, ...display.map(b => b.revenue), ...displayPrev.map(b => b.revenue));
+  const n          = display.length;
+  const labelEvery = n <= 8 ? 1 : n <= 16 ? 2 : n <= 24 ? 3 : 5;
 
   return (
     <Card className="p-4">
-      <SectionHeader
-        title={isTodayView ? "Últimos 7 dias" : `Tendência · ${periodLabel}`}
-        sub={`${fmtCurrency(totalRevenue)} em receita`}
-        href="/analytics"
-        hrefLabel="Analytics"
-      />
-      {/* Container: items-end aligns bar bottoms; extra height for value labels */}
-      <div className="flex items-end gap-px" style={{ height: 76 }}>
-        {trend.map((d, i) => {
-          const isLast  = i === trend.length - 1;
-          const isToday = isTodayView ? isLast : false;
-          const parts   = d.date.split("-") as [string, string, string];
-          const jsDay   = new Date(+parts[0], +parts[1] - 1, +parts[2]).getDay();
-          const label   = isToday ? "Hoje"
-            : trend.length <= 7 ? (DAY_NAMES[jsDay] ?? "?")
-            : (i % labelEvery === 0 ? parts[2] : ""); // show day-of-month number
-          const barH    = d.revenue > 0 ? Math.max(6, Math.round((d.revenue / maxRev) * 48)) : 2;
-          const valueLabel = fmtCompact(d.revenue);
-
-          return (
-            <div
-              key={d.date}
-              className="relative flex flex-1 flex-col items-center gap-0.5"
-              title={`${d.date}: ${fmtCurrency(d.revenue)} · ${d.orders} pedido${d.orders !== 1 ? "s" : ""}`}
-            >
-              {/* Value label above bar — absolutely positioned to not shift bar alignment */}
-              {d.revenue > 0 && (
-                <span
-                  className="pointer-events-none absolute left-0 right-0 text-center text-[7px] font-medium leading-none text-gray-500"
-                  style={{ bottom: barH + 16 }}
-                >
-                  {valueLabel}
-                </span>
-              )}
-              {/* Bar */}
-              <div
-                className={`w-full rounded-t-sm ${isToday ? "bg-orange-500" : "bg-gray-200"}`}
-                style={{ height: barH }}
-              />
-              {/* Day label below bar */}
-              <span className={`text-[8px] leading-none ${
-                isToday ? "font-bold text-orange-500" :
-                label    ? "text-gray-400"              : "text-transparent"
-              }`}>
-                {label || "·"}
+      {/* Header: summary + bar/line toggle */}
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800">Receita no período</h3>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+            <span className="font-semibold text-gray-800">{fmtCurrency(currentRevenue)}</span>
+            {pctDiff !== null && (
+              <span className={`font-semibold ${isUp ? "text-green-600" : "text-red-500"}`}>
+                {isUp ? "▲" : "▼"}{Math.abs(pctDiff).toFixed(1)}%
               </span>
-            </div>
-          );
-        })}
+            )}
+            <span>{prevLabel}</span>
+            <span className="text-gray-300">·</span>
+            <span>{fmtCurrency(prevRevenue)} anterior</span>
+          </div>
+        </div>
+        <div className="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setMode("bar")}
+            className={`px-2.5 py-1 transition-colors ${mode === "bar" ? "bg-orange-500 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+          >
+            Barras
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("line")}
+            className={`px-2.5 py-1 transition-colors ${mode === "line" ? "bg-orange-500 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+          >
+            Linha
+          </button>
+        </div>
       </div>
+
+      {display.length === 0 ? (
+        <div className="flex h-16 items-center justify-center text-xs text-gray-400">
+          Nenhum dado no período
+        </div>
+      ) : mode === "bar" ? (
+        <>
+          <div className="flex gap-px" style={{ height: 72 }}>
+            {display.map((b, i) => {
+              const prev  = displayPrev[i] ?? { revenue: 0, orders: 0, bucketKey: "", label: "" };
+              const curH  = b.revenue    > 0 ? Math.max(4, Math.round((b.revenue    / maxRev) * 54)) : 2;
+              const prevH = prev.revenue > 0 ? Math.max(2, Math.round((prev.revenue / maxRev) * 54)) : 2;
+              return (
+                <div
+                  key={b.bucketKey}
+                  className="relative flex flex-1 flex-col items-center"
+                  style={{ height: 72 }}
+                  title={`${b.label}: ${fmtCurrency(b.revenue)} · anterior: ${fmtCurrency(prev.revenue)}`}
+                >
+                  {/* Ghost bar: previous period (full width, behind) */}
+                  <div
+                    className="absolute bottom-[16px] w-full rounded-t-sm bg-gray-200"
+                    style={{ height: prevH }}
+                  />
+                  {/* Current bar (60% width, in front) */}
+                  <div
+                    className="absolute bottom-[16px] w-[60%] rounded-t-sm bg-orange-400"
+                    style={{ height: curH }}
+                  />
+                  {/* X-axis label */}
+                  {i % labelEvery === 0 && (
+                    <span className="absolute bottom-0 left-0 right-0 text-center text-[7px] leading-none text-gray-400">
+                      {b.label}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-2 flex items-center justify-end gap-3">
+            <span className="flex items-center gap-1 text-[10px] text-gray-400">
+              <span className="inline-block h-2 w-4 rounded-sm bg-orange-400" /> Período atual
+            </span>
+            <span className="flex items-center gap-1 text-[10px] text-gray-400">
+              <span className="inline-block h-2 w-4 rounded-sm bg-gray-200" /> Período anterior
+            </span>
+          </div>
+        </>
+      ) : (
+        <>
+          <svg
+            viewBox="0 0 400 60"
+            preserveAspectRatio="none"
+            className="w-full"
+            style={{ height: 60 }}
+          >
+            <defs>
+              <linearGradient id="salesAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor="#fb923c" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#fb923c" stopOpacity={0}   />
+              </linearGradient>
+            </defs>
+            {/* Previous period — dashed gray line */}
+            <polyline
+              points={toSvgPoints(displayPrev.slice(0, n), maxRev, 400, 60)}
+              fill="none"
+              stroke="#d1d5db"
+              strokeWidth="1.5"
+              strokeDasharray="4 3"
+              vectorEffect="non-scaling-stroke"
+            />
+            {/* Current period — gradient area fill */}
+            <path
+              d={toSvgAreaPath(display, maxRev, 400, 60)}
+              fill="url(#salesAreaGrad)"
+            />
+            {/* Current period — solid orange line */}
+            <polyline
+              points={toSvgPoints(display, maxRev, 400, 60)}
+              fill="none"
+              stroke="#f97316"
+              strokeWidth="2"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+          {/* X-axis labels */}
+          <div className="mt-1 flex">
+            {display.map((b, i) => (
+              <div key={b.bucketKey} className="flex-1 text-center">
+                {i % labelEvery === 0 && (
+                  <span className="text-[7px] leading-none text-gray-400">{b.label}</span>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-1.5 flex items-center justify-end gap-3">
+            <span className="flex items-center gap-1 text-[10px] text-gray-400">
+              <span className="inline-block h-0.5 w-4 bg-orange-400" /> Período atual
+            </span>
+            <span className="flex items-center gap-1 text-[10px] text-gray-400">
+              <span
+                className="inline-block w-4"
+                style={{ height: 0, borderTop: "1.5px dashed #d1d5db", display: "inline-block", verticalAlign: "middle" }}
+              /> Período anterior
+            </span>
+          </div>
+        </>
+      )}
     </Card>
   );
 }
@@ -1105,6 +1194,15 @@ export default function DashboardClient({ userName }: { userName: string }) {
           />
         </div>
 
+        {/* Sales chart — revenue over time with period comparison */}
+        <SalesChart
+          buckets={data.chartBuckets}
+          bucketsPrev={data.chartBucketsPrev}
+          prevLabel={data.prevPeriodLabel}
+          period={data.period}
+          granularity={data.granularity}
+        />
+
         {/* Real-time note for non-today periods */}
         {data.period !== "today" && (
           <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-500">
@@ -1135,20 +1233,6 @@ export default function DashboardClient({ userName }: { userName: string }) {
 
         {/* Channel origin split */}
         <ChannelSection sources={data.ordersBySource} total={data.ordersPeriod} periodLabel={pLabel} />
-
-        {/* Hourly rhythm — today + yesterday (adaptive granularity) */}
-        {(data.period === "today" || data.period === "yesterday") && data.hourlyOrders.length > 0 && (
-          <HourlyChart hourlyOrders={data.hourlyOrders} period={data.period} />
-        )}
-
-        {/* Trend chart */}
-        <TrendChart
-          trend={data.trendDays}
-          totalRevenue={data.revenueTrend}
-          periodLabel={pLabel}
-          days={data.periodDays}
-          period={data.period}
-        />
 
         {/* Active campaigns */}
         <CampaignSection campaigns={data.activeCampaigns} />

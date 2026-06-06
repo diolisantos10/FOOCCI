@@ -12,7 +12,7 @@
  *   crmSegments
  *
  * Period-sensitive:
- *   revenue, orders, avgTicket, topProducts, ordersByType, trendDays, hourlyOrders,
+ *   revenue, orders, avgTicket, topProducts, ordersByType, chartBuckets,
  *   newCustomersPeriod, foocciProof
  */
 
@@ -21,6 +21,7 @@ import { prisma } from "@/lib/prisma";
 import { OrderStatus, CampaignStatus } from "@prisma/client";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
+import { computePeriodRange, buildChartBuckets, type Period } from "@/lib/dashboard-periods";
 
 const TERMINAL: OrderStatus[]        = ["DELIVERED", "CANCELLED"];
 const REVENUE_STATUS: OrderStatus[]  = ["DELIVERED", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"];
@@ -28,143 +29,18 @@ const ACTIVE_CAMP: CampaignStatus[]  = ["ACTIVE", "SCHEDULED", "SENDING"];
 const DELAY_MS                       = 20 * 60 * 1_000;
 const DELAY_OK: OrderStatus[]        = ["READY", "OUT_FOR_DELIVERY", "AWAITING_PAYMENT"];
 
-/** Start of a business day in Brazil time (UTC-3 = 03:00 UTC). */
-function brazilMidnight(offsetDays = 0): Date {
-  const now = new Date();
-  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + offsetDays, 3, 0, 0));
-  if (offsetDays === 0 && Date.now() < d.getTime()) d.setUTCDate(d.getUTCDate() - 1);
-  return d;
-}
-
-/** Parse YYYY-MM-DD as Brazil midnight (03:00 UTC). */
-function parseBrazilDate(s: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const d = new Date(`${s}T03:00:00.000Z`);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-type Period = "today" | "yesterday" | "this_week" | "7d" | "current_month" | "30d" | "custom";
-
-interface PeriodRange {
-  rangeStart: Date;
-  rangeEnd:   Date;
-  prevStart:  Date;
-  prevEnd:    Date;
-  period:     Period;
-  label:      string;
-  days:       number;
-  isToday:    boolean;
-}
-
-function computePeriodRange(
-  period:         Period,
-  startDateParam: string | null,
-  endDateParam:   string | null,
-): PeriodRange {
-  const now        = new Date();
-  const todayStart = brazilMidnight(0);
-
-  if (period === "today") {
-    return {
-      rangeStart: todayStart, rangeEnd: now,
-      prevStart:  new Date(todayStart.getTime() - 86_400_000), prevEnd: todayStart,
-      period, label: "Hoje", days: 1, isToday: true,
-    };
-  }
-
-  if (period === "yesterday") {
-    const yStart = new Date(todayStart.getTime() - 86_400_000);
-    const yEnd   = todayStart;
-    return {
-      rangeStart: yStart, rangeEnd: yEnd,
-      prevStart:  new Date(yStart.getTime() - 86_400_000), prevEnd: yStart,
-      period, label: "Ontem", days: 1, isToday: false,
-    };
-  }
-
-  if (period === "this_week") {
-    // Monday 00:00 Brazil time
-    const brazilNow  = new Date(now.getTime() - 3 * 3_600_000);
-    const dayOfWeek  = brazilNow.getUTCDay(); // 0=Sun,1=Mon...6=Sat
-    const daysSinceMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const weekStart  = new Date(todayStart.getTime() - daysSinceMon * 86_400_000);
-    const days       = Math.max(1, daysSinceMon + 1);
-    return {
-      rangeStart: weekStart, rangeEnd: now,
-      prevStart:  new Date(weekStart.getTime() - 7 * 86_400_000), prevEnd: weekStart,
-      period, label: "Esta semana", days, isToday: false,
-    };
-  }
-
-  if (period === "7d") {
-    const rangeStart = new Date(todayStart.getTime() - 6 * 86_400_000);
-    return {
-      rangeStart, rangeEnd: now,
-      prevStart: new Date(rangeStart.getTime() - 7 * 86_400_000), prevEnd: rangeStart,
-      period, label: "Últimos 7 dias", days: 7, isToday: false,
-    };
-  }
-
-  if (period === "current_month") {
-    const brazilNow = new Date(now.getTime() - 3 * 3_600_000);
-    const y = brazilNow.getUTCFullYear(), m = brazilNow.getUTCMonth();
-    const rangeStart = new Date(Date.UTC(y, m, 1, 3, 0, 0));
-    const prevStart  = new Date(Date.UTC(y, m - 1, 1, 3, 0, 0));
-    const prevEnd    = rangeStart;
-    const days = Math.max(1, Math.ceil((now.getTime() - rangeStart.getTime()) / 86_400_000));
-    return {
-      rangeStart, rangeEnd: now,
-      prevStart, prevEnd,
-      period, label: "Mês atual", days, isToday: false,
-    };
-  }
-
-  if (period === "30d") {
-    const rangeStart = new Date(todayStart.getTime() - 29 * 86_400_000);
-    return {
-      rangeStart, rangeEnd: now,
-      prevStart: new Date(rangeStart.getTime() - 30 * 86_400_000), prevEnd: rangeStart,
-      period, label: "Últimos 30 dias", days: 30, isToday: false,
-    };
-  }
-
-  // custom
-  const rawStart = startDateParam ? parseBrazilDate(startDateParam) : null;
-  const rawEnd   = endDateParam   ? parseBrazilDate(endDateParam)   : null;
-  const safeStart = rawStart ?? todayStart;
-  // endDate is inclusive: add 1 day so the full end-day's data is included
-  const endDay   = rawEnd   ?? now;
-  const safeEnd  = new Date(Math.min(
-    endDay.getTime() + 86_400_000, // inclusive end-day
-    now.getTime(),
-  ));
-  const days = Math.max(1, Math.ceil((safeEnd.getTime() - safeStart.getTime()) / 86_400_000));
-  const label = startDateParam && endDateParam
-    ? `${startDateParam.slice(5)} – ${endDateParam.slice(5)}`
-    : "Personalizado";
-
-  return {
-    rangeStart: safeStart, rangeEnd: safeEnd,
-    prevStart: new Date(safeStart.getTime() - days * 86_400_000), prevEnd: safeStart,
-    period, label, days, isToday: false,
-  };
-}
-
 export async function GET(req: NextRequest) {
   const ctx = getTenantContext(req);
   if (!ctx) return unauthorized();
 
   try {
-    const sp            = req.nextUrl.searchParams;
-    const rawPeriod     = sp.get("period") ?? "today";
-    const periodKey     = (["today","yesterday","this_week","7d","current_month","30d","custom"].includes(rawPeriod)
+    const sp        = req.nextUrl.searchParams;
+    const rawPeriod = sp.get("period") ?? "today";
+    const periodKey = (["today","yesterday","this_week","7d","current_month","30d","custom"].includes(rawPeriod)
       ? rawPeriod : "today") as Period;
 
     const pr = computePeriodRange(periodKey, sp.get("startDate"), sp.get("endDate"));
-    const { rangeStart, rangeEnd, prevStart, prevEnd, label: periodLabel, days, isToday } = pr;
-
-    // Always need brazilMidnight for real-time delayed-order check
-    const todayStart = brazilMidnight(0);
+    const { rangeStart, rangeEnd, prevStart, prevEnd, label: periodLabel, prevLabel, days, granularity } = pr;
 
     const [
       periodOrders,
@@ -179,7 +55,7 @@ export async function GET(req: NextRequest) {
       cancelledPeriodCount,
       orderSourceCounts,
     ] = await Promise.all([
-      // 1. Period orders (KPIs + products + types + hourly/daily)
+      // 1. Period orders (KPIs + products + types + chart)
       prisma.order.findMany({
         where: {
           restaurantId: ctx.restaurantId,
@@ -197,14 +73,14 @@ export async function GET(req: NextRequest) {
           },
         },
       }),
-      // 2. Previous period orders (comparison delta)
+      // 2. Previous period orders (comparison KPIs + chart)
       prisma.order.findMany({
         where: {
           restaurantId: ctx.restaurantId,
           createdAt:    { gte: prevStart, lt: prevEnd },
           status:       { in: REVENUE_STATUS },
         },
-        select: { total: true },
+        select: { total: true, createdAt: true },
       }),
       // 3. All live (non-terminal) orders — pipeline + delayed (always real-time)
       prisma.order.findMany({
@@ -234,12 +110,12 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
         take:    3,
       }),
-      // 8. Recovery stats for period (drafts with at least one recovery attempt)
+      // 8. Recovery stats for period
       prisma.orderDraft.findMany({
         where: {
-          restaurantId:    ctx.restaurantId,
+          restaurantId:     ctx.restaurantId,
           recoveryAttempts: { gt: 0 },
-          createdAt:       { gte: rangeStart, lte: rangeEnd },
+          createdAt:        { gte: rangeStart, lte: rangeEnd },
         },
         select: { status: true },
       }),
@@ -289,7 +165,7 @@ export async function GET(req: NextRequest) {
     const openOrders = allOpenOrders.length;
 
     // ── Delayed orders (real-time) ─────────────────────────────────────────────
-    const now_ms      = Date.now();
+    const now_ms       = Date.now();
     const delayedCount = allOpenOrders.filter(
       o => !DELAY_OK.includes(o.status) && (now_ms - o.createdAt.getTime()) > DELAY_MS
     ).length;
@@ -309,23 +185,6 @@ export async function GET(req: NextRequest) {
       .slice(0, 5)
       .map(p => ({ ...p, revenue: Math.round(p.revenue * 100) / 100 }));
 
-    // ── Hourly breakdown (today + yesterday — adaptive granularity) ───────────
-    const hourlyOrders = (() => {
-      if (!isToday && periodKey !== "yesterday") return [];
-      const hourlyMap = new Map<number, { orders: number; revenue: number }>();
-      for (const order of periodOrders) {
-        const hour = new Date(order.createdAt.getTime() - 3 * 3_600_000).getUTCHours();
-        const slot = hourlyMap.get(hour) ?? { orders: 0, revenue: 0 };
-        slot.orders += 1; slot.revenue += Number(order.total);
-        hourlyMap.set(hour, slot);
-      }
-      return Array.from({ length: 24 }, (_, h) => ({
-        hour:    h,
-        orders:  hourlyMap.get(h)?.orders  ?? 0,
-        revenue: Math.round((hourlyMap.get(h)?.revenue ?? 0) * 100) / 100,
-      }));
-    })();
-
     // ── Order type breakdown (period) ──────────────────────────────────────────
     const ordersByType = {
       DELIVERY: periodOrders.filter(o => o.type === "DELIVERY").length,
@@ -333,51 +192,19 @@ export async function GET(req: NextRequest) {
       DINE_IN:  periodOrders.filter(o => o.type === "DINE_IN").length,
     };
 
-    // ── Daily trend (period) ───────────────────────────────────────────────────
-    // Build a daily map covering the full range (capped at 90 days).
-    const trendDays = (() => {
-      const cappedDays = Math.min(days, 90);
-      const dayRev: Record<string, number> = {};
-      const dayOrd: Record<string, number> = {};
-      for (let i = cappedDays - 1; i >= 0; i--) {
-        const k = new Date(rangeEnd.getTime() - i * 86_400_000 - 3 * 3_600_000).toISOString().slice(0, 10);
-        dayRev[k] = 0; dayOrd[k] = 0;
-      }
-      for (const o of periodOrders) {
-        const k = new Date(o.createdAt.getTime() - 3 * 3_600_000).toISOString().slice(0, 10);
-        if (k in dayRev) { dayRev[k] = (dayRev[k] ?? 0) + Number(o.total); dayOrd[k] = (dayOrd[k] ?? 0) + 1; }
-      }
-      return Object.entries(dayRev).map(([date, rev]) => ({
-        date, revenue: Math.round(rev * 100) / 100, orders: dayOrd[date] ?? 0,
-      }));
-    })();
-
-    // Keep todayStart-based 7-day trend for backward compat on "today" view
-    // (the trend section uses last 7 days when isToday)
-    const trend7DaysBase = (() => {
-      if (!isToday) return trendDays;
-      const sevenDaysAgo = new Date(todayStart.getTime() - 7 * 86_400_000);
-      const dayRev: Record<string, number> = {};
-      const dayOrd: Record<string, number> = {};
-      for (let i = 6; i >= 0; i--) {
-        const k = new Date(todayStart.getTime() - i * 86_400_000).toISOString().slice(0, 10);
-        dayRev[k] = 0; dayOrd[k] = 0;
-      }
-      for (const o of periodOrders) {
-        if (o.createdAt >= sevenDaysAgo) {
-          const k = new Date(o.createdAt.getTime() - 3 * 3_600_000).toISOString().slice(0, 10);
-          if (k in dayRev) { dayRev[k] = (dayRev[k] ?? 0) + Number(o.total); dayOrd[k] = (dayOrd[k] ?? 0) + 1; }
-        }
-      }
-      return Object.entries(dayRev).map(([date, rev]) => ({
-        date, revenue: Math.round(rev * 100) / 100, orders: dayOrd[date] ?? 0,
-      }));
-    })();
-
-    const revenueTrend = trendDays.reduce((s, d) => s + d.revenue, 0);
+    // ── Chart buckets (current + previous period) ──────────────────────────────
+    const numBuckets       = granularity === "hour" ? 24 : days;
+    const chartBuckets     = buildChartBuckets(
+      periodOrders.map(o => ({ createdAt: o.createdAt, total: Number(o.total) })),
+      rangeStart, numBuckets, granularity,
+    );
+    const chartBucketsPrev = buildChartBuckets(
+      prevOrders.map(o => ({ createdAt: o.createdAt, total: Number(o.total) })),
+      prevStart, numBuckets, granularity,
+    );
 
     // ── Foocci proof (upsell + recovery) ──────────────────────────────────────
-    let upsellRevenue = 0;
+    let upsellRevenue   = 0;
     let upsellItemCount = 0;
     for (const order of periodOrders) {
       for (const item of order.items) {
@@ -403,16 +230,17 @@ export async function GET(req: NextRequest) {
 
     return ok({
       // Period metadata
-      period:        periodKey,
+      period:          periodKey,
       periodLabel,
-      periodDays:    days,
+      periodDays:      days,
+      granularity,
 
       // Period KPIs
-      ordersPeriod:   ordersPeriod,
-      revenuePeriod:  Math.round(revenuePeriod  * 100) / 100,
-      avgTicket:      Math.round(avgTicket       * 100) / 100,
+      ordersPeriod,
+      revenuePeriod:   Math.round(revenuePeriod  * 100) / 100,
+      avgTicket:       Math.round(avgTicket       * 100) / 100,
       ordersPrev,
-      revenuePrev:    Math.round(revenuePrev     * 100) / 100,
+      revenuePrev:     Math.round(revenuePrev     * 100) / 100,
 
       // Real-time
       openOrders,
@@ -424,10 +252,10 @@ export async function GET(req: NextRequest) {
 
       // Period charts
       topProducts,
-      hourlyOrders,
+      chartBuckets,
+      chartBucketsPrev,
+      prevPeriodLabel: prevLabel,
       ordersByType,
-      trendDays:    isToday ? trend7DaysBase : trendDays,
-      revenueTrend: Math.round(revenueTrend * 100) / 100,
 
       // Period: cancelled count
       cancelledPeriod: cancelledPeriodCount,
