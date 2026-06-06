@@ -76,6 +76,40 @@ export class AgentLibraryService {
     });
   }
 
+  /**
+   * Create a source from an upload: persists metadata + the (already capped)
+   * extracted text. The original binary is NOT stored (kept private). When
+   * extracted text is present, extractionStatus is left PENDING (ready to
+   * extract techniques); otherwise PENDING with no text.
+   */
+  static async createSourceFromUpload(params: {
+    input: SourceInput;
+    extractedText?: string | null;
+    fileName?: string | null;
+    mimeType?: string | null;
+    fileSize?: number | null;
+  }) {
+    const { input } = params;
+    return prisma.agentLibrarySource.create({
+      data: {
+        agentSlug: input.agentSlug,
+        title: input.title,
+        author: input.author ?? null,
+        sourceType: input.sourceType,
+        category: input.category ?? null,
+        description: input.description ?? null,
+        // Prefer extracted text; fall back to any manually pasted text.
+        rawText: params.extractedText ?? input.rawText ?? null,
+        fileName: params.fileName ?? null,
+        mimeType: params.mimeType ?? null,
+        fileSize: params.fileSize ?? null,
+        // storageKey/fileUrl intentionally left null — binary not persisted in this phase.
+        extractionStatus: "PENDING",
+        status: "DRAFT",
+      },
+    });
+  }
+
   /** Add one technique to a source (manual or extracted). */
   static async createTechnique(sourceId: string, input: TechniqueInput) {
     const source = await prisma.agentLibrarySource.findUnique({

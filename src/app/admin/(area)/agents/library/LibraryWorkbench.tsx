@@ -12,7 +12,7 @@
  * exibido apenas como prévia curta (privado), nunca a obra inteira.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -134,7 +134,9 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // new source form
+  // new source form (Upload First)
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [nsFileName, setNsFileName] = useState<string>("");
   const [nsTitle, setNsTitle] = useState("");
   const [nsAuthor, setNsAuthor] = useState("");
   const [nsType, setNsType] = useState<string>("INTERNAL_NOTE");
@@ -153,24 +155,50 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
 
   function resetNewSource() {
     setNsTitle(""); setNsAuthor(""); setNsType("INTERNAL_NOTE");
-    setNsCategory(""); setNsDescription(""); setNsRawText("");
+    setNsCategory(""); setNsDescription(""); setNsRawText(""); setNsFileName("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
   function resetTech() {
     setTName(""); setTCategory(""); setTPurpose(""); setTApplication(""); setTUsageRule(""); setTQualityTest("");
   }
 
-  async function submitNewSource(e: React.FormEvent) {
-    e.preventDefault();
+  /** Upload First: send file (optional) + fields as multipart; optionally extract. */
+  async function submitUpload(extract: boolean) {
     setErr(null); setNotice(null); setBusy(true);
     try {
-      await postJSON("/api/admin/agents/library/sources", {
-        agentSlug, title: nsTitle, author: nsAuthor, sourceType: nsType,
-        category: nsCategory, description: nsDescription, rawText: nsRawText,
-      });
-      resetNewSource(); setShowNewSource(false); setNotice("Fonte criada.");
+      const fd = new FormData();
+      fd.append("agentSlug", agentSlug);
+      fd.append("sourceType", nsType);
+      fd.append("title", nsTitle);
+      fd.append("author", nsAuthor);
+      fd.append("category", nsCategory);
+      fd.append("description", nsDescription);
+      fd.append("rawText", nsRawText);
+      fd.append("extract", extract ? "1" : "0");
+      const f = fileInputRef.current?.files?.[0];
+      if (f) fd.append("file", f);
+
+      const res = await fetch("/api/admin/agents/library/upload", { method: "POST", body: fd });
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok || data.ok !== true) {
+        throw new Error(typeof data.error === "string" ? data.error : "Falha no upload.");
+      }
+
+      const created = typeof data.created === "number" ? data.created : 0;
+      const note = typeof data.note === "string" ? data.note : "";
+      const extractError = typeof data.extractError === "string" ? data.extractError : "";
+      let msg = "Fonte criada.";
+      if (extract) msg += extractError ? ` Extração falhou: ${extractError}` : ` ${created} técnica(s) extraída(s).`;
+      if (note) msg += ` ${note}`;
+      setNotice(msg);
+
+      const newId = typeof data.sourceId === "string" ? data.sourceId : null;
+      resetNewSource();
+      setShowNewSource(false);
+      if (newId) router.push(`${pathname}?agent=${agentSlug}&source=${newId}`);
       router.refresh();
     } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : "Erro ao criar fonte.");
+      setErr(e2 instanceof Error ? e2.message : "Erro ao enviar conteúdo.");
     } finally {
       setBusy(false);
     }
@@ -222,7 +250,7 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
           onClick={() => { setShowNewSource((v) => !v); setErr(null); }}
           className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700"
         >
-          {showNewSource ? "Fechar" : "+ Nova fonte"}
+          {showNewSource ? "Fechar" : "+ Adicionar conteúdo"}
         </button>
       </header>
 
@@ -268,23 +296,30 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
         ))}
       </div>
 
-      {/* Nova fonte */}
+      {/* Adicionar conteúdo à Library (Upload First) */}
       {showNewSource && (
-        <form onSubmit={submitNewSource} className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <p className="text-sm font-semibold">Nova fonte para <span className="text-orange-600">{libraryAgentName(agentSlug)}</span></p>
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <p className="text-sm font-semibold">
+            Adicionar conteúdo à Library de <span className="text-orange-600">{libraryAgentName(agentSlug)}</span>
+          </p>
+
+          {/* 1) Upload (fluxo principal) */}
+          <label className="block rounded-lg border-2 border-dashed border-orange-300 bg-white p-3 text-xs font-medium text-gray-700">
+            📎 Upload de arquivo (PDF, TXT ou MD) — fluxo principal
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.txt,.md,.markdown,application/pdf,text/plain,text/markdown"
+              onChange={(e) => setNsFileName(e.target.files?.[0]?.name ?? "")}
+              className="mt-1 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:bg-orange-700"
+            />
+            {nsFileName && <span className="mt-1 block text-[11px] text-gray-500">Selecionado: {nsFileName}</span>}
+          </label>
+
+          {/* 2) Metadados (complemento opcional) */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="text-xs font-medium text-gray-600">
-              Título *
-              <input value={nsTitle} onChange={(e) => setNsTitle(e.target.value)} required maxLength={200}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
-            </label>
-            <label className="text-xs font-medium text-gray-600">
-              Autor
-              <input value={nsAuthor} onChange={(e) => setNsAuthor(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
-            </label>
-            <label className="text-xs font-medium text-gray-600">
-              Tipo
+              Tipo da fonte
               <select value={nsType} onChange={(e) => setNsType(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
                 {SOURCE_TYPES.map((t) => <option key={t} value={t}>{SOURCE_TYPE_LABELS[t]}</option>)}
@@ -295,25 +330,43 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
               <input value={nsCategory} onChange={(e) => setNsCategory(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
             </label>
+            <label className="text-xs font-medium text-gray-600">
+              Título (opcional — detectado do arquivo)
+              <input value={nsTitle} onChange={(e) => setNsTitle(e.target.value)} maxLength={200}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+            </label>
+            <label className="text-xs font-medium text-gray-600">
+              Autor (opcional)
+              <input value={nsAuthor} onChange={(e) => setNsAuthor(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+            </label>
           </div>
           <label className="block text-xs font-medium text-gray-600">
             Descrição / essência (opcional)
             <input value={nsDescription} onChange={(e) => setNsDescription(e.target.value)}
               className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
           </label>
+
+          {/* 3) Colar conteúdo (opcional — alternativa ao upload) */}
           <label className="block text-xs font-medium text-gray-600">
-            Conteúdo colado (síntese / notas — não cole obras inteiras)
-            <textarea value={nsRawText} onChange={(e) => setNsRawText(e.target.value)} rows={5}
+            Ou cole o conteúdo / manualmente (opcional — síntese/notas, não obras inteiras)
+            <textarea value={nsRawText} onChange={(e) => setNsRawText(e.target.value)} rows={4}
               className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
           </label>
+
           <p className="text-[11px] text-gray-400">
-            Upload de PDF chega em fase futura (arquivo original fica privado). Por ora, cole uma síntese/notas e gere as
-            técnicas — ou cadastre técnicas manualmente depois.
+            🔒 O arquivo original <strong>não é armazenado</strong> (fica privado): o sistema extrai apenas o texto
+            (amostra inicial em PDFs grandes) para gerar a síntese e as técnicas. Nada vai para o runtime.
           </p>
-          <div className="flex gap-2">
-            <button type="submit" disabled={busy}
+
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => submitUpload(false)} disabled={busy}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              {busy ? "Processando…" : "Salvar fonte"}
+            </button>
+            <button type="button" onClick={() => submitUpload(true)} disabled={busy}
               className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">
-              {busy ? "Salvando…" : "Salvar fonte"}
+              {busy ? "Processando…" : "Salvar e extrair técnicas"}
             </button>
             <button type="button" onClick={() => { setShowNewSource(false); resetNewSource(); }}
               className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -329,7 +382,7 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Fontes ({sources.length})</h2>
           {sources.length === 0 && !dbError && (
             <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
-              Nenhuma fonte para {libraryAgentName(agentSlug)} ainda. Use “+ Nova fonte”.
+              Nenhuma fonte para {libraryAgentName(agentSlug)} ainda. Use “+ Adicionar conteúdo”.
             </p>
           )}
           {sources.map((s) => {

@@ -9,7 +9,36 @@ import {
   validateTechniqueInput,
   parseExtractedTechniques,
   LIBRARY_AGENTS,
+  detectUploadKind,
+  deriveTitleFromFileName,
+  capStoredText,
+  MAX_STORED_TEXT_CHARS,
 } from "./agentLibraryHelpers";
+
+describe("agentLibraryHelpers — upload (Upload First)", () => {
+  it("detects pdf vs text vs unsupported", () => {
+    expect(detectUploadKind("livro.pdf", "application/pdf")).toBe("pdf");
+    expect(detectUploadKind("x.PDF", "")).toBe("pdf");
+    expect(detectUploadKind("notas.txt", "text/plain")).toBe("text");
+    expect(detectUploadKind("manual.md", "")).toBe("text");
+    expect(detectUploadKind("foto.png", "image/png")).toBeNull();
+    expect(detectUploadKind("planilha.xlsx", "application/vnd.ms-excel")).toBeNull();
+  });
+
+  it("derives a clean title from a file name", () => {
+    expect(deriveTitleFromFileName("spin_selling-resumo.pdf")).toBe("spin selling resumo");
+    expect(deriveTitleFromFileName("/a/b/Manual Do Garçom.PDF")).toBe("Manual Do Garçom");
+    expect(deriveTitleFromFileName("")).toBe("Documento sem título");
+  });
+
+  it("caps stored text to the limit and flags truncation", () => {
+    const long = "x".repeat(MAX_STORED_TEXT_CHARS + 100);
+    const capped = capStoredText(long);
+    expect(capped.text.length).toBe(MAX_STORED_TEXT_CHARS);
+    expect(capped.truncated).toBe(true);
+    expect(capStoredText("curto").truncated).toBe(false);
+  });
+});
 
 describe("agentLibraryHelpers — agents", () => {
   it("accepts known agents and rejects unknown", () => {

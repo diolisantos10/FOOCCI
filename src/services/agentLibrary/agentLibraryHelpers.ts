@@ -217,3 +217,51 @@ export function parseExtractedTechniques(rawJson: string): TechniqueInput[] {
   }
   return out;
 }
+
+// ── upload (v1.1 — Upload First) ─────────────────────────────────────────────────
+
+/** File kinds we can extract text from in this phase. */
+export type UploadKind = "pdf" | "text";
+
+export const ACCEPTED_UPLOAD_EXTENSIONS = [".pdf", ".txt", ".md"] as const;
+
+/** Max accepted upload size. Larger files are rejected before parsing. */
+export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
+
+/** Max chars of extracted text we PERSIST (copyright guard — never the full work). */
+export const MAX_STORED_TEXT_CHARS = 20000;
+
+/** Max PDF pages parsed in this phase (large-file safety — sample the start). */
+export const MAX_PDF_PAGES = 15;
+
+/** Detect what kind of file this is from name + mime. Null = unsupported. */
+export function detectUploadKind(fileName: string, mimeType: string): UploadKind | null {
+  const name = (fileName || "").toLowerCase();
+  const mime = (mimeType || "").toLowerCase();
+  if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (
+    mime.startsWith("text/") ||
+    mime === "application/octet-stream" || // some browsers send this for .md
+    name.endsWith(".txt") ||
+    name.endsWith(".md") ||
+    name.endsWith(".markdown")
+  ) {
+    return "text";
+  }
+  return null;
+}
+
+/** Human title fallback derived from a file name (strip path + extension). */
+export function deriveTitleFromFileName(fileName: string): string {
+  const base = (fileName || "").split(/[\\/]/).pop() ?? "";
+  const noExt = base.replace(/\.[a-z0-9]+$/i, "");
+  const cleaned = noExt.replace(/[_-]+/g, " ").trim();
+  return cleaned.length > 0 ? cleaned.slice(0, 200) : "Documento sem título";
+}
+
+/** Cap extracted text to the storage limit; report whether it was truncated. */
+export function capStoredText(text: string): { text: string; truncated: boolean } {
+  const t = text ?? "";
+  if (t.length <= MAX_STORED_TEXT_CHARS) return { text: t, truncated: false };
+  return { text: t.slice(0, MAX_STORED_TEXT_CHARS), truncated: true };
+}
