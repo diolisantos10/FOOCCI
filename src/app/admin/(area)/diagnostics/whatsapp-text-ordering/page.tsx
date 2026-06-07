@@ -11,7 +11,7 @@
 
 import { useState, useCallback } from "react";
 import { DiagnosticReportActions } from "@/components/admin/DiagnosticReportActions";
-import { buildDiagnosticReportText } from "@/lib/admin/diagnosticReport";
+import { buildWaOrderingReport, deriveMatchStatus, type WaOrderingReportResult } from "@/lib/admin/waOrderingReport";
 
 // ── Types (mirror WaProcessResult) ────────────────────────────────────────────
 
@@ -20,7 +20,8 @@ interface OrderItem {
   unitPrice: number; lineTotal: number;
   options: { optionName: string }[]; extras: { extraName: string }[];
 }
-interface Unresolved { rawText: string; reason: string; candidates: string[] }
+interface ParsedItem { rawText: string; quantity: number; name: string }
+interface Unresolved { rawText: string; quantity: number; reason: string; candidates: string[] }
 interface MissingQ { itemName: string; groupName: string; options: string[] }
 interface DraftLine { name: string; quantity: number; variant?: string; options: string[]; extras: string[]; lineTotal: number }
 interface Draft { subtotal: number; items: DraftLine[]; missingRequirements: string[] }
@@ -41,6 +42,7 @@ interface SimResult {
   flagStatus: FlagStatus;
   session: Session;
   stage: string; intent: string;
+  parsedItems: ParsedItem[];
   matchedItems: OrderItem[]; unresolvedItems: Unresolved[]; missingQuestions: MissingQ[];
   draft: Draft | null; deliveryQuote: DeliveryQuote | null; payment: Payment | null;
   order: { orderId: string | null; status: string | null; wouldCreate: boolean } | null;
@@ -139,36 +141,12 @@ export default function WaTextOrderingPage() {
 
   const buildReport = useCallback(() => {
     if (!result) return "";
-    return buildDiagnosticReportText({
-      tool:        "WA Pedido Texto — Test Center",
+    return buildWaOrderingReport(result as unknown as WaOrderingReportResult, {
       restaurant:  result.restaurant.name,
       slug:        result.restaurant.slug,
       phone,
       mode:        result.flagStatus.mode,
-      verdict:     result.order?.wouldCreate ? "WARN — dry-run (pedido não criado)" : result.session.status,
-      inputs:      { mensagem: result.messageText, stage: result.stage, intent: result.intent },
-      sections: [
-        {
-          title: "Sessão",
-          rows: [
-            { label: "status",         value: result.session.status },
-            { label: "stage",          value: result.session.stage },
-            { label: "entrega",        value: result.session.deliveryType ?? "—" },
-            { label: "pagamento",      value: result.session.paymentMethod ?? "—" },
-            { label: "pgto status",    value: result.session.paymentStatus ?? "—" },
-            { label: "orderId",        value: result.session.orderId ?? "—" },
-          ],
-        },
-        ...(result.draft ? [{
-          title: "Comanda",
-          rows: [
-            { label: "subtotal",       value: `R$ ${result.draft.subtotal.toFixed(2)}` },
-            { label: "itens",          value: result.draft.items.length },
-            ...(result.deliveryQuote ? [{ label: "frete", value: `R$ ${result.deliveryQuote.fee.toFixed(2)}` }] : []),
-          ],
-        }] : []),
-      ],
-      safetyNotes: result.safetyNotes,
+      messageText: result.messageText,
     });
   }, [result, phone]);
 
@@ -300,6 +278,77 @@ export default function WaTextOrderingPage() {
                 </div>
               ))}
             </div>
+          </Card>
+
+          {/* E2. Suggested reply (what the WhatsApp Agent would send) */}
+          <Card title="Resposta sugerida" accent>
+            <p className="text-sm text-gray-900">{result.suggestedReply || "—"}</p>
+          </Card>
+
+          {/* E3. Parsed items (raw → quantity/name) */}
+          <Card title="Itens interpretados">
+            {result.parsedItems && result.parsedItems.length > 0 ? (
+              <ul className="space-y-1 text-sm">
+                {result.parsedItems.map((p, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <Pill text={`${p.quantity}×`} />
+                    <span className="font-medium">{p.name}</span>
+                    <span className="text-[11px] text-gray-400">raw: “{p.rawText}”</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-400">Sem itens interpretados</p>
+            )}
+          </Card>
+
+          {/* E4. Menu matches (per-item status) */}
+          <Card title="Correspondências no cardápio">
+            {result.matchedItems.length > 0 || result.unresolvedItems.length > 0 ? (
+              <ul className="space-y-1.5 text-sm">
+                {result.matchedItems.map((m, i) => {
+                  const status = deriveMatchStatus(m, result.missingQuestions);
+                  return (
+                    <li key={`m-${i}`} className="flex flex-wrap items-center gap-2">
+                      <Pill text={`${m.quantity}×`} />
+                      <span className="font-medium">{m.menuItemName}{m.variantName ? ` ${m.variantName}` : ""}</span>
+                      <Pill text={status} tone={status === "RESOLVED" ? "green" : "amber"} />
+                      <span className="tabular-nums text-gray-500">{fmtBRL(m.unitPrice)}</span>
+                    </li>
+                  );
+                })}
+                {result.unresolvedItems.map((u, i) => (
+                  <li key={`u-${i}`} className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{u.rawText}</span>
+                    <Pill text={u.reason} tone="red" />
+                    {u.candidates.length > 0 && (
+                      <span className="text-[11px] text-gray-500">candidatos: {u.candidates.join(", ")}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-400">Nenhum produto encontrado</p>
+            )}
+          </Card>
+
+          {/* E5. Missing questions */}
+          <Card title="Perguntas pendentes">
+            {result.missingQuestions.length > 0 ? (
+              <ul className="space-y-1 text-sm">
+                {result.missingQuestions.map((q, i) => (
+                  <li key={i}>
+                    <span className="font-medium">{q.itemName}</span>
+                    <span className="text-gray-600"> — {q.groupName}?</span>
+                    {q.options.length > 0 && (
+                      <span className="text-[11px] text-gray-400"> ({q.options.join(", ")})</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-400">Nenhuma pergunta pendente</p>
+            )}
           </Card>
 
           {/* F. Session panel */}

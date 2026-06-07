@@ -393,3 +393,28 @@ describe("Reply UX", () => {
     expect(detectIntent("qual o horário de vocês?")).toBe("QUESTION");
   });
 });
+
+// ── Never silently stuck (Part 3 invariant) ─────────────────────────────────────
+
+describe("State machine — never silently stuck", () => {
+  it("F1. known menu advances past MATCHING_MENU (yakisoba+coca → COLLECTING_REQUIRED_OPTIONS)", () => {
+    const r = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", MENU);
+    expect(r.session.stage).not.toBe("MATCHING_MENU");
+    expect(r.session.stage).toBe("COLLECTING_REQUIRED_OPTIONS");
+    expect(r.suggestedReply.trim().length).toBeGreaterThan(0);
+  });
+
+  it("F2. unknown item surfaces unresolvedItems AND a non-empty clarifying reply", () => {
+    const r = advanceSession(freshSession(), "quero uma pizza calabresa", MENU);
+    expect(r.session.unresolvedItems.length).toBeGreaterThan(0);
+    expect(r.suggestedReply.trim().length).toBeGreaterThan(0);
+    // it asks for clarification rather than going silent
+    expect(r.session.status).toBe("AWAITING_CUSTOMER");
+  });
+
+  it("F3. when an item is unresolved, the engine asks to confirm the name", () => {
+    const r = advanceSession(freshSession(), "quero um xpto9000", MENU);
+    expect(r.session.unresolvedItems[0]?.reason).toBe("NOT_FOUND");
+    expect(r.suggestedReply.toLowerCase()).toMatch(/encontrei|confirmar|nome/);
+  });
+});
