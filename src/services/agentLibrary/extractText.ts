@@ -40,7 +40,37 @@ interface PdfParseCtor {
   new (opts: { data: Uint8Array }): PdfParseInstance;
 }
 
+/**
+ * Polyfill the browser globals pdfjs (used by pdf-parse) expects in Node.
+ *
+ * pdfjs v5 references `DOMMatrix` (and friends) as globals but, in Node, only
+ * wires `@napi-rs/canvas` for createCanvas — it never sets these globals, so
+ * text extraction throws "DOMMatrix is not defined". We assign the spec-
+ * compliant implementations from `@napi-rs/canvas` (already a dependency) onto
+ * globalThis, only when missing. Scoped to the parser — not a broad app-wide
+ * polyfill — and run once.
+ */
+let pdfGlobalsReady = false;
+async function ensurePdfGlobals(): Promise<void> {
+  if (pdfGlobalsReady) return;
+  const g = globalThis as Record<string, unknown>;
+  if (typeof g.DOMMatrix === "undefined") {
+    const canvas = (await import("@napi-rs/canvas")) as unknown as Record<string, unknown>;
+    for (const name of ["DOMMatrix", "DOMPoint", "Path2D", "ImageData"]) {
+      if (typeof g[name] === "undefined" && canvas[name]) g[name] = canvas[name];
+    }
+  }
+  pdfGlobalsReady = true;
+}
+
 async function extractPdf(buffer: Buffer): Promise<ExtractResult> {
+  // Ensure DOMMatrix & co. exist before pdfjs runs (Node has no browser globals).
+  try {
+    await ensurePdfGlobals();
+  } catch {
+    /* fall through — extractPdf maps a missing-DOMMatrix failure to a clear message */
+  }
+
   // pdf-parse is externalized (next.config.js) and loaded at runtime. Resolve the
   // PDFParse constructor whether it is a named export or under `default` (CJS interop).
   const mod = (await import("pdf-parse")) as unknown as {
@@ -70,6 +100,14 @@ async function extractPdf(buffer: Buffer): Promise<ExtractResult> {
           ? "Texto extraído foi limitado ao máximo de armazenamento (amostra inicial)."
           : undefined,
     };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // If DOMMatrix (or another browser global) is still missing, surface a clear,
+    // specific message instead of the raw ReferenceError.
+    if (/DOMMatrix|Path2D|ImageData|is not defined/i.test(msg)) {
+      throw new Error("O parser de PDF precisa do modo Node/legacy. Extração não concluída. Use TXT/MD ou cole uma síntese.");
+    }
+    throw err instanceof Error ? err : new Error(msg);
   } finally {
     await parser.destroy().catch(() => { /* non-fatal */ });
   }

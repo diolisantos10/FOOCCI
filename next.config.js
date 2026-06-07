@@ -39,8 +39,9 @@ const nextConfig = {
       ],
       bodySizeLimit: "100mb",
     },
-    // Prevent Next.js from bundling pdf-parse (avoids test-fixture read at import time)
-    serverComponentsExternalPackages: ["pdf-parse"],
+    // Keep the PDF parser + its native canvas dep out of the bundle so they load
+    // from node_modules at runtime (native binary can't be webpack-bundled).
+    serverComponentsExternalPackages: ["pdf-parse", "@napi-rs/canvas", "pdfjs-dist"],
   },
 
   // ── Security headers ──────────────────────────────────────────────────────
