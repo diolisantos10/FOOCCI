@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getRepeatableOrder } from "@/services/order/RepeatOrderService";
+import { getRepeatableOrder, getRepeatableItemsForCustomer } from "@/services/order/RepeatOrderService";
 
 export async function GET(
   req:    NextRequest,
@@ -31,22 +31,30 @@ export async function GET(
     }
 
     const customerId = req.nextUrl.searchParams.get("customerId")?.trim();
-    if (!customerId) {
-      // No identity → no repeat order (never invent one).
-      return NextResponse.json({ ok: true, repeatOrder: null });
+    const phone = req.nextUrl.searchParams.get("phone")?.trim();
+    if (!customerId && !phone) {
+      // No identity → no repeat order/items (never invent one).
+      return NextResponse.json({ ok: true, repeatOrder: null, repeatItems: [] });
     }
 
-    // Verify the customer belongs to this restaurant.
-    const customer = await prisma.customer.findFirst({
-      where:  { id: customerId, restaurantId: restaurant.id },
-      select: { id: true },
-    });
-    if (!customer) {
-      return NextResponse.json({ ok: true, repeatOrder: null });
+    // Verify the customer belongs to this restaurant (when an id is provided).
+    let verifiedCustomerId: string | undefined;
+    if (customerId) {
+      const customer = await prisma.customer.findFirst({
+        where:  { id: customerId, restaurantId: restaurant.id },
+        select: { id: true },
+      });
+      if (!customer) {
+        return NextResponse.json({ ok: true, repeatOrder: null, repeatItems: [] });
+      }
+      verifiedCustomerId = customer.id;
     }
 
-    const repeatOrder = await getRepeatableOrder(restaurant.id, customer.id);
-    return NextResponse.json({ ok: true, repeatOrder });
+    const [repeatOrder, repeatItems] = await Promise.all([
+      verifiedCustomerId ? getRepeatableOrder(restaurant.id, verifiedCustomerId) : Promise.resolve(null),
+      getRepeatableItemsForCustomer({ restaurantId: restaurant.id, customerId: verifiedCustomerId, phone }),
+    ]);
+    return NextResponse.json({ ok: true, repeatOrder, repeatItems });
   } catch (err) {
     console.error("[GET /api/pedido/[slug]/repeat-order]", err);
     return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });

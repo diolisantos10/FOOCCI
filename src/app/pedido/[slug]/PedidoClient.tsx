@@ -2779,6 +2779,14 @@ export function PedidoClient({
         ? `Olá, ${name}! 😊 Que bom te ver por aqui — dá uma olhada no cardápio e me fala o que te apetece!`
         : `Olá, ${name}! 😊\nDá uma olhada no cardápio — me fala se quiser ajuda para escolher.`
       : `Olá! 😊\nDá uma olhada no cardápio — qualquer dúvida ou sugestão, é só me chamar.`;
+    // Clean opening: optional, low-friction actions. "Pedir novamente" appears
+    // ONLY for an identified customer with real repeatable history. Nothing is
+    // forced — if the customer ignores the buttons, they just browse the menu.
+    const greetingOptions: WaiterOption[] = [];
+    if (repeatOrder && repeatOrder.items.length > 0) {
+      greetingOptions.push({ label: "Pedir novamente", value: "open_repeat_items" });
+    }
+    greetingOptions.push({ label: "Ver sugestões", value: "see_suggestions" });
     setMessages((prev) => [
       ...prev,
       {
@@ -2786,6 +2794,7 @@ export function PedidoClient({
         role: "assistant" as const,
         content: greeting,
         ts: new Date(),
+        options: greetingOptions,
       },
     ]);
     // Fire ON_ENTRY to the server for Atendimento logging + early conversationId
@@ -3159,6 +3168,37 @@ export function PedidoClient({
         return;
       }
 
+      // "see_suggestions" (clean opening) → trigger the current recommendation flow.
+      if (value === "see_suggestions") {
+        sendText("me sugere algo", cart, stage, activeUpsell, { displayText: "Ver sugestões" });
+        return;
+      }
+
+      // "open_repeat_items" (clean opening) → show the customer's repeatable items
+      // as a per-item grid (each added only on tap). Never auto-adds to the cart.
+      if (value === "open_repeat_items") {
+        const cid = resolvedCustomerId;
+        if (!cid) {
+          pushAssistantMessage("Pra ver seus pedidos anteriores, preciso te identificar primeiro 😊");
+          return;
+        }
+        fetch(`/api/pedido/${slug}/repeat-order?customerId=${encodeURIComponent(cid)}`)
+          .then((r) => r.json())
+          .then((d: { ok: boolean; repeatItems?: Array<{ menuItemId: string }> }) => {
+            const ids = (d.repeatItems ?? []).map((i) => i.menuItemId);
+            const byId = new Map(categories.flatMap((c) => c.items).map((i) => [i.id, i]));
+            const mapped = ids.map((id) => byId.get(id)).filter((x): x is MenuItem => !!x);
+            if (mapped.length > 0) {
+              setSuggestedProducts(mapped);
+              pushAssistantMessage("Separei itens que você já pediu antes 👇");
+            } else {
+              pushAssistantMessage("Não encontrei pedidos anteriores por aqui ainda. Posso te mostrar sugestões 😊");
+            }
+          })
+          .catch(() => pushAssistantMessage("Não consegui recuperar seus pedidos agora 😕"));
+        return;
+      }
+
       // "see_final_suggestions" → show pairing suggestions before checkout.
       if (value === "see_final_suggestions") {
         setSuggestedProducts([]);
@@ -3196,7 +3236,7 @@ export function PedidoClient({
       setSuggestedProducts([]);
       sendText(value, cart, stage, activeUpsell, { displayText: label });
     },
-    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, pushAssistantMessage, proceedToCheckout, repeatOrder, hydrateRepeatCart, resolvedCustomerId, slug],
+    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, pushAssistantMessage, proceedToCheckout, repeatOrder, hydrateRepeatCart, resolvedCustomerId, slug, categories, openProduct],
   );
 
   // Sends a category intro via the standard sendText path so cards are preserved
