@@ -16,6 +16,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEven
 import type { WaiterMemory, CheckoutUpsellStage } from "@/services/ai/WaiterBrainV2";
 import type { RepeatOrderPayload } from "@/services/order/RepeatOrderService";
 import { buildDisplayCategories } from "@/services/order/repeatCategory";
+import { buildOpeningOptions, SUGGESTION_OPTION_VALUE } from "@/services/order/waiterOpening";
 import { buildWhatsAppUrl, buildInstagramUrl, buildTikTokUrl } from "@/lib/social";
 import { phoneCandidates } from "@/lib/phone";
 
@@ -1633,7 +1634,11 @@ const SALES_BEHAVIOR: SalesBehavior = {
   suggestOnAdd:             false,
   suggestOnIdle:            false,
   suggestOnCheckoutIntent:  true,
-  passivePermissionPrompt:  true,
+  // Clean opening: the Waiter never auto-pops a permission CTA ("Quer ajuda para
+  // escolher? / Me sugere algo / Agora não"). Suggestions come ONLY from the
+  // single "Quero uma sugestão" button (or the customer asking). The "Pedir de
+  // novo" feature is a visual menu category, not a chat prompt.
+  passivePermissionPrompt:  false,
 };
 
 // Product cards are shown only when the API returns mode "SUGGESTION" or "INTERVENTION"
@@ -2513,7 +2518,12 @@ export function PedidoClient({
   // Repeatable items (last order + most frequent) for an identified customer, loaded
   // once from the existing repeat-order API. Resolved against the live menu so cards
   // behave exactly like normal products (per-item add; never auto-added).
-  const [repeatItemIds, setRepeatItemIds] = useState<string[]>([]);
+  // Seed immediately from the SSR repeatOrder payload (already present on first
+  // render, same source the banner uses) so the category can show without waiting
+  // for the fetch; the fetch then augments it with the fuller list (most frequent).
+  const [repeatItemIds, setRepeatItemIds] = useState<string[]>(
+    () => (repeatOrder?.items ?? []).map((i) => i.menuItemId).filter((id): id is string => !!id),
+  );
   const repeatFetchedRef = useRef(false);
   useEffect(() => {
     if (repeatFetchedRef.current || entryPhase !== "browsing") return;
@@ -2527,6 +2537,9 @@ export function PedidoClient({
       .then((d: { repeatItems?: Array<{ menuItemId: string }> }) => {
         const ids = (d.repeatItems ?? []).map((i) => i.menuItemId);
         if (ids.length > 0) setRepeatItemIds(ids);
+        if (process.env.NODE_ENV !== "production") {
+          console.info("[repeat-order] fetched", { received: ids.length, via: cid ? "customerId" : "phone" });
+        }
       })
       .catch(() => { /* non-fatal — repeat section just won't appear */ });
   }, [entryPhase, resolvedCustomerId, effectiveCustomerPhone, slug]);
@@ -2535,7 +2548,11 @@ export function PedidoClient({
   const repeatMenuItems = useMemo(() => {
     if (repeatItemIds.length === 0) return [];
     const byId = new Map(categories.flatMap((c) => c.items).map((i) => [i.id, i]));
-    return repeatItemIds.map((id) => byId.get(id)).filter((x): x is MenuItem => !!x);
+    const mapped = repeatItemIds.map((id) => byId.get(id)).filter((x): x is MenuItem => !!x);
+    if (process.env.NODE_ENV !== "production" && repeatItemIds.length > 0 && mapped.length === 0) {
+      console.info("[repeat-order] no ids matched the live menu", { ids: repeatItemIds.length, menuItems: byId.size });
+    }
+    return mapped;
   }, [repeatItemIds, categories]);
 
   // Categories shown in the UI: prepend the virtual "Pedir de novo" when there is
@@ -2813,10 +2830,8 @@ export function PedidoClient({
     fireGtag("view_menu", { restaurant: restaurantName, ...getUtm() });
     const name = identifiedName;
     const greeting = name
-      ? isWaEntry
-        ? `Olá, ${name}! 😊 Que bom te ver por aqui — dá uma olhada no cardápio e me fala o que te apetece!`
-        : `Olá, ${name}! 😊\nDá uma olhada no cardápio — me fala se quiser ajuda para escolher.`
-      : `Olá! 😊\nDá uma olhada no cardápio — qualquer dúvida ou sugestão, é só me chamar.`;
+      ? `Oi, ${name}! 👋\nFica à vontade pra olhar o cardápio. Se quiser, eu te ajudo a escolher.`
+      : `Oi! 👋\nFica à vontade pra olhar o cardápio. Se quiser, eu te ajudo a escolher.`;
     // Clean opening: ONE optional, low-friction action. "Pedir de novo" is NOT a
     // chat button — it lives as a visual menu category (see displayCategories).
     setMessages((prev) => [
@@ -2826,7 +2841,7 @@ export function PedidoClient({
         role: "assistant" as const,
         content: greeting,
         ts: new Date(),
-        options: [{ label: "Quero sugestões", value: "see_suggestions" }],
+        options: buildOpeningOptions(),
       },
     ]);
     // Fire ON_ENTRY to the server for Atendimento logging + early conversationId
@@ -2909,6 +2924,7 @@ export function PedidoClient({
   // start a 3 s countdown then show the permission prompt.
   // Skipped when the suggestion grid is already active — no double-prompting.
   useEffect(() => {
+    if (!SALES_BEHAVIOR.passivePermissionPrompt) return;
     if (
       cart.length !== 1 ||
       aiPermState !== "idle" ||
@@ -3203,11 +3219,11 @@ export function PedidoClient({
       // "see_suggestions" (clean opening) → trigger the recommendation flow ONCE.
       // The top-of-handler `ui === "thinking"` guard prevents concurrent sends;
       // we also strip the button so it can't be re-tapped and duplicate the reply.
-      if (value === "see_suggestions") {
+      if (value === SUGGESTION_OPTION_VALUE) {
         setMessages((prev) =>
-          prev.map((m) => (m.options?.some((o) => o.value === "see_suggestions") ? { ...m, options: undefined } : m)),
+          prev.map((m) => (m.options?.some((o) => o.value === SUGGESTION_OPTION_VALUE) ? { ...m, options: undefined } : m)),
         );
-        sendText("me sugere algo", cart, stage, activeUpsell, { displayText: "Quero sugestões" });
+        sendText("me sugere algo", cart, stage, activeUpsell, { displayText: "Quero uma sugestão" });
         return;
       }
 
