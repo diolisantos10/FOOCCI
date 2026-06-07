@@ -38,6 +38,17 @@ import {
   type ProductionStatus,
   type CurrentStatus,
 } from "@/services/agents/waiterRuntimeMap";
+import {
+  WAITER_TEST_COVERAGE,
+  WAITER_EVAL_CRITERIA,
+  WAITER_TOMORROW_PLAN,
+  COVERAGE_LABELS,
+  backlogByPriority,
+  coverageSummary,
+  backlogSummary,
+  type CoverageStatus,
+  type BacklogPriority,
+} from "@/services/agents/waiterIntelligenceBacklog";
 
 // ── small presentational helpers (room-local) ──────────────────────────────────
 
@@ -118,6 +129,12 @@ function prodTone(p: ProductionStatus): Tone {
 }
 function currentTone(c: CurrentStatus): Tone {
   return c === "ACTIVE" ? "green" : c === "LEGACY" ? "gray" : c === "HARDCODED" ? "amber" : "violet";
+}
+function coverageTone(s: CoverageStatus): Tone {
+  return s === "AUTOMATED" ? "green" : s === "PARTIAL" ? "amber" : s === "MANUAL" ? "blue" : "red";
+}
+function priorityTone(p: BacklogPriority): Tone {
+  return p === "P0" ? "red" : p === "P1" ? "amber" : "violet";
 }
 
 /** Mirror card for one real runtime component. */
@@ -460,23 +477,40 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
             </p>
           </RoomCard>
 
-          <RoomCard title="Modo de teste recomendado amanhã" hint="Checklist manual — sem execução automática." badge={<Pill tone="blue">Amanhã testar</Pill>}>
+          <RoomCard
+            title="Plano de teste de amanhã"
+            hint="Cobertura por cenário crítico + ordem de teste manual."
+            badge={(() => { const s = coverageSummary(); return <Pill tone="green">{s.automated} auto · {s.partial} parcial · {s.manual + s.gap} manual</Pill>; })()}
+          >
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+              ⚠️ Teste com <strong>restaurante fechado</strong> antes de ativar qualquer mudança. KPIs/score reais ainda
+              não têm telemetria nesta tela.
+            </div>
+            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+              {WAITER_TEST_COVERAGE.map((c) => (
+                <div key={c.id} className="flex items-baseline gap-2 border-b border-gray-100 pb-1 text-xs last:border-0">
+                  <Pill tone={coverageTone(c.status)}>{COVERAGE_LABELS[c.status]}</Pill>
+                  <span className="font-medium text-gray-800">{c.label}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Amanhã testar nesta ordem</p>
             <ol className="grid grid-cols-1 gap-1 text-sm text-gray-800 sm:grid-cols-2">
-              {[
-                "Testar com restaurante fechado",
-                "Rodar o Waiter Test Center",
-                "Simular cliente indeciso",
-                "Simular pedido objetivo",
-                "Simular upsell de bebida",
-                "Simular upsell de sobremesa",
-                "Simular restrição alimentar",
-                "Simular produto indisponível",
-                "Validar que não inventa produto",
-                "Validar que conduz para o fechamento",
-              ].map((s, i) => (
+              {WAITER_TOMORROW_PLAN.map((s, i) => (
                 <li key={s} className="flex gap-2"><span className="text-gray-400">☐</span><span><span className="font-semibold text-gray-500">{i + 1}.</span> {s}</span></li>
               ))}
             </ol>
+          </RoomCard>
+
+          <RoomCard title="Critérios de avaliação" hint="O que é medido automaticamente vs. validação manual.">
+            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+              {WAITER_EVAL_CRITERIA.map((c) => (
+                <div key={c.label} className="flex items-baseline gap-2 text-xs">
+                  <Pill tone={c.automated ? "green" : "blue"}>{c.automated ? "Auto" : "Manual"}</Pill>
+                  <span className="text-gray-700">{c.label}</span>
+                </div>
+              ))}
+            </div>
           </RoomCard>
         </div>
       )}
@@ -513,6 +547,34 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
                 </div>
               ))}
             </div>
+          </RoomCard>
+
+          <RoomCard
+            title="Backlog de inteligência"
+            hint="Correções e evoluções priorizadas (P0 antes de uso real)."
+            badge={(() => { const s = backlogSummary(); return <Pill tone="red">{s.p0} P0 · {s.p1} P1 · {s.p2} P2</Pill>; })()}
+          >
+            {(["P0", "P1", "P2"] as BacklogPriority[]).map((p) => (
+              <div key={p} className="mb-3 last:mb-0">
+                <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <Pill tone={priorityTone(p)}>{p}</Pill>
+                  {p === "P0" ? "Antes de uso real" : p === "P1" ? "Melhora comercial" : "Evolução"}
+                </p>
+                <ul className="space-y-1">
+                  {backlogByPriority(p).map((b) => (
+                    <li key={b.id} className="rounded-lg border border-gray-200 bg-white p-2 text-xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-gray-900">{b.title}</span>
+                        <Pill tone={b.risk === "HIGH" ? "red" : b.risk === "MEDIUM" ? "amber" : "green"}>Risco {b.risk}</Pill>
+                        <span className="ml-auto text-[10px] text-gray-400">{b.phase}</span>
+                      </div>
+                      <p className="mt-0.5 text-gray-600">{b.problem}</p>
+                      <p className="mt-0.5 text-gray-500"><span className="font-semibold">Próximo passo:</span> {b.nextStep}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </RoomCard>
 
           <RoomCard title="Plano de migração futura" hint="Fases controladas — o Waiter atual segue como fallback.">
