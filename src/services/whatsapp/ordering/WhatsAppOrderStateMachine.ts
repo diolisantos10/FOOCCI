@@ -84,9 +84,12 @@ export function advanceSession(
       return handlePayment(next, text);
     case "REVIEWING_ORDER":
       return handleReview(next, text, intent, menu);
-    default:
+    default: {
       // IDLE / INTENT_DETECTED / PARSING_ITEMS / fresh order
+      const earlyInfo = handleEarlyInfo(next, text, menu);
+      if (earlyInfo) return earlyInfo;
       return handleItemCollection(next, text, menu);
+    }
   }
 }
 
@@ -137,13 +140,14 @@ function continueAfterItems(session: WaPersistedSession): AdvanceResult {
       // If other items are still queued, tell the customer what comes next (one
       // question at a time, but don't leave them guessing about the rest)
       const remaining = session.unresolvedItems.slice(1);
+      const remainLabel = remaining.length === 1 ? stripQty(remaining[0]!.rawText) : "";
       const hint = remaining.length === 1
-        ? ` Depois confirmo ${stripQty(remaining[0]!.rawText)}.`
+        ? ` Depois confirmo ${articleFor(remainLabel)}${remainLabel}.`
         : remaining.length > 1
           ? ` Depois confirmo os outros itens.`
           : "";
       return done(session, "ORDER_REQUEST",
-        `Para o ${label}, qual você quer: ${opts}?${hint}`, [], false);
+        `Para ${articleFor(label)}${titleCase(label)}, qual você quer: ${opts}?${hint}`, [], false);
     }
     if (u.reason === "UNAVAILABLE") {
       return done(session, "ORDER_REQUEST", `"${u.rawText}" está indisponível agora. Quer outra opção?`, [], false);
@@ -215,8 +219,11 @@ function handleOptionAnswer(
 
 // ── Delivery type ───────────────────────────────────────────────────────────────
 
-const DELIVERY_RE = /\b(entrega|entregar|delivery|receber|em casa|tele)\b/i;
-const PICKUP_RE   = /\b(retira|retirar|retirada|buscar|pegar|balc[aã]o|no local)\b/i;
+const DELIVERY_RE      = /\b(entrega|entregar|delivery|receber|em casa|tele)\b/i;
+const PICKUP_RE        = /\b(retira|retirar|retirada|buscar|pegar|balc[aã]o|no local)\b/i;
+const GREETING_RE      = /^(oi|ol[aá]|bom dia|boa tarde|boa noite|e a[íi]|hey|hello)\b/i;
+const ADDRESS_LIKE_RE  = /\b(rua|av\.?|avenida|r\.|al\.?|alameda|tv\.?|travessa|estr\.?|estrada|rod\.?|rodovia|pra[çc]a)\b.{3,}/i;
+const EARLY_PAYMENT_RE = /\b(vou pagar|pago)\b/i;
 
 function handleDeliveryType(session: WaPersistedSession, text: string): AdvanceResult {
   if (PICKUP_RE.test(text)) {
@@ -229,12 +236,63 @@ function handleDeliveryType(session: WaPersistedSession, text: string): AdvanceR
   }
   if (DELIVERY_RE.test(text)) {
     session.deliveryType = "DELIVERY";
+    // Address already captured before items were ordered — skip asking for it
+    if (session.address?.street && session.address?.number) {
+      session.stage  = "CALCULATING_DELIVERY_FEE";
+      session.status = "ACTIVE";
+      return done(session, "DELIVERY_INFO", "Só um instante, calculando a entrega…", ["QUOTE_DELIVERY"], false);
+    }
     session.stage  = "COLLECTING_ADDRESS";
     session.status = "AWAITING_CUSTOMER";
     return done(session, "DELIVERY_INFO",
       "Me envia o endereço completo com número, por favor.", [], false);
   }
   return done(session, "UNKNOWN", "Vai ser entrega ou retirada?", [], false);
+}
+
+// ── Early-info handler (address/payment/greeting before items are ordered) ───────
+
+const FEMININE_WORDS_RE = /^(coca|pizza|[aá]gua|agua|caipirinha|batata|cerveja|soda|limonada|laranja|maracuj[aá]|manga|melancia|fruta|por[çc][aã]o|porcao|bebida|sobremesa|entrada)/i;
+
+function articleFor(name: string): string {
+  if (FEMININE_WORDS_RE.test(norm(name))) return "a ";
+  return "o ";
+}
+
+function titleCase(s: string): string {
+  return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function handleEarlyInfo(
+  session: WaPersistedSession,
+  text:    string,
+  menu:    WaMenuItem[],
+): AdvanceResult | null {
+  void menu; // kept for API consistency; may use for question answering later
+  if (session.selectedItems.length > 0 || session.unresolvedItems.length > 0) return null;
+
+  if (GREETING_RE.test(text.trim())) {
+    session.stage = "IDLE";
+    return done(session, "UNKNOWN", "Olá! O que você vai querer pedir?", [], false);
+  }
+
+  const { method } = parsePaymentMethod(text);
+  if (method || EARLY_PAYMENT_RE.test(text)) {
+    if (method) session.paymentMethod = method;
+    session.stage = "IDLE";
+    return done(session, "PAYMENT_INFO", "Certo! Me diz o que vai querer pedir.", [], false);
+  }
+
+  if (ADDRESS_LIKE_RE.test(text)) {
+    const addr = parseAddressFragment(text);
+    if (addr.street) {
+      session.address = { ...(session.address ?? {}), ...addr, raw: text };
+      session.stage = "IDLE";
+      return done(session, "DELIVERY_INFO", "Endereço anotado! Me diz o que vai querer pedir.", [], false);
+    }
+  }
+
+  return null;
 }
 
 // ── Address ─────────────────────────────────────────────────────────────────────

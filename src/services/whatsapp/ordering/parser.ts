@@ -55,6 +55,26 @@ const NUMBER_WORDS: Record<string, number> = {
   quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
 };
 
+// Standalone delivery/payment tokens stripped from product item lists. They
+// appear as separate items when the customer writes a mixed one-line message
+// like "2 yakisoba, entrega, pix" — we don't want them as menu lookups.
+const DELIVERY_STANDALONE_RE = /^(entrega|delivery|retirada|retirar|buscar|pegar|balc[aã]o|no local)\s*$/i;
+const PAYMENT_STANDALONE_RE  = /^(pix|cart[aã]o|cr[eé]dito|d[eé]bito|dinheiro|esp[eé]cie|cash)\s*$/i;
+
+/** Normalizes spelling variants and strips Portuguese plural suffixes from a product name. */
+function normalizePluralAndSpelling(text: string): string {
+  return text
+    // Known spelling variants
+    .replace(/\bcocacola\b/gi, "coca cola")
+    .replace(/\bcoca-cola\b/gi, "coca cola")
+    .replace(/\bkisoba\b/gi, "yakisoba")
+    .replace(/\brefri\b/gi, "refrigerante")
+    // Strip trailing -s from words with stem ≥ 4 chars
+    // handles: cocas→coca, yakisobas→yakisoba, temakis→temaki, combos→combo, pizzas→pizza
+    .replace(/\b([a-záéíóúâêîôûãõàèìòùç]{4,})s\b/g, "$1")
+    .trim();
+}
+
 function parseQuantity(token: string): { qty: number; rest: string } {
   const xMatch = token.match(/^(\d+)\s*[xX×]\s*([\s\S]*)/);
   if (xMatch) return { qty: Math.max(1, parseInt(xMatch[1] ?? "1", 10)), rest: (xMatch[2] ?? "").trim() };
@@ -91,10 +111,15 @@ export function parseTextItems(messageText: string): WaParsedItem[] {
   const parts = cleaned
     .split(/\s+e\s+|\s*,\s*|\s*\+\s*|\s+mais\s+/i)
     .map(p => stripFiller(p.trim()))
-    .filter(p => p.length > 1);
+    .filter(p =>
+      p.length > 1 &&
+      !DELIVERY_STANDALONE_RE.test(p) &&
+      !PAYMENT_STANDALONE_RE.test(p),
+    );
 
   return parts.map(part => {
     const { qty, rest } = parseQuantity(part);
-    return { rawText: part, quantity: qty, name: stripFiller(rest) || part };
+    const rawName = stripFiller(rest) || part;
+    return { rawText: part, quantity: qty, name: normalizePluralAndSpelling(rawName) };
   });
 }
