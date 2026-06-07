@@ -357,11 +357,11 @@ describe("K. Feature flag disabled by default", () => {
 
   it("flag enabled only for allowlisted restaurant", () => {
     process.env.WHATSAPP_TEXT_ORDERING_ENABLED   = "true";
-    process.env.WHATSAPP_TEXT_ORDERING_ALLOWLIST = "rest-abc,rest-def";
+    process.env.WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS = "rest-abc,rest-def";
     expect(isWaTextOrderingEnabled("rest-abc")).toBe(true);
     expect(isWaTextOrderingEnabled("rest-xyz")).toBe(false);
     delete process.env.WHATSAPP_TEXT_ORDERING_ENABLED;
-    delete process.env.WHATSAPP_TEXT_ORDERING_ALLOWLIST;
+    delete process.env.WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS;
   });
 
   it("webhook routing does not import new service (structural)", async () => {

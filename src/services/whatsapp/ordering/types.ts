@@ -24,13 +24,48 @@ export type WaOrderStage =
   | "COMPLETED"
   | "CANCELLED";
 
+// Persistent session status (mirrors the DB column values)
+export type WaSessionStatus =
+  | "ACTIVE"
+  | "AWAITING_CUSTOMER"
+  | "READY_TO_CONFIRM"
+  | "AWAITING_PAYMENT"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "HANDOFF_REQUIRED"
+  | "EXPIRED";
+
+// Legacy alias kept for the W0/W1 in-memory session shape
 export type WaOrderStatus = "ACTIVE" | "COMPLETED" | "CANCELLED" | "HANDED_OFF";
 
 export type WaDetectedIntent =
   | "ORDER_REQUEST"
+  | "ORDER_MODIFICATION"
+  | "ANSWER_TO_OPTION"
+  | "DELIVERY_INFO"
+  | "PAYMENT_INFO"
+  | "CONFIRMATION"
+  | "CANCEL"
+  | "HUMAN_REQUEST"
   | "QUESTION"
-  | "HUMAN_NEEDED"
+  | "COMPLAINT"
+  | "HUMAN_NEEDED"  // legacy alias for HUMAN_REQUEST (W0/W1)
   | "UNKNOWN";
+
+// Per-item resolution status (W6 menu matching)
+export type WaItemStatus =
+  | "RESOLVED"
+  | "NEEDS_VARIANT"
+  | "NEEDS_REQUIRED_OPTION"
+  | "AMBIGUOUS"
+  | "UNAVAILABLE"
+  | "UNKNOWN";
+
+// Runtime mode (re-exported from the flag module for convenience)
+export type WaRuntimeMode =
+  | "DRY_RUN_ONLY"
+  | "ALLOWLIST_REPLY_ONLY"
+  | "ALLOWLIST_FULL_TEST";
 
 // ── Session item types ─────────────────────────────────────────────────────────
 
@@ -205,4 +240,90 @@ export interface WaMenuExtra {
   name:        string;
   price:       number;
   isAvailable: boolean;
+}
+
+// ── Persistent session DTO (matches WhatsAppOrderingSession DB row, typed) ────
+
+export interface WaPersistedSession {
+  id:               string;
+  restaurantId:     string;
+  customerId:       string | null;
+  conversationId:   string | null;
+  phone:            string;
+  status:           WaSessionStatus;
+  stage:            WaOrderStage;
+  selectedItems:    WaOrderItem[];
+  unresolvedItems:  WaUnresolvedItem[];
+  missingQuestions: WaMissingQuestion[];
+  deliveryType:     "DELIVERY" | "PICKUP" | "DINE_IN" | null;
+  address:          WaAddress | null;
+  deliveryQuote:    WaDeliveryQuote | null;
+  paymentMethod:    "PIX" | "CARD" | "CASH" | null;
+  paymentStatus:    "PENDING" | "AWAITING_PIX" | "PAID" | "FAILED" | null;
+  orderDraftId:     string | null;
+  orderId:          string | null;
+  pixPaymentId:     string | null;
+  mode:             WaRuntimeMode;
+  source:           string;
+  metadata:         Record<string, unknown> | null;
+  lastMessageAt:    Date;
+  expiresAt:        Date | null;
+  createdAt:        Date;
+  updatedAt:        Date;
+}
+
+export interface WaAddress {
+  cep?:            string;
+  street?:         string;
+  number?:         string;
+  neighborhood?:   string;
+  city?:           string;
+  state?:          string;
+  complement?:     string;
+  referencePoint?: string;
+  raw?:            string; // original free-text fragment
+}
+
+// ── State-machine input/output (processCustomerMessage) ───────────────────────
+
+export interface WaProcessInput {
+  restaurantId:    string;
+  restaurantSlug?: string;
+  phone:           string;
+  conversationId?: string;
+  customerId?:     string;
+  messageText:     string;
+  mode:            WaRuntimeMode;
+  currentSession?: WaPersistedSession | null;
+  allowSideEffects: boolean;
+}
+
+export interface WaPaymentInfo {
+  method:        "PIX" | "CARD" | "CASH" | null;
+  status:        "PENDING" | "AWAITING_PIX" | "PAID" | "FAILED" | null;
+  pixCopyPaste?: string;
+  pixQrCodeBase64?: string;
+  isDryRunStub?: boolean;
+  changeFor?:    number; // cash: troco para R$ X
+}
+
+export interface WaProcessResult {
+  session:          WaPersistedSession;
+  stage:            WaOrderStage;
+  intent:           WaDetectedIntent;
+  parsedItems:      WaParsedItem[];
+  matchedItems:     WaOrderItem[];
+  unresolvedItems:  WaUnresolvedItem[];
+  missingQuestions: WaMissingQuestion[];
+  draft:            WaDraftSummary | null;
+  deliveryQuote:    WaDeliveryQuote | null;
+  payment:          WaPaymentInfo | null;
+  order:            { orderId: string | null; status: string | null; wouldCreate: boolean } | null;
+  estimatedTotal:   number;
+  suggestedReply:   string;
+  operatorSummary:  string;
+  actions:          string[];
+  safetyNotes:      string[];
+  sideEffectsPerformed: string[];
+  handoff:          boolean;
 }

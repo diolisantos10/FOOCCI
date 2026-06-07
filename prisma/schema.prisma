@@ -85,6 +85,7 @@ model Restaurant {
   orderEditLogs          OrderEditLog[]
   agentProfileOverrides  RestaurantAgentProfileOverride[]
   agencyProjects         AgencyProject[]
+  waOrderingSessions     WhatsAppOrderingSession[]
 
   @@map("restaurants")
 }
@@ -2710,4 +2711,53 @@ model AgentLibraryTechnique {
   @@index([sourceId])
   @@index([status])
   @@map("agent_library_techniques")
+}
+
+// ═══════════════════════════════════════════
+//  WHATSAPP TEXT ORDERING SESSION
+//  Durable state for the WhatsApp AI text-ordering engine (controlled rollout).
+//  Additive only — no existing table is altered. Behind feature flag/allowlist;
+//  in DRY_RUN_ONLY mode this table is not written from production webhook paths.
+// ═══════════════════════════════════════════
+
+model WhatsAppOrderingSession {
+  id             String   @id @default(cuid())
+  restaurantId   String
+  customerId     String? // nullable — anonymous until identified
+  conversationId String? // nullable — links to Atendimento conversation when known
+  phone          String
+
+  status String @default("ACTIVE") // ACTIVE | AWAITING_CUSTOMER | READY_TO_CONFIRM | AWAITING_PAYMENT | COMPLETED | CANCELLED | HANDOFF_REQUIRED | EXPIRED
+  stage  String @default("IDLE") // see WaOrderStage in types.ts
+
+  selectedItems    Json @default("[]")
+  unresolvedItems  Json @default("[]")
+  missingQuestions Json @default("[]")
+
+  deliveryType  String? // DELIVERY | PICKUP | DINE_IN
+  address       Json? // normalized address fragments
+  deliveryQuote Json? // resolved delivery fee result
+
+  paymentMethod String? // PIX | CARD | CASH
+  paymentStatus String? // PENDING | AWAITING_PIX | PAID | FAILED
+
+  orderDraftId String?
+  orderId      String?
+  pixPaymentId String?
+
+  mode   String  @default("DRY_RUN_ONLY") // DRY_RUN_ONLY | ALLOWLIST_REPLY_ONLY | ALLOWLIST_FULL_TEST
+  source String  @default("admin_test") // admin_test | webhook
+  metadata Json?
+
+  lastMessageAt DateTime @default(now())
+  expiresAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, status])
+  @@index([restaurantId, phone, status])
+  @@index([conversationId])
+  @@map("whatsapp_ordering_sessions")
 }

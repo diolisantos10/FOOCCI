@@ -1,354 +1,386 @@
 "use client";
 
 /**
- * WA Pedido Texto — admin diagnostic simulator.
+ * WA Pedido Texto — admin Test Center (W5).
  *
- * Simulates a WhatsApp free-text order WITHOUT sending any real message,
- * creating any real order, or generating any real Pix.
- * Internal testing only.
+ * Multi-step WhatsApp order simulator. Maintains a transcript and a continuing
+ * session so you can walk a full conversation (items → options → delivery →
+ * address → payment) without affecting real customers. Dry-run from this page
+ * NEVER sends WhatsApp, creates an order, or generates a real Pix.
  */
 
 import { useState, useCallback } from "react";
 
-// ── Response types (mirror WhatsAppTextOrderService) ─────────────────────────
-
-interface ParsedItem {
-  rawText:  string;
-  quantity: number;
-  name:     string;
-}
+// ── Types (mirror WaProcessResult) ────────────────────────────────────────────
 
 interface OrderItem {
-  rawText:      string;
-  quantity:     number;
-  menuItemId:   string;
-  menuItemName: string;
-  variantName?: string;
-  unitPrice:    number;
-  lineTotal:    number;
-  options:      { optionName: string }[];
-  extras:       { extraName: string }[];
+  quantity: number; menuItemName: string; variantName?: string;
+  unitPrice: number; lineTotal: number;
+  options: { optionName: string }[]; extras: { extraName: string }[];
 }
-
-interface UnresolvedItem {
-  rawText:    string;
-  quantity:   number;
-  reason:     "NOT_FOUND" | "AMBIGUOUS" | "UNAVAILABLE";
-  candidates: string[];
+interface Unresolved { rawText: string; reason: string; candidates: string[] }
+interface MissingQ { itemName: string; groupName: string; options: string[] }
+interface DraftLine { name: string; quantity: number; variant?: string; options: string[]; extras: string[]; lineTotal: number }
+interface Draft { subtotal: number; items: DraftLine[]; missingRequirements: string[] }
+interface DeliveryQuote { fee: number; distanceKm?: number; status: string; reason?: string }
+interface Payment { method: string | null; status: string | null; pixCopyPaste?: string; isDryRunStub?: boolean; changeFor?: number }
+interface Session {
+  status: string; stage: string; deliveryType: string | null;
+  address: Record<string, string> | null; paymentMethod: string | null; paymentStatus: string | null;
+  orderId: string | null; orderDraftId: string | null;
 }
-
-interface MissingQuestion {
-  itemName:  string;
-  groupName: string;
-  required:  boolean;
-  options:   string[];
+interface FlagStatus {
+  enabled: boolean; mode: string; requestedMode: string;
+  restaurantAllowlisted: boolean; phoneAllowlisted: boolean; liveRoutingActive: boolean;
 }
-
-interface DraftLine {
-  name:      string;
-  quantity:  number;
-  variant?:  string;
-  options:   string[];
-  extras:    string[];
-  unitPrice: number;
-  lineTotal: number;
-}
-
-interface DraftSummary {
-  subtotal:            number;
-  items:               DraftLine[];
-  missingRequirements: string[];
-}
-
 interface SimResult {
-  restaurant:       { id: string; name: string; slug: string };
-  messageText:      string;
-  detectedIntent:   string;
-  parsedItems:      ParsedItem[];
-  matchedItems:     OrderItem[];
-  unresolvedItems:  UnresolvedItem[];
-  missingQuestions: MissingQuestion[];
-  draftSummary:     DraftSummary | null;
-  estimatedTotal:   number;
-  nextStage:        string;
-  suggestedReply:   string;
-  actions:          string[];
-  safetyNotes:      string[];
+  restaurant: { id: string; name: string; slug: string };
+  messageText: string;
+  flagStatus: FlagStatus;
+  session: Session;
+  stage: string; intent: string;
+  matchedItems: OrderItem[]; unresolvedItems: Unresolved[]; missingQuestions: MissingQ[];
+  draft: Draft | null; deliveryQuote: DeliveryQuote | null; payment: Payment | null;
+  order: { orderId: string | null; status: string | null; wouldCreate: boolean } | null;
+  estimatedTotal: number; suggestedReply: string; operatorSummary: string;
+  actions: string[]; safetyNotes: string[]; sideEffectsPerformed: string[]; handoff: boolean;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+interface TranscriptTurn { who: "customer" | "agent"; text: string; stage?: string }
 
-const INTENT_CLS: Record<string, string> = {
-  ORDER_REQUEST: "bg-green-900/40 text-green-300 border-green-700",
-  QUESTION:      "bg-blue-900/40 text-blue-300 border-blue-700",
-  HUMAN_NEEDED:  "bg-amber-900/40 text-amber-300 border-amber-700",
-  UNKNOWN:       "bg-gray-800 text-gray-400 border-gray-700",
-};
+const QUICK = [
+  "quero 2 yakisoba e uma coca",
+  "quero um combinado grande",
+  "frango",
+  "é entrega",
+  "meu endereço é Rua das Flores, 123",
+  "vou pagar no pix",
+  "cartão na entrega",
+  "cancela",
+  "quero falar com atendente",
+];
 
-function Badge({ text, cls }: { text: string; cls?: string }) {
+const fmtBRL = (v: number) => `R$ ${v.toFixed(2)}`;
+
+function Card({ title, children, accent }: { title: string; children: React.ReactNode; accent?: boolean }) {
   return (
-    <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${cls ?? "bg-gray-800 text-gray-300 border-gray-600"}`}>
-      {text}
-    </span>
-  );
-}
-
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-gray-700 bg-gray-900/60 p-4">
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{title}</h3>
+    <div className={`rounded-xl border ${accent ? "border-orange-200 bg-orange-50" : "border-gray-200 bg-white"} p-4`}>
+      <h3 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-500">{title}</h3>
       {children}
     </div>
   );
 }
 
-function fmtBRL(v: number) {
-  return `R$ ${v.toFixed(2)}`;
+function Pill({ text, tone = "gray" }: { text: string; tone?: "gray" | "green" | "amber" | "red" | "orange" }) {
+  const cls = {
+    gray:   "bg-gray-100 text-gray-700 border-gray-200",
+    green:  "bg-green-100 text-green-700 border-green-200",
+    amber:  "bg-amber-100 text-amber-700 border-amber-200",
+    red:    "bg-red-100 text-red-700 border-red-200",
+    orange: "bg-orange-100 text-orange-700 border-orange-200",
+  }[tone];
+  return <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cls}`}>{text}</span>;
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-
 export default function WaTextOrderingPage() {
-  const [slug, setSlug]         = useState("sushi-cazza");
-  const [message, setMessage]   = useState("Quero 2 yakisoba e uma Coca");
-  const [session, setSession]   = useState("");
-  const [result, setResult]     = useState<SimResult | null>(null);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [slug, setSlug]               = useState("sushi-cazza");
+  const [phone, setPhone]             = useState("+5511999990000");
+  const [conversationId, setConvId]   = useState("");
+  const [customerId, setCustomerId]   = useState("");
+  const [mode, setMode]               = useState<"dry_run" | "reply_only" | "full_test">("dry_run");
+  const [message, setMessage]         = useState("quero 2 yakisoba e uma coca");
 
-  const run = useCallback(async () => {
-    setLoading(true); setError(null); setResult(null);
+  const [result, setResult]           = useState<SimResult | null>(null);
+  const [sessionState, setSessionState] = useState<Record<string, unknown> | null>(null);
+  const [transcript, setTranscript]   = useState<TranscriptTurn[]>([]);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+  const [copied, setCopied]           = useState(false);
+
+  const send = useCallback(async (continueSession: boolean, overrideMsg?: string) => {
+    const msg = (overrideMsg ?? message).trim();
+    if (!msg) return;
+    setLoading(true); setError(null);
     try {
-      let currentSession: Record<string, unknown> | undefined;
-      if (session.trim()) {
-        currentSession = JSON.parse(session);
-      }
       const res = await fetch("/api/admin/diagnostics/whatsapp-text-ordering/run", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           restaurantSlug: slug,
-          messageText:    message,
-          mode:           "dry_run",
-          currentSession,
+          messageText:    msg,
+          phone, mode,
+          conversationId: conversationId || undefined,
+          customerId:     customerId || undefined,
+          currentSession: continueSession ? (sessionState ?? undefined) : undefined,
         }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? `HTTP ${res.status}`);
       }
-      setResult(await res.json());
+      const data: SimResult = await res.json();
+      setResult(data);
+      setSessionState(data.session as unknown as Record<string, unknown>);
+      setTranscript(prev => [
+        ...(continueSession ? prev : []),
+        { who: "customer", text: msg },
+        { who: "agent", text: data.suggestedReply, stage: data.stage },
+      ]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro desconhecido.");
     } finally {
       setLoading(false);
     }
-  }, [slug, message, session]);
+  }, [slug, phone, mode, message, conversationId, customerId, sessionState]);
+
+  const reset = useCallback(() => {
+    setResult(null); setSessionState(null); setTranscript([]); setError(null);
+  }, []);
+
+  const copyJson = useCallback(async () => {
+    if (!result) return;
+    await navigator.clipboard.writeText(JSON.stringify(result, null, 2));
+    setCopied(true); setTimeout(() => setCopied(false), 1500);
+  }, [result]);
+
+  const fs = result?.flagStatus;
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8 text-gray-200">
+    <div className="mx-auto max-w-4xl px-6 py-8 text-gray-900">
+      {/* A. Header */}
       <div className="mb-1 flex items-center gap-2">
         <span className="text-lg">🧾</span>
-        <h1 className="text-xl font-bold text-white">WA Pedido Texto</h1>
-        <Badge text="DRY-RUN" cls="bg-violet-900/50 text-violet-300 border-violet-700" />
+        <h1 className="text-xl font-bold">WA Pedido Texto</h1>
+        <Pill text="TEST CENTER" tone="orange" />
       </div>
-      <p className="mt-1 text-sm text-gray-400">
-        Simula um pedido por WhatsApp via texto livre. Nenhuma mensagem enviada,
-        nenhum pedido criado, nenhum Pix gerado.
-      </p>
+      <p className="text-sm text-gray-500">Simule pedidos por WhatsApp sem afetar clientes reais.</p>
 
-      {/* Input form */}
-      <div className="mt-6 space-y-3 rounded-xl border border-gray-700 bg-gray-900/60 p-4">
-        <label className="flex flex-col gap-1 text-xs text-gray-400">
-          Slug do restaurante
-          <input
-            value={slug}
-            onChange={e => setSlug(e.target.value)}
-            className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100"
-            placeholder="sushi-cazza"
-          />
+      {/* B. Safety banner */}
+      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <Pill text={fs?.enabled ? "flag: ON" : "flag: OFF"} tone={fs?.enabled ? "amber" : "green"} />
+          <Pill text={`modo: ${fs?.mode ?? "DRY_RUN_ONLY"}`} tone="gray" />
+          <Pill text={fs?.liveRoutingActive ? "live routing: ATIVO" : "live routing: inativo"} tone={fs?.liveRoutingActive ? "red" : "green"} />
+          {fs && <Pill text={fs.restaurantAllowlisted ? "restaurante allowlist ✓" : "restaurante não allowlist"} tone={fs.restaurantAllowlisted ? "green" : "gray"} />}
+          {fs && <Pill text={fs.phoneAllowlisted ? "telefone allowlist ✓" : "telefone não allowlist"} tone={fs.phoneAllowlisted ? "green" : "gray"} />}
+        </div>
+        <p className="mt-2 text-gray-600">
+          Dry-run não cria pedido, não gera Pix e não envia WhatsApp.
+        </p>
+      </div>
+
+      {/* C. Input panel */}
+      <div className="mt-4 grid gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-xs text-gray-600">
+          Restaurante (slug)
+          <input value={slug} onChange={e => setSlug(e.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm" />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-400">
+        <label className="flex flex-col gap-1 text-xs text-gray-600">
+          Telefone
+          <input value={phone} onChange={e => setPhone(e.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-gray-600">
+          Conversation ID (opcional)
+          <input value={conversationId} onChange={e => setConvId(e.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-gray-600">
+          Customer ID (opcional)
+          <input value={customerId} onChange={e => setCustomerId(e.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-gray-600">
+          Modo
+          <select value={mode} onChange={e => setMode(e.target.value as typeof mode)}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <option value="dry_run">Dry-run (sem efeitos)</option>
+            <option value="reply_only">Reply-only (teste controlado)</option>
+            <option value="full_test">Full controlled test</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-gray-600 sm:col-span-2">
           Mensagem do cliente
-          <textarea
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            rows={3}
-            className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 font-mono"
-            placeholder="Quero 2 yakisoba e uma Coca"
-          />
+          <textarea value={message} onChange={e => setMessage(e.target.value)} rows={2}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-mono" />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-400">
-          Sessão atual (JSON opcional)
-          <textarea
-            value={session}
-            onChange={e => setSession(e.target.value)}
-            rows={2}
-            className="rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 font-mono"
-            placeholder='{"stage":"REVIEWING_ORDER"}'
-          />
-        </label>
-        <button
-          onClick={run}
-          disabled={loading || !slug.trim() || !message.trim()}
-          className="rounded-lg bg-violet-700 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-50"
-        >
-          {loading ? "Simulando…" : "Simular pedido por WhatsApp"}
-        </button>
+        <div className="flex flex-wrap gap-2 sm:col-span-2">
+          <button onClick={() => send(false)} disabled={loading}
+            className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50">
+            {loading ? "Simulando…" : "Simular mensagem"}
+          </button>
+          <button onClick={() => send(true)} disabled={loading || !sessionState}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            Continuar sessão
+          </button>
+          <button onClick={() => send(true, "cancela")} disabled={loading || !sessionState}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            Cancelar sessão
+          </button>
+          <button onClick={reset} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
+            Limpar
+          </button>
+          <button onClick={copyJson} disabled={!result}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            {copied ? "✓ Copiado" : "Copiar JSON"}
+          </button>
+        </div>
+      </div>
+
+      {/* D. Quick scenarios */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {QUICK.map(q => (
+          <button key={q} onClick={() => { setMessage(q); send(!!sessionState, q); }}
+            className="rounded-full border border-gray-300 bg-white px-3 py-1 text-xs text-gray-600 hover:border-orange-300 hover:text-orange-700">
+            {q}
+          </button>
+        ))}
       </div>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-700 bg-red-900/40 px-4 py-3 text-sm text-red-300">
-          {error}
-        </div>
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
       {result && (
         <div className="mt-6 space-y-4">
-          {/* Restaurant + meta */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-white">{result.restaurant.name}</span>
-            <Badge text={result.restaurant.slug} />
-            <Badge text={result.nextStage} cls="bg-gray-800 text-gray-300 border-gray-600" />
+            <span className="text-sm font-bold">{result.restaurant.name}</span>
+            <Pill text={result.intent} tone="orange" />
+            <Pill text={`stage: ${result.stage}`} />
+            {result.handoff && <Pill text="HANDOFF" tone="red" />}
           </div>
 
-          {/* 1. Intent */}
-          <Panel title="Intent detectado">
-            <div className="flex items-center gap-3">
-              <Badge text={result.detectedIntent} cls={INTENT_CLS[result.detectedIntent] ?? ""} />
-              {result.actions.map(a => (
-                <Badge key={a} text={a} cls="bg-gray-800 text-gray-400 border-gray-700" />
+          {/* E. Conversation transcript */}
+          <Card title="Conversa simulada">
+            <div className="space-y-2">
+              {transcript.map((t, i) => (
+                <div key={i} className={`flex ${t.who === "customer" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                    t.who === "customer" ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-900"}`}>
+                    {t.text}
+                    {t.stage && t.who === "agent" && (
+                      <span className="mt-1 block text-[10px] opacity-60">{t.stage}</span>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
-          </Panel>
+          </Card>
 
-          {/* 2. Parsed items */}
-          <Panel title={`Itens parseados (${result.parsedItems.length})`}>
-            {result.parsedItems.length === 0 ? (
-              <p className="text-xs text-gray-500">Nenhum item detectado na mensagem.</p>
-            ) : (
-              <ul className="space-y-1">
-                {result.parsedItems.map((p, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm">
-                    <span className="tabular-nums text-gray-500 text-xs w-4">{p.quantity}×</span>
-                    <span className="text-gray-200">{p.name}</span>
-                    <span className="text-gray-600 text-xs">({p.rawText})</span>
-                  </li>
-                ))}
-              </ul>
+          {/* F. Session panel */}
+          <Card title="Sessão">
+            <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
+              <Field k="status" v={result.session.status} />
+              <Field k="stage" v={result.session.stage} />
+              <Field k="entrega" v={result.session.deliveryType ?? "—"} />
+              <Field k="pagamento" v={result.session.paymentMethod ?? "—"} />
+              <Field k="pgto status" v={result.session.paymentStatus ?? "—"} />
+              <Field k="orderId" v={result.session.orderId ?? "—"} />
+            </div>
+            {result.session.address && (
+              <p className="mt-2 text-xs text-gray-600">
+                Endereço: {[result.session.address.street, result.session.address.number, result.session.address.neighborhood].filter(Boolean).join(", ") || "—"}
+              </p>
             )}
-          </Panel>
-
-          {/* 3. Menu matches */}
-          <Panel title={`Matches no cardápio (${result.matchedItems.length})`}>
-            {result.matchedItems.length === 0 ? (
-              <p className="text-xs text-gray-500">Nenhum item confirmado no cardápio.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {result.matchedItems.map((m, i) => (
-                  <li key={i} className="flex items-center justify-between text-sm">
-                    <span>
-                      <span className="text-gray-500 text-xs">{m.quantity}×</span>{" "}
-                      <span className="text-gray-100 font-medium">{m.menuItemName}</span>
-                      {m.variantName && <span className="text-gray-400 ml-1 text-xs">({m.variantName})</span>}
-                    </span>
-                    <span className="text-gray-300 tabular-nums">{fmtBRL(m.lineTotal)}</span>
-                  </li>
+            {result.missingQuestions.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {result.missingQuestions.map((q, i) => (
+                  <Pill key={i} text={`${q.itemName}: ${q.groupName}`} tone="amber" />
                 ))}
-              </ul>
-            )}
-          </Panel>
-
-          {/* 4. Unresolved + missing questions */}
-          {(result.unresolvedItems.length > 0 || result.missingQuestions.length > 0) && (
-            <Panel title="Pendências">
-              {result.unresolvedItems.map((u, i) => (
-                <div key={i} className="mb-2 flex items-start gap-2">
-                  <Badge
-                    text={u.reason}
-                    cls={
-                      u.reason === "NOT_FOUND"
-                        ? "bg-red-900/40 text-red-300 border-red-700"
-                        : u.reason === "AMBIGUOUS"
-                        ? "bg-amber-900/40 text-amber-300 border-amber-700"
-                        : "bg-gray-800 text-gray-400 border-gray-700"
-                    }
-                  />
-                  <span className="text-sm text-gray-300">
-                    &quot;{u.rawText}&quot;
-                    {u.candidates.length > 0 && (
-                      <span className="text-gray-500"> → {u.candidates.join(", ")}</span>
-                    )}
-                  </span>
-                </div>
-              ))}
-              {result.missingQuestions.map((q, i) => (
-                <div key={i} className="mb-2 flex items-start gap-2">
-                  <Badge text="MISSING" cls="bg-amber-900/40 text-amber-300 border-amber-700" />
-                  <span className="text-sm text-gray-300">
-                    {q.itemName} — {q.groupName}
-                    {q.options.length > 0 && (
-                      <span className="text-gray-500"> ({q.options.join(", ")})</span>
-                    )}
-                  </span>
-                </div>
-              ))}
-            </Panel>
-          )}
-
-          {/* 5. Draft / comanda */}
-          {result.draftSummary && (
-            <Panel title="Comanda preliminar">
-              <ul className="space-y-1 mb-3">
-                {result.draftSummary.items.map((l, i) => (
-                  <li key={i} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-200">
-                      {l.quantity}× {l.name}
-                      {l.variant && <span className="text-gray-500"> {l.variant}</span>}
-                      {l.options.length > 0 && <span className="text-gray-500"> ({l.options.join(", ")})</span>}
-                    </span>
-                    <span className="tabular-nums text-gray-300">{fmtBRL(l.lineTotal)}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="border-t border-gray-700 pt-2 flex justify-between text-sm font-semibold">
-                <span className="text-gray-300">Subtotal</span>
-                <span className="text-white">{fmtBRL(result.draftSummary.subtotal)}</span>
               </div>
-              {result.draftSummary.missingRequirements.length > 0 && (
-                <p className="mt-2 text-xs text-amber-400">
-                  ⚠ Faltando: {result.draftSummary.missingRequirements.join(", ")}
-                </p>
-              )}
-            </Panel>
+            )}
+            {result.unresolvedItems.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {result.unresolvedItems.map((u, i) => (
+                  <Pill key={i} text={`${u.rawText} (${u.reason})`} tone="red" />
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* G. Comanda */}
+          {result.draft && (
+            <Card title="Comanda">
+              <ul className="space-y-1 text-sm">
+                {result.draft.items.map((l, i) => (
+                  <li key={i} className="flex justify-between">
+                    <span>{l.quantity}× {l.name}{l.variant ? ` ${l.variant}` : ""}{l.options.length ? ` (${l.options.join(", ")})` : ""}</span>
+                    <span className="tabular-nums">{fmtBRL(l.lineTotal)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-2 border-t border-gray-200 pt-2 text-sm">
+                <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{fmtBRL(result.draft.subtotal)}</span></div>
+                {result.deliveryQuote && result.session.deliveryType === "DELIVERY" && (
+                  <div className="flex justify-between text-gray-600"><span>Entrega</span><span>{fmtBRL(result.deliveryQuote.fee)}</span></div>
+                )}
+                <div className="flex justify-between font-bold"><span>Total</span><span>{fmtBRL(result.estimatedTotal)}</span></div>
+              </div>
+              <div className="mt-2">
+                {result.draft.missingRequirements.length > 0
+                  ? <Pill text="incompleto" tone="amber" />
+                  : result.order?.orderId
+                    ? <Pill text="pedido criado" tone="green" />
+                    : result.session.stage === "AWAITING_PIX_PAYMENT"
+                      ? <Pill text="aguardando pagamento" tone="amber" />
+                      : <Pill text="pronto para confirmar" tone="green" />}
+              </div>
+            </Card>
           )}
 
-          {/* 6. Suggested reply */}
-          <Panel title="Resposta sugerida (não enviada)">
-            <p className="rounded-lg bg-gray-800 px-4 py-3 text-sm text-gray-100 whitespace-pre-wrap">
-              {result.suggestedReply}
-            </p>
-          </Panel>
+          {/* H. Payment */}
+          {result.payment && (
+            <Card title="Pagamento" accent>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Pill text={result.payment.method ?? "—"} tone="orange" />
+                <Pill text={result.payment.status ?? "—"} />
+                {result.payment.isDryRunStub && <Pill text="STUB (não real)" tone="amber" />}
+                {result.payment.changeFor && <Pill text={`troco p/ ${fmtBRL(result.payment.changeFor)}`} />}
+              </div>
+              {result.payment.pixCopyPaste && (
+                <pre className="mt-2 overflow-auto rounded bg-white p-2 text-[11px] text-gray-600 border border-gray-200">
+                  {result.payment.pixCopyPaste}
+                </pre>
+              )}
+              <p className="mt-2 text-xs font-semibold text-orange-700">⚠ Pix gerado não confirma pedido.</p>
+            </Card>
+          )}
 
-          {/* 7. Safety notes */}
-          <Panel title="Notas de segurança">
-            <ul className="space-y-1">
-              {result.safetyNotes.map((n, i) => (
-                <li key={i} className="flex items-center gap-2 text-xs text-gray-400">
-                  <span className="text-green-500">✓</span> {n}
-                </li>
-              ))}
+          {/* Operator summary (handoff) */}
+          {result.handoff && (
+            <Card title="Resumo para o operador">
+              <p className="text-sm text-gray-700">{result.operatorSummary}</p>
+            </Card>
+          )}
+
+          {/* Safety notes */}
+          <Card title="Notas de segurança">
+            <ul className="space-y-1 text-xs text-gray-600">
+              {result.safetyNotes.map((n, i) => <li key={i}>✓ {n}</li>)}
+              {result.sideEffectsPerformed.length === 0
+                ? <li className="text-green-700 font-semibold">Nenhum efeito colateral real executado.</li>
+                : result.sideEffectsPerformed.map((s, i) => <li key={`se-${i}`} className="text-red-700 font-semibold">⚠ efeito real: {s}</li>)}
             </ul>
-          </Panel>
+          </Card>
 
-          {/* 8. Raw JSON */}
-          <Panel title="JSON bruto">
-            <pre className="overflow-auto rounded-lg bg-gray-950 p-3 text-[11px] text-gray-400 max-h-64">
+          {/* I. Raw JSON */}
+          <Card title="JSON bruto">
+            <pre className="max-h-72 overflow-auto rounded bg-gray-50 p-3 text-[11px] text-gray-600">
               {JSON.stringify(result, null, 2)}
             </pre>
-          </Panel>
+          </Card>
         </div>
       )}
+    </div>
+  );
+}
+
+function Field({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="rounded-md bg-gray-50 px-2 py-1">
+      <span className="block text-[10px] uppercase tracking-wide text-gray-400">{k}</span>
+      <span className="text-gray-800 break-all">{v}</span>
     </div>
   );
 }
