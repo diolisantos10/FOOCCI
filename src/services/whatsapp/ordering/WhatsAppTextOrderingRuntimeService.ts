@@ -3,16 +3,15 @@
  * live webhook path. Every guard must pass before the engine does anything that
  * could touch a real customer.
  *
- * SAFETY: This service is NOT wired into the Evolution webhook in this build.
- * It exists so a future, deliberate integration has a single, fully-guarded
- * entry point. Even when called, it:
- *   - refuses unless the master flag is on
- *   - refuses unless BOTH restaurant and phone are allowlisted
- *   - refuses on locked / human / non-customer conversations
- *   - never sends WhatsApp here (sending is intentionally not wired yet)
- *   - only creates a real order/Pix in ALLOWLIST_FULL_TEST mode
+ * Guards (all must pass):
+ *   1. Master flag on + restaurant allowlisted
+ *   2. Phone allowlisted + mode permits reply
+ *   3. Conversation is AI-eligible (not locked / human / non-customer)
  *
- * It returns a decision object describing exactly what it did and why.
+ * Side-effect permissions:
+ *   ALLOWLIST_REPLY_ONLY  — may send reply; no order, no Pix
+ *   ALLOWLIST_FULL_TEST   — may send reply + create order + generate Pix
+ *   DRY_RUN_ONLY          — no side effects (never reaches live path)
  */
 
 import {
@@ -38,7 +37,7 @@ export interface RuntimeDecision {
   mode:           string;
   result:         WaProcessResult | null;
   replyWouldSend: boolean;        // would a reply be sent (REPLY_ONLY / FULL_TEST)?
-  replySent:      boolean;        // always false — live sending not wired in this build
+  replySent:      boolean;        // did a real WhatsApp reply go out this turn?
   safetyNotes:    string[];
 }
 
@@ -129,8 +128,70 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
     metadata:         result.session.metadata,
   });
 
-  // Live WhatsApp sending is intentionally NOT wired in this build.
-  safetyNotes.push("live WhatsApp send not wired in this build (no Evolution call)");
+  // Handle handoff: mark conversation for human BEFORE sending the handoff message
+  // so the final AI message is still delivered but the AI won't handle the next turn.
+  if (result.handoff && input.conversationId) {
+    try {
+      const { markConversationNeedsHuman } = await import("@/lib/handoff");
+      await markConversationNeedsHuman(input.conversationId, "CUSTOMER_REQUEST");
+      safetyNotes.push("handoff: conversation marked for human (CUSTOMER_REQUEST)");
+    } catch (err) {
+      console.error("[TextOrderingRuntime] markConversationNeedsHuman failed:", err);
+    }
+  }
+
+  // Live reply sending: only when mode + allowlist permit it and there is a reply.
+  let replySent = false;
+  if (perms.canReply && result.suggestedReply && input.conversationId) {
+    try {
+      const { EvolutionConfigService } = await import("@/services/evolution/EvolutionConfigService");
+      const { EvolutionClient } = await import("@/lib/evolution/EvolutionClient");
+      const { prisma } = await import("@/lib/prisma");
+
+      const cfgResult = await EvolutionConfigService.getSnapshot(input.restaurantId);
+      if (cfgResult.ok) {
+        const sendResult = await EvolutionClient.sendTextMessage(
+          cfgResult.data,
+          input.phone,
+          result.suggestedReply,
+        );
+        const now = new Date();
+        await prisma.$transaction([
+          prisma.message.create({
+            data: {
+              conversationId: input.conversationId,
+              direction:      "OUTBOUND",
+              senderType:     "AI",
+              content:        result.suggestedReply,
+              type:           "TEXT",
+              sentAt:         now,
+              externalMessageId: sendResult.key.id,
+              externalStatus: "sent",
+              metadata: {
+                source:           "PEDIDO_TEXTO",
+                waOrderingStage:  result.session.stage,
+                waOrderingMode:   mode,
+              },
+            },
+          }),
+          prisma.conversation.update({
+            where: { id: input.conversationId },
+            data:  { lastMessageAt: now },
+          }),
+        ]);
+        replySent = true;
+        safetyNotes.push(`reply sent via Evolution (mode=${mode})`);
+      } else {
+        safetyNotes.push("reply skipped: Evolution config not found for restaurant");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[TextOrderingRuntime] Failed to send reply:", msg);
+      safetyNotes.push(`reply failed: ${msg.slice(0, 80)}`);
+    }
+  } else if (!perms.canReply) {
+    safetyNotes.push(`reply not sent: mode=${mode} does not permit replies`);
+  }
 
   return {
     handled:        true,
@@ -138,7 +199,7 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
     mode,
     result,
     replyWouldSend: perms.canReply,
-    replySent:      false,
+    replySent,
     safetyNotes,
   };
 

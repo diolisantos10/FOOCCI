@@ -230,6 +230,61 @@ export default function WaTextOrderingPage() {
         </p>
       </div>
 
+      {/* B2. Controlled test activation checklist */}
+      <details className="mt-3 rounded-xl border border-orange-200 bg-orange-50">
+        <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-orange-800 select-none">
+          Instruções para ativar teste controlado (clique para expandir)
+        </summary>
+        <div className="px-4 pb-4 pt-2 text-xs text-orange-900 space-y-2">
+          <p className="font-semibold">Defina estas variáveis de ambiente no servidor de produção:</p>
+          <pre className="rounded bg-white border border-orange-200 px-3 py-2 font-mono text-[11px] overflow-auto whitespace-pre-wrap">
+{`# 1. Ativar o motor (false por padrão — nenhum cliente é afetado sem isso)
+WHATSAPP_TEXT_ORDERING_ENABLED=true
+
+# 2. Modo controlado
+#   ALLOWLIST_REPLY_ONLY  → envia resposta, NÃO cria pedido real nem Pix
+#   ALLOWLIST_FULL_TEST   → envia + pode criar pedido real + Pix (use com cuidado)
+WHATSAPP_TEXT_ORDERING_MODE=ALLOWLIST_REPLY_ONLY
+
+# 3. Restaurante(s) no allowlist (IDs separados por vírgula)
+WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS=<restaurantId>
+
+# 4. Telefone(s) de teste (formato E.164, separados por vírgula)
+WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES=+5511999990000`}
+          </pre>
+          <p className="font-semibold mt-2">Checklist — tudo deve estar verde antes de ativar:</p>
+          <ul className="space-y-1">
+            <li className={`flex items-center gap-2 ${fs?.enabled ? "text-green-700" : "text-gray-500"}`}>
+              <span>{fs?.enabled ? "✅" : "⬜"}</span>
+              <span>WHATSAPP_TEXT_ORDERING_ENABLED=true</span>
+            </li>
+            <li className={`flex items-center gap-2 ${fs && fs.mode !== "DRY_RUN_ONLY" ? "text-green-700" : "text-gray-500"}`}>
+              <span>{fs && fs.mode !== "DRY_RUN_ONLY" ? "✅" : "⬜"}</span>
+              <span>Modo não é DRY_RUN_ONLY (atual: {fs?.mode ?? "—"})</span>
+            </li>
+            <li className={`flex items-center gap-2 ${fs?.restaurantAllowlisted ? "text-green-700" : "text-gray-500"}`}>
+              <span>{fs?.restaurantAllowlisted ? "✅" : "⬜"}</span>
+              <span>Restaurante "{slug}" no allowlist</span>
+            </li>
+            <li className={`flex items-center gap-2 ${fs?.phoneAllowlisted ? "text-green-700" : "text-gray-500"}`}>
+              <span>{fs?.phoneAllowlisted ? "✅" : "⬜"}</span>
+              <span>Telefone de teste no allowlist</span>
+            </li>
+            <li className="flex items-center gap-2 text-gray-500">
+              <span>⬜</span>
+              <span>Rodar suite "quick" abaixo e confirmar score ≥ 95/100 sem FAIL</span>
+            </li>
+            <li className="flex items-center gap-2 text-gray-500">
+              <span>⬜</span>
+              <span>Confirmar que número de teste NÃO é um cliente real (ou usar número de desenvolvimento)</span>
+            </li>
+          </ul>
+          <p className="mt-2 text-orange-700 font-semibold">
+            ⚠ Mesmo com o motor ativo, clientes fora do allowlist continuam usando o Receptionist normal.
+          </p>
+        </div>
+      </details>
+
       {/* C. Input panel */}
       <div className="mt-4 grid gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-xs text-gray-600">

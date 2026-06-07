@@ -36,6 +36,7 @@ import { markCrmReplyIfApplicable } from "@/services/agents/AgentRoutingService"
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 import { shouldAiRespond } from "@/services/conversation/ConversationAiPolicyService";
+import { isWaTextOrderingEnabled, isPhoneAllowlisted } from "@/lib/wa-text-ordering-flag";
 
 // Resolved conversations older than this are treated as new threads.
 const REOPEN_WINDOW_HOURS = 24;
@@ -278,7 +279,35 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     !isCartRecovery &&
     !optedOutThisTurn;
 
-  if (shouldRespond) {
+  // Text ordering engine: fires async, behind full flag + allowlist + conversation guards.
+  // Only TEXT messages are eligible. If the engine handles this message, normal agent
+  // routing (receptionist / AI_ORDERING_EXPERIMENTAL) is skipped for this turn.
+  let textOrderingHandled = false;
+  if (
+    shouldRespond &&
+    event.messageType === "TEXT" &&
+    isWaTextOrderingEnabled(restaurantId) &&
+    isPhoneAllowlisted(event.phone)
+  ) {
+    textOrderingHandled = true;
+    void import("@/services/whatsapp/ordering/WhatsAppTextOrderingRuntimeService")
+      .then(({ handleInboundForOrdering }) =>
+        handleInboundForOrdering({
+          restaurantId,
+          phone:          event.phone,
+          conversationId: conversation.id,
+          customerId:     customer.id,
+          messageText:    event.content,
+        }).catch((err) =>
+          console.error("[WebhookProcessor] Text ordering engine error:", err)
+        )
+      )
+      .catch((err) =>
+        console.error("[WebhookProcessor] Text ordering module load failed:", err)
+      );
+  }
+
+  if (shouldRespond && !textOrderingHandled) {
     // Read agent mode; default to RECEPTIONIST_ONLY if no config row exists.
     const agentCfg = await prisma.whatsAppAgentConfig.findUnique({
       where:  { restaurantId },
@@ -313,12 +342,12 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
 
   console.log(
     "[WebhookProcessor] Inbound message processed.",
-    { restaurantId, conversationId: conversation.id, phone: event.phone, ms: Date.now() - t0 }
+    { restaurantId, conversationId: conversation.id, phone: event.phone, textOrdering: textOrderingHandled, ms: Date.now() - t0 }
   );
 
   return {
     handled: true,
-    action: "message_persisted",
+    action: textOrderingHandled ? "text_ordering_routed" : "message_persisted",
     detail: `conversation:${conversation.id}`,
   };
 }
