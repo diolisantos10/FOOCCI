@@ -17,6 +17,13 @@ import type { WaiterMemory, CheckoutUpsellStage } from "@/services/ai/WaiterBrai
 import type { RepeatOrderPayload } from "@/services/order/RepeatOrderService";
 import { buildDisplayCategories } from "@/services/order/repeatCategory";
 import { buildOpeningOptions, SUGGESTION_OPTION_VALUE } from "@/services/order/waiterOpening";
+import {
+  payNowOptions,
+  shouldShowPayNow,
+  deliveryPaymentOptions,
+  arrivalBlockTitle,
+  type DeliverySubId,
+} from "@/services/order/paymentOptions";
 import { buildWhatsAppUrl, buildInstagramUrl, buildTikTokUrl } from "@/lib/social";
 import { phoneCandidates } from "@/lib/phone";
 
@@ -400,6 +407,8 @@ interface Props {
   recoveryCart?: Array<{ id: string; name: string; price: number; qty: number }>;
   /** Validated last-order payload for the "Pedir novamente" module (W3). */
   repeatOrder?: RepeatOrderPayload;
+  /** Whether online Pix ("Pagar agora") is available/configured. Defaults to true (current behavior). */
+  pixOnlineEnabled?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1750,6 +1759,7 @@ export function PedidoClient({
   pausedUntil = null,
   recoveryCart,
   repeatOrder,
+  pixOnlineEnabled = true,
 }: Props) {
   const pc = brandPrimaryColor || '#25d366';
   const sc = brandSecondaryColor || '#128c7e';
@@ -3499,25 +3509,8 @@ export function PedidoClient({
     [pushUserMessage, pushAssistantMessage],
   );
 
-  const handlePaymentMode = useCallback(
-    (mode: PaymentMode) => {
-      setPaymentMode(mode);
-      if (mode === "pay_now") {
-        setStage("ONLINE_METHOD_SELECT");
-        pushUserMessage("💳 Pagar agora");
-        pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["ONLINE_METHOD_SELECT"]!);
-      } else {
-        setStage("PAYMENT_METHOD");
-        const label = mode === "pay_on_delivery" ? "🚪 Pagar na entrega" : "🏪 Pagar na retirada";
-        pushUserMessage(label);
-        const methodPrompt = mode === "pay_on_delivery"
-          ? "Como prefere pagar na entrega? 👇"
-          : "Como prefere pagar na retirada? 👇";
-        pushAssistantMessage(methodPrompt);
-      }
-    },
-    [pushUserMessage, pushAssistantMessage],
-  );
+  // (Unified payment handlers — handlePayNowPix / handleArrivalPayment — are
+  //  defined below, after handleOnlinePaymentSelect / handlePaymentMethodSub.)
 
   const handlePaymentMethodSub = useCallback(
     (method: PaymentMethodSub) => {
@@ -3614,6 +3607,25 @@ export function PedidoClient({
     pushUserMessage("⚡ Pix — QR Code");
     pushAssistantMessage(CHECKOUT_ENTRY_PROMPT["REVIEW_ORDER"]!);
   }, [pushUserMessage, pushAssistantMessage]);
+
+  // ── Unified payment screen handlers ──────────────────────────────────────────
+  // "Pagar agora" (online Pix): set pay_now then go straight to review — same
+  // flow as the previous two-step PAYMENT → ONLINE_METHOD_SELECT path.
+  const handlePayNowPix = useCallback(() => {
+    setPaymentMode("pay_now");
+    handleOnlinePaymentSelect();
+  }, [handleOnlinePaymentSelect]);
+
+  // "Pagar na entrega/retirada": set BOTH the arrival mode and the chosen
+  // sub-method in one tap, then advance to review — identical state + payload to
+  // the previous PAYMENT → PAYMENT_METHOD path.
+  const handleArrivalPayment = useCallback(
+    (sub: DeliverySubId) => {
+      setPaymentMode(deliveryMethod === "pickup" ? "pay_on_pickup" : "pay_on_delivery");
+      handlePaymentMethodSub(sub);
+    },
+    [deliveryMethod, handlePaymentMethodSub],
+  );
 
   const handleCancelPix = useCallback(() => {
     setPixCopyPaste(null);
@@ -4018,27 +4030,59 @@ export function PedidoClient({
     }
 
     if (stage === "PAYMENT") {
-      const isDelivery = deliveryMethod === "delivery";
-      const isPickup = deliveryMethod === "pickup";
+      const showPayNow = shouldShowPayNow(pixOnlineEnabled);
+      const arrivalOptions = deliveryPaymentOptions();
       return (
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3" data-testid="checkout-area">
-          <p className="mb-2 text-xs font-semibold text-gray-500">Quer pagar agora ou na entrega?</p>
-          <div className="flex flex-col gap-2">
-            <button onClick={() => handlePaymentMode("pay_now")} className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-left text-sm font-semibold text-indigo-700 hover:bg-indigo-100">
-              💳 Pagar agora
-            </button>
-            {isDelivery && (
-              <button onClick={() => handlePaymentMode("pay_on_delivery")} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-100">
-                🚪 Pagar na entrega
-              </button>
-            )}
-            {isPickup && (
-              <button onClick={() => handlePaymentMode("pay_on_pickup")} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-100">
-                🏪 Pagar na retirada
-              </button>
-            )}
-          </div>
-          <div className="mt-2 flex justify-center">
+          <p className="mb-3 text-sm font-bold text-gray-800">Como você quer pagar?</p>
+
+          {/* Bloco 1 — Pagar agora (online) */}
+          {showPayNow && (
+            <div className="mb-3" data-testid="pay-now-block">
+              <p className="text-xs font-semibold text-gray-700">Pagar agora</p>
+              <p className="mb-2 text-[11px] text-gray-400">Você paga online antes do pedido ser enviado ao restaurante.</p>
+              <div className="flex flex-col gap-2">
+                {payNowOptions(pixOnlineEnabled).map((opt) => (
+                  <button
+                    key={opt.id}
+                    data-testid="pix-online-select-btn"
+                    onClick={handlePayNowPix}
+                    className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left hover:bg-indigo-100 active:scale-[0.99] transition-all"
+                  >
+                    <span className="shrink-0 text-lg">{opt.emoji}</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-indigo-800">{opt.label}</p>
+                      {opt.hint && <p className="text-xs text-indigo-600">{opt.hint}</p>}
+                    </div>
+                    <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1 text-xs font-bold text-white">Gerar QR Pix</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Bloco 2 — Pagar na entrega/retirada (on arrival) */}
+          {arrivalOptions.length > 0 && (
+            <div data-testid="pay-on-arrival-block">
+              <p className="text-xs font-semibold text-gray-700">{arrivalBlockTitle(deliveryMethod)}</p>
+              <p className="mb-2 text-[11px] text-gray-400">Você paga quando {deliveryMethod === "pickup" ? "retirar" : "receber"} o pedido.</p>
+              <div className="flex flex-col gap-2">
+                {arrivalOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    data-testid={`arrival-pay-${opt.id}`}
+                    onClick={() => handleArrivalPayment(opt.id)}
+                    className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 hover:bg-gray-100 active:scale-[0.99] transition-all"
+                  >
+                    <span className="shrink-0 text-lg">{opt.emoji}</span>
+                    <span className="flex-1">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3 flex justify-center">
             <button
               type="button"
               onClick={() => {
