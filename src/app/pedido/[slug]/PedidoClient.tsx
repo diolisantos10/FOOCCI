@@ -15,6 +15,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
 import type { WaiterMemory, CheckoutUpsellStage } from "@/services/ai/WaiterBrainV2";
 import type { RepeatOrderPayload } from "@/services/order/RepeatOrderService";
+import { buildDisplayCategories } from "@/services/order/repeatCategory";
 import { buildWhatsAppUrl, buildInstagramUrl, buildTikTokUrl } from "@/lib/social";
 import { phoneCandidates } from "@/lib/phone";
 
@@ -424,6 +425,7 @@ function formatTime(d: Date) {
 
 function categoryEmoji(name: string): string {
   const n = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (n.includes("pedir de novo") || n.includes("pedir novamente")) return "🔁";
   if (n.includes("pizza"))                          return "🍕";
   if (n.includes("bebida") || n.includes("drink"))  return "🥤";
   if (n.includes("sobremesa") || n.includes("doce")) return "🍰";
@@ -2507,14 +2509,50 @@ export function PedidoClient({
   // Controls checkout button appearance — no "Finalizar" language during this window.
   const upsellPending = upsellState.lastUpsellCategory !== null;
 
+  // ── "Pedir de novo" virtual category (W3 — visual menu section, not a chat button) ──
+  // Repeatable items (last order + most frequent) for an identified customer, loaded
+  // once from the existing repeat-order API. Resolved against the live menu so cards
+  // behave exactly like normal products (per-item add; never auto-added).
+  const [repeatItemIds, setRepeatItemIds] = useState<string[]>([]);
+  const repeatFetchedRef = useRef(false);
+  useEffect(() => {
+    if (repeatFetchedRef.current || entryPhase !== "browsing") return;
+    const cid = resolvedCustomerId;
+    const ph  = effectiveCustomerPhone;
+    if (!cid && !ph) return; // anonymous → never show "Pedir de novo"
+    repeatFetchedRef.current = true;
+    const qs = cid ? `customerId=${encodeURIComponent(cid)}` : `phone=${encodeURIComponent(ph!)}`;
+    fetch(`/api/pedido/${slug}/repeat-order?${qs}`)
+      .then((r) => r.json())
+      .then((d: { repeatItems?: Array<{ menuItemId: string }> }) => {
+        const ids = (d.repeatItems ?? []).map((i) => i.menuItemId);
+        if (ids.length > 0) setRepeatItemIds(ids);
+      })
+      .catch(() => { /* non-fatal — repeat section just won't appear */ });
+  }, [entryPhase, resolvedCustomerId, effectiveCustomerPhone, slug]);
+
+  // Map repeatable ids → live MenuItem objects (drops anything not in the menu).
+  const repeatMenuItems = useMemo(() => {
+    if (repeatItemIds.length === 0) return [];
+    const byId = new Map(categories.flatMap((c) => c.items).map((i) => [i.id, i]));
+    return repeatItemIds.map((id) => byId.get(id)).filter((x): x is MenuItem => !!x);
+  }, [repeatItemIds, categories]);
+
+  // Categories shown in the UI: prepend the virtual "Pedir de novo" when there is
+  // real history. This is what tabs + currentCategoryItems read from.
+  const displayCategories = useMemo<MenuCategory[]>(
+    () => buildDisplayCategories(categories, repeatMenuItems) as MenuCategory[],
+    [repeatMenuItems, categories],
+  );
+
   const currentCategoryItems = useMemo(
-    () => categories.find((c) => c.id === selectedCategoryId)?.items ?? [],
-    [categories, selectedCategoryId],
+    () => displayCategories.find((c) => c.id === selectedCategoryId)?.items ?? [],
+    [displayCategories, selectedCategoryId],
   );
 
   const selectedCategory = useMemo(
-    () => categories.find((c) => c.id === selectedCategoryId) ?? null,
-    [categories, selectedCategoryId],
+    () => displayCategories.find((c) => c.id === selectedCategoryId) ?? null,
+    [displayCategories, selectedCategoryId],
   );
 
   // ── Tab / salesPhase sync ─────────────────────────────────────────
@@ -2779,14 +2817,8 @@ export function PedidoClient({
         ? `Olá, ${name}! 😊 Que bom te ver por aqui — dá uma olhada no cardápio e me fala o que te apetece!`
         : `Olá, ${name}! 😊\nDá uma olhada no cardápio — me fala se quiser ajuda para escolher.`
       : `Olá! 😊\nDá uma olhada no cardápio — qualquer dúvida ou sugestão, é só me chamar.`;
-    // Clean opening: optional, low-friction actions. "Pedir novamente" appears
-    // ONLY for an identified customer with real repeatable history. Nothing is
-    // forced — if the customer ignores the buttons, they just browse the menu.
-    const greetingOptions: WaiterOption[] = [];
-    if (repeatOrder && repeatOrder.items.length > 0) {
-      greetingOptions.push({ label: "Pedir novamente", value: "open_repeat_items" });
-    }
-    greetingOptions.push({ label: "Ver sugestões", value: "see_suggestions" });
+    // Clean opening: ONE optional, low-friction action. "Pedir de novo" is NOT a
+    // chat button — it lives as a visual menu category (see displayCategories).
     setMessages((prev) => [
       ...prev,
       {
@@ -2794,7 +2826,7 @@ export function PedidoClient({
         role: "assistant" as const,
         content: greeting,
         ts: new Date(),
-        options: greetingOptions,
+        options: [{ label: "Quero sugestões", value: "see_suggestions" }],
       },
     ]);
     // Fire ON_ENTRY to the server for Atendimento logging + early conversationId
@@ -3168,34 +3200,14 @@ export function PedidoClient({
         return;
       }
 
-      // "see_suggestions" (clean opening) → trigger the current recommendation flow.
+      // "see_suggestions" (clean opening) → trigger the recommendation flow ONCE.
+      // The top-of-handler `ui === "thinking"` guard prevents concurrent sends;
+      // we also strip the button so it can't be re-tapped and duplicate the reply.
       if (value === "see_suggestions") {
-        sendText("me sugere algo", cart, stage, activeUpsell, { displayText: "Ver sugestões" });
-        return;
-      }
-
-      // "open_repeat_items" (clean opening) → show the customer's repeatable items
-      // as a per-item grid (each added only on tap). Never auto-adds to the cart.
-      if (value === "open_repeat_items") {
-        const cid = resolvedCustomerId;
-        if (!cid) {
-          pushAssistantMessage("Pra ver seus pedidos anteriores, preciso te identificar primeiro 😊");
-          return;
-        }
-        fetch(`/api/pedido/${slug}/repeat-order?customerId=${encodeURIComponent(cid)}`)
-          .then((r) => r.json())
-          .then((d: { ok: boolean; repeatItems?: Array<{ menuItemId: string }> }) => {
-            const ids = (d.repeatItems ?? []).map((i) => i.menuItemId);
-            const byId = new Map(categories.flatMap((c) => c.items).map((i) => [i.id, i]));
-            const mapped = ids.map((id) => byId.get(id)).filter((x): x is MenuItem => !!x);
-            if (mapped.length > 0) {
-              setSuggestedProducts(mapped);
-              pushAssistantMessage("Separei itens que você já pediu antes 👇");
-            } else {
-              pushAssistantMessage("Não encontrei pedidos anteriores por aqui ainda. Posso te mostrar sugestões 😊");
-            }
-          })
-          .catch(() => pushAssistantMessage("Não consegui recuperar seus pedidos agora 😕"));
+        setMessages((prev) =>
+          prev.map((m) => (m.options?.some((o) => o.value === "see_suggestions") ? { ...m, options: undefined } : m)),
+        );
+        sendText("me sugere algo", cart, stage, activeUpsell, { displayText: "Quero sugestões" });
         return;
       }
 
@@ -3236,7 +3248,7 @@ export function PedidoClient({
       setSuggestedProducts([]);
       sendText(value, cart, stage, activeUpsell, { displayText: label });
     },
-    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, pushAssistantMessage, proceedToCheckout, repeatOrder, hydrateRepeatCart, resolvedCustomerId, slug, categories, openProduct],
+    [cart, stage, activeUpsell, sendText, ui, suggestedProducts, handleItemAdd, pushAssistantMessage, proceedToCheckout, repeatOrder, hydrateRepeatCart, resolvedCustomerId, slug, openProduct],
   );
 
   // Sends a category intro via the standard sendText path so cards are preserved
@@ -4803,14 +4815,14 @@ export function PedidoClient({
         )}
 
         {/* Mobile: category carousel — compact, sticky above CartBar/input */}
-        {stage === "BROWSE" && entryPhase === "browsing" && categories.length > 0 && (
+        {stage === "BROWSE" && entryPhase === "browsing" && displayCategories.length > 0 && (
           <div className="lg:hidden relative shrink-0">
             <div
               ref={categoryBarRef}
               className="flex overflow-x-auto gap-2 border-t border-gray-200 bg-white px-3 py-1.5 [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none" }}
             >
-              {categories.map((cat) => (
+              {displayCategories.map((cat) => (
                 <button
                   key={cat.id}
                   data-testid={`category-tab-${cat.id}`}
@@ -4975,7 +4987,7 @@ export function PedidoClient({
 
             {/* Category nav — compact, sticky at bottom above the scrollable grid */}
             <div className="shrink-0 flex flex-wrap items-center gap-2 border-t border-gray-100 bg-white px-5 py-2.5">
-              {categories.map((cat) => (
+              {displayCategories.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => { setSuggestedProducts([]); handleCategorySelect(cat); }}
