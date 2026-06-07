@@ -17,7 +17,7 @@ const ORDER_PATTERNS: RegExp[] = [
 ];
 
 const QUESTION_PATTERNS: RegExp[] = [
-  /\b(tem|voc[eê]s tem|qual|quais|quanto custa|pre[çc]o|card[aá]pio|menu|dispon[ií]vel|como funciona|hor[aá]rio|funcionam|entrega)\b/i,
+  /\b(t[eê]m|voc[eê]s?\s+t[eê]m|qual|quais|quanto custa|pre[çc]o|card[aá]pio|menu|dispon[ií]vel|como funciona|hor[aá]rio|funcionam|entrega)\b/i,
   /\?/,
 ];
 
@@ -30,7 +30,7 @@ const COMPLAINT_PATTERNS: RegExp[] = [
 ];
 
 // Starts with a question word → almost certainly a question even if it names a product
-const QUESTION_START_RE = /^(qual|quais|quanto|como|quando|onde|por que|tem |vocês? tem|você tem|h[aá] )/i;
+const QUESTION_START_RE = /^(qual|quais|quanto|como|quando|onde|por que|t[eê]m\s|voc[eê]s?\s+t[eê]m|h[aá]\s)/i;
 
 export function detectIntent(text: string): WaDetectedIntent {
   if (COMPLAINT_PATTERNS.some(p => p.test(text))) return "COMPLAINT";
@@ -58,11 +58,11 @@ const NUMBER_WORDS: Record<string, number> = {
 // Standalone delivery/payment tokens stripped from product item lists. They
 // appear as separate items when the customer writes a mixed one-line message
 // like "2 yakisoba, entrega, pix" — we don't want them as menu lookups.
-const DELIVERY_STANDALONE_RE = /^(entrega|delivery|retirada|retirar|buscar|pegar|balc[aã]o|no local)\s*$/i;
-const PAYMENT_STANDALONE_RE  = /^(pix|cart[aã]o|cr[eé]dito|d[eé]bito|dinheiro|esp[eé]cie|cash)\s*$/i;
+export const DELIVERY_STANDALONE_RE = /^(entrega|delivery|retirada|retirar|buscar|pegar|balc[aã]o|no local)\s*$/i;
+export const PAYMENT_STANDALONE_RE  = /^(pix|cart[aã]o|cr[eé]dito|d[eé]bito|dinheiro|esp[eé]cie|cash)\s*$/i;
 
 /** Normalizes spelling variants and strips Portuguese plural suffixes from a product name. */
-function normalizePluralAndSpelling(text: string): string {
+export function normalizePluralAndSpelling(text: string): string {
   return text
     // Known spelling variants
     .replace(/\bcocacola\b/gi, "coca cola")
@@ -75,7 +75,7 @@ function normalizePluralAndSpelling(text: string): string {
     .trim();
 }
 
-function parseQuantity(token: string): { qty: number; rest: string } {
+export function parseQuantity(token: string): { qty: number; rest: string } {
   const xMatch = token.match(/^(\d+)\s*[xX×]\s*([\s\S]*)/);
   if (xMatch) return { qty: Math.max(1, parseInt(xMatch[1] ?? "1", 10)), rest: (xMatch[2] ?? "").trim() };
 
@@ -97,11 +97,11 @@ const INTENT_PREFIX_RE = /^(quero|queria|pode me trazer|me traz|coloca a[íi]|co
 // end (or whole) of each parsed item so "uma coca também" → "coca".
 const FILLER_RE = /\b(tamb[eé]m|por favor|pfv|pf|obrigad[oa]|valeu|ai|a[íi]|ent[aã]o|pra mim|por gentileza)\b/gi;
 
-function stripIntent(text: string): string {
+export function stripIntent(text: string): string {
   return text.trim().replace(INTENT_PREFIX_RE, "").trim();
 }
 
-function stripFiller(text: string): string {
+export function stripFiller(text: string): string {
   return text.replace(FILLER_RE, " ").replace(/\s+/g, " ").trim();
 }
 

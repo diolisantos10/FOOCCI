@@ -13,8 +13,17 @@
  * product listing, no upsell, no "pedido confirmado" before payment.
  */
 
-import { matchItems } from "./menuMatcher";
-import { parseTextItems, detectIntent } from "./parser";
+import { matchItems, bestMenuMatch } from "./menuMatcher";
+import {
+  parseTextItems,
+  detectIntent,
+  parseQuantity,
+  stripIntent,
+  stripFiller,
+  normalizePluralAndSpelling,
+  DELIVERY_STANDALONE_RE,
+  PAYMENT_STANDALONE_RE,
+} from "./parser";
 import { parsePaymentMethod } from "./WhatsAppPaymentService";
 import { parseAddressFragment } from "./addressParser";
 import { channelPrice } from "@/services/menu/MenuPricingService";
@@ -23,6 +32,8 @@ import type {
   WaMenuItem,
   WaDetectedIntent,
   WaOrderItem,
+  WaParsedItem,
+  WaUnresolvedItem,
   WaMissingQuestion,
 } from "./types";
 
@@ -77,20 +88,95 @@ export function advanceSession(
       }
       return handleItemCollection(next, text, menu);
     case "COLLECTING_DELIVERY_TYPE":
-      return handleDeliveryType(next, text);
+      return handleDeliveryType(next, text, menu);
     case "COLLECTING_ADDRESS":
       return handleAddress(next, text);
     case "COLLECTING_PAYMENT_METHOD":
-      return handlePayment(next, text);
+      return handlePayment(next, text, menu);
     case "REVIEWING_ORDER":
       return handleReview(next, text, intent, menu);
     default: {
       // IDLE / INTENT_DETECTED / PARSING_ITEMS / fresh order
-      const earlyInfo = handleEarlyInfo(next, text, menu);
-      if (earlyInfo) return earlyInfo;
+      // Intent-first: a menu question must never be run through the product matcher.
+      if (intent === "QUESTION" && next.selectedItems.length === 0) {
+        return handleMenuQuestion(next, text, menu);
+      }
+      // Early info: greeting / address / payment that arrives before any item.
+      const early = handleEarlyInfo(next, text, menu);
+      if (early) return early;
       return handleItemCollection(next, text, menu);
     }
   }
+}
+
+// ── Smart parsing (menu-aware " e " handling) ────────────────────────────────────
+
+/**
+ * Splits a message into product items WITHOUT shattering multi-word product
+ * names that contain " e " (e.g. "Yakisoba Carne e Frango"). The naive split on
+ * " e " turns "yakisoba carne e frango" into ["yakisoba carne", "frango"], which
+ * makes "frango" ambiguous. Here, before splitting a segment on " e ", we ask the
+ * menu: if the whole segment is a confident single match, keep it intact.
+ */
+function smartParse(text: string, menu: WaMenuItem[]): WaParsedItem[] {
+  const cleaned = stripIntent(text);
+
+  // Strong separators (comma / + / "mais") are always item boundaries.
+  const segments = cleaned
+    .split(/\s*,\s*|\s*\+\s*|\s+mais\s+/i)
+    .map(s => stripFiller(s.trim()))
+    .filter(s =>
+      s.length > 1 &&
+      !DELIVERY_STANDALONE_RE.test(s) &&
+      !PAYMENT_STANDALONE_RE.test(s),
+    );
+
+  const items: WaParsedItem[] = [];
+  for (const seg of segments) {
+    if (/\s+e\s+/i.test(seg)) {
+      const { qty, rest } = parseQuantity(seg);
+      const wholeName = normalizePluralAndSpelling(stripFiller(rest) || seg);
+      // Keep "carne e frango" together when it's a confident single product.
+      if (wholeIsConfident(wholeName, menu)) {
+        items.push({ rawText: seg, quantity: qty, name: wholeName });
+        continue;
+      }
+      // Otherwise it really is a list ("yakisoba e coca") → split on " e ".
+      const parts = seg
+        .split(/\s+e\s+/i)
+        .map(p => stripFiller(p.trim()))
+        .filter(p =>
+          p.length > 1 &&
+          !DELIVERY_STANDALONE_RE.test(p) &&
+          !PAYMENT_STANDALONE_RE.test(p),
+        );
+      for (const p of parts) {
+        const pq = parseQuantity(p);
+        items.push({ rawText: p, quantity: pq.qty, name: normalizePluralAndSpelling(stripFiller(pq.rest) || p) });
+      }
+    } else {
+      const { qty, rest } = parseQuantity(seg);
+      items.push({ rawText: seg, quantity: qty, name: normalizePluralAndSpelling(stripFiller(rest) || seg) });
+    }
+  }
+  return items;
+}
+
+const STOP_WORDS = new Set(["uma", "com", "sem", "para", "por"]);
+
+/**
+ * True only when the whole " e "-containing segment is a confident single product
+ * AND the matched item's name covers every content word of the segment. This
+ * keeps "yakisoba carne e frango" intact (Yakisoba Carne e Frango covers all
+ * words) but still splits "yakisoba e uma coca" (Yakisoba covers only "yakisoba",
+ * not "coca"), so it never collapses a real two-item list into one.
+ */
+function wholeIsConfident(wholeName: string, menu: WaMenuItem[]): boolean {
+  const best = bestMenuMatch(wholeName, menu);
+  if (!best.clearWinner || !best.top) return false;
+  const qWords = norm(wholeName).split(/\s+/).filter(w => w.length >= 3 && !STOP_WORDS.has(w));
+  const cWords = norm(best.top.name).split(/\s+/);
+  return qWords.every(qw => cWords.some(cw => cw.startsWith(qw) || qw.startsWith(cw)));
 }
 
 // ── Item collection ─────────────────────────────────────────────────────────────
@@ -100,24 +186,41 @@ function handleItemCollection(
   text:    string,
   menu:    WaMenuItem[],
 ): AdvanceResult {
-  const parsed = parseTextItems(text);
+  const hadItems = session.selectedItems.length > 0;
+  const parsed = smartParse(text, menu);
   const { matched, unresolved, missing } = matchItems(parsed, menu);
+
+  // Inline negation: resolve "X normal" ambiguities right away (one-line orders).
+  const stillUnresolved: WaUnresolvedItem[] = [];
+  for (const u of unresolved) {
+    if (u.reason === "AMBIGUOUS") {
+      const r = resolveByNegation(u.rawText, u, menu);
+      if (r) { matched.push(r); continue; }
+    }
+    stillUnresolved.push(u);
+  }
 
   // Merge newly matched items into existing selection
   session.selectedItems   = [...session.selectedItems, ...matched];
-  session.unresolvedItems = unresolved;
+  session.unresolvedItems = stillUnresolved;
   session.missingQuestions = mergeMissing(session, menu);
 
-  if (session.selectedItems.length === 0 && unresolved.length === 0) {
+  // Capture delivery/payment hints present in the same message (mixed one-line).
+  captureDeliveryPayment(session, text);
+
+  if (session.selectedItems.length === 0 && session.unresolvedItems.length === 0) {
     session.stage = "PARSING_ITEMS";
     return done(session, "UNKNOWN", "Pode me dizer o que você gostaria de pedir?", [], false);
   }
 
-  return continueAfterItems(session);
+  return continueAfterItems(session, hadItems ? matched : null);
 }
 
 /** Decides the next stage after items change: ask options, clarify, or move on. */
-function continueAfterItems(session: WaPersistedSession): AdvanceResult {
+function continueAfterItems(
+  session: WaPersistedSession,
+  justAdded: WaOrderItem[] | null,
+): AdvanceResult {
   // Ask the first missing required option (one at a time)
   const q = session.missingQuestions[0];
   if (q) {
@@ -125,7 +228,7 @@ function continueAfterItems(session: WaPersistedSession): AdvanceResult {
     session.status = "AWAITING_CUSTOMER";
     const opts = q.options.slice(0, 4).join(", ");
     return done(session, "ORDER_REQUEST",
-      `${confirmItems(session)} Para o ${q.itemName}, qual ${q.groupName.toLowerCase()}?${opts ? ` (${opts})` : ""}`,
+      `${confirmItems(session)} Para ${articleFor(q.itemName)}${q.itemName}, qual ${q.groupName.toLowerCase()}?${opts ? ` (${opts})` : ""}`,
       [], false);
   }
 
@@ -135,19 +238,20 @@ function continueAfterItems(session: WaPersistedSession): AdvanceResult {
     session.stage  = "MATCHING_MENU";
     session.status = "AWAITING_CUSTOMER";
     if (u.reason === "AMBIGUOUS") {
-      const label = stripQty(u.rawText);
+      const label = titleCase(normalizePluralAndSpelling(stripQty(u.rawText)));
       const opts  = u.candidates.slice(0, 3).join(" ou ");
-      // If other items are still queued, tell the customer what comes next (one
-      // question at a time, but don't leave them guessing about the rest)
+      // If other items are still queued, tell the customer what comes next.
       const remaining = session.unresolvedItems.slice(1);
-      const remainLabel = remaining.length === 1 ? stripQty(remaining[0]!.rawText) : "";
+      const remainLabel = remaining[0]
+        ? titleCase(normalizePluralAndSpelling(stripQty(remaining[0].rawText)))
+        : "";
       const hint = remaining.length === 1
         ? ` Depois confirmo ${articleFor(remainLabel)}${remainLabel}.`
         : remaining.length > 1
           ? ` Depois confirmo os outros itens.`
           : "";
       return done(session, "ORDER_REQUEST",
-        `Para ${articleFor(label)}${titleCase(label)}, qual você quer: ${opts}?${hint}`, [], false);
+        `Para ${articleFor(label)}${label}, qual você quer: ${opts}?${hint}`, [], false);
     }
     if (u.reason === "UNAVAILABLE") {
       return done(session, "ORDER_REQUEST", `"${u.rawText}" está indisponível agora. Quer outra opção?`, [], false);
@@ -155,11 +259,49 @@ function continueAfterItems(session: WaPersistedSession): AdvanceResult {
     return done(session, "ORDER_REQUEST", `Não encontrei "${u.rawText}" no cardápio. Pode confirmar o nome?`, [], false);
   }
 
-  // All items resolved → ask delivery type
-  session.stage  = "COLLECTING_DELIVERY_TYPE";
-  session.status = "AWAITING_CUSTOMER";
-  return done(session, "ORDER_REQUEST",
-    `${confirmItems(session)} Vai ser entrega ou retirada?`, [], false);
+  // All items resolved → route based on what we already know.
+  return routeAfterResolved(session, justAdded);
+}
+
+/**
+ * Drives the flow once all items are resolved, using whatever delivery/payment
+ * info we already captured (so a one-line "...entrega, pix" jumps straight to the
+ * next missing piece instead of re-asking "entrega ou retirada?").
+ */
+function routeAfterResolved(
+  session: WaPersistedSession,
+  justAdded: WaOrderItem[] | null,
+): AdvanceResult {
+  const addedNew = justAdded && justAdded.length > 0 && session.selectedItems.length > justAdded.length;
+  const confirm = addedNew ? `Adicionei ${listItems(justAdded!)}.` : confirmItems(session);
+
+  if (!session.deliveryType) {
+    session.stage  = "COLLECTING_DELIVERY_TYPE";
+    session.status = "AWAITING_CUSTOMER";
+    return done(session, "ORDER_REQUEST", `${confirm} Vai ser entrega ou retirada?`.trim(), [], false);
+  }
+
+  if (session.deliveryType === "DELIVERY") {
+    const addrComplete = !!(session.address?.street && session.address?.number);
+    if (!addrComplete) {
+      session.stage  = "COLLECTING_ADDRESS";
+      session.status = "AWAITING_CUSTOMER";
+      return done(session, "DELIVERY_INFO", "Me envia o endereço completo com número, por favor.", [], false);
+    }
+    if (!session.deliveryQuote || session.deliveryQuote.status !== "ok") {
+      session.stage  = "CALCULATING_DELIVERY_FEE";
+      session.status = "ACTIVE";
+      return done(session, "DELIVERY_INFO", "Só um instante, calculando a entrega…", ["QUOTE_DELIVERY"], false);
+    }
+  }
+
+  if (!session.paymentMethod) {
+    session.stage  = "COLLECTING_PAYMENT_METHOD";
+    session.status = "AWAITING_CUSTOMER";
+    return done(session, "ORDER_REQUEST", `${confirm} Vai pagar no Pix, cartão ou dinheiro?`.trim(), [], false);
+  }
+
+  return finalizePayment(session);
 }
 
 // ── Option answers ──────────────────────────────────────────────────────────────
@@ -170,7 +312,7 @@ function handleOptionAnswer(
   menu:    WaMenuItem[],
 ): AdvanceResult {
   const q = session.missingQuestions[0];
-  if (!q) return continueAfterItems(session);
+  if (!q) return continueAfterItems(session, null);
 
   // Find the menu item this question belongs to
   const menuItem = menu.find(m => m.name === q.itemName);
@@ -179,7 +321,7 @@ function handleOptionAnswer(
   if (!menuItem || !target) {
     // Can't resolve — drop the question to avoid a loop
     session.missingQuestions = session.missingQuestions.slice(1);
-    return continueAfterItems(session);
+    return continueAfterItems(session, null);
   }
 
   const answer = norm(text);
@@ -193,7 +335,7 @@ function handleOptionAnswer(
       target.unitPrice   = channelPrice({ price: variant.price, priceDelivery: variant.priceDelivery }, "DELIVERY");
       target.lineTotal   = round(target.unitPrice * target.quantity);
       session.missingQuestions = session.missingQuestions.slice(1);
-      return continueAfterItems(session);
+      return continueAfterItems(session, null);
     }
   } else {
     // Option group
@@ -207,14 +349,14 @@ function handleOptionAnswer(
       target.unitPrice = round(target.unitPrice + opt.price);
       target.lineTotal = round(target.unitPrice * target.quantity);
       session.missingQuestions = session.missingQuestions.slice(1);
-      return continueAfterItems(session);
+      return continueAfterItems(session, null);
     }
   }
 
   // Couldn't match the answer — re-ask once, listing options
   const opts = q.options.slice(0, 4).join(", ");
   return done(session, "ANSWER_TO_OPTION",
-    `Não entendi. Para o ${q.itemName}, escolha: ${opts}.`, [], false);
+    `Não entendi. Para ${articleFor(q.itemName)}${q.itemName}, escolha: ${opts}.`, [], false);
 }
 
 // ── Delivery type ───────────────────────────────────────────────────────────────
@@ -225,7 +367,34 @@ const GREETING_RE      = /^(oi|ol[aá]|bom dia|boa tarde|boa noite|e a[íi]|hey|
 const ADDRESS_LIKE_RE  = /\b(rua|av\.?|avenida|r\.|al\.?|alameda|tv\.?|travessa|estr\.?|estrada|rod\.?|rodovia|pra[çc]a)\b.{3,}/i;
 const EARLY_PAYMENT_RE = /\b(vou pagar|pago)\b/i;
 
-function handleDeliveryType(session: WaPersistedSession, text: string): AdvanceResult {
+// A message carries order content if it has an order verb or "<number> <word>".
+// The number must be followed by a LETTER (not another digit) so a house number
+// like "123, Centro" in an address is NOT mistaken for "123 c…".
+const ORDER_LIKE_RE = /\b(quero|queria|vou querer|vou de|pedir|adiciona|acrescenta|outro|outra|mais\s+(um|uma|\d))\b|\b\d+\s*x?\s*[a-záéíóúâêîôûãõ]/i;
+
+function hasOrderContent(text: string): boolean {
+  return ORDER_LIKE_RE.test(text);
+}
+
+function captureDeliveryPayment(session: WaPersistedSession, text: string): void {
+  if (!session.deliveryType) {
+    if (PICKUP_RE.test(text)) {
+      session.deliveryType  = "PICKUP";
+      session.deliveryQuote = { fee: 0, status: "ok", reason: "retirada" };
+    } else if (DELIVERY_RE.test(text)) {
+      session.deliveryType = "DELIVERY";
+    }
+  }
+  if (!session.paymentMethod) {
+    const { method, changeFor } = parsePaymentMethod(text);
+    if (method) {
+      session.paymentMethod = method;
+      if (changeFor) session.metadata = { ...(session.metadata ?? {}), changeFor };
+    }
+  }
+}
+
+function handleDeliveryType(session: WaPersistedSession, text: string, menu: WaMenuItem[]): AdvanceResult {
   if (PICKUP_RE.test(text)) {
     session.deliveryType  = "PICKUP";
     session.deliveryQuote = { fee: 0, status: "ok", reason: "retirada" };
@@ -247,52 +416,105 @@ function handleDeliveryType(session: WaPersistedSession, text: string): AdvanceR
     return done(session, "DELIVERY_INFO",
       "Me envia o endereço completo com número, por favor.", [], false);
   }
+
+  // Not a delivery/pickup answer — maybe the customer is modifying the order.
+  const mod = tryModification(session, text, menu);
+  if (mod) return mod;
+
   return done(session, "UNKNOWN", "Vai ser entrega ou retirada?", [], false);
 }
 
-// ── Early-info handler (address/payment/greeting before items are ordered) ───────
+// ── Order modifications (add / change item / change quantity) ────────────────────
 
-const FEMININE_WORDS_RE = /^(coca|pizza|[aá]gua|agua|caipirinha|batata|cerveja|soda|limonada|laranja|maracuj[aá]|manga|melancia|fruta|por[çc][aã]o|porcao|bebida|sobremesa|entrada)/i;
+const CHANGE_ITEM_RE = /\b(troca|troque|trocar|substitui|substituir|no lugar|em vez)\b/i;
+const CHANGE_QTY_KW  = /\b(na verdade|s[oó]|apenas|deixa|muda(r)?\s+(a\s+)?quantidade|coloca)\b/i;
+const ADD_RE         = /\b(adiciona|adicionar|acrescenta|inclui|incluir|tamb[eé]m|mais\s+(um|uma|\d))\b/i;
 
-function articleFor(name: string): string {
-  if (FEMININE_WORDS_RE.test(norm(name))) return "a ";
-  return "o ";
+const NUM_WORDS_LOCAL: Record<string, number> = {
+  um: 1, uma: 1, hum: 1, dois: 2, duas: 2, tres: 3, "três": 3,
+  quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+};
+
+function extractQuantityFromText(text: string): number | null {
+  const d = text.match(/\b(\d{1,3})\b/);
+  if (d && d[1]) return parseInt(d[1], 10);
+  const t = norm(text);
+  for (const [w, q] of Object.entries(NUM_WORDS_LOCAL)) {
+    if (new RegExp(`\\b${w}\\b`).test(t)) return q;
+  }
+  return null;
 }
 
-function titleCase(s: string): string {
-  return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
+function isQuantityChange(text: string): boolean {
+  return CHANGE_QTY_KW.test(text) && extractQuantityFromText(text) != null;
 }
 
-function handleEarlyInfo(
+function tryModification(
   session: WaPersistedSession,
   text:    string,
   menu:    WaMenuItem[],
 ): AdvanceResult | null {
-  void menu; // kept for API consistency; may use for question answering later
-  if (session.selectedItems.length > 0 || session.unresolvedItems.length > 0) return null;
-
-  if (GREETING_RE.test(text.trim())) {
-    session.stage = "IDLE";
-    return done(session, "UNKNOWN", "Olá! O que você vai querer pedir?", [], false);
-  }
-
-  const { method } = parsePaymentMethod(text);
-  if (method || EARLY_PAYMENT_RE.test(text)) {
-    if (method) session.paymentMethod = method;
-    session.stage = "IDLE";
-    return done(session, "PAYMENT_INFO", "Certo! Me diz o que vai querer pedir.", [], false);
-  }
-
-  if (ADDRESS_LIKE_RE.test(text)) {
-    const addr = parseAddressFragment(text);
-    if (addr.street) {
-      session.address = { ...(session.address ?? {}), ...addr, raw: text };
-      session.stage = "IDLE";
-      return done(session, "DELIVERY_INFO", "Endereço anotado! Me diz o que vai querer pedir.", [], false);
-    }
-  }
-
+  if (session.selectedItems.length === 0) return null;
+  if (isQuantityChange(text))   return changeQuantity(session, text);
+  if (CHANGE_ITEM_RE.test(text)) return changeItem(session, text, menu);
+  if (ADD_RE.test(text) || hasOrderContent(text)) return handleItemCollection(session, text, menu);
   return null;
+}
+
+function changeQuantity(session: WaPersistedSession, text: string): AdvanceResult {
+  const n = extractQuantityFromText(text);
+  const target = session.selectedItems[session.selectedItems.length - 1];
+  if (!n || !target) {
+    return done(session, "ORDER_MODIFICATION", "Para quantas unidades?", [], false);
+  }
+  target.quantity  = n;
+  target.lineTotal = round(target.unitPrice * n);
+
+  const routed = routeAfterResolved(session, null);
+  const tail = routed.suggestedReply.replace(/^(Anotei:[^.]*\.|Adicionei[^.]*\.)\s*/, "");
+  const ack  = `Atualizei para ${n} unidade${n !== 1 ? "s" : ""}.`;
+  return done(session, "ORDER_MODIFICATION", `${ack} ${tail}`.trim(), routed.actions, false);
+}
+
+function changeItem(session: WaPersistedSession, text: string, menu: WaMenuItem[]): AdvanceResult {
+  const rest = text
+    .replace(CHANGE_ITEM_RE, "")
+    .replace(/^\s*(por|pra|para|pelo|pela|de|o|a)\s+/i, "")
+    .trim();
+  const name = normalizePluralAndSpelling(rest);
+  const best = bestMenuMatch(name, menu);
+
+  if (!best.clearWinner || !best.top) {
+    if (best.candidates.length > 1) {
+      return done(session, "ORDER_REQUEST",
+        `Qual você quer: ${best.candidates.slice(0, 3).map(c => c.name).join(" ou ")}?`, [], false);
+    }
+    return done(session, "ORDER_REQUEST", `Não encontrei "${rest}" no cardápio. Pode confirmar o nome?`, [], false);
+  }
+
+  const menuItem = best.top;
+  const base = norm(menuItem.name).split(" ")[0] ?? "";
+  let idx = session.selectedItems.findIndex(i => norm(i.menuItemName).startsWith(base));
+  if (idx < 0) idx = session.selectedItems.length - 1;
+
+  const qty = idx >= 0 ? session.selectedItems[idx]!.quantity : 1;
+  const unitPrice = channelPrice({ price: menuItem.price, priceDelivery: menuItem.priceDelivery }, "DELIVERY");
+  const newItem: WaOrderItem = {
+    rawText: rest, quantity: qty,
+    menuItemId: menuItem.id, menuItemName: menuItem.name,
+    options: [], extras: [], unitPrice, lineTotal: round(unitPrice * qty),
+  };
+
+  if (idx >= 0) session.selectedItems[idx] = newItem;
+  else          session.selectedItems.push(newItem);
+  session.missingQuestions = mergeMissing(session, menu);
+
+  if (session.missingQuestions[0]) return continueAfterItems(session, null);
+
+  const routed = routeAfterResolved(session, null);
+  const tail = routed.suggestedReply.replace(/^(Anotei:[^.]*\.|Adicionei[^.]*\.)\s*/, "");
+  return done(session, "ORDER_MODIFICATION",
+    `Troquei para ${titleCase(menuItem.name)}. ${tail}`.trim(), routed.actions, false);
 }
 
 // ── Address ─────────────────────────────────────────────────────────────────────
@@ -312,20 +534,89 @@ function handleAddress(session: WaPersistedSession, text: string): AdvanceResult
   return done(session, "DELIVERY_INFO", "Só um instante, calculando a entrega…", ["QUOTE_DELIVERY"], false);
 }
 
-// ── Payment ─────────────────────────────────────────────────────────────────────
+// ── Early-info handler (greeting/address/payment before items) ────────────────────
 
-function handlePayment(session: WaPersistedSession, text: string): AdvanceResult {
-  const { method, changeFor } = parsePaymentMethod(text);
+function handleEarlyInfo(
+  session: WaPersistedSession,
+  text:    string,
+  menu:    WaMenuItem[],
+): AdvanceResult | null {
+  void menu; // reserved for future menu-aware early answers
+  if (session.selectedItems.length > 0 || session.unresolvedItems.length > 0) return null;
 
-  if (!method) {
-    return done(session, "PAYMENT_INFO", "Vai pagar no Pix, cartão ou dinheiro?", [], false);
+  const trimmed = text.trim();
+
+  if (GREETING_RE.test(trimmed)) {
+    session.stage = "IDLE";
+    return done(session, "UNKNOWN", "Olá! O que você vai querer pedir?", [], false);
   }
 
-  session.paymentMethod = method;
-  session.metadata = { ...(session.metadata ?? {}), ...(changeFor ? { changeFor } : {}) };
+  // Address keyword present → remember it (a street name wins over loose number
+  // detection so "Rua das Flores, 123" is never treated as an order).
+  if (ADDRESS_LIKE_RE.test(text)) {
+    const addr = parseAddressFragment(text);
+    if (addr.street) {
+      session.address = { ...(session.address ?? {}), ...addr, raw: text };
+      session.stage = "IDLE";
+      return done(session, "DELIVERY_INFO", "Endereço anotado! Me diz o que vai querer pedir.", [], false);
+    }
+  }
+
+  const { method, changeFor } = parsePaymentMethod(text);
+  if ((method || EARLY_PAYMENT_RE.test(text)) && !hasOrderContent(text)) {
+    if (method) session.paymentMethod = method;
+    if (changeFor) session.metadata = { ...(session.metadata ?? {}), changeFor };
+    session.stage = "IDLE";
+    return done(session, "PAYMENT_INFO", "Certo! Me diz o que vai querer pedir.", [], false);
+  }
+
+  return null;
+}
+
+// ── Menu questions ───────────────────────────────────────────────────────────────
+
+const QUESTION_SUBJECT_RE =
+  /^(voc[eê]s?\s+t[eê]m|t[eê]m|tem|qual|quais|quanto custa|quanto custam|quanto|h[aá]|existe|existem|vende[m]?|fazem|faz)\s+/i;
+
+function extractQuestionSubject(text: string): string {
+  return text.trim()
+    .replace(/\?+\s*$/, "")
+    .replace(QUESTION_SUBJECT_RE, "")
+    .replace(/\bvoc[eê]s?\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function handleMenuQuestion(session: WaPersistedSession, text: string, menu: WaMenuItem[]): AdvanceResult {
+  session.stage  = "IDLE";
+  session.status = "ACTIVE";
+
+  const subject = extractQuestionSubject(text);
+  if (!subject || subject.length < 2) {
+    return done(session, "QUESTION", "Claro! O que você gostaria de saber sobre o cardápio?", [], false);
+  }
+
+  const best = bestMenuMatch(normalizePluralAndSpelling(subject), menu);
+  if (best.candidates.length === 0) {
+    return done(session, "QUESTION",
+      `Não encontrei ${subject} cadastrado. Quer ver outras opções ou falar com um atendente?`, [], false);
+  }
+  if (best.clearWinner && best.top) {
+    return done(session, "QUESTION", `Sim, temos ${best.top.name}! Quer pedir?`, [], false);
+  }
+  const names = best.candidates.slice(0, 2).map(c => c.name).join(" e ");
+  return done(session, "QUESTION", `Temos ${names}. Quer pedir?`, [], false);
+}
+
+// ── Payment ─────────────────────────────────────────────────────────────────────
+
+function finalizePayment(session: WaPersistedSession): AdvanceResult {
+  const method = session.paymentMethod;
 
   // Cash without change info → ask for change
-  if (method === "CASH" && !changeFor) {
+  if (method === "CASH" && !(session.metadata?.changeFor)) {
+    session.stage  = "COLLECTING_PAYMENT_METHOD";
+    session.status = "AWAITING_CUSTOMER";
     return done(session, "PAYMENT_INFO", "Vai precisar de troco? Se sim, troco para quanto?", [], false);
   }
 
@@ -339,6 +630,32 @@ function handlePayment(session: WaPersistedSession, text: string): AdvanceResult
   session.stage  = "READY_TO_CREATE_ORDER";
   session.status = "READY_TO_CONFIRM";
   return done(session, "PAYMENT_INFO", "Confirmando seu pedido…", ["CREATE_ORDER"], false);
+}
+
+function handlePayment(session: WaPersistedSession, text: string, menu: WaMenuItem[]): AdvanceResult {
+  const { method, changeFor } = parsePaymentMethod(text);
+
+  // No method this turn — but if we're awaiting cash change, a bare number is it.
+  if (!method) {
+    if (session.paymentMethod === "CASH") {
+      const m = text.match(/(\d{1,4})/);
+      if (m && m[1]) {
+        session.metadata = { ...(session.metadata ?? {}), changeFor: parseInt(m[1], 10) };
+        return finalizePayment(session);
+      }
+      // Maybe the customer changed their mind about the order instead.
+      const mod = tryModification(session, text, menu);
+      if (mod) return mod;
+      return done(session, "PAYMENT_INFO", "Vai precisar de troco? Se sim, troco para quanto?", [], false);
+    }
+    const mod = tryModification(session, text, menu);
+    if (mod) return mod;
+    return done(session, "PAYMENT_INFO", "Vai pagar no Pix, cartão ou dinheiro?", [], false);
+  }
+
+  session.paymentMethod = method;
+  if (changeFor) session.metadata = { ...(session.metadata ?? {}), changeFor };
+  return finalizePayment(session);
 }
 
 // ── Review ──────────────────────────────────────────────────────────────────────
@@ -359,7 +676,9 @@ function handleReview(
       return done(session, "CONFIRMATION", "Vai pagar no Pix, cartão ou dinheiro?", [], false);
     }
   }
-  // Otherwise treat as a modification (more items)
+  // Otherwise treat as a modification (change / add more items)
+  const mod = tryModification(session, text, menu);
+  if (mod) return mod;
   return handleItemCollection(session, text, menu);
 }
 
@@ -418,7 +737,7 @@ function handleAmbiguityAnswer(
     candidateMenu,
   );
 
-  let resolved: import("./types").WaOrderItem | null = matched[0] ?? null;
+  let resolved: WaOrderItem | null = matched[0] ?? null;
 
   // Fallback: semantic negation ("normal" → non-zero candidate)
   if (!resolved) resolved = resolveByNegation(text, u, menu);
@@ -429,7 +748,7 @@ function handleAmbiguityAnswer(
     session.selectedItems.push(resolved);
     session.unresolvedItems = session.unresolvedItems.slice(1);
     session.missingQuestions = mergeMissing(session, menu);
-    return continueAfterItems(session);
+    return continueAfterItems(session, null);
   }
 
   // No match — re-ask listing the options
@@ -490,11 +809,26 @@ function mergeMissing(session: WaPersistedSession, menu: WaMenuItem[]): WaMissin
   return out;
 }
 
-function confirmItems(session: WaPersistedSession): string {
-  const list = session.selectedItems
+function listItems(items: WaOrderItem[]): string {
+  return items
     .map(i => `${i.quantity}× ${i.menuItemName}${i.variantName ? ` ${i.variantName}` : ""}`)
     .join(", ");
+}
+
+function confirmItems(session: WaPersistedSession): string {
+  const list = listItems(session.selectedItems);
   return list ? `Anotei: ${list}.` : "";
+}
+
+// Feminine product heads → "a", everything else → "o". Heuristic only (UX copy).
+const FEMININE_WORDS_RE = /^(coca|pizza|[aá]gua|caipirinha|batata|cerveja|soda|limonada|laranja|maracuj[aá]|manga|melancia|fruta|por[çc][aã]o|bebida|sobremesa|entrada|salada|esfiha|tapioca)/i;
+
+function articleFor(name: string): string {
+  return FEMININE_WORDS_RE.test(norm(name)) ? "a " : "o ";
+}
+
+function titleCase(s: string): string {
+  return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function operatorSummaryOf(session: WaPersistedSession): string {

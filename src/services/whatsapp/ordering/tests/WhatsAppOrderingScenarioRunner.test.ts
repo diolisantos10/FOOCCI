@@ -89,6 +89,7 @@ describe("Scenario Runner — evaluator: duplicate detection", () => {
       ],
       unresolvedItems: [], missingQuestions: [], actions: [],
       sideEffectsPerformed: [], order: null, paymentStub: false, paymentRealPix: false, estimatedTotal: 12,
+      deliveryType: null, paymentMethod: null, cashChange: null, hasAddress: false,
     };
     const scenario = { menuDependent: false } as WaOrderingScenario;
     const checks = evaluateScenario(scenario, [dupStep]);
@@ -107,6 +108,7 @@ describe("Scenario Runner — evaluator: side effects", () => {
       sideEffectsPerformed: ["order_created:abc123"],
       order: { orderId: "abc123", status: "PENDING", wouldCreate: true },
       paymentStub: false, paymentRealPix: true, estimatedTotal: 50,
+      deliveryType: null, paymentMethod: null, cashChange: null, hasAddress: false,
     };
     const scenario = { menuDependent: false } as WaOrderingScenario;
     const checks = evaluateScenario(scenario, [badStep]);

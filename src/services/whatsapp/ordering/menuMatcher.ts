@@ -54,6 +54,45 @@ function matchScore(query: string, candidate: string): number {
   return hits.length / Math.max(qWords.length, cWords.length);
 }
 
+// ── Single best match (used by smart parsing + menu questions) ──────────────────
+
+export interface BestMenuMatch {
+  top:         WaMenuItem | null;
+  score:       number;
+  clearWinner: boolean;
+  candidates:  WaMenuItem[]; // top 3 above MIN_THRESHOLD, best first
+}
+
+/**
+ * Scores `text` against the visible menu and returns the single best match plus
+ * whether it is an unambiguous clear winner. Pure — no item construction.
+ */
+export function bestMenuMatch(
+  text:    string,
+  menu:    WaMenuItem[],
+  channel: "DELIVERY" | "PICKUP" | "DINE_IN" = "DELIVERY",
+): BestMenuMatch {
+  const visible = menu.filter(m =>
+    m.isActive && (channel === "DINE_IN" ? true : m.showInDelivery),
+  );
+  const scored = visible
+    .map(m => ({ m, score: matchScore(text, m.name) }))
+    .filter(x => x.score >= MIN_THRESHOLD)
+    .sort((a, b) => b.score - a.score);
+
+  const top    = scored[0];
+  const second = scored[1];
+  const clearWinner = !!top && top.score >= HIGH_CONFIDENCE &&
+    (!second || (top.score - second.score) >= CLEAR_WINNER_GAP);
+
+  return {
+    top:         top?.m ?? null,
+    score:       top?.score ?? 0,
+    clearWinner,
+    candidates:  scored.slice(0, 3).map(x => x.m),
+  };
+}
+
 // ── Match result ───────────────────────────────────────────────────────────────
 
 export interface MatchResult {

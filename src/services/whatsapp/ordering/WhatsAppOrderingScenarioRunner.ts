@@ -63,6 +63,10 @@ export interface WaScenarioStep {
   paymentStub:     boolean;
   paymentRealPix:  boolean;
   estimatedTotal:  number;
+  deliveryType:    "DELIVERY" | "PICKUP" | "DINE_IN" | null;
+  paymentMethod:   "PIX" | "CARD" | "CASH" | null;
+  cashChange:      number | null;
+  hasAddress:      boolean;
 }
 
 export interface WaScenarioResult {
@@ -102,6 +106,15 @@ export interface RunScenarioContext {
 
 const norm = (t: string) =>
   t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
+// A message carries clear order content (verb or "<n> <letter>" or a product noun).
+const ORDER_CONTENT_RE =
+  /\b(quero|queria|vou querer|pedir|adiciona|yakisoba|coca|pizza|combo|temaki|por[çc][aã]o|hamb[uú]rguer|sushi)\b|\b\d+\s*x?\s*[a-záéíóúâêîôûãõ]/i;
+
+// The "what would you like to order?" prompt — must never be the final word when
+// the customer already gave a clear order.
+const REORDER_PROMPT_RE =
+  /me diz o que (vai|quer)|o que voc[eê] (vai|gostaria)|pode me dizer o que|pode dizer o que|gostaria de pedir|que voc[eê] gostaria de pedir/i;
 
 // ── Single scenario ─────────────────────────────────────────────────────────
 
@@ -156,6 +169,10 @@ export async function runScenario(
       paymentRealPix:       result.payment != null && result.payment.isDryRunStub === false
                              && result.payment.method === "PIX",
       estimatedTotal:       result.estimatedTotal,
+      deliveryType:         result.session.deliveryType,
+      paymentMethod:        result.session.paymentMethod,
+      cashChange:           (result.session.metadata?.changeFor as number | undefined) ?? null,
+      hasAddress:           !!result.session.address?.street,
     });
   }
 
@@ -395,6 +412,110 @@ function evaluate(scenario: WaOrderingScenario, steps: WaScenarioStep[]): WaScen
         detail: found ? "Presente." : "Não apareceu nas perguntas pendentes/resposta.",
       });
     }
+  }
+
+  // ── W8.A. Clear order text must never end at IDLE asking what to order ─────
+  const hasOrderMsg = steps.some(s => ORDER_CONTENT_RE.test(s.message));
+  if (hasOrderMsg) {
+    const stuck = last.stage === "IDLE"
+      && REORDER_PROMPT_RE.test(last.suggestedReply)
+      && last.matchedItems.length === 0;
+    const orderMsg = steps.find(s => ORDER_CONTENT_RE.test(s.message))!.message;
+    checks.push(stuck
+      ? { label: "não ignora pedido claro", severity: "FAIL", detail: `Voltou a perguntar o que pedir apesar de "${orderMsg}".` }
+      : { label: "não ignora pedido claro", severity: "PASS", detail: "Pedido claro não foi descartado." });
+  }
+
+  // ── W8.B. A question/greeting must not be quoted as a missing product ──────
+  let questionAsProduct: WaScenarioStep | null = null;
+  for (const s of steps) {
+    const m = s.suggestedReply.match(/n[ãa]o encontrei "([^"]+)" no card[aá]pio/i);
+    if (!m || !m[1]) continue;
+    const msg = s.message.trim();
+    const isQuestionOrGreeting =
+      /\?\s*$/.test(msg) ||
+      /^(oi|ol[aá]|bom dia|boa tarde|boa noite|e a[íi])\b/i.test(msg) ||
+      /\b(voc[eê]s?\s+t[eê]m|^t[eê]m|qual|quais)\b/i.test(msg);
+    if (isQuestionOrGreeting && norm(m[1]) === norm(msg.replace(/\?+$/, ""))) {
+      questionAsProduct = s;
+      break;
+    }
+  }
+  checks.push(!questionAsProduct
+    ? { label: "pergunta não vira produto", severity: "PASS", detail: "Perguntas/saudações não foram tratadas como produto." }
+    : { label: "pergunta não vira produto", severity: "FAIL", detail: `Tratou "${questionAsProduct.message}" como produto inexistente.` });
+
+  // ── W8.C. Expected delivery type captured ─────────────────────────────────
+  if (scenario.expectedDeliveryType) {
+    const ok = last.deliveryType === scenario.expectedDeliveryType;
+    checks.push({
+      label: "tipo de entrega",
+      severity: ok ? "PASS" : (scenario.menuDependent ? "WARN" : "FAIL"),
+      detail: ok ? `${last.deliveryType}` : `Esperado ${scenario.expectedDeliveryType}, obtido ${last.deliveryType ?? "—"}.`,
+    });
+  }
+
+  // ── W8.D. Expected payment method captured ────────────────────────────────
+  if (scenario.expectedPaymentMethod) {
+    const ok = last.paymentMethod === scenario.expectedPaymentMethod;
+    checks.push({
+      label: "forma de pagamento",
+      severity: ok ? "PASS" : (scenario.menuDependent ? "WARN" : "FAIL"),
+      detail: ok ? `${last.paymentMethod}` : `Esperado ${scenario.expectedPaymentMethod}, obtido ${last.paymentMethod ?? "—"}.`,
+    });
+  }
+
+  // ── W8.E. Expected cash change captured ───────────────────────────────────
+  if (scenario.expectedCashChange != null) {
+    const ok = last.cashChange === scenario.expectedCashChange;
+    checks.push({
+      label: "troco",
+      severity: ok ? "PASS" : (scenario.menuDependent ? "WARN" : "FAIL"),
+      detail: ok ? `R$ ${last.cashChange}` : `Esperado R$ ${scenario.expectedCashChange}, obtido ${last.cashChange ?? "—"}.`,
+    });
+  }
+
+  // ── W8.F. Expected final item count (add/change flows) ────────────────────
+  if (scenario.expectedItemCount != null) {
+    const ok = last.matchedItems.length === scenario.expectedItemCount;
+    checks.push({
+      label: "quantidade de itens",
+      severity: ok ? "PASS" : (scenario.menuDependent ? "WARN" : "FAIL"),
+      detail: ok ? `${last.matchedItems.length} item(ns).` : `Esperado ${scenario.expectedItemCount}, obtido ${last.matchedItems.length}.`,
+    });
+  }
+
+  // ── W8.G. Forbidden items absent from the final draft (replaced) ──────────
+  if (scenario.forbiddenItems && scenario.forbiddenItems.length > 0) {
+    for (const f of scenario.forbiddenItems) {
+      const present = last.matchedItems.find(m => norm(m.name).includes(norm(f)));
+      checks.push({
+        label: `item removido "${f}"`,
+        severity: present ? (scenario.menuDependent ? "WARN" : "FAIL") : "PASS",
+        detail: present ? `Ainda presente: ${present.name}.` : "Ausente do pedido final.",
+      });
+    }
+  }
+
+  // ── W8.H. Menu questions must not build a draft ───────────────────────────
+  if (scenario.expectNoDraft) {
+    const ok = last.matchedItems.length === 0;
+    checks.push({
+      label: "sem rascunho para pergunta",
+      severity: ok ? "PASS" : "FAIL",
+      detail: ok ? "Nenhum item montado (pergunta)." : `Montou ${last.matchedItems.length} item(ns) para uma pergunta.`,
+    });
+  }
+
+  // ── W8.I. Expected intent detected on some turn ───────────────────────────
+  if (scenario.expectIntent) {
+    const allowed = Array.isArray(scenario.expectIntent) ? scenario.expectIntent : [scenario.expectIntent];
+    const ok = steps.some(s => allowed.includes(s.intent as never));
+    checks.push({
+      label: "intenção detectada",
+      severity: ok ? "PASS" : "FAIL",
+      detail: ok ? `${allowed.join(" | ")}.` : `Esperado ${allowed.join(" | ")}, obtido ${[...new Set(steps.map(s => s.intent))].join(", ")}.`,
+    });
   }
 
   // ── 11. Always-on: every turn produced a non-empty reply ──────────────────

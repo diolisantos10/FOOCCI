@@ -16,7 +16,7 @@
  * only so the runner can assert they NEVER happen in dry-run.
  */
 
-import type { WaOrderStage, WaSessionStatus } from "../types";
+import type { WaOrderStage, WaSessionStatus, WaDetectedIntent } from "../types";
 
 export type WaScenarioCategory =
   | "basic"            // 1. Basic order parsing
@@ -61,6 +61,22 @@ export interface WaOrderingScenario {
   expectHandoff?:       boolean;
   /** Expect a completed draft (selectedItems present, no missingRequirements). */
   expectCompleteDraft?: boolean;
+
+  // ── W8: stricter expectations (close false-positive gaps) ─────────────────
+  /** Delivery type that must be captured by the end (e.g. one-line orders). */
+  expectedDeliveryType?:  "DELIVERY" | "PICKUP";
+  /** Payment method that must be captured by the end. */
+  expectedPaymentMethod?: "PIX" | "CARD" | "CASH";
+  /** Cash change amount that must be parsed and stored. */
+  expectedCashChange?:    number;
+  /** Detected intent expected on at least one turn (e.g. QUESTION for menu Q). */
+  expectIntent?:          WaDetectedIntent | WaDetectedIntent[];
+  /** Expect NO order draft to be built (a question must not become a product). */
+  expectNoDraft?:         boolean;
+  /** Exact number of matched item lines expected at the end (add/change flows). */
+  expectedItemCount?:     number;
+  /** Item-name substrings that must NOT appear in the final draft (replaced items). */
+  forbiddenItems?:        string[];
 
   // ── Safety expectations (dry-run invariants — always asserted) ────────────
   shouldCreateOrder:  false;
@@ -197,7 +213,7 @@ const FULL: WaOrderingScenario[] = [
     id: "full-cash-change",
     name: "Dinheiro com troco",
     category: "payment",
-    description: "Pagamento em dinheiro com troco para R$ 100, sem Pix.",
+    description: "Pagamento em dinheiro com troco para R$ 100, sem Pix. Yakisoba Carne e Frango resolvido direto (sem ambiguidade de 'frango').",
     messages: [
       "quero um yakisoba carne e frango",
       "entrega",
@@ -206,6 +222,9 @@ const FULL: WaOrderingScenario[] = [
     ],
     suites: ["full", "payment"],
     expectedItems: [{ name: "yakisoba", quantity: 1 }],
+    expectedDeliveryType: "DELIVERY",
+    expectedPaymentMethod: "CASH",
+    expectedCashChange: 100,
     menuDependent: true,
     tags: ["cash", "change", "delivery"],
     ...SAFE,
@@ -214,10 +233,11 @@ const FULL: WaOrderingScenario[] = [
     id: "full-add-item",
     name: "Adicionar item depois",
     category: "modify",
-    description: "Cliente adiciona um segundo item após o primeiro, sem substituir.",
+    description: "Cliente adiciona um segundo item após o primeiro, sem substituir — draft final com Coca-Cola + Coca Zero.",
     messages: ["quero uma coca", "normal", "adiciona mais uma coca zero"],
     suites: ["full"],
-    expectedItems: [{ name: "coca", quantity: 1 }],
+    expectedItems: [{ name: "coca cola" }, { name: "zero" }],
+    expectedItemCount: 2,
     menuDependent: true,
     tags: ["add"],
     ...SAFE,
@@ -226,10 +246,11 @@ const FULL: WaOrderingScenario[] = [
     id: "full-change-quantity",
     name: "Alterar quantidade",
     category: "quantity",
-    description: "Cliente reduz a quantidade — não deve duplicar a linha.",
+    description: "Cliente reduz a quantidade — não deve duplicar a linha nem criar item novo.",
     messages: ["quero 2 yakisoba carne e frango", "na verdade só 1"],
     suites: ["full"],
-    expectedItems: [{ name: "yakisoba" }],
+    expectedItems: [{ name: "yakisoba", quantity: 1 }],
+    expectedItemCount: 1,
     menuDependent: true,
     tags: ["quantity"],
     ...SAFE,
@@ -238,10 +259,12 @@ const FULL: WaOrderingScenario[] = [
     id: "full-change-item",
     name: "Trocar item",
     category: "modify",
-    description: "Cliente troca o item escolhido por outro.",
+    description: "Cliente troca o item escolhido por outro — Camarão sai, Carne e Frango entra.",
     messages: ["quero yakisoba de camarão", "troca por carne e frango"],
     suites: ["full"],
     expectedItems: [{ name: "yakisoba" }],
+    expectedItemCount: 1,
+    forbiddenItems: ["camar"],
     menuDependent: true,
     tags: ["change"],
     ...SAFE,
@@ -303,9 +326,13 @@ const EDGE: WaOrderingScenario[] = [
     id: "edge-mixed-order-one-line",
     name: "Pedido misto em uma linha",
     category: "basic",
-    description: "Vários itens e instruções na mesma mensagem.",
+    description: "Vários itens e instruções na mesma mensagem — itens, entrega e Pix capturados; pede o endereço (que falta). Nunca volta para 'o que deseja'.",
     messages: ["2 yakisoba frango, 1 coca normal, entrega, pix"],
     suites: ["edge"],
+    expectedItems: [{ name: "yakisoba", quantity: 2 }, { name: "coca", quantity: 1 }],
+    expectedDeliveryType: "DELIVERY",
+    expectedPaymentMethod: "PIX",
+    expectedFinalStage: "COLLECTING_ADDRESS",
     menuDependent: true,
     tags: ["mixed"],
     ...SAFE,
@@ -336,9 +363,11 @@ const EDGE: WaOrderingScenario[] = [
     id: "edge-menu-question",
     name: "Pergunta de cardápio",
     category: "noise",
-    description: "Cliente faz pergunta em vez de pedir.",
+    description: "Cliente faz pergunta em vez de pedir — classifica como QUESTION, não monta pedido e não trata a frase inteira como produto inexistente.",
     messages: ["vocês têm yakisoba vegetariano?"],
     suites: ["edge"],
+    expectIntent: "QUESTION",
+    expectNoDraft: true,
     menuDependent: false,
     tags: ["question"],
     ...SAFE,
