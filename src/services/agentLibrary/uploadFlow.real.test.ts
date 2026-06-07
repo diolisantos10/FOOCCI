@@ -12,6 +12,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 vi.mock("./AgentLibraryService", () => ({
   AgentLibraryService: {
     createSourceFromUpload: vi.fn(),
+    saveOriginalFile: vi.fn(),
+    loadOriginalFile: vi.fn(),
     setRawText: vi.fn(),
     setExtractionStatus: vi.fn(),
     extractTechniques: vi.fn(),
@@ -27,6 +29,8 @@ const svc = vi.mocked(AgentLibraryService);
 beforeEach(() => {
   vi.clearAllMocks();
   svc.createSourceFromUpload.mockResolvedValue({ id: "src_real" } as never);
+  svc.saveOriginalFile.mockResolvedValue({ storageKey: "db:file_real" } as never);
+  svc.loadOriginalFile.mockResolvedValue(null as never);
   svc.setRawText.mockResolvedValue({} as never);
   svc.setExtractionStatus.mockResolvedValue({} as never);
 });

@@ -38,7 +38,8 @@ interface TechniqueDTO {
 }
 interface SourceDetailDTO {
   id: string; title: string; author: string | null; sourceType: string; category: string | null;
-  description: string | null; fileName: string | null; rawTextPreview: string | null; rawTextTruncated: boolean;
+  description: string | null; fileName: string | null; hasFile: boolean; hasText: boolean;
+  rawTextPreview: string | null; rawTextTruncated: boolean;
   status: string; extractionStatus: string; createdAt: string; techniques: TechniqueDTO[];
 }
 
@@ -389,9 +390,20 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
                     </p>
                   </>
                 )}
-                {selected.extractionStatus === "FAILED" && (
+                {/* File/text status hints */}
+                {selected.extractionStatus === "FAILED" && selected.hasFile && (
                   <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                    A última extração falhou. A fonte está salva — tente extrair novamente ou adicione técnicas manualmente.
+                    Extração falhou, mas o arquivo está salvo. Você pode tentar novamente.
+                  </p>
+                )}
+                {selected.extractionStatus !== "FAILED" && selected.hasFile && !selected.hasText && (
+                  <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-800">
+                    Arquivo armazenado. Texto ainda não extraído.
+                  </p>
+                )}
+                {!selected.hasFile && !selected.hasText && (
+                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                    Esta fonte não tem texto nem arquivo armazenado. Cole conteúdo ou adicione técnicas manualmente.
                   </p>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">

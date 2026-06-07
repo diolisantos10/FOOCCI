@@ -20,6 +20,8 @@ import {
   type SourceInput,
   type TechniqueInput,
 } from "./agentLibraryHelpers";
+import { extractTextFromUpload } from "./extractText";
+import { resolveTextForExtraction } from "./extractionText";
 
 export interface LibraryStats {
   sources: number;
@@ -115,6 +117,49 @@ export class AgentLibraryService {
     return prisma.agentLibrarySource.update({ where: { id }, data: { rawText } });
   }
 
+  /**
+   * Store the original uploaded file PRIVATELY (DB bytes, never a public route)
+   * and link it to the source via storageKey + metadata. Upserted 1:1 so a
+   * re-upload replaces the previous bytes.
+   */
+  static async saveOriginalFile(
+    sourceId: string,
+    file: { fileName: string; mimeType: string; buffer: Buffer },
+  ): Promise<{ storageKey: string }> {
+    const rec = await prisma.agentLibraryFile.upsert({
+      where: { sourceId },
+      create: {
+        sourceId,
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+        fileSize: file.buffer.length,
+        data: file.buffer,
+      },
+      update: {
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+        fileSize: file.buffer.length,
+        data: file.buffer,
+      },
+      select: { id: true },
+    });
+    const storageKey = `db:${rec.id}`;
+    await prisma.agentLibrarySource.update({
+      where: { id: sourceId },
+      data: { storageKey, fileName: file.fileName, mimeType: file.mimeType, fileSize: file.buffer.length },
+    });
+    return { storageKey };
+  }
+
+  /** Load the stored original file (server-side only). Null if none. */
+  static async loadOriginalFile(
+    sourceId: string,
+  ): Promise<{ buffer: Buffer; fileName: string; mimeType: string } | null> {
+    const rec = await prisma.agentLibraryFile.findUnique({ where: { sourceId } });
+    if (!rec) return null;
+    return { buffer: Buffer.from(rec.data), fileName: rec.fileName, mimeType: rec.mimeType };
+  }
+
   /** Update only the extraction status (PENDING/EXTRACTING/EXTRACTED/FAILED). */
   static async setExtractionStatus(
     id: string,
@@ -162,10 +207,19 @@ export class AgentLibraryService {
     const source = await prisma.agentLibrarySource.findUnique({ where: { id: sourceId } });
     if (!source) throw new Error("Fonte não encontrada.");
 
-    const text = (source.rawText ?? "").trim();
-    if (!text) {
-      throw new Error("Esta fonte não tem texto colado. Cole um conteúdo ou adicione técnicas manualmente.");
+    // Resolve text: prefer pasted/extracted rawText; otherwise re-parse the
+    // stored original file (so "extract again" works without a paste). Throws a
+    // clear error when there is neither text nor a stored file.
+    const resolved = await resolveTextForExtraction({
+      rawText: source.rawText,
+      loadFile: () => AgentLibraryService.loadOriginalFile(sourceId),
+      parse: (buffer, fileName, mimeType) => extractTextFromUpload(buffer, fileName, mimeType),
+    });
+    const text = resolved.text;
+    if (resolved.fromFile) {
+      await AgentLibraryService.setRawText(sourceId, text);
     }
+
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("Extração por IA indisponível (OPENAI_API_KEY não configurada). Adicione técnicas manualmente.");
     }

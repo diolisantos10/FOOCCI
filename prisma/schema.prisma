@@ -2661,10 +2661,29 @@ model AgentLibrarySource {
   updatedAt        DateTime                     @updatedAt
 
   techniques AgentLibraryTechnique[]
+  file       AgentLibraryFile?
 
   @@index([agentSlug])
   @@index([status])
   @@map("agent_library_sources")
+}
+
+// Original uploaded file for a Library source, stored PRIVATELY in the database.
+// Never served by any public route and never exposed via a public URL — read
+// back only server-side so the "extract again" retry can re-parse the file.
+// 1:1 with the source; cascades on delete.
+model AgentLibraryFile {
+  id        String   @id @default(cuid())
+  sourceId  String   @unique
+  fileName  String
+  mimeType  String
+  fileSize  Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  source AgentLibrarySource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@map("agent_library_files")
 }
 
 model AgentLibraryTechnique {

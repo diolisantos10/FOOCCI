@@ -109,7 +109,9 @@ export async function extractTextFromUpload(
 
   if (!result.text.trim()) {
     throw new Error(
-      "Não foi possível extrair texto deste arquivo (pode ser um PDF digitalizado/imagem). Cole uma síntese manualmente.",
+      kind === "pdf"
+        ? "PDF sem texto extraível. Use PDF com texto selecionável ou cole uma síntese."
+        : "Não foi possível extrair texto deste arquivo. Cole uma síntese manualmente.",
     );
   }
   return result;

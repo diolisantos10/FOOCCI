@@ -39,6 +39,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         category: detail.category,
         description: detail.description,
         fileName: detail.fileName,
+        hasFile: !!detail.storageKey,
+        hasText: !!(detail.rawText && detail.rawText.trim().length > 0),
         rawTextPreview: detail.rawText ? detail.rawText.slice(0, 600) : null,
         rawTextTruncated: !!detail.rawText && detail.rawText.length > 600,
         status: detail.status,

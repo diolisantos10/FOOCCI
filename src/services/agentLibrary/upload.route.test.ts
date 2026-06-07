@@ -16,6 +16,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 vi.mock("./AgentLibraryService", () => ({
   AgentLibraryService: {
     createSourceFromUpload: vi.fn(),
+    saveOriginalFile: vi.fn(),
+    loadOriginalFile: vi.fn(),
     setRawText: vi.fn(),
     setExtractionStatus: vi.fn(),
     extractTechniques: vi.fn(),
@@ -36,6 +38,8 @@ const parse = vi.mocked(extractTextFromUpload);
 beforeEach(() => {
   vi.clearAllMocks();
   svc.createSourceFromUpload.mockResolvedValue({ id: "src_1" } as never);
+  svc.saveOriginalFile.mockResolvedValue({ storageKey: "db:file_1" } as never);
+  svc.loadOriginalFile.mockResolvedValue(null as never); // fall back to request blob in parse step
   svc.setRawText.mockResolvedValue({} as never);
   svc.setExtractionStatus.mockResolvedValue({} as never);
 });
@@ -51,6 +55,9 @@ describe("runUploadFlow — source-first", () => {
     const { status, body } = await runUploadFlow(fd);
 
     expect(svc.createSourceFromUpload).toHaveBeenCalledTimes(1);
+    // the original file is stored privately (storageKey)
+    expect(svc.saveOriginalFile).toHaveBeenCalledTimes(1);
+    expect(svc.saveOriginalFile).toHaveBeenCalledWith("src_1", expect.objectContaining({ fileName: "notes.txt", mimeType: "text/plain" }));
     expect(status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.stage).toBe("created");
@@ -90,6 +97,8 @@ describe("runUploadFlow — source-first", () => {
     const { status, body } = await runUploadFlow(fd);
 
     expect(svc.createSourceFromUpload).toHaveBeenCalledTimes(1);
+    // file was stored BEFORE parsing, so the retry has something to re-read
+    expect(svc.saveOriginalFile).toHaveBeenCalledTimes(1);
     expect(svc.setExtractionStatus).toHaveBeenCalledWith("src_1", "FAILED");
     expect(status).toBe(200);
     expect(body.ok).toBe(false);

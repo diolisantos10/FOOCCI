@@ -287,6 +287,7 @@ export type UploadStage =
   | "fileValidation"
   | "migration"
   | "dbCreateSource"
+  | "storeFile"
   | "pdfParse"
   | "aiExtraction"
   | "created"

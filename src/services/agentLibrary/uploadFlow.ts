@@ -154,13 +154,32 @@ export async function runUploadFlow(form: FormData): Promise<UploadFlowResult> {
       return ok(500, { ok: false, stage, message: "Falha ao criar a fonte no banco." });
     }
 
-    // ── C. parse file text (source already saved) ──────────────────────────────
+    // ── B2. store the original file PRIVATELY first (so retry can re-read it) ────
+    if (hasFile) {
+      stage = "storeFile";
+      try {
+        const buffer = Buffer.from(await blob!.arrayBuffer());
+        const { storageKey } = await AgentLibraryService.saveOriginalFile(sourceId, {
+          fileName: fileName!,
+          mimeType: mimeType!,
+          buffer,
+        });
+        log("file-stored", { sourceId, storageKey, fileSize });
+      } catch (err) {
+        // Non-fatal: the source still exists; retry just won't have a file yet.
+        log("file-store-failed", { sourceId, errName: err instanceof Error ? err.name : "Error" });
+      }
+    }
+
+    // ── C. parse file text (source + file already saved) ───────────────────────
     let textForAI = pastedText;
     let extractNote: string | undefined;
     if (hasFile) {
       stage = "pdfParse";
       try {
-        const buffer = Buffer.from(await blob!.arrayBuffer());
+        // Re-parse from the stored file so this never depends on the request body.
+        const stored = await AgentLibraryService.loadOriginalFile(sourceId);
+        const buffer = stored ? stored.buffer : Buffer.from(await blob!.arrayBuffer());
         const result = await extractTextFromUpload(buffer, fileName!, mimeType!);
         textForAI = result.text;
         extractNote = result.note;
@@ -170,7 +189,7 @@ export async function runUploadFlow(form: FormData): Promise<UploadFlowResult> {
         log("pdf-parse-failed", { sourceId, errName: err instanceof Error ? err.name : "Error" });
         await AgentLibraryService.setExtractionStatus(sourceId, "FAILED").catch(() => {});
         const detail = err instanceof Error ? err.message : "";
-        return ok(200, { ok: false, stage, sourceId, message: `Fonte criada, mas não foi possível extrair texto do arquivo. ${detail}`.trim() });
+        return ok(200, { ok: false, stage, sourceId, message: `Fonte criada e arquivo salvo, mas não foi possível extrair texto do arquivo. ${detail}`.trim() });
       }
     }
 
