@@ -296,6 +296,12 @@ export interface WaProcessInput {
   mode:            WaRuntimeMode;
   currentSession?: WaPersistedSession | null;
   allowSideEffects: boolean;
+  /**
+   * Pre-loaded menu. When provided, the DB menu load is skipped. Used by the
+   * Scenario Runner (to load the menu once for a whole multi-turn conversation)
+   * and by unit tests (to inject fixtures without a database).
+   */
+  menu?:           WaMenuItem[];
 }
 
 export interface WaPaymentInfo {

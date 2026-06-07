@@ -306,7 +306,7 @@ export async function processCustomerMessage(input: WaProcessInput): Promise<WaP
   if (!canCreateOrder) safetyNotes.push("nenhum pedido real criado (modo não é FULL_TEST liberado)");
   if (!canCreatePix)   safetyNotes.push("nenhum Pix real gerado (modo não é FULL_TEST liberado)");
 
-  const menu    = await loadMenuForRestaurant(input.restaurantId);
+  const menu    = input.menu ?? await loadMenuForRestaurant(input.restaurantId);
   const session = input.currentSession ?? newTransientSession(input);
 
   // Run the pure state machine for this turn

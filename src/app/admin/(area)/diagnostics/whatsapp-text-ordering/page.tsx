@@ -12,6 +12,8 @@
 import { useState, useCallback } from "react";
 import { DiagnosticReportActions } from "@/components/admin/DiagnosticReportActions";
 import { buildWaOrderingReport, deriveMatchStatus, type WaOrderingReportResult } from "@/lib/admin/waOrderingReport";
+import { buildScenarioRunnerReport } from "@/lib/admin/waScenarioReport";
+import type { WaScenarioRunReport, WaScenarioResult } from "@/services/whatsapp/ordering/WhatsAppOrderingScenarioRunner";
 
 // ── Types (mirror WaProcessResult) ────────────────────────────────────────────
 
@@ -96,12 +98,17 @@ export default function WaTextOrderingPage() {
 
   const [result, setResult]           = useState<SimResult | null>(null);
   const [sessionState, setSessionState] = useState<Record<string, unknown> | null>(null);
+  const [prevStage, setPrevStage]     = useState<string | null>(null);
   const [transcript, setTranscript]   = useState<TranscriptTurn[]>([]);
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const send = useCallback(async (continueSession: boolean, overrideMsg?: string) => {
     const msg = (overrideMsg ?? message).trim();
     if (!msg) return;
+    // Stage the session was in BEFORE this message (for "stage anterior").
+    const stageBefore = continueSession
+      ? ((sessionState?.stage as string | undefined) ?? null)
+      : null;
     setLoading(true); setError(null);
     try {
       const res = await fetch("/api/admin/diagnostics/whatsapp-text-ordering/run", {
@@ -123,11 +130,13 @@ export default function WaTextOrderingPage() {
       const data: SimResult = await res.json();
       setResult(data);
       setSessionState(data.session as unknown as Record<string, unknown>);
+      setPrevStage(stageBefore);
       setTranscript(prev => [
         ...(continueSession ? prev : []),
         { who: "customer", text: msg },
         { who: "agent", text: data.suggestedReply, stage: data.stage },
       ]);
+      setMessage("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro desconhecido.");
     } finally {
@@ -136,8 +145,52 @@ export default function WaTextOrderingPage() {
   }, [slug, phone, mode, message, conversationId, customerId, sessionState]);
 
   const reset = useCallback(() => {
-    setResult(null); setSessionState(null); setTranscript([]); setError(null);
+    setResult(null); setSessionState(null); setPrevStage(null); setTranscript([]); setError(null);
   }, []);
+
+  const hasSession = !!sessionState;
+
+  // ── Scenario Runner state ───────────────────────────────────────────────────
+  const [scReport, setScReport]     = useState<WaScenarioRunReport | null>(null);
+  const [scLoading, setScLoading]   = useState<string | null>(null);
+  const [scError, setScError]       = useState<string | null>(null);
+  const [scExpanded, setScExpanded] = useState<Set<string>>(new Set());
+
+  const runScenarios = useCallback(async (suite: "quick" | "full" | "edge" | "payment" | "all") => {
+    setScLoading(suite); setScError(null);
+    try {
+      const res = await fetch("/api/admin/diagnostics/whatsapp-text-ordering/scenarios/run", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ restaurantSlug: slug, suite, phone }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? `HTTP ${res.status}`);
+      }
+      const data: WaScenarioRunReport = await res.json();
+      setScReport(data);
+      // Auto-expand failures so they're visible immediately.
+      setScExpanded(new Set(data.results.filter(r => r.verdict === "FAIL").map(r => r.id)));
+    } catch (e) {
+      setScError(e instanceof Error ? e.message : "Erro desconhecido.");
+    } finally {
+      setScLoading(null);
+    }
+  }, [slug, phone]);
+
+  const toggleScenario = useCallback((id: string) => {
+    setScExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const buildScenarioReport = useCallback(() => {
+    if (!scReport) return "";
+    return buildScenarioRunnerReport(scReport);
+  }, [scReport]);
 
   const buildReport = useCallback(() => {
     if (!result) return "";
@@ -147,8 +200,9 @@ export default function WaTextOrderingPage() {
       phone,
       mode:        result.flagStatus.mode,
       messageText: result.messageText,
+      previousStage: prevStage ?? undefined,
     });
-  }, [result, phone]);
+  }, [result, phone, prevStage]);
 
   const fs = result?.flagStatus;
 
@@ -212,14 +266,23 @@ export default function WaTextOrderingPage() {
           <textarea value={message} onChange={e => setMessage(e.target.value)} rows={2}
             className="rounded-md border border-gray-300 px-3 py-2 text-sm font-mono" />
         </label>
+        {/* Active-session indicator — makes session continuity obvious */}
+        {hasSession && (
+          <div className="sm:col-span-2 flex flex-wrap items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs">
+            <Pill text="sessão ativa" tone="green" />
+            <span className="text-gray-600">stage atual:</span>
+            <Pill text={String(sessionState?.stage ?? "—")} tone="orange" />
+            <span className="text-gray-500">A próxima mensagem continua esta sessão. Use “Nova sessão” para recomeçar.</span>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2 sm:col-span-2">
-          <button onClick={() => send(false)} disabled={loading}
+          <button onClick={() => send(hasSession)} disabled={loading}
             className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50">
-            {loading ? "Simulando…" : "Simular mensagem"}
+            {loading ? "Simulando…" : hasSession ? "Enviar (continua sessão)" : "Simular mensagem"}
           </button>
-          <button onClick={() => send(true)} disabled={loading || !sessionState}
+          <button onClick={() => send(false)} disabled={loading}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-            Continuar sessão
+            Nova sessão
           </button>
           <button onClick={() => send(true, "cancela")} disabled={loading || !sessionState}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
@@ -248,6 +311,76 @@ export default function WaTextOrderingPage() {
             {q}
           </button>
         ))}
+      </div>
+
+      {/* ── Scenario Runner ─────────────────────────────────────────────── */}
+      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="text-base">🤖</span>
+          <h2 className="text-sm font-bold">Cenários automáticos</h2>
+          <Pill text="REGRESSÃO" tone="orange" />
+        </div>
+        <p className="text-xs text-gray-500">
+          Rode conversas completas (multi-turno) sem enviar WhatsApp real. A sessão é
+          preservada entre as mensagens de cada cenário.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button onClick={() => runScenarios("quick")} disabled={!!scLoading}
+            className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50">
+            {scLoading === "quick" ? "Rodando…" : "Rodar smoke test"}
+          </button>
+          <button onClick={() => runScenarios("full")} disabled={!!scLoading}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            {scLoading === "full" ? "Rodando…" : "Rodar cenários de pedido"}
+          </button>
+          <button onClick={() => runScenarios("edge")} disabled={!!scLoading}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            {scLoading === "edge" ? "Rodando…" : "Rodar casos difíceis"}
+          </button>
+          <button onClick={() => runScenarios("payment")} disabled={!!scLoading}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            {scLoading === "payment" ? "Rodando…" : "Rodar pagamento/frete"}
+          </button>
+          <button onClick={() => runScenarios("all")} disabled={!!scLoading}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            {scLoading === "all" ? "Rodando…" : "Rodar tudo"}
+          </button>
+          {scReport && (
+            <DiagnosticReportActions
+              buildReport={buildScenarioReport}
+              jsonData={scReport}
+              filenamePrefix="wa-scenarios"
+              slug={slug}
+              ranAt={scReport.ranAt}
+            />
+          )}
+        </div>
+
+        {scError && (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{scError}</div>
+        )}
+
+        {scReport && (
+          <div className="mt-4 space-y-3">
+            {/* Totals */}
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Pill text={`suíte: ${scReport.suite}`} tone="gray" />
+              <Pill text={`total: ${scReport.total}`} tone="gray" />
+              <Pill text={`✅ ${scReport.pass}`} tone="green" />
+              <Pill text={`⚠️ ${scReport.warn}`} tone="amber" />
+              <Pill text={`❌ ${scReport.fail}`} tone={scReport.fail > 0 ? "red" : "gray"} />
+              <Pill text={`score: ${scReport.score}/100`} tone={scReport.fail > 0 ? "red" : scReport.warn > 0 ? "amber" : "green"} />
+            </div>
+
+            {/* Scenario list (failed first) */}
+            <div className="space-y-2">
+              {scReport.results.map(r => (
+                <ScenarioRow key={r.id} r={r} open={scExpanded.has(r.id)} onToggle={() => toggleScenario(r.id)} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -355,7 +488,8 @@ export default function WaTextOrderingPage() {
           <Card title="Sessão">
             <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
               <Field k="status" v={result.session.status} />
-              <Field k="stage" v={result.session.stage} />
+              <Field k="stage anterior" v={prevStage ?? "—"} />
+              <Field k="stage final" v={result.session.stage} />
               <Field k="entrega" v={result.session.deliveryType ?? "—"} />
               <Field k="pagamento" v={result.session.paymentMethod ?? "—"} />
               <Field k="pgto status" v={result.session.paymentStatus ?? "—"} />
@@ -464,6 +598,102 @@ function Field({ k, v }: { k: string; v: string }) {
     <div className="rounded-md bg-gray-50 px-2 py-1">
       <span className="block text-[10px] uppercase tracking-wide text-gray-400">{k}</span>
       <span className="text-gray-800 break-all">{v}</span>
+    </div>
+  );
+}
+
+const VERDICT_TONE = { PASS: "green", WARN: "amber", FAIL: "red" } as const;
+const VERDICT_ICON = { PASS: "✅", WARN: "⚠️", FAIL: "❌" } as const;
+
+function ScenarioRow({ r, open, onToggle }: { r: WaScenarioResult; open: boolean; onToggle: () => void }) {
+  const tone = VERDICT_TONE[r.verdict];
+  return (
+    <div className={`rounded-lg border ${r.verdict === "FAIL" ? "border-red-200" : r.verdict === "WARN" ? "border-amber-200" : "border-gray-200"}`}>
+      <button onClick={onToggle}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm">
+        <span className="flex items-center gap-2">
+          <span>{VERDICT_ICON[r.verdict]}</span>
+          <span className="font-semibold">{r.name}</span>
+          <Pill text={r.category} tone="gray" />
+        </span>
+        <span className="flex items-center gap-2">
+          <Pill text={r.verdict} tone={tone} />
+          <span className="text-gray-400">{open ? "▲" : "▼"}</span>
+        </span>
+      </button>
+
+      {open && (
+        <div className="space-y-3 border-t border-gray-100 px-3 py-3 text-xs">
+          <p className="text-gray-500">{r.description}</p>
+
+          {/* Checks */}
+          <div>
+            <p className="mb-1 font-semibold uppercase tracking-wide text-gray-400">Verificações</p>
+            <ul className="space-y-1">
+              {r.checks.map((c, i) => (
+                <li key={i} className="flex gap-2">
+                  <span>{VERDICT_ICON[c.severity]}</span>
+                  <span className="font-medium">{c.label}:</span>
+                  <span className="text-gray-600">{c.detail}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Transcript + stage transitions */}
+          <div>
+            <p className="mb-1 font-semibold uppercase tracking-wide text-gray-400">Conversa</p>
+            <div className="space-y-1.5">
+              {r.steps.map(s => (
+                <div key={s.index} className="rounded-md bg-gray-50 p-2">
+                  <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                    <span>{s.previousStage}</span><span>→</span><span className="font-semibold text-gray-600">{s.stage}</span>
+                    {s.actions.length > 0 && <span className="ml-1">· {s.actions.join(", ")}</span>}
+                  </div>
+                  <p className="text-gray-900">→ {s.message}</p>
+                  <p className="text-gray-600">← {s.suggestedReply || "—"}</p>
+                  {s.matchedItems.length > 0 && (
+                    <p className="mt-0.5 text-[11px] text-gray-500">
+                      itens: {s.matchedItems.map(m => `${m.quantity}× ${m.name}${m.variant ? ` ${m.variant}` : ""}`).join(", ")}
+                    </p>
+                  )}
+                  {s.unresolvedItems.length > 0 && (
+                    <p className="text-[11px] text-amber-700">
+                      não resolvido: {s.unresolvedItems.map(u => `${u.rawText} (${u.reason})`).join(", ")}
+                    </p>
+                  )}
+                  {s.sideEffectsPerformed.length > 0 && (
+                    <p className="text-[11px] font-semibold text-red-700">⚠ efeito: {s.sideEffectsPerformed.join(", ")}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Final draft / items */}
+          {r.finalItems.length > 0 && (
+            <div>
+              <p className="mb-1 font-semibold uppercase tracking-wide text-gray-400">Comanda final</p>
+              <ul className="space-y-0.5">
+                {r.finalItems.map((m, i) => (
+                  <li key={i} className="flex justify-between">
+                    <span>{m.quantity}× {m.name}{m.variant ? ` ${m.variant}` : ""}</span>
+                    <span className="tabular-nums text-gray-500">R$ {m.lineTotal.toFixed(2)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Raw JSON */}
+          <details>
+            <summary className="cursor-pointer font-semibold uppercase tracking-wide text-gray-400">JSON do cenário</summary>
+            <pre className="mt-1 max-h-60 overflow-auto rounded bg-gray-50 p-2 text-[10px] text-gray-600">
+              {JSON.stringify(r, null, 2)}
+            </pre>
+          </details>
+        </div>
+      )}
     </div>
   );
 }
