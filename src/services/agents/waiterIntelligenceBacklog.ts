@@ -7,6 +7,27 @@
  * documents what the Waiter does today and what to validate before any real use.
  */
 
+// ── Release Candidate status (Waiter v1.6) ──────────────────────────────────────
+
+export interface ReleaseStatus {
+  version: string;
+  label: string;
+  /** Short bullet notes shown in the Room (kept compact — not a PDF). */
+  notes: readonly string[];
+}
+
+/** Compact RC status surfaced at the top of the Waiter Room. */
+export const WAITER_RELEASE_STATUS: ReleaseStatus = {
+  version: "v1.6",
+  label: "Release Candidate",
+  notes: [
+    "“Pedir de novo” em standby (UI desativada, backend preservado).",
+    "Comunicação humanizada (tom de garçom vendedor, sem textão).",
+    "Suítes antigas auditadas e classificadas (sem bug real / sem P0).",
+    "Testes ao vivo pendentes — restaurante pausado.",
+  ],
+};
+
 // ── Test Center coverage (the 20 critical scenarios for tomorrow) ───────────────
 
 export type CoverageStatus = "AUTOMATED" | "PARTIAL" | "MANUAL" | "GAP";

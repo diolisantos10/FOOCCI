@@ -42,6 +42,7 @@ import {
   WAITER_TEST_COVERAGE,
   WAITER_EVAL_CRITERIA,
   WAITER_TOMORROW_PLAN,
+  WAITER_RELEASE_STATUS,
   COVERAGE_LABELS,
   backlogByPriority,
   coverageSummary,
@@ -197,9 +198,15 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
           <div className="flex flex-wrap gap-1.5">
             <Pill tone="blue">Produto / Runtime</Pill>
             <Pill tone={active ? "green" : "gray"}>{active ? "Ativo no registry" : agent.status}</Pill>
+            <Pill tone="amber">Waiter {WAITER_RELEASE_STATUS.version} · {WAITER_RELEASE_STATUS.label}</Pill>
             <Pill tone="gray">Runtime DB: desligado</Pill>
           </div>
         </div>
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-700">
+          {WAITER_RELEASE_STATUS.notes.map((n) => (
+            <li key={n} className="flex gap-1"><span className="text-orange-500">•</span><span>{n}</span></li>
+          ))}
+        </ul>
       </section>
 
       {/* tab navigation */}

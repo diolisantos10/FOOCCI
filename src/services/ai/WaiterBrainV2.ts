@@ -2277,18 +2277,21 @@ function noCardsFound(): V2Output {
 
 // Each copy ends with a soft CLOSING CTA — the consultative seller always invites
 // the next step (add to cart) instead of leaving the suggestion hanging.
+// Human, restaurant-seller tone — short, warm, with a clear CTA. Copy only:
+// these strings never change product/card selection. Key substrings ("bebida",
+// "doce", "dividir/grupo") are preserved for behavior-substring tests.
 const INTENT_COPY: Partial<Record<CustomerIntent, string>> = {
-  wants_light_option:    "Pra algo mais leve, essas são as favoritas 👇 Quer que eu adicione?",
-  wants_complete_meal:   "Pra uma refeição completa, essa combinação é certeira 👇 Quer adicionar?",
-  wants_group_order:     "As favoritas do grupo pra dividir 👇 Quer que eu coloque no pedido?",
-  wants_budget_option:   "Melhor custo-benefício da casa 👇 Quer adicionar uma dessas?",
-  wants_premium_option:  "O melhor da casa, vale cada detalhe 👇 Quer experimentar?",
-  asks_for_drink:        "A bebida perfeita pra acompanhar 👇 Quer adicionar?",
-  asks_for_dessert:      "O favorito pra fechar com chave de ouro 🍰 Quer adicionar?",
-  asks_for_pairing:      "Combina certinho com o seu pedido 👇 Quer que eu adicione?",
-  wants_recommendation:  "O mais pedido da casa 👇 Quer que eu já adicione?",
-  asks_specific_product: "Separei essa opção pra você 👇 Quer adicionar ao pedido?",
-  asks_category:         "As melhores dessa categoria 👇 Quer adicionar alguma?",
+  wants_light_option:    "Se você quer algo mais leve, essas costumam funcionar bem 👇 Quer que eu adicione?",
+  wants_complete_meal:   "Pra uma refeição completa, eu iria nessas aqui 👇 Quer que eu adicione?",
+  wants_group_order:     "Pra dividir sem complicar, eu separaria essas opções aqui 👇 Quer que eu coloque no pedido?",
+  wants_budget_option:   "Boa — se a ideia é gastar menos sem errar, eu iria nessas opções aqui 👇 Quer adicionar?",
+  wants_premium_option:  "Se quiser caprichar, essas são as melhores da casa 👇 Quer experimentar?",
+  asks_for_drink:        "Pra acompanhar, essa bebida cai bem 👇 Quer adicionar?",
+  asks_for_dessert:      "Pra fechar com um doce, essa é certeira 🍰 Quer adicionar?",
+  asks_for_pairing:      "Pra combinar com o seu pedido, eu colocaria uma dessas 👇 Quer que eu adicione?",
+  wants_recommendation:  "Boa! Separei algumas opções que fazem bastante sentido pra você 👇 Quer que eu adicione?",
+  asks_specific_product: "Achei essa opção pra você 👇 Quer adicionar ao pedido?",
+  asks_category:         "Essas são as melhores dessa categoria 👇 Quer adicionar alguma?",
 };
 
 export interface CommercialResponseInput {
@@ -2394,7 +2397,7 @@ function buildSearchCopy(message: string): string {
   if (CONSTRAINT_RE_MSG.test(message)) {
     return "Entendido! Levei em conta sua restrição — veja essas opções 👇";
   }
-  return "Aqui estão as melhores opções pra você 👇";
+  return "Boa! Separei algumas opções que fazem bastante sentido pra você 👇";
 }
 
 /**
@@ -2532,10 +2535,10 @@ function handleRestriction(
 
   const message =
     kind === "allergy"
-      ? "Pra alergia eu prefiro não cravar: separei opções que parecem mais simples, mas confirme os ingredientes antes de adicionar 👇"
+      ? "Pra alergia eu prefiro não arriscar: separei opções que parecem mais simples, mas confira os ingredientes antes de adicionar 👇"
       : kind === "no_seafood" || kind === "no_pork"
-        ? `Separei opções ${noun} aparentes — confira os ingredientes antes de adicionar 👇 Quer que eu te ajude a montar?`
-        : `Não tenho uma marcação ${noun} confirmada em todos os itens, mas separei opções que parecem fazer sentido — confira os ingredientes antes de adicionar 👇 Quer que eu te ajude a montar?`;
+        ? `Separei opções ${noun} aparentes — dá uma conferida nos ingredientes antes de adicionar 👇 Quer que eu te ajude a montar?`
+        : `Prefiro não cravar como ${noun} sem confirmar os ingredientes, mas separei opções que parecem mais simples pra você conferir 👇 Quer que eu te ajude a montar?`;
 
   return { message, cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "", cardScope: "recommendation" };
 }
