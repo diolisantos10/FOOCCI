@@ -264,7 +264,7 @@ WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES=+5511999990000`}
             </li>
             <li className={`flex items-center gap-2 ${fs?.restaurantAllowlisted ? "text-green-700" : "text-gray-500"}`}>
               <span>{fs?.restaurantAllowlisted ? "✅" : "⬜"}</span>
-              <span>Restaurante "{slug}" no allowlist</span>
+              <span>Restaurante &quot;{slug}&quot; no allowlist</span>
             </li>
             <li className={`flex items-center gap-2 ${fs?.phoneAllowlisted ? "text-green-700" : "text-gray-500"}`}>
               <span>{fs?.phoneAllowlisted ? "✅" : "⬜"}</span>
@@ -272,7 +272,7 @@ WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES=+5511999990000`}
             </li>
             <li className="flex items-center gap-2 text-gray-500">
               <span>⬜</span>
-              <span>Rodar suite "quick" abaixo e confirmar score ≥ 95/100 sem FAIL</span>
+              <span>Rodar suite &quot;quick&quot; abaixo e confirmar score ≥ 95/100 sem FAIL</span>
             </li>
             <li className="flex items-center gap-2 text-gray-500">
               <span>⬜</span>
