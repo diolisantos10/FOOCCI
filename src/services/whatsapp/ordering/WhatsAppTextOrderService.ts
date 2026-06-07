@@ -359,39 +359,49 @@ export async function processCustomerMessage(input: WaProcessInput): Promise<WaP
         allowCreate:  canCreateOrder,
       });
       order = { orderId: creation.orderId, status: creation.status, wouldCreate: creation.wouldCreate };
-      if (creation.created && creation.orderId) {
-        s.orderId = creation.orderId;
-        sideEffectsPerformed.push(`order_created:${creation.orderId}`);
+
+      if (creation.blockedReply) {
+        // Guard blocked order creation (closed / paused) — escalate to human
+        s.stage  = "HANDOFF_REQUIRED";
+        s.status = "HANDOFF_REQUIRED";
+        reply = creation.blockedReply;
+      } else {
+        if (creation.created && creation.orderId) {
+          s.orderId = creation.orderId;
+          sideEffectsPerformed.push(`order_created:${creation.orderId}`);
+        }
       }
 
-      // ── Deferred action: generate Pix (after order exists / would exist) ───────
-      if (advanced.actions.includes("GENERATE_PIX")) {
-        const pix = await generatePix({
-          restaurantId: s.restaurantId,
-          orderId:      creation.orderId ?? "dry_run_order",
-          amount:       draft.total,
-          allowReal:    canCreatePix && creation.created,
-        });
-        payment = pix;
-        s.paymentStatus = pix.status;
-        s.pixPaymentId  = pix.isDryRunStub ? null : (pix.pixCopyPaste ?? null);
-        s.status = "AWAITING_PAYMENT";
-        s.stage  = "AWAITING_PIX_PAYMENT";
-        if (!pix.isDryRunStub) sideEffectsPerformed.push("pix_generated");
-        reply = "Pix gerado. Assim que o pagamento for confirmado, enviamos seu pedido para preparo.";
-        if (pix.isDryRunStub) reply += " (simulação — Pix não é real)";
-      } else {
-        // Pay on delivery/pickup
-        payment = {
-          method: s.paymentMethod,
-          status: creation.created ? "PENDING" : "PENDING",
-          changeFor: s.metadata?.changeFor as number | undefined,
-        };
-        s.status = "COMPLETED";
-        s.stage  = "COMPLETED";
-        reply = creation.created
-          ? "Pedido confirmado! Já vamos preparar. 🙌"
-          : "Tudo certo! (simulação — pedido não foi criado de verdade)";
+      // ── Deferred action: generate Pix / pay on delivery (only when not blocked) ─
+      if (!creation.blockedReply) {
+        if (advanced.actions.includes("GENERATE_PIX")) {
+          const pix = await generatePix({
+            restaurantId: s.restaurantId,
+            orderId:      creation.orderId ?? "dry_run_order",
+            amount:       draft.total,
+            allowReal:    canCreatePix && creation.created,
+          });
+          payment = pix;
+          s.paymentStatus = pix.status;
+          s.pixPaymentId  = pix.isDryRunStub ? null : (pix.pixCopyPaste ?? null);
+          s.status = "AWAITING_PAYMENT";
+          s.stage  = "AWAITING_PIX_PAYMENT";
+          if (!pix.isDryRunStub) sideEffectsPerformed.push("pix_generated");
+          reply = "Pix gerado. Assim que o pagamento for confirmado, enviamos seu pedido para preparo.";
+          if (pix.isDryRunStub) reply += " (simulação — Pix não é real)";
+        } else {
+          // Pay on delivery/pickup
+          payment = {
+            method: s.paymentMethod,
+            status: creation.created ? "PENDING" : "PENDING",
+            changeFor: s.metadata?.changeFor as number | undefined,
+          };
+          s.status = "COMPLETED";
+          s.stage  = "COMPLETED";
+          reply = creation.created
+            ? "Pedido confirmado! Já vamos preparar. 🙌"
+            : "Tudo certo! (simulação — pedido não foi criado de verdade)";
+        }
       }
     }
   }

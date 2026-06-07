@@ -37,8 +37,8 @@ import { isRestaurantOpenNow } from "@/lib/business-hours";
 import { getActiveMenuPromotions, resolveMenuItemPromotion } from "@/services/promotions/productPromotionResolver";
 import { channelPrice } from "@/services/menu/MenuPricingService";
 import { getPublicSiteUrl } from "@/lib/public-url";
-import { assignOrderNumber } from "@/lib/order-number";
 import { resolveItemUpsell } from "@/lib/upsell-attribution";
+import { createOrderRecord } from "@/services/checkout/CheckoutFinalizationService";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -332,6 +332,8 @@ export async function POST(
   const rawPhone = customerPhone?.trim() ?? "";
   const phone    = rawPhone ? (toE164(rawPhone) || rawPhone) : `GUEST-${randomUUID()}`;
 
+  // phone is used below for CRM guest check (after order creation)
+
   const subtotal = verifiedCart.reduce((acc, item) => acc + item.price * item.qty, 0);
 
   // ── Delivery fee — server is the source of truth ─────────────────────────────
@@ -493,149 +495,47 @@ export async function POST(
   const finalTotal = Math.max(0, Math.round((orderTotal - discountAmount) * 100) / 100);
 
   // ── Phase-1 transaction: customer + address + order ───────────
+  // Delegated to the shared CheckoutFinalizationService (same engine used by
+  // WhatsApp text ordering). All DB writes happen inside a single Prisma transaction.
   let orderId: string;
   let customerId: string;
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      // Resolve customer: prefer the pre-verified customerId from the identify flow.
-      // This ensures a WhatsApp customer whose phone was already in the DB gets
-      // their order linked to the correct Customer row even if the ordering page
-      // generated a fresh guest phone.
-      let resolvedId: string;
-      if (incomingCustomerId) {
-        const validated = await tx.customer.findUnique({
-          where:  { id: incomingCustomerId },
-          select: { id: true, restaurantId: true },
-        });
-        if (validated?.restaurantId === restaurantId) {
-          resolvedId = validated.id;
-          console.debug("[finalize] customer resolved via customerId", {
-            customerId: resolvedId, strategy: "customerId",
-          });
-        } else {
-          // Cross-restaurant or stale ID — fall through to phone upsert
-          const fallback = await tx.customer.upsert({
-            where:  { phone_restaurantId: { phone, restaurantId } },
-            create: { restaurantId, name: customerName, phone, isGuest: isGuestIdentifier(phone) },
-            update: { name: customerName },
-            select: { id: true },
-          });
-          resolvedId = fallback.id;
-          console.debug("[finalize] customer resolved via phone (customerId invalid)", {
-            customerId: resolvedId, strategy: "phone_lookup",
-          });
-        }
-      } else {
-        const upserted = await tx.customer.upsert({
-          where:  { phone_restaurantId: { phone, restaurantId } },
-          create: { restaurantId, name: customerName, phone, isGuest: isGuestIdentifier(phone) },
-          update: { name: customerName },
-          select: { id: true },
-        });
-        resolvedId = upserted.id;
-        const strategy = isGuestIdentifier(phone) ? "created_guest" : "phone_lookup";
-        console.debug("[finalize] customer resolved via phone upsert", {
-          customerId: resolvedId, strategy,
-        });
-      }
-      const customer = { id: resolvedId };
-
-      let deliveryAddressId: string | null = null;
-      if (deliveryMethod === "delivery") {
-        const addr = await tx.address.create({
-          data: {
-            customerId:   customer.id,
-            street:       address.street || "—",
-            number:       address.number || "—",
-            neighborhood: address.neighborhood || "—",
-            complement:   address.complement  || null,
-            city:         address.city        || "",
-            state:        address.state       || "",
-            zipCode:      address.cep         || "",
-          },
-          select: { id: true },
-        });
-        deliveryAddressId = addr.id;
-      }
-
-      // oneTimePerUser guard — runs inside transaction so it's serialized with order creation.
-      // Exclude AWAITING_PAYMENT and CANCELLED so abandoned Pix orders don't permanently
-      // block the customer from reusing the coupon.
-      if (resolvedPromoId && promoOneTimePerUser) {
-        const alreadyUsed = await tx.order.findFirst({
-          where: {
-            customerId:  customer.id,
-            promotionId: resolvedPromoId,
-            status:      { notIn: ["AWAITING_PAYMENT", "CANCELLED"] },
-          },
-          select: { id: true },
-        });
-        if (alreadyUsed) throw new Error("COUPON_ALREADY_USED");
-      }
-
-      const orderNumber = await assignOrderNumber(tx, restaurantId);
-
-      const order = await tx.order.create({
-        data: {
-          restaurantId,
-          customerId:     customer.id,
-          orderNumber,
-          // pay_now (Pix/online): start as AWAITING_PAYMENT so the order is
-          // invisible to the restaurant dashboard until payment is confirmed.
-          // PENDING is visible and has a "Confirmar" button — that would send
-          // the premature "pedido aceito" WhatsApp before Pix is paid.
-          status: paymentMode === "pay_now" ? "AWAITING_PAYMENT" : "PENDING",
-          type:           deliveryMethod === "delivery" ? "DELIVERY" : "PICKUP",
-          source:         "pedido",
-          subtotal:       new Decimal(subtotal),
-          deliveryFee:    new Decimal(deliveryFeeAmount),
-          discount:       new Decimal(discountAmount),
-          total:          new Decimal(finalTotal),
-          couponCode:              resolvedCouponCode,
-          promotionId:             resolvedPromoId,
-          // For offline payments (confirmed immediately), stamp usage now.
-          // For pay_now (Pix/Stone), usage is stamped only after the webhook confirms payment.
-          couponUsageCountedAt:    (resolvedPromoId && paymentMode !== "pay_now") ? new Date() : null,
-          deliveryAddressId,
-          idempotencyKey: ikey,
-          trackingLinkId:  trackingLinkId  ?? null,
-          trafficSource:   trafficSource   ?? null,
-          trafficMedium:   trafficMedium   ?? null,
-          trafficCampaign: trafficCampaign ?? null,
-          trafficContent:  trafficContent  ?? null,
-          items: {
-            create: verifiedCart.map((item) => ({
-              menuItemId:   item.menuItemId,
-              name:         item.name,
-              price:        new Decimal(item.price),
-              quantity:     item.qty,
-              total:        new Decimal(item.price * item.qty),
-              categoryId:   item.categoryId   ?? null,
-              categoryName: item.categoryName ?? null,
-              variantName:  item.variantName  ?? null,
-              notes:        item.notes        ?? null,
-              // Foocci incremental-revenue attribution (analytics only).
-              isUpsell:     resolveItemUpsell(item),
-              addonsJson:   (item.selectedOptions?.length || item.selectedExtras?.length)
-                ? { options: item.selectedOptions ?? [], extras: item.selectedExtras ?? [] }
-                : undefined,
-            })),
-          },
-        },
-        select: { id: true },
-      });
-
-      // Only count usage immediately for offline payments; pay_now usage is counted
-      // in the payment webhook once the Pix/link is actually confirmed paid.
-      if (resolvedPromoId && paymentMode !== "pay_now") {
-        await tx.promotion.update({
-          where: { id: resolvedPromoId },
-          data:  { usedCount: { increment: 1 } },
-        });
-      }
-
-      return { customerId: customer.id, orderId: order.id };
+    const result = await createOrderRecord({
+      restaurantId,
+      customerName,
+      phone,
+      customerId: incomingCustomerId ?? null,
+      deliveryType: deliveryMethod === "delivery" ? "DELIVERY" : "PICKUP",
+      address: deliveryMethod === "delivery" ? address : null,
+      items: verifiedCart.map((item) => ({
+        menuItemId:    item.menuItemId,
+        name:          item.name,
+        price:         item.price,
+        qty:           item.qty,
+        notes:         item.notes ?? null,
+        variantName:   item.variantName ?? null,
+        categoryId:    item.categoryId   ?? null,
+        categoryName:  item.categoryName ?? null,
+        isUpsell:      resolveItemUpsell(item),
+        selectedOptions: item.selectedOptions,
+        selectedExtras:  item.selectedExtras,
+      })),
+      subtotal,
+      deliveryFee:           deliveryFeeAmount,
+      discount:              discountAmount,
+      total:                 finalTotal,
+      paymentMode,
+      couponCode:            resolvedCouponCode,
+      promotionId:           resolvedPromoId,
+      promoOneTimePerUser,
+      idempotencyKey:        ikey,
+      source:                "pedido",
+      trackingLinkId,
+      trafficSource,
+      trafficMedium,
+      trafficCampaign,
+      trafficContent,
     });
 
     orderId    = result.orderId;
