@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { DiagnosticReportActions } from "@/components/admin/DiagnosticReportActions";
+import { buildDiagnosticReportText } from "@/lib/admin/diagnosticReport";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -168,6 +170,54 @@ export default function CartRecoveryQAPage() {
   const [error,             setError]            = useState<string | null>(null);
   const [confirmLive,       setConfirmLive]      = useState(false);
 
+  const buildReport = useCallback(() => {
+    if (!result) return "";
+    const dr = result.dryRunResult;
+    return buildDiagnosticReportText({
+      tool:        "QA — Cart Recovery",
+      slug:        result.slug,
+      phone:       result.phoneMasked ?? undefined,
+      mode:        result.mode,
+      verdict:     result.verdict,
+      diagnosis:   result.failedStep ? `Falhou em: ${result.failedStep}${result.failReason ? ` — ${result.failReason}` : ""}` : "Todos os passos passaram",
+      recommendation: result.verdict === "PASS" ? "Pipeline de recuperação funcional." : "Revisar passo com falha antes do próximo deploy.",
+      inputs:      {
+        slug:              result.slug,
+        mode:              result.mode,
+        inactivityMinutes: dr?.inactivityMinutes ?? "—",
+      },
+      sections: [
+        {
+          title: "Resumo dos passos",
+          rows: [
+            { label: "passed",  value: result.summary.passed },
+            { label: "failed",  value: result.summary.failed },
+            { label: "warned",  value: result.summary.warned },
+            { label: "skipped", value: result.summary.skipped },
+          ],
+        },
+        ...(dr ? [{
+          title: "Dry-run",
+          rows: [
+            { label: "checked",       value: dr.checked },
+            { label: "eligible",      value: dr.eligible },
+            { label: "no phone",      value: dr.skippedNoPhone },
+            { label: "no config",     value: dr.skippedNoConfig },
+            { label: "daily limit",   value: dr.skippedDailyLimit },
+            { label: "ordered after", value: dr.skippedOrderedAfter },
+            { label: "pending pay",   value: dr.skippedPendingPayment },
+            { label: "rest. closed",  value: dr.skippedRestaurantClosed },
+            { label: "duration ms",   value: dr.durationMs },
+          ],
+        }] : []),
+        {
+          title: "Etapas",
+          rows: result.steps.map((s) => ({ label: s.step, value: `${s.status.toUpperCase()} — ${s.detail}` })),
+        },
+      ],
+    });
+  }, [result]);
+
   const runQA = useCallback(async (live: boolean) => {
     setLoading(true);
     setError(null);
@@ -321,6 +371,15 @@ export default function CartRecoveryQAPage() {
       {/* Results */}
       {result && verdict && summary && (
         <>
+          {/* Export */}
+          <DiagnosticReportActions
+            buildReport={buildReport}
+            jsonData={result}
+            filenamePrefix="cart-recovery-qa"
+            slug={result.slug}
+            ranAt={result.queriedAt}
+          />
+
           {/* Verdict + summary */}
           <div className="flex items-start gap-4 flex-wrap">
             <div className={`rounded-xl border-2 px-5 py-3 font-bold text-2xl tracking-wide ${VERDICT_STYLES[verdict]}`}>

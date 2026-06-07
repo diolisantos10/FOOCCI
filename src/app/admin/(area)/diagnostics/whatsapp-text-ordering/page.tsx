@@ -10,6 +10,8 @@
  */
 
 import { useState, useCallback } from "react";
+import { DiagnosticReportActions } from "@/components/admin/DiagnosticReportActions";
+import { buildDiagnosticReportText } from "@/lib/admin/diagnosticReport";
 
 // ── Types (mirror WaProcessResult) ────────────────────────────────────────────
 
@@ -95,8 +97,6 @@ export default function WaTextOrderingPage() {
   const [transcript, setTranscript]   = useState<TranscriptTurn[]>([]);
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
-  const [copied, setCopied]           = useState(false);
-
   const send = useCallback(async (continueSession: boolean, overrideMsg?: string) => {
     const msg = (overrideMsg ?? message).trim();
     if (!msg) return;
@@ -137,11 +137,40 @@ export default function WaTextOrderingPage() {
     setResult(null); setSessionState(null); setTranscript([]); setError(null);
   }, []);
 
-  const copyJson = useCallback(async () => {
-    if (!result) return;
-    await navigator.clipboard.writeText(JSON.stringify(result, null, 2));
-    setCopied(true); setTimeout(() => setCopied(false), 1500);
-  }, [result]);
+  const buildReport = useCallback(() => {
+    if (!result) return "";
+    return buildDiagnosticReportText({
+      tool:        "WA Pedido Texto — Test Center",
+      restaurant:  result.restaurant.name,
+      slug:        result.restaurant.slug,
+      phone,
+      mode:        result.flagStatus.mode,
+      verdict:     result.order?.wouldCreate ? "WARN — dry-run (pedido não criado)" : result.session.status,
+      inputs:      { mensagem: result.messageText, stage: result.stage, intent: result.intent },
+      sections: [
+        {
+          title: "Sessão",
+          rows: [
+            { label: "status",         value: result.session.status },
+            { label: "stage",          value: result.session.stage },
+            { label: "entrega",        value: result.session.deliveryType ?? "—" },
+            { label: "pagamento",      value: result.session.paymentMethod ?? "—" },
+            { label: "pgto status",    value: result.session.paymentStatus ?? "—" },
+            { label: "orderId",        value: result.session.orderId ?? "—" },
+          ],
+        },
+        ...(result.draft ? [{
+          title: "Comanda",
+          rows: [
+            { label: "subtotal",       value: `R$ ${result.draft.subtotal.toFixed(2)}` },
+            { label: "itens",          value: result.draft.items.length },
+            ...(result.deliveryQuote ? [{ label: "frete", value: `R$ ${result.deliveryQuote.fee.toFixed(2)}` }] : []),
+          ],
+        }] : []),
+      ],
+      safetyNotes: result.safetyNotes,
+    });
+  }, [result, phone]);
 
   const fs = result?.flagStatus;
 
@@ -221,10 +250,15 @@ export default function WaTextOrderingPage() {
           <button onClick={reset} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
             Limpar
           </button>
-          <button onClick={copyJson} disabled={!result}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-            {copied ? "✓ Copiado" : "Copiar JSON"}
-          </button>
+          {result && (
+            <DiagnosticReportActions
+              buildReport={buildReport}
+              jsonData={result}
+              filenamePrefix="wa-text-ordering"
+              slug={slug}
+              ranAt={new Date().toISOString()}
+            />
+          )}
         </div>
       </div>
 

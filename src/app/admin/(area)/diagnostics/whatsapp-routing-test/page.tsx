@@ -245,9 +245,9 @@ export default function WhatsAppRoutingTestPage() {
       {/* Export bar */}
       {(summary || customResult) && (
         <div className="mt-6 flex flex-wrap gap-2">
-          <button onClick={() => download("json")} className="rounded-md border border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800">Baixar JSON</button>
-          <button onClick={() => download("txt")} className="rounded-md border border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800">Baixar relatório TXT</button>
-          <button onClick={copyReport} className="rounded-md border border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800">{copied ? "✓ Copiado" : "Copiar relatório"}</button>
+          <button onClick={copyReport} className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">{copied ? "✓ Copiado" : "Copiar relatório"}</button>
+          <button onClick={() => download("json")} className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">Baixar JSON</button>
+          <button onClick={() => download("txt")} className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">Baixar TXT</button>
         </div>
       )}
 

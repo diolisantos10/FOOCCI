@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { DiagnosticReportActions } from "@/components/admin/DiagnosticReportActions";
+import { buildDiagnosticReportText } from "@/lib/admin/diagnosticReport";
 
 // ── Types: restaurant-mismatch endpoint ──────────────────────────────────────────
 
@@ -189,6 +191,44 @@ export default function RestaurantMismatchDiagPage() {
     }
   }, []);
 
+  const buildReport = useCallback(() => {
+    if (!mismatch) return "";
+    const d = mismatch.diagnosis;
+    return buildDiagnosticReportText({
+      tool:        "Diagnóstico de Restaurante / Mismatch",
+      slug,
+      verdict:     d.slugSwapSafe ? "PASS — slug swap seguro" : "WARN — revisar antes de swap",
+      diagnosis:   d.likelyRootCause,
+      recommendation: d.safeRecommendation,
+      inputs:      { slug },
+      sections: [
+        {
+          title: "Diagnóstico",
+          rows: [
+            { label: "canonical ID",     value: d.likelyCanonicalRestaurantId ?? "—" },
+            { label: "legacy IDs",       value: d.likelyLegacyRestaurantIds.join(", ") || "nenhum" },
+            { label: "slug swap seguro", value: d.slugSwapSafe ? "sim" : "não" },
+          ],
+        },
+        {
+          title: "Restaurantes",
+          rows: mismatch.diagTable.map((r) => ({
+            label: r.slug,
+            value: `${r.likelyRole} | evo=${r.hasEvolutionConfig} | convs90d=${r.conversationCountLast90d}`,
+          })),
+        },
+        ...(draftsResult ? [{
+          title: "Drafts recentes",
+          rows: [
+            { label: "restaurantes", value: draftsResult.restaurants.length },
+            { label: "total drafts", value: draftsResult.restaurants.reduce((s, r) => s + r.drafts.length, 0) },
+            { label: "sem telefone", value: draftsResult.restaurants.flatMap((r) => r.drafts).filter((d) => !d.phoneExists).length },
+          ],
+        }] : []),
+      ],
+    });
+  }, [mismatch, draftsResult, slug]);
+
   const run = useCallback(async () => {
     setResetStates({});
     setLoading(true);
@@ -273,6 +313,14 @@ export default function RestaurantMismatchDiagPage() {
 
       {mismatch && (
         <>
+          <DiagnosticReportActions
+            buildReport={buildReport}
+            jsonData={{ mismatch, drafts: draftsResult }}
+            filenamePrefix="restaurant-mismatch"
+            slug={slug}
+            ranAt={mismatch.queriedAt}
+          />
+
           <p className="text-xs text-gray-600">
             Consultado em {new Date(mismatch.queriedAt).toLocaleString("pt-BR")}
           </p>

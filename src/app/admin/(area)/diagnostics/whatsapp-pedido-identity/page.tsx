@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { DiagnosticReportActions } from "@/components/admin/DiagnosticReportActions";
+import { buildDiagnosticReportText } from "@/lib/admin/diagnosticReport";
 
 // ── API response shape ────────────────────────────────────────────────────────
 
@@ -170,6 +172,34 @@ export default function WhatsAppPedidoIdentityPage() {
       setLoading(false);
     }
   }, [slug, phone]);
+
+  const buildReport = useCallback(() => {
+    if (!result) return "";
+    const sm = result.summary;
+    return buildDiagnosticReportText({
+      tool:        "Diagnóstico — WhatsApp → /pedido Identity",
+      slug:        result.slug,
+      phone:       result.phone,
+      verdict:     sm?.verdict,
+      diagnosis:   sm?.failures?.join("; ") || "sem falhas",
+      recommendation: sm?.recommendation,
+      inputs:      { slug: result.slug, phone: result.phone },
+      sections: [
+        {
+          title: "Cadeia de identidade",
+          rows: [
+            { label: "restaurante",       value: result.step1_restaurant?.found ? "encontrado" : "NÃO ENCONTRADO" },
+            { label: "cliente no DB",     value: result.step2_customer?.found ? "sim" : "não" },
+            { label: "NEXTAUTH_SECRET",   value: result.step4_secret?.NEXTAUTH_SECRET_set ? "set" : "NÃO CONFIGURADO" },
+            { label: "token sign",        value: result.step5_signToken?.signSucceeded ? "ok" : "FALHOU" },
+            { label: "token verify",      value: result.step6_verifyRoundTrip?.verifySucceeded ? "ok" : "FALHOU" },
+            { label: "URL com waToken",   value: result.step7_pedidoUrl?.hasWaTokenParam ? "sim" : "não" },
+            { label: "SSR resolve",       value: result.step8_ssrResolution?.verdict ?? "—" },
+          ],
+        },
+      ],
+    });
+  }, [result]);
 
   const s2 = result?.step2_customer;
   const s3 = result?.step3_menuUrl;
@@ -486,6 +516,15 @@ export default function WhatsAppPedidoIdentityPage() {
               )}
             </Section>
           )}
+
+          {/* Export */}
+          <DiagnosticReportActions
+            buildReport={buildReport}
+            jsonData={result}
+            filenamePrefix="wa-pedido-identity"
+            slug={result.slug}
+            ranAt={result.generatedAt}
+          />
 
           {/* Raw JSON */}
           <RawJson data={result} />
