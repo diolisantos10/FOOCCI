@@ -69,6 +69,13 @@ export function advanceSession(
   switch (session.stage) {
     case "COLLECTING_REQUIRED_OPTIONS":
       return handleOptionAnswer(next, text, menu);
+    case "MATCHING_MENU":
+      // If we are waiting for the customer to resolve an ambiguous item, treat
+      // the incoming message as an answer, not as a new order request.
+      if (next.unresolvedItems[0]?.reason === "AMBIGUOUS") {
+        return handleAmbiguityAnswer(next, text, menu);
+      }
+      return handleItemCollection(next, text, menu);
     case "COLLECTING_DELIVERY_TYPE":
       return handleDeliveryType(next, text);
     case "COLLECTING_ADDRESS":
@@ -78,7 +85,7 @@ export function advanceSession(
     case "REVIEWING_ORDER":
       return handleReview(next, text, intent, menu);
     default:
-      // IDLE / INTENT_DETECTED / PARSING_ITEMS / MATCHING_MENU / fresh order
+      // IDLE / INTENT_DETECTED / PARSING_ITEMS / fresh order
       return handleItemCollection(next, text, menu);
   }
 }
@@ -125,7 +132,18 @@ function continueAfterItems(session: WaPersistedSession): AdvanceResult {
     session.stage  = "MATCHING_MENU";
     session.status = "AWAITING_CUSTOMER";
     if (u.reason === "AMBIGUOUS") {
-      return done(session, "ORDER_REQUEST", `Qual você quer: ${u.candidates.join(" ou ")}?`, [], false);
+      const label = stripQty(u.rawText);
+      const opts  = u.candidates.slice(0, 3).join(" ou ");
+      // If other items are still queued, tell the customer what comes next (one
+      // question at a time, but don't leave them guessing about the rest)
+      const remaining = session.unresolvedItems.slice(1);
+      const hint = remaining.length === 1
+        ? ` Depois confirmo ${stripQty(remaining[0]!.rawText)}.`
+        : remaining.length > 1
+          ? ` Depois confirmo os outros itens.`
+          : "";
+      return done(session, "ORDER_REQUEST",
+        `Para o ${label}, qual você quer: ${opts}?${hint}`, [], false);
     }
     if (u.reason === "UNAVAILABLE") {
       return done(session, "ORDER_REQUEST", `"${u.rawText}" está indisponível agora. Quer outra opção?`, [], false);
@@ -287,6 +305,81 @@ function handleReview(
   return handleItemCollection(session, text, menu);
 }
 
+// ── Ambiguity resolution ────────────────────────────────────────────────────────
+
+// Words that signal "the regular version" (not zero / diet / light) so
+// "quero a normal" resolves to the non-zero candidate when there is exactly one.
+const NEGATION_TERMS = ["normal", "classica", "original", "tradicional", "simples"];
+const SPECIAL_TERMS  = ["zero", "diet", "light", "sem acucar", "sem açucar"];
+
+function resolveByNegation(
+  text:       string,
+  u:          { rawText: string; quantity: number; candidates: string[] },
+  menu:       WaMenuItem[],
+): WaOrderItem | null {
+  const t = norm(text);
+  if (!NEGATION_TERMS.some(w => t.includes(w))) return null;
+
+  // Keep only candidates that do NOT look like a "special" variety
+  const regular = u.candidates.filter(c => !SPECIAL_TERMS.some(s => norm(c).includes(s)));
+  if (regular.length !== 1) return null; // can't decide unambiguously
+
+  const menuItem = menu.find(m => norm(m.name) === norm(regular[0]!) && m.isAvailable);
+  if (!menuItem) return null;
+
+  const unitPrice = channelPrice(
+    { price: menuItem.price, priceDelivery: menuItem.priceDelivery },
+    "DELIVERY",
+  );
+  return {
+    rawText:      u.rawText,
+    quantity:     u.quantity,
+    menuItemId:   menuItem.id,
+    menuItemName: menuItem.name,
+    options:      [],
+    extras:       [],
+    unitPrice,
+    lineTotal:    round(unitPrice * u.quantity),
+  };
+}
+
+function handleAmbiguityAnswer(
+  session: WaPersistedSession,
+  text:    string,
+  menu:    WaMenuItem[],
+): AdvanceResult {
+  const u = session.unresolvedItems[0];
+  if (!u || u.reason !== "AMBIGUOUS") return handleItemCollection(session, text, menu);
+
+  // Restrict matching to just the candidates for this item
+  const candidateMenu = menu.filter(m =>
+    m.isAvailable && u.candidates.some(c => norm(c) === norm(m.name)),
+  );
+  const { matched } = matchItems(
+    [{ rawText: text, quantity: u.quantity, name: text }],
+    candidateMenu,
+  );
+
+  let resolved: import("./types").WaOrderItem | null = matched[0] ?? null;
+
+  // Fallback: semantic negation ("normal" → non-zero candidate)
+  if (!resolved) resolved = resolveByNegation(text, u, menu);
+
+  if (resolved) {
+    // Preserve the original quantity (the matcher may reset to 1 for bare text)
+    resolved = { ...resolved, quantity: u.quantity, lineTotal: round(resolved.unitPrice * u.quantity) };
+    session.selectedItems.push(resolved);
+    session.unresolvedItems = session.unresolvedItems.slice(1);
+    session.missingQuestions = mergeMissing(session, menu);
+    return continueAfterItems(session);
+  }
+
+  // No match — re-ask listing the options
+  const opts = u.candidates.slice(0, 3).join(" ou ");
+  return done(session, "ANSWER_TO_OPTION",
+    `Não entendi. Qual você quer: ${opts}?`, [], false);
+}
+
 // ── Intent classification (context-aware) ──────────────────────────────────────
 
 const CONFIRM_RE = /\b(sim|isso|pode ser|fechado|confirmo|confirmar|ok|t[aá] bom|beleza|certo|perfeito|isso mesmo)\b/i;
@@ -384,5 +477,13 @@ function clone(s: WaPersistedSession): WaPersistedSession {
 
 const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 const round = (n: number) => Math.round(n * 100) / 100;
+
+/** Strips a leading quantity token ("2 yakisoba" → "yakisoba", "uma coca" → "coca"). */
+function stripQty(raw: string): string {
+  return raw
+    .replace(/^\d+\s+/, "")
+    .replace(/^(um|uma|hum|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)\s+/i, "")
+    .trim();
+}
 
 export { operatorSummaryOf };

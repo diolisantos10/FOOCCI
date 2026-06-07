@@ -11,7 +11,7 @@ import { advanceSession } from "../WhatsAppOrderStateMachine";
 import { parsePaymentMethod } from "../WhatsAppPaymentService";
 import { parseAddressFragment } from "../addressParser";
 import { buildFullDraft, checkCompleteness, renderComanda } from "../WhatsAppOrderDraftBuilder";
-import { detectIntent } from "../parser";
+import { detectIntent, parseTextItems } from "../parser";
 import {
   isWaTextOrderingEnabled,
   getWaTextOrderingMode,
@@ -416,5 +416,150 @@ describe("State machine — never silently stuck", () => {
     const r = advanceSession(freshSession(), "quero um xpto9000", MENU);
     expect(r.session.unresolvedItems[0]?.reason).toBe("NOT_FOUND");
     expect(r.suggestedReply.toLowerCase()).toMatch(/encontrei|confirmar|nome/);
+  });
+});
+
+// ── Ambiguity queue — multi-item (spec A-J) ─────────────────────────────────────
+
+// Two yakisoba variants + two coca variants → both items are ambiguous on "yakisoba" / "coca"
+
+const YAKI_CARNE: WaMenuItem = {
+  id: "yaki-cf", name: "Yakisoba Carne e Frango", price: 32, priceDelivery: 34,
+  isActive: true, isAvailable: true, showInDelivery: true, hasVariants: false,
+  variants: [], optionGroups: [], extras: [],
+};
+const YAKI_CAMARAO: WaMenuItem = {
+  id: "yaki-cam", name: "Yakisoba de Camarão", price: 38, priceDelivery: 40,
+  isActive: true, isAvailable: true, showInDelivery: true, hasVariants: false,
+  variants: [], optionGroups: [], extras: [],
+};
+const COCA_COLA: WaMenuItem = {
+  id: "coca-cola", name: "Coca-Cola", price: 6, priceDelivery: 6.5,
+  isActive: true, isAvailable: true, showInDelivery: true, hasVariants: false,
+  variants: [], optionGroups: [], extras: [],
+};
+const COCA_ZERO_M: WaMenuItem = {
+  id: "coca-zero", name: "Coca Zero", price: 6, priceDelivery: 6.5,
+  isActive: true, isAvailable: true, showInDelivery: true, hasVariants: false,
+  variants: [], optionGroups: [], extras: [],
+};
+const AMBIG_MENU = [YAKI_CARNE, YAKI_CAMARAO, COCA_COLA, COCA_ZERO_M];
+
+describe("Ambiguity queue — multi-item", () => {
+  // A. Both items parsed
+  it("A. parses both items from 'quero 2 yakisoba e uma coca'", () => {
+    const parsed = parseTextItems("quero 2 yakisoba e uma coca");
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].quantity).toBe(2);
+    expect(parsed[0].name.toLowerCase()).toContain("yakisoba");
+    expect(parsed[1].quantity).toBe(1);
+    expect(parsed[1].name.toLowerCase()).toContain("coca");
+  });
+
+  // B. Both show as AMBIGUOUS
+  it("B. both yakisoba and coca appear as AMBIGUOUS", () => {
+    const r = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", AMBIG_MENU);
+    const unresolved = r.session.unresolvedItems;
+    expect(unresolved.length).toBe(2);
+    expect(unresolved[0]?.reason).toBe("AMBIGUOUS");
+    expect(unresolved[1]?.reason).toBe("AMBIGUOUS");
+  });
+
+  // C. First reply asks only yakisoba
+  it("C. suggested reply asks only about yakisoba first", () => {
+    const r = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", AMBIG_MENU);
+    // Must mention yakisoba candidates, not coca candidates
+    expect(r.suggestedReply.toLowerCase()).toContain("yakisoba");
+    expect(r.session.stage).toBe("MATCHING_MENU");
+  });
+
+  // D. First reply mentions coca will come next
+  it("D. suggested reply mentions coca will be confirmed next", () => {
+    const r = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", AMBIG_MENU);
+    expect(r.suggestedReply.toLowerCase()).toMatch(/depois|confirmo/);
+    expect(r.suggestedReply.toLowerCase()).toContain("coca");
+  });
+
+  // E. Answering resolves yakisoba with correct quantity
+  it("E. 'Carne e frango' resolves yakisoba and preserves quantity 2", () => {
+    let s = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", AMBIG_MENU).session;
+    const r = advanceSession(s, "Carne e frango", AMBIG_MENU);
+    const yaki = r.session.selectedItems.find(i => i.menuItemName === "Yakisoba Carne e Frango");
+    expect(yaki).toBeDefined();
+    expect(yaki!.quantity).toBe(2);
+    expect(yaki!.lineTotal).toBeCloseTo(68); // 2 × 34 delivery price
+    // Yakisoba should be removed from unresolved
+    const stillUnresolved = r.session.unresolvedItems.map(u => u.rawText);
+    expect(stillUnresolved.every(t => !t.toLowerCase().includes("yakisoba"))).toBe(true);
+  });
+
+  // F. Next reply asks about coca
+  it("F. after yakisoba resolved, next reply asks about coca", () => {
+    let s = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", AMBIG_MENU).session;
+    const r = advanceSession(s, "Carne e frango", AMBIG_MENU);
+    expect(r.suggestedReply.toLowerCase()).toContain("coca");
+    expect(r.session.stage).toBe("MATCHING_MENU");
+    // Remaining unresolved should still contain coca
+    expect(r.session.unresolvedItems[0]?.rawText.toLowerCase()).toContain("coca");
+  });
+
+  // G. "normal" resolves to Coca-Cola via negation fallback
+  it("G. 'normal' resolves to Coca-Cola (non-zero candidate)", () => {
+    let s = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", AMBIG_MENU).session;
+    s = advanceSession(s, "Carne e frango", AMBIG_MENU).session;
+    const r = advanceSession(s, "normal", AMBIG_MENU);
+    const coca = r.session.selectedItems.find(i => i.menuItemName === "Coca-Cola");
+    expect(coca).toBeDefined();
+    expect(coca!.quantity).toBe(1);
+  });
+
+  // G (alt). "zero" resolves to Coca Zero via direct matching
+  it("G2. 'zero' resolves to Coca Zero via direct match", () => {
+    let s = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", AMBIG_MENU).session;
+    s = advanceSession(s, "Carne e frango", AMBIG_MENU).session;
+    const r = advanceSession(s, "zero", AMBIG_MENU);
+    const coca = r.session.selectedItems.find(i => i.menuItemName === "Coca Zero");
+    expect(coca).toBeDefined();
+    expect(coca!.quantity).toBe(1);
+  });
+
+  // H. Full resolved draft has correct items and quantities
+  it("H. draft after both resolved: 2x Yakisoba Carne e Frango + 1x Coca-Cola", () => {
+    let s = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", AMBIG_MENU).session;
+    s = advanceSession(s, "Carne e frango", AMBIG_MENU).session;
+    s = advanceSession(s, "normal", AMBIG_MENU).session;
+    expect(s.selectedItems).toHaveLength(2);
+    const yaki = s.selectedItems.find(i => i.menuItemName === "Yakisoba Carne e Frango");
+    const cola  = s.selectedItems.find(i => i.menuItemName === "Coca-Cola");
+    expect(yaki?.quantity).toBe(2);
+    expect(cola?.quantity).toBe(1);
+    expect(s.unresolvedItems).toHaveLength(0);
+    // All resolved → should advance to COLLECTING_DELIVERY_TYPE
+    expect(s.stage).toBe("COLLECTING_DELIVERY_TYPE");
+  });
+
+  // I. Dry-run: no side effects in the state machine (pure)
+  it("I. state machine produces no side effects (pure function, no DB calls)", () => {
+    // advanceSession is synchronous and pure — if it resolves without throwing
+    // and doesn't return any CREATE_ORDER / GENERATE_PIX actions, it has no effects
+    let s = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", AMBIG_MENU).session;
+    s = advanceSession(s, "Carne e frango", AMBIG_MENU).session;
+    const r = advanceSession(s, "normal", AMBIG_MENU);
+    expect(r.actions).not.toContain("CREATE_ORDER");
+    expect(r.actions).not.toContain("GENERATE_PIX");
+    // No WhatsApp send action either (that would be handled in processCustomerMessage)
+  });
+
+  // No duplicates: re-asking doesn't duplicate items
+  it("no duplicates: wrong answer re-asks without duplicating unresolved items", () => {
+    let s = advanceSession(freshSession(), "quero 2 yakisoba e uma coca", AMBIG_MENU).session;
+    // Give a nonsense answer that matches nothing
+    const r = advanceSession(s, "xpto9000", AMBIG_MENU);
+    // Still at MATCHING_MENU
+    expect(r.session.stage).toBe("MATCHING_MENU");
+    // Still only 2 unresolved items (not duplicated)
+    expect(r.session.unresolvedItems).toHaveLength(2);
+    // selectedItems unchanged
+    expect(r.session.selectedItems).toHaveLength(0);
   });
 });
