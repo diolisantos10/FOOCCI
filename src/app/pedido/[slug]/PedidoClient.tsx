@@ -424,6 +424,12 @@ function formatTime(d: Date) {
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+// TODO: reativar Pedir de novo após validação visual e UX dedicada.
+// Standby: the "Pedir de novo" feature (virtual category + repeat banner +
+// repeat-order fetch) is disabled in the public UI for the operational launch.
+// The backend service/route/tests stay intact — only the UI is gated off here.
+const REPEAT_ORDER_UI_ENABLED = false;
+
 function categoryEmoji(name: string): string {
   const n = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (n.includes("pedir de novo") || n.includes("pedir novamente")) return "🔁";
@@ -2526,6 +2532,7 @@ export function PedidoClient({
   );
   const repeatFetchedRef = useRef(false);
   useEffect(() => {
+    if (!REPEAT_ORDER_UI_ENABLED) return; // standby — no repeat-order fetch
     if (repeatFetchedRef.current || entryPhase !== "browsing") return;
     const cid = resolvedCustomerId;
     const ph  = effectiveCustomerPhone;
@@ -2558,7 +2565,7 @@ export function PedidoClient({
   // Categories shown in the UI: prepend the virtual "Pedir de novo" when there is
   // real history. This is what tabs + currentCategoryItems read from.
   const displayCategories = useMemo<MenuCategory[]>(
-    () => buildDisplayCategories(categories, repeatMenuItems) as MenuCategory[],
+    () => (REPEAT_ORDER_UI_ENABLED ? (buildDisplayCategories(categories, repeatMenuItems) as MenuCategory[]) : categories),
     [repeatMenuItems, categories],
   );
 
@@ -4624,7 +4631,7 @@ export function PedidoClient({
           {/* Repeat-order module (W3) — subtle bubble near the top of the chat.
               Shown only to an identified returning customer with an empty cart,
               never during a recovery flow (recovery cart takes precedence). */}
-          {stage === "BROWSE" && entryPhase === "browsing" && repeatOrder
+          {REPEAT_ORDER_UI_ENABLED && stage === "BROWSE" && entryPhase === "browsing" && repeatOrder
             && repeatOrder.items.length > 0 && !repeatDismissed
             && cart.length === 0 && !recoveryCart?.length && (
             <div className="flex justify-start" data-testid="repeat-order-module">
