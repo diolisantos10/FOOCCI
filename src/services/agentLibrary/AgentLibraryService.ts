@@ -160,6 +160,19 @@ export class AgentLibraryService {
     return { buffer: Buffer.from(rec.data), fileName: rec.fileName, mimeType: rec.mimeType };
   }
 
+  /**
+   * Delete a source and everything attached to it. The linked techniques and the
+   * private original file are removed automatically by the DB cascade
+   * (onDelete: Cascade on both relations). Returns false if the source does not
+   * exist (so the route can answer 404).
+   */
+  static async deleteSource(id: string): Promise<boolean> {
+    const existing = await prisma.agentLibrarySource.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) return false;
+    await prisma.agentLibrarySource.delete({ where: { id } });
+    return true;
+  }
+
   /** Update only the extraction status (PENDING/EXTRACTING/EXTRACTED/FAILED). */
   static async setExtractionStatus(
     id: string,

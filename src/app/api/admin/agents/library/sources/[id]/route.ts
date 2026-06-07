@@ -1,5 +1,7 @@
 /**
- * GET /api/admin/agents/library/sources/[id] — source detail + techniques.
+ * GET    /api/admin/agents/library/sources/[id] — source detail + techniques.
+ * DELETE /api/admin/agents/library/sources/[id] — delete a source (+ cascade:
+ *        its techniques and the private original file).
  * Used by the embedded per-agent Library panel (Waiter Room → aba Library).
  *
  * Auth: x-admin-secret header OR foocci-admin-token cookie.
@@ -70,5 +72,36 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       );
     }
     return NextResponse.json({ ok: false, error: "Falha ao carregar a fonte." }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  if (!process.env.ADMIN_SECRET) {
+    return NextResponse.json({ ok: false, error: "Endpoint desabilitado (ADMIN_SECRET ausente no servidor)." }, { status: 403 });
+  }
+  if (!checkAdminRequest(req)) {
+    return NextResponse.json({ ok: false, error: "Sessão admin expirada. Faça login novamente." }, { status: 401 });
+  }
+
+  const id = params.id?.trim();
+  if (!id) return NextResponse.json({ ok: false, error: "id é obrigatório." }, { status: 400 });
+
+  try {
+    // Cascade (onDelete: Cascade) removes the linked techniques AND the private
+    // original file row, so deleting the source cleans everything in one step.
+    const deleted = await AgentLibraryService.deleteSource(id);
+    if (!deleted) {
+      return NextResponse.json({ ok: false, error: "Fonte não encontrada." }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, message: "Fonte excluída com sucesso." });
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      return NextResponse.json(
+        { ok: false, error: "Migration da Agent Library ainda não aplicada. Rode prisma migrate deploy." },
+        { status: 503 },
+      );
+    }
+    console.error("[library/delete] failed", err instanceof Error ? err.name : "Error");
+    return NextResponse.json({ ok: false, error: "Falha ao excluir a fonte." }, { status: 500 });
   }
 }

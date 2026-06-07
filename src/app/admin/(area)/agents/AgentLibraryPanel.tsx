@@ -95,6 +95,9 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
   const [description, setDescription] = useState("");
   const [rawText, setRawText] = useState("");
 
+  // delete confirmation (holds the source id pending confirmation)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   // manual technique form
   const [showAddTech, setShowAddTech] = useState(false);
   const [tName, setTName] = useState("");
@@ -212,6 +215,25 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
     }
   }
 
+  async function deleteSource(id: string) {
+    setErr(null); setWarn(null); setNotice(null); setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/agents/library/sources/${id}`, { method: "DELETE" });
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok || data.ok !== true) {
+        throw new Error(typeof data.error === "string" ? data.error : "Falha ao excluir a fonte.");
+      }
+      setConfirmDeleteId(null);
+      if (selectedId === id) setSelectedId(null); // clear the open detail
+      setNotice(typeof data.message === "string" ? data.message : "Fonte excluída com sucesso.");
+      await loadList();
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Erro ao excluir a fonte.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const agentName = libraryAgentName(agentSlug);
 
   return (
@@ -237,6 +259,25 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
         {err && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
         {warn && <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">⚠️ {warn}</div>}
         {notice && <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{notice}</div>}
+
+        {confirmDeleteId && (
+          <div className="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-800">
+            <p className="font-medium">
+              Tem certeza que deseja excluir esta fonte da Library? As técnicas vinculadas também serão removidas. Esta
+              ação não pode ser desfeita.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" disabled={busy} onClick={() => deleteSource(confirmDeleteId)}
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+                {busy ? "Excluindo…" : "Sim, excluir fonte"}
+              </button>
+              <button type="button" disabled={busy} onClick={() => setConfirmDeleteId(null)}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
@@ -335,8 +376,8 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
           {sources.map((s) => {
             const isSel = selectedId === s.id;
             return (
-              <button key={s.id} type="button" onClick={() => setSelectedId(s.id)}
-                className={`block w-full rounded-xl border bg-white p-3 text-left transition hover:border-orange-300 ${isSel ? "border-orange-400 ring-1 ring-orange-200" : "border-gray-200"}`}>
+              <div key={s.id} onClick={() => setSelectedId(s.id)}
+                className={`block w-full cursor-pointer rounded-xl border bg-white p-3 text-left transition hover:border-orange-300 ${isSel ? "border-orange-400 ring-1 ring-orange-200" : "border-gray-200"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold">{s.title}</p>
@@ -349,8 +390,13 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
                   <Pill tone="gray">{SOURCE_STATUS_LABELS[s.status] ?? s.status}</Pill>
                   <Pill tone="green">{s.techniqueCount} técnica(s)</Pill>
                   <span className="ml-auto text-[11px] text-gray-400">{fmtDate(s.createdAt)}</span>
+                  <button type="button"
+                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(s.id); }}
+                    className="rounded-md border border-red-200 px-1.5 py-0.5 text-[10px] font-medium text-red-600 hover:bg-red-50">
+                    Excluir
+                  </button>
                 </div>
-              </button>
+              </div>
             );
           })}
         </section>
@@ -403,7 +449,9 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
                 )}
                 {!selected.hasFile && !selected.hasText && (
                   <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                    Esta fonte não tem texto nem arquivo armazenado. Cole conteúdo ou adicione técnicas manualmente.
+                    {selected.extractionStatus === "FAILED"
+                      ? "Esta fonte não tem texto nem arquivo armazenado. Exclua e envie novamente o material."
+                      : "Esta fonte não tem texto nem arquivo armazenado. Cole conteúdo ou adicione técnicas manualmente."}
                   </p>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -414,6 +462,10 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
                   <button type="button" onClick={() => { setShowAddTech((v) => !v); setErr(null); }}
                     className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
                     {showAddTech ? "Fechar" : "+ Técnica manual"}
+                  </button>
+                  <button type="button" onClick={() => setConfirmDeleteId(selected.id)} disabled={busy}
+                    className="ml-auto rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
+                    Excluir fonte
                   </button>
                 </div>
               </div>
