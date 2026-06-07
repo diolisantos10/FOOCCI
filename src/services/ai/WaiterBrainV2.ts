@@ -2447,6 +2447,99 @@ function applyConstraints(
   });
 }
 
+// ─── dietary restrictions (cautious, deterministic) ───────────────────────────
+// Safety: we NEVER claim an item IS vegan/vegetarian (no reliable tags), NEVER
+// say "não temos", and NEVER surface obvious meat/seafood for a vegan. We
+// exclude by name/description/category heuristics and present candidates the
+// customer confirms before adding. Copyright/data-safe: no invented tags.
+
+type RestrictionKind = "vegan" | "vegetarian" | "no_seafood" | "no_pork" | "allergy";
+
+const RESTRICTION_STATEMENT_RE =
+  /\b(sou|somos)\s+vegan[oa]s?\b|\b(sou|somos)\s+vegetarian[oa]s?\b|\bvegan[oa]s?\b|\bvegetarian[oa]s?\b|\bsem\s+(frutos?\s+do\s+mar|peixe|carne|porco|gl[uú]ten|lactose|camar[ãa]o)\b|\bn[ãa]o\s+como\s+(carne|peixe|porco|frutos?\s+do\s+mar|camar[ãa]o)\b|\bal[eé]rgic[oa]\b/i;
+
+const SEAFOOD_TERMS = ["peixe", "salm", "atum", "camar", "kani", "polvo", "lula", "ceviche", "sashimi", "tartar", "tártar", "frutos do mar", "marisco", "siri", "caranguejo", "unagi", "enguia", "tilapia", "tilápia", "robalo", "niguiri"];
+const MEAT_TERMS = ["carne", " boi", "bovin", "frango", "galinha", "porco", "suino", "suíno", "bacon", "presunto", "lingui", "calabres", "pernil", "picanha", "costela", "cordeiro"];
+const DAIRY_EGG_TERMS = ["queijo", "cream cheese", "catupiry", "requeij", "leite", "manteiga", " ovo", "maionese", "philadel", "filadel", "filadél", "cheese"];
+const PORK_TERMS = ["porco", "suino", "suíno", "bacon", "presunto", "pernil", "lingui", "calabres", "lombo"];
+const PLANT_TERMS = ["pepino", "shimeji", "cogumelo", "legume", "arroz", "sunomono", "edamame", "alga", "vegetal", "vegetarian", "vegan", "salada", "abacate", "tofu", "misso", "missô", "hortali", "guacamole", "batata", "mandioca", "conserva"];
+
+function detectRestriction(msg: string): RestrictionKind | null {
+  if (!RESTRICTION_STATEMENT_RE.test(msg)) return null;
+  const m = msg.toLowerCase();
+  if (/vegan/.test(m)) return "vegan";
+  if (/vegetarian/.test(m)) return "vegetarian";
+  if (/sem\s+(frutos?\s+do\s+mar|peixe|camar)|n[ãa]o\s+como\s+(peixe|frutos?\s+do\s+mar|camar)/.test(m)) return "no_seafood";
+  if (/sem\s+porco|n[ãa]o\s+como\s+porco/.test(m)) return "no_pork";
+  return "allergy"; // gluten/lactose/allergy → cautious, exclude only explicit keywords
+}
+
+function excludeTermsFor(kind: RestrictionKind): string[] {
+  switch (kind) {
+    case "vegan":      return [...SEAFOOD_TERMS, ...MEAT_TERMS, ...DAIRY_EGG_TERMS];
+    case "vegetarian": return [...SEAFOOD_TERMS, ...MEAT_TERMS];
+    case "no_seafood": return [...SEAFOOD_TERMS];
+    case "no_pork":    return [...PORK_TERMS];
+    case "allergy":    return []; // can't infer the allergen safely; rely on explicit keywords
+  }
+}
+
+function selectRestrictionCandidates(
+  catalog: V2CatalogItem[],
+  cartItemIds: string[],
+  kind: RestrictionKind,
+  extraExclude: string[],
+): string[] {
+  const exclude = [...excludeTermsFor(kind), ...extraExclude.map((s) => s.toLowerCase())].filter(Boolean);
+  const hayOf = (i: V2CatalogItem) => `${i.name} ${i.description ?? ""} ${i.categoryName}`.toLowerCase();
+  const isExcluded = (i: V2CatalogItem) => exclude.some((t) => hayOf(i).includes(t));
+  const isPlant = (i: V2CatalogItem) => PLANT_TERMS.some((t) => hayOf(i).includes(t));
+
+  const pool = catalog.filter((i) => !cartItemIds.includes(i.id) && !isExcluded(i));
+  // Plant-leaning items first (more likely to fit), then best-seller order.
+  const sorted = pool.sort((a, b) => {
+    const pa = isPlant(a) ? 1 : 0;
+    const pb = isPlant(b) ? 1 : 0;
+    if (pa !== pb) return pb - pa;
+    return byBestSeller(a, b);
+  });
+  return sorted.slice(0, RECOMMENDATION_CARD_CAP).map((i) => i.id);
+}
+
+function handleRestriction(
+  kind: RestrictionKind,
+  catalog: V2CatalogItem[],
+  cartItemIds: string[],
+  extraExclude: string[],
+): V2Output {
+  const cards = selectRestrictionCandidates(catalog, cartItemIds, kind, extraExclude);
+  const noun =
+    kind === "vegan" ? "vegana" :
+    kind === "vegetarian" ? "vegetariana" :
+    kind === "no_seafood" ? "sem peixe/frutos do mar" :
+    kind === "no_pork" ? "sem porco" : "para sua restrição";
+
+  if (cards.length === 0) {
+    return {
+      message: `Não encontrei uma opção ${noun} confirmada no cardápio. Posso te mostrar opções sem peixe/carne aparente pra você avaliar?`,
+      cards: [],
+      mode: "BROWSE",
+      options: [{ label: "Ver opções", value: "browse_menu" }],
+      requiresAI: false,
+      aiDirective: "",
+    };
+  }
+
+  const message =
+    kind === "allergy"
+      ? "Pra alergia eu prefiro não cravar: separei opções que parecem mais simples, mas confirme os ingredientes antes de adicionar 👇"
+      : kind === "no_seafood" || kind === "no_pork"
+        ? `Separei opções ${noun} aparentes — confira os ingredientes antes de adicionar 👇 Quer que eu te ajude a montar?`
+        : `Não tenho uma marcação ${noun} confirmada em todos os itens, mas separei opções que parecem fazer sentido — confira os ingredientes antes de adicionar 👇 Quer que eu te ajude a montar?`;
+
+  return { message, cards, mode: "SUGGESTION", options: [], requiresAI: false, aiDirective: "", cardScope: "recommendation" };
+}
+
 // ─── culinary knowledge dictionary ─────────────────────────────
 // Short, accurate explanations for common culinary terms.
 // Used by the EXPLAIN_CATEGORY_OR_PRODUCT intent handler.
@@ -2514,12 +2607,26 @@ function handleUserMessage(input: V2Input): V2Output {
   // Applies message-level constraints (allergy, budget) before building the response so card lists
   // are always safe to render. Also pivots copy via buildObjectionCopy() when an objection is detected.
   const suggest = (intent: CustomerIntent, rawIds: string[], mode: WaiterMode): V2Output => {
-    const cards = applyConstraints(rawIds, catalog, maxBudget, excludedIngredients);
+    // Broad intents ("me sugere algo", "algo leve/barato"…) should show MORE options
+    // (8–12). Widen the selection here, centrally, without touching contextual flows
+    // (pairing/checkout/category already have their own card policy).
+    let ids = rawIds;
+    if (BROAD_RECOMMENDATION_INTENTS.has(intent)) {
+      const wide = rankProducts(catalog, intent, cartItemIds, BROAD_RECOMMENDATION_LIMIT, suggestedIds);
+      if (wide.length > ids.length) ids = wide;
+    }
+    const cards = applyConstraints(ids, catalog, maxBudget, excludedIngredients);
     if (cards.length === 0 && rawIds.length > 0) return noCardsFound();
     const base    = buildCommercialResponse({ intent, selectedProducts: cards, mode }, cfg);
     const message = buildObjectionCopy(msgRaw, intent) ?? base.message;
     return { ...base, message, requiresAI: false, aiDirective: "", cardScope: scopeForIntent(intent) };
   };
+
+  // Dietary restriction (vegan/vegetarian/no-seafood/no-pork/allergy) — handled
+  // deterministically and cautiously: never claims an item IS vegan, never says
+  // "não temos", never surfaces obvious meat/seafood for a vegan.
+  const dietaryRestriction = detectRestriction(msgRaw);
+  if (dietaryRestriction) return handleRestriction(dietaryRestriction, catalog, cartItemIds, excludedIngredients);
 
   // ── Discovery answer paths — strict intent-matched filters ───────────────────
   // Each path uses a dedicated filter function that enforces inclusion AND exclusion.
@@ -3122,8 +3229,19 @@ const VALID_MODES = new Set<WaiterMode>(["BROWSE", "SUGGESTION", "INTERVENTION",
 // safety ceiling applies there. Consultative recommendation stays concise; passive
 // upsell shows a small relevant subset.
 const CATEGORY_CARD_CAP       = 50; // technical safety only — NOT a product limit
-const RECOMMENDATION_CARD_CAP = 8;  // consultative pick: text stays concise, cards ordered
+const RECOMMENDATION_CARD_CAP = 12; // broad recommendation: show a fuller set (8–12)
 const UPSELL_CARD_CAP         = 6;  // passive upsell: small relevant subset
+
+// Broad/open intents should surface MORE options (8–12). Contextual intents
+// (pairing/checkout/specific) stay small via their own limits.
+const BROAD_RECOMMENDATION_LIMIT = 12;
+const BROAD_RECOMMENDATION_INTENTS = new Set<CustomerIntent>([
+  "wants_recommendation",
+  "wants_light_option",
+  "wants_complete_meal",
+  "wants_budget_option",
+  "wants_premium_option",
+]);
 
 // Internal rank limit for category/options flows — request "all relevant" up to the cap.
 const OPTIONS_CARD_LIMIT = CATEGORY_CARD_CAP;

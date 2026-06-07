@@ -80,10 +80,12 @@ describe("P0 card policy — category/options shows ALL available cards", () => 
 });
 
 describe("P0 card policy — consultative recommendation stays concise", () => {
-  it("'me sugere algo' returns a concise ordered set (≤ 8), not the full menu", () => {
+  it("'me sugere algo' returns a fuller ordered set (8–12), not the full menu", () => {
     const out = decide({ ...base, message: "me sugere algo" });
-    expect(out.cards.length).toBeGreaterThan(0);
-    expect(out.cards.length).toBeLessThanOrEqual(8);
+    // Broad recommendation policy: show MORE options (8–12) when available…
+    expect(out.cards.length).toBeGreaterThanOrEqual(8);
+    expect(out.cards.length).toBeLessThanOrEqual(12);
+    // …but never the entire menu (cards are still curated/ordered).
     expect(out.cards.length).toBeLessThan(CATALOG.length);
   });
 });

@@ -60,8 +60,10 @@ function isShareable(item: V2CatalogItem): boolean {
   return false;
 }
 
-// Max cards a consultative response may render (mirrors WaiterBrainV2 ceiling).
-const MAX_CARDS_PER_RESPONSE = 6;
+// Max cards a broad recommendation may render (mirrors WaiterBrainV2
+// RECOMMENDATION_CARD_CAP). "no_long_menu_dump" still catches a true menu dump,
+// but the broad policy now surfaces a fuller set (8–12) of options.
+const MAX_CARDS_PER_RESPONSE = 12;
 
 const DRINK_CAT_RE   = /bebida|suco|drink|refri|água|agua|cerveja|vinho|refrigerante|soda|shake/i;
 const DESSERT_CAT_RE = /sobremesa|doce|gelad|sorvete|brownie|pudim|mousse|tembleque/i;

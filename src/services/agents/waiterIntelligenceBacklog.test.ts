@@ -35,11 +35,11 @@ describe("waiterIntelligenceBacklog — coverage", () => {
 });
 
 describe("waiterIntelligenceBacklog — criteria", () => {
-  it("marks anti-hallucination as automated and '≤3 sugestões' as not automated", () => {
+  it("marks anti-hallucination as automated and price-check as manual", () => {
     const real = WAITER_EVAL_CRITERIA.find((c) => c.label === "Não inventa produto");
     expect(real?.automated).toBe(true);
-    const three = WAITER_EVAL_CRITERIA.find((c) => c.label.includes("até 3"));
-    expect(three?.automated).toBe(false);
+    const price = WAITER_EVAL_CRITERIA.find((c) => c.label === "Não inventa preço");
+    expect(price?.automated).toBe(false);
   });
 });
 
