@@ -44,6 +44,11 @@ const ALLOWED_EXTERNAL = new Set([
   // Analytics Test Center — deterministic, pure (no DB/LLM/network/mutation).
   "@/services/analytics/testing/analyticsScenarios",
   "@/services/analytics/testing/analyticsEvaluator",
+  // WhatsApp Text Ordering scenario runner — DRY_RUN_ONLY + allowSideEffects
+  // forced false; menu injection means no DB, no Evolution, no real send/order.
+  "@/services/whatsapp/ordering/WhatsAppOrderingScenarioRunner",
+  "@/services/whatsapp/ordering/testing/whatsappOrderingScenarios",
+  "@/services/whatsapp/ordering/types",
 ]);
 
 const FORBIDDEN_TOKENS = [
@@ -89,9 +94,11 @@ describe("Quality Control — no side effects (static import scan)", () => {
           isInternal || isNodeBuiltin || isAllowedExternal,
           `Unexpected external import "${spec}" in ${file}`,
         ).toBe(true);
-        // Forbidden-token scan only matters for non-internal specs (internal
-        // relative paths like "./auditors/WhatsAppAuditor" are safe by design).
-        if (!isInternal && !isNodeBuiltin) {
+        // Forbidden-token scan only matters for non-internal, non-allowlisted
+        // specs. Internal relative paths (e.g. "./auditors/WhatsAppAuditor") and
+        // vetted read-only harnesses (e.g. the WhatsApp scenario runner, whose
+        // path legitimately contains "whatsapp") are safe by design.
+        if (!isInternal && !isNodeBuiltin && !isAllowedExternal) {
           for (const bad of FORBIDDEN_TOKENS) {
             expect(spec.includes(bad), `Forbidden import "${spec}" in ${file}`).toBe(false);
           }

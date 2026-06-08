@@ -83,7 +83,7 @@ describe("Quality Control — runAll", () => {
     for (const f of res.findings) expect(f.runId).toBe(res.runId);
   });
 
-  it("(3) includes real Waiter + CRM + Analytics results while WhatsApp stays PARTIAL", async () => {
+  it("(3) includes all four auditors connected with real findings", async () => {
     const res = await runAll({ now: new Date("2026-06-08T03:00:00Z") });
     // Waiter connected: real Test Center finding
     const waiter = res.findings.filter((f) => f.auditorId === "waiter");
@@ -96,12 +96,12 @@ describe("Quality Control — runAll", () => {
     const analytics = res.findings.filter((f) => f.auditorId === "analytics");
     expect(analytics.some((f) => f.title.includes("Analytics Test Center"))).toBe(true);
     expect(analytics.some((f) => f.title.includes("read-only"))).toBe(true);
-    expect(analytics.some((f) => f.title.includes("não conectado"))).toBe(false);
-    // WhatsApp stays a not-connected stub (INFO)
+    // WhatsApp connected: no-send safety + leak-prevention findings
     const wa = res.findings.filter((f) => f.auditorId === "whatsapp");
-    expect(wa.length).toBeGreaterThan(0);
-    expect(wa.every((f) => f.severity === "INFO")).toBe(true);
-    expect(wa.some((f) => f.title.includes("não conectado"))).toBe(true);
+    expect(wa.some((f) => f.title.includes("no-send"))).toBe(true);
+    expect(wa.some((f) => f.title.includes("vazamento"))).toBe(true);
+    // none of the four is a not-connected stub anymore
+    expect(res.findings.some((f) => f.title.includes("não conectado"))).toBe(false);
   });
 
   it("severity + status counts sum to the number of findings", async () => {
@@ -166,9 +166,9 @@ describe("Quality Control — counting + global status", () => {
     expect(countByStatus(fs)).toEqual({ PASS: 1, WARNING: 2, FAIL: 0 });
   });
 
-  it("global status is WARNING (Waiter+CRM+Analytics green; WhatsApp still partial)", async () => {
+  it("global status is WARNING (all four connected; only known drift/coverage gaps, no P0)", async () => {
     const res = await runAll();
-    // connected auditors are clean, but the WhatsApp stub keeps it at WARNING
+    // legacy Waiter drift + WhatsApp payment/Pix coverage gap keep it at WARNING
     expect(res.globalStatus).toBe("WARNING");
     expect(res.countsByStatus.FAIL).toBe(0);
     expect(res.countsBySeverity.P0).toBe(0);
