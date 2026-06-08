@@ -38,6 +38,9 @@ const ALLOWED_EXTERNAL = new Set([
   "@/services/ai/waiter/testing/waiterEvaluator",
   "@/services/ai/WaiterBrainV2",
   "@/services/agents/waiterLegacyTestAudit",
+  // CRM Test Center — deterministic, pure (no DB/LLM/network/sends).
+  "@/services/crm/testing/crmScenarios",
+  "@/services/crm/testing/crmEvaluator",
 ]);
 
 const FORBIDDEN_TOKENS = [
@@ -53,6 +56,11 @@ const FORBIDDEN_TOKENS = [
   "OrderService",
   "OrderDraftService",
   "CampaignService",
+  // CRM real-send / dispatch paths must never be imported by an auditor.
+  "SendService",
+  "ScheduledCampaignRunner",
+  "ScheduledCampaignScheduler",
+  "AutomationScheduler",
   "node-fetch",
   "axios",
 ];

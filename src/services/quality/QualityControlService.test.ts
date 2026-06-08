@@ -83,13 +83,18 @@ describe("Quality Control — runAll", () => {
     for (const f of res.findings) expect(f.runId).toBe(res.runId);
   });
 
-  it("(4) includes the real Waiter result while others stay PARTIAL/INFO", async () => {
+  it("(3) includes real Waiter + CRM results while Analytics/WhatsApp stay PARTIAL", async () => {
     const res = await runAll({ now: new Date("2026-06-08T03:00:00Z") });
-    // Waiter is connected: a real Test Center finding (PASS/WARNING/FAIL, not the v0 stub)
+    // Waiter connected: real Test Center finding
     const waiter = res.findings.filter((f) => f.auditorId === "waiter");
     expect(waiter.some((f) => f.title.includes("Waiter Test Center"))).toBe(true);
-    // The other three remain not-connected stubs (INFO)
-    for (const id of ["crm", "analytics", "whatsapp"]) {
+    // CRM connected: real Test Center + dry-run guarantee findings
+    const crm = res.findings.filter((f) => f.auditorId === "crm");
+    expect(crm.some((f) => f.title.includes("CRM Test Center"))).toBe(true);
+    expect(crm.some((f) => f.title.includes("dry-run"))).toBe(true);
+    expect(crm.some((f) => f.title.includes("não conectado"))).toBe(false);
+    // The remaining two stay not-connected stubs (INFO)
+    for (const id of ["analytics", "whatsapp"]) {
       const fs = res.findings.filter((f) => f.auditorId === id);
       expect(fs.length).toBeGreaterThan(0);
       expect(fs.every((f) => f.severity === "INFO")).toBe(true);
@@ -159,10 +164,10 @@ describe("Quality Control — counting + global status", () => {
     expect(countByStatus(fs)).toEqual({ PASS: 1, WARNING: 2, FAIL: 0 });
   });
 
-  it("v0 global status is WARNING (auditors registered, runners not connected yet)", async () => {
+  it("global status is WARNING (Waiter+CRM green; Analytics/WhatsApp still partial)", async () => {
     const res = await runAll();
+    // connected auditors are clean, but the not-connected stubs keep it at WARNING
     expect(res.globalStatus).toBe("WARNING");
-    // honest: nothing was actually verified, so no PASS / no real FAIL
     expect(res.countsByStatus.FAIL).toBe(0);
     expect(res.countsBySeverity.P0).toBe(0);
   });

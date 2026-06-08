@@ -38,8 +38,8 @@ export const AUDITOR_META = {
     area: "CRM",
     group: "CRM",
     mission:
-      "Auditar campanhas, segmentos e segurança de disparo (sempre dry-run, nunca dispara campanha real).",
-    connection: "PARTIAL",
+      "Auditar com checks reais (dry-run): contact-safety/segurança de disparo, segmentação, campanhas, templates, janelas, públicos vazios, atribuição e review — nunca dispara campanha real.",
+    connection: "ACTIVE",
     linkedLabs: [
       { label: "CRM Test Center", href: "/admin/agentes/crm/testes", exists: true },
     ],
