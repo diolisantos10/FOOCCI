@@ -193,29 +193,32 @@ export async function runUploadFlow(form: FormData): Promise<UploadFlowResult> {
       }
     }
 
-    // ── D. AI extraction (optional; source already saved) ──────────────────────
-    const wantExtract = str("extract") === "1";
-    if (wantExtract) {
+    // ── D. AI extraction — AUTOMATIC by default ────────────────────────────────
+    // Extraction runs automatically whenever there is text to synthesize, so the
+    // happy path needs NO manual button. The caller may opt out with extract="0"
+    // (e.g. "save without extracting"). The manual route stays as retry/reprocess.
+    const optedOut = str("extract") === "0";
+    const hasText = textForAI.trim().length > 0;
+    if (!optedOut && hasText) {
       stage = "aiExtraction";
-      if (!textForAI.trim()) {
-        await AgentLibraryService.setExtractionStatus(sourceId, "FAILED").catch(() => {});
-        return ok(200, { ok: false, stage, sourceId, message: "Fonte criada, mas não há texto para extrair. Adicione técnicas manualmente." });
-      }
       try {
         const r = await AgentLibraryService.extractTechniques(sourceId);
         log("extraction-done", { sourceId, created: r.created });
-        const baseMsg = r.created > 0 ? `${r.created} técnica(s) extraída(s).` : "Nenhuma técnica foi extraída — revise o conteúdo ou adicione manualmente.";
+        const baseMsg = r.created > 0
+          ? `${r.created} técnica(s) extraída(s) automaticamente.`
+          : "Nenhuma técnica foi extraída — revise o conteúdo ou reprocesse.";
         return ok(200, { ok: r.created > 0, stage: r.created > 0 ? "done" : "aiExtraction", sourceId, created: r.created, message: (extractNote ? `${extractNote} ` : "") + baseMsg });
       } catch (err) {
         log("extraction-failed", { sourceId, errName: err instanceof Error ? err.name : "Error" });
         const detail = err instanceof Error ? err.message : "";
-        return ok(200, { ok: false, stage, sourceId, message: `Fonte criada, mas a extração por IA falhou. Você pode tentar novamente. ${detail}`.trim() });
+        return ok(200, { ok: false, stage, sourceId, message: `Fonte criada, mas a extração automática por IA falhou. Você pode tentar novamente. ${detail}`.trim() });
       }
     }
 
-    // ── E. created (no extraction requested) ───────────────────────────────────
+    // ── E. created (opted out, or no text to extract) ──────────────────────────
     stage = "created";
-    return ok(200, { ok: true, stage, sourceId, message: (extractNote ? `${extractNote} ` : "") + "Fonte criada." });
+    const noTextTail = hasText ? "" : " Sem texto para extrair — reenvie um arquivo com texto ou adicione técnicas manualmente.";
+    return ok(200, { ok: true, stage, sourceId, message: (extractNote ? `${extractNote} ` : "") + "Fonte criada." + noTextTail });
   } catch (err) {
     // Last-resort guard: uses ONLY top-level `stage` + `sourceId` — never throws.
     console.error("[library/upload] unhandled", err instanceof Error ? `${err.name}: ${err.message}` : "Error", JSON.stringify({ stage, sourceId }));

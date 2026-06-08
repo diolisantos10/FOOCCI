@@ -343,17 +343,18 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
               className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
           </label>
           <p className="text-[11px] text-gray-400">
-            🔒 O arquivo original <strong>não é armazenado</strong> (fica privado): o sistema extrai apenas o texto
-            (amostra inicial em PDFs grandes) para gerar a síntese e as técnicas. Nada vai para o runtime.
+            ✨ Ao salvar, as técnicas são <strong>extraídas automaticamente</strong> — sem precisar apertar nenhum botão
+            depois. O arquivo fica guardado de forma privada (só para reprocessar); o sistema usa apenas o texto
+            (<strong>amostra inicial em PDFs grandes</strong>) para gerar a síntese. Nada vai para o runtime.
           </p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => submitUpload(false)} disabled={busy}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-              {busy ? "Processando…" : "Salvar"}
-            </button>
             <button type="button" onClick={() => submitUpload(true)} disabled={busy}
               className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">
-              {busy ? "Processando…" : "Salvar e extrair técnicas"}
+              {busy ? "Processando…" : "Salvar e extrair técnicas (automático)"}
+            </button>
+            <button type="button" onClick={() => submitUpload(false)} disabled={busy}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50">
+              {busy ? "Processando…" : "Só salvar"}
             </button>
             <button type="button" onClick={() => { setShowForm(false); resetForm(); }}
               className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -455,9 +456,10 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
                   </p>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
+                  {/* Secondary maintenance: extraction is automatic on upload; this only retries/reprocesses. */}
                   <button type="button" onClick={runExtraction} disabled={busy}
-                    className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50">
-                    {busy ? "Processando…" : selected.extractionStatus === "FAILED" ? "↻ Tentar extrair novamente" : "✨ Gerar técnicas com IA"}
+                    className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-50">
+                    {busy ? "Processando…" : selected.extractionStatus === "FAILED" ? "↻ Tentar novamente" : "🔄 Reprocessar técnicas"}
                   </button>
                   <button type="button" onClick={() => { setShowAddTech((v) => !v); setErr(null); }}
                     className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">

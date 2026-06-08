@@ -87,6 +87,61 @@ describe("runUploadFlow — source-first", () => {
     expect(body.stage).toBe("fileValidation");
   });
 
+  it("auto-extracts when no extract flag is sent (happy path needs no manual button)", async () => {
+    parse.mockResolvedValue({ kind: "text", text: "ancoragem de preço e escassez", truncated: false } as never);
+    svc.extractTechniques.mockResolvedValue({ created: 4 } as never);
+    const fd = new FormData();
+    fd.append("agentSlug", "waiter");
+    // NOTE: no `extract` field at all → extraction must run automatically
+    fd.append("file", new Blob(["ancoragem"], { type: "text/plain" }), "notes.txt");
+
+    const { status, body } = await runUploadFlow(fd);
+
+    expect(svc.extractTechniques).toHaveBeenCalledWith("src_1");
+    expect(status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.stage).toBe("done");
+    expect(body.created).toBe(4);
+  });
+
+  it("auto-extracts pasted text too (no file, no extract flag)", async () => {
+    svc.extractTechniques.mockResolvedValue({ created: 3 } as never);
+    const fd = new FormData();
+    fd.append("agentSlug", "waiter");
+    fd.append("title", "Notas de vendas");
+    fd.append("rawText", "técnica de upsell consultivo e ancoragem");
+
+    const { body } = await runUploadFlow(fd);
+    expect(svc.extractTechniques).toHaveBeenCalledWith("src_1");
+    expect(body.stage).toBe("done");
+  });
+
+  it("opts out of extraction with extract=0 ('Só salvar') — no AI call", async () => {
+    parse.mockResolvedValue({ kind: "text", text: "hello", truncated: false } as never);
+    const fd = new FormData();
+    fd.append("agentSlug", "waiter");
+    fd.append("extract", "0");
+    fd.append("file", new Blob(["hello"], { type: "text/plain" }), "notes.txt");
+
+    const { body } = await runUploadFlow(fd);
+    expect(svc.extractTechniques).not.toHaveBeenCalled();
+    expect(body.stage).toBe("created");
+    expect(body.ok).toBe(true);
+  });
+
+  it("does not auto-extract (nor FAIL) when there is no text — just created", async () => {
+    parse.mockResolvedValue({ kind: "text", text: "   ", truncated: false } as never);
+    const fd = new FormData();
+    fd.append("agentSlug", "waiter");
+    fd.append("file", new Blob([" "], { type: "text/plain" }), "empty.txt");
+
+    const { body } = await runUploadFlow(fd);
+    expect(svc.extractTechniques).not.toHaveBeenCalled();
+    expect(svc.setExtractionStatus).not.toHaveBeenCalledWith("src_1", "FAILED");
+    expect(body.stage).toBe("created");
+    expect(body.ok).toBe(true);
+  });
+
   it("keeps the source when parsing fails AFTER creation (partial, sourceId)", async () => {
     parse.mockRejectedValue(new Error("DOMMatrix is not defined"));
     const fd = new FormData();
