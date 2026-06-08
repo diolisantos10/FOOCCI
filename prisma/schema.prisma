@@ -86,6 +86,7 @@ model Restaurant {
   agentProfileOverrides  RestaurantAgentProfileOverride[]
   agencyProjects         AgencyProject[]
   waOrderingSessions     WhatsAppOrderingSession[]
+  waTextOrderingConfig   WhatsAppTextOrderingConfig?
 
   @@map("restaurants")
 }
@@ -2760,4 +2761,39 @@ model WhatsAppOrderingSession {
   @@index([restaurantId, phone, status])
   @@index([conversationId])
   @@map("whatsapp_ordering_sessions")
+}
+
+// ═══════════════════════════════════════════
+//  WHATSAPP TEXT ORDERING — per-restaurant live activation config
+// ═══════════════════════════════════════════
+// Moves controlled-rollout activation out of Railway env vars and into the
+// admin UI. One row per restaurant. The global env kill switch
+// (WHATSAPP_TEXT_ORDERING_ENABLED=false / WHATSAPP_TEXT_ORDERING_PAUSED=true)
+// always overrides this row. When no row exists, the runtime falls back to the
+// env-based config for backward compatibility. Default is fully OFF/safe.
+model WhatsAppTextOrderingConfig {
+  id           String @id @default(cuid())
+  restaurantId String @unique
+
+  enabled Boolean @default(false)
+
+  // DRY_RUN_ONLY | ALLOWLIST_REPLY_ONLY | ALLOWLIST_FULL_TEST
+  mode String @default("DRY_RUN_ONLY")
+
+  // PHONE_ALLOWLIST | RESTAURANT_WIDE
+  scope String @default("PHONE_ALLOWLIST")
+
+  // E.164 phone strings; matched format-tolerantly at runtime.
+  allowlistedPhones Json @default("[]")
+
+  paused Boolean @default(false)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_text_ordering_configs")
 }

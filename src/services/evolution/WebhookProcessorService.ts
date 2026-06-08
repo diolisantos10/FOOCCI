@@ -36,7 +36,8 @@ import { markCrmReplyIfApplicable } from "@/services/agents/AgentRoutingService"
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 import { shouldAiRespond } from "@/services/conversation/ConversationAiPolicyService";
-import { getRoutingDecision, maskPhone } from "@/lib/wa-text-ordering-flag";
+import { maskPhone } from "@/lib/wa-text-ordering-flag";
+import { getRoutingDecisionForRestaurant } from "@/services/whatsapp/ordering/WhatsAppTextOrderingConfigService";
 
 // Resolved conversations older than this are treated as new threads.
 const REOPEN_WINDOW_HOURS = 24;
@@ -285,7 +286,7 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   // getRoutingDecision() is the single source of truth — it handles scope (PHONE_ALLOWLIST
   // vs RESTAURANT_WIDE) and the kill switch (PAUSED) in one place.
   const routingDecision = shouldRespond && event.messageType === "TEXT"
-    ? getRoutingDecision(restaurantId, event.phone)
+    ? await getRoutingDecisionForRestaurant(restaurantId, event.phone)
     : null;
   let textOrderingHandled = false;
   if (routingDecision?.shouldUseTextOrdering) {
@@ -340,11 +341,15 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     }
   }
 
-  // Live-routing trace: emitted only when the Text Ordering master switch is on,
-  // so allowlisted live tests are debuggable without adding noise for everyone.
+  // Live-routing trace: emitted when this restaurant has Text Ordering in play
+  // (a DB config row OR an env flag set), so controlled live tests are debuggable
+  // without adding noise for restaurants that never touched the feature.
   // No secrets and no full phone are logged.
-  if (process.env.WHATSAPP_TEXT_ORDERING_ENABLED === "true" && event.messageType === "TEXT") {
-    const decision = routingDecision ?? getRoutingDecision(restaurantId, event.phone);
+  if (
+    routingDecision &&
+    (routingDecision.dbConfigPresent || process.env.WHATSAPP_TEXT_ORDERING_ENABLED !== undefined)
+  ) {
+    const decision = routingDecision;
     const finalHandler = textOrderingHandled
       ? "TEXT_ORDERING"
       : shouldRespond
@@ -355,6 +360,9 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     console.log("[WA-TextOrdering] routing decision", {
       restaurantId,
       phoneMasked:           maskPhone(event.phone),
+      source:                decision.source,
+      dbConfigPresent:       decision.dbConfigPresent,
+      globalKillSwitch:      decision.globalKillSwitch,
       mode:                  decision.mode,
       scope:                 decision.scope,
       paused:                decision.paused,

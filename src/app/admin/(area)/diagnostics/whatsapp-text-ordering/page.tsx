@@ -9,7 +9,7 @@
  * NEVER sends WhatsApp, creates an order, or generates a real Pix.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { DiagnosticReportActions } from "@/components/admin/DiagnosticReportActions";
 import { buildWaOrderingReport, deriveMatchStatus, type WaOrderingReportResult } from "@/lib/admin/waOrderingReport";
 import { buildScenarioRunnerReport } from "@/lib/admin/waScenarioReport";
@@ -44,12 +44,34 @@ interface RoutingReadiness {
   restaurant: { id: string; name: string; slug: string };
   input: { phone: string; phoneMasked: string };
   flags: {
-    masterEnabled: boolean; paused: boolean; mode: string; scope: string;
+    masterEnabled: boolean; globalKillSwitch: boolean; paused: boolean; mode: string; scope: string;
     restaurantAllowlisted: boolean; enabledForRestaurant: boolean; phoneAllowlisted: boolean;
+    source: "db" | "env"; dbConfigPresent: boolean;
   };
+  dbConfig: { enabled: boolean; mode: string; scope: string; paused: boolean; phones: number } | null;
   wouldRouteToTextOrdering: boolean;
   declineReason: string | null;
   hint: string;
+}
+
+type WaMode = "DRY_RUN_ONLY" | "ALLOWLIST_REPLY_ONLY" | "ALLOWLIST_FULL_TEST";
+type WaScope = "PHONE_ALLOWLIST" | "RESTAURANT_WIDE";
+
+interface ActivationConfig {
+  restaurantId: string;
+  enabled: boolean;
+  mode: WaMode;
+  scope: WaScope;
+  allowlistedPhones: string[];
+  paused: boolean;
+  notes: string | null;
+  updatedAt: string | null;
+}
+interface ConfigResponse {
+  restaurant: { id: string; name: string; slug: string };
+  configPresent: boolean;
+  config: ActivationConfig;
+  global: { killSwitch: boolean; paused: boolean };
 }
 interface SimResult {
   restaurant: { id: string; name: string; slug: string };
@@ -230,6 +252,97 @@ export default function WaTextOrderingPage() {
     }
   }, [slug, phone]);
 
+  // ── Live activation config (DB-persisted, founder-facing) ───────────────────
+  const [cfg, setCfg]             = useState<ConfigResponse | null>(null);
+  const [cfgLoading, setCfgLoad]  = useState(false);
+  const [cfgSaving, setCfgSaving] = useState(false);
+  const [cfgError, setCfgError]   = useState<string | null>(null);
+  const [cfgOk, setCfgOk]         = useState<string | null>(null);
+  // Local editable mirrors of the persisted config.
+  const [aEnabled, setAEnabled]   = useState(false);
+  const [aPaused, setAPaused]     = useState(false);
+  const [aMode, setAMode]         = useState<WaMode>("DRY_RUN_ONLY");
+  const [aScope, setAScope]       = useState<WaScope>("PHONE_ALLOWLIST");
+  const [aPhones, setAPhones]     = useState("");
+
+  const applyConfig = useCallback((c: ConfigResponse) => {
+    setCfg(c);
+    setAEnabled(c.config.enabled);
+    setAPaused(c.config.paused);
+    setAMode(c.config.mode);
+    setAScope(c.config.scope);
+    setAPhones((c.config.allowlistedPhones ?? []).join(", "));
+  }, []);
+
+  const loadConfig = useCallback(async () => {
+    setCfgLoad(true); setCfgError(null); setCfgOk(null);
+    try {
+      const res = await fetch(`/api/admin/diagnostics/whatsapp-text-ordering/config?restaurantSlug=${encodeURIComponent(slug)}`);
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? `HTTP ${res.status}`);
+      }
+      applyConfig(await res.json());
+    } catch (e) {
+      setCfgError(e instanceof Error ? e.message : "Erro desconhecido.");
+    } finally {
+      setCfgLoad(false);
+    }
+  }, [slug, applyConfig]);
+
+  // Auto-load the persisted config when the page opens and whenever the slug changes.
+  useEffect(() => { void loadConfig(); }, [loadConfig]);
+
+  const patchConfig = useCallback(async (patch: Record<string, unknown>, okMsg: string) => {
+    setCfgSaving(true); setCfgError(null); setCfgOk(null);
+    try {
+      const res = await fetch("/api/admin/diagnostics/whatsapp-text-ordering/config", {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ restaurantSlug: slug, ...patch }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? `HTTP ${res.status}`);
+      }
+      applyConfig(await res.json());
+      setCfgOk(okMsg);
+      // Refresh routing readiness so the panel reflects the new config immediately.
+      void checkRouting();
+    } catch (e) {
+      setCfgError(e instanceof Error ? e.message : "Erro desconhecido.");
+    } finally {
+      setCfgSaving(false);
+    }
+  }, [slug, applyConfig, checkRouting]);
+
+  const phonesArray = useCallback(
+    () => aPhones.split(/[,\n]/).map(s => s.trim()).filter(Boolean),
+    [aPhones],
+  );
+
+  const saveConfig = useCallback(() => patchConfig({
+    enabled: aEnabled, paused: aPaused, mode: aMode, scope: aScope, allowlistedPhones: phonesArray(),
+  }, "Configuração salva."), [patchConfig, aEnabled, aPaused, aMode, aScope, phonesArray]);
+
+  // Quick presets — each writes a complete, safe config in one click.
+  const presetMyPhoneReply = useCallback(() => patchConfig({
+    enabled: true, paused: false, mode: "ALLOWLIST_REPLY_ONLY", scope: "PHONE_ALLOWLIST",
+    allowlistedPhones: [phone],
+  }, "Ativado: só seu telefone, resposta apenas."), [patchConfig, phone]);
+
+  const presetRestaurantReply = useCallback(() => patchConfig({
+    enabled: true, paused: false, mode: "ALLOWLIST_REPLY_ONLY", scope: "RESTAURANT_WIDE",
+  }, "Ativado: restaurante inteiro, resposta apenas."), [patchConfig]);
+
+  const presetMyPhoneFullTest = useCallback(() => patchConfig({
+    enabled: true, paused: false, mode: "ALLOWLIST_FULL_TEST", scope: "PHONE_ALLOWLIST",
+    allowlistedPhones: [phone],
+  }, "Ativado: seu telefone, pedido real controlado."), [patchConfig, phone]);
+
+  const presetPauseAll  = useCallback(() => patchConfig({ paused: true }, "Pausado."), [patchConfig]);
+  const presetDisable   = useCallback(() => patchConfig({ enabled: false }, "Desativado."), [patchConfig]);
+
   const buildReport = useCallback(() => {
     if (!result) return "";
     return buildWaOrderingReport(result as unknown as WaOrderingReportResult, {
@@ -296,12 +409,17 @@ export default function WaTextOrderingPage() {
               />
               <Pill text={`modo: ${rdReport.flags.mode}`} tone="gray" />
               <Pill text={`escopo: ${rdReport.flags.scope}`} tone="gray" />
+              <Pill text={`origem: ${rdReport.flags.source === "db" ? "painel (DB)" : "env (Railway)"}`} tone={rdReport.flags.source === "db" ? "green" : "amber"} />
+              {rdReport.flags.globalKillSwitch && <Pill text="🛑 KILL SWITCH GLOBAL" tone="red" />}
               {rdReport.flags.paused && <Pill text="⏸ PAUSADO" tone="red" />}
             </div>
             <div className="grid grid-cols-2 gap-1 text-[11px] text-gray-700 sm:grid-cols-3">
-              <span>{rdReport.flags.masterEnabled ? "✅" : "⬜"} flag ligada</span>
+              <span>{!rdReport.flags.globalKillSwitch ? "✅" : "🛑"} kill switch global {rdReport.flags.globalKillSwitch ? "ATIVO (bloqueia)" : "ok"}</span>
+              <span>{rdReport.dbConfig?.enabled ? "✅" : "⬜"} config DB ativada</span>
               <span>{rdReport.flags.enabledForRestaurant ? "✅" : "⬜"} restaurante liberado</span>
-              <span>{rdReport.flags.scope === "PHONE_ALLOWLIST" ? (rdReport.flags.phoneAllowlisted ? "✅" : "⬜") : "✅"} {rdReport.flags.scope === "PHONE_ALLOWLIST" ? "telefone no allowlist" : "escopo: todos os telefones"}</span>
+              <span>{!rdReport.flags.paused ? "✅" : "⏸"} {rdReport.flags.paused ? "pausado" : "não pausado"}</span>
+              <span>{rdReport.flags.scope === "PHONE_ALLOWLIST" ? (rdReport.flags.phoneAllowlisted ? "✅" : "⬜") : "✅"} {rdReport.flags.scope === "PHONE_ALLOWLIST" ? "telefone na lista" : "escopo: todos os telefones"}</span>
+              <span>{rdReport.wouldRouteToTextOrdering ? "✅" : "⬜"} roteia para Pedido Texto</span>
             </div>
             <p className="text-[11px] text-gray-600">
               Restaurante: <span className="font-mono">{rdReport.restaurant.id}</span> ({rdReport.restaurant.slug}) ·
@@ -317,10 +435,141 @@ export default function WaTextOrderingPage() {
         )}
       </div>
 
-      {/* B2. Controlled test activation checklist */}
+      {/* B1b. Activation control panel — DB-persisted, no Railway editing needed */}
+      <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">
+            Controle de ativação ao vivo
+          </h3>
+          <div className="flex items-center gap-2">
+            {cfg && (
+              <Pill
+                text={cfg.configPresent ? "config salva" : "sem config (usando env)"}
+                tone={cfg.configPresent ? "green" : "amber"}
+              />
+            )}
+            <button
+              onClick={loadConfig}
+              disabled={cfgLoading}
+              className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {cfgLoading ? "Carregando…" : "Recarregar"}
+            </button>
+          </div>
+        </div>
+
+        {/* Global kill switch warning */}
+        {cfg?.global.killSwitch && (
+          <div className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+            🛑 Bloqueado pelo kill switch global no Railway (WHATSAPP_TEXT_ORDERING_ENABLED=false).
+            Nenhuma ativação aqui terá efeito até remover essa variável.
+          </div>
+        )}
+        {cfg?.global.paused && (
+          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+            ⏸ Pausa global ativa no Railway (WHATSAPP_TEXT_ORDERING_PAUSED=true).
+          </div>
+        )}
+
+        {cfgError && <p className="mt-2 text-xs font-semibold text-red-600">{cfgError}</p>}
+        {cfgOk && <p className="mt-2 text-xs font-semibold text-emerald-700">{cfgOk}</p>}
+
+        {/* Quick presets */}
+        <div className="mt-3">
+          <p className="text-[11px] font-semibold text-emerald-800">Presets rápidos:</p>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <button onClick={presetMyPhoneReply} disabled={cfgSaving}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+              Ativar só meu telefone — resposta apenas
+            </button>
+            <button onClick={presetRestaurantReply} disabled={cfgSaving}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+              Ativar restaurante inteiro — resposta apenas
+            </button>
+            <button onClick={presetMyPhoneFullTest} disabled={cfgSaving}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+              Ativar meu telefone — pedido real controlado
+            </button>
+          </div>
+        </div>
+
+        {/* Manual controls */}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+            <input type="checkbox" checked={aEnabled} onChange={e => setAEnabled(e.target.checked)} />
+            Ativar Pedido por WhatsApp
+          </label>
+          <label className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+            <input type="checkbox" checked={aPaused} onChange={e => setAPaused(e.target.checked)} />
+            Pausar Pedido por WhatsApp
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-600">
+            Modo
+            <select value={aMode} onChange={e => setAMode(e.target.value as WaMode)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm">
+              <option value="DRY_RUN_ONLY">Desligado (dry-run, sem efeitos)</option>
+              <option value="ALLOWLIST_REPLY_ONLY">Somente resposta para telefone de teste</option>
+              <option value="ALLOWLIST_FULL_TEST">Pedido real controlado para telefone de teste</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-600">
+            Escopo
+            <select value={aScope} onChange={e => setAScope(e.target.value as WaScope)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm">
+              <option value="PHONE_ALLOWLIST">Apenas telefones liberados</option>
+              <option value="RESTAURANT_WIDE">Restaurante inteiro</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-600 sm:col-span-2">
+            Telefones liberados (separados por vírgula — formato E.164, ex: +5511999990000)
+            <textarea value={aPhones} onChange={e => setAPhones(e.target.value)} rows={2}
+              disabled={aScope === "RESTAURANT_WIDE"}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm font-mono disabled:bg-gray-100 disabled:text-gray-400" />
+          </label>
+        </div>
+
+        {/* Mode/scope warnings */}
+        <div className="mt-3 space-y-1 text-[11px]">
+          {aMode === "ALLOWLIST_REPLY_ONLY" && (
+            <p className="text-emerald-800">ℹ REPLY_ONLY: responde no WhatsApp, <b>não cria pedido nem Pix</b>.</p>
+          )}
+          {aMode === "ALLOWLIST_FULL_TEST" && (
+            <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 font-semibold text-red-800">
+              ⚠ FULL_TEST: pode <b>criar pedido e Pix REAIS</b> para os telefones/escopo liberados. Use só com monitoramento ao vivo.
+            </p>
+          )}
+          {aScope === "RESTAURANT_WIDE" && (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 font-semibold text-amber-800">
+              ⚠ RESTAURANT_WIDE: <b>todos os clientes</b> deste restaurante podem cair no fluxo de Pedido por Texto.
+            </p>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button onClick={saveConfig} disabled={cfgSaving}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+            {cfgSaving ? "Salvando…" : "Salvar configuração"}
+          </button>
+          <button onClick={presetPauseAll} disabled={cfgSaving}
+            className="rounded-lg border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+            Pausar agora
+          </button>
+          <button onClick={presetDisable} disabled={cfgSaving}
+            className="rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">
+            Desativar agora
+          </button>
+          <button onClick={checkRouting} disabled={rdLoading}
+            className="rounded-lg border border-blue-400 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+            Verificar roteamento
+          </button>
+        </div>
+      </div>
+
+      {/* B2. Env fallback reference (only needed when not using the panel above) */}
       <details className="mt-3 rounded-xl border border-orange-200 bg-orange-50">
         <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-orange-800 select-none">
-          Instruções para ativar teste controlado (clique para expandir)
+          Variáveis de ambiente (fallback / kill switch global — opcional)
         </summary>
         <div className="px-4 pb-4 pt-2 text-xs text-orange-900 space-y-2">
           <p className="font-semibold">Defina estas variáveis de ambiente no servidor de produção:</p>

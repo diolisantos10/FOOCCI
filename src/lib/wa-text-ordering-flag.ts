@@ -164,6 +164,33 @@ export interface WaRoutingDecision {
   /** Final verdict — mirrors the live webhook gate exactly. */
   shouldUseTextOrdering: boolean;
   declineReason:         string | null;
+  /** Where the effective config came from: persisted DB row or env fallback. */
+  source?:               "db" | "env";
+  /** True when a per-restaurant DB config row drove this decision. */
+  dbConfigPresent?:      boolean;
+  /** True when the global env kill switch (ENABLED=false) is engaged. */
+  globalKillSwitch?:     boolean;
+}
+
+/** True when the global env kill switch is engaged (forces OFF for everyone). */
+export function isGlobalKillSwitchEngaged(): boolean {
+  return process.env.WHATSAPP_TEXT_ORDERING_ENABLED === "false";
+}
+
+/** True when the global env pause is engaged (pauses everyone). */
+export function isGlobalPauseEngaged(): boolean {
+  return process.env.WHATSAPP_TEXT_ORDERING_PAUSED === "true";
+}
+
+/**
+ * Format-tolerant phone membership test. Both the candidate and every list entry
+ * are canonicalised with the same BR normaliser the live webhook uses, so an
+ * allowlist entry typed as +5511…, 5511…, or 11… all match the Evolution JID.
+ */
+export function isPhoneInList(phone: string, list: string[]): boolean {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return false;
+  return list.map(normalizePhone).includes(normalized);
 }
 
 /**

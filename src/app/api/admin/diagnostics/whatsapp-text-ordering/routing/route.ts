@@ -22,15 +22,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { maskPhone } from "@/lib/wa-text-ordering-flag";
 import {
-  getRoutingDecision,
-  maskPhone,
-  isWaTextOrderingEnabled,
-  isRestaurantAllowlisted,
-  isPhoneAllowlisted,
-  isWaTextOrderingPaused,
-  getWaTextOrderingScope,
-} from "@/lib/wa-text-ordering-flag";
+  getRoutingDecisionForRestaurant,
+  getRestaurantConfig,
+} from "@/services/whatsapp/ordering/WhatsAppTextOrderingConfigService";
 
 const bodySchema = z.object({
   restaurantSlug: z.string().min(1).max(100),
@@ -67,8 +63,9 @@ export async function POST(req: NextRequest) {
   }
 
   // The live webhook receives the phone as an E.164 JID (e.g. "+5511999990000").
-  // We accept any format and report what the gate sees.
-  const decision = getRoutingDecision(restaurant.id, phone);
+  // We accept any format and report what the DB-aware gate sees.
+  const decision = await getRoutingDecisionForRestaurant(restaurant.id, phone);
+  const dbConfig = await getRestaurantConfig(restaurant.id);
 
   return NextResponse.json({
     restaurant,
@@ -78,53 +75,42 @@ export async function POST(req: NextRequest) {
     },
     flags: {
       masterEnabled:         decision.masterEnabled,
+      globalKillSwitch:      decision.globalKillSwitch ?? false,
       paused:                decision.paused,
       mode:                  decision.mode,
       scope:                 decision.scope,
       restaurantAllowlisted: decision.restaurantAllowlisted,
       enabledForRestaurant:  decision.enabledForRestaurant,
       phoneAllowlisted:      decision.phoneAllowlisted,
+      source:                decision.source ?? "env",
+      dbConfigPresent:       decision.dbConfigPresent ?? false,
     },
+    dbConfig: dbConfig
+      ? {
+          enabled: dbConfig.enabled,
+          mode:    dbConfig.mode,
+          scope:   dbConfig.scope,
+          paused:  dbConfig.paused,
+          phones:  dbConfig.allowlistedPhones.length,
+        }
+      : null,
     // Final verdict — identical logic to the live Evolution webhook gate.
     wouldRouteToTextOrdering: decision.shouldUseTextOrdering,
     declineReason:            decision.declineReason,
-    // Helpful for the operator: how to set the env vars for THIS test.
-    hint: decision.shouldUseTextOrdering
-      ? "Pronto — esta mensagem entraria no Pedido por Texto."
-      : buildHint(restaurant.id, phone, {
-          isWaTextOrderingEnabled: isWaTextOrderingEnabled(restaurant.id),
-          isRestaurantAllowlisted: isRestaurantAllowlisted(restaurant.id),
-          isPhoneAllowlisted:      isPhoneAllowlisted(phone),
-          paused:                  isWaTextOrderingPaused(),
-          scope:                   getWaTextOrderingScope(),
-        }),
+    hint: buildHint(decision),
     sideEffects: "none — this check never sends WhatsApp, creates orders, or generates Pix",
   });
 }
 
-function buildHint(
-  restaurantId: string,
-  phone: string,
-  s: {
-    isWaTextOrderingEnabled: boolean;
-    isRestaurantAllowlisted: boolean;
-    isPhoneAllowlisted:      boolean;
-    paused:                  boolean;
-    scope:                   string;
-  },
-): string {
-  const parts: string[] = [];
-  if (process.env.WHATSAPP_TEXT_ORDERING_ENABLED !== "true") {
-    parts.push('Set WHATSAPP_TEXT_ORDERING_ENABLED="true"');
+function buildHint(decision: { shouldUseTextOrdering: boolean; globalKillSwitch?: boolean; source?: string; declineReason: string | null }): string {
+  if (decision.shouldUseTextOrdering) {
+    return "Pronto — esta mensagem entraria no Pedido por Texto.";
   }
-  if (s.paused) {
-    parts.push('Remove or set WHATSAPP_TEXT_ORDERING_PAUSED="false" to resume');
+  if (decision.globalKillSwitch) {
+    return "Bloqueado pelo kill switch global no Railway. Remova WHATSAPP_TEXT_ORDERING_ENABLED=false para liberar.";
   }
-  if (!s.isWaTextOrderingEnabled || !s.isRestaurantAllowlisted) {
-    parts.push(`Add restaurant ID to WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: "${restaurantId}"`);
+  if (decision.source === "env") {
+    return "Nenhuma configuração salva no painel para este restaurante — usando variáveis de ambiente (Railway). Use o painel de controle abaixo para ativar sem mexer no Railway.";
   }
-  if (s.scope === "PHONE_ALLOWLIST" && !s.isPhoneAllowlisted) {
-    parts.push(`Add phone to WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES (E.164): "${phone}" — or set WHATSAPP_TEXT_ORDERING_SCOPE=RESTAURANT_WIDE to skip per-phone allowlist`);
-  }
-  return parts.join(" · ");
+  return decision.declineReason ?? "Ajuste a configuração no painel de controle acima.";
 }
