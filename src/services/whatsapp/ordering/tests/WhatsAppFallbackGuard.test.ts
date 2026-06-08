@@ -23,7 +23,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 // ── hoisted mocks ─────────────────────────────────────────────────────────────
 
 const prismaMock = vi.hoisted(() => ({
-  conversation: { findUnique: vi.fn() },
+  conversation: { findUnique: vi.fn(), update: vi.fn() },
   message:      { create: vi.fn() },
   $transaction: vi.fn(),
 }));
@@ -197,6 +197,9 @@ describe("D — empty suggestedReply sets replySent=false (no silent drop)", () 
     expect(r.handled).toBe(true);
     expect(r.replySent).toBe(false);
     expect(r.replyWouldSend).toBe(true);
+    // Webhook semantics (task E): handled && (replySent || handoffApplied) = false → old agent falls back.
+    const textOrderingHandled = r.handled && (r.replySent || r.handoffApplied);
+    expect(textOrderingHandled).toBe(false);
   });
 });
 
@@ -379,6 +382,42 @@ describe("J — DRY_RUN_ONLY processes silently (replyWouldSend=false) so old ag
     // And no order/Pix created in DRY_RUN.
     const call = processMock.processCustomerMessage.mock.calls[0][0];
     expect(call.allowSideEffects).toBe(false);
+  });
+});
+
+// ── K. REPLY_ONLY + send succeeds → textOrderingHandled=true (old agent blocked) ──
+// This is the POSITIVE counterpart to test J. When the engine actually sends a
+// reply in ALLOWLIST_REPLY_ONLY mode, `textOrderingHandled` must be `true` so the
+// old WhatsApp Receptionist is NOT invoked. This directly proves the fix for the
+// live test failure: switching from DRY_RUN_ONLY → ALLOWLIST_REPLY_ONLY and having
+// a real reply go out blocks the old agent from also answering.
+
+describe("K — REPLY_ONLY + reply sent → textOrderingHandled=true (old agent blocked)", () => {
+  it("replySent=true → webhook textOrderingHandled=true, Receptionist skipped", async () => {
+    configMock.resolveWaConfig.mockResolvedValue(dbConfig({
+      enabled: true, mode: "ALLOWLIST_REPLY_ONLY", scope: "RESTAURANT_WIDE",
+    }));
+    prismaMock.conversation.findUnique.mockResolvedValue(activeConv());
+    sessionMock.WhatsAppOrderingSessionService.findActiveSession.mockResolvedValue(fakeSession());
+    sessionMock.WhatsAppOrderingSessionService.updateSession.mockResolvedValue({});
+    processMock.processCustomerMessage.mockResolvedValue(processResult("Adicionei 1 yakisoba!"));
+    prismaMock.$transaction.mockResolvedValue([]);
+
+    const { EvolutionConfigService } = await import("@/services/evolution/EvolutionConfigService");
+    vi.mocked(EvolutionConfigService.getSnapshot).mockResolvedValue({ ok: true, data: {} as never });
+    const { EvolutionClient } = await import("@/lib/evolution/EvolutionClient");
+    vi.mocked(EvolutionClient.sendTextMessage).mockResolvedValue({ key: { id: "msg-test-1" } } as never);
+
+    const r = await handleInboundForOrdering({
+      restaurantId: REST, phone: PHONE, conversationId: CONV,
+      messageText: "Quero um yakisoba",
+    });
+    expect(r.handled).toBe(true);
+    expect(r.replyWouldSend).toBe(true);
+    expect(r.replySent).toBe(true);
+    // Webhook semantics: handled && (replySent || handoffApplied) = true → old agent blocked.
+    const textOrderingHandled = r.handled && (r.replySent || r.handoffApplied);
+    expect(textOrderingHandled).toBe(true);
   });
 });
 

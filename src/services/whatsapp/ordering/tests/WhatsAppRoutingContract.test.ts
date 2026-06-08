@@ -119,6 +119,23 @@ describe("B — RESTAURANT_WIDE + 'Oi' + no session → old WhatsApp Agent", () 
   });
 });
 
+// ── A3 — 'Olá' is a greeting with no order intent ────────────────────────────
+// Guards the live bug where RESTAURANT_WIDE was activated and every message
+// (including greetings) stopped going to the old Receptionist. 'Olá' must
+// always yield OLD_WHATSAPP_AGENT when there is no active ordering session.
+
+describe("A3 — RESTAURANT_WIDE + REPLY_ONLY + 'Olá' + no session → old WhatsApp Agent", () => {
+  it("'Olá' has no order intent → old WhatsApp Agent regardless of mode", async () => {
+    eligibleConfig({ mode: "ALLOWLIST_REPLY_ONLY" }); noSession();
+    const d = await route("Olá");
+    expect(d.messageHasOrderIntent).toBe(false);
+    expect(d.hasActiveSession).toBe(false);
+    expect(d.wouldRouteToTextOrdering).toBe(false);
+    expect(d.finalHandler).toBe("OLD_WHATSAPP_AGENT");
+    expect(d.effectiveFinalHandler).toBe("OLD_WHATSAPP_AGENT");
+  });
+});
+
 describe("C — RESTAURANT_WIDE + 'Cardápio' + no session → old WhatsApp Agent", () => {
   it("a menu question is not order intent", async () => {
     eligibleConfig(); noSession();
