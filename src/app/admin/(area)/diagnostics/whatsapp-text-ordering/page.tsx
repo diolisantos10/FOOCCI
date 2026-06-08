@@ -44,7 +44,7 @@ interface RoutingReadiness {
   restaurant: { id: string; name: string; slug: string };
   input: { phone: string; phoneMasked: string };
   flags: {
-    masterEnabled: boolean; mode: string;
+    masterEnabled: boolean; paused: boolean; mode: string; scope: string;
     restaurantAllowlisted: boolean; enabledForRestaurant: boolean; phoneAllowlisted: boolean;
   };
   wouldRouteToTextOrdering: boolean;
@@ -295,11 +295,13 @@ export default function WaTextOrderingPage() {
                 tone={rdReport.wouldRouteToTextOrdering ? "green" : "red"}
               />
               <Pill text={`modo: ${rdReport.flags.mode}`} tone="gray" />
+              <Pill text={`escopo: ${rdReport.flags.scope}`} tone="gray" />
+              {rdReport.flags.paused && <Pill text="⏸ PAUSADO" tone="red" />}
             </div>
             <div className="grid grid-cols-2 gap-1 text-[11px] text-gray-700 sm:grid-cols-3">
               <span>{rdReport.flags.masterEnabled ? "✅" : "⬜"} flag ligada</span>
               <span>{rdReport.flags.enabledForRestaurant ? "✅" : "⬜"} restaurante liberado</span>
-              <span>{rdReport.flags.phoneAllowlisted ? "✅" : "⬜"} telefone no allowlist</span>
+              <span>{rdReport.flags.scope === "PHONE_ALLOWLIST" ? (rdReport.flags.phoneAllowlisted ? "✅" : "⬜") : "✅"} {rdReport.flags.scope === "PHONE_ALLOWLIST" ? "telefone no allowlist" : "escopo: todos os telefones"}</span>
             </div>
             <p className="text-[11px] text-gray-600">
               Restaurante: <span className="font-mono">{rdReport.restaurant.id}</span> ({rdReport.restaurant.slug}) ·

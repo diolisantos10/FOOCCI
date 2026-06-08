@@ -28,6 +28,8 @@ import {
   isWaTextOrderingEnabled,
   isRestaurantAllowlisted,
   isPhoneAllowlisted,
+  isWaTextOrderingPaused,
+  getWaTextOrderingScope,
 } from "@/lib/wa-text-ordering-flag";
 
 const bodySchema = z.object({
@@ -76,7 +78,9 @@ export async function POST(req: NextRequest) {
     },
     flags: {
       masterEnabled:         decision.masterEnabled,
+      paused:                decision.paused,
       mode:                  decision.mode,
+      scope:                 decision.scope,
       restaurantAllowlisted: decision.restaurantAllowlisted,
       enabledForRestaurant:  decision.enabledForRestaurant,
       phoneAllowlisted:      decision.phoneAllowlisted,
@@ -91,6 +95,8 @@ export async function POST(req: NextRequest) {
           isWaTextOrderingEnabled: isWaTextOrderingEnabled(restaurant.id),
           isRestaurantAllowlisted: isRestaurantAllowlisted(restaurant.id),
           isPhoneAllowlisted:      isPhoneAllowlisted(phone),
+          paused:                  isWaTextOrderingPaused(),
+          scope:                   getWaTextOrderingScope(),
         }),
     sideEffects: "none — this check never sends WhatsApp, creates orders, or generates Pix",
   });
@@ -99,17 +105,26 @@ export async function POST(req: NextRequest) {
 function buildHint(
   restaurantId: string,
   phone: string,
-  s: { isWaTextOrderingEnabled: boolean; isRestaurantAllowlisted: boolean; isPhoneAllowlisted: boolean },
+  s: {
+    isWaTextOrderingEnabled: boolean;
+    isRestaurantAllowlisted: boolean;
+    isPhoneAllowlisted:      boolean;
+    paused:                  boolean;
+    scope:                   string;
+  },
 ): string {
   const parts: string[] = [];
   if (process.env.WHATSAPP_TEXT_ORDERING_ENABLED !== "true") {
     parts.push('Set WHATSAPP_TEXT_ORDERING_ENABLED="true"');
   }
-  if (!s.isWaTextOrderingEnabled || !s.isRestaurantAllowlisted) {
-    parts.push(`Add the restaurant ID to WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: "${restaurantId}"`);
+  if (s.paused) {
+    parts.push('Remove or set WHATSAPP_TEXT_ORDERING_PAUSED="false" to resume');
   }
-  if (!s.isPhoneAllowlisted) {
-    parts.push(`Add this phone to WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES (E.164): "${phone}"`);
+  if (!s.isWaTextOrderingEnabled || !s.isRestaurantAllowlisted) {
+    parts.push(`Add restaurant ID to WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS: "${restaurantId}"`);
+  }
+  if (s.scope === "PHONE_ALLOWLIST" && !s.isPhoneAllowlisted) {
+    parts.push(`Add phone to WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES (E.164): "${phone}" — or set WHATSAPP_TEXT_ORDERING_SCOPE=RESTAURANT_WIDE to skip per-phone allowlist`);
   }
   return parts.join(" · ");
 }

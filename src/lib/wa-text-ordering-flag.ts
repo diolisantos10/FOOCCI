@@ -10,15 +10,23 @@
  *   ALLOWLIST_FULL_TEST — may create a real order + Pix, ONLY for allowlisted
  *                         restaurant+phone, with customer confirmation.
  *
- * Even with the master switch on, the engine is NEVER active for a customer
- * unless BOTH the restaurant and the phone are on their allowlists (except the
- * empty-allowlist convenience for DRY_RUN_ONLY, which has no side effects).
+ * Two scope modes (WHATSAPP_TEXT_ORDERING_SCOPE):
+ *   PHONE_ALLOWLIST  — (default) gate requires BOTH restaurant AND phone on allowlists.
+ *   RESTAURANT_WIDE  — gate requires only restaurant allowlist; routes ALL customer
+ *                      phones for that restaurant. Use for full restaurant rollout.
+ *
+ * Kill switch (WHATSAPP_TEXT_ORDERING_PAUSED=true):
+ *   Instantly pauses live routing for ALL restaurants without clearing other flags.
+ *   ENABLED stays true so diagnostics/dry-run still work. Unset or set to "false"
+ *   to resume. Takes effect on next inbound message — no deploy required.
  *
  * Env vars (all optional; safe defaults):
  *   WHATSAPP_TEXT_ORDERING_ENABLED=false
  *   WHATSAPP_TEXT_ORDERING_MODE=DRY_RUN_ONLY
+ *   WHATSAPP_TEXT_ORDERING_SCOPE=PHONE_ALLOWLIST
  *   WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS=rest-id-1,rest-id-2
  *   WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES=+5511999990000,+5511888887777
+ *   WHATSAPP_TEXT_ORDERING_PAUSED=false
  */
 
 export type WaOrderingMode =
@@ -26,11 +34,17 @@ export type WaOrderingMode =
   | "ALLOWLIST_REPLY_ONLY"
   | "ALLOWLIST_FULL_TEST";
 
+export type WaOrderingScope =
+  | "PHONE_ALLOWLIST"
+  | "RESTAURANT_WIDE";
+
 const VALID_MODES: WaOrderingMode[] = [
   "DRY_RUN_ONLY",
   "ALLOWLIST_REPLY_ONLY",
   "ALLOWLIST_FULL_TEST",
 ];
+
+const VALID_SCOPES: WaOrderingScope[] = ["PHONE_ALLOWLIST", "RESTAURANT_WIDE"];
 
 /** Whether the master switch is on. Defaults to false. */
 export function isWaTextOrderingEnabled(restaurantId?: string): boolean {
@@ -46,6 +60,24 @@ export function isWaTextOrderingEnabled(restaurantId?: string): boolean {
 export function getWaTextOrderingMode(): WaOrderingMode {
   const raw = (process.env.WHATSAPP_TEXT_ORDERING_MODE ?? "").trim().toUpperCase();
   return (VALID_MODES as string[]).includes(raw) ? (raw as WaOrderingMode) : "DRY_RUN_ONLY";
+}
+
+/**
+ * The configured scope.
+ *   PHONE_ALLOWLIST (default) — both restaurant AND phone must be allowlisted.
+ *   RESTAURANT_WIDE           — all phones for an allowlisted restaurant are routed.
+ */
+export function getWaTextOrderingScope(): WaOrderingScope {
+  const raw = (process.env.WHATSAPP_TEXT_ORDERING_SCOPE ?? "").trim().toUpperCase();
+  return (VALID_SCOPES as string[]).includes(raw) ? (raw as WaOrderingScope) : "PHONE_ALLOWLIST";
+}
+
+/**
+ * Kill switch — pauses live routing instantly without clearing ENABLED.
+ * Set WHATSAPP_TEXT_ORDERING_PAUSED=true to pause; unset or false to resume.
+ */
+export function isWaTextOrderingPaused(): boolean {
+  return process.env.WHATSAPP_TEXT_ORDERING_PAUSED === "true";
 }
 
 /** True only if the master switch is on AND this restaurant is allowlisted. */
@@ -80,16 +112,19 @@ export function resolveSideEffectPermissions(
   phone:        string,
 ): WaSideEffectPermissions {
   const mode    = getWaTextOrderingMode();
+  const scope   = getWaTextOrderingScope();
+  const paused  = isWaTextOrderingPaused();
   const reasons: string[] = [];
 
   const enabled        = process.env.WHATSAPP_TEXT_ORDERING_ENABLED === "true";
   const restOk         = isRestaurantAllowlisted(restaurantId);
-  const phoneOk        = isPhoneAllowlisted(phone);
-  const fullyAllowed   = enabled && restOk && phoneOk;
+  const phoneOk        = scope === "RESTAURANT_WIDE" ? true : isPhoneAllowlisted(phone);
+  const fullyAllowed   = enabled && restOk && phoneOk && !paused;
 
   if (!enabled)  reasons.push("master switch off (WHATSAPP_TEXT_ORDERING_ENABLED!=true)");
+  if (paused)    reasons.push("paused (WHATSAPP_TEXT_ORDERING_PAUSED=true)");
   if (!restOk)   reasons.push("restaurant not allowlisted");
-  if (!phoneOk)  reasons.push("phone not allowlisted");
+  if (scope === "PHONE_ALLOWLIST" && !phoneOk) reasons.push("phone not allowlisted");
 
   let canReply = false;
   let canCreateOrder = false;
@@ -118,7 +153,9 @@ export function resolveSideEffectPermissions(
 
 export interface WaRoutingDecision {
   masterEnabled:         boolean;
+  paused:                boolean;
   mode:                  WaOrderingMode;
+  scope:                 WaOrderingScope;
   /** Restaurant explicitly present in the restaurant allowlist. */
   restaurantAllowlisted: boolean;
   /** Master flag on AND (restaurant allowlist empty OR restaurant included). */
@@ -130,28 +167,42 @@ export interface WaRoutingDecision {
 }
 
 /**
- * Computes the exact live-routing decision the Evolution webhook applies, so the
- * webhook handler and the admin diagnostic share ONE implementation. The gate is:
- *   isWaTextOrderingEnabled(restaurantId) && isPhoneAllowlisted(phone)
+ * Computes the exact live-routing decision the Evolution webhook applies.
+ * Single source of truth shared by webhook handler and admin diagnostics.
+ *
+ * Gate logic:
+ *   PHONE_ALLOWLIST (default): enabled(restaurant) && !paused && phone allowlisted
+ *   RESTAURANT_WIDE:           enabled(restaurant) && !paused  (all phones)
  */
 export function getRoutingDecision(restaurantId: string, phone: string): WaRoutingDecision {
   const masterEnabled         = process.env.WHATSAPP_TEXT_ORDERING_ENABLED === "true";
+  const paused                = isWaTextOrderingPaused();
   const mode                  = getWaTextOrderingMode();
+  const scope                 = getWaTextOrderingScope();
   const restaurantAllowlisted = isRestaurantAllowlisted(restaurantId);
   const enabledForRestaurant  = isWaTextOrderingEnabled(restaurantId);
   const phoneAllowlisted      = isPhoneAllowlisted(phone);
-  const shouldUseTextOrdering = enabledForRestaurant && phoneAllowlisted;
+
+  let shouldUseTextOrdering: boolean;
+  if (scope === "RESTAURANT_WIDE") {
+    shouldUseTextOrdering = enabledForRestaurant && !paused;
+  } else {
+    shouldUseTextOrdering = enabledForRestaurant && phoneAllowlisted && !paused;
+  }
 
   let declineReason: string | null = null;
   if (!shouldUseTextOrdering) {
     if (!masterEnabled)              declineReason = "master switch off (WHATSAPP_TEXT_ORDERING_ENABLED!=true)";
+    else if (paused)                 declineReason = "paused (WHATSAPP_TEXT_ORDERING_PAUSED=true)";
     else if (!enabledForRestaurant)  declineReason = "restaurant not allowlisted (set WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS to the restaurant ID)";
-    else if (!phoneAllowlisted)      declineReason = "phone not allowlisted (add the E.164 number to WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES)";
+    else if (scope === "PHONE_ALLOWLIST" && !phoneAllowlisted)
+                                     declineReason = "phone not allowlisted (add the E.164 number to WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES)";
     else                             declineReason = "unknown";
   }
 
   return {
-    masterEnabled, mode, restaurantAllowlisted, enabledForRestaurant,
+    masterEnabled, paused, mode, scope,
+    restaurantAllowlisted, enabledForRestaurant,
     phoneAllowlisted, shouldUseTextOrdering, declineReason,
   };
 }

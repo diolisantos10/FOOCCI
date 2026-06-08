@@ -36,7 +36,7 @@ import { markCrmReplyIfApplicable } from "@/services/agents/AgentRoutingService"
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 import { shouldAiRespond } from "@/services/conversation/ConversationAiPolicyService";
-import { isWaTextOrderingEnabled, isPhoneAllowlisted, getRoutingDecision, maskPhone } from "@/lib/wa-text-ordering-flag";
+import { getRoutingDecision, maskPhone } from "@/lib/wa-text-ordering-flag";
 
 // Resolved conversations older than this are treated as new threads.
 const REOPEN_WINDOW_HOURS = 24;
@@ -282,13 +282,13 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   // Text ordering engine: fires async, behind full flag + allowlist + conversation guards.
   // Only TEXT messages are eligible. If the engine handles this message, normal agent
   // routing (receptionist / AI_ORDERING_EXPERIMENTAL) is skipped for this turn.
+  // getRoutingDecision() is the single source of truth — it handles scope (PHONE_ALLOWLIST
+  // vs RESTAURANT_WIDE) and the kill switch (PAUSED) in one place.
+  const routingDecision = shouldRespond && event.messageType === "TEXT"
+    ? getRoutingDecision(restaurantId, event.phone)
+    : null;
   let textOrderingHandled = false;
-  if (
-    shouldRespond &&
-    event.messageType === "TEXT" &&
-    isWaTextOrderingEnabled(restaurantId) &&
-    isPhoneAllowlisted(event.phone)
-  ) {
+  if (routingDecision?.shouldUseTextOrdering) {
     textOrderingHandled = true;
     void import("@/services/whatsapp/ordering/WhatsAppTextOrderingRuntimeService")
       .then(({ handleInboundForOrdering }) =>
@@ -344,7 +344,7 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   // so allowlisted live tests are debuggable without adding noise for everyone.
   // No secrets and no full phone are logged.
   if (process.env.WHATSAPP_TEXT_ORDERING_ENABLED === "true" && event.messageType === "TEXT") {
-    const decision = getRoutingDecision(restaurantId, event.phone);
+    const decision = routingDecision ?? getRoutingDecision(restaurantId, event.phone);
     const finalHandler = textOrderingHandled
       ? "TEXT_ORDERING"
       : shouldRespond
@@ -356,6 +356,8 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
       restaurantId,
       phoneMasked:           maskPhone(event.phone),
       mode:                  decision.mode,
+      scope:                 decision.scope,
+      paused:                decision.paused,
       enabled:               decision.masterEnabled,
       restaurantAllowlisted: decision.restaurantAllowlisted,
       enabledForRestaurant:  decision.enabledForRestaurant,
