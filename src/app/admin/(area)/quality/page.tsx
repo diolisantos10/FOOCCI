@@ -13,6 +13,7 @@ import {
   TREND_LABEL,
   type Trend,
 } from "@/services/quality/executiveSummary";
+import { detectRegression } from "@/services/quality/regression";
 import type { AuditRunResult, FindingSeverity, FindingStatus } from "@/services/quality/types";
 
 // ─── display helpers ────────────────────────────────────────────────────────
@@ -127,6 +128,8 @@ export default function QualityControlPage() {
   const [copied, setCopied] = useState<"json" | "txt" | null>(null);
   const [history, setHistory] = useState<HistoryRun[]>([]);
   const [latestRun, setLatestRun] = useState<LatestRun | null>(null);
+  const [selectedRun, setSelectedRun] = useState<LatestRun | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -202,6 +205,20 @@ export default function QualityControlPage() {
   }, [viewFindings]);
 
   const trendRuns = history.slice(0, 7).reverse(); // oldest → newest (left → right)
+  const regression = useMemo(() => detectRegression(history[0], history[1]), [history]);
+
+  async function selectRun(id: string) {
+    if (selectedId === id) { setSelectedId(null); setSelectedRun(null); return; } // toggle off
+    setSelectedId(id);
+    setSelectedRun(null);
+    try {
+      const res = await fetch(`/api/admin/quality/history?runId=${encodeURIComponent(id)}&limit=20`);
+      const data = (await res.json()) as { ok: boolean; run?: LatestRun | null };
+      if (data.ok && data.run) setSelectedRun(data.run);
+    } catch {
+      /* best-effort */
+    }
+  }
 
   return (
     <div className="mx-auto max-w-5xl p-6">
@@ -212,7 +229,7 @@ export default function QualityControlPage() {
           <p className="mt-1 text-sm text-gray-400">Auditoria automática do Foocci antes da operação.</p>
         </div>
         <div className="text-right">
-          <span className="rounded-full bg-violet-900/50 px-3 py-1 text-xs font-semibold text-violet-200">v3.2 · Diário</span>
+          <span className="rounded-full bg-violet-900/50 px-3 py-1 text-xs font-semibold text-violet-200">v3.3 · Diário</span>
           {latestRun && (
             <p className="mt-1.5 text-[11px] text-gray-500">
               Última: {fmtDateTime(latestRun.createdAt)} · {latestRun.source.toLowerCase()} · {fmtDuration(latestRun.durationMs)}
@@ -226,6 +243,14 @@ export default function QualityControlPage() {
         🔒 Read-only · SafeMode. Nenhuma auditoria envia WhatsApp, cria pedido, gera Pix ou altera o banco.
         <span className="text-gray-500"> Auditoria automática diária por cron (madrugada).</span>
       </div>
+
+      {/* New-P0 regression banner (visual only — no external alert) */}
+      {regression.severity === "P0" && (
+        <div className="mb-4 rounded-lg border border-red-600 bg-red-950/40 px-3 py-2 text-sm font-semibold text-red-200">
+          🚨 {regression.title}: {regression.summary}
+          <span className="ml-1 font-normal text-red-300/80">(detecção visual — nenhum alerta externo é enviado)</span>
+        </div>
+      )}
 
       {/* ── Situação do sistema (primeira dobra) ── */}
       <section
@@ -241,11 +266,29 @@ export default function QualityControlPage() {
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className={`text-2xl font-bold ${viewStatus ? statusTone(viewStatus) : "text-gray-500"}`}>
                 {viewStatus ? statusLabel(viewStatus) : "—"}
               </span>
               {viewStatus && findingStatusBadge(viewStatus)}
+              {/* Regression vs. previous run */}
+              {regression.trend !== "INSUFFICIENT_HISTORY" && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    regression.severity === "P0"
+                      ? "animate-pulse bg-red-900/70 text-red-200 ring-1 ring-red-500"
+                      : regression.trend === "WORSENED"
+                      ? "bg-amber-900/50 text-amber-300"
+                      : regression.trend === "IMPROVED"
+                      ? "bg-green-900/50 text-green-300"
+                      : "bg-gray-800 text-gray-400"
+                  }`}
+                  title={regression.summary}
+                >
+                  {regression.trend === "IMPROVED" ? "▲ " : regression.trend === "WORSENED" ? "▼ " : "= "}
+                  {regression.title}
+                </span>
+              )}
             </div>
             <p className="mt-1 text-sm text-gray-300">{overview.statusText}</p>
             {overview.hasHistory && (
@@ -345,7 +388,13 @@ export default function QualityControlPage() {
               </thead>
               <tbody>
                 {history.slice(0, 10).map((h) => (
-                  <tr key={h.id} className="border-t border-gray-800/70">
+                  <tr
+                    key={h.id}
+                    onClick={() => selectRun(h.id)}
+                    className={`cursor-pointer border-t border-gray-800/70 hover:bg-gray-800/50 ${
+                      selectedId === h.id ? "bg-gray-800/70" : ""
+                    }`}
+                  >
                     <td className="py-1 pr-2 text-gray-300">{fmtDateTime(h.createdAt)}</td>
                     <td className="px-2"><span className={statusTone(h.globalStatus)}>{h.globalStatus}</span></td>
                     <td className="px-2 text-gray-400">
@@ -359,6 +408,49 @@ export default function QualityControlPage() {
                 ))}
               </tbody>
             </table>
+            <p className="mt-1.5 text-[10px] text-gray-600">Clique numa linha para ver os detalhes da rodada.</p>
+          </div>
+        )}
+
+        {/* Drill-down panel for the selected run */}
+        {selectedId && (
+          <div className="mt-3 rounded-lg border border-violet-800/50 bg-gray-950/50 p-3">
+            {!selectedRun ? (
+              <p className="text-xs text-gray-500">Carregando rodada…</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-gray-200">Rodada {fmtDateTime(selectedRun.createdAt)}</span>
+                    {findingStatusBadge(selectedRun.globalStatus)}
+                    <span className="text-[11px] text-gray-500">
+                      {selectedRun.source.toLowerCase()} · {fmtDuration(selectedRun.durationMs)} ·
+                      {" "}P0 {selectedRun.countsBySeverity.P0} · P1 {selectedRun.countsBySeverity.P1} · P2 {selectedRun.countsBySeverity.P2}
+                    </span>
+                  </div>
+                  <button type="button" onClick={() => { setSelectedId(null); setSelectedRun(null); }} className="text-[11px] text-gray-500 hover:text-gray-300">
+                    fechar ✕
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Auditores afetados:{" "}
+                  {[...new Set(selectedRun.findings.map((f) => f.auditorId))].map(auditorName).join(", ") || "—"}
+                </p>
+                <div className="mt-2 space-y-1.5">
+                  {sortFindings(selectedRun.findings).map((f, i) => (
+                    <div key={i} className="rounded bg-gray-800/60 p-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {findingStatusBadge(f.status)}
+                        {severityBadge(f.severity)}
+                        <span className="text-[11px] text-gray-400">{auditorName(f.auditorId)}</span>
+                        <span className="text-xs font-semibold text-gray-200">{f.title}</span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-gray-400">{f.summary}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
