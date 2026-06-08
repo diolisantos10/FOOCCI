@@ -57,10 +57,13 @@ interface RoutingReadiness {
     messageHasOrderIntent: boolean;
     wouldRouteToTextOrdering: boolean;
     finalHandler: string;
+    replyCapable: boolean;
+    effectiveFinalHandler: string;
     declineReason: string | null;
   } | null;
   wouldRouteToTextOrdering: boolean;
   finalHandler?: string;
+  effectiveFinalHandler?: string;
   declineReason: string | null;
   hint: string;
 }
@@ -446,12 +449,20 @@ export default function WaTextOrderingPage() {
             <div className="flex flex-wrap items-center gap-2">
               <Pill
                 text={
-                  (rdReport.finalHandler ?? (rdReport.wouldRouteToTextOrdering ? "TEXT_ORDERING" : "OLD_WHATSAPP_AGENT")) === "TEXT_ORDERING"
-                    ? "→ Pedido Texto ✓"
-                    : "→ Agente WhatsApp (host)"
+                  (rdReport.effectiveFinalHandler ?? rdReport.messageAware?.effectiveFinalHandler
+                    ?? (rdReport.wouldRouteToTextOrdering ? "TEXT_ORDERING" : "OLD_WHATSAPP_AGENT")) === "TEXT_ORDERING"
+                    ? "Cliente ouve: Pedido Texto ✓"
+                    : "Cliente ouve: Agente WhatsApp (host)"
                 }
-                tone={rdReport.wouldRouteToTextOrdering ? "green" : "amber"}
+                tone={
+                  (rdReport.effectiveFinalHandler ?? rdReport.messageAware?.effectiveFinalHandler) === "TEXT_ORDERING"
+                    ? "green"
+                    : "amber"
+                }
               />
+              {rdReport.messageAware && rdReport.messageAware.wouldRouteToTextOrdering && !rdReport.messageAware.replyCapable && (
+                <Pill text="⚠ DRY_RUN: motor em silêncio" tone="red" />
+              )}
               {rdReport.messageAware && (
                 <Pill text={`intenção: ${rdReport.messageAware.detectedIntent}`} tone={rdReport.messageAware.messageHasOrderIntent ? "green" : "gray"} />
               )}
@@ -481,6 +492,12 @@ export default function WaTextOrderingPage() {
               Restaurante: <span className="font-mono">{rdReport.restaurant.id}</span> ({rdReport.restaurant.slug}) ·
               telefone: <span className="font-mono">{rdReport.input.phoneMasked}</span>
             </p>
+            {rdReport.messageAware && rdReport.messageAware.wouldRouteToTextOrdering && !rdReport.messageAware.replyCapable && (
+              <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-red-900">
+                <p className="font-semibold">Roteia para Pedido Texto, mas o modo é {rdReport.flags.mode} — o motor processa em silêncio e o Agente WhatsApp (host) responde.</p>
+                {rdReport.hint && <p className="mt-1">{rdReport.hint}</p>}
+              </div>
+            )}
             {!rdReport.wouldRouteToTextOrdering && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900">
                 <p className="font-semibold">Manipulador final: {rdReport.finalHandler ?? "OLD_WHATSAPP_AGENT"}</p>

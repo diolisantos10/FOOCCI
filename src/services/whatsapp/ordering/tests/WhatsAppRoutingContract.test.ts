@@ -35,7 +35,11 @@ const prismaMock = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
-import { getMessageAwareRoutingDecision } from "../WhatsAppTextOrderingConfigService";
+import {
+  getMessageAwareRoutingDecision,
+  isReplyCapableMode,
+  effectiveLiveHandler,
+} from "../WhatsAppTextOrderingConfigService";
 import { advanceSession } from "../WhatsAppOrderStateMachine";
 import type { WaMenuItem, WaPersistedSession } from "../types";
 
@@ -195,6 +199,47 @@ describe("N/O — finalHandler values match the diagnostic", () => {
     expect((await route("Bom dia")).finalHandler).toBe("OLD_WHATSAPP_AGENT");
     eligibleConfig(); noSession();
     expect((await route("Quero yakisoba")).finalHandler).toBe("TEXT_ORDERING");
+  });
+});
+
+// ── P — DRY_RUN_ONLY routes to the engine but the customer hears the old agent ─
+// This is the root cause of "diagnostic said TEXT_ORDERING but the live order
+// message still got the old WhatsApp Agent's reply": DRY_RUN_ONLY is eligible and
+// order-intent routes to it, but the engine stays SILENT (canReply=false), so the
+// webhook falls back to the old agent.
+
+describe("P — DRY_RUN_ONLY: routes to engine, but effective handler is old agent", () => {
+  it("order intent in DRY_RUN_ONLY → wouldRoute=true, replyCapable=false, effective=OLD_WHATSAPP_AGENT", async () => {
+    eligibleConfig({ mode: "DRY_RUN_ONLY" }); noSession();
+    const d = await route("Quero 1 yakisoba");
+    expect(d.routingEligible).toBe(true);
+    expect(d.messageHasOrderIntent).toBe(true);
+    expect(d.wouldRouteToTextOrdering).toBe(true);     // routing IS correct
+    expect(d.replyCapable).toBe(false);                // but mode won't reply
+    expect(d.finalHandler).toBe("TEXT_ORDERING");      // routing verdict
+    expect(d.effectiveFinalHandler).toBe("OLD_WHATSAPP_AGENT"); // customer-facing
+    expect(d.declineReason).toMatch(/DRY_RUN_ONLY/);
+  });
+
+  it("ALLOWLIST_REPLY_ONLY → replyCapable=true, effective=TEXT_ORDERING", async () => {
+    eligibleConfig({ mode: "ALLOWLIST_REPLY_ONLY" }); noSession();
+    const d = await route("Quero 1 yakisoba");
+    expect(d.wouldRouteToTextOrdering).toBe(true);
+    expect(d.replyCapable).toBe(true);
+    expect(d.effectiveFinalHandler).toBe("TEXT_ORDERING");
+  });
+});
+
+describe("isReplyCapableMode / effectiveLiveHandler — pure helpers shared by webhook + diagnostic", () => {
+  it("only REPLY_ONLY and FULL_TEST are reply-capable", () => {
+    expect(isReplyCapableMode("ALLOWLIST_REPLY_ONLY")).toBe(true);
+    expect(isReplyCapableMode("ALLOWLIST_FULL_TEST")).toBe(true);
+    expect(isReplyCapableMode("DRY_RUN_ONLY")).toBe(false);
+  });
+  it("effectiveLiveHandler collapses routing + reply capability", () => {
+    expect(effectiveLiveHandler(true,  "ALLOWLIST_REPLY_ONLY")).toBe("TEXT_ORDERING");
+    expect(effectiveLiveHandler(true,  "DRY_RUN_ONLY")).toBe("OLD_WHATSAPP_AGENT");
+    expect(effectiveLiveHandler(false, "ALLOWLIST_REPLY_ONLY")).toBe("OLD_WHATSAPP_AGENT");
   });
 });
 

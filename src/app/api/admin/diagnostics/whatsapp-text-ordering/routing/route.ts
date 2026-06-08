@@ -126,6 +126,12 @@ export async function POST(req: NextRequest) {
           messageHasOrderIntent:    messageAware.messageHasOrderIntent,
           wouldRouteToTextOrdering: messageAware.wouldRouteToTextOrdering,
           finalHandler:             messageAware.finalHandler,
+          // Reply-capability: DRY_RUN_ONLY routes to the engine but the engine
+          // stays silent, so the customer still hears the old agent. This is the
+          // field that explains "diagnostic said TEXT_ORDERING but live used the
+          // old agent".
+          replyCapable:             messageAware.replyCapable,
+          effectiveFinalHandler:    messageAware.effectiveFinalHandler,
           declineReason:            messageAware.declineReason,
         }
       : null,
@@ -137,6 +143,10 @@ export async function POST(req: NextRequest) {
     finalHandler: messageAware
       ? messageAware.finalHandler
       : (decision.shouldUseTextOrdering ? "TEXT_ORDERING" : "OLD_WHATSAPP_AGENT"),
+    // The handler the CUSTOMER actually hears from (accounts for DRY_RUN_ONLY).
+    effectiveFinalHandler: messageAware
+      ? messageAware.effectiveFinalHandler
+      : (decision.shouldUseTextOrdering ? "TEXT_ORDERING" : "OLD_WHATSAPP_AGENT"),
     hint: buildHint(decision, messageAware),
     sideEffects: "none — this check never sends WhatsApp, creates orders, or generates Pix",
   });
@@ -144,12 +154,18 @@ export async function POST(req: NextRequest) {
 
 function buildHint(
   decision: { shouldUseTextOrdering: boolean; globalKillSwitch?: boolean; source?: string; declineReason: string | null },
-  messageAware: { wouldRouteToTextOrdering: boolean; finalHandler: string; detectedIntent: string; hasActiveSession: boolean; declineReason: string | null } | null,
+  messageAware: { wouldRouteToTextOrdering: boolean; finalHandler: string; detectedIntent: string; hasActiveSession: boolean; replyCapable: boolean; effectiveFinalHandler: string; declineReason: string | null } | null,
 ): string {
   // When a sample message is supplied, the message-aware contract is authoritative.
   if (messageAware) {
+    if (messageAware.wouldRouteToTextOrdering && !messageAware.replyCapable) {
+      // Routes to the engine, but the mode is DRY_RUN_ONLY → engine stays silent and
+      // the old WhatsApp Agent answers. THIS is why a real order message can still
+      // get the old agent's reply even though routing is correct.
+      return "Esta mensagem é roteada para o Pedido por Texto, MAS o modo é DRY_RUN_ONLY: o motor processa em silêncio e o Agente WhatsApp (host) é quem responde ao cliente. Troque para ALLOWLIST_REPLY_ONLY no painel para o Pedido por Texto responder de verdade.";
+    }
     if (messageAware.wouldRouteToTextOrdering) {
-      return "Pronto — esta mensagem entraria no Pedido por Texto (intenção de pedido ou sessão ativa).";
+      return "Pronto — esta mensagem entraria no Pedido por Texto e o modo permite resposta (intenção de pedido ou sessão ativa).";
     }
     if (!decision.shouldUseTextOrdering) {
       // Config-level decline — surface the config reason (kill switch / paused / etc.).

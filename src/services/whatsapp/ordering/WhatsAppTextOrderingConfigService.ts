@@ -250,6 +250,35 @@ export type WaFinalHandler =
   | "HUMAN_HANDOFF"
   | "IGNORED";
 
+/**
+ * A mode that is allowed to send a live WhatsApp reply. DRY_RUN_ONLY is NOT —
+ * in dry-run the engine observes the turn silently and never sends, so the old
+ * WhatsApp Agent remains the effective responder for the customer.
+ */
+export function isReplyCapableMode(mode: WaOrderingMode | string): boolean {
+  return mode === "ALLOWLIST_REPLY_ONLY" || mode === "ALLOWLIST_FULL_TEST";
+}
+
+/**
+ * The handler the CUSTOMER actually hears from on the live path.
+ *
+ * `wouldRouteToTextOrdering` answers "does this message go to the engine?".
+ * It is NOT the same as "does the customer get a Text Ordering reply?", because
+ * a DRY_RUN_ONLY config routes the message to the engine but the engine stays
+ * SILENT (canReply=false) → the webhook's textOrderingHandled stays false → the
+ * old WhatsApp Agent falls back and answers. This helper collapses routing +
+ * reply-capability into the single customer-facing outcome, and is shared by the
+ * Evolution webhook trace and the admin diagnostic so they never disagree.
+ */
+export function effectiveLiveHandler(
+  wouldRouteToTextOrdering: boolean,
+  mode: WaOrderingMode | string,
+): WaFinalHandler {
+  return wouldRouteToTextOrdering && isReplyCapableMode(mode)
+    ? "TEXT_ORDERING"
+    : "OLD_WHATSAPP_AGENT";
+}
+
 export interface MessageAwareRouteInput {
   restaurantId:    string;
   phone:           string;
@@ -269,7 +298,16 @@ export interface MessageAwareRouteDecision {
   messageHasOrderIntent:    boolean;
   /** The full contract result: eligible && (session || order intent). */
   wouldRouteToTextOrdering: boolean;
+  /** Routing verdict (does the message reach the engine?). */
   finalHandler:             WaFinalHandler;
+  /** True when the resolved mode permits a live reply (REPLY_ONLY / FULL_TEST). */
+  replyCapable:             boolean;
+  /**
+   * Customer-facing outcome. Differs from finalHandler when the message routes to
+   * the engine but the mode is DRY_RUN_ONLY: the engine observes silently and the
+   * old WhatsApp Agent answers, so this is OLD_WHATSAPP_AGENT.
+   */
+  effectiveFinalHandler:    WaFinalHandler;
   declineReason:            string | null;
 }
 
@@ -322,6 +360,20 @@ export async function getMessageAwareRoutingDecision(
     ? "TEXT_ORDERING"
     : "OLD_WHATSAPP_AGENT";
 
+  // Reply-capability: even an eligible, order-intent message stays with the old
+  // agent if the mode is DRY_RUN_ONLY (engine observes silently). This is the
+  // single most common reason a routed order message still gets the old agent's
+  // reply in production, so we surface it explicitly.
+  const replyCapable = isReplyCapableMode(config.mode);
+  const effectiveFinalHandler = effectiveLiveHandler(wouldRouteToTextOrdering, config.mode);
+
+  if (wouldRouteToTextOrdering && !replyCapable) {
+    declineReason =
+      `Mensagem tem intenção de pedido e é elegível, mas o modo é ${config.mode} ` +
+      `(sem resposta): o motor observa em silêncio e o Agente WhatsApp (host) responde. ` +
+      `Troque para ALLOWLIST_REPLY_ONLY para o Pedido por Texto responder.`;
+  }
+
   return {
     config,
     routingEligible,
@@ -330,6 +382,8 @@ export async function getMessageAwareRoutingDecision(
     messageHasOrderIntent,
     wouldRouteToTextOrdering,
     finalHandler,
+    replyCapable,
+    effectiveFinalHandler,
     declineReason,
   };
 }

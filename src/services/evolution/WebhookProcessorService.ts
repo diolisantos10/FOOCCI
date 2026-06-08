@@ -298,8 +298,20 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
       })
     : null;
 
+  // Live-trace fields — captured across the runtime call so the structured log
+  // below can explain EXACTLY why an order-like message did or didn't get a Text
+  // Ordering reply (the #1 production support question).
   let textOrderingHandled = false;
+  let runtimeCalled       = false;
+  let runtimeHandled      = false;
+  let replyProduced       = false;
+  let replySent           = false;
+  let handoffApplied      = false;
+  let runtimeMode: string | null = null;
+  let fallbackReason: string | null = null;
+
   if (routingDecision?.wouldRouteToTextOrdering) {
+    runtimeCalled = true;
     try {
       const { handleInboundForOrdering } = await import(
         "@/services/whatsapp/ordering/WhatsAppTextOrderingRuntimeService"
@@ -315,27 +327,49 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
         customerId:     customer.id,
         messageText:    event.content,
       });
+      runtimeHandled = decision.handled;
+      replyProduced  = Boolean(decision.result?.suggestedReply);
+      replySent      = decision.replySent;
+      handoffApplied = decision.handoffApplied;
+      runtimeMode    = decision.mode;
       // "Truly handled" = a reply was sent/saved OR an intentional handoff was
       // applied. A bare handled=true with no reply (DRY_RUN mode, a guard decline,
       // or a send failure before saving) must NOT block the old agent.
       textOrderingHandled = decision.handled && (decision.replySent || decision.handoffApplied);
       if (!textOrderingHandled) {
+        // Precise fallback reason so a routed order message that still gets the old
+        // agent is never a mystery in the logs. DRY_RUN_ONLY is the most common one.
+        fallbackReason =
+          decision.blockedReason
+          ?? (!decision.handled
+                ? "engine returned handled=false"
+                : !decision.replyWouldSend
+                  ? `mode=${decision.mode} does not permit replies (DRY_RUN_ONLY observes silently)`
+                  : !replyProduced
+                    ? "engine produced no reply for this turn"
+                    : "reply not sent (Evolution config missing or send failed)");
         console.warn("[WA-TextOrdering] engine did not effectively handle — falling back to old agent", {
           restaurantId,
           phoneMasked:    maskPhone(event.phone),
           handled:        decision.handled,
+          replyWouldSend: decision.replyWouldSend,
+          replyProduced,
           replySent:      decision.replySent,
           handoffApplied: decision.handoffApplied,
+          mode:           decision.mode,
           blockedReason:  decision.blockedReason,
+          fallbackReason,
         });
       }
     } catch (err) {
       // Module load OR engine threw — fall back to the old agent so the customer
       // still gets a reply. textOrderingHandled stays false.
+      fallbackReason = `engine error: ${err instanceof Error ? err.message : String(err)}`;
       console.error("[WebhookProcessor] Text ordering engine error — falling back to old agent:", err);
       textOrderingHandled = false;
     }
   }
+  const fallbackToOldAgent = Boolean(shouldRespond && !textOrderingHandled);
 
   if (shouldRespond && !textOrderingHandled) {
     // Read agent mode; default to RECEPTIONIST_ONLY if no config row exists.
@@ -400,12 +434,25 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
       enabledForRestaurant:  decision.enabledForRestaurant,
       phoneAllowlisted:      decision.phoneAllowlisted,
       // message-aware contract fields
+      messageLen:            event.content.length,
       detectedIntent:        routingDecision.detectedIntent,
       messageHasOrderIntent: routingDecision.messageHasOrderIntent,
       hasActiveSession:      routingDecision.hasActiveSession,
+      replyCapable:          routingDecision.replyCapable,
       shouldRespond,
       shouldUseTextOrdering: routingDecision.wouldRouteToTextOrdering,
       declineReason:         routingDecision.declineReason,
+      // runtime outcome — why the customer did/didn't get a Text Ordering reply
+      runtimeCalled,
+      runtimeHandled,
+      runtimeMode,
+      replyProduced,
+      replySent,
+      handoffApplied,
+      textOrderingHandled,
+      fallbackToOldAgent,
+      fallbackReason,
+      effectiveFinalHandler: routingDecision.effectiveFinalHandler,
       finalHandler,
     });
   }

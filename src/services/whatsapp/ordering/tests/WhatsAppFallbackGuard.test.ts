@@ -350,6 +350,38 @@ describe("I — REPLY_ONLY mode never creates an order or Pix", () => {
   });
 });
 
+// ── J. DRY_RUN_ONLY: engine handles silently → old agent must fall back ───────
+// Root cause of "order message still got the old agent": in DRY_RUN the engine
+// processes the turn but cannot reply, so replySent=false AND replyWouldSend=false.
+// The webhook computes textOrderingHandled = handled && (replySent || handoffApplied)
+// = true && (false || false) = false → old agent answers. Customer never silenced.
+
+describe("J — DRY_RUN_ONLY processes silently (replyWouldSend=false) so old agent falls back", () => {
+  it("order message in DRY_RUN_ONLY → handled=true, replySent=false, replyWouldSend=false", async () => {
+    configMock.resolveWaConfig.mockResolvedValue(dbConfig({
+      enabled: true, mode: "DRY_RUN_ONLY", scope: "RESTAURANT_WIDE",
+    }));
+    prismaMock.conversation.findUnique.mockResolvedValue(activeConv());
+    sessionMock.WhatsAppOrderingSessionService.findActiveSession.mockResolvedValue(fakeSession());
+    sessionMock.WhatsAppOrderingSessionService.updateSession.mockResolvedValue({});
+    processMock.processCustomerMessage.mockResolvedValue(processResult("Adicionei 1 yakisoba!"));
+
+    const r = await handleInboundForOrdering({
+      restaurantId: REST, phone: PHONE, conversationId: CONV, messageText: "Quero 1 yakisoba",
+    });
+    expect(r.handled).toBe(true);
+    expect(r.replyWouldSend).toBe(false); // DRY_RUN cannot reply
+    expect(r.replySent).toBe(false);
+    expect(r.handoffApplied).toBe(false);
+    // Webhook semantics: handled && (replySent || handoffApplied) = false → fallback.
+    const textOrderingHandled = r.handled && (r.replySent || r.handoffApplied);
+    expect(textOrderingHandled).toBe(false);
+    // And no order/Pix created in DRY_RUN.
+    const call = processMock.processCustomerMessage.mock.calls[0][0];
+    expect(call.allowSideEffects).toBe(false);
+  });
+});
+
 // ── Global kill switch overrides DB config ───────────────────────────────────
 
 describe("Kill switch — global env ENABLED=false overrides DB enabled=true", () => {
