@@ -13,6 +13,9 @@
  * Response:
  *   { ok: true, latest, runs, run? }       (200)
  *   { ok: false, error }                   (401 | 403 | 500)
+ *
+ * `latest` includes the findings of the most recent run (for the executive
+ * overview); `runs` are lightweight summaries (for the trend + history table).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -36,8 +39,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const runs = await listHistory(Number.isFinite(limit) ? limit : 20);
+    // latest carries its findings (executive overview); summaries drive the trend.
+    const latest = runs[0] ? await getRunWithFindings(runs[0].id) : null;
     const run = runId ? await getRunWithFindings(runId) : null;
-    return NextResponse.json({ ok: true, latest: runs[0] ?? null, runs, run });
+    return NextResponse.json({ ok: true, latest, runs, run });
   } catch (err) {
     console.error("[quality] history failed:", err instanceof Error ? err.message : err);
     return NextResponse.json({ ok: false, error: "Failed to load history" }, { status: 500 });

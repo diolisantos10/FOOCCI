@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AUDITOR_META_LIST } from "@/services/quality/registryMeta";
 import {
-  buildExecutiveSummary,
-  emptyExecutiveSummary,
   statusLabel,
   buildAuditJson,
   buildAuditTxt,
   sortFindings,
-  type ExecutiveSummary,
 } from "@/services/quality/dashboardModel";
+import {
+  buildExecutiveOverview,
+  TREND_LABEL,
+  type Trend,
+} from "@/services/quality/executiveSummary";
 import type { AuditRunResult, FindingSeverity, FindingStatus } from "@/services/quality/types";
 
 // ─── display helpers ────────────────────────────────────────────────────────
@@ -50,9 +52,32 @@ function connectionBadge(connection: "ACTIVE" | "PARTIAL" | "PLANNED") {
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${m.cls}`}>{m.label}</span>;
 }
 
-// ─── history types + helpers ────────────────────────────────────────────────
+const TREND_ICON: Record<Trend, string> = {
+  improving: "↗",
+  worsening: "↘",
+  stable: "→",
+  insufficient: "·",
+};
+
+function statusDotClass(status: FindingStatus): string {
+  if (status === "FAIL") return "bg-red-500";
+  if (status === "WARNING") return "bg-amber-500";
+  return "bg-green-500";
+}
+
+// ─── types + helpers ─────────────────────────────────────────────────────────
 
 interface SeverityCounts { P0: number; P1: number; P2: number; INFO: number }
+
+interface ViewFinding {
+  auditorId: string;
+  status: FindingStatus;
+  severity: FindingSeverity;
+  title: string;
+  summary: string;
+  evidence: string[];
+  recommendation: string;
+}
 
 interface HistoryRun {
   id: string;
@@ -67,21 +92,26 @@ interface HistoryRun {
   createdAt: string;
 }
 
+type LatestRun = HistoryRun & { findings: ViewFinding[] };
+
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
-
 function fmtDuration(ms: number): string {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
+function auditorName(id: string): string {
+  return AUDITOR_META_LIST.find((a) => a.id === id)?.name ?? id;
+}
 
-// ─── summary card ──────────────────────────────────────────────────────────
+// ─── compact cards ───────────────────────────────────────────────────────────
 
-function SummaryCard({ label, value, tone }: { label: string; value: string | number; tone?: string }) {
+function MiniCard({ label, value, tone, sub }: { label: string; value: string | number; tone?: string; sub?: string }) {
   return (
     <div className="rounded-lg border border-gray-800 bg-gray-900 p-3">
       <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
-      <p className={`mt-0.5 text-2xl font-bold ${tone ?? "text-gray-200"}`}>{value}</p>
+      <p className={`mt-0.5 text-xl font-bold ${tone ?? "text-gray-200"}`}>{value}</p>
+      {sub && <p className="text-[10px] text-gray-500">{sub}</p>}
     </div>
   );
 }
@@ -96,15 +126,16 @@ export default function QualityControlPage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<"json" | "txt" | null>(null);
   const [history, setHistory] = useState<HistoryRun[]>([]);
-
-  const summary: ExecutiveSummary = result ? buildExecutiveSummary(result) : emptyExecutiveSummary();
-  const latest = history[0] ?? null;
+  const [latestRun, setLatestRun] = useState<LatestRun | null>(null);
 
   const refreshHistory = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/quality/history?limit=20");
-      const data = (await res.json()) as { ok: boolean; runs?: HistoryRun[] };
-      if (data.ok && data.runs) setHistory(data.runs);
+      const data = (await res.json()) as { ok: boolean; runs?: HistoryRun[]; latest?: LatestRun | null };
+      if (data.ok) {
+        setHistory(data.runs ?? []);
+        setLatestRun(data.latest ?? null);
+      }
     } catch {
       /* history is best-effort; ignore */
     }
@@ -150,220 +181,232 @@ export default function QualityControlPage() {
     }
   }
 
+  // Unified view: a fresh manual run wins; otherwise the latest persisted run.
+  const viewFindings: ViewFinding[] = (result?.findings as ViewFinding[] | undefined) ?? latestRun?.findings ?? [];
+  const viewCounts = result?.countsBySeverity ?? latestRun?.countsBySeverity ?? null;
+  const viewStatus: FindingStatus | null = result?.globalStatus ?? latestRun?.globalStatus ?? null;
+
+  const overview = useMemo(
+    () => buildExecutiveOverview({ counts: viewCounts, globalStatus: viewStatus, findings: viewFindings, runs: history }),
+    [viewCounts, viewStatus, viewFindings, history],
+  );
+
   const findingsByAuditor = useMemo(() => {
-    const map = new Map<string, AuditRunResult["findings"]>();
-    if (result) for (const f of result.findings) {
+    const map = new Map<string, ViewFinding[]>();
+    for (const f of viewFindings) {
       const arr = map.get(f.auditorId) ?? [];
       arr.push(f);
       map.set(f.auditorId, arr);
     }
     return map;
-  }, [result]);
+  }, [viewFindings]);
+
+  const trendRuns = history.slice(0, 7).reverse(); // oldest → newest (left → right)
 
   return (
     <div className="mx-auto max-w-5xl p-6">
       {/* Header */}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">Controle de Qualidade</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            Auditores internos que verificam o Foocci antes da operação.
-          </p>
+          <p className="mt-1 text-sm text-gray-400">Auditoria automática do Foocci antes da operação.</p>
         </div>
-        <span className="rounded-full bg-violet-900/50 px-3 py-1 text-xs font-semibold text-violet-200">
-          v2 · Histórico
-        </span>
+        <div className="text-right">
+          <span className="rounded-full bg-violet-900/50 px-3 py-1 text-xs font-semibold text-violet-200">v3.2 · Diário</span>
+          {latestRun && (
+            <p className="mt-1.5 text-[11px] text-gray-500">
+              Última: {fmtDateTime(latestRun.createdAt)} · {latestRun.source.toLowerCase()} · {fmtDuration(latestRun.durationMs)}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Read-only banner */}
-      <div className="mb-5 rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-2 text-[11px] text-gray-400">
-        🔒 Read-only · SafeMode (dry-run, sem efeitos colaterais). Nenhuma auditoria envia WhatsApp, cria pedido,
-        gera Pix ou altera o banco. <span className="text-gray-500">Auditoria automática: configurável por cron externo (madrugada).</span>
+      <div className="mb-4 rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-1.5 text-[11px] text-gray-400">
+        🔒 Read-only · SafeMode. Nenhuma auditoria envia WhatsApp, cria pedido, gera Pix ou altera o banco.
+        <span className="text-gray-500"> Auditoria automática diária por cron (madrugada).</span>
       </div>
 
-      {/* Executive summary */}
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <SummaryCard label="Auditores" value={summary.auditors} />
-        <SummaryCard label="Passou" value={summary.passed} tone="text-green-400" />
-        <SummaryCard label="Atenção" value={summary.attention} tone="text-amber-400" />
-        <SummaryCard label="Falhou" value={summary.failed} tone="text-red-400" />
-        <SummaryCard label="P0 aberto" value={summary.p0Open} tone={summary.p0Open > 0 ? "text-red-400" : "text-gray-200"} />
-        <SummaryCard
-          label="Status geral"
-          value={result ? statusLabel(summary.globalStatus) : "—"}
-          tone={result ? statusTone(summary.globalStatus) : "text-gray-500"}
+      {/* ── Situação do sistema (primeira dobra) ── */}
+      <section
+        className={`mb-4 rounded-xl border p-5 ${
+          overview.globalStatus === "FAIL"
+            ? "border-red-800/60 bg-red-950/20"
+            : overview.globalStatus === "WARNING"
+            ? "border-amber-800/50 bg-amber-950/15"
+            : overview.globalStatus === "PASS"
+            ? "border-green-800/50 bg-green-950/15"
+            : "border-gray-800 bg-gray-900"
+        }`}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className={`text-2xl font-bold ${viewStatus ? statusTone(viewStatus) : "text-gray-500"}`}>
+                {viewStatus ? statusLabel(viewStatus) : "—"}
+              </span>
+              {viewStatus && findingStatusBadge(viewStatus)}
+            </div>
+            <p className="mt-1 text-sm text-gray-300">{overview.statusText}</p>
+            {overview.hasHistory && (
+              <p className="mt-2 text-xs text-gray-400">
+                {overview.worstAuditor && overview.worstAuditor.severity !== "INFO" ? (
+                  <>
+                    Auditor mais crítico:{" "}
+                    <span className="font-semibold text-gray-200">{auditorName(overview.worstAuditor.auditorId)}</span>{" "}
+                    ({overview.worstAuditor.severity}).{" "}
+                  </>
+                ) : null}
+                <span className="text-violet-300/90">→ {overview.recommendation}</span>
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => run()}
+              disabled={loading}
+              className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {runningId === "__all__" ? "Rodando…" : "Rodar agora"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Cards compactos ── */}
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <MiniCard
+          label="Última auditoria"
+          value={latestRun ? latestRun.source.toLowerCase() : "—"}
+          tone="text-gray-200"
+          sub={latestRun ? fmtDateTime(latestRun.createdAt) : "sem histórico"}
         />
+        <MiniCard label="P0 abertos" value={overview.p0} tone={overview.p0 > 0 ? "text-red-400" : "text-green-400"} />
+        <MiniCard label="P1 / P2" value={`${overview.p1} / ${overview.p2}`} tone="text-amber-400" />
+        <MiniCard label="Auditores OK" value={overview.auditorsOk} tone="text-green-400" />
+        <MiniCard label="Com atenção" value={overview.auditorsAttention} tone={overview.auditorsAttention > 0 ? "text-amber-400" : "text-gray-200"} />
+        <MiniCard label="Tendência" value={`${TREND_ICON[overview.trend]}`} tone="text-gray-200" sub={TREND_LABEL[overview.trend]} />
       </div>
 
-      {/* Run-all + status line */}
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={() => run()}
-          disabled={loading}
-          className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {runningId === "__all__" ? "Rodando…" : "Rodar auditoria manual"}
-        </button>
+      {/* ── Tendência das últimas rodadas ── */}
+      {trendRuns.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2">
+          <span className="text-[10px] uppercase tracking-wide text-gray-500">Últimas rodadas</span>
+          <div className="flex items-center gap-1.5">
+            {trendRuns.map((r) => (
+              <span
+                key={r.id}
+                title={`${r.globalStatus} · ${fmtDateTime(r.createdAt)} · ${r.source.toLowerCase()}`}
+                className={`h-2.5 w-2.5 rounded-full ${statusDotClass(r.globalStatus)}`}
+              />
+            ))}
+          </div>
+          <span className="text-[11px] text-gray-500">{TREND_LABEL[overview.trend]}</span>
+        </div>
+      )}
+
+      {/* Copy + status line */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
         {result && (
           <>
-            <button
-              type="button"
-              onClick={() => copy("json")}
-              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white"
-            >
+            <button type="button" onClick={() => copy("json")} className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white">
               {copied === "json" ? "✓ Copiado" : "Copiar JSON"}
             </button>
-            <button
-              type="button"
-              onClick={() => copy("txt")}
-              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white"
-            >
+            <button type="button" onClick={() => copy("txt")} className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 hover:text-white">
               {copied === "txt" ? "✓ Copiado" : "Copiar TXT"}
             </button>
           </>
         )}
         <span className="text-xs text-gray-500">
-          {result
-            ? `Run ${result.runId} · ${result.findings.length} findings`
-            : "Aguardando primeira rodada manual"}
+          {viewFindings.length > 0 ? `${viewFindings.length} findings na última rodada` : "Aguardando primeira rodada"}
         </span>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-800/50 bg-red-950/30 p-3 text-sm text-red-400">{error}</div>
-      )}
+      {error && <div className="mb-4 rounded-lg border border-red-800/50 bg-red-950/30 p-3 text-sm text-red-400">{error}</div>}
 
-      {/* Última auditoria + histórico recente */}
-      <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
-        {/* Latest run */}
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-          <p className="text-[10px] uppercase tracking-wide text-gray-500">Última auditoria</p>
-          {latest ? (
-            <div className="mt-1.5 space-y-1">
-              <div className="flex items-center gap-2">
-                {findingStatusBadge(latest.globalStatus)}
-                <span className={`text-sm font-bold ${statusTone(latest.globalStatus)}`}>{statusLabel(latest.globalStatus)}</span>
-              </div>
-              <p className="text-xs text-gray-400">{fmtDateTime(latest.createdAt)}</p>
-              <p className="text-[11px] text-gray-500">
-                {fmtDuration(latest.durationMs)} · {latest.source.toLowerCase()}
-                {latest.auditorId ? ` · ${latest.auditorId}` : " · todos"}
-              </p>
-              <div className="flex flex-wrap gap-1 pt-1">
-                {severityBadge("P0")}<span className="text-[11px] text-gray-400">{latest.countsBySeverity.P0}</span>
-                {severityBadge("P1")}<span className="text-[11px] text-gray-400">{latest.countsBySeverity.P1}</span>
-                {severityBadge("P2")}<span className="text-[11px] text-gray-400">{latest.countsBySeverity.P2}</span>
-              </div>
-            </div>
-          ) : (
-            <p className="mt-2 text-xs text-gray-600">Nenhuma auditoria registrada ainda.</p>
-          )}
-        </div>
-
-        {/* Recent history table */}
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4 lg:col-span-2">
-          <p className="mb-2 text-[10px] uppercase tracking-wide text-gray-500">Histórico recente</p>
-          {history.length === 0 ? (
-            <p className="text-xs text-gray-600">Sem execuções registradas. Rode uma auditoria manual.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="text-[10px] uppercase tracking-wide text-gray-500">
-                    <th className="py-1 pr-2 font-semibold">Quando</th>
-                    <th className="px-2 font-semibold">Status</th>
-                    <th className="px-2 font-semibold">P0/P1/P2</th>
-                    <th className="px-2 font-semibold">Auditor</th>
-                    <th className="px-2 font-semibold">Fonte</th>
-                    <th className="pl-2 font-semibold">Duração</th>
+      {/* Histórico recente */}
+      <div className="mb-6 rounded-lg border border-gray-800 bg-gray-900 p-4">
+        <p className="mb-2 text-[10px] uppercase tracking-wide text-gray-500">Histórico recente</p>
+        {history.length === 0 ? (
+          <p className="text-xs text-gray-600">Sem execuções registradas. Rode uma auditoria manual.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wide text-gray-500">
+                  <th className="py-1 pr-2 font-semibold">Quando</th>
+                  <th className="px-2 font-semibold">Status</th>
+                  <th className="px-2 font-semibold">P0/P1/P2</th>
+                  <th className="px-2 font-semibold">Auditor</th>
+                  <th className="px-2 font-semibold">Fonte</th>
+                  <th className="pl-2 font-semibold">Duração</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.slice(0, 10).map((h) => (
+                  <tr key={h.id} className="border-t border-gray-800/70">
+                    <td className="py-1 pr-2 text-gray-300">{fmtDateTime(h.createdAt)}</td>
+                    <td className="px-2"><span className={statusTone(h.globalStatus)}>{h.globalStatus}</span></td>
+                    <td className="px-2 text-gray-400">
+                      <span className={h.countsBySeverity.P0 > 0 ? "text-red-400" : ""}>{h.countsBySeverity.P0}</span>
+                      {" / "}{h.countsBySeverity.P1}{" / "}{h.countsBySeverity.P2}
+                    </td>
+                    <td className="px-2 text-gray-400">{h.auditorId ?? "todos"}</td>
+                    <td className="px-2 text-gray-500">{h.source.toLowerCase()}</td>
+                    <td className="pl-2 text-gray-500">{fmtDuration(h.durationMs)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {history.slice(0, 10).map((h) => (
-                    <tr key={h.id} className="border-t border-gray-800/70">
-                      <td className="py-1 pr-2 text-gray-300">{fmtDateTime(h.createdAt)}</td>
-                      <td className="px-2"><span className={statusTone(h.globalStatus)}>{h.globalStatus}</span></td>
-                      <td className="px-2 text-gray-400">
-                        <span className={h.countsBySeverity.P0 > 0 ? "text-red-400" : ""}>{h.countsBySeverity.P0}</span>
-                        {" / "}{h.countsBySeverity.P1}{" / "}{h.countsBySeverity.P2}
-                      </td>
-                      <td className="px-2 text-gray-400">{h.auditorId ?? "todos"}</td>
-                      <td className="px-2 text-gray-500">{h.source.toLowerCase()}</td>
-                      <td className="pl-2 text-gray-500">{fmtDuration(h.durationMs)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Auditor list */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {auditors.map((a) => {
           const findings = sortFindings(findingsByAuditor.get(a.id) ?? []);
           const worst = findings[0];
+          const main = findings[0];
           return (
-            <div key={a.id} className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-sm font-bold text-white">{a.name}</h2>
-                    <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-400">{a.area}</span>
-                    <span className="rounded bg-violet-900/40 px-1.5 py-0.5 text-[10px] text-violet-300">{a.group}</span>
-                    {connectionBadge(a.connection)}
-                    {worst && severityBadge(worst.severity)}
-                  </div>
-                  <p className="mt-1 text-xs text-gray-400">{a.mission}</p>
+            <div key={a.id} className="rounded-lg border border-gray-800 bg-gray-900 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-bold text-white">{a.name}</h2>
+                  {connectionBadge(a.connection)}
+                  {worst ? severityBadge(worst.severity) : <span className="text-[10px] text-gray-600">não rodado</span>}
+                  {main && <span className="truncate text-[11px] text-gray-400">{main.title}</span>}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => run(a.id)}
-                  disabled={loading}
-                  className="shrink-0 rounded-lg border border-violet-700 bg-violet-900/40 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-900/70 disabled:opacity-50"
-                >
-                  {runningId === a.id ? "Rodando…" : "Rodar este auditor"}
-                </button>
-              </div>
-
-              {/* Linked labs */}
-              <div className="mt-2 flex flex-wrap gap-2">
-                {a.linkedLabs.map((lab) =>
-                  lab.exists ? (
-                    <a
-                      key={lab.label}
-                      href={lab.href}
-                      className="rounded-full border border-gray-700 bg-gray-800 px-2.5 py-1 text-[11px] text-gray-300 hover:border-violet-600 hover:text-violet-200"
-                    >
-                      🔗 {lab.label}
+                <div className="flex shrink-0 items-center gap-2">
+                  {a.linkedLabs[0]?.exists && (
+                    <a href={a.linkedLabs[0].href} className="rounded-full border border-gray-700 bg-gray-800 px-2.5 py-1 text-[11px] text-gray-300 hover:border-violet-600 hover:text-violet-200">
+                      🔗 Lab
                     </a>
-                  ) : (
-                    <span key={lab.label} className="rounded-full border border-dashed border-gray-700 px-2.5 py-1 text-[11px] text-gray-600">
-                      {lab.label} (planejado)
-                    </span>
-                  ),
-                )}
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => run(a.id)}
+                    disabled={loading}
+                    className="rounded-lg border border-violet-700 bg-violet-900/40 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-900/70 disabled:opacity-50"
+                  >
+                    {runningId === a.id ? "Rodando…" : "Rodar"}
+                  </button>
+                </div>
               </div>
 
-              {/* Findings */}
+              {/* Findings (P0 first via sortFindings) */}
               {findings.length > 0 && (
-                <div className="mt-3 space-y-2 border-t border-gray-800 pt-3">
+                <div className="mt-2 space-y-1.5 border-t border-gray-800 pt-2">
                   {findings.map((f, i) => (
-                    <div key={i} className="rounded-lg bg-gray-800/60 p-2.5">
+                    <div key={i} className="rounded-lg bg-gray-800/60 p-2">
                       <div className="flex flex-wrap items-center gap-2">
                         {findingStatusBadge(f.status)}
                         {severityBadge(f.severity)}
                         <span className="text-xs font-semibold text-gray-200">{f.title}</span>
                       </div>
-                      <p className="mt-1 text-xs text-gray-400">{f.summary}</p>
-                      {f.evidence.length > 0 && (
-                        <ul className="mt-1 list-inside list-disc text-[11px] text-gray-500">
-                          {f.evidence.map((e, j) => <li key={j}>{e}</li>)}
-                        </ul>
-                      )}
-                      <p className="mt-1 text-[11px] text-violet-300/80">→ {f.recommendation}</p>
+                      <p className="mt-0.5 text-[11px] text-gray-400">{f.summary}</p>
+                      <p className="mt-0.5 text-[11px] text-violet-300/80">→ {f.recommendation}</p>
                     </div>
                   ))}
                 </div>

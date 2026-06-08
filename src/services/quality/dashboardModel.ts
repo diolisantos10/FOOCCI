@@ -94,7 +94,7 @@ export function buildAuditTxt(result: AuditRunResult): string {
 /** Severity ordering used to sort findings (worst first). */
 const SEVERITY_RANK: Record<AuditFinding["severity"], number> = { P0: 0, P1: 1, P2: 2, INFO: 3 };
 
-/** Findings sorted worst-first for display. */
-export function sortFindings(findings: readonly AuditFinding[]): AuditFinding[] {
+/** Findings sorted worst-first for display (generic over the severity field). */
+export function sortFindings<T extends { severity: AuditFinding["severity"] }>(findings: readonly T[]): T[] {
   return [...findings].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
 }

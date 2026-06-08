@@ -29,14 +29,17 @@ describe("GET /api/admin/quality/history", () => {
     expect(listHistory).not.toHaveBeenCalled();
   });
 
-  it("(3) returns latest + recent runs when authorized", async () => {
+  it("(3) returns latest (with findings) + recent run summaries when authorized", async () => {
     checkAdminRequest.mockReturnValue(true);
     listHistory.mockResolvedValue([{ id: "r1" }, { id: "r2" }]);
+    getRunWithFindings.mockResolvedValue({ id: "r1", findings: [{ id: "f1" }] });
     const res = await GET(req("http://localhost/api/admin/quality/history?limit=20"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.latest).toEqual({ id: "r1" });
+    // latest now carries findings (fetched via getRunWithFindings on runs[0].id)
+    expect(body.latest).toEqual({ id: "r1", findings: [{ id: "f1" }] });
+    expect(getRunWithFindings).toHaveBeenCalledWith("r1");
     expect(body.runs).toHaveLength(2);
     expect(listHistory).toHaveBeenCalledWith(20);
   });
