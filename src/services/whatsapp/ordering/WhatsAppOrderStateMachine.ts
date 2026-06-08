@@ -90,7 +90,7 @@ export function advanceSession(
     case "COLLECTING_DELIVERY_TYPE":
       return handleDeliveryType(next, text, menu);
     case "COLLECTING_ADDRESS":
-      return handleAddress(next, text);
+      return handleAddress(next, text, menu);
     case "COLLECTING_PAYMENT_METHOD":
       return handlePayment(next, text, menu);
     case "REVIEWING_ORDER":
@@ -276,13 +276,14 @@ function handleItemCollection(
     return done(session, "UNKNOWN", "Pode me dizer o que você gostaria de pedir?", [], false);
   }
 
-  return continueAfterItems(session, hadItems ? matched : null);
+  return continueAfterItems(session, hadItems ? matched : null, menu);
 }
 
 /** Decides the next stage after items change: ask options, clarify, or move on. */
 function continueAfterItems(
-  session: WaPersistedSession,
+  session:   WaPersistedSession,
   justAdded: WaOrderItem[] | null,
+  menu:      WaMenuItem[],
 ): AdvanceResult {
   // Ask the first missing required option (one at a time)
   const q = session.missingQuestions[0];
@@ -301,10 +302,20 @@ function continueAfterItems(
     session.stage  = "MATCHING_MENU";
     session.status = "AWAITING_CUSTOMER";
     if (u.reason === "AMBIGUOUS") {
-      const label = titleCase(normalizePluralAndSpelling(stripQty(u.rawText)));
-      const opts  = u.candidates.slice(0, 3).join(" ou ");
+      const label    = titleCase(normalizePluralAndSpelling(stripQty(u.rawText)));
+      const hasDraft = session.selectedItems.length > 0;
+      // Numbered options (up to 3 candidates + optional "Deixar sem X")
+      const numOpts  = u.candidates.slice(0, 3).map((c, i) => {
+        const item  = menu.find(m => norm(m.name) === norm(c));
+        const price = item
+          ? channelPrice({ price: item.price, priceDelivery: item.priceDelivery }, "DELIVERY")
+          : null;
+        return `${i + 1} — ${titleCase(c)}${price !== null ? ` — R$ ${price.toFixed(2)}` : ""}`;
+      });
+      if (hasDraft) numOpts.push(`${numOpts.length + 1} — Deixar sem ${label}`);
+      const optsList = numOpts.join("\n");
       // If other items are still queued, tell the customer what comes next.
-      const remaining = session.unresolvedItems.slice(1);
+      const remaining   = session.unresolvedItems.slice(1);
       const remainLabel = remaining[0]
         ? titleCase(normalizePluralAndSpelling(stripQty(remaining[0].rawText)))
         : "";
@@ -314,7 +325,7 @@ function continueAfterItems(
           ? ` Depois confirmo os outros itens.`
           : "";
       return done(session, "ORDER_REQUEST",
-        `Para ${articleFor(label)}${label}, qual você quer: ${opts}?${hint}`, [], false);
+        `Para ${articleFor(label)}${label}, qual opção você quer?\n${optsList}${hint}`, [], false);
     }
     if (u.reason === "UNAVAILABLE") {
       return done(session, "ORDER_REQUEST", `"${u.rawText}" está indisponível agora. Quer outra opção?`, [], false);
@@ -376,7 +387,13 @@ function handleOptionAnswer(
   menu:    WaMenuItem[],
 ): AdvanceResult {
   const q = session.missingQuestions[0];
-  if (!q) return continueAfterItems(session, null);
+  if (!q) return continueAfterItems(session, null, menu);
+
+  // Explicit add-item interrupt (ADD_RE or order content not matching any listed option)
+  if (ADD_RE.test(text) || (hasOrderContent(text) && !q.options.some(o => norm(text).includes(norm(o))))) {
+    const mod = tryModification(session, text, menu);
+    if (mod) return mod;
+  }
 
   // Numeric selection: "1" → first option, "2" → second, etc.
   const numericSel = /^\s*\d+\s*$/.test(text) ? parseInt(text.trim(), 10) : NaN;
@@ -391,7 +408,7 @@ function handleOptionAnswer(
   if (!menuItem || !target) {
     // Can't resolve — drop the question to avoid a loop
     session.missingQuestions = session.missingQuestions.slice(1);
-    return continueAfterItems(session, null);
+    return continueAfterItems(session, null, menu);
   }
 
   const answer = norm(text);
@@ -405,7 +422,7 @@ function handleOptionAnswer(
       target.unitPrice   = channelPrice({ price: variant.price, priceDelivery: variant.priceDelivery }, "DELIVERY");
       target.lineTotal   = round(target.unitPrice * target.quantity);
       session.missingQuestions = session.missingQuestions.slice(1);
-      return continueAfterItems(session, null);
+      return continueAfterItems(session, null, menu);
     }
   } else {
     // Option group
@@ -419,7 +436,7 @@ function handleOptionAnswer(
       target.unitPrice = round(target.unitPrice + opt.price);
       target.lineTotal = round(target.unitPrice * target.quantity);
       session.missingQuestions = session.missingQuestions.slice(1);
-      return continueAfterItems(session, null);
+      return continueAfterItems(session, null, menu);
     }
   }
 
@@ -580,7 +597,7 @@ function changeItem(session: WaPersistedSession, text: string, menu: WaMenuItem[
   else          session.selectedItems.push(newItem);
   session.missingQuestions = mergeMissing(session, menu);
 
-  if (session.missingQuestions[0]) return continueAfterItems(session, null);
+  if (session.missingQuestions[0]) return continueAfterItems(session, null, menu);
 
   const routed = routeAfterResolved(session, null);
   const tail = routed.suggestedReply.replace(/^(Anotei:[^.]*\.|Adicionei[^.]*\.)\s*/, "");
@@ -588,9 +605,41 @@ function changeItem(session: WaPersistedSession, text: string, menu: WaMenuItem[
     `Troquei para ${titleCase(menuItem.name)}. ${tail}`.trim(), routed.actions, false);
 }
 
+// ── Cancel pending unresolved item (item-level cancel during ambiguity) ───────────
+
+function cancelPendingItem(session: WaPersistedSession, menu: WaMenuItem[]): AdvanceResult {
+  const u     = session.unresolvedItems[0];
+  const label = u ? titleCase(normalizePluralAndSpelling(stripQty(u.rawText))) : "o item";
+  session.unresolvedItems = session.unresolvedItems.slice(1);
+  const ack = `Beleza, deixei ${articleFor(label)}${label} de fora.`;
+
+  if (session.selectedItems.length === 0 && session.unresolvedItems.length === 0) {
+    session.stage  = "IDLE";
+    session.status = "ACTIVE";
+    return done(session, "CANCEL", `${ack} Quer pedir algo?`, [], false);
+  }
+
+  const routed = continueAfterItems(session, null, menu);
+  // Prepend ack + inline comanda so customer sees what remains
+  const replyHasComanda = routed.suggestedReply.includes("*Resumo do pedido:*");
+  if (replyHasComanda) {
+    routed.suggestedReply = `${ack}\n\n${routed.suggestedReply}`;
+  } else {
+    const comanda = inlineComanda(session);
+    routed.suggestedReply = `${ack}\n\n${comanda}\n\n${routed.suggestedReply}`;
+  }
+  return routed;
+}
+
 // ── Address ─────────────────────────────────────────────────────────────────────
 
-function handleAddress(session: WaPersistedSession, text: string): AdvanceResult {
+function handleAddress(session: WaPersistedSession, text: string, menu: WaMenuItem[]): AdvanceResult {
+  // Add-item interrupt: if the message carries order content and does NOT look
+  // like a street address, treat it as a new item request, not an address.
+  if ((ADD_RE.test(text) || hasOrderContent(text)) && !ADDRESS_LIKE_RE.test(text)) {
+    const mod = tryModification(session, text, menu);
+    if (mod) return mod;
+  }
   const addr = parseAddressFragment(text);
   session.address = { ...(session.address ?? {}), ...addr, raw: text };
 
@@ -799,6 +848,40 @@ function handleAmbiguityAnswer(
   const u = session.unresolvedItems[0];
   if (!u || u.reason !== "AMBIGUOUS") return handleItemCollection(session, text, menu);
 
+  // Explicit item-level cancel
+  if (CANCEL_ITEM_RE.test(text)) return cancelPendingItem(session, menu);
+
+  const hasDraft      = session.selectedItems.length > 0;
+  const maxCandidates = Math.min(u.candidates.length, 3);
+  const numericSel    = /^\s*\d+\s*$/.test(text) ? parseInt(text.trim(), 10) : NaN;
+
+  if (!isNaN(numericSel)) {
+    // Last numbered option = "Deixar sem X" (only when draft has items)
+    if (hasDraft && numericSel === maxCandidates + 1) {
+      return cancelPendingItem(session, menu);
+    }
+    // Numbered candidate selection: "1" → first candidate, "2" → second, etc.
+    if (numericSel >= 1 && numericSel <= maxCandidates) {
+      const chosen   = u.candidates[numericSel - 1]!;
+      const menuItem = menu.find(m => m.isAvailable && norm(m.name) === norm(chosen));
+      if (menuItem) {
+        const unitPrice = channelPrice(
+          { price: menuItem.price, priceDelivery: menuItem.priceDelivery },
+          "DELIVERY",
+        );
+        const res: WaOrderItem = {
+          rawText: u.rawText, quantity: u.quantity,
+          menuItemId: menuItem.id, menuItemName: menuItem.name,
+          options: [], extras: [], unitPrice, lineTotal: round(unitPrice * u.quantity),
+        };
+        session.selectedItems.push(res);
+        session.unresolvedItems  = session.unresolvedItems.slice(1);
+        session.missingQuestions = mergeMissing(session, menu);
+        return continueAfterItems(session, null, menu);
+      }
+    }
+  }
+
   // Restrict matching to just the candidates for this item
   const candidateMenu = menu.filter(m =>
     m.isAvailable && u.candidates.some(c => norm(c) === norm(m.name)),
@@ -819,19 +902,37 @@ function handleAmbiguityAnswer(
     session.selectedItems.push(resolved);
     session.unresolvedItems = session.unresolvedItems.slice(1);
     session.missingQuestions = mergeMissing(session, menu);
-    return continueAfterItems(session, null);
+    return continueAfterItems(session, null, menu);
   }
 
-  // No match — re-ask listing the options
-  const opts = u.candidates.slice(0, 3).join(" ou ");
-  return done(session, "ANSWER_TO_OPTION",
-    `Não entendi. Qual você quer: ${opts}?`, [], false);
+  // No match — build numbered options list for re-ask
+  const label      = titleCase(normalizePluralAndSpelling(stripQty(u.rawText)));
+  const answerNorm = norm(text);
+  const numOpts    = u.candidates.slice(0, 3).map((c, i) => `${i + 1} — ${titleCase(c)}`);
+  if (hasDraft) numOpts.push(`${numOpts.length + 1} — Deixar sem ${label}`);
+  const optsList = numOpts.join("\n");
+
+  // Format/size mismatch: customer asked for "lata" when only 2L exists → targeted reply
+  const mentionedFormat  = answerNorm.match(FORMAT_KEYWORD_RE)?.[0];
+  const isFormatMismatch = mentionedFormat != null &&
+    !u.candidates.some(c => norm(c).includes(mentionedFormat));
+  const prefix = isFormatMismatch
+    ? `Não encontrei essa versão d${articleFor(label) === "a " ? "a" : "o"} ${label}. Tenho essas opções:`
+    : `Não entendi. Para ${articleFor(label)}${label}, qual você quer?`;
+
+  return done(session, "ANSWER_TO_OPTION", `${prefix}\n${optsList}`, [], false);
 }
 
 // ── Intent classification (context-aware) ──────────────────────────────────────
 
 const CONFIRM_RE = /\b(sim|isso|pode ser|fechado|confirmo|confirmar|ok|t[aá] bom|beleza|certo|perfeito|isso mesmo)\b/i;
 const CANCEL_RE  = /\b(cancela|cancelar|desisto|deixa pra l[aá]|esquece)\b/i;
+// Cancels only the PENDING unresolved item — not the whole order.
+// "não quero / não quero mais / tira / remove / sem essa" during ambiguity.
+const CANCEL_ITEM_RE = /\b(n[aã]o\s+quero(?:\s+mais)?|tira(?:r)?|remov(?:e|er)|n[aã]o\s+precisa|sem\s+ess[ae]|sem\s+isso)\b/i;
+// Format/size terms. When the customer names a format not present in any candidate,
+// we reply with a targeted "not available in that format" message.
+const FORMAT_KEYWORD_RE = /\b(lata|garrafa|2\s*l(?:itro)?s?|1\s*l(?:itro)?|500\s*ml|350\s*ml|zero|diet|light|pequen[ao]|grande|familiar|gigante)\b/i;
 // A message that is ONLY a greeting/social opener (no product content). Anchored to
 // the whole string so "quero 1 coca, bom dia" is NOT caught — only pure greetings.
 const GREETING_ONLY_RE =
