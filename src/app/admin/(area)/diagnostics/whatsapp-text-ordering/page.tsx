@@ -563,6 +563,14 @@ export default function WaTextOrderingPage() {
             className="rounded-lg border border-blue-400 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
             Verificar roteamento
           </button>
+          <button
+            onClick={() => { setMessage("Bom dia"); void send(false, "Bom dia"); }}
+            disabled={loading || cfgSaving}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            title="Testa 'Bom dia' como nova sessão — confirma se o agente responderia a uma saudação"
+          >
+            Testar saudação (Bom dia)
+          </button>
         </div>
       </div>
 

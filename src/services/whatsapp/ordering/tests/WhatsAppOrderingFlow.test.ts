@@ -376,7 +376,10 @@ describe("Webhook safety", () => {
     const src = await fs.readFile(new URL("../WhatsAppTextOrderingRuntimeService.ts", import.meta.url), "utf-8");
     expect(src).toContain("aiLocked");
     expect(src).toContain("HUMANO_ASSUMIU");
-    expect(src).toContain("isWaTextOrderingEnabled");
+    // Runtime now uses DB-aware resolveWaConfig (not the env-only isWaTextOrderingEnabled)
+    // to prevent the mismatch where DB-configured restaurants were silently blocked.
+    expect(src).toContain("resolveWaConfig");
+    expect(src).toContain("config.enabled");
   });
 });
 

@@ -280,32 +280,55 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     !isCartRecovery &&
     !optedOutThisTurn;
 
-  // Text ordering engine: fires async, behind full flag + allowlist + conversation guards.
+  // Text ordering engine: fires async, behind DB-aware flag + allowlist + conversation guards.
   // Only TEXT messages are eligible. If the engine handles this message, normal agent
   // routing (receptionist / AI_ORDERING_EXPERIMENTAL) is skipped for this turn.
-  // getRoutingDecision() is the single source of truth — it handles scope (PHONE_ALLOWLIST
-  // vs RESTAURANT_WIDE) and the kill switch (PAUSED) in one place.
+  //
+  // IMPORTANT: the module import is awaited so a load failure is caught BEFORE we
+  // set textOrderingHandled=true. Previously the fire-and-forget swallowed load
+  // errors silently, blocking the old Receptionist with no fallback.
+  //
+  // The engine call itself remains fire-and-forget (AI processing + WhatsApp send
+  // are too slow to hold the webhook open). After the runtime guard fix (DB-aware
+  // config) the engine will only return handled=false for conversation-locked cases
+  // which also prevent the old Receptionist from running — so no message is lost.
   const routingDecision = shouldRespond && event.messageType === "TEXT"
     ? await getRoutingDecisionForRestaurant(restaurantId, event.phone)
     : null;
   let textOrderingHandled = false;
   if (routingDecision?.shouldUseTextOrdering) {
-    textOrderingHandled = true;
-    void import("@/services/whatsapp/ordering/WhatsAppTextOrderingRuntimeService")
-      .then(({ handleInboundForOrdering }) =>
-        handleInboundForOrdering({
-          restaurantId,
-          phone:          event.phone,
-          conversationId: conversation.id,
-          customerId:     customer.id,
-          messageText:    event.content,
-        }).catch((err) =>
-          console.error("[WebhookProcessor] Text ordering engine error:", err)
-        )
-      )
-      .catch((err) =>
-        console.error("[WebhookProcessor] Text ordering module load failed:", err)
+    try {
+      const { handleInboundForOrdering } = await import(
+        "@/services/whatsapp/ordering/WhatsAppTextOrderingRuntimeService"
       );
+      // Module loaded successfully. Mark as handled before firing async work so
+      // the old Receptionist doesn't double-reply.
+      textOrderingHandled = true;
+      void handleInboundForOrdering({
+        restaurantId,
+        phone:          event.phone,
+        conversationId: conversation.id,
+        customerId:     customer.id,
+        messageText:    event.content,
+      }).then((r) => {
+        if (!r.handled) {
+          // Engine declined despite routing approval. This means a guard inside the
+          // runtime blocked it (e.g. conversation lock). Log but do not panic —
+          // conversation-locked turns are also blocked for the old Receptionist.
+          console.warn("[WA-TextOrdering] engine returned handled=false after routing approved", {
+            blockedReason: r.blockedReason,
+            restaurantId,
+            phoneMasked: maskPhone(event.phone),
+          });
+        }
+      }).catch((err) =>
+        console.error("[WebhookProcessor] Text ordering engine error:", err)
+      );
+    } catch (err) {
+      // Module failed to load — fall back to old Receptionist by not setting
+      // textOrderingHandled=true. This ensures the customer still gets a reply.
+      console.error("[WebhookProcessor] Text ordering module load failed — falling back to old Receptionist:", err);
+    }
   }
 
   if (shouldRespond && !textOrderingHandled) {

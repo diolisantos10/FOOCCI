@@ -4,9 +4,15 @@
  * could touch a real customer.
  *
  * Guards (all must pass):
- *   1. Master flag on + restaurant allowlisted
- *   2. Phone allowlisted + mode permits reply
+ *   1. DB-aware: enabled, not paused, global kill switch not engaged
+ *   2. DB-aware: scope + phone allowlist + mode permits reply
  *   3. Conversation is AI-eligible (not locked / human / non-customer)
+ *
+ * IMPORTANT: guards use the DB-aware config (WhatsAppTextOrderingConfigService),
+ * which is the same source as the webhook routing decision. The previous env-only
+ * guards caused a fatal mismatch: webhook approved routing (DB config), runtime
+ * denied it (env vars not set) → engine returned handled=false silently, old
+ * Receptionist already blocked → customer got no reply.
  *
  * Side-effect permissions:
  *   ALLOWLIST_REPLY_ONLY  — may send reply; no order, no Pix
@@ -15,13 +21,16 @@
  */
 
 import {
-  isWaTextOrderingEnabled,
-  resolveSideEffectPermissions,
-  getWaTextOrderingMode,
+  isGlobalKillSwitchEngaged,
+  isGlobalPauseEngaged,
+  isPhoneInList,
 } from "@/lib/wa-text-ordering-flag";
+import {
+  resolveWaConfig,
+} from "@/services/whatsapp/ordering/WhatsAppTextOrderingConfigService";
 import { processCustomerMessage } from "./WhatsAppTextOrderService";
 import { WhatsAppOrderingSessionService } from "./WhatsAppOrderingSessionService";
-import type { WaProcessResult } from "./types";
+import type { WaProcessResult, WaRuntimeMode } from "./types";
 
 export interface RuntimeInput {
   restaurantId:    string;
@@ -64,17 +73,33 @@ async function conversationAllowsAi(conversationId: string): Promise<{ ok: boole
 }
 
 export async function handleInboundForOrdering(input: RuntimeInput): Promise<RuntimeDecision> {
-  const mode = getWaTextOrderingMode();
+  // ── DB-aware config resolution ────────────────────────────────────────────
+  // Must use the same config source as the webhook routing decision
+  // (WhatsAppTextOrderingConfigService). Using env-only flags here caused a
+  // fatal mismatch: webhook approved (DB config), runtime denied (env vars not
+  // set) → engine returned handled=false silently, old Receptionist already
+  // blocked, customer received no reply.
+  const config   = await resolveWaConfig(input.restaurantId);
+  const mode     = config.mode as WaRuntimeMode;
   const safetyNotes: string[] = [];
 
-  // Guard 1 — master flag + restaurant allowlist
-  if (!isWaTextOrderingEnabled(input.restaurantId)) {
-    return block("feature disabled or restaurant not allowlisted", mode);
-  }
+  // Guard 1 — DB-aware: feature enabled + not paused (global and restaurant-level)
+  if (isGlobalKillSwitchEngaged()) return block("global kill switch active (WHATSAPP_TEXT_ORDERING_ENABLED=false)", mode);
+  if (isGlobalPauseEngaged())      return block("global pause active (WHATSAPP_TEXT_ORDERING_PAUSED=true)", mode);
+  if (!config.enabled)             return block("feature disabled for restaurant in admin panel", mode);
+  if (config.paused)               return block("text ordering paused for restaurant in admin panel", mode);
 
-  // Guard 2 — side-effect permissions (restaurant + phone allowlist + mode)
-  const perms = resolveSideEffectPermissions(input.restaurantId, input.phone);
-  safetyNotes.push(...perms.reasons);
+  // Guard 2 — DB-aware: scope + phone allowlist + mode permits reply
+  const phoneOk = config.scope === "RESTAURANT_WIDE"
+    || isPhoneInList(input.phone, config.allowlistedPhones);
+  if (!phoneOk) return block("phone not in restaurant allowlist", mode);
+
+  const canReply       = mode === "ALLOWLIST_REPLY_ONLY" || mode === "ALLOWLIST_FULL_TEST";
+  const canCreateOrder = mode === "ALLOWLIST_FULL_TEST";
+
+  if (canReply)       safetyNotes.push(`mode=${mode} → reply allowed`);
+  else                safetyNotes.push(`mode=${mode} → no reply (dry-run only)`);
+  if (canCreateOrder) safetyNotes.push("mode=ALLOWLIST_FULL_TEST → order + Pix allowed");
 
   // Guard 3 — conversation must be an AI-eligible customer chat
   if (input.conversationId) {
@@ -108,7 +133,7 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
     messageText:      input.messageText,
     mode,
     currentSession:   session,
-    allowSideEffects: perms.canCreateOrder,
+    allowSideEffects: canCreateOrder,
   });
 
   // Persist the updated session
@@ -142,7 +167,7 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
 
   // Live reply sending: only when mode + allowlist permit it and there is a reply.
   let replySent = false;
-  if (perms.canReply && result.suggestedReply && input.conversationId) {
+  if (canReply && result.suggestedReply && input.conversationId) {
     try {
       const { EvolutionConfigService } = await import("@/services/evolution/EvolutionConfigService");
       const { EvolutionClient } = await import("@/lib/evolution/EvolutionClient");
@@ -189,7 +214,7 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
       console.error("[TextOrderingRuntime] Failed to send reply:", msg);
       safetyNotes.push(`reply failed: ${msg.slice(0, 80)}`);
     }
-  } else if (!perms.canReply) {
+  } else if (!canReply) {
     safetyNotes.push(`reply not sent: mode=${mode} does not permit replies`);
   }
 
@@ -198,7 +223,7 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
     blockedReason:  null,
     mode,
     result,
-    replyWouldSend: perms.canReply,
+    replyWouldSend: canReply,
     replySent,
     safetyNotes,
   };
