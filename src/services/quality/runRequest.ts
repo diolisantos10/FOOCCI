@@ -19,6 +19,8 @@ export interface QualityRunResponse {
   ok: boolean;
   mode: "all" | "one";
   result?: AuditRunResult;
+  /** Set by the API route once the run is persisted. */
+  runId?: string;
   error?: string;
   code?: "NOT_FOUND" | "BAD_REQUEST";
 }

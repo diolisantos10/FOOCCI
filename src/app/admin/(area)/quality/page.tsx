@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AUDITOR_META_LIST } from "@/services/quality/registryMeta";
 import {
   buildExecutiveSummary,
@@ -50,6 +50,31 @@ function connectionBadge(connection: "ACTIVE" | "PARTIAL" | "PLANNED") {
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${m.cls}`}>{m.label}</span>;
 }
 
+// ─── history types + helpers ────────────────────────────────────────────────
+
+interface SeverityCounts { P0: number; P1: number; P2: number; INFO: number }
+
+interface HistoryRun {
+  id: string;
+  source: string;
+  globalStatus: FindingStatus;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  auditorId: string | null;
+  countsBySeverity: SeverityCounts;
+  countsByStatus: Record<FindingStatus, number>;
+  createdAt: string;
+}
+
+function fmtDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function fmtDuration(ms: number): string {
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
 // ─── summary card ──────────────────────────────────────────────────────────
 
 function SummaryCard({ label, value, tone }: { label: string; value: string | number; tone?: string }) {
@@ -70,8 +95,24 @@ export default function QualityControlPage() {
   const [runningId, setRunningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<"json" | "txt" | null>(null);
+  const [history, setHistory] = useState<HistoryRun[]>([]);
 
   const summary: ExecutiveSummary = result ? buildExecutiveSummary(result) : emptyExecutiveSummary();
+  const latest = history[0] ?? null;
+
+  const refreshHistory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/quality/history?limit=20");
+      const data = (await res.json()) as { ok: boolean; runs?: HistoryRun[] };
+      if (data.ok && data.runs) setHistory(data.runs);
+    } catch {
+      /* history is best-effort; ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshHistory();
+  }, [refreshHistory]);
 
   async function run(auditorId?: string) {
     setLoading(true);
@@ -85,7 +126,10 @@ export default function QualityControlPage() {
       });
       const data = (await res.json()) as { ok: boolean; result?: AuditRunResult; error?: string };
       if (!data.ok || !data.result) setError(data.error ?? "Erro desconhecido");
-      else setResult(data.result);
+      else {
+        setResult(data.result);
+        void refreshHistory();
+      }
     } catch {
       setError("Falha de rede ao executar a auditoria");
     } finally {
@@ -127,7 +171,7 @@ export default function QualityControlPage() {
           </p>
         </div>
         <span className="rounded-full bg-violet-900/50 px-3 py-1 text-xs font-semibold text-violet-200">
-          v1 · Manual
+          v2 · Histórico
         </span>
       </div>
 
@@ -189,6 +233,72 @@ export default function QualityControlPage() {
       {error && (
         <div className="mb-4 rounded-lg border border-red-800/50 bg-red-950/30 p-3 text-sm text-red-400">{error}</div>
       )}
+
+      {/* Última auditoria + histórico recente */}
+      <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
+        {/* Latest run */}
+        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+          <p className="text-[10px] uppercase tracking-wide text-gray-500">Última auditoria</p>
+          {latest ? (
+            <div className="mt-1.5 space-y-1">
+              <div className="flex items-center gap-2">
+                {findingStatusBadge(latest.globalStatus)}
+                <span className={`text-sm font-bold ${statusTone(latest.globalStatus)}`}>{statusLabel(latest.globalStatus)}</span>
+              </div>
+              <p className="text-xs text-gray-400">{fmtDateTime(latest.createdAt)}</p>
+              <p className="text-[11px] text-gray-500">
+                {fmtDuration(latest.durationMs)} · {latest.source.toLowerCase()}
+                {latest.auditorId ? ` · ${latest.auditorId}` : " · todos"}
+              </p>
+              <div className="flex flex-wrap gap-1 pt-1">
+                {severityBadge("P0")}<span className="text-[11px] text-gray-400">{latest.countsBySeverity.P0}</span>
+                {severityBadge("P1")}<span className="text-[11px] text-gray-400">{latest.countsBySeverity.P1}</span>
+                {severityBadge("P2")}<span className="text-[11px] text-gray-400">{latest.countsBySeverity.P2}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-gray-600">Nenhuma auditoria registrada ainda.</p>
+          )}
+        </div>
+
+        {/* Recent history table */}
+        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4 lg:col-span-2">
+          <p className="mb-2 text-[10px] uppercase tracking-wide text-gray-500">Histórico recente</p>
+          {history.length === 0 ? (
+            <p className="text-xs text-gray-600">Sem execuções registradas. Rode uma auditoria manual.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-wide text-gray-500">
+                    <th className="py-1 pr-2 font-semibold">Quando</th>
+                    <th className="px-2 font-semibold">Status</th>
+                    <th className="px-2 font-semibold">P0/P1/P2</th>
+                    <th className="px-2 font-semibold">Auditor</th>
+                    <th className="px-2 font-semibold">Fonte</th>
+                    <th className="pl-2 font-semibold">Duração</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.slice(0, 10).map((h) => (
+                    <tr key={h.id} className="border-t border-gray-800/70">
+                      <td className="py-1 pr-2 text-gray-300">{fmtDateTime(h.createdAt)}</td>
+                      <td className="px-2"><span className={statusTone(h.globalStatus)}>{h.globalStatus}</span></td>
+                      <td className="px-2 text-gray-400">
+                        <span className={h.countsBySeverity.P0 > 0 ? "text-red-400" : ""}>{h.countsBySeverity.P0}</span>
+                        {" / "}{h.countsBySeverity.P1}{" / "}{h.countsBySeverity.P2}
+                      </td>
+                      <td className="px-2 text-gray-400">{h.auditorId ?? "todos"}</td>
+                      <td className="px-2 text-gray-500">{h.source.toLowerCase()}</td>
+                      <td className="pl-2 text-gray-500">{fmtDuration(h.durationMs)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Auditor list */}
       <div className="space-y-3">

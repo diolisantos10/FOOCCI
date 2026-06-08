@@ -20,8 +20,15 @@ function collectTs(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...collectTs(full));
-    else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) out.push(full);
+    if (entry.isDirectory()) {
+      // The persistence/ layer is the ONE place allowed to use prisma (it writes
+      // only to the standalone quality_audit_* tables). It is never imported by
+      // the pure engine or auditors, so it is excluded from this scan.
+      if (entry.name === "persistence") continue;
+      out.push(...collectTs(full));
+    } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+      out.push(full);
+    }
   }
   return out;
 }

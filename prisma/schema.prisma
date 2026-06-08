@@ -44,7 +44,7 @@ model Restaurant {
 
   // Monotonic per-restaurant counter for human-friendly sequential order numbers.
   // Incremented atomically inside the order-creation transaction.
-  lastOrderNumber      Int       @default(0)
+  lastOrderNumber Int @default(0)
 
   users                  User[]
   customers              Customer[]
@@ -276,13 +276,13 @@ model MenuItem {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  category        MenuCategory              @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  orderItems      OrderItem[]
-  orderDraftItems OrderDraftItem[]
-  variants        MenuItemVariant[]
-  extras          MenuItemExtra[]
-  optionGroups    OptionGroup[]
-  placements      MenuItemPlacement[]
+  category         MenuCategory              @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems       OrderItem[]
+  orderDraftItems  OrderDraftItem[]
+  variants         MenuItemVariant[]
+  extras           MenuItemExtra[]
+  optionGroups     OptionGroup[]
+  placements       MenuItemPlacement[]
   imageEnhancement MenuItemImageEnhancement?
 
   @@index([categoryId])
@@ -396,50 +396,50 @@ enum FulfillmentType {
 // ═══════════════════════════════════════════
 
 model Order {
-  id                  String      @id @default(cuid())
-  restaurantId        String
-  customerId          String
-  orderNumber         Int?        // human-friendly sequential number, unique per restaurant; null for legacy orders
-  orderDraftId        String?     @unique // traceability back to originating draft
-  status              OrderStatus @default(PENDING)
-  type                OrderType   @default(DELIVERY)
-  subtotal            Decimal     @db.Decimal(10, 2)
-  deliveryFee         Decimal     @default(0) @db.Decimal(10, 2)
-  discount            Decimal     @default(0) @db.Decimal(10, 2)
-  total               Decimal     @db.Decimal(10, 2)
-  notes               String?
-  deliveryAddressId   String? // FK to Address snapshot at order time
-  estimatedAt         DateTime?
-  completedAt         DateTime?
-  cancelledAt         DateTime?
-  idempotencyKey      String?     @unique
-  crmSyncedAt         DateTime? // set once customer metrics have been counted for this order
-  source              String? // pedido | qr | whatsapp | manual | import — origin channel
-  importedAt          DateTime? // set for historically imported orders; actual event date
+  id                   String      @id @default(cuid())
+  restaurantId         String
+  customerId           String
+  orderNumber          Int? // human-friendly sequential number, unique per restaurant; null for legacy orders
+  orderDraftId         String?     @unique // traceability back to originating draft
+  status               OrderStatus @default(PENDING)
+  type                 OrderType   @default(DELIVERY)
+  subtotal             Decimal     @db.Decimal(10, 2)
+  deliveryFee          Decimal     @default(0) @db.Decimal(10, 2)
+  discount             Decimal     @default(0) @db.Decimal(10, 2)
+  total                Decimal     @db.Decimal(10, 2)
+  notes                String?
+  deliveryAddressId    String? // FK to Address snapshot at order time
+  estimatedAt          DateTime?
+  completedAt          DateTime?
+  cancelledAt          DateTime?
+  idempotencyKey       String?     @unique
+  crmSyncedAt          DateTime? // set once customer metrics have been counted for this order
+  source               String? // pedido | qr | whatsapp | manual | import — origin channel
+  importedAt           DateTime? // set for historically imported orders; actual event date
   // ── Marketing / channel attribution ──────────────────────────────────────────
-  trackingLinkId      String? // FK to TrackingLink if customer arrived via trackable link
-  trafficSource       String? // utm_source / e.g. instagram, whatsapp, qr, google
-  trafficMedium       String? // utm_medium / e.g. bio, direct, mesa, embalagem
-  trafficCampaign     String? // utm_campaign
-  trafficContent      String? // utm_content
+  trackingLinkId       String? // FK to TrackingLink if customer arrived via trackable link
+  trafficSource        String? // utm_source / e.g. instagram, whatsapp, qr, google
+  trafficMedium        String? // utm_medium / e.g. bio, direct, mesa, embalagem
+  trafficCampaign      String? // utm_campaign
+  trafficContent       String? // utm_content
   // ── Saipos POS integration fields ────────────────────────────────────
-  saiposSentAt        DateTime? // when the order was successfully sent to Saipos
-  saiposOrderId       String? // Saipos internal order reference (from their response)
-  saiposStatus        String? // latest status received from Saipos webhook
-  saiposError         String? // last error message if send failed
-  saiposLastErrorCode String? // error code from last failed attempt (e.g. "902")
-  saiposLastAttemptAt DateTime? // timestamp of last Saipos send attempt
+  saiposSentAt         DateTime? // when the order was successfully sent to Saipos
+  saiposOrderId        String? // Saipos internal order reference (from their response)
+  saiposStatus         String? // latest status received from Saipos webhook
+  saiposError          String? // last error message if send failed
+  saiposLastErrorCode  String? // error code from last failed attempt (e.g. "902")
+  saiposLastAttemptAt  DateTime? // timestamp of last Saipos send attempt
   // ── Coupon / promotion ────────────────────────────────────────────────
-  couponCode              String?   // code entered by customer at checkout
-  promotionId             String?   // FK to Promotion that was applied (soft reference — no CASCADE)
-  couponUsageCountedAt    DateTime? // set once Promotion.usedCount has been incremented for this order
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  couponCode           String? // code entered by customer at checkout
+  promotionId          String? // FK to Promotion that was applied (soft reference — no CASCADE)
+  couponUsageCountedAt DateTime? // set once Promotion.usedCount has been incremented for this order
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
-  restaurant      Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  customer        Customer    @relation(fields: [customerId], references: [id])
-  orderDraft      OrderDraft? @relation(fields: [orderDraftId], references: [id])
-  deliveryAddress Address?    @relation(fields: [deliveryAddressId], references: [id])
+  restaurant      Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customer        Customer       @relation(fields: [customerId], references: [id])
+  orderDraft      OrderDraft?    @relation(fields: [orderDraftId], references: [id])
+  deliveryAddress Address?       @relation(fields: [deliveryAddressId], references: [id])
   items           OrderItem[]
   payment         Payment?
   editLogs        OrderEditLog[]
@@ -521,38 +521,38 @@ model Payment {
 // ═══════════════════════════════════════════
 
 model OrderEditLog {
-  id               String   @id @default(cuid())
-  orderId          String
-  restaurantId     String
-  userId           String?  // staff member who made the change; null = system
+  id           String  @id @default(cuid())
+  orderId      String
+  restaurantId String
+  userId       String? // staff member who made the change; null = system
 
   // What changed
-  action           String   @default("ITEM_REPLACED")
+  action String @default("ITEM_REPLACED")
 
   // Previous item snapshot
-  previousItemId   String?  // OrderItem.id that was removed (informational only)
+  previousItemId   String? // OrderItem.id that was removed (informational only)
   previousItemName String
   previousItemQty  Int
-  previousItemData Json     // { name, price, quantity, variantName, addonsJson, total }
+  previousItemData Json // { name, price, quantity, variantName, addonsJson, total }
 
   // New item snapshot
-  newItemName      String
-  newItemQty       Int
-  newItemData      Json     // { name, price, quantity, variantName, addonsJson, total }
+  newItemName String
+  newItemQty  Int
+  newItemData Json // { name, price, quantity, variantName, addonsJson, total }
 
   // Financial impact
-  previousTotal    Decimal  @db.Decimal(10, 2) // order total before change
-  newTotal         Decimal  @db.Decimal(10, 2) // order total after change
-  priceDiff        Decimal  @db.Decimal(10, 2) // newTotal − previousTotal (positive = to collect)
+  previousTotal Decimal @db.Decimal(10, 2) // order total before change
+  newTotal      Decimal @db.Decimal(10, 2) // order total after change
+  priceDiff     Decimal @db.Decimal(10, 2) // newTotal − previousTotal (positive = to collect)
 
   // Reason
-  reason           String   // CLIENTE_PEDIU | PRODUTO_INDISPONIVEL | ERRO_SABOR | ERRO_OPERACIONAL | OUTRO
-  reasonNote       String?
+  reason     String // CLIENTE_PEDIU | PRODUTO_INDISPONIVEL | ERRO_SABOR | ERRO_OPERACIONAL | OUTRO
+  reasonNote String?
 
   // Payment adjustment tracking (staff must resolve manually)
-  paymentResolved  Boolean  @default(false)  // staff marked the payment diff as handled
+  paymentResolved Boolean @default(false) // staff marked the payment diff as handled
 
-  createdAt        DateTime @default(now())
+  createdAt DateTime @default(now())
 
   order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -594,23 +594,23 @@ enum PaymentStatus {
 // ═══════════════════════════════════════════
 
 model Conversation {
-  id            String             @id @default(cuid())
-  restaurantId  String
-  customerId    String?
-  channel       Channel            @default(WHATSAPP)
-  status        ConversationStatus @default(OPEN)
-  aiEnabled     Boolean            @default(true) // false when human has taken over (temporary)
-  sessionId     String? // stable browser session ID for web agent tracking
-  customerName  String? // denormalized — set for anonymous web sessions
-  customerPhone String? // denormalized — set when customer identifies
-  orderId       String?
-  orderDraftId  String?
+  id                String             @id @default(cuid())
+  restaurantId      String
+  customerId        String?
+  channel           Channel            @default(WHATSAPP)
+  status            ConversationStatus @default(OPEN)
+  aiEnabled         Boolean            @default(true) // false when human has taken over (temporary)
+  sessionId         String? // stable browser session ID for web agent tracking
+  customerName      String? // denormalized — set for anonymous web sessions
+  customerPhone     String? // denormalized — set when customer identifies
+  orderId           String?
+  orderDraftId      String?
   // ── Persistent non-customer classification + permanent AI lock (P0-A) ──
   // Stronger than `aiEnabled=false`: when aiLocked is true the AI NEVER replies
   // automatically and is NOT re-enabled by any auto-return rule — only an
   // explicit manual unlock can restore AI.
-  conversationType  ConversationType @default(CUSTOMER)
-  aiLocked          Boolean          @default(false)
+  conversationType  ConversationType   @default(CUSTOMER)
+  aiLocked          Boolean            @default(false)
   aiLockedReason    String? // free-text or classification note
   aiLockedAt        DateTime?
   aiLockedByUserId  String? // operator who applied the lock
@@ -729,8 +729,8 @@ model Campaign {
   totalResponded Int            @default(0)
   totalConverted Int            @default(0)
   totalRevenue   Decimal        @default(0) @db.Decimal(12, 2)
-  couponCode     String?        // soft link to Promotion.couponCode for attribution
-  promotionId    String?        // soft FK to Promotion.id for attribution (no cascade)
+  couponCode     String? // soft link to Promotion.couponCode for attribution
+  promotionId    String? // soft FK to Promotion.id for attribution (no cascade)
   scheduleConfig Json? // { mode, scheduledAt?, weekdays?, timeWindowStart?, timeWindowEnd?, dailyLimit? }
   audienceConfig Json? // { templateId?, segment?, filters? }
   createdAt      DateTime       @default(now())
@@ -746,12 +746,12 @@ model Campaign {
 }
 
 model CampaignExecution {
-  id            String          @id @default(cuid())
-  campaignId    String
-  restaurantId  String? // denormalized for fast tenant-scoped queries
-  customerId    String
-  customerName  String? // snapshot at campaign creation
-  customerPhone String? // snapshot at campaign creation
+  id               String          @id @default(cuid())
+  campaignId       String
+  restaurantId     String? // denormalized for fast tenant-scoped queries
+  customerId       String
+  customerName     String? // snapshot at campaign creation
+  customerPhone    String? // snapshot at campaign creation
   messageText      String?         @db.Text // personalized message for this recipient
   status           ExecutionStatus @default(PENDING)
   sentAt           DateTime?
@@ -774,11 +774,11 @@ model CampaignExecution {
 enum CampaignStatus {
   DRAFT
   SCHEDULED
-  ACTIVE      // recurring campaign is live and within its schedule window
+  ACTIVE // recurring campaign is live and within its schedule window
   SENDING
   SENT
-  PAUSED      // recurring campaign manually paused
-  COMPLETED   // recurring: audience exhausted or end condition met
+  PAUSED // recurring campaign manually paused
+  COMPLETED // recurring: audience exhausted or end condition met
   CANCELLED
 }
 
@@ -1249,11 +1249,11 @@ model MenuItemImageEnhancement {
   id           String                    @id @default(cuid())
   menuItemId   String                    @unique
   restaurantId String
-  originalUrl  String                    // snapshot of imageUrl at enhancement time
-  enhancedUrl  String?                   // enhanced image (stored in Foocci storage)
+  originalUrl  String // snapshot of imageUrl at enhancement time
+  enhancedUrl  String? // enhanced image (stored in Foocci storage)
   status       MenuItemEnhancementStatus @default(PENDING)
-  processMode  String?                   // "enhance" | "upscale" | "enhance+upscale"
-  providerName String?                   // which provider processed this
+  processMode  String? // "enhance" | "upscale" | "enhance+upscale"
+  providerName String? // which provider processed this
   errorReason  String?
   notes        String?
   approvedAt   DateTime?
@@ -1296,7 +1296,7 @@ model DeliveryConfig {
   distancePricePerKm    Decimal? @db.Decimal(10, 2)
   distanceMaxKm         Float?
   distanceMinFee        Decimal? @db.Decimal(10, 2)
-  distanceMinFeeKm      Float?                         // km included in minimumFee (new formula)
+  distanceMinFeeKm      Float? // km included in minimumFee (new formula)
   distanceMaxFee        Decimal? @db.Decimal(10, 2)
   distanceEstimatedBase Int?
 
@@ -1355,7 +1355,7 @@ model BusinessHours {
   isOpen       Boolean  @default(true)
   openTime     String   @default("09:00") // "HH:MM" — legacy single period open; use periodsJson when set
   closeTime    String   @default("22:00") // "HH:MM" — legacy single period close; use periodsJson when set
-  periodsJson  Json?    // [{open:"HH:MM",close:"HH:MM"},…] — null means use openTime/closeTime
+  periodsJson  Json? // [{open:"HH:MM",close:"HH:MM"},…] — null means use openTime/closeTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -1560,7 +1560,7 @@ model CRMAutomation {
   triggerAfterDays Int               @default(30)
   discountType     String? // "PERCENTAGE" | "FIXED" | null
   discountValue    Decimal?          @db.Decimal(10, 2)
-  scheduleConfig   Json?   // { sendTime?, sendDays?, timezone? }
+  scheduleConfig   Json? // { sendTime?, sendDays?, timezone? }
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
@@ -1647,9 +1647,9 @@ model RestaurantCRMProfile {
   restaurantId         String         @unique
   toneProfile          CRMToneProfile @default(FRIENDLY)
   styleWeights         Json           @default("{}") // { FRIENDLY: 0.3, PLAYFUL: 0.2, ... }
-  profileVersion       Int            @default(0)    // bumped each time weights are recomputed
-  whatsAppSafetyConfig Json?                         // CRMWhatsAppSafetyConfig — global sending safety rules
-  segmentConfig        Json?                         // SegmentConfig — relationship segment day thresholds
+  profileVersion       Int            @default(0) // bumped each time weights are recomputed
+  whatsAppSafetyConfig Json? // CRMWhatsAppSafetyConfig — global sending safety rules
+  segmentConfig        Json? // SegmentConfig — relationship segment day thresholds
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
@@ -1719,7 +1719,7 @@ model TrackingLink {
   isActive        Boolean @default(true)
 
   // ── Short link ─────────────────────────────────────────────────
-  shortCode       String? @unique // e.g. "k7m9qx3" — used for /r/[code] redirect
+  shortCode String? @unique // e.g. "k7m9qx3" — used for /r/[code] redirect
 
   // ── Aggregated metrics (incremented atomically) ────────────────
   clickCount              Int     @default(0)
@@ -1865,7 +1865,7 @@ model MenuEvent {
 // without hallucinating. SUGGESTED items await owner approval.
 
 model RestaurantKnowledgeItem {
-  id           String   @id @default(cuid())
+  id           String @id @default(cuid())
   restaurantId String
 
   // Human-readable title for the owner (not shown to customer)
@@ -2084,16 +2084,16 @@ model OperationalManualDecisionLog {
 /// Logical area / department of an AI agent. Mirrors the agent registry.
 enum AgentArea {
   ORCHESTRATOR // Manager agent that coordinates the others
-  SECURITY     // Security & Governance agent
-  WAITER       // Sales / ordering agent inside /pedido
-  WHATSAPP     // Inbound WhatsApp receptionist
-  CRM          // Outbound relationship agent
-  UI_UX        // UI/UX agent
-  MANUAL       // Manual / Constitution agent
-  QA           // QA / Test agent
-  INTEGRATION  // Integration agent
-  BRANDING     // Branding agent
-  ANALYTICS    // Analytics / Product agent
+  SECURITY // Security & Governance agent
+  WAITER // Sales / ordering agent inside /pedido
+  WHATSAPP // Inbound WhatsApp receptionist
+  CRM // Outbound relationship agent
+  UI_UX // UI/UX agent
+  MANUAL // Manual / Constitution agent
+  QA // QA / Test agent
+  INTEGRATION // Integration agent
+  BRANDING // Branding agent
+  ANALYTICS // Analytics / Product agent
   GENERAL
 }
 
@@ -2120,12 +2120,12 @@ enum AgentVisibility {
 /// SAFETY: `forbiddenActions` and `safetyRules` are INTERNAL/master-only and
 /// are NEVER editable or visible to restaurant users.
 model AgentProfile {
-  id          String          @id @default(cuid())
-  slug        String          @unique
+  id          String    @id @default(cuid())
+  slug        String    @unique
   name        String
   title       String?
-  area        AgentArea       @default(GENERAL)
-  description String?         @db.Text
+  area        AgentArea @default(GENERAL)
+  description String?   @db.Text
 
   // ── Professional identity (structured sections) ──
   mission            String? @db.Text
@@ -2150,14 +2150,14 @@ model AgentProfile {
   extendedSections Json? // Record<string, unknown>
 
   // ── Governance / lifecycle ──
-  status          AgentStatus     @default(DRAFT)
-  visibility      AgentVisibility @default(INTERNAL)
-  isGlobalDefault Boolean         @default(true)
+  status           AgentStatus     @default(DRAFT)
+  visibility       AgentVisibility @default(INTERNAL)
+  isGlobalDefault  Boolean         @default(true)
   /// Master kill-switch for DB-driven runtime for THIS agent. OFF in Phase 1.
-  isRuntimeEnabled Boolean        @default(false)
-  version         String          @default("0.1")
+  isRuntimeEnabled Boolean         @default(false)
+  version          String          @default("0.1")
   /// Where the row originated: CODE_SEED | MANUAL | IMPORT | …
-  source          String?         @default("CODE_SEED")
+  source           String?         @default("CODE_SEED")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2201,7 +2201,7 @@ model AgentProfileVersion {
 /// the master profile, nor the hardcoded protocol floor. The application layer
 /// enforces this; the schema deliberately exposes no safety columns here.
 model RestaurantAgentProfileOverride {
-  id             String  @id @default(cuid())
+  id             String @id @default(cuid())
   restaurantId   String
   agentProfileId String
 
@@ -2323,11 +2323,11 @@ model BuildProject {
   // ── Priority 1.2: registry metadata (no secrets; GitHub fields are metadata
   //    only — never tokens). projectRules/promptContext are high-level notes
   //    used by FUTURE phases; nothing here drives runtime or prompt generation.
-  projectRules Json?   // string[] of high-level rules (no secrets)
+  projectRules  Json? // string[] of high-level rules (no secrets)
   promptContext String? @db.Text // freeform context block for later prompt phases
-  displayOrder Int     @default(0)
-  category     String? // e.g. "platform", "agency", "experiment"
-  riskNotes    String? @db.Text
+  displayOrder  Int     @default(0)
+  category      String? // e.g. "platform", "agency", "experiment"
+  riskNotes     String? @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2343,15 +2343,15 @@ model BuildProject {
 /// `allowedProjectIds` is a JSON string[] of BuildProject ids; an empty array
 /// means "all active projects" (resolved in the service layer).
 model BuildAuthorizedSender {
-  id                String  @id @default(cuid())
+  id                String    @id @default(cuid())
   /// Normalized E.164 phone, e.g. "+5511999990000". Unique. (canonical match key)
-  phone             String  @unique
+  phone             String    @unique
   /// Raw value the admin typed (for display); the canonical match uses `phone`.
   rawPhone          String?
   name              String?
-  role              String  @default("operator")
-  isActive          Boolean @default(true)
-  allowedProjectIds Json    @default("[]") // string[] of BuildProject ids ([] = all)
+  role              String    @default("operator")
+  isActive          Boolean   @default(true)
+  allowedProjectIds Json      @default("[]") // string[] of BuildProject ids ([] = all)
   notes             String?
   lastUsedAt        DateTime?
 
@@ -2394,23 +2394,23 @@ model BuildOSMasterWhatsAppConfig {
 /// WITHOUT touching env vars / Railway. Env vars remain bootstrap/emergency only.
 /// There is normally exactly one active row (the most recent is authoritative).
 model BuildOSConfig {
-  id        String      @id @default(cuid())
-  isEnabled Boolean     @default(false)
-  mode      BuildOSMode @default(INTERNAL_ONLY)
+  id                               String      @id @default(cuid())
+  isEnabled                        Boolean     @default(false)
+  mode                             BuildOSMode @default(INTERNAL_ONLY)
   /// Optional override for the default project; falls back to BuildProject.isDefault.
-  defaultProjectId String?
+  defaultProjectId                 String?
   /// When true, env BUILD_OS_AUTHORIZED_PHONES is allowed as a fallback even when
   /// DB senders exist. When false, DB authorized senders are the sole source once any exist.
-  allowEnvAuthorizedPhonesFallback Boolean @default(true)
+  allowEnvAuthorizedPhonesFallback Boolean     @default(true)
 
   /// ── Build OS WhatsApp Master/Admin channel (separate from restaurant WhatsApp) ──
   /// The Evolution instanceName dedicated to internal Build OS commands (Diego/CEO).
   /// NULL = no Master channel configured yet → diagnostics must say "não configurado"
   /// and must NOT assume a restaurant instance (e.g. sushicazza) is the Build OS channel.
-  whatsappInstanceName String?
+  whatsappInstanceName                    String?
   /// Whether the Master channel is active. When false, Build OS won't process commands
   /// even from the configured instance.
-  whatsappEnabled Boolean @default(false)
+  whatsappEnabled                         Boolean @default(false)
   /// EMERGENCY/TEMPORARY only: allow restaurant instances to act as the Build OS channel.
   /// Default OFF — restaurant WhatsApp must never be the Build OS command channel unless
   /// this is explicitly enabled (and the UI labels it "fallback legado — não recomendado").
@@ -2439,16 +2439,16 @@ model BuildCommand {
   receivedAt    DateTime                  @default(now())
 
   // ── Priority 1.3: deterministic (non-LLM) classification metadata ──
-  executionIntent          BuildExecutionIntent @default(UNKNOWN)
-  targetArea               String? // e.g. "checkout", "whatsapp", "waiter", "buildos", "unknown"
-  requiresHumanConfirmation Boolean             @default(true)
-  classificationSummary    String? // short human-readable summary
+  executionIntent           BuildExecutionIntent @default(UNKNOWN)
+  targetArea                String? // e.g. "checkout", "whatsapp", "waiter", "buildos", "unknown"
+  requiresHumanConfirmation Boolean              @default(true)
+  classificationSummary     String? // short human-readable summary
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project BuildProject?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  events  BuildCommandEvent[]
+  project        BuildProject?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  events         BuildCommandEvent[]
   promptVersions BuildPromptVersion[]
 
   @@index([status])
@@ -2479,27 +2479,27 @@ model BuildCommandEvent {
 /// no secrets; the phone is stored masked. Best-effort write; never blocks the
 /// webhook. Trimmed by keeping only recent rows in the admin view.
 model BuildWebhookTrace {
-  id              String   @id @default(cuid())
+  id             String   @id @default(cuid())
   /// Evolution instanceName the event arrived on — lets diagnostics show whether a
   /// /build came from the Build OS Master channel or a restaurant instance.
-  instanceName    String?
+  instanceName   String?
   /// Masked phone (e.g. "+55***0692"). Never the full number.
-  maskedPhone     String?
+  maskedPhone    String?
   /// Full normalized E.164 sender, stored SERVER-SIDE ONLY so the admin can
   /// authorize an unauthorized /build sender by traceId without the full number
   /// ever leaving the backend. NEVER returned in any API/view — masked only.
-  rawPhone        String?
-  prefixDetected  String?
-  configEnabled   Boolean?
-  configSource    String?
-  authorized      Boolean?
-  fromMe          Boolean?
-  commandCreated  Boolean  @default(false)
-  promptDrafted   Boolean  @default(false)
-  responseSent    Boolean  @default(false)
-  shortCircuited  Boolean  @default(false)
-  failureReason   String?
-  createdAt       DateTime @default(now())
+  rawPhone       String?
+  prefixDetected String?
+  configEnabled  Boolean?
+  configSource   String?
+  authorized     Boolean?
+  fromMe         Boolean?
+  commandCreated Boolean  @default(false)
+  promptDrafted  Boolean  @default(false)
+  responseSent   Boolean  @default(false)
+  shortCircuited Boolean  @default(false)
+  failureReason  String?
+  createdAt      DateTime @default(now())
 
   @@index([createdAt])
   @@map("build_webhook_traces")
@@ -2509,15 +2509,15 @@ model BuildWebhookTrace {
 /// Generated deterministically from a TEMPLATE — never by an LLM in this phase.
 /// Stored internally only; the full text is visible solely in the admin area.
 model BuildPromptVersion {
-  id                 String                 @id @default(cuid())
-  commandId          String
-  versionNumber      Int                    @default(1)
-  promptText         String                 @db.Text
-  promptKind         BuildPromptKind        @default(TECHNICAL_DRAFT)
-  generatedBy        BuildPromptGeneratedBy @default(TEMPLATE)
+  id                  String                 @id @default(cuid())
+  commandId           String
+  versionNumber       Int                    @default(1)
+  promptText          String                 @db.Text
+  promptKind          BuildPromptKind        @default(TECHNICAL_DRAFT)
+  generatedBy         BuildPromptGeneratedBy @default(TEMPLATE)
   /// When this version was produced by an AJUSTAR reply, the operator's instruction.
-  revisionInstruction String?               @db.Text
-  createdAt          DateTime               @default(now())
+  revisionInstruction String?                @db.Text
+  createdAt           DateTime               @default(now())
 
   command BuildCommand @relation(fields: [commandId], references: [id], onDelete: Cascade)
 
@@ -2642,15 +2642,15 @@ enum AgentLibraryTechniqueStatus {
 }
 
 model AgentLibrarySource {
-  id          String                 @id @default(cuid())
-  agentSlug   String
-  title       String
-  author      String?
-  sourceType  AgentLibrarySourceType @default(INTERNAL_NOTE)
-  category    String?
-  description String?
+  id               String                       @id @default(cuid())
+  agentSlug        String
+  title            String
+  author           String?
+  sourceType       AgentLibrarySourceType       @default(INTERNAL_NOTE)
+  category         String?
+  description      String?
   // Pasted content (synthesis/notes). Never store full copyrighted works here.
-  rawText     String?
+  rawText          String?
   // Optional original file (kept PRIVATE) — reserved for a future upload phase.
   fileUrl          String?
   storageKey       String?
@@ -2722,7 +2722,7 @@ model AgentLibraryTechnique {
 // ═══════════════════════════════════════════
 
 model WhatsAppOrderingSession {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   restaurantId   String
   customerId     String? // nullable — anonymous until identified
   conversationId String? // nullable — links to Atendimento conversation when known
@@ -2746,14 +2746,14 @@ model WhatsAppOrderingSession {
   orderId      String?
   pixPaymentId String?
 
-  mode   String  @default("DRY_RUN_ONLY") // DRY_RUN_ONLY | ALLOWLIST_REPLY_ONLY | ALLOWLIST_FULL_TEST
-  source String  @default("admin_test") // admin_test | webhook
+  mode     String @default("DRY_RUN_ONLY") // DRY_RUN_ONLY | ALLOWLIST_REPLY_ONLY | ALLOWLIST_FULL_TEST
+  source   String @default("admin_test") // admin_test | webhook
   metadata Json?
 
-  lastMessageAt DateTime @default(now())
+  lastMessageAt DateTime  @default(now())
   expiresAt     DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
@@ -2796,4 +2796,53 @@ model WhatsAppTextOrderingConfig {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@map("whatsapp_text_ordering_configs")
+}
+
+// ═══════════════════════════════════════════
+//  QUALITY CONTROL – audit run history (v2)
+// ═══════════════════════════════════════════
+// Read-only audit results produced by /admin/quality. Standalone tables (no FK
+// into business data): they only store the standardized audit output so Diego
+// can open the dashboard and see the latest run, history and open P0/P1/P2.
+// Nothing here is written by runtime ordering/payment/CRM paths.
+
+model QualityAuditRun {
+  id               String   @id @default(cuid())
+  source           String   @default("MANUAL") // MANUAL | CRON | SYSTEM
+  globalStatus     String // PASS | WARNING | FAIL
+  startedAt        DateTime
+  finishedAt       DateTime
+  durationMs       Int
+  triggeredBy      String? // admin identifier (no PII)
+  auditorId        String? // set when a single auditor ran
+  countsBySeverity Json // { P0, P1, P2, INFO }
+  countsByStatus   Json // { PASS, WARNING, FAIL }
+  metadata         Json?
+  createdAt        DateTime @default(now())
+
+  findings QualityAuditFinding[]
+
+  @@index([createdAt])
+  @@index([globalStatus])
+  @@map("quality_audit_runs")
+}
+
+model QualityAuditFinding {
+  id             String   @id @default(cuid())
+  runId          String
+  auditorId      String
+  status         String // PASS | WARNING | FAIL
+  severity       String // P0 | P1 | P2 | INFO
+  title          String
+  summary        String
+  evidence       Json // string[] (sanitized technical evidence only)
+  affectedArea   String
+  recommendation String
+  createdAt      DateTime @default(now())
+
+  run QualityAuditRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([auditorId, severity])
+  @@map("quality_audit_findings")
 }

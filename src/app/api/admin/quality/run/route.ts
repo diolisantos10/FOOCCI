@@ -11,14 +11,19 @@
  * Body:
  *   { auditorId?: string }  — when present runs one auditor, otherwise all.
  *
+ * On success the run + sanitized findings are persisted to the standalone
+ * quality_audit_* tables (no business data). Persistence failure is non-fatal:
+ * the audit result is still returned (without a runId).
+ *
  * Response:
- *   { ok: true,  mode, result }            (200)
+ *   { ok: true,  mode, result, runId? }    (200)
  *   { ok: false, error, code }             (400 | 401 | 403 | 404)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { handleQualityRun } from "@/services/quality/runRequest";
+import { persistRun } from "@/services/quality/persistence/QualityAuditStore";
 
 export async function POST(req: NextRequest) {
   if (!process.env.ADMIN_SECRET) {
@@ -44,5 +49,16 @@ export async function POST(req: NextRequest) {
   }
 
   const { httpStatus, payload } = await handleQualityRun(body);
+
+  // Persist successful runs (sanitized). Non-fatal on failure.
+  if (payload.ok && payload.result) {
+    try {
+      const auditorId = payload.mode === "one" ? payload.result.auditorIds[0] ?? null : null;
+      payload.runId = await persistRun(payload.result, { source: "MANUAL", auditorId });
+    } catch (err) {
+      console.error("[quality] persist failed:", err instanceof Error ? err.message : err);
+    }
+  }
+
   return NextResponse.json(payload, { status: httpStatus });
 }
