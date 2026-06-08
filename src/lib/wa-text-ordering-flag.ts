@@ -114,12 +114,88 @@ export function resolveSideEffectPermissions(
   return { mode, canReply, canCreateOrder, canCreatePix, reasons };
 }
 
+// ── Live routing decision (single source of truth for the webhook gate) ───────
+
+export interface WaRoutingDecision {
+  masterEnabled:         boolean;
+  mode:                  WaOrderingMode;
+  /** Restaurant explicitly present in the restaurant allowlist. */
+  restaurantAllowlisted: boolean;
+  /** Master flag on AND (restaurant allowlist empty OR restaurant included). */
+  enabledForRestaurant:  boolean;
+  phoneAllowlisted:      boolean;
+  /** Final verdict — mirrors the live webhook gate exactly. */
+  shouldUseTextOrdering: boolean;
+  declineReason:         string | null;
+}
+
+/**
+ * Computes the exact live-routing decision the Evolution webhook applies, so the
+ * webhook handler and the admin diagnostic share ONE implementation. The gate is:
+ *   isWaTextOrderingEnabled(restaurantId) && isPhoneAllowlisted(phone)
+ */
+export function getRoutingDecision(restaurantId: string, phone: string): WaRoutingDecision {
+  const masterEnabled         = process.env.WHATSAPP_TEXT_ORDERING_ENABLED === "true";
+  const mode                  = getWaTextOrderingMode();
+  const restaurantAllowlisted = isRestaurantAllowlisted(restaurantId);
+  const enabledForRestaurant  = isWaTextOrderingEnabled(restaurantId);
+  const phoneAllowlisted      = isPhoneAllowlisted(phone);
+  const shouldUseTextOrdering = enabledForRestaurant && phoneAllowlisted;
+
+  let declineReason: string | null = null;
+  if (!shouldUseTextOrdering) {
+    if (!masterEnabled)              declineReason = "master switch off (WHATSAPP_TEXT_ORDERING_ENABLED!=true)";
+    else if (!enabledForRestaurant)  declineReason = "restaurant not allowlisted (set WHATSAPP_TEXT_ORDERING_ALLOWLIST_RESTAURANTS to the restaurant ID)";
+    else if (!phoneAllowlisted)      declineReason = "phone not allowlisted (add the E.164 number to WHATSAPP_TEXT_ORDERING_ALLOWLIST_PHONES)";
+    else                             declineReason = "unknown";
+  }
+
+  return {
+    masterEnabled, mode, restaurantAllowlisted, enabledForRestaurant,
+    phoneAllowlisted, shouldUseTextOrdering, declineReason,
+  };
+}
+
+/** Masks a phone for safe logging: keeps country/DDD + last 2 digits. */
+export function maskPhone(phone: string): string {
+  const d = phone.replace(/\D/g, "");
+  if (d.length <= 4) return "***";
+  return `${d.slice(0, 4)}***${d.slice(-2)}`;
+}
+
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 function parseList(raw: string | undefined): string[] {
   return (raw ?? "").split(",").map(s => s.trim()).filter(Boolean);
 }
 
+/**
+ * Canonicalises a Brazilian phone so all common formats collapse to one key.
+ * These must all match each other:
+ *   +5511999990000 · 5511999990000 · 11999990000 · +551199990000 · 1199990000
+ *
+ * Strategy: strip non-digits → drop a leading 55 country code (12/13-digit
+ * numbers) → normalise the mobile 9th digit so "with 9" and "without 9" forms
+ * resolve to the same canonical national number (DDD + 9 + 8 digits).
+ *
+ * This is the same tolerance the customer-identity phoneCandidates() helper uses;
+ * without it an allowlist entry typed in one format silently fails to match the
+ * E.164 JID Evolution delivers, and the message falls through to the old agent.
+ */
 function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, "");
+  let digits = phone.replace(/\D/g, "");
+  if (digits.length === 0) return "";
+
+  // Drop the BR country code when present on a 12/13-digit number.
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) {
+    digits = digits.slice(2);
+  }
+
+  // National form is DDD(2) + local. Insert the mobile 9th digit when missing so
+  // 10-digit (DDD + 8) and 11-digit (DDD + 9 + 8) forms canonicalise together.
+  if (digits.length === 10) {
+    return `${digits.slice(0, 2)}9${digits.slice(2)}`;
+  }
+
+  return digits;
 }

@@ -36,7 +36,7 @@ import { markCrmReplyIfApplicable } from "@/services/agents/AgentRoutingService"
 import { markConversationNeedsHuman } from "@/lib/handoff";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 import { shouldAiRespond } from "@/services/conversation/ConversationAiPolicyService";
-import { isWaTextOrderingEnabled, isPhoneAllowlisted } from "@/lib/wa-text-ordering-flag";
+import { isWaTextOrderingEnabled, isPhoneAllowlisted, getRoutingDecision, maskPhone } from "@/lib/wa-text-ordering-flag";
 
 // Resolved conversations older than this are treated as new threads.
 const REOPEN_WINDOW_HOURS = 24;
@@ -338,6 +338,33 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
           console.error("[WebhookProcessor] Receptionist module load failed:", err)
         );
     }
+  }
+
+  // Live-routing trace: emitted only when the Text Ordering master switch is on,
+  // so allowlisted live tests are debuggable without adding noise for everyone.
+  // No secrets and no full phone are logged.
+  if (process.env.WHATSAPP_TEXT_ORDERING_ENABLED === "true" && event.messageType === "TEXT") {
+    const decision = getRoutingDecision(restaurantId, event.phone);
+    const finalHandler = textOrderingHandled
+      ? "TEXT_ORDERING"
+      : shouldRespond
+        ? "WHATSAPP_RECEPTIONIST"
+        : aiDecision.allowed === false
+          ? "HUMAN_HANDOFF"
+          : "IGNORED";
+    console.log("[WA-TextOrdering] routing decision", {
+      restaurantId,
+      phoneMasked:           maskPhone(event.phone),
+      mode:                  decision.mode,
+      enabled:               decision.masterEnabled,
+      restaurantAllowlisted: decision.restaurantAllowlisted,
+      enabledForRestaurant:  decision.enabledForRestaurant,
+      phoneAllowlisted:      decision.phoneAllowlisted,
+      shouldRespond,
+      shouldUseTextOrdering: decision.shouldUseTextOrdering,
+      declineReason:         decision.declineReason,
+      finalHandler,
+    });
   }
 
   console.log(

@@ -37,6 +37,19 @@ interface Session {
 interface FlagStatus {
   enabled: boolean; mode: string; requestedMode: string;
   restaurantAllowlisted: boolean; phoneAllowlisted: boolean; liveRoutingActive: boolean;
+  declineReason?: string | null;
+}
+
+interface RoutingReadiness {
+  restaurant: { id: string; name: string; slug: string };
+  input: { phone: string; phoneMasked: string };
+  flags: {
+    masterEnabled: boolean; mode: string;
+    restaurantAllowlisted: boolean; enabledForRestaurant: boolean; phoneAllowlisted: boolean;
+  };
+  wouldRouteToTextOrdering: boolean;
+  declineReason: string | null;
+  hint: string;
 }
 interface SimResult {
   restaurant: { id: string; name: string; slug: string };
@@ -192,6 +205,31 @@ export default function WaTextOrderingPage() {
     return buildScenarioRunnerReport(scReport);
   }, [scReport]);
 
+  // ── Live routing readiness state ────────────────────────────────────────────
+  const [rdReport, setRdReport]   = useState<RoutingReadiness | null>(null);
+  const [rdLoading, setRdLoading] = useState(false);
+  const [rdError, setRdError]     = useState<string | null>(null);
+
+  const checkRouting = useCallback(async () => {
+    setRdLoading(true); setRdError(null);
+    try {
+      const res = await fetch("/api/admin/diagnostics/whatsapp-text-ordering/routing", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ restaurantSlug: slug, phone }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? `HTTP ${res.status}`);
+      }
+      setRdReport(await res.json());
+    } catch (e) {
+      setRdError(e instanceof Error ? e.message : "Erro desconhecido.");
+    } finally {
+      setRdLoading(false);
+    }
+  }, [slug, phone]);
+
   const buildReport = useCallback(() => {
     if (!result) return "";
     return buildWaOrderingReport(result as unknown as WaOrderingReportResult, {
@@ -228,6 +266,53 @@ export default function WaTextOrderingPage() {
         <p className="mt-2 text-gray-600">
           Dry-run não cria pedido, não gera Pix e não envia WhatsApp.
         </p>
+      </div>
+
+      {/* B1. Live routing readiness — "would a real message route to Pedido Texto?" */}
+      <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-blue-700">
+            Prontidão de roteamento ao vivo
+          </h3>
+          <button
+            onClick={checkRouting}
+            disabled={rdLoading}
+            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {rdLoading ? "Verificando…" : "Verificar roteamento"}
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-blue-800">
+          Usa o restaurante e telefone dos campos abaixo. Não envia WhatsApp, não cria pedido nem Pix —
+          só responde se a mensagem real entraria no Pedido por Texto.
+        </p>
+        {rdError && <p className="mt-2 text-xs font-semibold text-red-600">{rdError}</p>}
+        {rdReport && (
+          <div className="mt-3 space-y-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <Pill
+                text={rdReport.wouldRouteToTextOrdering ? "ROTEIA → Pedido Texto ✓" : "NÃO roteia (cai no agente antigo)"}
+                tone={rdReport.wouldRouteToTextOrdering ? "green" : "red"}
+              />
+              <Pill text={`modo: ${rdReport.flags.mode}`} tone="gray" />
+            </div>
+            <div className="grid grid-cols-2 gap-1 text-[11px] text-gray-700 sm:grid-cols-3">
+              <span>{rdReport.flags.masterEnabled ? "✅" : "⬜"} flag ligada</span>
+              <span>{rdReport.flags.enabledForRestaurant ? "✅" : "⬜"} restaurante liberado</span>
+              <span>{rdReport.flags.phoneAllowlisted ? "✅" : "⬜"} telefone no allowlist</span>
+            </div>
+            <p className="text-[11px] text-gray-600">
+              Restaurante: <span className="font-mono">{rdReport.restaurant.id}</span> ({rdReport.restaurant.slug}) ·
+              telefone: <span className="font-mono">{rdReport.input.phoneMasked}</span>
+            </p>
+            {!rdReport.wouldRouteToTextOrdering && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900">
+                <p className="font-semibold">Motivo: {rdReport.declineReason}</p>
+                {rdReport.hint && <p className="mt-1">{rdReport.hint}</p>}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* B2. Controlled test activation checklist */}

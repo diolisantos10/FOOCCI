@@ -33,6 +33,7 @@ import {
   getWaTextOrderingMode,
   isRestaurantAllowlisted,
   isPhoneAllowlisted,
+  getRoutingDecision,
 } from "@/lib/wa-text-ordering-flag";
 import type { WaPersistedSession, WaRuntimeMode } from "@/services/whatsapp/ordering/types";
 
@@ -105,14 +106,17 @@ export async function POST(req: NextRequest) {
     allowSideEffects: false,
   });
 
-  // Live-routing status banner data
+  // Live-routing status banner data. liveRoutingActive reflects the REAL webhook
+  // gate (W9 wired the engine in): would this restaurant+phone route live now?
+  const routing = getRoutingDecision(restaurant.id, testPhone);
   const flagStatus = {
     enabled:             isWaTextOrderingEnabled(restaurant.id),
     mode:                getWaTextOrderingMode(),
     requestedMode,
     restaurantAllowlisted: isRestaurantAllowlisted(restaurant.id),
     phoneAllowlisted:    isPhoneAllowlisted(testPhone),
-    liveRoutingActive:   false, // engine is never wired into the live webhook in this build
+    liveRoutingActive:   routing.shouldUseTextOrdering,
+    declineReason:       routing.declineReason,
   };
 
   return NextResponse.json({
