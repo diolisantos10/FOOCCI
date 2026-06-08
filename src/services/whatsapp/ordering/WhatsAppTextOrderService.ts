@@ -258,6 +258,23 @@ import type {
 
 const CUSTOMER_FALLBACK_NAME = "Cliente WhatsApp";
 
+function paymentMethodLabel(method: string | null): string {
+  if (method === "PIX")  return "Pix";
+  if (method === "CARD") return "Cartão";
+  if (method === "CASH") return "Dinheiro";
+  return "a definir";
+}
+
+function buildOrderConfirmedReply(session: WaPersistedSession): string {
+  const deliveryLabel = session.deliveryType === "PICKUP" ? "Retirada no balcão" : "Entrega no seu endereço";
+  return `Pedido confirmado! ✅\n${deliveryLabel} · ${paymentMethodLabel(session.paymentMethod)}. Já vamos preparar. 🙌`;
+}
+
+function buildOrderAnnotatedReply(session: WaPersistedSession): string {
+  const deliveryLabel = session.deliveryType === "PICKUP" ? "Retirada no balcão" : "Entrega no seu endereço";
+  return `Pedido anotado! ✅\n${deliveryLabel} · ${paymentMethodLabel(session.paymentMethod)}. Um atendente vai confirmar em instantes. 😊`;
+}
+
 /** Builds a fresh in-memory session (not persisted). */
 export function newTransientSession(input: {
   restaurantId: string;
@@ -331,10 +348,11 @@ export async function processCustomerMessage(input: WaProcessInput): Promise<WaP
     s.deliveryQuote = quote;
 
     if (quote.status === "ok") {
-      const total = Math.round((draft.subtotal + quote.fee) * 100) / 100;
       s.stage  = "COLLECTING_PAYMENT_METHOD";
       s.status = "AWAITING_CUSTOMER";
-      reply = `Entrega para esse endereço fica R$ ${quote.fee.toFixed(2)}. Seu pedido ficou R$ ${total.toFixed(2)} com a entrega. Vai pagar no Pix, cartão ou dinheiro?`;
+      // Rebuild draft with delivery fee now set so comanda shows the correct total
+      const draftWithFee = buildFullDraft(s);
+      reply = `${draftWithFee.comandaText}\n\nVai pagar no Pix, cartão ou dinheiro?`;
     } else if (quote.status === "out_of_range" || quote.status === "blocked") {
       s.stage  = "HANDOFF_REQUIRED";
       s.status = "HANDOFF_REQUIRED";
@@ -391,20 +409,27 @@ export async function processCustomerMessage(input: WaProcessInput): Promise<WaP
           s.status = "AWAITING_PAYMENT";
           s.stage  = "AWAITING_PIX_PAYMENT";
           if (!pix.isDryRunStub) sideEffectsPerformed.push("pix_generated");
-          reply = "Pix gerado. Assim que o pagamento for confirmado, enviamos seu pedido para preparo.";
-          if (pix.isDryRunStub) reply += " (simulação — Pix não é real)";
+          if (pix.isDryRunStub) {
+            reply = "Pix gerado (simulação — código não é real). Assim que o pagamento for confirmado, seu pedido entra para preparo.";
+          } else if (pix.status === "FAILED") {
+            s.stage  = "HANDOFF_REQUIRED";
+            s.status = "HANDOFF_REQUIRED";
+            reply = "Houve um problema ao gerar o Pix. Vou chamar um atendente para te ajudar. 🤝";
+          } else {
+            reply = `Pix gerado! ✅\n\n*Código Pix (copia e cola):*\n${pix.pixCopyPaste}\n\nAssim que identificarmos o pagamento, avisamos e seu pedido entra para preparo. 🙌`;
+          }
         } else {
           // Pay on delivery/pickup
           payment = {
-            method: s.paymentMethod,
-            status: creation.created ? "PENDING" : "PENDING",
+            method:    s.paymentMethod,
+            status:    "PENDING",
             changeFor: s.metadata?.changeFor as number | undefined,
           };
           s.status = "COMPLETED";
           s.stage  = "COMPLETED";
           reply = creation.created
-            ? "Pedido confirmado! Já vamos preparar. 🙌"
-            : "Tudo certo! (simulação — pedido não foi criado de verdade)";
+            ? buildOrderConfirmedReply(s)
+            : buildOrderAnnotatedReply(s);
         }
       }
     }

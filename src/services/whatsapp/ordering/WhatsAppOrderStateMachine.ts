@@ -95,6 +95,9 @@ export function advanceSession(
       return handlePayment(next, text, menu);
     case "REVIEWING_ORDER":
       return handleReview(next, text, intent, menu);
+    case "AWAITING_PIX_PAYMENT":
+      return handleAwaitingPixPayment(next, text);
+
     default: {
       // IDLE / INTENT_DETECTED / PARSING_ITEMS / fresh order
       // Intent-first: a menu question must never be run through the product matcher.
@@ -190,6 +193,53 @@ function wholeIsConfident(wholeName: string, menu: WaMenuItem[]): boolean {
   const qWords = norm(wholeName).split(/\s+/).filter(w => w.length >= 3 && !STOP_WORDS.has(w));
   const cWords = norm(best.top.name).split(/\s+/);
   return qWords.every(qw => cWords.some(cw => cw.startsWith(qw) || qw.startsWith(cw)));
+}
+
+// ── Awaiting Pix payment ────────────────────────────────────────────────────────
+
+const PIX_PAID_RE = /\b(paguei|pago|pix\s*feito|transferi|enviei|confirmei|j[aá]\s+paguei|j[aá]\s+mandei|j[aá]\s+fiz)\b/i;
+
+function handleAwaitingPixPayment(session: WaPersistedSession, text: string): AdvanceResult {
+  if (PIX_PAID_RE.test(text)) {
+    return done(session, "CONFIRMATION",
+      "Aguardando confirmação automática do Pix. Assim que identificarmos, avisamos e seu pedido entra para preparo! 😊",
+      [], false);
+  }
+  if (CANCEL_RE.test(text)) {
+    session.status = "CANCELLED";
+    session.stage  = "CANCELLED";
+    return done(session, "CANCEL", "Pedido cancelado. Se precisar, é só chamar de novo. 👋", [], false);
+  }
+  if (/\b(atendente|humano|pessoa|operador|falar com)\b/i.test(text)) {
+    session.status = "HANDOFF_REQUIRED";
+    session.stage  = "HANDOFF_REQUIRED";
+    return done(session, "HUMAN_REQUEST", "Certo! Vou chamar um atendente. 🤝", [], true);
+  }
+  return done(session, "UNKNOWN",
+    "Seu pedido está aguardando confirmação do Pix. Assim que confirmado, avisamos! 😊",
+    [], false);
+}
+
+// ── Inline comanda builder (pure, no imports needed) ──────────────────────────
+
+function inlineComanda(session: WaPersistedSession): string {
+  const lines: string[] = ["*Resumo do pedido:*"];
+  let subtotal = 0;
+  for (const item of session.selectedItems) {
+    const variant = item.variantName ? ` ${item.variantName}` : "";
+    const opts = item.options.length > 0 ? ` (${item.options.map(o => o.optionName).join(", ")})` : "";
+    lines.push(`${item.quantity}x ${item.menuItemName}${variant}${opts} — R$ ${item.lineTotal.toFixed(2)}`);
+    subtotal += item.lineTotal;
+  }
+  const deliveryFee = session.deliveryType === "PICKUP" ? 0 : (session.deliveryQuote?.fee ?? 0);
+  if (session.deliveryType === "DELIVERY") {
+    lines.push(`Entrega — R$ ${deliveryFee.toFixed(2)}`);
+  } else if (session.deliveryType === "PICKUP") {
+    lines.push("Retirada — grátis");
+  }
+  const total = round(subtotal + deliveryFee);
+  lines.push(`*Total — R$ ${total.toFixed(2)}*`);
+  return lines.join("\n");
 }
 
 // ── Item collection ─────────────────────────────────────────────────────────────
@@ -311,7 +361,8 @@ function routeAfterResolved(
   if (!session.paymentMethod) {
     session.stage  = "COLLECTING_PAYMENT_METHOD";
     session.status = "AWAITING_CUSTOMER";
-    return done(session, "ORDER_REQUEST", `${confirm} Vai pagar no Pix, cartão ou dinheiro?`.trim(), [], false);
+    const comanda = inlineComanda(session);
+    return done(session, "ORDER_REQUEST", `${comanda}\n\nVai pagar no Pix, cartão ou dinheiro?`, [], false);
   }
 
   return finalizePayment(session);
@@ -326,6 +377,12 @@ function handleOptionAnswer(
 ): AdvanceResult {
   const q = session.missingQuestions[0];
   if (!q) return continueAfterItems(session, null);
+
+  // Numeric selection: "1" → first option, "2" → second, etc.
+  const numericSel = /^\s*\d+\s*$/.test(text) ? parseInt(text.trim(), 10) : NaN;
+  if (!isNaN(numericSel) && numericSel >= 1 && numericSel <= q.options.length) {
+    return handleOptionAnswer(session, q.options[numericSel - 1]!, menu);
+  }
 
   // Find the menu item this question belongs to
   const menuItem = menu.find(m => m.name === q.itemName);
@@ -413,8 +470,9 @@ function handleDeliveryType(session: WaPersistedSession, text: string, menu: WaM
     session.deliveryQuote = { fee: 0, status: "ok", reason: "retirada" };
     session.stage  = "COLLECTING_PAYMENT_METHOD";
     session.status = "AWAITING_CUSTOMER";
+    const comanda = inlineComanda(session);
     return done(session, "DELIVERY_INFO",
-      "Fechado, retirada no balcão. Vai pagar no Pix, cartão ou dinheiro?", [], false);
+      `Retirada no balcão. ✅\n\n${comanda}\n\nVai pagar no Pix, cartão ou dinheiro?`, [], false);
   }
   if (DELIVERY_RE.test(text)) {
     session.deliveryType = "DELIVERY";
@@ -427,7 +485,7 @@ function handleDeliveryType(session: WaPersistedSession, text: string, menu: WaM
     session.stage  = "COLLECTING_ADDRESS";
     session.status = "AWAITING_CUSTOMER";
     return done(session, "DELIVERY_INFO",
-      "Me envia o endereço completo com número, por favor.", [], false);
+      "Me envia o endereço com rua, número e bairro, por favor.", [], false);
   }
 
   // Not a delivery/pickup answer — maybe the customer is modifying the order.
@@ -538,7 +596,7 @@ function handleAddress(session: WaPersistedSession, text: string): AdvanceResult
 
   if (!session.address.street || !session.address.number) {
     return done(session, "DELIVERY_INFO",
-      "Me envia o endereço completo com número, por favor.", [], false);
+      "Me envia o endereço com rua, número e bairro, por favor.", [], false);
   }
 
   // Address looks complete → defer to delivery quote (I/O)

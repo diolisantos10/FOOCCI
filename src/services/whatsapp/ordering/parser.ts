@@ -64,11 +64,16 @@ export const PAYMENT_STANDALONE_RE  = /^(pix|cart[aã]o|cr[eé]dito|d[eé]bito|d
 /** Normalizes spelling variants and strips Portuguese plural suffixes from a product name. */
 export function normalizePluralAndSpelling(text: string): string {
   return text
-    // Known spelling variants
+    // Known spelling variants (common WhatsApp typos + abbreviations)
     .replace(/\bcocacola\b/gi, "coca cola")
     .replace(/\bcoca-cola\b/gi, "coca cola")
     .replace(/\bkisoba\b/gi, "yakisoba")
     .replace(/\brefri\b/gi, "refrigerante")
+    .replace(/\bpiza\b/gi, "pizza")
+    .replace(/\bhamburger\b/gi, "hamburguer")
+    .replace(/\bhamburguesa\b/gi, "hamburguer")
+    .replace(/\bfrapp[eê]\b/gi, "frappe")
+    .replace(/\bwrapt?\b/gi, "wrap")
     // Strip trailing -s from words with stem ≥ 4 chars
     // handles: cocas→coca, yakisobas→yakisoba, temakis→temaki, combos→combo, pizzas→pizza
     .replace(/\b([a-záéíóúâêîôûãõàèìòùç]{4,})s\b/g, "$1")

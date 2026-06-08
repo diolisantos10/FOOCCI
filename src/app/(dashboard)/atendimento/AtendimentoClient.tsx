@@ -2153,7 +2153,9 @@ function MessageBubble({
   const crmActorLabel = crmCtx === "CRM_CAMPAIGN" ? "Campanha" : crmCtx === "CRM_AUTOMATION" ? "Automação" : "CRM";
   const senderLabel = isOutbound
     ? (msg.senderType === "AI"
-        ? (msgSource === "CARDAPIO" ? "IA · Cardápio" : "IA · WhatsApp")
+        ? (msgSource === "PEDIDO_TEXTO" ? "IA · Pedido Texto"
+           : msgSource === "CARDAPIO"   ? "IA · Cardápio"
+           :                              "IA · WhatsApp")
         : msg.senderType === "HUMAN_EXTERNAL" ? "WhatsApp externo"
         : msg.senderType === "CRM" ? crmActorLabel
         : msg.senderType === "HUMAN"
@@ -2162,7 +2164,9 @@ function MessageBubble({
     : (msg.senderType === "CUSTOMER_CARDAPIO" ? `${customerName} · Cardápio` : `${customerName} · WhatsApp`);
   const senderBadgeCls = isOutbound
     ? (msg.senderType === "AI"
-        ? "bg-orange-50 border border-orange-200 text-orange-600"
+        ? (msgSource === "PEDIDO_TEXTO"
+            ? "bg-sky-50 border border-sky-200 text-sky-700"
+            : "bg-orange-50 border border-orange-200 text-orange-600")
         : msg.senderType === "HUMAN_EXTERNAL"
           ? "bg-teal-50 border border-teal-200 text-teal-700"
           : msg.senderType === "CRM"
