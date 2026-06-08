@@ -49,8 +49,9 @@ export const AUDITOR_META = {
     name: "Auditor Analytics",
     area: "Analytics",
     group: "Analytics",
-    mission: "Auditar métricas, dashboard e relatórios (somente leitura).",
-    connection: "PARTIAL",
+    mission:
+      "Auditar com checks reais read-only (data fixa): diagnóstico, métricas/vendas/upsell, retenção/cohort, operação, analista conversacional e dashboard cockpit — sem DB nem dado ao vivo.",
+    connection: "ACTIVE",
     linkedLabs: [
       { label: "Analytics Test Center", href: "/admin/agentes/analytics/testes", exists: true },
     ],

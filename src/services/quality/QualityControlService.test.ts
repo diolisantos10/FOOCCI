@@ -83,7 +83,7 @@ describe("Quality Control — runAll", () => {
     for (const f of res.findings) expect(f.runId).toBe(res.runId);
   });
 
-  it("(3) includes real Waiter + CRM results while Analytics/WhatsApp stay PARTIAL", async () => {
+  it("(3) includes real Waiter + CRM + Analytics results while WhatsApp stays PARTIAL", async () => {
     const res = await runAll({ now: new Date("2026-06-08T03:00:00Z") });
     // Waiter connected: real Test Center finding
     const waiter = res.findings.filter((f) => f.auditorId === "waiter");
@@ -92,14 +92,16 @@ describe("Quality Control — runAll", () => {
     const crm = res.findings.filter((f) => f.auditorId === "crm");
     expect(crm.some((f) => f.title.includes("CRM Test Center"))).toBe(true);
     expect(crm.some((f) => f.title.includes("dry-run"))).toBe(true);
-    expect(crm.some((f) => f.title.includes("não conectado"))).toBe(false);
-    // The remaining two stay not-connected stubs (INFO)
-    for (const id of ["analytics", "whatsapp"]) {
-      const fs = res.findings.filter((f) => f.auditorId === id);
-      expect(fs.length).toBeGreaterThan(0);
-      expect(fs.every((f) => f.severity === "INFO")).toBe(true);
-      expect(fs.some((f) => f.title.includes("não conectado"))).toBe(true);
-    }
+    // Analytics connected: real Test Center + read-only guarantee findings
+    const analytics = res.findings.filter((f) => f.auditorId === "analytics");
+    expect(analytics.some((f) => f.title.includes("Analytics Test Center"))).toBe(true);
+    expect(analytics.some((f) => f.title.includes("read-only"))).toBe(true);
+    expect(analytics.some((f) => f.title.includes("não conectado"))).toBe(false);
+    // WhatsApp stays a not-connected stub (INFO)
+    const wa = res.findings.filter((f) => f.auditorId === "whatsapp");
+    expect(wa.length).toBeGreaterThan(0);
+    expect(wa.every((f) => f.severity === "INFO")).toBe(true);
+    expect(wa.some((f) => f.title.includes("não conectado"))).toBe(true);
   });
 
   it("severity + status counts sum to the number of findings", async () => {
@@ -164,9 +166,9 @@ describe("Quality Control — counting + global status", () => {
     expect(countByStatus(fs)).toEqual({ PASS: 1, WARNING: 2, FAIL: 0 });
   });
 
-  it("global status is WARNING (Waiter+CRM green; Analytics/WhatsApp still partial)", async () => {
+  it("global status is WARNING (Waiter+CRM+Analytics green; WhatsApp still partial)", async () => {
     const res = await runAll();
-    // connected auditors are clean, but the not-connected stubs keep it at WARNING
+    // connected auditors are clean, but the WhatsApp stub keeps it at WARNING
     expect(res.globalStatus).toBe("WARNING");
     expect(res.countsByStatus.FAIL).toBe(0);
     expect(res.countsBySeverity.P0).toBe(0);

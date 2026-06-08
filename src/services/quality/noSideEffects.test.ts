@@ -41,6 +41,9 @@ const ALLOWED_EXTERNAL = new Set([
   // CRM Test Center — deterministic, pure (no DB/LLM/network/sends).
   "@/services/crm/testing/crmScenarios",
   "@/services/crm/testing/crmEvaluator",
+  // Analytics Test Center — deterministic, pure (no DB/LLM/network/mutation).
+  "@/services/analytics/testing/analyticsScenarios",
+  "@/services/analytics/testing/analyticsEvaluator",
 ]);
 
 const FORBIDDEN_TOKENS = [
