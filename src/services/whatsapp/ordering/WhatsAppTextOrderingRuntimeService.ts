@@ -47,6 +47,7 @@ export interface RuntimeDecision {
   result:         WaProcessResult | null;
   replyWouldSend: boolean;        // would a reply be sent (REPLY_ONLY / FULL_TEST)?
   replySent:      boolean;        // did a real WhatsApp reply go out this turn?
+  handoffApplied: boolean;        // was an intentional human handoff applied + saved?
   safetyNotes:    string[];
 }
 
@@ -155,10 +156,12 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
 
   // Handle handoff: mark conversation for human BEFORE sending the handoff message
   // so the final AI message is still delivered but the AI won't handle the next turn.
+  let handoffApplied = false;
   if (result.handoff && input.conversationId) {
     try {
       const { markConversationNeedsHuman } = await import("@/lib/handoff");
       await markConversationNeedsHuman(input.conversationId, "CUSTOMER_REQUEST");
+      handoffApplied = true;
       safetyNotes.push("handoff: conversation marked for human (CUSTOMER_REQUEST)");
     } catch (err) {
       console.error("[TextOrderingRuntime] markConversationNeedsHuman failed:", err);
@@ -225,13 +228,14 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
     result,
     replyWouldSend: canReply,
     replySent,
+    handoffApplied,
     safetyNotes,
   };
 
   function block(reason: string, m: string): RuntimeDecision {
     return {
       handled: false, blockedReason: reason, mode: m, result: null,
-      replyWouldSend: false, replySent: false,
+      replyWouldSend: false, replySent: false, handoffApplied: false,
       safetyNotes: [`blocked: ${reason}`],
     };
   }

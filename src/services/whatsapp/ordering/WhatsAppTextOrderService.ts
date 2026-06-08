@@ -18,7 +18,9 @@
  *  - Does NOT mutate any customer or campaign record.
  *  - Only reads menu data from DB (tenant-scoped by restaurantId).
  *
- * Not wired into the real webhook path. Protected by WHATSAPP_TEXT_ORDERING_ENABLED flag.
+ * Wired into the live webhook path via WhatsAppTextOrderingRuntimeService, which
+ * runs only after the message-aware routing contract approves (order intent OR an
+ * active ordering session) and behind the DB-aware enabled/paused/allowlist guards.
  */
 
 import { matchItems } from "./menuMatcher";

@@ -28,6 +28,9 @@ import {
   type WaOrderingScope,
   type WaRoutingDecision,
 } from "@/lib/wa-text-ordering-flag";
+import { detectIntent } from "./parser";
+import { WhatsAppOrderingSessionService } from "./WhatsAppOrderingSessionService";
+import type { WaDetectedIntent } from "./types";
 
 const VALID_MODES: WaOrderingMode[] = ["DRY_RUN_ONLY", "ALLOWLIST_REPLY_ONLY", "ALLOWLIST_FULL_TEST"];
 const VALID_SCOPES: WaOrderingScope[] = ["PHONE_ALLOWLIST", "RESTAURANT_WIDE"];
@@ -223,6 +226,111 @@ export async function getRoutingDecisionForRestaurant(
     source:                "db",
     dbConfigPresent:       true,
     globalKillSwitch,
+  };
+}
+
+// ── Message-aware routing contract ───────────────────────────────────────────
+//
+// The config-level decision above answers "is this restaurant+phone eligible for
+// Text Ordering?". It is NOT sufficient to route a live message, because the old
+// WhatsApp Agent (Receptionist) is the DEFAULT HOST for the conversation. Text
+// Ordering is an order-taking TOOL that must only engage when the customer is
+// actually ordering.
+//
+// Contract:  route to Text Ordering ONLY when
+//              routingEligible && (hasActiveSession || messageHasOrderIntent)
+//
+// Everything else — greetings ("Bom dia", "Oi"), cardápio/hours/address questions,
+// general chat, unknown text — stays with the old WhatsApp Agent. This is what
+// restores the menu/greeting reply that broke when RESTAURANT_WIDE was activated.
+
+export type WaFinalHandler =
+  | "TEXT_ORDERING"
+  | "OLD_WHATSAPP_AGENT"
+  | "HUMAN_HANDOFF"
+  | "IGNORED";
+
+export interface MessageAwareRouteInput {
+  restaurantId:    string;
+  phone:           string;
+  messageText:     string;
+  conversationId?: string | null;
+}
+
+export interface MessageAwareRouteDecision {
+  /** The underlying config-level (restaurant+phone) eligibility decision. */
+  config:                   WaRoutingDecision;
+  /** config.shouldUseTextOrdering — restaurant+phone are eligible by config. */
+  routingEligible:          boolean;
+  /** An ACTIVE WhatsAppOrderingSession already exists for this restaurant+phone. */
+  hasActiveSession:         boolean;
+  detectedIntent:           WaDetectedIntent;
+  /** True only for genuine ORDER_REQUEST intent. */
+  messageHasOrderIntent:    boolean;
+  /** The full contract result: eligible && (session || order intent). */
+  wouldRouteToTextOrdering: boolean;
+  finalHandler:             WaFinalHandler;
+  declineReason:            string | null;
+}
+
+/**
+ * The single message-aware routing decision shared by the live Evolution webhook
+ * gate and the admin diagnostic. Pure read: never sends WhatsApp, never creates
+ * an order, never creates Pix. Looks up the active session only when the config
+ * is eligible (otherwise the verdict is "old agent" regardless of session state).
+ */
+export async function getMessageAwareRoutingDecision(
+  input: MessageAwareRouteInput,
+): Promise<MessageAwareRouteDecision> {
+  const config = await getRoutingDecisionForRestaurant(input.restaurantId, input.phone);
+  const routingEligible = config.shouldUseTextOrdering;
+
+  const detectedIntent = detectIntent(input.messageText);
+  const messageHasOrderIntent = detectedIntent === "ORDER_REQUEST";
+
+  let hasActiveSession = false;
+  if (routingEligible) {
+    try {
+      const session = await WhatsAppOrderingSessionService.findActiveSession({
+        restaurantId:   input.restaurantId,
+        phone:          input.phone,
+        conversationId: input.conversationId ?? undefined,
+      });
+      hasActiveSession = session !== null;
+    } catch {
+      // A session-lookup failure must never silence the customer: fall back to the
+      // old agent (hasActiveSession stays false) rather than guess "ordering".
+      hasActiveSession = false;
+    }
+  }
+
+  const wouldRouteToTextOrdering =
+    routingEligible && (hasActiveSession || messageHasOrderIntent);
+
+  let declineReason: string | null = null;
+  if (!wouldRouteToTextOrdering) {
+    if (!routingEligible) {
+      declineReason = config.declineReason
+        ?? "Configuração não elegível para Pedido por Texto.";
+    } else {
+      declineReason =
+        "Mensagem sem intenção de pedido e sem sessão ativa — tratada pelo Agente WhatsApp (host).";
+    }
+  }
+
+  const finalHandler: WaFinalHandler = wouldRouteToTextOrdering
+    ? "TEXT_ORDERING"
+    : "OLD_WHATSAPP_AGENT";
+
+  return {
+    config,
+    routingEligible,
+    hasActiveSession,
+    detectedIntent,
+    messageHasOrderIntent,
+    wouldRouteToTextOrdering,
+    finalHandler,
+    declineReason,
   };
 }
 

@@ -101,6 +101,19 @@ export function advanceSession(
       if (intent === "QUESTION" && next.selectedItems.length === 0) {
         return handleMenuQuestion(next, text, menu);
       }
+      // Defense-in-depth: a bare greeting must never be fed to the product matcher
+      // (which would answer "não encontrei 'Bom dia' no cardápio"). The live router
+      // already keeps greetings with the old WhatsApp Agent; this is the safety net
+      // for any greeting that still reaches the engine (e.g. an idle active session).
+      if (next.selectedItems.length === 0 && GREETING_ONLY_RE.test(text)) {
+        return done(
+          next,
+          "UNKNOWN",
+          "Olá! Pode me mandar seu pedido por aqui que eu anoto pra você. 😊",
+          [],
+          false,
+        );
+      }
       // Early info: greeting / address / payment that arrives before any item.
       const early = handleEarlyInfo(next, text, menu);
       if (early) return early;
@@ -761,6 +774,10 @@ function handleAmbiguityAnswer(
 
 const CONFIRM_RE = /\b(sim|isso|pode ser|fechado|confirmo|confirmar|ok|t[aá] bom|beleza|certo|perfeito|isso mesmo)\b/i;
 const CANCEL_RE  = /\b(cancela|cancelar|desisto|deixa pra l[aá]|esquece)\b/i;
+// A message that is ONLY a greeting/social opener (no product content). Anchored to
+// the whole string so "quero 1 coca, bom dia" is NOT caught — only pure greetings.
+const GREETING_ONLY_RE =
+  /^(oi+|ol[aá]+|ola+|bom dia|boa tarde|boa noite|hey|hi|hello|e a[íi]|eai|opa|al[oô]|tudo bem|tudo bom|boas|fala|menu|in[ií]cio|inicio|come[çc]ar)[\s!?.,]*$/i;
 
 function classify(text: string, stage: string, hasPendingQuestion: boolean): WaDetectedIntent {
   if (CANCEL_RE.test(text)) return "CANCEL";

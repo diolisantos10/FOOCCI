@@ -37,7 +37,7 @@ import { markConversationNeedsHuman } from "@/lib/handoff";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 import { shouldAiRespond } from "@/services/conversation/ConversationAiPolicyService";
 import { maskPhone } from "@/lib/wa-text-ordering-flag";
-import { getRoutingDecisionForRestaurant } from "@/services/whatsapp/ordering/WhatsAppTextOrderingConfigService";
+import { getMessageAwareRoutingDecision } from "@/services/whatsapp/ordering/WhatsAppTextOrderingConfigService";
 
 // Resolved conversations older than this are treated as new threads.
 const REOPEN_WINDOW_HOURS = 24;
@@ -280,54 +280,60 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
     !isCartRecovery &&
     !optedOutThisTurn;
 
-  // Text ordering engine: fires async, behind DB-aware flag + allowlist + conversation guards.
-  // Only TEXT messages are eligible. If the engine handles this message, normal agent
-  // routing (receptionist / AI_ORDERING_EXPERIMENTAL) is skipped for this turn.
+  // ── Routing contract ────────────────────────────────────────────────────────
+  // The old WhatsApp Agent (Receptionist) is the DEFAULT HOST for the conversation.
+  // WhatsApp Text Ordering is an order-taking TOOL that only engages when the
+  // customer is actually ordering:
   //
-  // IMPORTANT: the module import is awaited so a load failure is caught BEFORE we
-  // set textOrderingHandled=true. Previously the fire-and-forget swallowed load
-  // errors silently, blocking the old Receptionist with no fallback.
+  //   route to Text Ordering ⇔ routingEligible && (activeSession || orderIntent)
   //
-  // The engine call itself remains fire-and-forget (AI processing + WhatsApp send
-  // are too slow to hold the webhook open). After the runtime guard fix (DB-aware
-  // config) the engine will only return handled=false for conversation-locked cases
-  // which also prevent the old Receptionist from running — so no message is lost.
+  // Greetings ("Bom dia", "Oi"), cardápio/hours/address questions, general chat
+  // and unknown text stay with the old agent. Only TEXT messages are eligible.
   const routingDecision = shouldRespond && event.messageType === "TEXT"
-    ? await getRoutingDecisionForRestaurant(restaurantId, event.phone)
+    ? await getMessageAwareRoutingDecision({
+        restaurantId,
+        phone:          event.phone,
+        messageText:    event.content,
+        conversationId: conversation.id,
+      })
     : null;
+
   let textOrderingHandled = false;
-  if (routingDecision?.shouldUseTextOrdering) {
+  if (routingDecision?.wouldRouteToTextOrdering) {
     try {
       const { handleInboundForOrdering } = await import(
         "@/services/whatsapp/ordering/WhatsAppTextOrderingRuntimeService"
       );
-      // Module loaded successfully. Mark as handled before firing async work so
-      // the old Receptionist doesn't double-reply.
-      textOrderingHandled = true;
-      void handleInboundForOrdering({
+      // Await the engine so we KNOW whether it truly handled the message BEFORE
+      // deciding whether to fall back to the old agent. Blocking the old agent on a
+      // fire-and-forget call risks swallowing the customer's message if the engine
+      // declines, errors, or sends nothing.
+      const decision = await handleInboundForOrdering({
         restaurantId,
         phone:          event.phone,
         conversationId: conversation.id,
         customerId:     customer.id,
         messageText:    event.content,
-      }).then((r) => {
-        if (!r.handled) {
-          // Engine declined despite routing approval. This means a guard inside the
-          // runtime blocked it (e.g. conversation lock). Log but do not panic —
-          // conversation-locked turns are also blocked for the old Receptionist.
-          console.warn("[WA-TextOrdering] engine returned handled=false after routing approved", {
-            blockedReason: r.blockedReason,
-            restaurantId,
-            phoneMasked: maskPhone(event.phone),
-          });
-        }
-      }).catch((err) =>
-        console.error("[WebhookProcessor] Text ordering engine error:", err)
-      );
+      });
+      // "Truly handled" = a reply was sent/saved OR an intentional handoff was
+      // applied. A bare handled=true with no reply (DRY_RUN mode, a guard decline,
+      // or a send failure before saving) must NOT block the old agent.
+      textOrderingHandled = decision.handled && (decision.replySent || decision.handoffApplied);
+      if (!textOrderingHandled) {
+        console.warn("[WA-TextOrdering] engine did not effectively handle — falling back to old agent", {
+          restaurantId,
+          phoneMasked:    maskPhone(event.phone),
+          handled:        decision.handled,
+          replySent:      decision.replySent,
+          handoffApplied: decision.handoffApplied,
+          blockedReason:  decision.blockedReason,
+        });
+      }
     } catch (err) {
-      // Module failed to load — fall back to old Receptionist by not setting
-      // textOrderingHandled=true. This ensures the customer still gets a reply.
-      console.error("[WebhookProcessor] Text ordering module load failed — falling back to old Receptionist:", err);
+      // Module load OR engine threw — fall back to the old agent so the customer
+      // still gets a reply. textOrderingHandled stays false.
+      console.error("[WebhookProcessor] Text ordering engine error — falling back to old agent:", err);
+      textOrderingHandled = false;
     }
   }
 
@@ -370,9 +376,9 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
   // No secrets and no full phone are logged.
   if (
     routingDecision &&
-    (routingDecision.dbConfigPresent || process.env.WHATSAPP_TEXT_ORDERING_ENABLED !== undefined)
+    (routingDecision.config.dbConfigPresent || process.env.WHATSAPP_TEXT_ORDERING_ENABLED !== undefined)
   ) {
-    const decision = routingDecision;
+    const decision = routingDecision.config;
     const finalHandler = textOrderingHandled
       ? "TEXT_ORDERING"
       : shouldRespond
@@ -393,9 +399,13 @@ async function handleInboundMessage(event: InboundMessageEvent): Promise<Process
       restaurantAllowlisted: decision.restaurantAllowlisted,
       enabledForRestaurant:  decision.enabledForRestaurant,
       phoneAllowlisted:      decision.phoneAllowlisted,
+      // message-aware contract fields
+      detectedIntent:        routingDecision.detectedIntent,
+      messageHasOrderIntent: routingDecision.messageHasOrderIntent,
+      hasActiveSession:      routingDecision.hasActiveSession,
       shouldRespond,
-      shouldUseTextOrdering: decision.shouldUseTextOrdering,
-      declineReason:         decision.declineReason,
+      shouldUseTextOrdering: routingDecision.wouldRouteToTextOrdering,
+      declineReason:         routingDecision.declineReason,
       finalHandler,
     });
   }
