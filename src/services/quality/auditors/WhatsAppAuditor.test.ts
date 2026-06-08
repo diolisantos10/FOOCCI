@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { WhatsAppAuditor, classifyWaFunctional, evaluateWaSafety, evaluateWaLeak } from "./WhatsAppAuditor";
+import { WhatsAppAuditor, classifyWaFunctional, evaluateWaSafety, evaluateWaLeak, evaluateWaPixSafety } from "./WhatsAppAuditor";
 import { SAFE_MODE, QualitySafeModeError } from "../SafeMode";
 import type { AuditContext } from "../types";
 import type {
@@ -61,6 +61,17 @@ describe("WhatsAppAuditor — connected safe runner (v1.4)", () => {
     expect(safety!.evidence.join(" ")).toContain("allowSideEffects=false");
   });
 
+  it("(1) covers pix_safety WITHOUT a DB — PASS/INFO, no real Pix, no Mercado Pago", async () => {
+    const findings = await WhatsAppAuditor.run(ctx);
+    const pixSafety = findings.find((f) => f.title.includes("segurança de pagamento/Pix"));
+    expect(pixSafety).toBeDefined();
+    expect(pixSafety!.status).toBe("PASS");
+    expect(pixSafety!.severity).toBe("INFO");
+    expect(pixSafety!.summary).toContain("pix_safety coberto");
+    // the old DB-coverage gap finding must be gone
+    expect(findings.some((f) => f.title.includes("fora do dry audit"))).toBe(false);
+  });
+
   it("(7) blocks execution outside SafeMode", async () => {
     const unsafe = { ...ctx, safeMode: { safeMode: true, dryRun: false, allowSideEffects: true } as never };
     await expect(WhatsAppAuditor.run(unsafe)).rejects.toBeInstanceOf(QualitySafeModeError);
@@ -88,6 +99,23 @@ describe("evaluateWaSafety — real-action risk ⇒ P0", () => {
     const s = evaluateWaSafety(report([result()]));
     expect(s.status).toBe("PASS");
     expect(s.severity).toBe("INFO");
+  });
+});
+
+describe("evaluateWaPixSafety — Pix safety without DB", () => {
+  it("(4) a real Pix ⇒ FAIL / P0", () => {
+    const s = evaluateWaPixSafety(report([result({ steps: [step({ paymentRealPix: true })] })]));
+    expect(s.status).toBe("FAIL");
+    expect(s.severity).toBe("P0");
+  });
+
+  it("Pix stub flow ⇒ PASS / INFO (covered, no Mercado Pago)", () => {
+    const s = evaluateWaPixSafety(
+      report([result({ steps: [step({ paymentStub: true, stage: "AWAITING_PIX_PAYMENT" })] })]),
+    );
+    expect(s.status).toBe("PASS");
+    expect(s.severity).toBe("INFO");
+    expect(s.pixStubFlows).toBe(1);
   });
 });
 

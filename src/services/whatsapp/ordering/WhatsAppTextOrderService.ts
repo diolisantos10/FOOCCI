@@ -321,7 +321,9 @@ export async function processCustomerMessage(input: WaProcessInput): Promise<WaP
   // ── Deferred action: delivery quote (read-only — safe in every mode) ──────────
   if (advanced.actions.includes("QUOTE_DELIVERY") && s.address) {
     const draft = buildFullDraft(s);
-    const quote = await quoteWhatsAppDelivery({
+    // Injected quoter (audits/tests) skips the DB read; default is DB-backed.
+    const quoter = input.deliveryQuoter ?? quoteWhatsAppDelivery;
+    const quote = await quoter({
       restaurantId: s.restaurantId,
       subtotal:     draft.subtotal,
       address:      s.address,

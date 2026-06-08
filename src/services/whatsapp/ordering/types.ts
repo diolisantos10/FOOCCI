@@ -121,6 +121,20 @@ export interface WaDeliveryQuote {
   reason?:     string;
 }
 
+/** Input for a delivery-fee quote (mirror of WhatsAppDeliveryService input). */
+export interface WaDeliveryQuoteInput {
+  restaurantId: string;
+  subtotal:     number;
+  address:      WaAddress;
+}
+
+/**
+ * Pluggable delivery quoter. The default implementation reads deliveryConfig
+ * from the DB; an injected one (audits/tests) lets the payment flow run with no
+ * DB access. Never affects whether a real order/Pix is created.
+ */
+export type WaDeliveryQuoter = (input: WaDeliveryQuoteInput) => Promise<WaDeliveryQuote>;
+
 // ── Session ────────────────────────────────────────────────────────────────────
 
 export interface WaOrderingSession {
@@ -302,6 +316,13 @@ export interface WaProcessInput {
    * and by unit tests (to inject fixtures without a database).
    */
   menu?:           WaMenuItem[];
+  /**
+   * Optional delivery quoter. When provided, the DB-backed deliveryConfig read
+   * is skipped (used by the Quality audit + tests to run the payment flow with
+   * no DB). Defaults to the real DB-backed quoter. Never changes order/Pix
+   * creation, which stays gated by allowSideEffects + mode.
+   */
+  deliveryQuoter?: WaDeliveryQuoter;
 }
 
 export interface WaPaymentInfo {

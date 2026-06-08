@@ -23,16 +23,18 @@ import { assertSafeMode } from "../SafeMode";
 import { AUDITOR_META } from "../registryMeta";
 import { makeFinding } from "./_shared";
 import { runScenarioSuite, type WaScenarioRunReport, type WaScenarioResult } from "@/services/whatsapp/ordering/WhatsAppOrderingScenarioRunner";
-import type { WaScenarioSuite } from "@/services/whatsapp/ordering/testing/whatsappOrderingScenarios";
-import type { WaMenuItem } from "@/services/whatsapp/ordering/types";
+import type { WaDeliveryQuoter, WaMenuItem } from "@/services/whatsapp/ordering/types";
 
 /**
- * Suites that run fully on the injected menu (no DB). The "payment"/"full"
- * suites read live delivery/Pix config from the DB, so they are intentionally
- * EXCLUDED from the safe dry audit and surfaced as a coverage gap (validated in
- * the lab against a real restaurant instead).
+ * Synthetic delivery quoter — replaces the DB-backed deliveryConfig read so the
+ * payment/Pix scenarios run with NO database. It only returns a fee estimate; it
+ * never creates an order or Pix (those stay blocked by allowSideEffects=false).
  */
-const SAFE_SUITES: WaScenarioSuite[] = ["quick", "edge"];
+const syntheticQuoter: WaDeliveryQuoter = async ({ subtotal }) => ({
+  fee: 8,
+  distanceKm: 3,
+  status: subtotal > 0 ? "ok" : "unknown",
+});
 
 /** Synthetic menu covering the scenario nouns. Injection ⇒ no DB read. */
 function syntheticMenu(): WaMenuItem[] {
@@ -56,6 +58,8 @@ const RUN_CTX = {
   restaurantSlug: "qc-wa",
   restaurantName: "QC Synthetic WhatsApp",
   menu: syntheticMenu(),
+  // Injected quoter ⇒ payment/Pix scenarios run with no DB (gap closed in v3.1).
+  deliveryQuoter: syntheticQuoter,
 };
 
 /** Markers that must NEVER leak into a customer-facing reply. */
@@ -156,26 +160,51 @@ export function evaluateWaLeak(report: WaScenarioRunReport): {
   };
 }
 
-/** Runs the DB-free safe suites and merges them into one report (dedup by id). */
-async function runSafeReport(): Promise<WaScenarioRunReport> {
-  const byId = new Map<string, WaScenarioResult>();
-  for (const suite of SAFE_SUITES) {
-    const rep = await runScenarioSuite(suite, RUN_CTX);
-    for (const r of rep.results) byId.set(r.id, r);
+/**
+ * Pix / payment safety gate. With the injected synthetic quoter the payment
+ * scenarios run with NO DB, so we can assert: every Pix stays a dry-run STUB
+ * (no Mercado Pago) and no real Pix is ever generated. Any real Pix ⇒ FAIL/P0.
+ */
+export function evaluateWaPixSafety(report: WaScenarioRunReport): {
+  status: FindingStatus;
+  severity: FindingSeverity;
+  reason: string;
+  pixStubFlows: number;
+  realPix: string[];
+} {
+  let pixStubFlows = 0;
+  const realPix: string[] = [];
+  for (const r of report.results) {
+    for (const s of r.steps) {
+      if (s.paymentRealPix) realPix.push(`${r.id}#${s.index}`);
+      else if (s.paymentStub && s.stage === "AWAITING_PIX_PAYMENT") pixStubFlows += 1;
+    }
   }
-  const results = [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
-  const pass = results.filter((r) => r.verdict === "PASS").length;
-  const warn = results.filter((r) => r.verdict === "WARN").length;
-  const fail = results.filter((r) => r.verdict === "FAIL").length;
-  const score = results.length === 0 ? 100 : Math.round(((pass + warn * 0.5) / results.length) * 100);
+  if (realPix.length > 0) {
+    return {
+      status: "FAIL",
+      severity: "P0",
+      reason: "Pix real gerado durante a auditoria (deveria ser sempre stub em dry-run).",
+      pixStubFlows,
+      realPix: realPix.sort(),
+    };
+  }
   return {
-    suite: "all",
-    restaurant: { id: RUN_CTX.restaurantId, name: RUN_CTX.restaurantName, slug: RUN_CTX.restaurantSlug },
-    ranAt: "", // intentionally empty — never used in findings (determinism)
-    total: results.length,
-    pass, warn, fail, score,
-    results,
+    status: "PASS",
+    severity: "INFO",
+    reason: `pix_safety coberto: ${pixStubFlows} fluxo(s) de Pix em stub, 0 Pix real, sem Mercado Pago.`,
+    pixStubFlows,
+    realPix: [],
   };
+}
+
+/**
+ * Runs the FULL scenario set. With the injected delivery quoter the
+ * payment/Pix scenarios now run with no DB, so the previous coverage gap is
+ * closed and "all" runs safely.
+ */
+async function runSafeReport(): Promise<WaScenarioRunReport> {
+  return runScenarioSuite("all", RUN_CTX);
 }
 
 export const WhatsAppAuditor: Auditor = {
@@ -283,20 +312,27 @@ export const WhatsAppAuditor: Auditor = {
       );
     }
 
-    // ── 4) Payment / Pix coverage gap (needs live config — not run safely) ─
+    // ── 4) Pix / payment safety (gap closed in v3.1 via injected quoter) ───
+    const pix = evaluateWaPixSafety(report);
     findings.push(
       makeFinding(ctx, "whatsapp", {
-        status: "WARNING",
-        severity: "P2",
-        title: "WhatsApp — cobertura de pagamento/Pix fora do dry audit",
-        summary:
-          "Cenários de pagamento/Pix exigem config de entrega/Pix ao vivo (DB) e ficam fora da auditoria segura — validados no lab contra um restaurante real.",
-        evidence: [
-          `Suítes seguras auditadas: ${SAFE_SUITES.join(", ")} (menu injetado, sem DB)`,
-          "Suítes payment/full excluídas: leem deliveryConfig/Pix do banco.",
-        ],
+        status: pix.status,
+        severity: pix.severity,
+        title: "WhatsApp — segurança de pagamento/Pix (dry-run)",
+        summary: pix.reason,
+        evidence:
+          pix.realPix.length > 0
+            ? pix.realPix
+            : [
+                "deliveryConfig via quoter sintético injetado (sem DB)",
+                "Pix sempre stub (isDryRunStub=true) — nenhuma chamada Mercado Pago",
+                "Pedido nunca criado (allowSideEffects=false, mode=DRY_RUN_ONLY)",
+              ],
         affectedArea: "WhatsApp",
-        recommendation: "Adicionar fixture de config de entrega/Pix injetável para auditar pix_safety sem DB (v1.5).",
+        recommendation:
+          pix.status === "FAIL"
+            ? "Bloquear — Pix real não pode ser gerado em auditoria."
+            : "Manter quoter injetado; pix_safety coberto sem DB.",
       }),
     );
 

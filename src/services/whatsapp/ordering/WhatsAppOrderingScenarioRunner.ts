@@ -19,6 +19,7 @@
 
 import { processCustomerMessage } from "./WhatsAppTextOrderService";
 import type {
+  WaDeliveryQuoter,
   WaMenuItem,
   WaOrderStage,
   WaPersistedSession,
@@ -102,6 +103,12 @@ export interface RunScenarioContext {
   restaurantSlug?: string;
   phone?:         string;
   menu:           WaMenuItem[];
+  /**
+   * Optional injected delivery quoter. When provided, the payment flow runs with
+   * no DB (used by the Quality WhatsApp auditor to cover pix_safety/payment
+   * safely). Order/Pix creation stays blocked by allowSideEffects=false.
+   */
+  deliveryQuoter?: WaDeliveryQuoter;
 }
 
 const norm = (t: string) =>
@@ -141,6 +148,7 @@ export async function runScenario(
       currentSession:  session,
       allowSideEffects: false, // HARD invariant — never real
       menu:            ctx.menu,
+      deliveryQuoter:  ctx.deliveryQuoter, // injected (audits/tests) — no DB
     });
 
     session = result.session;
