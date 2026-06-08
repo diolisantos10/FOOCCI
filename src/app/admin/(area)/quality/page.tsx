@@ -178,7 +178,7 @@ export default function QualityControlPage() {
       {/* Read-only banner */}
       <div className="mb-5 rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-2 text-[11px] text-gray-400">
         🔒 Read-only · SafeMode (dry-run, sem efeitos colaterais). Nenhuma auditoria envia WhatsApp, cria pedido,
-        gera Pix ou altera o banco.
+        gera Pix ou altera o banco. <span className="text-gray-500">Auditoria automática: configurável por cron externo (madrugada).</span>
       </div>
 
       {/* Executive summary */}
