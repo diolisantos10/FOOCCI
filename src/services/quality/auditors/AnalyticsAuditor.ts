@@ -10,20 +10,13 @@
 
 import type { Auditor } from "../types";
 import { assertSafeMode } from "../SafeMode";
+import { AUDITOR_META } from "../registryMeta";
 import { notConnectedFinding } from "./_shared";
 
 export const AnalyticsAuditor: Auditor = {
-  id: "analytics",
-  name: "Auditor Analytics",
-  area: "Analytics",
-  group: "Analytics",
-  mission: "Auditar métricas, dashboard e relatórios (somente leitura).",
+  ...AUDITOR_META.analytics,
   readOnly: true,
   canRunDaily: true,
-  connection: "PARTIAL",
-  linkedLabs: [
-    { label: "Analytics Test Center", href: "/admin/agentes/analytics/testes", exists: true },
-  ],
   async run(ctx) {
     assertSafeMode(ctx.safeMode);
     return [

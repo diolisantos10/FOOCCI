@@ -8,7 +8,7 @@
  */
 
 import type { AuditFinding, AuditRunResult, FindingStatus } from "./types";
-import { getAuditors } from "./QualityControlService";
+import { AUDITOR_META_LIST } from "./registryMeta";
 
 export interface ExecutiveSummary {
   /** Total auditors registered in the engine (not just the ones that ran). */
@@ -25,7 +25,7 @@ export interface ExecutiveSummary {
 /** Summary shown before any manual run has happened. */
 export function emptyExecutiveSummary(): ExecutiveSummary {
   return {
-    auditors: getAuditors().length,
+    auditors: AUDITOR_META_LIST.length,
     auditorsRun: 0,
     passed: 0,
     attention: 0,
@@ -38,7 +38,7 @@ export function emptyExecutiveSummary(): ExecutiveSummary {
 /** Derives the executive summary cards from a real run result. */
 export function buildExecutiveSummary(result: AuditRunResult): ExecutiveSummary {
   return {
-    auditors: getAuditors().length,
+    auditors: AUDITOR_META_LIST.length,
     auditorsRun: result.auditorIds.length,
     passed: result.countsByStatus.PASS,
     attention: result.countsByStatus.WARNING,

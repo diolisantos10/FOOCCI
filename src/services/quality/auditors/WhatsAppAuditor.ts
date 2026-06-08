@@ -11,22 +11,13 @@
 
 import type { Auditor } from "../types";
 import { assertSafeMode } from "../SafeMode";
+import { AUDITOR_META } from "../registryMeta";
 import { notConnectedFinding } from "./_shared";
 
 export const WhatsAppAuditor: Auditor = {
-  id: "whatsapp",
-  name: "Auditor WhatsApp",
-  area: "WhatsApp",
-  group: "WhatsApp",
-  mission:
-    "Auditar roteamento, ordering em dry-run e prevenção de vazamento de comando interno (nunca envia WhatsApp nem chama Evolution real).",
+  ...AUDITOR_META.whatsapp,
   readOnly: true,
   canRunDaily: true,
-  connection: "PARTIAL",
-  linkedLabs: [
-    { label: "WhatsApp Routing Lab", href: "/admin/diagnostics/whatsapp-routing-test", exists: true },
-    { label: "WhatsApp Text Ordering Lab", href: "/admin/diagnostics/whatsapp-text-ordering", exists: true },
-  ],
   async run(ctx) {
     assertSafeMode(ctx.safeMode);
     return [

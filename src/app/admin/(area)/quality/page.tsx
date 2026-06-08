@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { getAuditors } from "@/services/quality/QualityControlService";
+import { AUDITOR_META_LIST } from "@/services/quality/registryMeta";
 import {
   buildExecutiveSummary,
   emptyExecutiveSummary,
@@ -64,7 +64,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: string | nu
 // ─── page ──────────────────────────────────────────────────────────────────
 
 export default function QualityControlPage() {
-  const auditors = useMemo(() => getAuditors(), []);
+  const auditors = AUDITOR_META_LIST;
   const [result, setResult] = useState<AuditRunResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [runningId, setRunningId] = useState<string | null>(null);

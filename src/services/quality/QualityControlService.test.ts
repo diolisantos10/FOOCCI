@@ -10,6 +10,7 @@ import {
   QualityAuditorNotFoundError,
 } from "./QualityControlService";
 import type { AuditFinding } from "./types";
+import { AUDITOR_META_LIST } from "./registryMeta";
 
 const EXPECTED_IDS = ["waiter", "crm", "analytics", "whatsapp"];
 
@@ -25,6 +26,14 @@ describe("Quality Control — registry", () => {
 
   it("(3) every auditor can run daily", () => {
     for (const a of getAuditors()) expect(a.canRunDaily).toBe(true);
+  });
+
+  it("client metadata (registryMeta) stays in sync with the engine registry", () => {
+    const engine = getAuditors().map((a) => ({
+      id: a.id, name: a.name, area: a.area, group: a.group,
+      mission: a.mission, connection: a.connection, linkedLabs: a.linkedLabs,
+    }));
+    expect(engine).toEqual(AUDITOR_META_LIST.map((m) => ({ ...m })));
   });
 
   it("every auditor links at least one lab with a real or honestly-flagged href", () => {
@@ -72,6 +81,20 @@ describe("Quality Control — runAll", () => {
     expect(res.findings.length).toBeGreaterThanOrEqual(EXPECTED_IDS.length);
     // every finding is stamped with the same run id
     for (const f of res.findings) expect(f.runId).toBe(res.runId);
+  });
+
+  it("(4) includes the real Waiter result while others stay PARTIAL/INFO", async () => {
+    const res = await runAll({ now: new Date("2026-06-08T03:00:00Z") });
+    // Waiter is connected: a real Test Center finding (PASS/WARNING/FAIL, not the v0 stub)
+    const waiter = res.findings.filter((f) => f.auditorId === "waiter");
+    expect(waiter.some((f) => f.title.includes("Waiter Test Center"))).toBe(true);
+    // The other three remain not-connected stubs (INFO)
+    for (const id of ["crm", "analytics", "whatsapp"]) {
+      const fs = res.findings.filter((f) => f.auditorId === id);
+      expect(fs.length).toBeGreaterThan(0);
+      expect(fs.every((f) => f.severity === "INFO")).toBe(true);
+      expect(fs.some((f) => f.title.includes("não conectado"))).toBe(true);
+    }
   });
 
   it("severity + status counts sum to the number of findings", async () => {

@@ -10,21 +10,13 @@
 
 import type { Auditor } from "../types";
 import { assertSafeMode } from "../SafeMode";
+import { AUDITOR_META } from "../registryMeta";
 import { notConnectedFinding } from "./_shared";
 
 export const CrmAuditor: Auditor = {
-  id: "crm",
-  name: "Auditor CRM",
-  area: "CRM",
-  group: "CRM",
-  mission:
-    "Auditar campanhas, segmentos e segurança de disparo (sempre dry-run, nunca dispara campanha real).",
+  ...AUDITOR_META.crm,
   readOnly: true,
   canRunDaily: true,
-  connection: "PARTIAL",
-  linkedLabs: [
-    { label: "CRM Test Center", href: "/admin/agentes/crm/testes", exists: true },
-  ],
   async run(ctx) {
     assertSafeMode(ctx.safeMode);
     return [

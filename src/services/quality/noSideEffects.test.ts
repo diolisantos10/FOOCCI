@@ -27,6 +27,19 @@ function collectTs(dir: string): string[] {
 }
 
 const FORBIDDEN_IMPORT = /from\s+["']([^"']+)["']/g;
+
+/**
+ * Vetted external modules a connected auditor may import. All are pure /
+ * read-only deterministic test harnesses (no DB writes, no sends, no order
+ * creation). Anything outside this allowlist must stay internal to quality/.
+ */
+const ALLOWED_EXTERNAL = new Set([
+  "@/services/ai/waiter/testing/waiterScenarios",
+  "@/services/ai/waiter/testing/waiterEvaluator",
+  "@/services/ai/WaiterBrainV2",
+  "@/services/agents/waiterLegacyTestAudit",
+]);
+
 const FORBIDDEN_TOKENS = [
   "prisma",
   "@/lib/prisma",
@@ -56,11 +69,13 @@ describe("Quality Control — no side effects (static import scan)", () => {
       const src = readFileSync(file, "utf8");
       const specs = [...src.matchAll(FORBIDDEN_IMPORT)].map((m) => m[1]);
       for (const spec of specs) {
-        // allowed: relative imports inside quality/ and node:* builtins (none expected in source)
+        // allowed: relative imports inside quality/, node:* builtins, and the
+        // vetted read-only external harnesses in ALLOWED_EXTERNAL.
         const isInternal = spec.startsWith("./") || spec.startsWith("../");
         const isNodeBuiltin = spec.startsWith("node:");
+        const isAllowedExternal = ALLOWED_EXTERNAL.has(spec);
         expect(
-          isInternal || isNodeBuiltin,
+          isInternal || isNodeBuiltin || isAllowedExternal,
           `Unexpected external import "${spec}" in ${file}`,
         ).toBe(true);
         // Forbidden-token scan only matters for non-internal specs (internal
