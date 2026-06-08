@@ -76,6 +76,14 @@ const FORBIDDEN_TOKENS = [
   "ScheduledCampaignRunner",
   "ScheduledCampaignScheduler",
   "AutomationScheduler",
+  // LLM / external providers / webhooks must never be imported by an auditor.
+  "openai",
+  "@/lib/openai",
+  "stone",
+  "Stone",
+  "saipos",
+  "Saipos",
+  "/webhooks",
   "node-fetch",
   "axios",
 ];

@@ -14,6 +14,7 @@ import {
   type Trend,
 } from "@/services/quality/executiveSummary";
 import { detectRegression } from "@/services/quality/regression";
+import { deriveInternalAlerts } from "@/services/quality/internalAlerts";
 import type { AuditRunResult, FindingSeverity, FindingStatus } from "@/services/quality/types";
 
 // ─── display helpers ────────────────────────────────────────────────────────
@@ -206,6 +207,7 @@ export default function QualityControlPage() {
 
   const trendRuns = history.slice(0, 7).reverse(); // oldest → newest (left → right)
   const regression = useMemo(() => detectRegression(history[0], history[1]), [history]);
+  const internalAlerts = useMemo(() => deriveInternalAlerts(history, 5), [history]);
 
   async function selectRun(id: string) {
     if (selectedId === id) { setSelectedId(null); setSelectedRun(null); return; } // toggle off
@@ -249,6 +251,44 @@ export default function QualityControlPage() {
         <div className="mb-4 rounded-lg border border-red-600 bg-red-950/40 px-3 py-2 text-sm font-semibold text-red-200">
           🚨 {regression.title}: {regression.summary}
           <span className="ml-1 font-normal text-red-300/80">(detecção visual — nenhum alerta externo é enviado)</span>
+        </div>
+      )}
+
+      {/* ── Alertas internos (derivados do histórico — sem envio externo) ── */}
+      {internalAlerts.length > 0 && (
+        <div className="mb-4 rounded-lg border border-gray-800 bg-gray-900 p-3">
+          <div className="mb-1.5 flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">Alertas internos</p>
+            <span className="text-[10px] text-gray-600">Alerta interno — nenhum envio externo configurado.</span>
+          </div>
+          <div className="space-y-1.5">
+            {internalAlerts.map((a) => (
+              <div
+                key={`${a.type}-${a.runId}`}
+                className={`flex flex-wrap items-center gap-2 rounded-lg p-2 ${
+                  a.severity === "P0" ? "bg-red-950/40 ring-1 ring-red-700/60" : a.severity === "WARNING" ? "bg-amber-950/30" : "bg-green-950/20"
+                }`}
+              >
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    a.type === "NEW_P0" ? "bg-red-900/60 text-red-200" : a.type === "STATUS_REGRESSION" ? "bg-amber-900/50 text-amber-300" : "bg-green-900/50 text-green-300"
+                  }`}
+                >
+                  {a.type === "NEW_P0" ? "NOVO P0" : a.type === "STATUS_REGRESSION" ? "REGRESSÃO" : "P0 RESOLVIDO"}
+                </span>
+                <span className="text-xs font-semibold text-gray-200">{a.title}</span>
+                <span className="text-[11px] text-gray-400">{a.summary}</span>
+                <span className="ml-auto text-[10px] text-gray-500">{fmtDateTime(a.createdAt)}</span>
+                <button
+                  type="button"
+                  onClick={() => selectRun(a.runId)}
+                  className="rounded border border-gray-700 bg-gray-800 px-2 py-0.5 text-[10px] text-gray-300 hover:border-violet-600 hover:text-violet-200"
+                >
+                  ver rodada
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
