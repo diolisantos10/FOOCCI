@@ -1,0 +1,106 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Agent Library — Deep Extraction Diagnostic (cron-safe, manual)
+#
+# Proves, in production with zero manual steps, that DEEP chunked extraction
+# turns substantial content into useful archived techniques. It POSTs to the
+# CRON-protected diagnostic route, which creates a dense synthetic source, runs
+# the real chunk→consolidate pipeline, asserts techniquesCreated > 0, and deletes
+# the temp source. Never touches any agent runtime.
+#
+# Manual only (workflow_dispatch). Uses CRON_SECRET — NOT ADMIN_SECRET.
+#
+# Required GitHub Secrets (already used by the other crons — no new secret):
+#   FOOCCI_BASE_URL   Production URL with no trailing slash.
+#   CRON_SECRET       Must match the CRON_SECRET env var set in Railway.
+#                     Never printed in logs — injected via env:, not ${{ }}.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Agent Library Deep Extraction Diagnostic
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  run-deep-diagnostic:
+    name: "Deep Extraction Diagnostic"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Build endpoint URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"   # strip any trailing slash
+          echo "url=${BASE_URL}/api/cron/agent-library/deep-diagnostic" >> "$GITHUB_OUTPUT"
+
+      # CRON_SECRET is injected via env: so it never appears in the step
+      # definition or in workflow logs (GitHub masks it automatically).
+      - name: "POST /api/cron/agent-library/deep-diagnostic"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "────────────────────────────────────"
+          echo "→ Endpoint : $ENDPOINT_URL"
+          echo "────────────────────────────────────"
+
+          set +e
+          curl --connect-timeout 20 --max-time 240 -sS \
+            -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            -o /tmp/response.json \
+            -w "%{http_code}" > /tmp/http_status.txt
+          CURL_EXIT=$?
+          set -e
+
+          HTTP_STATUS=$(cat /tmp/http_status.txt 2>/dev/null || echo "000")
+
+          # Print ONLY safe summary fields — never chunk text / techniques / secret.
+          STATUS=$(jq  -r '.status // "?"'             /tmp/response.json 2>/dev/null)
+          STAGE=$(jq   -r '.stage // "-"'              /tmp/response.json 2>/dev/null)
+          TECHS=$(jq   -r '.techniquesCreated // "?"'  /tmp/response.json 2>/dev/null)
+          CLEANED=$(jq -r '.sourceCleanedUp // "?"'    /tmp/response.json 2>/dev/null)
+          RUNTIME=$(jq -r '.runtimeTouched // "?"'     /tmp/response.json 2>/dev/null)
+          MESSAGE=$(jq -r '.message // ""'             /tmp/response.json 2>/dev/null)
+
+          echo "← curl exit          : $CURL_EXIT"
+          echo "← HTTP Status        : $HTTP_STATUS"
+          echo "← status             : $STATUS"
+          echo "← stage              : $STAGE"
+          echo "← techniquesCreated  : $TECHS"
+          echo "← sourceCleanedUp    : $CLEANED"
+          echo "← runtimeTouched     : $RUNTIME"
+          echo "← message            : $MESSAGE"
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo "::error::curl failed with exit $CURL_EXIT (connection/timeout error)."
+            exit "$CURL_EXIT"
+          fi
+
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            echo "::error::Endpoint returned non-2xx status ($HTTP_STATUS)."
+            exit 1
+          fi
+
+          if [[ "$STATUS" != "PASS" ]]; then
+            echo "::error::Diagnostic status is '$STATUS' (expected PASS) at stage '$STAGE'. message: $MESSAGE"
+            exit 1
+          fi
+          if ! [[ "$TECHS" =~ ^[0-9]+$ ]] || [[ "$TECHS" -lt 1 ]]; then
+            echo "::error::techniquesCreated='$TECHS' (expected > 0)."
+            exit 1
+          fi
+          if [[ "$CLEANED" != "true" ]]; then
+            echo "::error::sourceCleanedUp='$CLEANED' (expected true)."
+            exit 1
+          fi
+          if [[ "$RUNTIME" != "false" ]]; then
+            echo "::error::runtimeTouched='$RUNTIME' (expected false)."
+            exit 1
+          fi
+
+          echo "✅ Deep extraction diagnostic PASS — $TECHS técnica(s), fonte limpa, runtime intocado."
