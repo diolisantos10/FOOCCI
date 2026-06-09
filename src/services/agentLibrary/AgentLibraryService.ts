@@ -17,6 +17,7 @@ import { openai } from "@/lib/openai";
 import {
   clampText,
   parseExtractedTechniques,
+  newTechniqueActivationDefaults,
   type SourceInput,
   type TechniqueInput,
 } from "./agentLibraryHelpers";
@@ -208,7 +209,7 @@ export class AgentLibraryService {
         goodExample: input.goodExample ?? null,
         badExample: input.badExample ?? null,
         confidence: input.confidence ?? null,
-        status: "EXTRACTED",
+        ...newTechniqueActivationDefaults(),
       },
     });
   }
@@ -301,7 +302,7 @@ export class AgentLibraryService {
               goodExample: t.goodExample ?? null,
               badExample: t.badExample ?? null,
               confidence: t.confidence ?? null,
-              status: "EXTRACTED",
+              ...newTechniqueActivationDefaults(),
             },
           }),
         ),

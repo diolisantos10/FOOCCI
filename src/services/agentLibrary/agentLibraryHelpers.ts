@@ -84,7 +84,33 @@ export const TECHNIQUE_STATUS_LABELS: Record<string, string> = {
   IN_REVIEW: "Em revisão",
   ACTIVE: "Ativa",
   ARCHIVED: "Arquivada",
+  REJECTED: "Rejeitada",
 };
+
+/**
+ * Activation defaults for NEW techniques. The operator already approved the
+ * SOURCE when they uploaded it, so extracted techniques are born ready — ACTIVE
+ * and runtime-eligible — instead of waiting in a per-technique approval queue.
+ *
+ * This does NOT touch a real customer by itself: a technique only reaches the
+ * Waiter prompt through an ACTIVE LIBRARY_ASSISTED version (default is CURRENT).
+ * Governance lives at the version/runtime level, not per technique.
+ */
+export function newTechniqueActivationDefaults(): {
+  status: "ACTIVE";
+  runtimeEnabled: true;
+  runtimePriority: number;
+  approvedAt: Date;
+  approvedBy: string;
+} {
+  return {
+    status: "ACTIVE",
+    runtimeEnabled: true,
+    runtimePriority: 50,
+    approvedAt: new Date(),
+    approvedBy: "source-upload",
+  };
+}
 
 // ── input validation ────────────────────────────────────────────────────────────
 

@@ -95,6 +95,10 @@ describe("DeepExtractionService.consolidateJob", () => {
     expect(db.agentLibraryTechnique.createMany).toHaveBeenCalledTimes(1);
     expect(db.agentLibrarySource.update).toHaveBeenCalledWith(expect.objectContaining({ data: { extractionStatus: "EXTRACTED" } }));
     expect(db.agentLibraryChunkTechniqueCandidate.deleteMany).toHaveBeenCalledWith({ where: { jobId: "job1" } });
+    // New: techniques are born ready (ACTIVE + runtimeEnabled) — no manual approval queue.
+    const created = db.agentLibraryTechnique.createMany.mock.calls[0][0].data;
+    expect(created[0]).toMatchObject({ status: "ACTIVE", runtimeEnabled: true });
+    expect(created[0].runtimePriority).toBeGreaterThan(0);
   });
 
   it("(5)(9) candidates that all filter out → PARTIAL + lastError (never silent EXTRACTED)", async () => {

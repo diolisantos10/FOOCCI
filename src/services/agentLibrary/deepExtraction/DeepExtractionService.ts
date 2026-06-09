@@ -13,6 +13,7 @@
 import { prisma } from "@/lib/prisma";
 import { chunkText, progressPercent, wasTruncated } from "./chunking";
 import { consolidateToTechniques, type CandidateLike } from "./consolidation";
+import { newTechniqueActivationDefaults } from "../agentLibraryHelpers";
 
 /** Max retries per chunk before it is marked FAILED. */
 export const MAX_CHUNK_RETRIES = 2;
@@ -183,6 +184,10 @@ export const DeepExtractionService = {
           goodExample: t.goodExample ?? null,
           badExample: t.badExample ?? null,
           confidence: typeof t.confidence === "number" ? t.confidence : null,
+          // Born ready: the operator approved the source, so techniques are ACTIVE
+          // + runtimeEnabled. Real use still requires an ACTIVE LIBRARY_ASSISTED
+          // version (default CURRENT stays safe).
+          ...newTechniqueActivationDefaults(),
         })),
       });
     }

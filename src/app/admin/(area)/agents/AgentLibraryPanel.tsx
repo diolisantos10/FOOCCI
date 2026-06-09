@@ -243,7 +243,7 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Biblioteca do {agentName}</h3>
-            <p className="text-xs text-gray-500">A universidade privada do {agentName} — fontes e técnicas (read-only vs. runtime).</p>
+            <p className="text-xs text-gray-500">Você aprova a <strong>fonte</strong> ao enviá-la. A IA extrai e as técnicas já ficam <strong>ativas e prontas</strong> — sem fila de aprovação por técnica. O uso real só acontece via uma versão LIBRARY_ASSISTED ativa (o padrão CURRENT continua seguro).</p>
           </div>
           <button type="button" onClick={() => { setShowForm((v) => !v); setErr(null); setWarn(null); }}
             className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700">
@@ -343,9 +343,10 @@ export function AgentLibraryPanel({ agentSlug }: { agentSlug: string }) {
               className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
           </label>
           <p className="text-[11px] text-gray-400">
-            ✨ Ao salvar, as técnicas são <strong>extraídas automaticamente</strong> — sem precisar apertar nenhum botão
-            depois. O arquivo fica guardado de forma privada (só para reprocessar); o sistema usa apenas o texto
-            (<strong>amostra inicial em PDFs grandes</strong>) para gerar a síntese. Nada vai para o runtime.
+            ✨ Ao salvar, as técnicas são <strong>extraídas automaticamente</strong> e já nascem ativas/prontas — sem fila
+            de aprovação por técnica. O arquivo fica guardado de forma privada (só para reprocessar); o sistema usa apenas
+            o texto (<strong>amostra inicial em PDFs grandes</strong>) para gerar a síntese. O uso real só ocorre via uma
+            versão LIBRARY_ASSISTED ativa — o padrão CURRENT continua seguro.
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => submitUpload(true)} disabled={busy}
