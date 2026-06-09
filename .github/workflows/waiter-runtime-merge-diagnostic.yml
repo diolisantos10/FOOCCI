@@ -1,0 +1,119 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Waiter Runtime Merge — Operational Diagnostic (cron-safe, manual)
+#
+# Proves, in production with zero manual steps, the full governed cycle of the
+# Waiter Runtime Merge: synthetic technique → DRAFT → TESTING → Quality gate →
+# ACTIVE LIBRARY_ASSISTED → bridge enabled (technique in promptBlock) → rollback
+# → CURRENT fallback → cleanup. The synthetic version is scoped to a unique
+# non-existent restaurant, so NO real /pedido turn can ever see it.
+#
+# Manual only (workflow_dispatch). Uses CRON_SECRET — NOT ADMIN_SECRET.
+#
+# Required GitHub Secrets (already used by the other crons — no new secret):
+#   FOOCCI_BASE_URL   Production URL with no trailing slash.
+#   CRON_SECRET       Must match the CRON_SECRET env var set in Railway.
+#                     Never printed in logs — injected via env:, masked by GitHub.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Waiter Runtime Merge Diagnostic
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  run-merge-diagnostic:
+    name: "Waiter Runtime Merge Diagnostic"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Build endpoint URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"   # strip any trailing slash
+          echo "url=${BASE_URL}/api/cron/waiter-runtime/merge-diagnostic" >> "$GITHUB_OUTPUT"
+
+      # CRON_SECRET is injected via env: so it never appears in the step
+      # definition or in workflow logs (GitHub masks it automatically).
+      - name: "POST /api/cron/waiter-runtime/merge-diagnostic"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "────────────────────────────────────"
+          echo "→ Endpoint : $ENDPOINT_URL"
+          echo "────────────────────────────────────"
+
+          set +e
+          curl --connect-timeout 20 --max-time 240 -sS \
+            -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            -o /tmp/response.json \
+            -w "%{http_code}" > /tmp/http_status.txt
+          CURL_EXIT=$?
+          set -e
+
+          HTTP_STATUS=$(cat /tmp/http_status.txt 2>/dev/null || echo "000")
+
+          # Print ONLY safe summary fields — never technique text / secret.
+          # NB: boolean fields use a raw jq read (NOT `// "?"`), because jq's `//`
+          # treats `false` as empty and would turn a correct `false` into "?".
+          STATUS=$(jq    -r '.status // "?"'                      /tmp/response.json 2>/dev/null)
+          STAGE=$(jq     -r '.stage // "-"'                       /tmp/response.json 2>/dev/null)
+          GATE_P0=$(jq   -r '.qualityGateP0 // "?"'               /tmp/response.json 2>/dev/null)
+          VER_CREATED=$(jq -r '.versionCreated'                   /tmp/response.json 2>/dev/null)
+          TECH_CREATED=$(jq -r '.techniqueCreated'                /tmp/response.json 2>/dev/null)
+          ACTIVATED=$(jq -r '.activated'                          /tmp/response.json 2>/dev/null)
+          BRIDGE=$(jq    -r '.bridgeEnabled'                      /tmp/response.json 2>/dev/null)
+          PROMPT_INC=$(jq -r '.promptBlockIncludedTechnique'      /tmp/response.json 2>/dev/null)
+          ROLLED=$(jq    -r '.rolledBack'                         /tmp/response.json 2>/dev/null)
+          FALLBACK=$(jq  -r '.fallbackCurrent'                    /tmp/response.json 2>/dev/null)
+          CLEANUP=$(jq   -r '.cleanup'                            /tmp/response.json 2>/dev/null)
+          RUNTIME=$(jq   -r '.runtimeTouched'                     /tmp/response.json 2>/dev/null)
+          MESSAGE=$(jq   -r '.message // ""'                      /tmp/response.json 2>/dev/null)
+
+          echo "← curl exit                    : $CURL_EXIT"
+          echo "← HTTP Status                  : $HTTP_STATUS"
+          echo "← status                       : $STATUS"
+          echo "← stage                        : $STAGE"
+          echo "← qualityGateP0                : $GATE_P0"
+          echo "← versionCreated               : $VER_CREATED"
+          echo "← techniqueCreated             : $TECH_CREATED"
+          echo "← activated                    : $ACTIVATED"
+          echo "← bridgeEnabled                : $BRIDGE"
+          echo "← promptBlockIncludedTechnique : $PROMPT_INC"
+          echo "← rolledBack                   : $ROLLED"
+          echo "← fallbackCurrent              : $FALLBACK"
+          echo "← cleanup                      : $CLEANUP"
+          echo "← runtimeTouched               : $RUNTIME"
+          echo "← message                      : $MESSAGE"
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo "::error::curl failed with exit $CURL_EXIT (connection/timeout error)."
+            exit "$CURL_EXIT"
+          fi
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then
+            echo "::error::Endpoint returned non-2xx status ($HTTP_STATUS)."
+            exit 1
+          fi
+          if [[ "$STATUS" != "PASS" ]]; then
+            echo "::error::Diagnostic status is '$STATUS' (expected PASS) at stage '$STAGE'. message: $MESSAGE"
+            exit 1
+          fi
+          if ! [[ "$GATE_P0" =~ ^0$ ]]; then
+            echo "::error::qualityGateP0='$GATE_P0' (expected 0)."
+            exit 1
+          fi
+          if [[ "$ACTIVATED" != "true" ]];   then echo "::error::activated='$ACTIVATED' (expected true).";   exit 1; fi
+          if [[ "$BRIDGE" != "true" ]];      then echo "::error::bridgeEnabled='$BRIDGE' (expected true).";   exit 1; fi
+          if [[ "$PROMPT_INC" != "true" ]];  then echo "::error::promptBlockIncludedTechnique='$PROMPT_INC' (expected true)."; exit 1; fi
+          if [[ "$ROLLED" != "true" ]];      then echo "::error::rolledBack='$ROLLED' (expected true).";      exit 1; fi
+          if [[ "$FALLBACK" != "true" ]];    then echo "::error::fallbackCurrent='$FALLBACK' (expected true)."; exit 1; fi
+          if [[ "$CLEANUP" != "true" ]];     then echo "::error::cleanup='$CLEANUP' (expected true).";        exit 1; fi
+          if [[ "$RUNTIME" != "false" ]];    then echo "::error::runtimeTouched='$RUNTIME' (expected false)."; exit 1; fi
+
+          echo "✅ Waiter Runtime Merge diagnostic PASS — ciclo completo validado, fonte limpa, runtime intocado."
