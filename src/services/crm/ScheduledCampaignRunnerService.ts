@@ -38,6 +38,9 @@ import {
   type CRMWhatsAppSafetyConfig,
 } from "@/lib/crm-safety";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
+import { readDedupePolicy, readOverridePolicy } from "./crmDedupePolicy";
+import { generateMessageFingerprint } from "./messageFingerprint";
+import { getImpactedByConcept, getImpactedByMessage, recordLedger } from "./CRMContactLedgerService";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -204,6 +207,7 @@ export class ScheduledCampaignRunnerService {
         id: true, restaurantId: true, name: true, status: true,
         targetSegment: true, templateId: true, message: true,
         scheduleConfig: true, totalSent: true,
+        campaignFamilyKey: true, messageFingerprint: true, dedupePolicy: true,
       },
     });
 
@@ -302,7 +306,26 @@ export class ScheduledCampaignRunnerService {
       })).map((e) => e.customerId)
     );
 
-    const newEligible = allEligible.filter((c) => !alreadySentIds.has(c.id) && !recentlyAttemptedIds.has(c.id));
+    // ── Governance dedupe (concept + message) via the impact ledger ──────────
+    // Anti-spam by default: do not re-contact a customer already impacted by this
+    // CONCEPT (campaignFamilyKey) or by the same MESSAGE fingerprint, even under a
+    // new campaignId. The ledger is empty for historical data, so this is a no-op
+    // until impacts start being recorded — no surprise change to live campaigns.
+    const dedupe = readDedupePolicy(campaign.dedupePolicy);
+    const familyKey = campaign.campaignFamilyKey ?? "";
+    const fingerprint = campaign.messageFingerprint || generateMessageFingerprint(campaign.message);
+    let impactedByConcept = new Set<string>();
+    let impactedByMessage = new Set<string>();
+    if (!dedupe.allowResendToImpacted) {
+      [impactedByConcept, impactedByMessage] = await Promise.all([
+        dedupe.dedupeByConcept && familyKey ? getImpactedByConcept(campaign.restaurantId, familyKey, dedupe.dedupeWindowDays) : Promise.resolve(new Set<string>()),
+        dedupe.dedupeByMessage && fingerprint ? getImpactedByMessage(campaign.restaurantId, fingerprint, dedupe.dedupeWindowDays) : Promise.resolve(new Set<string>()),
+      ]);
+    }
+
+    const newEligible = allEligible.filter(
+      (c) => !alreadySentIds.has(c.id) && !recentlyAttemptedIds.has(c.id) && !impactedByConcept.has(c.id) && !impactedByMessage.has(c.id),
+    );
 
     if (newEligible.length === 0) {
       // Only mark COMPLETED when the campaign was explicitly configured to end
@@ -341,7 +364,12 @@ export class ScheduledCampaignRunnerService {
     }
 
     // Send batch
-    const { sent, failed, blocked = 0 } = await this._sendBatch(campaign, batch, safety);
+    const override = readOverridePolicy(campaign.scheduleConfig);
+    const { sent, failed, blocked = 0 } = await this._sendBatch(campaign, batch, safety, {
+      allowWeeklyCapOverride: override.allowWeeklyCustomerCapOverride,
+      campaignFamilyKey: familyKey || null,
+      messageFingerprint: fingerprint || null,
+    });
 
     // Check end conditions
     const totalSentAfter      = (campaign.totalSent ?? 0) + sent;
@@ -429,7 +457,8 @@ export class ScheduledCampaignRunnerService {
       message: string; templateId: string | null; targetSegment: string | null;
     },
     customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>,
-    safety?: CRMWhatsAppSafetyConfig
+    safety?: CRMWhatsAppSafetyConfig,
+    governance?: { allowWeeklyCapOverride: boolean; campaignFamilyKey: string | null; messageFingerprint: string | null },
   ): Promise<{ sent: number; failed: number; blocked: number }> {
     const cfgResult = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
     if (!cfgResult.ok) {
@@ -486,6 +515,7 @@ export class ScheduledCampaignRunnerService {
         phone:              customer.phone,
         campaignId:         campaign.id,
         isBirthday,
+        allowWeeklyCapOverride: governance?.allowWeeklyCapOverride ?? false,
         enforceTimeWindows: false, // already gated pre-batch in runCampaignBatch
         enforceDailyCap:    false, // already gated pre-batch in runCampaignBatch
         context:            safetyContext,
@@ -586,6 +616,21 @@ export class ScheduledCampaignRunnerService {
             },
           }),
         ]);
+
+        // Impact memory: record the SENT so future campaigns/concepts dedupe.
+        await recordLedger({
+          restaurantId: campaign.restaurantId,
+          customerId: customer.id,
+          phone: customer.phone,
+          campaignId: campaign.id,
+          campaignFamilyKey: governance?.campaignFamilyKey ?? null,
+          messageFingerprint: governance?.messageFingerprint ?? null,
+          contactType: isBirthday ? "BIRTHDAY" : "CAMPAIGN",
+          status: "SENT",
+          reasonCode: governance?.allowWeeklyCapOverride ? "OVERRIDE_WEEKLY_LIMIT_USED" : "SENT",
+          usedPriorityOverride: governance?.allowWeeklyCapOverride ?? false,
+          sourceExecutionId: exec.id,
+        });
 
         sent++;
       } catch (err) {

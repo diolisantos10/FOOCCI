@@ -114,6 +114,12 @@ export interface ContactSafetyEvalInput {
   // ── flags ──
   /** Birthday sends are exempt from frequency rules (cooldown/weekly/24h/dup). */
   isBirthday: boolean;
+  /**
+   * Priority override: skip ONLY the per-customer weekly cap (for important
+   * campaigns like birthday). NEVER skips opt-out, phone, quiet hours, sending
+   * window, global cap, same-campaign dedup or cooldown.
+   */
+  allowWeeklyCapOverride?: boolean;
   /** Enforce quiet-hours / weekend / sending-window time gates (autonomous paths). */
   enforceTimeWindows: boolean;
   /** Enforce the daily global cap. Autonomous paths enforce; manual human sends may override. */
@@ -242,8 +248,11 @@ export function evaluateContactSafety(input: ContactSafetyEvalInput): ContactSaf
         `Cooldown ativo (${input.safety.customerCooldownHours}h)`,
       );
     }
-    // Per-customer weekly cap.
+    // Per-customer weekly cap — skippable ONLY via an explicit priority override
+    // (e.g. birthday). All gates above (opt-out/phone/window/global/dedup/cooldown)
+    // still apply.
     if (
+      !input.allowWeeklyCapOverride &&
       input.safety.maxPerWeekPerCustomer > 0 &&
       input.sendsWithinWeek >= input.safety.maxPerWeekPerCustomer
     ) {
@@ -340,6 +349,8 @@ export interface AssertSendableInput {
   campaignId?: string | null;
   /** Birthday exemption from frequency rules. */
   isBirthday?: boolean;
+  /** Priority override: skip ONLY the per-customer weekly cap. */
+  allowWeeklyCapOverride?: boolean;
   /** Enforce quiet-hours / weekend / window (autonomous paths). Default true. */
   enforceTimeWindows?: boolean;
   /** Enforce daily global cap. Default true; manual human sends may pass false. */
@@ -448,6 +459,7 @@ export class ContactSafetyService {
         globalSentToday: ctx.globalSentToday,
         restaurantOpen: ctx.restaurantOpen,
         isBirthday: input.isBirthday ?? false,
+        allowWeeklyCapOverride: input.allowWeeklyCapOverride ?? false,
         enforceTimeWindows: input.enforceTimeWindows ?? true,
         enforceDailyCap: input.enforceDailyCap ?? true,
         enforceRestaurantOpen: input.enforceRestaurantOpen ?? false,

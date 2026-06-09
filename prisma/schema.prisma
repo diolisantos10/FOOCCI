@@ -731,8 +731,17 @@ model Campaign {
   totalRevenue   Decimal        @default(0) @db.Decimal(12, 2)
   couponCode     String? // soft link to Promotion.couponCode for attribution
   promotionId    String? // soft FK to Promotion.id for attribution (no cascade)
-  scheduleConfig Json? // { mode, scheduledAt?, weekdays?, timeWindowStart?, timeWindowEnd?, dailyLimit? }
+  scheduleConfig Json? // { mode, ..., dailyLimit?, priority?, allowWeeklyCustomerCapOverride?, overrideReason? }
   audienceConfig Json? // { templateId?, segment?, filters? }
+  // ── Governance / impact-memory identity (additive) ─────────────────────────
+  // Stable concept key (e.g. "pascoa-2026") so a deleted/recreated campaign still
+  // knows who was already impacted by the CONCEPT, not just by this campaignId.
+  campaignFamilyKey  String?
+  // Normalized hash of the message — same/near-same text under a NEW campaignId
+  // is recognised as a duplicate.
+  messageFingerprint String?
+  // { dedupeByConcept?, dedupeByMessage?, dedupeWindowDays?, allowResendToImpacted? }
+  dedupePolicy   Json?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -742,7 +751,39 @@ model Campaign {
 
   @@index([restaurantId])
   @@index([restaurantId, status])
+  @@index([restaurantId, campaignFamilyKey])
   @@map("campaigns")
+}
+
+// CRM Contact Ledger — immutable impact memory. Records who was contacted (or
+// blocked/failed), by which campaign + CONCEPT + message fingerprint, and when.
+// Intentionally has NO foreign keys: deleting a campaign or customer NEVER erases
+// the ledger (it is audit + dedupe memory). Stores no full message text.
+model CRMContactLedger {
+  id                 String    @id @default(cuid())
+  restaurantId       String
+  customerId         String?
+  phone              String?
+  campaignId         String? // soft reference (no FK / no cascade)
+  campaignFamilyKey  String?
+  messageFingerprint String?
+  channel            String    @default("WHATSAPP")
+  contactType        String // CAMPAIGN | AUTOMATION | BIRTHDAY | REACTIVATION | REVIEW_REQUEST | POST_ORDER | MANUAL
+  status             String // SENT | BLOCKED | FAILED | SKIPPED
+  reasonCode         String? // canonical reason code (see crmReasonCodes)
+  usedPriorityOverride Boolean @default(false)
+  sentAt             DateTime?
+  blockedAt          DateTime?
+  failedAt           DateTime?
+  sourceExecutionId  String?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+
+  @@index([restaurantId, customerId])
+  @@index([restaurantId, campaignFamilyKey, customerId])
+  @@index([restaurantId, messageFingerprint, customerId])
+  @@index([restaurantId, createdAt])
+  @@map("crm_contact_ledger")
 }
 
 model CampaignExecution {

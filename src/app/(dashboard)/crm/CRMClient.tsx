@@ -798,6 +798,13 @@ function ActionConfigDrawer({
   const [timeWindowEnd,   setTimeWindowEnd]   = useState("18:00");
   const [dailyLimit,      setDailyLimit]      = useState(20);
   const [priority,        setPriority]        = useState<"LOW" | "NORMAL" | "HIGH" | "CRITICAL">("NORMAL");
+  // ── Governance / anti-spam ──
+  const [familyKey,       setFamilyKey]       = useState("");
+  const [dedupeByConcept, setDedupeByConcept] = useState(true);
+  const [dedupeByMessage, setDedupeByMessage] = useState(true);
+  const [dedupeWindowDays, setDedupeWindowDays] = useState(30);
+  const [allowResend,     setAllowResend]     = useState(false);
+  const [allowWeeklyOverride, setAllowWeeklyOverride] = useState(false);
   type EndCondition = "AUDIENCE_EXHAUSTED" | "END_DATE" | "MAX_TOTAL";
   const [endCondition, setEndCondition] = useState<EndCondition>("AUDIENCE_EXHAUSTED");
   const [endDate,      setEndDate]      = useState("");
@@ -852,6 +859,9 @@ function ActionConfigDrawer({
         messageTemplate: message,
         objective:       template.objective,
         ...(linkedCouponCode.trim() ? { couponCode: linkedCouponCode.trim().toUpperCase() } : {}),
+        // Governance: stable concept key + anti-spam dedupe policy.
+        ...(familyKey.trim() ? { campaignFamilyKey: familyKey.trim() } : {}),
+        dedupePolicy: { dedupeByConcept, dedupeByMessage, dedupeWindowDays: Math.max(0, dedupeWindowDays), allowResendToImpacted: allowResend },
       };
 
       if (sendMode === "recurring") {
@@ -861,6 +871,7 @@ function ActionConfigDrawer({
           timeWindow:   { start: timeWindowStart, end: timeWindowEnd },
           dailyLimit:   Math.max(1, Math.min(200, dailyLimit)),
           priority,
+          allowWeeklyCustomerCapOverride: allowWeeklyOverride,
           endCondition,
           endDate:      endCondition === "END_DATE"   ? (endDate || null) : null,
           maxTotal:     endCondition === "MAX_TOTAL"  ? maxTotal          : null,
@@ -1109,6 +1120,38 @@ function ActionConfigDrawer({
             </p>
           </div>
 
+          {/* Governance: identity + anti-spam dedupe */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Identidade & evitar repetição</p>
+            <label className="mt-2 block text-[11px] font-semibold text-gray-700">
+              Identidade da campanha
+              <input
+                type="text"
+                value={familyKey}
+                onChange={(e) => setFamilyKey(e.target.value)}
+                placeholder="ex: pascoa-2026 (sugerido pelo nome)"
+                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs lowercase focus:border-brand-400 focus:outline-none"
+              />
+            </label>
+            <p className="mt-1 text-[10px] text-gray-400">Use para não reenviar a mesma campanha/conceito a quem já foi impactado — mesmo se a campanha for recriada.</p>
+            <div className="mt-2 space-y-1.5">
+              <label className="flex items-center gap-2 text-[11px] text-gray-700">
+                <input type="checkbox" checked={dedupeByConcept} onChange={(e) => setDedupeByConcept(e.target.checked)} /> Não reenviar para quem já recebeu esta campanha/conceito
+              </label>
+              <label className="flex items-center gap-2 text-[11px] text-gray-700">
+                <input type="checkbox" checked={dedupeByMessage} onChange={(e) => setDedupeByMessage(e.target.checked)} /> Não reenviar mensagem igual ou parecida
+              </label>
+              <label className="flex items-center gap-2 text-[11px] text-gray-700">
+                Janela de dedupe (dias)
+                <input type="number" min={0} value={dedupeWindowDays} onChange={(e) => setDedupeWindowDays(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-20 rounded border border-gray-200 px-2 py-1 text-xs" />
+              </label>
+              <label className="flex items-center gap-2 text-[11px] text-amber-700">
+                <input type="checkbox" checked={allowResend} onChange={(e) => setAllowResend(e.target.checked)} /> Permitir reenviar para já impactados (use com cuidado)
+              </label>
+            </div>
+          </div>
+
           {/* Scheduling section */}
           <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-3">
               <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Tipo de campanha</p>
@@ -1246,6 +1289,15 @@ function ActionConfigDrawer({
                     </select>
                     <p className="mt-1 text-[10px] text-gray-400">Na previsão de capacidade, campanhas de prioridade alta recebem orçamento primeiro.</p>
                   </div>
+
+                  {/* Priority override */}
+                  <label className="flex items-start gap-2 rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
+                    <input type="checkbox" checked={allowWeeklyOverride} onChange={(e) => setAllowWeeklyOverride(e.target.checked)} className="mt-0.5" />
+                    <span className="text-[10px] text-gray-600">
+                      <strong className="text-gray-800">Permitir envio prioritário acima do limite semanal por cliente.</strong> Use apenas para campanhas importantes (ex.: aniversário).
+                      Ainda respeita opt-out, telefone válido, janela de envio, quiet hours, dedupe e limite global do restaurante.
+                    </span>
+                  </label>
 
                   {/* End condition */}
                   <div>
@@ -1678,6 +1730,13 @@ const EXEC_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   CONVERTED: { bg: "bg-green-50",   text: "text-green-700" },
 };
 
+type PreflightResult = {
+  audienceTotal: number; eligibleNow: number; forecastSendToday: number;
+  blocked: { optOut: number; invalidPhone: number; weeklyLimit: number; alreadyImpactedCampaign: number; alreadyImpactedConcept: number; duplicateMessage: number; globalCap: number; campaignCap: number };
+  overrideWeeklyLimitUsed: number;
+  warnings: string[]; recommendations: string[]; canSendNow: boolean;
+};
+
 type CampaignDebugResult = {
   isRecurring:    boolean;
   isDueNow:       boolean;
@@ -1717,6 +1776,7 @@ function CampaignManageModal({
   const [error,        setError]        = useState(false);
   const [debug,        setDebug]        = useState<CampaignDebugResult | null>(null);
   const [loadingDebug, setLoadingDebug] = useState(false);
+  const [preflight,    setPreflight]    = useState<PreflightResult | null>(null);
 
   // Edit – name
   const [editName,    setEditName]    = useState("");
@@ -1769,6 +1829,12 @@ function CampaignManageModal({
       .then((json) => setDebug(json.data ?? null))
       .catch(() => {})
       .finally(() => setLoadingDebug(false));
+
+    setPreflight(null);
+    fetch(`/api/crm/campaigns/${detailId}/preflight`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((json) => setPreflight(json.data ?? null))
+      .catch(() => {});
   }, [detailId]);
 
   const sc           = detail ? (CAMPAIGN_STATUS_COLORS[detail.status] ?? { bg: "bg-gray-100", text: "text-gray-600" }) : null;
@@ -2291,6 +2357,31 @@ function CampaignManageModal({
                 {/* ── Diagnóstico ── */}
                 {activeTab === "diagnostics" && (
                   <div className="space-y-4">
+                    {preflight && (
+                      <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700">Prévia de envio</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          {[
+                            { l: "Público total", v: preflight.audienceTotal },
+                            { l: "Elegíveis agora", v: preflight.eligibleNow },
+                            { l: "Previsão hoje", v: preflight.forecastSendToday },
+                            { l: "Já receberam o conceito", v: preflight.blocked.alreadyImpactedConcept + preflight.blocked.alreadyImpactedCampaign },
+                            { l: "Mensagem duplicada", v: preflight.blocked.duplicateMessage },
+                            { l: "Limite semanal/cliente", v: preflight.blocked.weeklyLimit },
+                            { l: "Opt-out", v: preflight.blocked.optOut },
+                            { l: "Telefone inválido", v: preflight.blocked.invalidPhone },
+                            { l: "Orçamento global", v: preflight.blocked.globalCap },
+                          ].map((m) => (
+                            <div key={m.l} className="rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-center">
+                              <p className="text-sm font-bold text-gray-800">{m.v}</p>
+                              <p className="text-[9px] text-gray-500">{m.l}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {preflight.warnings.map((w, i) => <p key={i} className="mt-1 text-[10px] text-amber-700">• {w}</p>)}
+                        {preflight.recommendations.map((r, i) => <p key={`r${i}`} className="mt-1 text-[10px] text-blue-700">→ {r}</p>)}
+                      </div>
+                    )}
                     {loadingDebug && <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-xs text-gray-400">Verificando estado do runner…</div>}
                     {!loadingDebug && !debug && (
                       <div className="rounded-2xl border-2 border-dashed border-gray-100 py-8 text-center text-xs text-gray-400">

@@ -143,6 +143,8 @@ export async function POST(req: NextRequest) {
       audienceConfig?:  Record<string, unknown> | null;
       couponCode?:      string | null;
       promotionId?:     string | null;
+      campaignFamilyKey?: string | null;
+      dedupePolicy?:    Record<string, unknown> | null;
     };
 
     if (!body.name?.trim()) {
@@ -167,6 +169,8 @@ export async function POST(req: NextRequest) {
       audienceConfig:  body.audienceConfig ?? undefined,
       couponCode:      body.couponCode?.trim() || undefined,
       promotionId:     body.promotionId?.trim() || undefined,
+      campaignFamilyKey: body.campaignFamilyKey?.trim() || undefined,
+      dedupePolicy:    body.dedupePolicy ?? undefined,
     });
 
     return ok(result, 201);

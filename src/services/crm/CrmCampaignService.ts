@@ -14,6 +14,7 @@
 import { prisma } from "@/lib/prisma";
 import { EvolutionConfigService } from "@/services/evolution/EvolutionConfigService";
 import { EvolutionClient } from "@/lib/evolution/EvolutionClient";
+import { generateMessageFingerprint, suggestCampaignFamilyKey } from "./messageFingerprint";
 import { getPublicMenuUrl, getPublicSiteUrl } from "@/lib/public-url";
 import { isGuestIdentifier } from "@/lib/guest";
 import { ConversationStatus } from "@prisma/client";
@@ -47,6 +48,8 @@ export interface CreateCampaignInput {
   audienceConfig?: any; // Prisma Json? field
   couponCode?:     string;   // optional coupon link for attribution
   promotionId?:    string;   // optional promotion link for attribution
+  campaignFamilyKey?: string; // stable concept key (auto-suggested if omitted)
+  dedupePolicy?:   any;       // { dedupeByConcept?, dedupeByMessage?, dedupeWindowDays?, allowResendToImpacted? }
 }
 
 export interface CampaignRecipientRow {
@@ -365,6 +368,11 @@ export class CrmCampaignService {
           audienceConfig: input.audienceConfig ?? undefined,
           couponCode:     input.couponCode     ?? null,
           promotionId:    input.promotionId    ?? null,
+          // Governance identity: concept key + message fingerprint enable dedupe
+          // and impact memory that survive delete/recreate.
+          campaignFamilyKey:  input.campaignFamilyKey?.trim() || suggestCampaignFamilyKey({ name: input.name, objective: input.objective }),
+          messageFingerprint: generateMessageFingerprint(input.messageTemplate),
+          dedupePolicy:       input.dedupePolicy ?? undefined,
         },
       });
 

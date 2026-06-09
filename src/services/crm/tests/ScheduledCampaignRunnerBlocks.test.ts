@@ -5,7 +5,16 @@ const db = vi.hoisted(() => ({
   campaignExecution: { findMany: vi.fn(), create: vi.fn(), count: vi.fn() },
   restaurant: { findUnique: vi.fn() },
   restaurantBrandConfig: { findUnique: vi.fn() },
-  customer: { findMany: vi.fn() },
+  customer: { findMany: vi.fn(), findUnique: vi.fn() },
+  conversation: { findFirst: vi.fn(), create: vi.fn() },
+  message: { create: vi.fn() },
+  cRMContactLedger: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn() },
+  $transaction: vi.fn(async (arr: unknown) => (Array.isArray(arr) ? Promise.all(arr as Promise<unknown>[]) : undefined)),
+}));
+const ledger = vi.hoisted(() => ({
+  getImpactedByConcept: vi.fn(async () => new Set<string>()),
+  getImpactedByMessage: vi.fn(async () => new Set<string>()),
+  recordLedger: vi.fn(async () => {}),
 }));
 const evoCfg = vi.hoisted(() => ({ getSnapshot: vi.fn() }));
 const evoClient = vi.hoisted(() => ({ sendTextMessage: vi.fn() }));
@@ -29,12 +38,14 @@ vi.mock("@/lib/public-url", () => ({ getPublicMenuUrl: () => "", getPublicSiteUr
 vi.mock("@/services/agents/AgentRoutingService", () => ({
   assignConversationContext: vi.fn(), buildConversationMetadataForCrmSend: vi.fn(() => ({})), CONTEXT_TYPE: {},
 }));
+vi.mock("../CRMContactLedgerService", () => ledger);
 
 import { ScheduledCampaignRunnerService } from "../ScheduledCampaignRunnerService";
 
 const CAMPAIGN = {
   id: "cmp1", restaurantId: "r1", name: "Recuperar clientes frios", status: "ACTIVE",
   message: "oi", templateId: "recuperar-frios", targetSegment: "recuperar-frios",
+  campaignFamilyKey: "reativacao-frios", messageFingerprint: "mf_1_abc", dedupePolicy: null,
   totalSent: 0, scheduleConfig: { mode: "RECURRING", weekdays: [0,1,2,3,4,5,6], timeWindow: { start: "00:00", end: "23:59" }, dailyLimit: 20, endCondition: "AUDIENCE_EXHAUSTED" },
 };
 
@@ -49,7 +60,15 @@ beforeEach(() => {
   db.restaurant.findUnique.mockResolvedValue({ name: "Sushi Cazza", slug: "sushicazza" });
   db.restaurantBrandConfig.findUnique.mockResolvedValue({ googleReviewUrl: null });
   db.customer.findMany.mockResolvedValue([]); // none opted out
+  db.customer.findUnique.mockResolvedValue({ id: "c1", name: "Ana" });
+  db.conversation.findFirst.mockResolvedValue(null);
+  db.conversation.create.mockResolvedValue({ id: "conv1" });
+  db.message.create.mockResolvedValue({ id: "msg1" });
+  evoClient.sendTextMessage.mockResolvedValue({ key: { id: "wamid1" } });
   evoCfg.getSnapshot.mockResolvedValue({ ok: true, data: {} });
+  ledger.getImpactedByConcept.mockResolvedValue(new Set());
+  ledger.getImpactedByMessage.mockResolvedValue(new Set());
+  ledger.recordLedger.mockResolvedValue(undefined);
   safety.getSafetyConfig.mockResolvedValue({ dailyGlobalCap: 200, weeklyGlobalCap: 0, customerCooldownHours: 24, maxPerWeekPerCustomer: 1, quietHoursEnabled: false, sendOnWeekends: true });
   svc.resolveAudience.mockResolvedValue([{ id: "c1", name: "Ana", phone: "5511999990000", tier: "BRONZE", segment: "FRIO", totalOrders: 1, totalSpend: 10, lastOrderAt: null }]);
 });
@@ -91,6 +110,39 @@ describe("ScheduledCampaignRunner — safety blocks are not failures (no useless
     const r = await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { limit: 5 });
     expect(r.reason).toMatch(/semanal/i);
     expect(r.sent).toBe(0);
+  });
+
+  it("(5) concept dedupe: a customer already impacted by the concept is excluded (not sent)", async () => {
+    ledger.getImpactedByConcept.mockResolvedValue(new Set(["c1"]));
+    const r = await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { limit: 5 });
+    expect(r.eligible).toBe(0);
+    expect(r.sent).toBe(0);
+    expect(contact.ContactSafetyService.assertSendable).not.toHaveBeenCalled();
+  });
+
+  it("(6) message dedupe: a customer who got the same message is excluded", async () => {
+    ledger.getImpactedByMessage.mockResolvedValue(new Set(["c1"]));
+    const r = await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { limit: 5 });
+    expect(r.eligible).toBe(0);
+  });
+
+  it("(11) a successful send records a SENT entry in the impact ledger", async () => {
+    contact.ContactSafetyService.assertSendable.mockResolvedValue({ sendable: true, reason: null });
+    db.campaign.findUnique.mockResolvedValue({ ...CAMPAIGN, campaignFamilyKey: "reativacao-frios", messageFingerprint: "mf_1_abc" });
+    const r = await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { limit: 5 });
+    expect(r.sent).toBe(1);
+    expect(ledger.recordLedger).toHaveBeenCalledTimes(1);
+    const entry = ledger.recordLedger.mock.calls[0][0];
+    expect(entry.status).toBe("SENT");
+    expect(entry.campaignFamilyKey).toBe("reativacao-frios");
+    expect(entry.messageFingerprint).toBe("mf_1_abc");
+  });
+
+  it("priority override is passed to the safety gate when the campaign enables it", async () => {
+    contact.ContactSafetyService.assertSendable.mockResolvedValue({ sendable: false, reason: "X", detail: "x" });
+    db.campaign.findUnique.mockResolvedValue({ ...CAMPAIGN, scheduleConfig: { ...CAMPAIGN.scheduleConfig, allowWeeklyCustomerCapOverride: true } });
+    await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { limit: 5 });
+    expect(contact.ContactSafetyService.assertSendable).toHaveBeenCalledWith(expect.objectContaining({ allowWeeklyCapOverride: true }));
   });
 
   it("(9) dry-run records nothing and never calls Evolution", async () => {
