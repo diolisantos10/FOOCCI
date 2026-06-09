@@ -3381,6 +3381,10 @@ model AgentTrainingConfig {
   autoApplySandbox          Boolean  @default(false)
   autoApplyProduction       Boolean  @default(false) // always false in v1
   enabledRestaurantIds      Json     @default("[]")  // string[] — empty = all
+  autoRunArenaOnCapture     Boolean  @default(false)
+  autoDiagnoseOnFailure     Boolean  @default(true)
+  smallBatchEveryHours      Int?
+  nightlyBatchEnabled       Boolean  @default(false)
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 

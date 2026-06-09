@@ -31,6 +31,8 @@ import {
 import { processCustomerMessage } from "./WhatsAppTextOrderService";
 import { WhatsAppOrderingSessionService } from "./WhatsAppOrderingSessionService";
 import type { WaProcessResult, WaRuntimeMode } from "./types";
+import { classifyTextOrderFailure } from "@/services/ai/UnknownFallbackHandler";
+import { captureFailure as captureTrainingFailure } from "@/services/agent-training/AgentTrainingFailureCaptureService";
 
 export interface RuntimeInput {
   restaurantId:    string;
@@ -166,6 +168,26 @@ export async function handleInboundForOrdering(input: RuntimeInput): Promise<Run
     } catch (err) {
       console.error("[TextOrderingRuntime] markConversationNeedsHuman failed:", err);
     }
+
+    // P0: Capture failure for training (async, non-blocking)
+    captureTrainingFailure({
+      restaurantId:    input.restaurantId,
+      conversationId:  input.conversationId,
+      customerId:      input.customerId ?? null,
+      agentType:       "WHATSAPP_ORDERING",
+      source:          "LIVE_FAILURE",
+      failureCategory: classifyTextOrderFailure(
+        result.stage,
+        result.actions,
+        String(result.intent),
+      ),
+      customerMessage:  input.messageText,
+      recentTranscript: [],
+      agentReply:       result.suggestedReply ?? "",
+      stage:            result.stage,
+      intent:           String(result.intent),
+      safetyNotes:      "P0 handoff triggered in text ordering runtime",
+    }).catch(() => {});
   }
 
   // Live reply sending: only when mode + allowlist permit it and there is a reply.

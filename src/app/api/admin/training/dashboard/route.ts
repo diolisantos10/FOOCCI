@@ -11,6 +11,8 @@ export async function GET(req: NextRequest) {
 
   const since24h = new Date(Date.now() - 24 * 3_600_000);
 
+  const sinceSod = new Date(new Date().setHours(0, 0, 0, 0));
+
   const [
     runsToday,
     activeRun,
@@ -20,6 +22,9 @@ export async function GET(req: NextRequest) {
     failCount,
     pendingProposals,
     latestRun,
+    liveFailuresToday,
+    approvedSandboxCandidates,
+    latestRealFailure,
   ] = await Promise.all([
     prisma.agentTrainingRun.count({ where: { createdAt: { gte: since24h } } }),
     prisma.agentTrainingRun.findFirst({ where: { status: "RUNNING" }, orderBy: { startedAt: "desc" } }),
@@ -31,6 +36,18 @@ export async function GET(req: NextRequest) {
     prisma.agentTrainingRun.findFirst({
       where:   { status: "COMPLETED" },
       orderBy: { completedAt: "desc" },
+    }),
+    prisma.agentTrainingScenario.count({
+      where: {
+        source:    { in: ["REAL_CONVERSATION", "LIVE_FAILURE"] },
+        createdAt: { gte: sinceSod },
+      },
+    }),
+    prisma.agentBrainVersion.count({ where: { status: "SANDBOX" } }),
+    prisma.agentTrainingScenario.findFirst({
+      where:   { source: { in: ["REAL_CONVERSATION", "LIVE_FAILURE"] } },
+      orderBy: { createdAt: "desc" },
+      select:  { id: true, title: true, status: true, riskLevel: true, createdAt: true },
     }),
   ]);
 
@@ -51,15 +68,20 @@ export async function GET(req: NextRequest) {
     .map(([category, count]) => ({ category, count }));
 
   return NextResponse.json({
-    activeRun:            activeRun ?? null,
+    activeRun:               activeRun ?? null,
     runsToday,
     totalScenarios,
     passCount,
     warnCount,
     failCount,
-    latestScore:          latestRun?.score ?? null,
+    latestScore:             latestRun?.score ?? null,
     pendingProposals,
     topFailureCategories,
-    latestRun:            latestRun ?? null,
+    latestRun:               latestRun ?? null,
+    liveFailuresToday,
+    approvedSandboxCandidates,
+    latestRealFailure:       latestRealFailure
+      ? { ...latestRealFailure, createdAt: latestRealFailure.createdAt.toISOString() }
+      : null,
   });
 }

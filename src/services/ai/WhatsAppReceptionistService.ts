@@ -35,6 +35,12 @@ import { markConversationNeedsHuman } from "@/lib/handoff";
 import { getPeriodsForRow, isInPeriod, getNextOpenAt, buildClosedMessage } from "@/lib/business-hours";
 import { getPublicMenuUrl, getPublicQrUrl, sanitizeCustomerUrl } from "@/lib/public-url";
 import { signWaToken } from "@/lib/wa-token";
+import {
+  P0_FALLBACK_REPLY,
+  isRepeatedClarificationLoop,
+  classifyReceptionistFailure,
+} from "@/services/ai/UnknownFallbackHandler";
+import { captureFailure as captureTrainingFailure } from "@/services/agent-training/AgentTrainingFailureCaptureService";
 
 // ─── constants ────────────────────────────────────────────────
 
@@ -852,6 +858,21 @@ async function run(conversationId: string): Promise<void> {
             replyText      = gpt.reply;
             triggerHandoff = gpt.needsHandoff;
 
+            // P0: Detect repeated clarification loop — if agent is about to send
+            // the same clarification 2+ times, escalate rather than loop.
+            const recentAgentReplies = conversationHistory
+              .filter((m) => m.role === "assistant")
+              .map((m) => m.content);
+            const isLoop = !triggerHandoff && isRepeatedClarificationLoop(recentAgentReplies, replyText);
+            if (isLoop) {
+              replyText      = P0_FALLBACK_REPLY;
+              triggerHandoff = true;
+            } else if (triggerHandoff) {
+              // P0: When GPT decides handoff, always use the canonical safe phrase
+              // instead of whatever GPT generated (could be hallucinated or confusing).
+              replyText = P0_FALLBACK_REPLY;
+            }
+
             // If GPT gave a generic/short answer with no URL, append the menu so
             // the customer always knows their options — but only if the full menu
             // hasn't been shown recently (prevents spamming the numbered list after
@@ -875,6 +896,25 @@ async function run(conversationId: string): Promise<void> {
                 lastMessage.content,
                 conversationId,
               ).catch(() => {});
+            }
+
+            // P0: Capture failure for training (async, non-blocking)
+            if (triggerHandoff) {
+              const failureCategory = isLoop
+                ? ("REPEATED_CLARIFICATION_LOOP" as const)
+                : classifyReceptionistFailure(intent, gpt.needsHandoff, false);
+              captureTrainingFailure({
+                restaurantId,
+                conversationId,
+                agentType:        "WHATSAPP_RECEPTIONIST",
+                source:           "LIVE_FAILURE",
+                failureCategory,
+                customerMessage:  lastMessage.content,
+                recentTranscript: conversationHistory.map((m) => ({ role: m.role, content: m.content })),
+                agentReply:       replyText,
+                intent,
+                safetyNotes:      "P0 fallback activated — handoff triggered",
+              }).catch(() => {});
             }
           }
         } else {

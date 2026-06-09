@@ -19,6 +19,10 @@ const DEFAULT_CONFIG = {
   autoApplySandbox:          false,
   autoApplyProduction:       false,
   enabledRestaurantIds:      [] as string[],
+  autoRunArenaOnCapture:     false,
+  autoDiagnoseOnFailure:     true,
+  smallBatchEveryHours:      null as number | null,
+  nightlyBatchEnabled:       false,
 };
 
 export async function GET(req: NextRequest) {

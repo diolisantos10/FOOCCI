@@ -37,6 +37,9 @@ interface DashboardData {
   latestScore: number | null; pendingProposals: number;
   topFailureCategories: Array<{ category: string; count: number }>;
   latestRun: TrainingRun | null;
+  liveFailuresToday: number;
+  approvedSandboxCandidates: number;
+  latestRealFailure: { id: string; title: string; status: string; riskLevel: string | null; createdAt: string } | null;
 }
 
 interface TrainingConfig {
@@ -44,6 +47,17 @@ interface TrainingConfig {
   useRealConversationMining: boolean; useAiGeneratedScenarios: boolean;
   minimumScoreThreshold: number; autoCreateProposals: boolean;
   autoApplySandbox: boolean;
+  autoRunArenaOnCapture: boolean;
+  autoDiagnoseOnFailure: boolean;
+  smallBatchEveryHours: number | null;
+  nightlyBatchEnabled: boolean;
+}
+
+interface RealCaseItem {
+  id: string; title: string; source: string; status: string;
+  riskLevel: string; failureCategory: string;
+  restaurantId: string | null; failureSummary: string | null;
+  createdAt: string; transcriptLength: number;
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
@@ -63,7 +77,9 @@ function statusBadge(status: string) {
     APPROVED:         "bg-green-900/60 text-green-400",
     REJECTED:         "bg-red-900/60 text-red-400",
     NEEDS_REVISION:   "bg-orange-900/60 text-orange-400",
-    APPLIED_TO_SANDBOX: "bg-blue-900/60 text-blue-400",
+    APPLIED_TO_SANDBOX:  "bg-blue-900/60 text-blue-400",
+    RESOLVED_MANUALLY:   "bg-gray-700 text-gray-500",
+    LIVE_FAILURE:        "bg-orange-900/60 text-orange-400",
     DRAFT:    "bg-gray-700 text-gray-400",
     SANDBOX:  "bg-blue-900/60 text-blue-400",
     ACTIVE:   "bg-green-900/60 text-green-400",
@@ -111,10 +127,11 @@ function fmtDate(iso: string | null): string {
 
 // ── Tab components ────────────────────────────────────────────────────────────
 
-function DashboardTab({ data, onRunBatch, running }: {
+function DashboardTab({ data, onRunBatch, running, onSwitchToArena }: {
   data: DashboardData | null;
   onRunBatch: () => void;
   running: boolean;
+  onSwitchToArena: () => void;
 }) {
   if (!data) return <div className="text-gray-500 text-sm p-4">Carregando…</div>;
 
@@ -132,13 +149,47 @@ function DashboardTab({ data, onRunBatch, running }: {
         </div>
       )}
 
+      {/* Live failures alert */}
+      {data.liveFailuresToday > 0 && (
+        <div className="flex items-center justify-between rounded-xl border border-orange-700/40 bg-orange-900/10 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-orange-400">⚠</span>
+            <span className="text-sm text-orange-300">
+              <b>{data.liveFailuresToday}</b> falha{data.liveFailuresToday > 1 ? "s" : ""} capturada{data.liveFailuresToday > 1 ? "s" : ""} hoje de conversas reais
+              {data.latestRealFailure && (
+                <span className="ml-2 text-orange-500">· última: {data.latestRealFailure.title.slice(0, 40)}</span>
+              )}
+            </span>
+          </div>
+          <button
+            onClick={onSwitchToArena}
+            className="shrink-0 rounded-lg bg-orange-800/60 px-3 py-1 text-xs font-semibold text-orange-300 hover:bg-orange-800 transition-colors"
+          >
+            Ver casos reais →
+          </button>
+        </div>
+      )}
+
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          { label: "Runs hoje",        value: data.runsToday,         color: "text-white" },
+          { label: "Runs hoje",          value: data.runsToday,                   color: "text-white" },
+          { label: "Falhas ao vivo hoje", value: data.liveFailuresToday,           color: data.liveFailuresToday > 0 ? "text-orange-400" : "text-gray-400" },
+          { label: "Candidatos sandbox",  value: data.approvedSandboxCandidates,   color: data.approvedSandboxCandidates > 0 ? "text-blue-400" : "text-gray-400" },
+          { label: "Aprovações pend.",    value: data.pendingProposals,            color: data.pendingProposals > 0 ? "text-yellow-400" : "text-gray-400" },
+        ].map((c) => (
+          <div key={c.label} className="rounded-xl border border-gray-700 bg-gray-800/60 px-4 py-3">
+            <p className="text-[11px] text-gray-500 mb-1">{c.label}</p>
+            <p className={`text-2xl font-bold ${c.color}`}>{String(c.value)}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
           { label: "Total cenários",   value: data.totalScenarios,    color: "text-white" },
           { label: "Score recente",    value: data.latestScore !== null ? data.latestScore.toFixed(1) : "—", color: data.latestScore !== null && data.latestScore >= 75 ? "text-green-400" : "text-yellow-400" },
-          { label: "Aprovações pend.", value: data.pendingProposals,  color: data.pendingProposals > 0 ? "text-yellow-400" : "text-gray-400" },
+          { label: "Pass",  value: data.passCount,  color: "text-green-400" },
+          { label: "Fail",  value: data.failCount,  color: data.failCount > 0 ? "text-red-400" : "text-gray-400" },
         ].map((c) => (
           <div key={c.label} className="rounded-xl border border-gray-700 bg-gray-800/60 px-4 py-3">
             <p className="text-[11px] text-gray-500 mb-1">{c.label}</p>
@@ -393,15 +444,15 @@ function ProposalsTab() {
             <span>Tipo: <b className="text-gray-300">{selectedProposal.proposedChangeType.replace(/_/g, " ")}</b></span>
             <span>Score: <b className="text-gray-300">{selectedProposal.beforeScore ?? "?"} → {selectedProposal.afterScoreEstimate ?? "?"}</b></span>
           </div>
-          {selectedProposal.status === "PENDING_APPROVAL" && (
+          {(selectedProposal.status === "PENDING_APPROVAL" || selectedProposal.status === "NEEDS_REVISION") && (
             <div className="flex gap-2 pt-2 flex-wrap">
-              <button onClick={() => void updateStatus(selectedProposal.id, "APPROVED")} disabled={!!updating}
-                className="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600 disabled:opacity-50">
-                ✓ Aprovar
-              </button>
               <button onClick={() => void updateStatus(selectedProposal.id, "APPLIED_TO_SANDBOX")} disabled={!!updating}
                 className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50">
-                Aprovar para sandbox
+                ✓ Aprovar para sandbox
+              </button>
+              <button onClick={() => void updateStatus(selectedProposal.id, "APPROVED")} disabled={!!updating}
+                className="rounded-lg bg-green-700/60 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+                Aprovar (sem sandbox)
               </button>
               <button onClick={() => void updateStatus(selectedProposal.id, "REJECTED")} disabled={!!updating}
                 className="rounded-lg bg-red-900/60 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-900 disabled:opacity-50">
@@ -410,6 +461,10 @@ function ProposalsTab() {
               <button onClick={() => setNoteFor(selectedProposal.id)}
                 className="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-700">
                 Pedir ajuste
+              </button>
+              <button onClick={() => void updateStatus(selectedProposal.id, "RESOLVED_MANUALLY")} disabled={!!updating}
+                className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-800">
+                Resolvido manualmente
               </button>
             </div>
           )}
@@ -462,7 +517,7 @@ function ProposalsTab() {
       )}
 
       <div className="flex gap-2 flex-wrap">
-        {["PENDING_APPROVAL", "APPROVED", "REJECTED", "NEEDS_REVISION", "APPLIED_TO_SANDBOX"].map((s) => (
+        {["PENDING_APPROVAL", "APPROVED", "REJECTED", "NEEDS_REVISION", "APPLIED_TO_SANDBOX", "RESOLVED_MANUALLY"].map((s) => (
           <button key={s} onClick={() => setFilter(s)}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${filter === s ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
           >{s.replace(/_/g, " ")}</button>
@@ -581,15 +636,131 @@ interface ArenaResult {
   sideEffectsPerformed: string[];
 }
 
+function RealCasesSection({ onReplayTranscript }: {
+  onReplayTranscript: (items: Array<{ role: string; content: string; ts: string }>, title: string) => void;
+}) {
+  const [cases, setCases]     = useState<RealCaseItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch("/api/admin/training/arena/real-cases");
+      const data = await res.json() as { ok?: boolean; items?: RealCaseItem[] };
+      setCases(data.items ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const diagnose = async (id: string) => {
+    setActionMsg(null);
+    const res  = await fetch(`/api/admin/training/scenarios/${id}/evaluate`, { method: "POST" });
+    const data = await res.json() as { ok?: boolean; error?: string };
+    setActionMsg(data.ok ? "✓ Diagnóstico gerado!" : `Erro: ${data.error ?? "falha"}`);
+  };
+
+  const propose = async (id: string) => {
+    setActionMsg(null);
+    const res  = await fetch(`/api/admin/training/scenarios/${id}/proposal`, { method: "POST" });
+    const data = await res.json() as { ok?: boolean; error?: string };
+    setActionMsg(data.ok ? "✓ Proposta criada! Veja em Sugestões." : `Erro: ${data.error ?? "falha"}`);
+  };
+
+  const replayInArena = async (id: string, title: string) => {
+    const res  = await fetch(`/api/admin/training/scenarios/${id}`);
+    const data = await res.json() as { transcriptJson?: Array<{ role: string; content: string; ts?: string }> };
+    const turns = (data.transcriptJson ?? []).map((t) => ({
+      role:    t.role === "customer" ? "customer" : "bot",
+      content: t.content,
+      ts:      t.ts ?? new Date().toISOString(),
+    }));
+    onReplayTranscript(turns, title);
+  };
+
+  return (
+    <div className="mt-8 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+          Casos reais capturados
+        </p>
+        <button onClick={() => void load()} className="text-[11px] text-gray-600 hover:text-gray-400">↺ Atualizar</button>
+      </div>
+
+      {actionMsg && (
+        <p className={`text-xs px-2 py-1 rounded ${actionMsg.startsWith("Erro") ? "text-red-400 bg-red-900/20" : "text-green-400 bg-green-900/20"}`}>
+          {actionMsg}
+        </p>
+      )}
+
+      {loading && <p className="text-xs text-gray-600">Carregando casos reais…</p>}
+
+      {!loading && cases.length === 0 && (
+        <p className="text-xs text-gray-600 py-3 text-center">
+          Nenhum caso real capturado ainda. Falhas ao vivo aparecerão aqui automaticamente.
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {cases.map((c) => (
+          <div key={c.id} className="rounded-xl border border-gray-700 bg-gray-800/40 p-3 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-200 truncate">{c.title}</p>
+                {c.failureSummary && (
+                  <p className="text-[11px] text-gray-500 mt-0.5 truncate">{c.failureSummary.slice(0, 80)}</p>
+                )}
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                {statusBadge(c.status)}
+                {riskBadge(c.riskLevel)}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-gray-500">
+              <span className="rounded bg-red-900/40 px-1.5 py-0.5 text-red-400">{c.failureCategory.replace(/_/g, " ")}</span>
+              <span>{c.transcriptLength} msgs</span>
+              <span>{fmtDate(c.createdAt)}</span>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              <button
+                onClick={() => void replayInArena(c.id, c.title)}
+                className="rounded bg-violet-800/60 px-2 py-1 text-[11px] text-violet-300 hover:bg-violet-800 transition-colors"
+              >
+                ▶ Rodar na Arena
+              </button>
+              <button
+                onClick={() => void diagnose(c.id)}
+                className="rounded bg-gray-700 px-2 py-1 text-[11px] text-gray-300 hover:bg-gray-600 transition-colors"
+              >
+                🔍 Gerar diagnóstico
+              </button>
+              <button
+                onClick={() => void propose(c.id)}
+                className="rounded bg-yellow-900/40 px-2 py-1 text-[11px] text-yellow-400 hover:bg-yellow-900/60 transition-colors"
+              >
+                💡 Criar proposta
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ArenaTab() {
   const [selectedKey, setSelectedKey] = useState<string>("priceBeforeOrder");
   const [running,     setRunning]     = useState(false);
   const [result,      setResult]      = useState<ArenaResult | null>(null);
   const [error,       setError]       = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(0);
+  const [replayTitle, setReplayTitle] = useState<string | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
 
-  const selectedScenario = ARENA_SCENARIO_DEFS.find((s) => s.key === selectedKey)!;
+  const selectedScenario = ARENA_SCENARIO_DEFS.find((s) => s.key === selectedKey)!
 
   const runArena = async () => {
     setRunning(true);
@@ -645,6 +816,15 @@ function ArenaTab() {
         <p className="font-semibold">Arena de treinamento automático</p>
         <p className="text-violet-500">Clientes IA simulam atendimentos reais. O agente responde com o motor real em modo seguro. Você assiste, avalia e aprova melhorias. Não é um simulador manual — você não precisa digitar nada.</p>
       </div>
+
+      {/* replay label */}
+      {replayTitle && (
+        <div className="rounded-lg bg-violet-900/20 border border-violet-700/30 px-3 py-2 text-xs text-violet-400 flex items-center gap-2">
+          <span>Reproduzindo caso real:</span>
+          <span className="font-semibold">{replayTitle}</span>
+          <button onClick={() => { setReplayTitle(null); setResult(null); setVisibleCount(0); }} className="ml-auto text-violet-500 hover:text-violet-300">✕</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left — scenario picker + controls */}
@@ -795,6 +975,25 @@ function ArenaTab() {
           </div>
         </div>
       </div>
+      <RealCasesSection
+        onReplayTranscript={(turns, title) => {
+          setReplayTitle(title);
+          setResult({
+            scenarioId:           null,
+            runId:                "replay",
+            transcript:           turns as ArenaMessage[],
+            status:               "PENDING",
+            score:                null,
+            persona:              "caso real",
+            scenarioTitle:        title,
+            sideEffectsPerformed: [],
+          });
+          setVisibleCount(0);
+          let i = 0;
+          const tick = () => { i++; setVisibleCount(i); if (i < turns.length) setTimeout(tick, 650); };
+          setTimeout(tick, 300);
+        }}
+      />
     </div>
   );
 }
@@ -1155,44 +1354,89 @@ function ConfigTab() {
 
   return (
     <div className="p-6 space-y-6 max-w-lg">
+      <div className="rounded-xl border border-red-700/40 bg-red-900/10 px-4 py-3 text-xs text-red-400 font-semibold">
+        🔒 Aplicar em produção automaticamente — sempre DESATIVADO em v1. Nunca automático.
+      </div>
       <div className="rounded-xl border border-yellow-700/40 bg-yellow-900/10 px-4 py-3 text-xs text-yellow-400">
-        autoApplyProduction está sempre desativado em v1. Nenhuma alteração de produção é automática.
+        Mudanças em produção requerem aprovação manual. Sandbox não afeta clientes reais.
       </div>
 
-      {([
-        ["enableContinuousTraining",  "Treinamento contínuo ativo"],
-        ["useRealConversationMining", "Usar conversas reais"],
-        ["useAiGeneratedScenarios",   "Usar cenários gerados por IA"],
-        ["autoCreateProposals",       "Criar propostas automaticamente"],
-        ["autoApplySandbox",          "Auto-aplicar no sandbox"],
-      ] as [keyof TrainingConfig, string][]).map(([key, label]) => (
-        <label key={key} className="flex items-center justify-between cursor-pointer">
-          <span className="text-sm text-gray-300">{label}</span>
-          <div
-            onClick={() => toggle(key)}
-            className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${config[key] ? "bg-violet-600" : "bg-gray-700"}`}
-          >
-            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform mt-0.5 ${config[key] ? "translate-x-4" : "translate-x-0.5"}`} />
-          </div>
-        </label>
-      ))}
+      <div className="space-y-4">
+        <p className="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Captura de falhas reais</p>
+        {([
+          ["useRealConversationMining", "Capturar falhas reais automaticamente"],
+          ["autoDiagnoseOnFailure",     "Gerar diagnóstico automático para WARN/FAIL"],
+          ["autoCreateProposals",       "Criar proposta automática para falhas recorrentes"],
+          ["autoRunArenaOnCapture",     "Rodar Arena automática com casos reais"],
+        ] as [keyof TrainingConfig, string][]).map(([key, label]) => (
+          <label key={key} className="flex items-center justify-between cursor-pointer">
+            <span className="text-sm text-gray-300">{label}</span>
+            <div
+              onClick={() => toggle(key)}
+              className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${config[key] ? "bg-violet-600" : "bg-gray-700"}`}
+            >
+              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform mt-0.5 ${config[key] ? "translate-x-4" : "translate-x-0.5"}`} />
+            </div>
+          </label>
+        ))}
+      </div>
 
-      <div>
-        <label className="text-xs text-gray-500 block mb-1">Máx. cenários/hora</label>
-        <input
-          type="number" min={1} max={100} value={config.maxScenariosPerHour}
-          onChange={(e) => setConfig((c) => c ? { ...c, maxScenariosPerHour: parseInt(e.target.value, 10) || 20 } : c)}
-          className="w-32 rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white"
-        />
+      <div className="space-y-4 pt-2 border-t border-gray-800">
+        <p className="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Sandbox e treinamento</p>
+        {([
+          ["enableContinuousTraining", "Treinamento contínuo ativo"],
+          ["useAiGeneratedScenarios",  "Usar cenários gerados por IA"],
+          ["autoApplySandbox",         "Auto-aplicar no sandbox (⚠ desativado por padrão)"],
+          ["nightlyBatchEnabled",      "Batch noturno automático"],
+        ] as [keyof TrainingConfig, string][]).map(([key, label]) => (
+          <label key={key} className="flex items-center justify-between cursor-pointer">
+            <span className="text-sm text-gray-300">{label}</span>
+            <div
+              onClick={() => toggle(key)}
+              className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${config[key] ? "bg-violet-600" : "bg-gray-700"}`}
+            >
+              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform mt-0.5 ${config[key] ? "translate-x-4" : "translate-x-0.5"}`} />
+            </div>
+          </label>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Máx. cenários/hora</label>
+          <input
+            type="number" min={1} max={100} value={config.maxScenariosPerHour}
+            onChange={(e) => setConfig((c) => c ? { ...c, maxScenariosPerHour: parseInt(e.target.value, 10) || 20 } : c)}
+            className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Score mínimo aceitável</label>
+          <input
+            type="number" min={0} max={1} step={0.05} value={config.minimumScoreThreshold}
+            onChange={(e) => setConfig((c) => c ? { ...c, minimumScoreThreshold: parseFloat(e.target.value) || 0.6 } : c)}
+            className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white"
+          />
+        </div>
       </div>
 
       <div>
-        <label className="text-xs text-gray-500 block mb-1">Score mínimo aceitável</label>
-        <input
-          type="number" min={0} max={1} step={0.05} value={config.minimumScoreThreshold}
-          onChange={(e) => setConfig((c) => c ? { ...c, minimumScoreThreshold: parseFloat(e.target.value) || 0.6 } : c)}
-          className="w-32 rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white"
-        />
+        <label className="text-xs text-gray-500 block mb-1">Batch pequeno a cada X horas (vazio = não agendado)</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number" min={1} max={168}
+            value={config.smallBatchEveryHours ?? ""}
+            placeholder="—"
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              setConfig((c) => c ? { ...c, smallBatchEveryHours: isNaN(v) ? null : v } : c);
+            }}
+            className="w-32 rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white"
+          />
+          {!config.smallBatchEveryHours && (
+            <span className="text-xs text-gray-600">Não agendado · Endpoint: POST /api/admin/training/runs</span>
+          )}
+        </div>
       </div>
 
       <button onClick={save} disabled={saving}
@@ -1595,7 +1839,7 @@ export default function AgentTrainingPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {tab === "dashboard" && (
-          <DashboardTab data={dashboard} onRunBatch={triggerBatch} running={runningBatch} />
+          <DashboardTab data={dashboard} onRunBatch={triggerBatch} running={runningBatch} onSwitchToArena={() => setTab("arena")} />
         )}
         {tab === "arena" && <ArenaTab />}
         {tab === "runs" && (

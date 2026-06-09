@@ -11,11 +11,12 @@ import { checkAdminRequest } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import type { ProposalStatus } from "@/services/agent-training/types";
 
-const ALLOWED_STATUS_TRANSITIONS: ProposalStatus[] = [
+const ALLOWED_STATUS_TRANSITIONS: Array<ProposalStatus | "RESOLVED_MANUALLY"> = [
   "APPROVED",
   "REJECTED",
   "NEEDS_REVISION",
   "APPLIED_TO_SANDBOX",
+  "RESOLVED_MANUALLY",
   // APPLIED_TO_PRODUCTION intentionally excluded from v1
 ];
 
@@ -49,15 +50,39 @@ export async function PATCH(
     );
   }
 
+  const now = new Date();
+  const isApproval = newStatus === "APPROVED" || newStatus === "APPLIED_TO_SANDBOX";
+  // Cast to string since RESOLVED_MANUALLY may not be in the ProposalStatus enum but is a valid Prisma string
+  const safeStatus = newStatus as string;
+
   const proposal = await prisma.agentImprovementProposal.update({
     where: { id: params.id },
     data:  {
-      status:        newStatus,
+      status:        safeStatus,
       reviewerNotes: body.reviewerNotes ?? undefined,
-      approvedBy:    newStatus === "APPROVED" || newStatus === "APPLIED_TO_SANDBOX" ? "admin" : undefined,
-      approvedAt:    newStatus === "APPROVED" || newStatus === "APPLIED_TO_SANDBOX" ? new Date() : undefined,
+      approvedBy:    isApproval ? "admin" : undefined,
+      approvedAt:    isApproval ? now : undefined,
     },
+    include: { brainVersions: { orderBy: { createdAt: "desc" }, take: 1 } },
   });
 
-  return NextResponse.json(proposal);
+  // When approving for sandbox: create a candidate brain version linked to this proposal.
+  // Does NOT apply to production — status is SANDBOX until explicit production promotion.
+  let sandboxVersion = null;
+  if (newStatus === "APPLIED_TO_SANDBOX" && proposal.brainVersions.length === 0) {
+    const shortId = params.id.slice(0, 8);
+    sandboxVersion = await prisma.agentBrainVersion.create({
+      data: {
+        agentType:        proposal.agentType,
+        restaurantId:     proposal.restaurantId ?? undefined,
+        versionLabel:     `sandbox-${shortId}-${now.toISOString().slice(0, 10)}`,
+        status:           "SANDBOX",
+        promptText:       proposal.proposedPatchText ?? undefined,
+        configJson:       proposal.proposedConfigJson ?? undefined,
+        sourceProposalId: proposal.id,
+      },
+    });
+  }
+
+  return NextResponse.json({ ...proposal, sandboxVersion });
 }
