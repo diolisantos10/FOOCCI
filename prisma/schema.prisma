@@ -2646,6 +2646,29 @@ enum AgentLibraryTechniqueStatus {
   IN_REVIEW
   ACTIVE
   ARCHIVED
+  REJECTED
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  WAITER RUNTIME MERGE — versioning + Library→runtime bridge (additive only).
+//  Lets curated Library techniques optionally feed the Waiter prompt UNDER
+//  governance: a technique only reaches the runtime when it is ACTIVE +
+//  runtimeEnabled, and only via an ACTIVE WaiterRuntimeVersion in
+//  LIBRARY_ASSISTED mode. Default is always the safe CURRENT runtime.
+//  Nothing here touches checkout / payment / Pix / order creation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum WaiterRuntimeVersionStatus {
+  DRAFT
+  TESTING
+  ACTIVE
+  ROLLED_BACK
+  ARCHIVED
+}
+
+enum WaiterRuntimeMode {
+  CURRENT // runtime atual, sem Library no prompt (seguro)
+  LIBRARY_ASSISTED // runtime atual + técnicas ACTIVE da Library, versionadas
 }
 
 model AgentLibrarySource {
@@ -2711,15 +2734,92 @@ model AgentLibraryTechnique {
   badExample    String?
   confidence    Float?
   status        AgentLibraryTechniqueStatus @default(EXTRACTED)
-  createdAt     DateTime                    @default(now())
-  updatedAt     DateTime                    @updatedAt
+  // ── Curation / runtime governance (additive) ───────────────────────────────
+  // A technique only reaches the Waiter prompt when status=ACTIVE AND
+  // runtimeEnabled=true AND it is selected by an ACTIVE LIBRARY_ASSISTED version.
+  runtimeEnabled  Boolean   @default(false)
+  runtimePriority Int       @default(0)
+  approvedAt      DateTime?
+  approvedBy      String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  lastUsedAt      DateTime?
+  usageCount      Int       @default(0)
+  qualityScore    Float?
+  tags            String? // JSON-encoded string[] (kept as String for SQLite/Postgres parity)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  source AgentLibrarySource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  source              AgentLibrarySource             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  versionAssignments  WaiterRuntimeVersionTechnique[]
 
   @@index([agentSlug])
   @@index([sourceId])
   @@index([status])
+  @@index([agentSlug, status, runtimeEnabled])
   @@map("agent_library_techniques")
+}
+
+// A versioned snapshot of the Waiter's runtime behaviour. Only ONE version may be
+// ACTIVE per scope (agentSlug + restaurantId). When none is ACTIVE, the runtime
+// falls back to CURRENT (no Library in the prompt). DRAFT/TESTING never affect a
+// real customer. Activation is gated by the Quality gate; rollback is instant.
+model WaiterRuntimeVersion {
+  id           String                     @id @default(cuid())
+  agentSlug    String                     @default("waiter")
+  restaurantId String? // null = global default scope
+  name         String
+  description  String?
+  status       WaiterRuntimeVersionStatus @default(DRAFT)
+  mode         WaiterRuntimeMode          @default(CURRENT)
+  isActive     Boolean                    @default(false)
+
+  // Library governance knobs
+  libraryEnabled          Boolean @default(false)
+  maxTechniques           Int     @default(6)
+  techniqueSelectionPolicy String  @default("PRIORITY_DESC") // how techniques are ordered/picked
+  promptPolicy            String? // JSON-encoded prompt assembly knobs
+  safetyPolicy            String? // JSON-encoded safety constraints
+  metadata                String? // JSON-encoded free-form metadata
+
+  // Lifecycle / audit
+  activatedAt        DateTime?
+  activatedBy        String?
+  rolledBackAt       DateTime?
+  rollbackToVersionId String?
+
+  // Quality gate snapshot
+  qualityStatus   String? // PASS | FAIL | UNKNOWN at last gate check
+  lastQualityRunAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  techniques WaiterRuntimeVersionTechnique[]
+
+  @@index([agentSlug, restaurantId, status])
+  @@index([agentSlug, isActive])
+  @@map("waiter_runtime_versions")
+}
+
+// Freezes which techniques belong to a version (so an ACTIVE version is not
+// silently changed by later edits to the Library). priority overrides the
+// technique's own runtimePriority within this version.
+model WaiterRuntimeVersionTechnique {
+  id          String   @id @default(cuid())
+  versionId   String
+  techniqueId String
+  priority    Int      @default(0)
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  version   WaiterRuntimeVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  technique AgentLibraryTechnique @relation(fields: [techniqueId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, techniqueId])
+  @@index([versionId])
+  @@index([techniqueId])
+  @@map("waiter_runtime_version_techniques")
 }
 
 // ═══════════════════════════════════════════

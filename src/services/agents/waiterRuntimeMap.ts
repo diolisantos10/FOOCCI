@@ -19,6 +19,7 @@ export type WaiterTab =
   | "Brain & Skills"
   | "Library"
   | "Runtime & Testes"
+  | "Runtime Merge"
   | "Governança";
 
 export type IntelligenceType = "DETERMINISTIC" | "LLM" | "HYBRID" | "UI" | "TEST" | "CONFIG";

@@ -33,6 +33,7 @@ import { getDrinkAttemptCount, getAlreadySuggestedItems, isDessertCategory, isMa
 import * as WaiterBrain from "./WaiterBrain";
 import * as WaiterBrainV2 from "./WaiterBrainV2";
 import { buildWaiterProfileDirective } from "./waiter/WaiterAgentProfile";
+import { getWaiterRuntimeKnowledge } from "@/services/waiterRuntime/WaiterLibraryRuntimeBridge";
 import type { V2Event, V2CatalogItem, WaiterMode, WaiterOption, MenuIntentResult } from "./WaiterBrainV2";
 import type { UpsellSuggestion } from "./UpsellEngine";
 import type OpenAI from "openai";
@@ -334,6 +335,16 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
         sysAddendum += `\n→ Se quiser sugerir alternativas reais do cardápio, mencione-as APENAS usando IDs listados no CARDÁPIO COMPLETO acima.`;
       }
     }
+  }
+
+  // ── Library → runtime bridge (governed, optional, fully fallback-safe) ───────
+  // Adds curated, ACTIVE+runtimeEnabled techniques ONLY when an ACTIVE
+  // LIBRARY_ASSISTED version exists for this restaurant/global scope. Any other
+  // case (no version, library off, no techniques, DB error) returns enabled:false
+  // and the prompt is byte-for-byte identical to today. Never throws.
+  const libraryKnowledge = await getWaiterRuntimeKnowledge({ restaurantId, agentSlug: "waiter" });
+  if (libraryKnowledge.enabled && libraryKnowledge.promptBlock) {
+    sysAddendum += libraryKnowledge.promptBlock;
   }
 
   if (sysAddendum) {
@@ -725,6 +736,12 @@ async function runTurn(conversationId: string, startMs: number): Promise<void> {
         .join("\n") +
       "\n  → Estes itens NÃO devem aparecer novamente como sugestão, independente do estágio." +
       "\n  → Se não houver item novo disponível em uma categoria → PULE a categoria inteira.";
+  }
+
+  // ── Library → runtime bridge (same governed, fallback-safe path as web) ──────
+  const libraryKnowledge = await getWaiterRuntimeKnowledge({ restaurantId, agentSlug: "waiter" });
+  if (libraryKnowledge.enabled && libraryKnowledge.promptBlock) {
+    sysAddendum += libraryKnowledge.promptBlock;
   }
 
   if (sysAddendum) {
