@@ -5,6 +5,7 @@
 
 import { runSimulation, type RunSimulationOptions } from "../AgentSimulationService";
 import { persistSimulationRun } from "../SimulationStore";
+import { getApprovedExampleSeeds } from "../examples/SimulationExampleStore";
 import { WaiterSimulationAdapter } from "./WaiterSimulationAdapter";
 import type { SimulationRunResult } from "../types";
 
@@ -13,11 +14,23 @@ export async function runWaiterSimulation(opts: RunSimulationOptions = {}): Prom
   return runSimulation(WaiterSimulationAdapter, opts);
 }
 
-/** Runs and persists the Waiter simulation; returns the new runId + result. */
+/**
+ * Runs and persists the Waiter simulation; returns the new runId + result.
+ * Loads APPROVED real-conversation example seeds (if any) to bias scenario
+ * selection toward real patterns — unless the caller already passed examples.
+ */
 export async function runAndPersistWaiterSimulation(
   opts: RunSimulationOptions = {},
 ): Promise<{ runId: string; result: SimulationRunResult }> {
-  const result = await runSimulation(WaiterSimulationAdapter, opts);
+  let examples = opts.examples;
+  if (!examples) {
+    try {
+      examples = await getApprovedExampleSeeds("waiter");
+    } catch {
+      examples = []; // never block a run if the example library is unavailable
+    }
+  }
+  const result = await runSimulation(WaiterSimulationAdapter, { ...opts, examples });
   const runId = await persistSimulationRun(result);
   return { runId, result };
 }

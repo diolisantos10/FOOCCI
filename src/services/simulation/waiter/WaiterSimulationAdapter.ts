@@ -48,13 +48,26 @@ export const WaiterSimulationAdapter: AgentSimulationAdapter = {
       : WAITER_SCENARIO_TEMPLATES;
     const templates = pool.length > 0 ? pool : WAITER_SCENARIO_TEMPLATES;
 
+    // Approved real-conversation examples (if any) only carry a classification —
+    // never raw text — so they BIAS which scenario types appear without ever
+    // copying literal customer wording. Phrasing always comes from templates.
+    const exampleSeeds = (input.examples ?? []).filter((e) =>
+      WAITER_SCENARIO_TEMPLATES.some((t) => t.scenarioType === e.scenarioType),
+    );
+
     const out: SimulationScenario[] = [];
     for (let i = 0; i < input.count; i++) {
-      // Cycle through templates so every type is represented, but vary phrasing.
-      const tpl = templates[i % templates.length] as WaiterScenarioTemplate;
+      let tpl = templates[i % templates.length] as WaiterScenarioTemplate;
+      let inspiredByExampleId: string | undefined;
+      // Half the scenarios (when examples exist) follow a real-pattern type.
+      if (exampleSeeds.length > 0 && rng.bool(0.5)) {
+        const ex = rng.pick(exampleSeeds);
+        tpl = templateFor(ex.scenarioType) ?? tpl;
+        inspiredByExampleId = ex.exampleId;
+      }
       const persona = rng.pick(tpl.personas);
-      const message = rng.pick(tpl.messages);
-      const constraints = { ...rng.pick(tpl.constraintsPool) };
+      const message = rng.pick(tpl.messages); // template variation — never example literal
+      const constraints = { ...rng.pick(tpl.constraintsPool), ...(inspiredByExampleId ? { inspiredByExampleId } : {}) };
       out.push({
         scenarioKey: `${tpl.scenarioType}_${i + 1}`,
         scenarioType: tpl.scenarioType,

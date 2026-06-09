@@ -2960,6 +2960,57 @@ model AgentSimulationOpportunity {
   @@map("agent_simulation_opportunities")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  SIMULATION EXAMPLE LIBRARY — sanitized real-conversation patterns (additive).
+//  Real conversations are read READ-ONLY, sanitized (PII/secrets stripped) and
+//  classified into reusable examples that inspire (never copy) generated
+//  scenarios. An example only feeds the generator after a human approves it.
+//  Nothing here mutates a real conversation, order, payment or runtime.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AgentSimulationExampleSourceType {
+  REAL_CONVERSATION
+  MANUAL
+  GENERATED
+  IMPORTED
+}
+
+enum AgentSimulationExampleStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  BACKLOGGED
+}
+
+model AgentSimulationExample {
+  id            String                            @id @default(cuid())
+  agentSlug     String
+  restaurantId  String?
+  sourceType    AgentSimulationExampleSourceType  @default(REAL_CONVERSATION)
+  sourceId      String? // e.g. the originating Conversation id (for dedupe)
+  channel       String                            @default("UNKNOWN") // WHATSAPP | WEB_AGENT | QR_AGENT | MANUAL | UNKNOWN
+  intent        String
+  scenarioType  String
+  customerProfile String?
+  // Sanitized ONLY — raw transcript is NEVER stored.
+  sanitizedTranscript String? // JSON-encoded TranscriptTurn[]
+  summary       String
+  labels        String? // JSON-encoded string[]
+  riskFlags     String? // JSON-encoded string[] (what was masked)
+  qualityNotes  String?
+  status        AgentSimulationExampleStatus      @default(PENDING_REVIEW)
+  isApprovedForSimulation Boolean                 @default(false)
+  reviewedAt    DateTime?
+  reviewedBy    String?
+  createdAt     DateTime                          @default(now())
+  updatedAt     DateTime                          @updatedAt
+
+  @@unique([agentSlug, sourceType, sourceId])
+  @@index([agentSlug, status])
+  @@index([agentSlug, isApprovedForSimulation])
+  @@map("agent_simulation_examples")
+}
+
 
 //  Durable state for the WhatsApp AI text-ordering engine (controlled rollout).
 //  Additive only — no existing table is altered. Behind feature flag/allowlist;

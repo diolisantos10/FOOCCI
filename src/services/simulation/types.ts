@@ -113,10 +113,23 @@ export interface SimulationRunResult {
   runtimeTouched: false;
 }
 
+/**
+ * An APPROVED real-conversation example, shaped for the generator. It carries only
+ * the classification (intent + scenarioType) — never raw text — so it can INSPIRE
+ * scenario selection without ever copying literal customer wording.
+ */
+export interface ExampleSeed {
+  exampleId: string;
+  intent: string;
+  scenarioType: string;
+}
+
 export interface GenerateScenariosInput {
   seed: string;
   count: number;
   scenarioTypes?: string[];
+  /** Approved real-conversation examples to bias scenario selection (optional). */
+  examples?: ExampleSeed[];
 }
 
 /**

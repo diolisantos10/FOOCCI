@@ -89,7 +89,7 @@ export async function listRuns(agentSlug: string, limit = 20) {
     orderBy: { createdAt: "desc" },
     take: Math.min(Math.max(limit, 1), 100),
     select: {
-      id: true, agentSlug: true, mode: true, driver: true, status: true, seed: true,
+      id: true, agentSlug: true, mode: true, driver: true, status: true, seed: true, restaurantId: true,
       startedAt: true, finishedAt: true, durationMs: true, scenariosTotal: true,
       scenariosPassed: true, scenariosWarning: true, scenariosFailed: true,
       p0Count: true, p1Count: true, p2Count: true, opportunityCount: true, createdAt: true,

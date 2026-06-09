@@ -13,10 +13,15 @@ import { useCallback, useEffect, useState } from "react";
 const BASE = "/api/admin/agents/waiter/simulation";
 
 interface RunRow {
-  id: string; status: string; seed: string | null; driver: string;
+  id: string; status: string; seed: string | null; driver: string; mode: string;
   scenariosTotal: number; scenariosPassed: number; scenariosWarning: number; scenariosFailed: number;
   p0Count: number; p1Count: number; p2Count: number; opportunityCount: number; createdAt: string;
 }
+interface ExampleRow {
+  id: string; intent: string; scenarioType: string; channel: string; sourceType: string;
+  summary: string; status: string; riskFlags: string | null; createdAt: string;
+}
+interface ExampleStats { total: number; approved: number; pending: number; rejected: number }
 interface ScenarioRow {
   id: string; scenarioType: string; persona: string; initialMessage: string;
   status: string; severity: string; score: number; summary: string; transcript: string | null;
@@ -45,11 +50,38 @@ export function WaiterSimulationLab() {
   const [msg, setMsg] = useState("");
   const [scenarioCount, setScenarioCount] = useState(12);
   const [seed, setSeed] = useState("");
+  const [examples, setExamples] = useState<ExampleRow[]>([]);
+  const [exampleStats, setExampleStats] = useState<ExampleStats | null>(null);
+  const [exMsg, setExMsg] = useState("");
 
   const loadRuns = useCallback(async () => {
     const res = await fetch(BASE).then((r) => r.json()).catch(() => ({ ok: false }));
     if (res.ok) setRuns(res.runs ?? []);
   }, []);
+
+  const loadExamples = useCallback(async () => {
+    const res = await fetch(`${BASE}/examples?limit=30`).then((r) => r.json()).catch(() => ({ ok: false }));
+    if (res.ok) { setExamples(res.examples ?? []); setExampleStats(res.stats ?? null); }
+  }, []);
+
+  const extractExamples = useCallback(async () => {
+    setBusy(true); setExMsg("");
+    try {
+      const res = await fetch(`${BASE}/examples/extract`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 50, days: 30 }),
+      });
+      const json = await res.json();
+      setExMsg(json.ok ? `Extraídos ${json.created} exemplo(s) (pendentes), ${json.skipped} ignorado(s).` : (json.error ?? "Falha."));
+      await loadExamples();
+    } finally { setBusy(false); }
+  }, [loadExamples]);
+
+  const reviewExample = useCallback(async (id: string, status: string) => {
+    await fetch(`${BASE}/examples/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
+    });
+    await loadExamples();
+  }, [loadExamples]);
 
   const loadDetail = useCallback(async (runId: string) => {
     setBusy(true);
@@ -59,7 +91,10 @@ export function WaiterSimulationLab() {
     } finally { setBusy(false); }
   }, []);
 
-  useEffect(() => { void loadRuns(); }, [loadRuns]);
+  useEffect(() => { void loadRuns(); void loadExamples(); }, [loadRuns, loadExamples]);
+
+  const lastManual = runs.find((r) => r.mode === "MANUAL");
+  const lastCron = runs.find((r) => r.mode === "CRON");
 
   const runNow = useCallback(async () => {
     setBusy(true); setMsg("");
@@ -167,6 +202,60 @@ export function WaiterSimulationLab() {
         </section>
       )}
 
+      {/* Manual vs automatic */}
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <h3 className="text-sm font-bold text-gray-900">Execuções</h3>
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="rounded-lg border border-gray-100 p-2">
+            <p className="text-[11px] font-semibold text-gray-700">Última manual <Pill tone="blue">MANUAL</Pill></p>
+            <p className="mt-0.5 text-[11px] text-gray-500">{lastManual ? `${new Date(lastManual.createdAt).toLocaleString("pt-BR")} — ${lastManual.scenariosPassed}/${lastManual.scenariosTotal} PASS · P0 ${lastManual.p0Count}` : "Nenhuma ainda."}</p>
+          </div>
+          <div className="rounded-lg border border-gray-100 p-2">
+            <p className="text-[11px] font-semibold text-gray-700">Última automática <Pill tone="violet">CRON</Pill></p>
+            <p className="mt-0.5 text-[11px] text-gray-500">{lastCron ? `${new Date(lastCron.createdAt).toLocaleString("pt-BR")} — ${lastCron.scenariosPassed}/${lastCron.scenariosTotal} PASS · P0 ${lastCron.p0Count}` : "Nenhuma ainda."}</p>
+            <p className="mt-0.5 text-[10px] text-gray-400">Agendado: diário ~03:45 BRT (cron 45 6 * * *).</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Real conversation examples */}
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-gray-900">Exemplos reais</h3>
+          <button type="button" disabled={busy} onClick={() => void extractExamples()}
+            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Extrair de conversas</button>
+        </div>
+        <p className="mt-1 text-[11px] text-amber-700">🔒 Dados sensíveis (telefone, e-mail, endereço, CPF/CNPJ, nome) são sanitizados antes de qualquer uso. Conversa bruta nunca é exibida nem armazenada.</p>
+        {exampleStats && (
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            <Stat label="Total" value={String(exampleStats.total)} tone="blue" />
+            <Stat label="Aprovados" value={String(exampleStats.approved)} tone="green" />
+            <Stat label="Pendentes" value={String(exampleStats.pending)} tone="amber" />
+            <Stat label="Rejeitados" value={String(exampleStats.rejected)} tone="gray" />
+          </div>
+        )}
+        {exMsg && <p className="mt-2 text-[11px] text-gray-700">{exMsg}</p>}
+        <div className="mt-2 space-y-1.5">
+          {examples.length === 0 && <p className="text-[11px] text-gray-500">Nenhum exemplo ainda. Extraia de conversas reais (sanitizadas) acima.</p>}
+          {examples.map((e) => (
+            <div key={e.id} className="rounded-lg border border-gray-100 px-2 py-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill tone={e.status === "APPROVED" ? "green" : e.status === "REJECTED" ? "red" : e.status === "BACKLOGGED" ? "violet" : "amber"}>{e.status}</Pill>
+                <Pill tone="gray">{e.scenarioType}</Pill>
+                <Pill tone="blue">{e.channel}</Pill>
+                <span className="text-[11px] text-gray-700">{e.intent}</span>
+              </div>
+              <p className="mt-1 text-[11px] text-gray-600">{e.summary}</p>
+              <div className="mt-1 flex gap-1">
+                <Btn onClick={() => void reviewExample(e.id, "APPROVED")}>Aprovar</Btn>
+                <Btn tone="red" onClick={() => void reviewExample(e.id, "REJECTED")}>Rejeitar</Btn>
+                <Btn onClick={() => void reviewExample(e.id, "BACKLOGGED")}>Backlog</Btn>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* History */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h3 className="text-sm font-bold text-gray-900">Histórico de runs</h3>
@@ -176,6 +265,7 @@ export function WaiterSimulationLab() {
             <button key={r.id} type="button" onClick={() => void loadDetail(r.id)}
               className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-gray-100 px-2 py-1.5 text-left hover:bg-gray-50">
               <span className="font-mono text-[10px] text-gray-400">{new Date(r.createdAt).toLocaleString("pt-BR")}</span>
+              <Pill tone={r.mode === "CRON" ? "violet" : "blue"}>{r.mode}</Pill>
               <Pill tone="blue">{r.scenariosTotal} cenários</Pill>
               <Pill tone="green">{r.scenariosPassed} PASS</Pill>
               <Pill tone={r.p0Count > 0 ? "red" : "gray"}>P0 {r.p0Count}</Pill>

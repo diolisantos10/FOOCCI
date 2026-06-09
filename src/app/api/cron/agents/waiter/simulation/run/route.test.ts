@@ -43,6 +43,11 @@ describe("POST /api/cron/agents/waiter/simulation/run", () => {
     expect(body.runtimeTouched).toBe(false);
     expect(body.p0Count).toBe(0);
   });
+
+  it("(P12-auto.5) records the run with mode=CRON", async () => {
+    await POST(req({ authorization: "Bearer s3cr3t" }));
+    expect(runSvc.runAndPersistWaiterSimulation).toHaveBeenCalledWith(expect.objectContaining({ mode: "CRON" }));
+  });
   it("does not expose a GET handler (POST only)", () => {
     expect((routeModule as Record<string, unknown>).GET).toBeUndefined();
   });

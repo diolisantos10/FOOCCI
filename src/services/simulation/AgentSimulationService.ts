@@ -16,6 +16,7 @@ import { dailySeed } from "./scenarioGenerator";
 import type {
   AgentSimulationAdapter,
   EvaluatedScenario,
+  ExampleSeed,
   SimulationMode,
   SimulationOpportunity,
   SimulationRunResult,
@@ -28,6 +29,8 @@ export interface RunSimulationOptions {
   mode?: SimulationMode;
   restaurantId?: string | null;
   now?: Date;
+  /** Approved real-conversation example seeds to bias scenario generation. */
+  examples?: ExampleSeed[];
 }
 
 const MAX_SCENARIOS = 50;
@@ -45,7 +48,7 @@ export async function runSimulation(
   const mode: SimulationMode = options.mode ?? "MANUAL";
   const startedAt = now;
 
-  const scenarios = adapter.generateScenarios({ seed, count, scenarioTypes: options.scenarioTypes });
+  const scenarios = adapter.generateScenarios({ seed, count, scenarioTypes: options.scenarioTypes, examples: options.examples });
 
   const evaluated: EvaluatedScenario[] = [];
   const opportunities: SimulationOpportunity[] = [];

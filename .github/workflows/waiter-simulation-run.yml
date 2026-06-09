@@ -5,8 +5,9 @@
 # opportunities for human review. Fully dry-run: no order, no Pix, no WhatsApp, no
 # runtime mutation. Uses CRON_SECRET — NOT ADMIN_SECRET.
 #
-# v1: manual only (workflow_dispatch). A conservative daily schedule is documented
-# below but left COMMENTED so we never run cost/load without an explicit decision.
+# Runs manually (workflow_dispatch) AND once a day on a conservative schedule —
+# a "daily automatic lab", not 24/7 spam. The endpoint derives a daily seed so the
+# scenarios vary by date instead of repeating.
 #
 # Required GitHub Secrets (already used by the other crons — no new secret):
 #   FOOCCI_BASE_URL   Production URL with no trailing slash.
@@ -17,9 +18,8 @@ name: Waiter Simulation Lab Run
 
 on:
   workflow_dispatch: {}
-  # v2 (documented, intentionally disabled): conservative daily run.
-  # schedule:
-  #   - cron: "30 6 * * *"   # 06:30 UTC, once a day, small batch only
+  schedule:
+    - cron: "45 6 * * *" # 06:45 UTC ≈ 03:45 BRT — one small batch per day
 
 jobs:
   run-waiter-simulation:
@@ -79,5 +79,7 @@ jobs:
           if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then echo "::error::non-2xx ($HTTP_STATUS)."; exit 1; fi
           if [[ "$STATUS" != "PASS" ]]; then echo "::error::status='$STATUS' (expected PASS). $MESSAGE"; exit 1; fi
           if [[ "$RUNTIME" != "false" ]]; then echo "::error::runtimeTouched='$RUNTIME' (expected false)."; exit 1; fi
+          # A simulation that surfaces a P0 must fail the job so it is noticed.
+          if ! [[ "$P0" =~ ^0$ ]]; then echo "::error::p0Count='$P0' (expected 0) — Waiter simulation found a critical issue."; exit 1; fi
 
           echo "✅ Waiter simulation run OK — $TOTAL cenários, P0=$P0, oportunidades=$OPPS, runtime intocado."

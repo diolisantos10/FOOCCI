@@ -114,9 +114,44 @@ Implement `AgentSimulationAdapter` for the new agent:
 
 ---
 
-## 10. Next steps
+## 10. Automatic daily run
 
-- v2: `PLAYWRIGHT`/`UI_STUB` driver to exercise the **real UI** of `/pedido`.
-- v2: optional **AI Scenario Generator** (same `generateScenarios` contract).
-- v2: conservative daily schedule + trend metrics; cross-link with Quality.
-- Replicate the adapter for WhatsApp / CRM / Analytics.
+`waiter-simulation-run.yml` runs on `workflow_dispatch` **and** a daily schedule
+(`cron: "45 6 * * *"` ≈ 03:45 BRT) — a "daily automatic lab", not 24/7 spam. The
+cron route records `mode=CRON`; the endpoint derives a **daily seed** (varies by
+date) so scenarios differ each day. The job **fails** if HTTP is non-2xx,
+`status≠PASS`, `runtimeTouched=true`, or `p0Count>0`. The Simulador tab shows the
+last MANUAL and last CRON run separately.
+
+## 11. Real conversation examples (inspiration, sanitized)
+
+Real conversations can be turned into reusable **examples** that bias scenario
+generation toward real patterns — without ever copying literal wording or PII:
+
+1. `extractExamples({ restaurantId?, limit, days })` reads `Conversation`/`Message`
+   **read-only**, sanitizes every turn (`simulationSanitizer`: phone, email,
+   address, CPF, CNPJ, name, order number, tokens), classifies intent +
+   scenarioType, and stores an `AgentSimulationExample` as **PENDING_REVIEW**.
+2. A human **approves/rejects/backlogs** each example
+   (`PATCH …/simulation/examples/[id]`). Only **APPROVED** examples feed the
+   generator (`isApprovedForSimulation=true`).
+3. The generator receives approved examples as `ExampleSeed` (only intent +
+   scenarioType — **never raw text**) and biases which scenario types appear;
+   phrasing always comes from templates, so it produces **variations, not copies**.
+
+Raw transcripts are **never** stored — only the sanitized form. The admin UI shows
+stats + sanitized summaries, never raw conversations.
+
+APIs: `POST …/simulation/examples/extract`, `GET …/simulation/examples`,
+`PATCH …/simulation/examples/[id]`. (Extraction is admin-triggered only — no
+automatic extraction cron in this version.)
+
+Data: `AgentSimulationExample` (migration `20260609040000_simulation_example_library`).
+
+## 12. Next steps
+
+- `PLAYWRIGHT`/`UI_STUB` driver to exercise the **real UI** of `/pedido`.
+- Optional **AI Scenario Generator** (same `generateScenarios` contract) +
+  paraphrase-based variations seeded from approved examples.
+- Trend metrics; cross-link with Quality; replicate the adapter for
+  WhatsApp / CRM / Analytics. A guarded extraction cron once volume justifies it.
