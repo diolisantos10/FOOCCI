@@ -696,15 +696,49 @@ function handleEarlyInfo(
 // ── Menu questions ───────────────────────────────────────────────────────────────
 
 const QUESTION_SUBJECT_RE =
-  /^(voc[eê]s?\s+t[eê]m|t[eê]m|tem|qual|quais|quanto custa|quanto custam|quanto|h[aá]|existe|existem|vende[m]?|fazem|faz)\s+/i;
+  /^(voc[eê]s?\s+t[eê]m|t[eê]m|tem|qual|quais|quanto custa|quanto custam|quanto|h[aá]|existe|existem|vende[m]?|fazem|faz|preço do?|pre[çc]o|valor do?|quanto\s+sai|quanto\s+fica)\s+/i;
+
+// Leading Portuguese articles — strip them so "o yakisoba" → "yakisoba" for matching
+const LEADING_ARTICLE_RE = /^(os?|as?|uns?|umas?)\s+/i;
 
 function extractQuestionSubject(text: string): string {
   return text.trim()
     .replace(/\?+\s*$/, "")
     .replace(QUESTION_SUBJECT_RE, "")
     .replace(/\bvoc[eê]s?\b/gi, "")
+    .replace(LEADING_ARTICLE_RE, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function buildPriceListReply(subject: string, candidates: WaMenuItem[]): string {
+  if (candidates.length === 0) {
+    return `Não encontrei "${subject}" no cardápio. Quer ver o cardápio completo ou falar com um atendente?`;
+  }
+
+  if (candidates.length === 1 && candidates[0]) {
+    const item = candidates[0];
+    if (item.hasVariants && item.variants.length > 0) {
+      const varLines = item.variants
+        .filter(v => v.isAvailable)
+        .slice(0, 5)
+        .map((v, i) => {
+          const p = channelPrice({ price: v.price, priceDelivery: v.priceDelivery }, "DELIVERY");
+          return `${i + 1} — ${titleCase(v.name)} — R$ ${p.toFixed(2)}`;
+        })
+        .join("\n");
+      return `Temos estas opções de ${titleCase(item.name)}:\n\n${varLines}\n\nQuer pedir alguma?`;
+    }
+    const p = channelPrice({ price: item.price, priceDelivery: item.priceDelivery }, "DELIVERY");
+    return `${titleCase(item.name)} custa R$ ${p.toFixed(2)}. Quer pedir?`;
+  }
+
+  // Multiple candidates → numbered list with prices
+  const lines = candidates.slice(0, 4).map((item, i) => {
+    const p = channelPrice({ price: item.price, priceDelivery: item.priceDelivery }, "DELIVERY");
+    return `${i + 1} — ${titleCase(item.name)} — R$ ${p.toFixed(2)}`;
+  }).join("\n");
+  return `Temos estas opções:\n\n${lines}\n\nQuer pedir alguma?`;
 }
 
 function handleMenuQuestion(session: WaPersistedSession, text: string, menu: WaMenuItem[]): AdvanceResult {
@@ -716,13 +750,22 @@ function handleMenuQuestion(session: WaPersistedSession, text: string, menu: WaM
     return done(session, "QUESTION", "Claro! O que você gostaria de saber sobre o cardápio?", [], false);
   }
 
+  const isPriceQuery = /\b(quanto custa|quanto custam|pre[çc]o|valor|quanto\s+sai|quanto\s+fica|qual\s+o\s+pre[çc]o)\b/i.test(text);
+
   const best = bestMenuMatch(normalizePluralAndSpelling(subject), menu);
+
   if (best.candidates.length === 0) {
     return done(session, "QUESTION",
-      `Não encontrei ${subject} cadastrado. Quer ver outras opções ou falar com um atendente?`, [], false);
+      `Não encontrei "${subject}" no cardápio. Quer ver o cardápio completo ou falar com um atendente?`, [], false);
   }
+
+  if (isPriceQuery) {
+    const candidates = best.clearWinner && best.top ? [best.top] : best.candidates.slice(0, 4);
+    return done(session, "QUESTION", buildPriceListReply(subject, candidates), [], false);
+  }
+
   if (best.clearWinner && best.top) {
-    return done(session, "QUESTION", `Sim, temos ${best.top.name}! Quer pedir?`, [], false);
+    return done(session, "QUESTION", `Sim, temos ${titleCase(best.top.name)}! Quer pedir?`, [], false);
   }
   const names = best.candidates.slice(0, 2).map(c => c.name).join(" e ");
   return done(session, "QUESTION", `Temos ${names}. Quer pedir?`, [], false);

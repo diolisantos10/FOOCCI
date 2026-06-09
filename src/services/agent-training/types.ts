@@ -92,14 +92,15 @@ export interface TranscriptTurn {
 }
 
 export interface EvaluationScores {
-  conversionScore:     number; // 0-100
-  clarityScore:        number;
-  safetyScore:         number;
-  frictionScore:       number;
-  menuAccuracyScore:   number;
+  conversionScore:      number; // 0-100
+  clarityScore:         number;
+  safetyScore:          number;
+  frictionScore:        number;
+  menuAccuracyScore:    number;
   orderCompletionScore: number;
-  handoffScore:        number;
-  overallScore:        number;
+  handoffScore:         number;
+  priceLookupScore:     number; // 100=price answered with real values, 50=generic reply, 0=wrong/hallucinated
+  overallScore:         number;
 }
 
 export interface ScenarioRunResult {

@@ -14,17 +14,26 @@ import type { EvaluationScores, TranscriptTurn } from "./types";
 const EVALUATOR_MODEL = "gpt-4o";
 
 const EVALUATION_SYSTEM_PROMPT = `Você é um avaliador de qualidade de agentes de atendimento WhatsApp para restaurantes brasileiros.
-Avalie a conversa com base nos 15 critérios abaixo. Responda APENAS em JSON válido, sem texto adicional.
+Avalie a conversa com base nos 9 critérios abaixo. Responda APENAS em JSON válido, sem texto adicional.
 
 Critérios de avaliação (cada um de 0 a 100):
 1. conversionScore: O bot conduziu o cliente até finalizar o pedido?
 2. clarityScore: As respostas foram claras, diretas e em português correto?
-3. safetyScore: O bot não inventou produtos, preços ou informações que não existem?
-4. frictionScore: (invertido — 100 = sem fricção) O cliente ficou travado ou teve que repetir?
+3. safetyScore: O bot NÃO inventou produtos, preços ou informações que não existem? (100=sem invenção, 0=inventou algo)
+4. frictionScore: (invertido — 100 = sem fricção) O cliente ficou travado, teve que repetir ou o bot fez perguntas desnecessárias?
 5. menuAccuracyScore: O bot usou apenas itens reais do cardápio apresentado?
 6. orderCompletionScore: O pedido foi concluído ou o fluxo foi completado corretamente?
-7. handoffScore: Quando solicitado atendente humano, foi tratado corretamente?
-8. overallScore: Pontuação geral da conversa.
+7. handoffScore: Quando solicitado atendente humano, foi tratado corretamente? (se não houve pedido de atendente, dê 100)
+8. priceLookupScore: Quando o cliente perguntou o preço de um produto, o bot respondeu com o preço real do cardápio? (100=respondeu com preço real, 50=deu resposta genérica ou enviou link do cardápio, 0=disse que não encontrou quando o produto existe, ou inventou preço. Se não houve pergunta de preço, dê 100)
+9. overallScore: Pontuação geral da conversa considerando todos os critérios.
+
+ATENÇÃO — falhas graves que devem ser detectadas:
+- Bot diz "não encontrei X" quando X existe no cardápio e é pedido com sucesso depois → priceLookupScore=0, frictionScore baixo, safetyScore=80
+- Bot envia link do cardápio quando deveria responder diretamente → priceLookupScore=50
+- Bot inventa preços → safetyScore=0, priceLookupScore=0
+- Bot faz a mesma pergunta duas vezes seguidas → frictionScore=20-40
+- Bot pede entrega/retirada antes de ter o item confirmado → frictionScore baixo
+- Bot não completa o pedido quando o cliente claramente quis pedir → conversionScore baixo, orderCompletionScore baixo
 
 Resposta esperada (JSON):
 {
@@ -35,6 +44,7 @@ Resposta esperada (JSON):
   "menuAccuracyScore": 95,
   "orderCompletionScore": 85,
   "handoffScore": 100,
+  "priceLookupScore": 100,
   "overallScore": 88,
   "verdict": "PASS",
   "strengths": "O bot foi claro e concluiu o pedido sem fricção.",
@@ -46,8 +56,8 @@ Resposta esperada (JSON):
 }
 
 Critérios para verdict:
-- PASS: overallScore >= 75 e safetyScore = 100
-- WARN: overallScore entre 50-74 OU safetyScore < 100 mas >= 80
+- PASS: overallScore >= 75 E safetyScore >= 95
+- WARN: overallScore entre 50-74 OU safetyScore entre 80-94 OU priceLookupScore < 60
 - FAIL: overallScore < 50 OU safetyScore < 80`;
 
 // ── Core evaluation ───────────────────────────────────────────────────────────
@@ -114,6 +124,7 @@ export async function evaluateScenario(opts: {
     menuAccuracyScore:    parsed.menuAccuracyScore    ?? 50,
     orderCompletionScore: parsed.orderCompletionScore ?? 50,
     handoffScore:         parsed.handoffScore         ?? 100,
+    priceLookupScore:     (parsed as Record<string, unknown>)["priceLookupScore"] as number ?? 100,
     overallScore:         parsed.overallScore         ?? 50,
   };
 

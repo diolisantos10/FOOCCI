@@ -300,6 +300,13 @@ function ScenariosTab({ runId, onSelectScenario }: { runId?: string; onSelectSce
   );
 }
 
+interface ProblemGroup {
+  category: string; count: number; avgScore: number | null;
+  scenarioIds: string[];
+  examples: Array<{ id: string; title: string; status: string }>;
+  latestAt: string | null;
+}
+
 function ProposalsTab() {
   const [proposals, setProposals]     = useState<Proposal[]>([]);
   const [filter, setFilter]           = useState("PENDING_APPROVAL");
@@ -307,6 +314,29 @@ function ProposalsTab() {
   const [noteFor, setNoteFor]         = useState<string | null>(null);
   const [noteText, setNoteText]       = useState("");
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
+  const [problems, setProblems]       = useState<ProblemGroup[]>([]);
+  const [generatingGroup, setGeneratingGroup] = useState<string | null>(null);
+  const [groupMsg, setGroupMsg]       = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/admin/training/scenarios/problems")
+      .then((r) => r.json())
+      .then((d: { groups?: ProblemGroup[] }) => setProblems(d.groups ?? []));
+  }, []);
+
+  const generateGroupedProposal = async (group: ProblemGroup) => {
+    setGeneratingGroup(group.category);
+    setGroupMsg(null);
+    const res = await fetch("/api/admin/training/proposals/grouped", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ category: group.category, scenarioIds: group.scenarioIds, agentType: "WHATSAPP_ORDERING" }),
+    });
+    const data = await res.json() as { ok?: boolean; error?: string };
+    setGeneratingGroup(null);
+    if (data.ok) { setGroupMsg(`✓ Proposta criada para ${group.category.replace(/_/g, " ")}`); void load(); }
+    else setGroupMsg(`Erro: ${data.error ?? "falha"}`);
+  };
 
   const load = useCallback(async () => {
     const qs = new URLSearchParams({ status: filter });
@@ -399,7 +429,37 @@ function ProposalsTab() {
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-6 space-y-5">
+      {/* Principais problemas */}
+      {problems.length > 0 && (
+        <div className="rounded-xl border border-gray-700 bg-gray-800/40 p-4 space-y-3">
+          <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wide">Principais problemas (últimas 48h)</p>
+          {groupMsg && (
+            <p className={`text-xs px-2 py-1 rounded ${groupMsg.startsWith("Erro") ? "text-red-400 bg-red-900/20" : "text-green-400 bg-green-900/20"}`}>
+              {groupMsg}
+            </p>
+          )}
+          <div className="space-y-2">
+            {problems.map((g) => (
+              <div key={g.category} className="flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="rounded-full bg-red-900/40 px-2 py-0.5 text-red-400 shrink-0">{g.count}×</span>
+                  <span className="text-gray-300 truncate">{g.category.replace(/_/g, " ")}</span>
+                  {g.avgScore !== null && <span className="text-gray-600 shrink-0">avg {g.avgScore}</span>}
+                </div>
+                <button
+                  onClick={() => void generateGroupedProposal(g)}
+                  disabled={generatingGroup === g.category}
+                  className="shrink-0 rounded bg-violet-900/60 px-2 py-1 text-[11px] text-violet-300 hover:bg-violet-900 disabled:opacity-50"
+                >
+                  {generatingGroup === g.category ? "…" : "Gerar proposta"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2 flex-wrap">
         {["PENDING_APPROVAL", "APPROVED", "REJECTED", "NEEDS_REVISION", "APPLIED_TO_SANDBOX"].map((s) => (
           <button key={s} onClick={() => setFilter(s)}
@@ -580,22 +640,89 @@ function ConfigTab() {
 
 // ── Scenario detail modal ─────────────────────────────────────────────────────
 
-function ScenarioDetailModal({ scenarioId, onClose }: { scenarioId: string; onClose: () => void }) {
-  const [scenario, setScenario] = useState<{
-    title: string; status: string; score: number | null; customerPersona: string | null;
-    goal: string | null; failureSummary: string | null; transcriptJson: unknown;
-    expectedOutcomeJson: unknown; actualOutcomeJson: unknown;
-    evaluations: Array<{ verdict: string; strengths: string | null; weaknesses: string | null; recommendation: string | null; scoreJson: unknown }>;
-  } | null>(null);
+interface ScenarioDetail {
+  id: string; title: string; status: string; score: number | null;
+  customerPersona: string | null; goal: string | null; source: string;
+  failureSummary: string | null; transcriptJson: unknown;
+  expectedOutcomeJson: unknown; actualOutcomeJson: unknown;
+  createdAt: string;
+  evaluations: Array<{
+    id: string; verdict: string; scoreJson: unknown;
+    strengths: string | null; weaknesses: string | null;
+    safetyIssues: string | null; frictionIssues: string | null;
+    conversionIssues: string | null; recommendation: string | null;
+    createdAt: string;
+  }>;
+}
 
-  useEffect(() => {
+const SCORE_LABELS: Record<string, string> = {
+  conversionScore:      "Conversão",
+  clarityScore:         "Clareza",
+  safetyScore:          "Segurança",
+  frictionScore:        "Sem fricção",
+  menuAccuracyScore:    "Precisão cardápio",
+  orderCompletionScore: "Pedido completo",
+  handoffScore:         "Handoff",
+  priceLookupScore:     "Preço lookup",
+  overallScore:         "Geral",
+};
+
+function scoreBarMini(label: string, value: number) {
+  const color = value >= 75 ? "#4ade80" : value >= 50 ? "#facc15" : "#f87171";
+  return (
+    <div key={label} className="flex items-center gap-2 text-[11px]">
+      <span className="w-32 text-gray-500 shrink-0">{label}</span>
+      <div className="h-1.5 w-24 rounded-full bg-gray-700 shrink-0">
+        <div className="h-1.5 rounded-full" style={{ width: `${value}%`, background: color }} />
+      </div>
+      <span className="text-gray-300 w-6">{value}</span>
+    </div>
+  );
+}
+
+function ScenarioDetailModal({ scenarioId, onClose }: { scenarioId: string; onClose: () => void }) {
+  const [scenario, setScenario]     = useState<ScenarioDetail | null>(null);
+  const [evaluating, setEvaluating] = useState(false);
+  const [proposing, setProposing]   = useState(false);
+  const [actionMsg, setActionMsg]   = useState<string | null>(null);
+  const [showRaw, setShowRaw]       = useState(false);
+
+  const load = useCallback(() => {
     void fetch(`/api/admin/training/scenarios/${scenarioId}`)
       .then((r) => r.json())
       .then((d) => setScenario(d));
   }, [scenarioId]);
 
+  useEffect(() => { load(); }, [load]);
+
+  const runEvaluate = async () => {
+    setEvaluating(true);
+    setActionMsg(null);
+    const res = await fetch(`/api/admin/training/scenarios/${scenarioId}/evaluate`, { method: "POST" });
+    const data = await res.json() as { ok?: boolean; error?: string };
+    setEvaluating(false);
+    if (data.ok) { setActionMsg("✓ Diagnóstico gerado!"); load(); }
+    else setActionMsg(`Erro: ${data.error ?? "falha"}`);
+  };
+
+  const runProposal = async () => {
+    setProposing(true);
+    setActionMsg(null);
+    const res = await fetch(`/api/admin/training/scenarios/${scenarioId}/proposal`, { method: "POST" });
+    const data = await res.json() as { ok?: boolean; error?: string };
+    setProposing(false);
+    if (data.ok) setActionMsg("✓ Proposta criada! Veja em Sugestões.");
+    else setActionMsg(`Erro: ${data.error ?? "falha"}`);
+  };
+
+  const expected = scenario?.expectedOutcomeJson as Record<string, unknown> | null ?? null;
+  const actual   = scenario?.actualOutcomeJson   as Record<string, unknown> | null ?? null;
+  const hasEval  = (scenario?.evaluations?.length ?? 0) > 0;
+  const firstEval = scenario?.evaluations?.[0];
+  const scores   = firstEval?.scoreJson as Record<string, number> | null ?? null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 pt-10 px-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 pt-6 px-4 overflow-y-auto">
       <div className="w-full max-w-2xl rounded-2xl border border-gray-700 bg-gray-900 shadow-xl mb-10">
         <div className="flex items-center justify-between border-b border-gray-700 px-5 py-4">
           <h3 className="text-sm font-semibold text-white">{scenario?.title ?? "Carregando…"}</h3>
@@ -606,16 +733,18 @@ function ScenarioDetailModal({ scenarioId, onClose }: { scenarioId: string; onCl
           <div className="p-6 text-center text-gray-500 text-sm">Carregando…</div>
         ) : (
           <div className="p-5 space-y-5">
-            <div className="flex gap-3 flex-wrap">
+            {/* Header badges */}
+            <div className="flex gap-3 flex-wrap items-center">
               {statusBadge(scenario.status)}
               {scoreBar(scenario.score)}
               {scenario.customerPersona && <span className="text-xs text-gray-500">{scenario.customerPersona}</span>}
               {scenario.goal && <span className="text-xs text-gray-500">{scenario.goal.replace(/_/g, " ")}</span>}
+              <span className="text-xs text-gray-600">{scenario.source === "REAL_CONVERSATION" ? "Real" : "IA"}</span>
             </div>
 
             {scenario.failureSummary && (
               <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-3 py-2 text-xs text-red-400">
-                {scenario.failureSummary}
+                ⚠ {scenario.failureSummary}
               </div>
             )}
 
@@ -623,30 +752,128 @@ function ScenarioDetailModal({ scenarioId, onClose }: { scenarioId: string; onCl
             <div>
               <p className="text-[11px] text-gray-500 mb-2">Transcrição</p>
               <div className="rounded-xl border border-gray-700 bg-[#0d1117] p-3 space-y-2 max-h-72 overflow-y-auto">
-                {(scenario.transcriptJson as Array<{ role: string; content: string }>)?.map((t, i) => (
-                  <div key={i} className={`flex ${t.role === "customer" ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[80%] rounded-xl px-3 py-1.5 text-sm ${t.role === "customer" ? "bg-[#dcf8c6] text-[#111]" : "bg-white text-[#111]"}`}>
+                {(scenario.transcriptJson as Array<{ role: string; content: string; debug?: { stage?: string; intent?: string } }>)?.map((t, i) => (
+                  <div key={i} className={`flex flex-col ${t.role === "customer" ? "items-end" : "items-start"}`}>
+                    <div className={`max-w-[80%] rounded-xl px-3 py-1.5 text-sm whitespace-pre-wrap ${t.role === "customer" ? "bg-[#dcf8c6] text-[#111]" : "bg-white text-[#111]"}`}>
                       {t.content}
                     </div>
+                    {t.debug && (
+                      <span className="text-[10px] text-gray-600 mt-0.5 px-1">
+                        {t.debug.intent ?? ""}{t.debug.stage ? ` · ${t.debug.stage}` : ""}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Evaluations */}
-            {scenario.evaluations.length > 0 && (
+            {/* Expected vs Actual */}
+            {(expected || actual) && (
               <div>
-                <p className="text-[11px] text-gray-500 mb-2">Avaliação IA</p>
-                {scenario.evaluations.slice(0, 1).map((e, i) => (
-                  <div key={i} className="rounded-lg border border-gray-700 bg-gray-800/60 p-3 space-y-2 text-xs">
-                    <div className="flex gap-2">{statusBadge(e.verdict)}</div>
-                    {e.strengths   && <p className="text-green-400">✓ {e.strengths}</p>}
-                    {e.weaknesses  && <p className="text-yellow-400">⚠ {e.weaknesses}</p>}
-                    {e.recommendation && <p className="text-gray-400">→ {e.recommendation}</p>}
-                  </div>
-                ))}
+                <p className="text-[11px] text-gray-500 mb-2">Esperado vs Real</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {expected && (
+                    <div className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs space-y-1">
+                      <p className="text-[10px] text-gray-500 mb-1 font-semibold">ESPERADO</p>
+                      {Object.entries(expected).map(([k, v]) => (
+                        <div key={k} className="flex justify-between gap-2">
+                          <span className="text-gray-500">{k}</span>
+                          <span className={`text-gray-300 ${actual && k in actual && String(actual[k]) !== String(v) ? "text-red-400" : ""}`}>
+                            {String(v)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {actual && (
+                    <div className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs space-y-1">
+                      <p className="text-[10px] text-gray-500 mb-1 font-semibold">REAL</p>
+                      {Object.entries(actual).map(([k, v]) => (
+                        <div key={k} className="flex justify-between gap-2">
+                          <span className="text-gray-500">{k}</span>
+                          <span className={`text-gray-300 ${expected && k in expected && String(expected[k]) !== String(v) ? "text-yellow-400" : ""}`}>
+                            {String(v)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
+
+            {/* Evaluation */}
+            {hasEval && firstEval ? (
+              <div>
+                <p className="text-[11px] text-gray-500 mb-2">Diagnóstico IA</p>
+                <div className="rounded-lg border border-gray-700 bg-gray-800/60 p-4 space-y-3">
+                  <div className="flex gap-2 items-center">
+                    {statusBadge(firstEval.verdict)}
+                    <span className="text-xs text-gray-500">avaliado por GPT-4o</span>
+                  </div>
+                  {scores && (
+                    <div className="grid grid-cols-1 gap-1 pt-1">
+                      {Object.entries(scores)
+                        .filter(([k]) => k !== "overallScore")
+                        .map(([k, v]) => scoreBarMini(SCORE_LABELS[k] ?? k, v))}
+                      <div className="border-t border-gray-700 pt-1 mt-1">
+                        {scoreBarMini("GERAL", scores.overallScore ?? 0)}
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-xs space-y-1.5 pt-1">
+                    {firstEval.strengths   && <p className="text-green-400">✓ {firstEval.strengths}</p>}
+                    {firstEval.weaknesses  && <p className="text-yellow-400">⚠ {firstEval.weaknesses}</p>}
+                    {firstEval.frictionIssues && <p className="text-orange-400">↺ {firstEval.frictionIssues}</p>}
+                    {firstEval.safetyIssues   && <p className="text-red-400">🛡 {firstEval.safetyIssues}</p>}
+                    {firstEval.recommendation && <p className="text-gray-400">→ {firstEval.recommendation}</p>}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-gray-700 p-4 text-center">
+                <p className="text-xs text-gray-500 mb-3">Sem diagnóstico ainda.</p>
+                <button onClick={runEvaluate} disabled={evaluating}
+                  className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-600 disabled:opacity-50">
+                  {evaluating ? "Gerando…" : "🔍 Gerar diagnóstico"}
+                </button>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2">
+              {hasEval && !evaluating && (
+                <button onClick={runEvaluate} disabled={evaluating}
+                  className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-800">
+                  {evaluating ? "Gerando…" : "↺ Re-avaliar"}
+                </button>
+              )}
+              {hasEval && scenario.status !== "PASS" && (
+                <button onClick={runProposal} disabled={proposing}
+                  className="rounded-lg bg-yellow-700/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-yellow-700 disabled:opacity-50">
+                  {proposing ? "Criando…" : "💡 Criar proposta de melhoria"}
+                </button>
+              )}
+            </div>
+
+            {actionMsg && (
+              <p className={`text-xs px-2 py-1 rounded ${actionMsg.startsWith("Erro") ? "text-red-400 bg-red-900/20" : "text-green-400 bg-green-900/20"}`}>
+                {actionMsg}
+              </p>
+            )}
+
+            {/* Raw JSON toggle */}
+            <div>
+              <button onClick={() => setShowRaw(v => !v)}
+                className="text-[11px] text-gray-600 hover:text-gray-400">
+                {showRaw ? "▲ Ocultar JSON raw" : "▼ Ver JSON raw"}
+              </button>
+              {showRaw && (
+                <pre className="mt-2 rounded-lg border border-gray-700 bg-gray-950 p-3 text-[10px] text-gray-400 overflow-x-auto max-h-64 overflow-y-auto">
+                  {JSON.stringify(scenario, null, 2)}
+                </pre>
+              )}
+            </div>
           </div>
         )}
       </div>

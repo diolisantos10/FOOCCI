@@ -111,14 +111,33 @@ const SCENARIO_TEMPLATES: ScenarioTemplate[] = [
     expectedOutcome: { handoff: true },
     riskTags:        ["handoff"],
   },
-  // PRICE_ASKER
+  // PRICE_ASKER — price lookup then order
   {
     title:           "Cliente pergunta preço antes de pedir",
     persona:         "PRICE_ASKER",
     goal:            "ASK_MENU_THEN_ORDER",
     messageSequence: ["quanto custa o yakisoba", "quero 1 yakisoba", "entrega", "Rua C 3", "pix"],
-    expectedOutcome: { priceAnswered: true, orderCompleted: true },
-    riskTags:        ["price_query"],
+    expectedOutcome: {
+      priceAnswered:   true,
+      priceListShown:  true,
+      realPricesUsed:  true,
+      orderCompleted:  true,
+      botShouldNotSayNotFound: true,
+    },
+    riskTags:        ["price_query", "menu_lookup"],
+  },
+  // PRICE_ASKER — price query for ambiguous item
+  {
+    title:           "Cliente pergunta preço de item ambíguo",
+    persona:         "PRICE_ASKER",
+    goal:            "ASK_MENU_THEN_ORDER",
+    messageSequence: ["qual o preço da coca", "quero 1", "entrega", "Rua H 8", "pix"],
+    expectedOutcome: {
+      priceAnswered:   true,
+      priceListShown:  true,
+      orderCompleted:  true,
+    },
+    riskTags:        ["price_query", "ambiguity"],
   },
   // UNAVAILABLE_ITEM
   {
