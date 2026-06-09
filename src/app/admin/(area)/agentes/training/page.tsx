@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { CycleValidationReport } from "@/app/api/admin/training/validate-cycle/route";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -553,6 +553,247 @@ function BrainVersionsTab() {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Arena Tab ─────────────────────────────────────────────────────────────────
+
+const ARENA_SCENARIO_DEFS = [
+  { key: "priceBeforeOrder",  title: "Pergunta preço antes de pedir",  persona: "cliente que pergunta preço",  description: "Pergunta preço do yakisoba antes de fazer o pedido",       riskTags: ["price_lookup", "order_completion"] },
+  { key: "directOrder",       title: "Pedido direto",                  persona: "cliente direto",              description: "Pede yakisoba diretamente sem perguntas",                 riskTags: ["order_completion"] },
+  { key: "addItemMidFlow",    title: "Adicionar item no meio",         persona: "cliente que muda pedido",     description: "Adiciona item extra durante coleta de endereço",          riskTags: ["interrupt", "mid_flow_add"] },
+  { key: "cancelPendingItem", title: "Cancelar item pendente",         persona: "cliente indeciso",            description: "Cancela item antes de resolver ambiguidade",              riskTags: ["cancel_item", "ambiguity"] },
+  { key: "requestAgent",      title: "Pedir atendente humano",         persona: "cliente bravo",               description: "Solicita atendente humano durante a conversa",            riskTags: ["handoff"] },
+  { key: "cocaAmbiguity",     title: "Ambiguidade Coca-Cola",          persona: "cliente confuso",             description: "Pede 'uma coca' sem especificar tamanho",                 riskTags: ["ambiguity", "order_completion"] },
+] as const;
+
+interface ArenaMessage { role: "customer" | "bot"; content: string; ts: string; }
+interface ArenaResult {
+  scenarioId:           string | null;
+  runId:                string;
+  transcript:           ArenaMessage[];
+  status:               "PASS" | "WARN" | "FAIL" | "PENDING";
+  score:                number | null;
+  persona:              string;
+  scenarioTitle:        string;
+  sideEffectsPerformed: string[];
+}
+
+function ArenaTab() {
+  const [selectedKey, setSelectedKey] = useState<string>("priceBeforeOrder");
+  const [running,     setRunning]     = useState(false);
+  const [result,      setResult]      = useState<ArenaResult | null>(null);
+  const [error,       setError]       = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(0);
+  const chatRef = useRef<HTMLDivElement>(null);
+
+  const selectedScenario = ARENA_SCENARIO_DEFS.find((s) => s.key === selectedKey)!;
+
+  const runArena = async () => {
+    setRunning(true);
+    setResult(null);
+    setError(null);
+    setVisibleCount(0);
+    try {
+      const res  = await fetch("/api/admin/training/arena/run", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ scenarioKey: selectedKey }),
+      });
+      const data = await res.json() as ArenaResult & { ok: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? `Erro ${res.status}`);
+      } else {
+        setResult(data);
+        // Animate messages one-by-one
+        let i = 0;
+        const tick = () => {
+          i++;
+          setVisibleCount(i);
+          if (i < data.transcript.length) setTimeout(tick, 650);
+        };
+        setTimeout(tick, 300);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro desconhecido");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [visibleCount]);
+
+  const playbackDone = result && visibleCount >= result.transcript.length;
+
+  return (
+    <div className="p-6 space-y-5 max-w-5xl">
+      {/* Safety banner */}
+      <div className="rounded-xl border border-green-700/40 bg-green-900/10 px-4 py-2.5 flex items-start gap-2">
+        <span className="mt-0.5 text-green-400">🛡</span>
+        <p className="text-xs text-green-400 font-medium">
+          Arena segura — clientes IA, motor real em modo seco.
+          Nenhuma mensagem WhatsApp enviada, nenhum pedido criado, nenhum Pix gerado.
+        </p>
+      </div>
+
+      {/* Concept note */}
+      <div className="rounded-xl border border-violet-700/30 bg-violet-900/10 px-4 py-3 text-xs text-violet-400 space-y-1">
+        <p className="font-semibold">Arena de treinamento automático</p>
+        <p className="text-violet-500">Clientes IA simulam atendimentos reais. O agente responde com o motor real em modo seguro. Você assiste, avalia e aprova melhorias. Não é um simulador manual — você não precisa digitar nada.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left — scenario picker + controls */}
+        <div className="space-y-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Selecionar cenário</p>
+          <div className="space-y-1.5">
+            {ARENA_SCENARIO_DEFS.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => { setSelectedKey(s.key); setResult(null); setError(null); setVisibleCount(0); }}
+                className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors ${
+                  selectedKey === s.key
+                    ? "border-violet-500 bg-violet-900/20 text-violet-200"
+                    : "border-gray-700 bg-gray-800/40 text-gray-400 hover:border-gray-600 hover:text-gray-300"
+                }`}
+              >
+                <p className="text-xs font-semibold">{s.title}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{s.description}</p>
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {s.riskTags.map((tag) => (
+                    <span key={tag} className="rounded px-1.5 py-0.5 bg-gray-700 text-[10px] text-gray-400">{tag}</span>
+                  ))}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void runArena()}
+            disabled={running}
+            className="w-full rounded-lg bg-violet-700 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+          >
+            {running && <span className="flex h-2 w-2 rounded-full bg-violet-300 animate-pulse" />}
+            {running ? "Simulando atendimento…" : "▶ Rodar atendimento simulado"}
+          </button>
+
+          {error && (
+            <div className="rounded-xl border border-red-700/40 bg-red-900/10 px-3 py-2 text-xs text-red-400">
+              {error}
+            </div>
+          )}
+
+          {/* Result card */}
+          {result && playbackDone && (
+            <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Resultado</p>
+              <div className="flex items-center gap-3">
+                {statusBadge(result.status)}
+                {scoreBar(result.score)}
+              </div>
+              {result.sideEffectsPerformed.length > 0 && (
+                <p className="text-xs text-red-400 font-semibold">⚠ SAFETY VIOLATION: sideEffects não vazio: {result.sideEffectsPerformed.join(", ")}</p>
+              )}
+              <div className="flex gap-2 flex-wrap text-xs">
+                {result.scenarioId && (
+                  <button
+                    type="button"
+                    onClick={() => void fetch(`/api/admin/training/scenarios/${result.scenarioId}`)}
+                    className="rounded border border-gray-600 px-2.5 py-1 text-gray-400 hover:bg-gray-700 transition-colors"
+                  >
+                    ID: {result.scenarioId.slice(0, 8)}…
+                  </button>
+                )}
+                <span className="rounded border border-gray-700 px-2.5 py-1 text-gray-500 font-mono">
+                  Run: {result.runId.slice(0, 8)}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-600">Para diagnóstico GPT-4o e proposta, vá em Cenários → selecione este cenário → Gerar diagnóstico.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Right — WhatsApp-like playback */}
+        <div className="rounded-xl overflow-hidden border border-gray-700 flex flex-col" style={{ minHeight: 500 }}>
+          {/* WA header */}
+          <div className="bg-green-900/80 border-b border-green-700/40 px-4 py-3 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full bg-green-700 flex items-center justify-center text-base shrink-0">🤖</div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white truncate">{result?.scenarioTitle ?? selectedScenario.title}</p>
+              <p className="text-[11px] text-green-400 truncate">Persona: {result?.persona ?? selectedScenario.persona}</p>
+            </div>
+            <span className="ml-auto shrink-0 rounded-full bg-green-900/60 border border-green-700/40 px-2 py-0.5 text-[10px] text-green-400 font-semibold">
+              ARENA SEGURA
+            </span>
+          </div>
+
+          {/* Chat area */}
+          <div
+            ref={chatRef}
+            className="flex-1 overflow-y-auto p-4 bg-gray-900/90 space-y-2"
+          >
+            {!result && !running && (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-xs text-gray-600 text-center">
+                  Selecione um cenário e clique em<br />&ldquo;Rodar atendimento simulado&rdquo;
+                </p>
+              </div>
+            )}
+            {running && visibleCount === 0 && (
+              <div className="flex h-full items-center justify-center">
+                <div className="flex gap-1.5">
+                  {[0, 1, 2].map((i) => (
+                    <span key={i} className="h-2.5 w-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: `${i * 0.18}s` }} />
+                  ))}
+                </div>
+              </div>
+            )}
+            {result && result.transcript.slice(0, visibleCount).map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === "customer" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[78%] rounded-xl px-3 py-2 text-xs leading-relaxed shadow-sm ${
+                  msg.role === "customer"
+                    ? "bg-green-700 text-white rounded-br-sm"
+                    : "bg-gray-700 text-gray-100 rounded-bl-sm"
+                }`}>
+                  <p className={`text-[10px] mb-0.5 font-semibold ${msg.role === "customer" ? "text-green-200" : "text-gray-400"}`}>
+                    {msg.role === "customer" ? "Cliente IA" : "Agente"}
+                  </p>
+                  <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                  <p className={`text-[10px] mt-1 text-right ${msg.role === "customer" ? "text-green-300" : "text-gray-500"}`}>
+                    {new Date(msg.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {/* Typing indicator while still revealing messages */}
+            {result && visibleCount < result.transcript.length && (
+              <div className="flex justify-start">
+                <div className="bg-gray-700 rounded-xl px-3 py-2 flex gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <span key={i} className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: `${i * 0.18}s` }} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="bg-gray-800/80 border-t border-gray-700 px-4 py-2 flex items-center gap-2">
+            <p className="text-[11px] text-gray-500 flex-1">
+              {result
+                ? playbackDone
+                  ? `${result.transcript.length} mensagens · ${result.status}`
+                  : `Reproduzindo… ${visibleCount}/${result.transcript.length}`
+                : "Arena automática — sem digitação manual"}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1242,10 +1483,11 @@ function RunDetailView({ runId, onBack }: { runId: string; onBack: () => void })
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type Tab = "dashboard" | "runs" | "cenarios" | "falhas" | "sugestoes" | "versoes" | "config" | "validar";
+type Tab = "dashboard" | "arena" | "runs" | "cenarios" | "falhas" | "sugestoes" | "versoes" | "config" | "validar";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "dashboard", label: "Dashboard" },
+  { id: "arena",     label: "Arena" },
   { id: "runs",      label: "Runs" },
   { id: "cenarios",  label: "Cenários" },
   { id: "sugestoes", label: "Sugestões" },
@@ -1322,7 +1564,7 @@ export default function AgentTrainingPage() {
           <div>
             <h1 className="text-lg font-bold text-white">🧠 Agent Training Center</h1>
             <p className="text-xs text-gray-500 mt-0.5">
-              O agente treina sozinho, mas não publica sozinho.
+              Clientes IA simulam atendimentos reais. Mudanças só publicadas com aprovação.
             </p>
           </div>
           {pendingCount > 0 && (
@@ -1355,6 +1597,7 @@ export default function AgentTrainingPage() {
         {tab === "dashboard" && (
           <DashboardTab data={dashboard} onRunBatch={triggerBatch} running={runningBatch} />
         )}
+        {tab === "arena" && <ArenaTab />}
         {tab === "runs" && (
           selectedRun
             ? <RunDetailView runId={selectedRun} onBack={() => setSelectedRun(null)} />

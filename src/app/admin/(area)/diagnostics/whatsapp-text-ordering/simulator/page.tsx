@@ -580,20 +580,30 @@ export default function WaSimulatorPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gray-950 text-white">
+      {/* ── Debug banner ─────────────────────────────────────────────────────── */}
+      <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-6 py-2 flex items-center gap-3">
+        <span className="text-amber-400 text-sm">⚠</span>
+        <p className="text-xs text-amber-400">
+          <span className="font-semibold">Esta tela é uma ferramenta de debug para desenvolvedores.</span>
+          {" "}Para treinamento automático com clientes IA, use{" "}
+          <a href="/admin/agentes/training" className="underline hover:text-amber-300">Treinamento IA → Arena</a>.
+        </p>
+      </div>
+
       {/* ── Page header ──────────────────────────────────────────────────────── */}
       <div className="flex shrink-0 items-center justify-between border-b border-gray-800 bg-gray-900 px-6 py-3">
         <div>
           <div className="flex items-center gap-3">
-            <span className="text-lg">💬</span>
+            <span className="text-lg">🔧</span>
             <h1 className="text-base font-semibold text-white">
-              Simulador WhatsApp — Pedido por Texto
+              WA Simulador — Debug / Desenvolvedor
             </h1>
             <span className="rounded-full border border-emerald-700 bg-emerald-900/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
               Simulação segura
             </span>
           </div>
           <p className="mt-0.5 text-xs text-gray-400">
-            Teste conversas como se fosse o WhatsApp, sem enviar mensagens reais.
+            Ferramenta de debug — permite digitar mensagens manualmente para testar o motor.
           </p>
         </div>
         <a

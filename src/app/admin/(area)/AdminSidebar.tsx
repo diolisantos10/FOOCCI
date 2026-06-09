@@ -31,9 +31,9 @@ export function AdminSidebar() {
     { href: "/admin/agentes/waiter/testes",                label: "Waiter Testes", icon: "🧠" },
     { href: "/admin/agentes/crm/testes",                   label: "CRM Testes",    icon: "📞" },
     { href: "/admin/agentes/analytics/testes",             label: "Analytics Testes", icon: "📊" },
-    { href: "/admin/diagnostics/whatsapp-text-ordering",           label: "WA Pedido Texto",   icon: "🧾" },
-    { href: "/admin/diagnostics/whatsapp-text-ordering/simulator", label: "WA Simulador",      icon: "💬" },
-    { href: "/admin/agentes/training",                             label: "Treinamento IA",    icon: "🧠" },
+    { href: "/admin/diagnostics/whatsapp-text-ordering",           label: "WA Pedido Texto",        icon: "🧾" },
+    { href: "/admin/agentes/training",                            label: "Treinamento IA",         icon: "🧠" },
+    { href: "/admin/diagnostics/whatsapp-text-ordering/simulator", label: "WA Simulador (debug)",  icon: "🔧" },
   ];
 
   return (
