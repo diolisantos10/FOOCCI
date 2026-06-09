@@ -15,6 +15,87 @@ import { getImpactedByConcept, getImpactedByMessage } from "./CRMContactLedgerSe
 const COLD_NAME_RE = /fri[oa]s?|recuper|reativ/i;
 const SENT_STATUSES = ["SENT", "DELIVERED", "READ"] as const;
 
+/**
+ * Cron-safe, GLOBAL, read-only scan of cold campaigns across ALL restaurants.
+ * Returns ONLY campaign metadata + counts (no message text, no customer PII) so
+ * it can run from a CRON_SECRET diagnostic without an admin secret.
+ */
+export interface ColdCampaignSummary {
+  campaignId: string;
+  restaurantId: string;
+  name: string;
+  status: string;
+  targetSegment: string | null;
+  campaignFamilyKey: string | null;
+  hasFingerprint: boolean;
+  suggestedFamilyKey: string;
+  sentExecutions: number;
+  blockedSafety: number;
+  failedProvider: number;
+  weeklyCapBlocks: number;
+  alreadyInLedger: number;
+}
+
+export interface ColdRecoveryGlobal {
+  candidates: ColdCampaignSummary[];
+  totals: { campaigns: number; sentExecutions: number; alreadyInLedger: number; wouldBackfill: number };
+  recommendedFamilyKey: string;
+}
+
+export async function diagnoseColdRecoveryGlobal(): Promise<ColdRecoveryGlobal> {
+  const all = await prisma.campaign.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true, restaurantId: true, name: true, status: true, targetSegment: true, templateId: true,
+      campaignFamilyKey: true, messageFingerprint: true,
+    },
+  });
+  const cold = all.filter(
+    (c) => COLD_NAME_RE.test(c.name) || (c.targetSegment ?? "").toLowerCase().includes("frio") || (c.templateId ?? "").includes("recuperar-frios"),
+  );
+
+  const candidates: ColdCampaignSummary[] = [];
+  for (const c of cold) {
+    const [groups, sentCount, ledgerCount] = await Promise.all([
+      prisma.campaignExecution.groupBy({
+        by: ["status", "failedReason", "errorMessage"],
+        where: { campaignId: c.id, status: { in: ["BLOCKED", "FAILED"] as never[] } },
+        _count: { id: true },
+      }),
+      prisma.campaignExecution.count({ where: { campaignId: c.id, status: { in: [...SENT_STATUSES] } } }),
+      prisma.cRMContactLedger.count({ where: { campaignId: c.id, status: "SENT" } }),
+    ]);
+    let blockedSafety = 0, failedProvider = 0, weeklyCapBlocks = 0;
+    for (const g of groups) {
+      const cat = classifyExecution({ status: g.status, failedReason: g.failedReason, errorMessage: g.errorMessage });
+      if (cat.kind === "BLOCKED") { blockedSafety += g._count.id; if (cat.category === "BLOCKED_WEEKLY_LIMIT") weeklyCapBlocks += g._count.id; }
+      else if (cat.kind === "FAILED") failedProvider += g._count.id;
+    }
+    candidates.push({
+      campaignId: c.id, restaurantId: c.restaurantId, name: c.name, status: c.status, targetSegment: c.targetSegment,
+      campaignFamilyKey: c.campaignFamilyKey, hasFingerprint: !!c.messageFingerprint,
+      suggestedFamilyKey: c.campaignFamilyKey || suggestCampaignFamilyKey({ name: c.name }),
+      sentExecutions: sentCount, blockedSafety, failedProvider, weeklyCapBlocks, alreadyInLedger: ledgerCount,
+    });
+  }
+
+  const totals = candidates.reduce(
+    (acc, c) => ({
+      campaigns: acc.campaigns + 1,
+      sentExecutions: acc.sentExecutions + c.sentExecutions,
+      alreadyInLedger: acc.alreadyInLedger + c.alreadyInLedger,
+      wouldBackfill: acc.wouldBackfill + Math.max(0, c.sentExecutions - c.alreadyInLedger),
+    }),
+    { campaigns: 0, sentExecutions: 0, alreadyInLedger: 0, wouldBackfill: 0 },
+  );
+
+  return {
+    candidates,
+    totals,
+    recommendedFamilyKey: candidates.find((c) => c.campaignFamilyKey)?.campaignFamilyKey || "reativacao-frios",
+  };
+}
+
 export interface ColdCampaignCandidate {
   campaignId: string;
   name: string;
