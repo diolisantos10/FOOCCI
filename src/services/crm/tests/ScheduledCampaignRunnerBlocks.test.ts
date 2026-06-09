@@ -11,7 +11,7 @@ const evoCfg = vi.hoisted(() => ({ getSnapshot: vi.fn() }));
 const evoClient = vi.hoisted(() => ({ sendTextMessage: vi.fn() }));
 const svc = vi.hoisted(() => ({ resolveAudience: vi.fn(), personalizeMessage: vi.fn(() => "oi") }));
 const safety = vi.hoisted(() => ({
-  getSafetyConfig: vi.fn(), getTodayGlobalSendCount: vi.fn(() => 0),
+  getSafetyConfig: vi.fn(), getTodayGlobalSendCount: vi.fn(() => 0), getWeekGlobalSendCount: vi.fn(() => 0),
   checkQuietHours: vi.fn(() => null), checkWeekendBlock: vi.fn(() => null),
   randomDelayMs: vi.fn(() => 0), isBirthdayCampaign: vi.fn(() => false),
 }));
@@ -50,7 +50,7 @@ beforeEach(() => {
   db.restaurantBrandConfig.findUnique.mockResolvedValue({ googleReviewUrl: null });
   db.customer.findMany.mockResolvedValue([]); // none opted out
   evoCfg.getSnapshot.mockResolvedValue({ ok: true, data: {} });
-  safety.getSafetyConfig.mockResolvedValue({ dailyGlobalCap: 200, customerCooldownHours: 24, maxPerWeekPerCustomer: 1, quietHoursEnabled: false, sendOnWeekends: true });
+  safety.getSafetyConfig.mockResolvedValue({ dailyGlobalCap: 200, weeklyGlobalCap: 0, customerCooldownHours: 24, maxPerWeekPerCustomer: 1, quietHoursEnabled: false, sendOnWeekends: true });
   svc.resolveAudience.mockResolvedValue([{ id: "c1", name: "Ana", phone: "5511999990000", tier: "BRONZE", segment: "FRIO", totalOrders: 1, totalSpend: 10, lastOrderAt: null }]);
 });
 
@@ -77,6 +77,20 @@ describe("ScheduledCampaignRunner — safety blocks are not failures (no useless
     // One of the findMany calls must filter status in [BLOCKED, FAILED] within a window.
     const calls = db.campaignExecution.findMany.mock.calls.map((c) => JSON.stringify(c[0]));
     expect(calls.some((c) => c.includes("BLOCKED") && c.includes("FAILED") && c.includes("createdAt"))).toBe(true);
+  });
+
+  it("weekly restaurant cap is OFF by default (not enforced)", async () => {
+    contact.ContactSafetyService.assertSendable.mockResolvedValue({ sendable: true, reason: null });
+    await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { dryRun: true, limit: 5 });
+    expect(safety.getWeekGlobalSendCount).not.toHaveBeenCalled();
+  });
+
+  it("weekly restaurant cap blocks the campaign when set and reached", async () => {
+    safety.getSafetyConfig.mockResolvedValue({ dailyGlobalCap: 200, weeklyGlobalCap: 50, customerCooldownHours: 24, maxPerWeekPerCustomer: 1, quietHoursEnabled: false, sendOnWeekends: true });
+    safety.getWeekGlobalSendCount.mockResolvedValue(50); // at the weekly cap
+    const r = await ScheduledCampaignRunnerService.runCampaignBatch("cmp1", { limit: 5 });
+    expect(r.reason).toMatch(/semanal/i);
+    expect(r.sent).toBe(0);
   });
 
   it("(9) dry-run records nothing and never calls Evolution", async () => {

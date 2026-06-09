@@ -797,6 +797,7 @@ function ActionConfigDrawer({
   const [timeWindowStart, setTimeWindowStart] = useState("10:00");
   const [timeWindowEnd,   setTimeWindowEnd]   = useState("18:00");
   const [dailyLimit,      setDailyLimit]      = useState(20);
+  const [priority,        setPriority]        = useState<"LOW" | "NORMAL" | "HIGH" | "CRITICAL">("NORMAL");
   type EndCondition = "AUDIENCE_EXHAUSTED" | "END_DATE" | "MAX_TOTAL";
   const [endCondition, setEndCondition] = useState<EndCondition>("AUDIENCE_EXHAUSTED");
   const [endDate,      setEndDate]      = useState("");
@@ -859,6 +860,7 @@ function ActionConfigDrawer({
           weekdays,
           timeWindow:   { start: timeWindowStart, end: timeWindowEnd },
           dailyLimit:   Math.max(1, Math.min(200, dailyLimit)),
+          priority,
           endCondition,
           endDate:      endCondition === "END_DATE"   ? (endDate || null) : null,
           maxTotal:     endCondition === "MAX_TOTAL"  ? maxTotal          : null,
@@ -1226,6 +1228,23 @@ function ActionConfigDrawer({
                       onChange={(e) => setDailyLimit(Math.max(1, Math.min(200, parseInt(e.target.value) || 1)))}
                       className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
                     />
+                    <p className="mt-1 text-[10px] text-gray-400">Ritmo da campanha. O envio real também respeita o orçamento global do restaurante e o limite por cliente.</p>
+                  </div>
+
+                  {/* Priority */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-1">Prioridade</label>
+                    <select
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value as "LOW" | "NORMAL" | "HIGH" | "CRITICAL")}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800 focus:border-brand-400 focus:outline-none"
+                    >
+                      <option value="LOW">Baixa</option>
+                      <option value="NORMAL">Normal</option>
+                      <option value="HIGH">Alta (aniversário, pós-pedido, reativação)</option>
+                      <option value="CRITICAL">Crítica (urgente)</option>
+                    </select>
+                    <p className="mt-1 text-[10px] text-gray-400">Na previsão de capacidade, campanhas de prioridade alta recebem orçamento primeiro.</p>
                   </div>
 
                   {/* End condition */}
@@ -2294,6 +2313,17 @@ function CampaignManageModal({
                               <strong className="text-amber-700">{detail.performance.blockedSafety}</strong> bloqueio(s) de segurança (não é falha — voltam a ser elegíveis quando a janela expira) ·
                               <strong className="text-red-600"> {detail.performance.failedProvider}</strong> falha(s) real(is) de envio.
                             </p>
+                            {detail.performance.reasonGroups.some((g) => g.category === "BLOCKED_WEEKLY_LIMIT") && (
+                              <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[10px] text-amber-800">
+                                <p className="font-semibold">Como destravar (a maioria está no limite semanal por cliente):</p>
+                                <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                                  <li>Aumentar <strong>“Máximo de contatos por cliente / semana”</strong> nas Configurações de CRM.</li>
+                                  <li>Reduzir/pausar a campanha concorrente que consumiu o contato semanal (ex.: almoço).</li>
+                                  <li>Separar os públicos para que as campanhas não disputem os mesmos clientes.</li>
+                                  <li>Subir a <strong>prioridade</strong> desta campanha para receber orçamento primeiro (previsão).</li>
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         )}
                         <div className={`flex items-start gap-2 rounded-xl px-3 py-3 ${debug.isDueNow ? "border border-green-100 bg-green-50" : "border border-amber-100 bg-amber-50"}`}>

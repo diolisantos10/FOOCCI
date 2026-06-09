@@ -30,6 +30,7 @@ import {
 import {
   getSafetyConfig,
   getTodayGlobalSendCount,
+  getWeekGlobalSendCount,
   checkQuietHours,
   checkWeekendBlock,
   randomDelayMs,
@@ -235,6 +236,17 @@ export class ScheduledCampaignRunnerService {
         const reason = `Cap global diário atingido (${globalToday}/${safety.dailyGlobalCap})`;
         console.log(`[ScheduledCampaignRunner] ${campaign.name} blocked — ${reason}`);
         return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: globalToday, reason, completed: false };
+      }
+    }
+
+    // Optional restaurant weekly cap — OFF by default (weeklyGlobalCap = 0).
+    // Only enforced when the owner explicitly sets it in Settings.
+    if (safety.weeklyGlobalCap > 0) {
+      const globalWeek = await getWeekGlobalSendCount(campaign.restaurantId);
+      if (globalWeek >= safety.weeklyGlobalCap) {
+        const reason = `Cap global semanal atingido (${globalWeek}/${safety.weeklyGlobalCap})`;
+        console.log(`[ScheduledCampaignRunner] ${campaign.name} blocked — ${reason}`);
+        return { campaignId, campaignName: campaign.name, eligible: 0, sent: 0, failed: 0, skipped: globalWeek, reason, completed: false };
       }
     }
     // ────────────────────────────────────────────────────────────────────────

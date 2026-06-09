@@ -7,22 +7,23 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
-import { parseSafetyConfig, getTodayGlobalSendCount } from "@/lib/crm-safety";
+import { parseSafetyConfig, getTodayGlobalSendCount, getWeekGlobalSendCount } from "@/lib/crm-safety";
 
 export async function GET(req: NextRequest) {
   try {
     const ctx = getTenantContext(req);
     if (!ctx) return unauthorized();
 
-    const [profile, todaySent] = await Promise.all([
+    const [profile, todaySent, weekSent] = await Promise.all([
       prisma.restaurantCRMProfile.findUnique({
         where:  { restaurantId: ctx.restaurantId },
         select: { whatsAppSafetyConfig: true },
       }),
       getTodayGlobalSendCount(ctx.restaurantId),
+      getWeekGlobalSendCount(ctx.restaurantId),
     ]);
 
-    return ok({ ...parseSafetyConfig(profile?.whatsAppSafetyConfig), todaySent });
+    return ok({ ...parseSafetyConfig(profile?.whatsAppSafetyConfig), todaySent, weekSent });
   } catch (err) {
     console.error("[GET /api/settings/crm-safety]", err);
     return serverError();

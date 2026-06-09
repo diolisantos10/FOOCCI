@@ -16,6 +16,8 @@ import { prisma } from "@/lib/prisma";
 export interface CRMWhatsAppSafetyConfig {
   /** Max CRM messages sent per 24-hour rolling window across ALL campaigns + automations. 0 = no cap. */
   dailyGlobalCap: number;
+  /** OPTIONAL restaurant-wide weekly cap (7-day rolling) across ALL campaigns + automations. 0 = off. */
+  weeklyGlobalCap: number;
   /** Minimum hours between any two CRM messages to the same customer. Default 24. */
   customerCooldownHours: number;
   /** Whether to enforce quiet hours (no automated sends). */
@@ -40,6 +42,8 @@ export interface CRMWhatsAppSafetyConfig {
 
 export const DEFAULT_SAFETY_CONFIG: Readonly<CRMWhatsAppSafetyConfig> = {
   dailyGlobalCap:        200,
+  weeklyGlobalCap:       0, // off by default — opt-in via Settings
+
   customerCooldownHours: 24,
   quietHoursEnabled:     true,
   quietHoursStart:       "21:00",
@@ -60,6 +64,7 @@ export function parseSafetyConfig(raw: unknown): CRMWhatsAppSafetyConfig {
   const r = raw as Record<string, unknown>;
   return {
     dailyGlobalCap:        typeof r.dailyGlobalCap        === "number"  ? r.dailyGlobalCap        : d.dailyGlobalCap,
+    weeklyGlobalCap:       typeof r.weeklyGlobalCap       === "number"  ? r.weeklyGlobalCap       : d.weeklyGlobalCap,
     customerCooldownHours: typeof r.customerCooldownHours === "number"  ? r.customerCooldownHours : d.customerCooldownHours,
     quietHoursEnabled:     typeof r.quietHoursEnabled     === "boolean" ? r.quietHoursEnabled     : d.quietHoursEnabled,
     quietHoursStart:       typeof r.quietHoursStart       === "string"  ? r.quietHoursStart       : d.quietHoursStart,
@@ -89,6 +94,21 @@ export async function getSafetyConfig(restaurantId: string): Promise<CRMWhatsApp
  */
 export async function getTodayGlobalSendCount(restaurantId: string): Promise<number> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  return prisma.campaignExecution.count({
+    where: {
+      restaurantId,
+      sentAt: { gte: cutoff },
+      status: { in: ["SENT", "DELIVERED", "READ"] },
+    },
+  });
+}
+
+/**
+ * Total CRM messages successfully sent in the last 7 days for this restaurant,
+ * across ALL campaigns and automations (for the optional weekly restaurant cap).
+ */
+export async function getWeekGlobalSendCount(restaurantId: string): Promise<number> {
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   return prisma.campaignExecution.count({
     where: {
       restaurantId,
