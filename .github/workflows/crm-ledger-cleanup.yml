@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CRM Contact Ledger — backfill ROLLBACK / cleanup (cron-safe, manual)
+#
+# Removes CRMContactLedger rows (metadata.backfill=true) that do NOT belong to
+# keep_campaign_id, and optionally relabels the kept rows to a canonical concept
+# key. DEFAULTS TO DRY-RUN (counts only, writes nothing). A real cleanup requires
+# explicitly dispatching dry_run=false.
+#
+# Manual only (workflow_dispatch). Uses CRON_SECRET — NOT ADMIN_SECRET.
+# Never sends WhatsApp, never activates a campaign, never deletes a campaign.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CRM Ledger Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run? (true = count only, false = actually delete/relabel)"
+        type: choice
+        default: "true"
+        options: ["true", "false"]
+      keep_campaign_id:
+        description: "Campaign whose SENT ledger rows are PRESERVED (the old cold campaign)"
+        type: string
+        default: "cmq1r7i1b00o2s6xju850qkp5"
+      relabel_to:
+        description: "Optional: canonical concept key to set on the kept rows"
+        type: string
+        default: "reativacao-frios"
+
+jobs:
+  ledger-cleanup:
+    name: "CRM Ledger Cleanup"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "cleanup=${BASE_URL}/api/cron/crm/contact-ledger-cleanup" >> "$GITHUB_OUTPUT"
+
+      - name: "Ledger cleanup (DRY-RUN unless dry_run=false)"
+        env:
+          URL: ${{ steps.params.outputs.cleanup }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          KEEP_CAMPAIGN_ID: ${{ inputs.keep_campaign_id }}
+          RELABEL_TO: ${{ inputs.relabel_to }}
+        run: |
+          BODY=$(jq -nc --argjson dry "$([[ "$DRY_RUN" == "false" ]] && echo false || echo true)" \
+                       --arg keep "$KEEP_CAMPAIGN_ID" --arg rel "$RELABEL_TO" \
+                       '{dryRun:$dry, keepCampaignId:$keep} + (if $rel=="" then {} else {relabelTo:$rel} end)')
+          echo "→ payload (sem dados sensíveis): $BODY"
+          set +e
+          curl --connect-timeout 20 --max-time 180 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d "$BODY" \
+            -o /tmp/cleanup.json -w "%{http_code}" > /tmp/ccode.txt
+          set -e
+          HTTP=$(cat /tmp/ccode.txt)
+          echo "← HTTP                 : $HTTP"
+          echo "← ok                   : $(jq -r '.ok' /tmp/cleanup.json 2>/dev/null)"
+          echo "← dryRun               : $(jq -r '.dryRun' /tmp/cleanup.json 2>/dev/null)"
+          echo "← keepCampaignId       : $(jq -r '.keepCampaignId // "?"' /tmp/cleanup.json 2>/dev/null)"
+          echo "← totalBackfillRecords : $(jq -r '.totalBackfillRecords // "?"' /tmp/cleanup.json 2>/dev/null)"
+          echo "← keepRecords          : $(jq -r '.keepRecords // "?"' /tmp/cleanup.json 2>/dev/null)"
+          echo "← removeRecords        : $(jq -r '.removeRecords // "?"' /tmp/cleanup.json 2>/dev/null)"
+          echo "← relabelCandidates    : $(jq -r '.relabelCandidates // "?"' /tmp/cleanup.json 2>/dev/null)"
+          echo "← deleted              : $(jq -r '.deleted // 0' /tmp/cleanup.json 2>/dev/null)"
+          echo "← relabeled            : $(jq -r '.relabeled // 0' /tmp/cleanup.json 2>/dev/null)"
+          echo "← warnings             : $(jq -rc '.warnings // []' /tmp/cleanup.json 2>/dev/null)"
+          echo "── by campaign (id · count · action) ──"
+          jq -r '.byCampaign[]? | "\(.campaignId) · \(.count) · \(.action)"' /tmp/cleanup.json 2>/dev/null || true
+          echo "── kept family keys (key · count) ──"
+          jq -r '.keptFamilyKeys[]? | "\(.campaignFamilyKey) · \(.count)"' /tmp/cleanup.json 2>/dev/null || true
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::cleanup non-2xx ($HTTP)."; exit 1; fi
+          echo "✅ Ledger cleanup ($([[ "$DRY_RUN" == "false" ]] && echo REAL || echo dry-run)) concluído."
