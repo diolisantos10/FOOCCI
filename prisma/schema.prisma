@@ -2822,8 +2822,145 @@ model WaiterRuntimeVersionTechnique {
   @@map("waiter_runtime_version_techniques")
 }
 
-// ═══════════════════════════════════════════
-//  WHATSAPP TEXT ORDERING SESSION
+// ─────────────────────────────────────────────────────────────────────────────
+//  AGENT SIMULATION LAB — safe, dry-run behavioural simulation (additive only).
+//  Artificial customers interact with an agent (Waiter first) in SIMULATION mode:
+//  no order, no Pix, no WhatsApp, no real customer, no runtime mutation. It only
+//  records runs, scenarios and OPPORTUNITIES for a human to review/approve.
+//  Reusable across agents (Waiter / WhatsApp / CRM / Analytics / future).
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AgentSimulationMode {
+  MANUAL
+  CRON
+  DIAGNOSTIC
+}
+
+enum AgentSimulationDriver {
+  SERVICE // drives the real deterministic engine (no LLM, no side effects)
+  API
+  UI_STUB
+  PLAYWRIGHT // backlog — real browser UI driver
+}
+
+enum AgentSimulationRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  PARTIAL
+}
+
+enum AgentSimulationScenarioStatus {
+  PASS
+  WARNING
+  FAIL
+}
+
+enum AgentSimulationSeverity {
+  P0
+  P1
+  P2
+  INFO
+}
+
+enum AgentSimulationOpportunityType {
+  BUG
+  MISSED_SALE
+  UX_FRICTION
+  PROMPT_GAP
+  POLICY_GAP
+  LIBRARY_OPPORTUNITY
+  TRAINING_OPPORTUNITY
+}
+
+enum AgentSimulationOpportunityStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  BACKLOGGED
+}
+
+model AgentSimulationRun {
+  id             String                   @id @default(cuid())
+  agentSlug      String
+  departmentSlug String
+  restaurantId   String? // null = synthetic/global (no real restaurant)
+  mode           AgentSimulationMode      @default(MANUAL)
+  driver         AgentSimulationDriver    @default(SERVICE)
+  status         AgentSimulationRunStatus @default(RUNNING)
+  seed           String?
+  startedAt      DateTime                 @default(now())
+  finishedAt     DateTime?
+  durationMs     Int                      @default(0)
+  scenariosTotal    Int @default(0)
+  scenariosPassed   Int @default(0)
+  scenariosWarning  Int @default(0)
+  scenariosFailed   Int @default(0)
+  p0Count           Int @default(0)
+  p1Count           Int @default(0)
+  p2Count           Int @default(0)
+  opportunityCount  Int @default(0)
+  metadata       String? // JSON-encoded
+  createdAt      DateTime @default(now())
+
+  scenarios     AgentSimulationScenario[]
+  opportunities AgentSimulationOpportunity[]
+
+  @@index([agentSlug, createdAt])
+  @@map("agent_simulation_runs")
+}
+
+model AgentSimulationScenario {
+  id                  String                        @id @default(cuid())
+  runId               String
+  agentSlug           String
+  scenarioKey         String
+  scenarioType        String
+  persona             String
+  customerGoal        String
+  customerConstraints String? // JSON-encoded
+  initialMessage      String
+  status              AgentSimulationScenarioStatus @default(PASS)
+  severity            AgentSimulationSeverity       @default(INFO)
+  score               Int                           @default(0)
+  summary             String
+  evidence            String? // JSON-encoded
+  transcript          String? // JSON-encoded, sanitized
+  createdAt           DateTime                      @default(now())
+
+  run           AgentSimulationRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
+  opportunities AgentSimulationOpportunity[]
+
+  @@index([runId])
+  @@map("agent_simulation_scenarios")
+}
+
+model AgentSimulationOpportunity {
+  id             String                           @id @default(cuid())
+  runId          String
+  scenarioId     String?
+  agentSlug      String
+  type           AgentSimulationOpportunityType
+  severity       AgentSimulationSeverity          @default(INFO)
+  title          String
+  summary        String
+  evidence       String? // JSON-encoded
+  recommendation String
+  expectedImpact String?
+  status         AgentSimulationOpportunityStatus @default(PENDING_REVIEW)
+  reviewedAt     DateTime?
+  reviewedBy     String?
+  createdAt      DateTime                         @default(now())
+
+  run      AgentSimulationRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  scenario AgentSimulationScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+
+  @@index([runId])
+  @@index([agentSlug, status])
+  @@map("agent_simulation_opportunities")
+}
+
+
 //  Durable state for the WhatsApp AI text-ordering engine (controlled rollout).
 //  Additive only — no existing table is altered. Behind feature flag/allowlist;
 //  in DRY_RUN_ONLY mode this table is not written from production webhook paths.

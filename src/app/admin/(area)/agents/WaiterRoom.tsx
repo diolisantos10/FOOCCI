@@ -18,6 +18,7 @@ import { useState } from "react";
 import type { AdminAgentProfileView } from "@/services/agents/types";
 import { AgentLibraryPanel } from "./AgentLibraryPanel";
 import { WaiterRuntimeCockpit } from "./WaiterRuntimeCockpit";
+import { WaiterSimulationLab } from "./WaiterSimulationLab";
 import {
   WAITER_RUNTIME_COMPONENTS,
   WAITER_RUNTIME_SERVICES,
@@ -170,6 +171,7 @@ const TABS: readonly Tab[] = [
   "Library",
   "Runtime & Testes",
   "Runtime Merge",
+  "Simulador",
   "Governança",
 ];
 
@@ -432,6 +434,9 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
 
       {/* ── Runtime Merge — REAL cockpit (live APIs, not documentation) ──────── */}
       {tab === "Runtime Merge" && <WaiterRuntimeCockpit />}
+
+      {/* ── Simulador — Agent Simulation Lab (safe, dry-run) ────────────────── */}
+      {tab === "Simulador" && <WaiterSimulationLab />}
 
       {/* ── Runtime & Testes ────────────────────────────────────────────────── */}
       {tab === "Runtime & Testes" && (
