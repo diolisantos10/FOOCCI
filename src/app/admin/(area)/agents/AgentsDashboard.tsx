@@ -77,13 +77,21 @@ export function AgentsDashboard({ agents, dbOrigin, initialTab }: Props) {
         </p>
       </header>
 
-      {/* Discreet wayfinding: this is NOT the Build OS / Prompt Relay screen. */}
-      <a
-        href="/admin/build-os"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-600 hover:border-orange-300 hover:text-orange-700"
-      >
-        🛠️ Procurando o Prompt Relay / diagnóstico do WhatsApp? Acesse <strong>Build OS</strong> →
-      </a>
+      {/* Wayfinding shortcuts */}
+      <div className="flex flex-wrap gap-2">
+        <a
+          href="/admin/build-os"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-600 hover:border-orange-300 hover:text-orange-700"
+        >
+          🛠️ Procurando o Prompt Relay / diagnóstico do WhatsApp? Acesse <strong>Build OS</strong> →
+        </a>
+        <a
+          href="/admin/agentes/training"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:border-violet-400 hover:bg-violet-100"
+        >
+          🧠 <strong>Treinamento IA</strong> — batch, diagnóstico, propostas →
+        </a>
+      </div>
 
       {/* Pill / tab navigation */}
       <nav className="flex flex-wrap gap-2 border-b border-gray-200 pb-3">

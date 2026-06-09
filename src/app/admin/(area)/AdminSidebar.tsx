@@ -47,7 +47,7 @@ export function AdminSidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-3">
+      <nav className="flex-1 overflow-y-auto px-2 py-3">
         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
           Plataforma
         </p>
