@@ -377,10 +377,18 @@ export default function WaTextOrderingPage() {
   return (
     <div className="mx-auto max-w-4xl px-6 py-8 text-gray-900">
       {/* A. Header */}
-      <div className="mb-1 flex items-center gap-2">
-        <span className="text-lg">🧾</span>
-        <h1 className="text-xl font-bold">WA Pedido Texto</h1>
-        <Pill text="TEST CENTER" tone="orange" />
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🧾</span>
+          <h1 className="text-xl font-bold">WA Pedido Texto</h1>
+          <Pill text="TEST CENTER" tone="orange" />
+        </div>
+        <a
+          href="/admin/diagnostics/whatsapp-text-ordering/simulator"
+          className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 transition-colors"
+        >
+          💬 Abrir Simulador WhatsApp
+        </a>
       </div>
       <p className="text-sm text-gray-500">Simule pedidos por WhatsApp sem afetar clientes reais.</p>
 
