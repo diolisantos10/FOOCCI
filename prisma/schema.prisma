@@ -2626,6 +2626,13 @@ enum AgentLibraryExtractionStatus {
   EXTRACTING
   EXTRACTED
   FAILED
+  // v2 deep/chunked extraction states
+  EXTRACTING_TEXT
+  CHUNKING
+  PROCESSING_CHUNKS
+  CONSOLIDATING
+  PARTIAL
+  READY
 }
 
 enum AgentLibrarySourceStatus {
@@ -2662,8 +2669,9 @@ model AgentLibrarySource {
   createdAt        DateTime                     @default(now())
   updatedAt        DateTime                     @updatedAt
 
-  techniques AgentLibraryTechnique[]
-  file       AgentLibraryFile?
+  techniques    AgentLibraryTechnique[]
+  file          AgentLibraryFile?
+  extractionJob AgentLibraryExtractionJob?
 
   @@index([agentSlug])
   @@index([status])
@@ -2845,4 +2853,87 @@ model QualityAuditFinding {
   @@index([runId])
   @@index([auditorId, severity])
   @@map("quality_audit_findings")
+}
+
+// ═══════════════════════════════════════════
+//  AGENT LIBRARY – deep chunked extraction (v2)
+// ═══════════════════════════════════════════
+// Background, chunked deep extraction so long materials (books/trainings) are
+// processed in parts with progress, then consolidated + deduped into final
+// AgentLibraryTechnique rows. Additive; the quick single-shot path still works.
+// Library remains OFF the runtime — techniques are archived knowledge only.
+
+model AgentLibraryExtractionJob {
+  id              String    @id @default(cuid())
+  sourceId        String    @unique
+  agentSlug       String
+  // PENDING | EXTRACTING_TEXT | CHUNKING | PROCESSING_CHUNKS | CONSOLIDATING | EXTRACTED | PARTIAL | FAILED
+  stage           String    @default("PENDING")
+  processingMode  String    @default("CHUNKED") // SAMPLE | FULL | CHUNKED
+  extractionDepth String    @default("DEEP") // QUICK | DEEP
+  totalChunks     Int       @default(0)
+  processedChunks Int       @default(0)
+  failedChunks    Int       @default(0)
+  techniquesFound Int       @default(0)
+  lastError       String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  source     AgentLibrarySource                    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  chunks     AgentLibrarySourceChunk[]
+  candidates AgentLibraryChunkTechniqueCandidate[]
+
+  @@index([stage])
+  @@index([agentSlug])
+  @@map("agent_library_extraction_jobs")
+}
+
+model AgentLibrarySourceChunk {
+  id                  String   @id @default(cuid())
+  jobId               String
+  sourceId            String
+  chunkIndex          Int
+  totalChunks         Int
+  charCount           Int
+  text                String
+  status              String   @default("PENDING") // PENDING | PROCESSING | DONE | FAILED
+  techniquesExtracted Int      @default(0)
+  retries             Int      @default(0)
+  error               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  job AgentLibraryExtractionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, chunkIndex])
+  @@index([jobId, status])
+  @@map("agent_library_source_chunks")
+}
+
+model AgentLibraryChunkTechniqueCandidate {
+  id              String   @id @default(cuid())
+  jobId           String
+  sourceId        String
+  agentSlug       String
+  chunkIndex      Int
+  techniqueName   String
+  category        String?
+  purpose         String?
+  principle       String?
+  application     String?
+  usageRule       String?
+  qualityTest     String?
+  goodExample     String?
+  badExample      String?
+  confidence      Float?
+  // Short synthesized evidence only — never long copyrighted excerpts.
+  evidenceSnippet String?
+  createdAt       DateTime @default(now())
+
+  job AgentLibraryExtractionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@map("agent_library_chunk_technique_candidates")
 }

@@ -48,7 +48,12 @@ export class AgentLibraryService {
     const rows = await prisma.agentLibrarySource.findMany({
       where: { agentSlug },
       orderBy: { createdAt: "desc" },
-      include: { _count: { select: { techniques: true } } },
+      include: {
+        _count: { select: { techniques: true } },
+        extractionJob: {
+          select: { stage: true, totalChunks: true, processedChunks: true, failedChunks: true, techniquesFound: true },
+        },
+      },
     });
     return rows;
   }

@@ -44,6 +44,15 @@ export default async function AgentLibraryPage({
       extractionStatus: r.extractionStatus,
       techniqueCount: r._count.techniques,
       createdAt: r.createdAt.toISOString(),
+      job: r.extractionJob
+        ? {
+            stage: r.extractionJob.stage,
+            totalChunks: r.extractionJob.totalChunks,
+            processedChunks: r.extractionJob.processedChunks,
+            failedChunks: r.extractionJob.failedChunks,
+            techniquesFound: r.extractionJob.techniquesFound,
+          }
+        : null,
     }));
 
     if (selectedId) {

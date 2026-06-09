@@ -17,6 +17,8 @@
 
 import { AgentLibraryService } from "./AgentLibraryService";
 import { extractTextFromUpload } from "./extractText";
+import { isDeepCandidate } from "./deepExtraction/chunking";
+import { DeepExtractionService } from "./deepExtraction/DeepExtractionService";
 import {
   validateSourceInput,
   deriveTitleFromFileName,
@@ -199,6 +201,28 @@ export async function runUploadFlow(form: FormData): Promise<UploadFlowResult> {
     // (e.g. "save without extracting"). The manual route stays as retry/reprocess.
     const optedOut = str("extract") === "0";
     const hasText = textForAI.trim().length > 0;
+
+    // Large material → DEEP chunked extraction in the background. The upload
+    // returns fast (job scheduled); a cron/processor advances the chunks.
+    if (!optedOut && hasText && isDeepCandidate(textForAI)) {
+      stage = "scheduled";
+      try {
+        const { totalChunks, truncated } = await DeepExtractionService.scheduleJob(sourceId, textForAI);
+        log("deep-scheduled", { sourceId, totalChunks, truncated });
+        const tail = truncated ? " (material muito grande — processado até o limite de partes)." : "";
+        return ok(200, {
+          ok: true,
+          stage,
+          sourceId,
+          message: (extractNote ? `${extractNote} ` : "") +
+            `Extração profunda agendada: ${totalChunks} partes serão processadas em segundo plano.${tail}`,
+        });
+      } catch (err) {
+        log("deep-schedule-failed", { sourceId, errName: err instanceof Error ? err.name : "Error" });
+        // Fall through to the quick path as a safety net.
+      }
+    }
+
     if (!optedOut && hasText) {
       stage = "aiExtraction";
       try {

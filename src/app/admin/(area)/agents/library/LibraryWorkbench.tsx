@@ -46,6 +46,14 @@ export interface SourceDTO {
   extractionStatus: string;
   techniqueCount: number;
   createdAt: string;
+  /** Deep-extraction progress, when a chunked job exists. */
+  job?: {
+    stage: string;
+    totalChunks: number;
+    processedChunks: number;
+    failedChunks: number;
+    techniquesFound: number;
+  } | null;
 }
 
 export interface TechniqueDTO {
@@ -121,8 +129,18 @@ function Pill({ children, tone = "gray" }: { children: React.ReactNode; tone?: "
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{children}</span>;
 }
 
-function extractionTone(s: string): "gray" | "green" | "amber" {
-  return s === "EXTRACTED" ? "green" : s === "FAILED" ? "amber" : s === "EXTRACTING" ? "amber" : "gray";
+function extractionTone(s: string): "gray" | "green" | "amber" | "blue" {
+  if (s === "EXTRACTED" || s === "READY") return "green";
+  if (s === "FAILED") return "amber";
+  if (s === "EXTRACTING" || s === "PARTIAL") return "amber";
+  if (s === "EXTRACTING_TEXT" || s === "CHUNKING" || s === "PROCESSING_CHUNKS" || s === "CONSOLIDATING") return "blue";
+  return "gray";
+}
+
+/** Whole-number deep-extraction progress for a source job. */
+function jobPercent(job: NonNullable<SourceDTO["job"]>): number {
+  if (job.totalChunks <= 0) return 0;
+  return Math.min(100, Math.round((job.processedChunks / job.totalChunks) * 100));
 }
 
 // ── component ───────────────────────────────────────────────────────────────────
@@ -434,6 +452,22 @@ export function LibraryWorkbench({ agents, agentSlug, stats, sources, selected, 
                   <Pill tone="green">{s.techniqueCount} técnica(s)</Pill>
                   <span className="ml-auto text-[11px] text-gray-400">{fmtDate(s.createdAt)}</span>
                 </div>
+                {/* Deep extraction progress (processing in background) */}
+                {s.job && s.job.totalChunks > 0 && ["PROCESSING_CHUNKS", "CONSOLIDATING", "CHUNKING"].includes(s.extractionStatus) && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between text-[11px] text-gray-500">
+                      <span>{s.extractionStatus === "CONSOLIDATING" ? "Consolidando técnicas…" : `Lendo em partes — ${s.job.processedChunks}/${s.job.totalChunks}`}</span>
+                      <span>{jobPercent(s.job)}%</span>
+                    </div>
+                    <div className="mt-1 h-1.5 rounded-full bg-gray-100">
+                      <div className="h-1.5 rounded-full bg-blue-500 transition-all" style={{ width: `${jobPercent(s.job)}%` }} />
+                    </div>
+                    <p className="mt-1 text-[10px] text-gray-400">
+                      {s.job.techniquesFound} técnica(s) encontradas até agora · processando em segundo plano
+                      {s.job.failedChunks > 0 ? ` · ${s.job.failedChunks} parte(s) falharam` : ""}
+                    </p>
+                  </div>
+                )}
               </Link>
             );
           })}

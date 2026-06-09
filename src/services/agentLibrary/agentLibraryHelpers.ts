@@ -64,6 +64,13 @@ export const EXTRACTION_STATUS_LABELS: Record<string, string> = {
   EXTRACTING: "Extraindo…",
   EXTRACTED: "Extraído",
   FAILED: "Falhou",
+  // v2 deep/chunked extraction states
+  EXTRACTING_TEXT: "Lendo conteúdo…",
+  CHUNKING: "Dividindo em partes…",
+  PROCESSING_CHUNKS: "Extração profunda em andamento",
+  CONSOLIDATING: "Consolidando técnicas…",
+  PARTIAL: "Parcial (algumas partes falharam)",
+  READY: "Pronto",
 };
 
 export const SOURCE_STATUS_LABELS: Record<string, string> = {
@@ -290,6 +297,7 @@ export type UploadStage =
   | "storeFile"
   | "pdfParse"
   | "aiExtraction"
+  | "scheduled"
   | "created"
   | "done";
 
