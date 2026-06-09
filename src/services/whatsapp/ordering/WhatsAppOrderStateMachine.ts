@@ -695,20 +695,31 @@ function handleEarlyInfo(
 
 // ── Menu questions ───────────────────────────────────────────────────────────────
 
+// More-specific multi-word forms (e.g. "quanto sai") must come BEFORE the
+// bare "quanto" so the regex engine doesn't stop early and leave "sai …" behind.
+// All alternatives use `\s+` at the end (via the outer `)\s+`) so prefixes of
+// real product names like "tem" in "temaki" are never accidentally stripped.
 const QUESTION_SUBJECT_RE =
-  /^(voc[eê]s?\s+t[eê]m|t[eê]m|tem|qual|quais|quanto custa|quanto custam|quanto|h[aá]|existe|existem|vende[m]?|fazem|faz|preço do?|pre[çc]o|valor do?|quanto\s+sai|quanto\s+fica)\s+/i;
+  /^(voc[eê]s?\s+t[eê]m|t[eê]m|tem|qual|quais|quanto custa[m]?|quanto\s+sai|quanto\s+fica|quanto|h[aá]|existe[m]?|vende[m]?|fazem|faz|pre[çc]o|valor)\s+/i;
 
-// Leading Portuguese articles — strip them so "o yakisoba" → "yakisoba" for matching
-const LEADING_ARTICLE_RE = /^(os?|as?|uns?|umas?)\s+/i;
+// Leading Portuguese articles AND genitive prepositions — strip them so
+// "o yakisoba" → "yakisoba" and "do temaki" → "temaki" for menu matching.
+// Combined with the loop in extractQuestionSubject this handles multi-step
+// cases like "qual o preço do X" → "preço do X" → "X" in two passes.
+const LEADING_ARTICLE_RE = /^(d[aeo]s?|os?|as?|um[as]?|uns?)\s+/i;
 
 function extractQuestionSubject(text: string): string {
-  return text.trim()
-    .replace(/\?+\s*$/, "")
-    .replace(QUESTION_SUBJECT_RE, "")
-    .replace(/\bvoc[eê]s?\b/gi, "")
-    .replace(LEADING_ARTICLE_RE, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  let s = text.trim().replace(/\?+\s*$/, "");
+  let prev: string;
+  do {
+    prev = s;
+    s = s
+      .replace(QUESTION_SUBJECT_RE, "")
+      .replace(/\bvoc[eê]s?\b/gi, "")
+      .replace(LEADING_ARTICLE_RE, "")
+      .trim();
+  } while (s !== prev && s.length > 0);
+  return s.replace(/\s+/g, " ").trim();
 }
 
 function buildPriceListReply(subject: string, candidates: WaMenuItem[]): string {
