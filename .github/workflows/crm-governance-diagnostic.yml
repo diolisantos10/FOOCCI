@@ -1,0 +1,88 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CRM Governance Diagnostic (cron-safe, manual)
+#
+# Proves, in production with zero admin secret, that the CRM governance foundation
+# works: CRMContactLedger table + Campaign identity columns exist, ledger dedupe
+# (concept/message) works, and the preflight blocks an already-impacted customer.
+# Synthetic data + cleanup; never sends WhatsApp; no real customer impacted.
+#
+# Manual only (workflow_dispatch). Uses CRON_SECRET — NOT ADMIN_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CRM Governance Diagnostic
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  run-crm-governance-diagnostic:
+    name: "CRM Governance Diagnostic"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Build endpoint URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/crm/governance-diagnostic" >> "$GITHUB_OUTPUT"
+
+      - name: "POST /api/cron/crm/governance-diagnostic"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "────────────────────────────────────"
+          echo "→ Endpoint : $ENDPOINT_URL"
+          echo "────────────────────────────────────"
+
+          set +e
+          curl --connect-timeout 20 --max-time 180 -sS \
+            -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            -o /tmp/response.json \
+            -w "%{http_code}" > /tmp/http_status.txt
+          CURL_EXIT=$?
+          set -e
+
+          HTTP_STATUS=$(cat /tmp/http_status.txt 2>/dev/null || echo "000")
+
+          # Safe summary only — never secrets. Boolean fields read raw (NOT `// "?"`)
+          # because jq's `//` treats a correct `false` as empty.
+          STATUS=$(jq    -r '.status // "?"'               /tmp/response.json 2>/dev/null)
+          STAGE=$(jq     -r '.stage // "-"'                /tmp/response.json 2>/dev/null)
+          LEDGER=$(jq    -r '.ledgerAvailable'             /tmp/response.json 2>/dev/null)
+          IDENTITY=$(jq  -r '.campaignIdentityAvailable'   /tmp/response.json 2>/dev/null)
+          PREFLIGHT=$(jq -r '.preflightWorks'              /tmp/response.json 2>/dev/null)
+          DEDUPE=$(jq    -r '.dedupeWorks'                 /tmp/response.json 2>/dev/null)
+          RUNTIME=$(jq   -r '.runtimeTouched'              /tmp/response.json 2>/dev/null)
+          CLEANUP=$(jq   -r '.cleanup'                     /tmp/response.json 2>/dev/null)
+          MESSAGE=$(jq   -r '.message // ""'               /tmp/response.json 2>/dev/null)
+
+          echo "← curl exit                  : $CURL_EXIT"
+          echo "← HTTP Status                : $HTTP_STATUS"
+          echo "← status                     : $STATUS"
+          echo "← stage                      : $STAGE"
+          echo "← ledgerAvailable            : $LEDGER"
+          echo "← campaignIdentityAvailable  : $IDENTITY"
+          echo "← preflightWorks             : $PREFLIGHT"
+          echo "← dedupeWorks                : $DEDUPE"
+          echo "← runtimeTouched             : $RUNTIME"
+          echo "← cleanup                    : $CLEANUP"
+          echo "← message                    : $MESSAGE"
+
+          if [ "$CURL_EXIT" -ne 0 ]; then echo "::error::curl failed with exit $CURL_EXIT."; exit "$CURL_EXIT"; fi
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then echo "::error::non-2xx ($HTTP_STATUS)."; exit 1; fi
+          if [[ "$STATUS" != "PASS" ]]; then echo "::error::status='$STATUS' (expected PASS) at stage '$STAGE'. $MESSAGE"; exit 1; fi
+          if [[ "$LEDGER" != "true" ]]; then echo "::error::ledgerAvailable='$LEDGER' (expected true)."; exit 1; fi
+          if [[ "$IDENTITY" != "true" ]]; then echo "::error::campaignIdentityAvailable='$IDENTITY' (expected true)."; exit 1; fi
+          if [[ "$PREFLIGHT" != "true" ]]; then echo "::error::preflightWorks='$PREFLIGHT' (expected true)."; exit 1; fi
+          if [[ "$DEDUPE" != "true" ]]; then echo "::error::dedupeWorks='$DEDUPE' (expected true)."; exit 1; fi
+          if [[ "$RUNTIME" != "false" ]]; then echo "::error::runtimeTouched='$RUNTIME' (expected false)."; exit 1; fi
+          if [[ "$CLEANUP" != "true" ]]; then echo "::error::cleanup='$CLEANUP' (expected true)."; exit 1; fi
+
+          echo "✅ CRM Governance diagnostic PASS — ledger, identidade, dedupe e preflight OK, fonte limpa."
