@@ -57,10 +57,16 @@ export interface CampaignBatchResult {
   eligible:     number;
   sent:         number;
   failed:       number;
+  /** Safety blocks (weekly cap / cooldown / opt-out / window) — NOT failures. */
+  blocked?:     number;
   skipped:      number;
   reason?:      string;
   completed:    boolean;
 }
+
+/** Recently-blocked customers are not re-attempted for this many hours (avoids
+ *  re-creating a block row every cron tick and inflating the failure count). */
+const BLOCK_RETRY_WINDOW_HOURS = 24;
 
 export interface ScheduledCampaignRunSummary {
   dryRun:             boolean;
@@ -68,6 +74,7 @@ export interface ScheduledCampaignRunSummary {
   totalEligible:      number;
   totalSent:          number;
   totalFailed:        number;
+  totalBlocked:       number;
   totalSkipped:       number;
   results:            CampaignBatchResult[];
 }
@@ -267,7 +274,23 @@ export class ScheduledCampaignRunnerService {
       })).map((e) => e.customerId)
     );
 
-    const newEligible = allEligible.filter((c) => !alreadySentIds.has(c.id));
+    // Avoid useless retry: a customer recently BLOCKED (weekly cap / cooldown /
+    // opt-out / window) OR recently FAILED at the provider (e.g. invalid number)
+    // is NOT re-attempted within the retry window, so we don't create a fresh
+    // block/failure row every tick (which inflated "falhas" to the hundreds).
+    // They are re-evaluated only after the window expires.
+    const recentlyAttemptedIds = new Set(
+      (await prisma.campaignExecution.findMany({
+        where: {
+          campaignId,
+          status:    { in: ["BLOCKED", "FAILED"] as never[] },
+          createdAt: { gte: new Date(Date.now() - BLOCK_RETRY_WINDOW_HOURS * 60 * 60 * 1000) },
+        },
+        select: { customerId: true },
+      })).map((e) => e.customerId)
+    );
+
+    const newEligible = allEligible.filter((c) => !alreadySentIds.has(c.id) && !recentlyAttemptedIds.has(c.id));
 
     if (newEligible.length === 0) {
       // Only mark COMPLETED when the campaign was explicitly configured to end
@@ -306,7 +329,7 @@ export class ScheduledCampaignRunnerService {
     }
 
     // Send batch
-    const { sent, failed } = await this._sendBatch(campaign, batch, safety);
+    const { sent, failed, blocked = 0 } = await this._sendBatch(campaign, batch, safety);
 
     // Check end conditions
     const totalSentAfter      = (campaign.totalSent ?? 0) + sent;
@@ -328,6 +351,7 @@ export class ScheduledCampaignRunnerService {
       eligible:     newEligible.length,
       sent,
       failed,
+      blocked,
       skipped:      newEligible.length - batch.length,
       completed:    exhausted,
     };
@@ -379,6 +403,7 @@ export class ScheduledCampaignRunnerService {
       totalEligible:      results.reduce((s, r) => s + r.eligible, 0),
       totalSent:          results.reduce((s, r) => s + r.sent, 0),
       totalFailed:        results.reduce((s, r) => s + r.failed, 0),
+      totalBlocked:       results.reduce((s, r) => s + (r.blocked ?? 0), 0),
       totalSkipped:       results.reduce((s, r) => s + r.skipped, 0),
       results,
     };
@@ -393,11 +418,11 @@ export class ScheduledCampaignRunnerService {
     },
     customers: Array<{ id: string; name: string; phone: string; tier: string; segment: string; totalOrders: number; totalSpend: number; lastOrderAt: string | null }>,
     safety?: CRMWhatsAppSafetyConfig
-  ): Promise<{ sent: number; failed: number }> {
+  ): Promise<{ sent: number; failed: number; blocked: number }> {
     const cfgResult = await EvolutionConfigService.getSnapshot(campaign.restaurantId);
     if (!cfgResult.ok) {
       console.error(`[ScheduledCampaignRunner] WhatsApp not configured for restaurant ${campaign.restaurantId}`);
-      return { sent: 0, failed: customers.length };
+      return { sent: 0, failed: customers.length, blocked: 0 };
     }
     const evoConfig = cfgResult.data;
 
@@ -437,7 +462,8 @@ export class ScheduledCampaignRunnerService {
     });
 
     let sent        = 0;
-    let failed      = 0;
+    let failed      = 0; // REAL send failures (provider/Evolution) only
+    let blocked     = 0; // safety blocks — never counted as failures
     let sendIndex   = 0; // tracks actual send attempts (for inter-send delay placement)
 
     for (const customer of customers) {
@@ -453,6 +479,8 @@ export class ScheduledCampaignRunnerService {
         context:            safetyContext,
       });
       if (!decision.sendable) {
+        // A safety block is NOT a failure — record it as BLOCKED with the
+        // machine reason on errorMessage (so the UI classifies it precisely).
         await prisma.campaignExecution.create({
           data: {
             campaignId:    campaign.id,
@@ -461,11 +489,12 @@ export class ScheduledCampaignRunnerService {
             customerName:  customer.name,
             customerPhone: customer.phone,
             messageText:   "",
-            status:        "FAILED",
-            failedReason:  decision.detail ?? decision.reason ?? "BLOCKED",
+            status:        "BLOCKED" as never,
+            failedReason:  decision.detail ?? decision.reason ?? "Bloqueado",
+            errorMessage:  decision.reason ?? "UNKNOWN_ERROR",
           },
         });
-        failed++;
+        blocked++;
         continue;
       }
 
@@ -478,11 +507,12 @@ export class ScheduledCampaignRunnerService {
             customerName:  customer.name,
             customerPhone: customer.phone,
             messageText:   "",
-            status:        "FAILED",
+            status:        "BLOCKED" as never,
             failedReason:  "Cliente opt-out",
+            errorMessage:  "CUSTOMER_OPTED_OUT",
           },
         });
-        failed++;
+        blocked++;
         continue;
       }
 
@@ -547,6 +577,7 @@ export class ScheduledCampaignRunnerService {
 
         sent++;
       } catch (err) {
+        // A real provider/Evolution failure (e.g. HTTP 400 invalid number).
         const errMsg = err instanceof Error ? err.message : "Erro desconhecido";
         await prisma.campaignExecution.create({
           data: {
@@ -558,25 +589,27 @@ export class ScheduledCampaignRunnerService {
             messageText:   "",
             status:        "FAILED",
             failedReason:  errMsg,
+            errorMessage:  errMsg, // raw provider detail (status/endpoint) for classification
           },
         });
         failed++;
       }
     }
 
-    // Single campaign counter update after batch
-    if (sent > 0 || failed > 0) {
+    // Single campaign counter update after batch. totalFailed counts REAL send
+    // failures only — safety blocks are derived from BLOCKED executions, not here.
+    if (sent > 0 || failed > 0 || blocked > 0) {
       await prisma.campaign.update({
         where: { id: campaign.id },
         data:  {
           totalSent:    { increment: sent },
           totalFailed:  { increment: failed },
-          totalAudience: { increment: sent + failed },
+          totalAudience: { increment: sent + failed + blocked },
         },
       });
     }
 
-    return { sent, failed };
+    return { sent, failed, blocked };
   }
 
   /**

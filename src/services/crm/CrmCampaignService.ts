@@ -67,8 +67,10 @@ export interface SendInput {
 export interface SendResult {
   totalSent:        number;
   totalFailed:      number;
+  /** Safety blocks (weekly cap / cooldown / opt-out / dedupe) — NOT failures. */
+  totalBlocked:     number;
   duplicateSkipped: number;
-  results:          Array<{ id: string; status: "SENT" | "FAILED"; error?: string }>;
+  results:          Array<{ id: string; status: "SENT" | "FAILED" | "BLOCKED"; error?: string }>;
 }
 
 // ─── template → segment mapping ───────────────────────────────
@@ -500,6 +502,7 @@ export class CrmCampaignService {
 
     let totalSent        = 0;
     let totalFailed      = 0;
+    let totalBlocked     = 0;
     let duplicateSkipped = 0;
     const results: SendResult["results"] = [];
 
@@ -516,15 +519,16 @@ export class CrmCampaignService {
         context:        safetyContext,
       });
       if (!decision.sendable) {
+        // Safety block — recorded as BLOCKED (not a failure), machine reason kept.
         await prisma.campaignExecution.update({
           where: { id: exec.id },
-          data:  { status: "FAILED", failedReason: decision.detail ?? decision.reason ?? "BLOCKED" },
+          data:  { status: "BLOCKED" as never, failedReason: decision.detail ?? decision.reason ?? "Bloqueado", errorMessage: decision.reason ?? "UNKNOWN_ERROR" },
         });
-        totalFailed++;
+        totalBlocked++;
         if (decision.reason === "RECENT_CRM_MESSAGE_24H" || decision.reason === "DUPLICATE_CAMPAIGN_RECIPIENT") {
           duplicateSkipped++;
         }
-        results.push({ id: exec.id, status: "FAILED", error: decision.reason ?? "BLOCKED" });
+        results.push({ id: exec.id, status: "BLOCKED", error: decision.reason ?? "BLOCKED" });
         continue;
       }
 
@@ -533,11 +537,11 @@ export class CrmCampaignService {
       if (exec.customerId && recentlySentIds.has(exec.customerId)) {
         await prisma.campaignExecution.update({
           where: { id: exec.id },
-          data:  { status: "FAILED", failedReason: "DUPLICATE_24H_SKIP" },
+          data:  { status: "BLOCKED" as never, failedReason: "Mensagem recente (24h)", errorMessage: "RECENT_CRM_MESSAGE_24H" },
         });
         duplicateSkipped++;
-        totalFailed++;
-        results.push({ id: exec.id, status: "FAILED", error: "DUPLICATE_24H_SKIP" });
+        totalBlocked++;
+        results.push({ id: exec.id, status: "BLOCKED", error: "DUPLICATE_24H_SKIP" });
         continue;
       }
 
@@ -545,10 +549,10 @@ export class CrmCampaignService {
       if (exec.customerId && optedOutIds.has(exec.customerId)) {
         await prisma.campaignExecution.update({
           where: { id: exec.id },
-          data:  { status: "FAILED", failedReason: "Cliente opt-out" },
+          data:  { status: "BLOCKED" as never, failedReason: "Cliente opt-out", errorMessage: "CUSTOMER_OPTED_OUT" },
         });
-        totalFailed++;
-        results.push({ id: exec.id, status: "FAILED", error: "Cliente opt-out" });
+        totalBlocked++;
+        results.push({ id: exec.id, status: "BLOCKED", error: "Cliente opt-out" });
         continue;
       }
 
@@ -556,7 +560,7 @@ export class CrmCampaignService {
       if (!phone) {
         await prisma.campaignExecution.update({
           where: { id: exec.id },
-          data:  { status: "FAILED", failedReason: "Telefone inválido ou ausente" },
+          data:  { status: "FAILED", failedReason: "Telefone inválido ou ausente", errorMessage: "INVALID_PHONE_FORMAT" },
         });
         totalFailed++;
         results.push({ id: exec.id, status: "FAILED", error: "Telefone inválido" });
@@ -622,7 +626,7 @@ export class CrmCampaignService {
         const errMsg = err instanceof Error ? err.message : "Erro desconhecido";
         await prisma.campaignExecution.update({
           where: { id: exec.id },
-          data:  { status: "FAILED", failedReason: errMsg },
+          data:  { status: "FAILED", failedReason: errMsg, errorMessage: errMsg },
         });
         totalFailed++;
         results.push({ id: exec.id, status: "FAILED", error: errMsg });
@@ -640,7 +644,7 @@ export class CrmCampaignService {
       },
     });
 
-    return { totalSent, totalFailed, duplicateSkipped, results };
+    return { totalSent, totalFailed, totalBlocked, duplicateSkipped, results };
   }
 }
 

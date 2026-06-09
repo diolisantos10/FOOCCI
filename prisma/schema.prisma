@@ -788,6 +788,11 @@ enum ExecutionStatus {
   DELIVERED
   READ
   FAILED
+  // A safety BLOCK (weekly cap / cooldown / opt-out / window) is NOT a send
+  // failure — it is stored distinctly so the UI never counts it as a "falha".
+  BLOCKED
+  // Recipient intentionally not attempted (not eligible this run).
+  SKIPPED
 }
 
 // ═══════════════════════════════════════════

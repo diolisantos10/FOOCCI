@@ -155,10 +155,18 @@ type CampaignExecutionRow = {
   status:           string;
   sentAt:           string | null;
   failedReason:     string | null;
+  errorMessage?:    string | null;
   converted:        boolean;
   convertedAt:      string | null;
   revenue:          number | null;
   convertedOrderId: string | null;
+  classification?:  { category: string; kind: string; badge: string } | null;
+};
+
+type CampaignPerformance = {
+  audience: number; sent: number; blockedSafety: number; failedProvider: number;
+  read: number; responded: number; converted: number; conversionRate: number;
+  reasonGroups: Array<{ category: string; badge: string; count: number; kind: string }>;
 };
 
 type CampaignDetail = {
@@ -183,6 +191,7 @@ type CampaignDetail = {
   createdAt:      string;
   sentAt:         string | null;
   executions:     CampaignExecutionRow[];
+  performance?:   CampaignPerformance | null;
 };
 
 // ── Custom action types ───────────────────────────────────────────────────────
@@ -2161,26 +2170,48 @@ function CampaignManageModal({
                 {/* ── Performance ── */}
                 {activeTab === "performance" && (
                   <div className="space-y-6">
-                    <div>
-                      <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Resultados totais</p>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        {[
-                          { label: "Total audiência",  value: detail.totalAudience,  color: "text-gray-700" },
-                          { label: "Disparados",        value: detail.totalSent,      color: "text-blue-700" },
-                          { label: "Lidos",             value: detail.totalRead,      color: "text-indigo-700" },
-                          { label: "Falhas",            value: detail.totalFailed,    color: detail.totalFailed > 0 ? "text-red-600" : "text-gray-400" },
-                          { label: "Respostas",         value: detail.totalResponded, color: "text-blue-600" },
-                          { label: "Tx. resposta",      value: responseRate ? `${responseRate}%` : "—", color: responseRate ? "text-green-600" : "text-gray-400" },
-                          { label: "Compras",           value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-gray-400" },
-                          { label: "Tx. conversão",     value: convRate ? `${convRate}%` : "—",  color: convRate ? "text-green-700" : "text-gray-400" },
-                        ].map((m) => (
-                          <div key={m.label} className="rounded-xl border border-gray-100 bg-white px-2 py-3 text-center shadow-sm">
-                            <p className={`text-xl font-bold leading-none ${m.color}`}>{m.value}</p>
-                            <p className="mt-1.5 text-[9px] text-gray-500 leading-tight">{m.label}</p>
+                    {(() => {
+                      const perf = detail.performance;
+                      const sent = perf?.sent ?? detail.totalSent;
+                      const blocked = perf?.blockedSafety ?? 0;
+                      const failed = perf?.failedProvider ?? detail.totalFailed;
+                      return (
+                        <div>
+                          <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Resultados totais</p>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            {[
+                              { label: "Audiência total",        value: perf?.audience ?? detail.totalAudience, color: "text-gray-700" },
+                              { label: "Enviados",                value: sent,    color: "text-blue-700" },
+                              { label: "Bloqueados (segurança)",  value: blocked, color: blocked > 0 ? "text-amber-600" : "text-gray-400" },
+                              { label: "Falhas reais de envio",   value: failed,  color: failed > 0 ? "text-red-600" : "text-gray-400" },
+                              { label: "Lidos",                   value: detail.totalRead,      color: "text-indigo-700" },
+                              { label: "Respostas",               value: detail.totalResponded, color: "text-blue-600" },
+                              { label: "Compras",                 value: detail.totalConverted, color: detail.totalConverted > 0 ? "text-green-700" : "text-gray-400" },
+                              { label: "Conversão",               value: convRate ? `${convRate}%` : "—", color: convRate ? "text-green-700" : "text-gray-400" },
+                            ].map((m) => (
+                              <div key={m.label} className="rounded-xl border border-gray-100 bg-white px-2 py-3 text-center shadow-sm">
+                                <p className={`text-xl font-bold leading-none ${m.color}`}>{m.value}</p>
+                                <p className="mt-1.5 text-[9px] text-gray-500 leading-tight">{m.label}</p>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </div>
+                          {blocked > 0 && (
+                            <p className="mt-2 text-[10px] text-amber-600">
+                              ⓘ Bloqueios de segurança (limite semanal, cooldown, opt-out) <strong>não são falhas de envio</strong> — os clientes voltam a ficar elegíveis quando a janela expira.
+                            </p>
+                          )}
+                          {perf && perf.reasonGroups.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {perf.reasonGroups.map((g) => (
+                                <span key={g.category} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${g.kind === "FAILED" ? "bg-red-50 text-red-600" : g.kind === "BLOCKED" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+                                  {g.badge}: {g.count}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {Number(detail.totalRevenue) > 0 && (
                       <div className="flex items-center gap-3 rounded-xl border border-green-100 bg-green-50 px-4 py-3">
@@ -2206,16 +2237,25 @@ function CampaignManageModal({
                       ) : (
                         <div className="space-y-1.5 max-h-72 overflow-y-auto rounded-xl border border-gray-100 p-2">
                           {detail.executions.map((ex) => {
-                            const exSc = EXEC_STATUS_COLORS[ex.status] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                            // Prefer the server classification so a safety block reads
+                            // "Bloqueado", an invalid number reads "Telefone inválido",
+                            // and only a real provider error reads "Falhou".
+                            const kind = ex.classification?.kind ?? ex.status;
+                            const badge = ex.classification?.badge ?? (EXEC_STATUS_LABELS[ex.status] ?? ex.status);
+                            const tone = kind === "SENT" ? { bg: "bg-green-50", text: "text-green-700" }
+                              : kind === "BLOCKED" ? { bg: "bg-amber-50", text: "text-amber-700" }
+                              : kind === "FAILED" ? { bg: "bg-red-50", text: "text-red-600" }
+                              : (EXEC_STATUS_COLORS[ex.status] ?? { bg: "bg-gray-100", text: "text-gray-600" });
+                            const reasonColor = kind === "BLOCKED" ? "text-amber-600" : "text-red-500";
                             return (
                               <div key={ex.id} className="flex items-center gap-3 rounded-xl border border-gray-50 bg-white px-3 py-2 shadow-sm">
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs font-semibold text-gray-800 truncate">{ex.customerName ?? "Cliente"}</p>
                                   <p className="text-[10px] text-gray-400 truncate">{ex.customerPhone ?? "—"}</p>
-                                  {ex.failedReason && <p className="text-[10px] text-red-500 truncate">{ex.failedReason}</p>}
+                                  {ex.failedReason && <p className={`text-[10px] truncate ${reasonColor}`}>{ex.failedReason}</p>}
                                 </div>
                                 <div className="shrink-0 flex flex-col items-end gap-0.5">
-                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${exSc.bg} ${exSc.text}`}>{EXEC_STATUS_LABELS[ex.status] ?? ex.status}</span>
+                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.bg} ${tone.text}`}>{badge}</span>
                                   {ex.converted && ex.revenue != null && (
                                     <span className="text-[10px] font-semibold text-green-600">R$ {Number(ex.revenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
                                   )}
@@ -2240,6 +2280,22 @@ function CampaignManageModal({
                     )}
                     {!loadingDebug && debug && (
                       <div className="space-y-3">
+                        {detail.performance && (detail.performance.blockedSafety > 0 || detail.performance.failedProvider > 0) && (
+                          <div className="rounded-xl border border-gray-100 bg-white px-3 py-3">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Por que clientes não receberam</p>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {detail.performance.reasonGroups.map((g) => (
+                                <span key={g.category} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${g.kind === "FAILED" ? "bg-red-50 text-red-600" : g.kind === "BLOCKED" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+                                  {g.badge}: {g.count}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="mt-2 text-[10px] text-gray-500">
+                              <strong className="text-amber-700">{detail.performance.blockedSafety}</strong> bloqueio(s) de segurança (não é falha — voltam a ser elegíveis quando a janela expira) ·
+                              <strong className="text-red-600"> {detail.performance.failedProvider}</strong> falha(s) real(is) de envio.
+                            </p>
+                          </div>
+                        )}
                         <div className={`flex items-start gap-2 rounded-xl px-3 py-3 ${debug.isDueNow ? "border border-green-100 bg-green-50" : "border border-amber-100 bg-amber-50"}`}>
                           <div className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${debug.isDueNow ? "bg-green-500" : "bg-amber-400"}`} />
                           <p className={`text-xs font-semibold ${debug.isDueNow ? "text-green-700" : "text-amber-700"}`}>

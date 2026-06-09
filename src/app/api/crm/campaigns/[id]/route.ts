@@ -8,6 +8,7 @@ import { NextRequest } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, notFound, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { classifyExecution, summarizeExecutions } from "@/services/crm/crmExecutionClassification";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ export async function GET(
             status:           true,
             sentAt:           true,
             failedReason:     true,
+            errorMessage:     true,
             converted:        true,
             convertedAt:      true,
             revenue:          true,
@@ -67,7 +69,34 @@ export async function GET(
       return notFound("Campaign not found");
     }
 
-    return ok(campaign);
+    // Classify each execution (SENT / FAILED_PROVIDER / BLOCKED_*) so the UI shows
+    // the right badge and a clean Performance split (blocked ≠ failed).
+    const executions = campaign.executions.map((e) => ({
+      ...e,
+      classification: classifyExecution({ status: e.status, failedReason: e.failedReason, errorMessage: e.errorMessage }),
+    }));
+    const performance = summarizeExecutions(
+      campaign.executions.map((e) => ({ status: e.status, failedReason: e.failedReason, errorMessage: e.errorMessage })),
+    );
+    const responded = campaign.totalResponded;
+    const converted = campaign.totalConverted;
+    const conversionRate = performance.sent > 0 ? Math.round((converted / performance.sent) * 100) : 0;
+
+    return ok({
+      ...campaign,
+      executions,
+      performance: {
+        audience:       campaign.totalAudience,
+        sent:           performance.sent,
+        blockedSafety:  performance.blockedSafety,
+        failedProvider: performance.failedProvider,
+        read:           campaign.totalRead,
+        responded,
+        converted,
+        conversionRate,
+        reasonGroups:   performance.reasonGroups,
+      },
+    });
   } catch (err) {
     console.error("[GET /api/crm/campaigns/[id]]", err);
     return serverError();

@@ -8,6 +8,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { ok, badRequest, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { CrmCampaignService } from "@/services/crm/CrmCampaignService";
+import { summarizeFromReasonCounts } from "@/services/crm/crmExecutionClassification";
 
 // ─── GET — campaign history ────────────────────────────────────
 
@@ -64,6 +65,7 @@ export async function GET(req: NextRequest) {
         if (["SENT", "DELIVERED", "READ"].includes(g.status)) s.sent   += g._count.id;
         else if (g.status === "FAILED")                        s.failed += g._count.id;
         else if (g.status === "PENDING")                       s.pending += g._count.id;
+        // BLOCKED / SKIPPED are intentionally NOT counted as failures.
       }
     }
 
@@ -79,29 +81,41 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // Batch-compute failure breakdowns for campaigns that have failures.
-    // Grouped at the DB level — one round-trip regardless of campaign count.
-    const failedCampaignIds = enriched.filter((c) => c.totalFailed > 0).map((c) => c.id);
-    const failureBreakdowns: Record<string, Record<string, number>> = {};
+    // Classify non-sent executions so the UI separates real send FAILURES from
+    // expected SAFETY BLOCKS (weekly cap / cooldown / opt-out / window). Grouped
+    // at the DB level — one round-trip regardless of campaign count.
+    const allIds = enriched.map((c) => c.id);
+    const summaries: Record<string, ReturnType<typeof summarizeFromReasonCounts>> = {};
 
-    if (failedCampaignIds.length > 0) {
-      const failGroups = await prisma.campaignExecution.groupBy({
-        by:    ["campaignId", "failedReason"],
-        where: { campaignId: { in: failedCampaignIds }, status: "FAILED" },
+    if (allIds.length > 0) {
+      const groups = await prisma.campaignExecution.groupBy({
+        by:    ["campaignId", "status", "failedReason", "errorMessage"],
+        where: { campaignId: { in: allIds }, status: { in: ["FAILED", "BLOCKED"] as never[] } },
         _count: { id: true },
       });
-      for (const g of failGroups) {
-        if (!failureBreakdowns[g.campaignId]) failureBreakdowns[g.campaignId] = {};
-        const reason = g.failedReason ?? "BLOCKED";
-        failureBreakdowns[g.campaignId]![reason] =
-          (failureBreakdowns[g.campaignId]![reason] ?? 0) + g._count.id;
+      const byCampaign: Record<string, Array<{ status: string; failedReason?: string | null; errorMessage?: string | null; count: number }>> = {};
+      for (const g of groups) {
+        (byCampaign[g.campaignId] ??= []).push({
+          status: g.status, failedReason: g.failedReason, errorMessage: g.errorMessage, count: g._count.id,
+        });
       }
+      for (const id of allIds) summaries[id] = summarizeFromReasonCounts(byCampaign[id] ?? []);
     }
 
-    const withBreakdowns = enriched.map((c) => ({
-      ...c,
-      failureBreakdown: failureBreakdowns[c.id] ?? null,
-    }));
+    const withBreakdowns = enriched.map((c) => {
+      const summary = summaries[c.id];
+      return {
+        ...c,
+        // Real failures only (provider/invalid phone), not safety blocks.
+        totalFailed: summary ? summary.failedProvider : c.totalFailed,
+        totalBlocked: summary ? summary.blockedSafety : 0,
+        executionSummary: summary ?? null,
+        // Legacy field kept for back-compat: reason → count of the non-sent rows.
+        failureBreakdown: summary
+          ? Object.fromEntries(summary.reasonGroups.map((r) => [r.badge, r.count]))
+          : null,
+      };
+    });
 
     return ok(withBreakdowns);
   } catch (err) {
