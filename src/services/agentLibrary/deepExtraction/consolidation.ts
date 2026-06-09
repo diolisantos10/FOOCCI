@@ -35,9 +35,13 @@ export function isGenericTechnique(c: CandidateLike): boolean {
   const name = (c.techniqueName ?? "").trim();
   if (name.length < 8) return true;
   if (GENERIC_NAME.some((re) => re.test(name))) return true;
-  // No application AND no usage rule ⇒ not actionable for the Waiter.
-  if (!c.application?.trim() && !c.usageRule?.trim()) return true;
-  return false;
+  // Keep it when it carries ANY substantive operational content (a concrete
+  // application, usage rule, quality test or principle). Only drop the truly
+  // empty/vague candidates — otherwise good-but-partial techniques are lost.
+  const hasSubstance = [c.application, c.usageRule, c.qualityTest, c.principle].some(
+    (f) => typeof f === "string" && f.trim().length >= 12,
+  );
+  return !hasSubstance;
 }
 
 /** Lowercased, accent/punctuation-stripped name for dedupe keys. */

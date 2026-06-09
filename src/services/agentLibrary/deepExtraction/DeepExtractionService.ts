@@ -187,12 +187,26 @@ export const DeepExtractionService = {
       });
     }
 
+    // Honesty rule: 0 final techniques is NEVER a silent EXTRACTED.
+    //  - finals > 0           → EXTRACTED (or PARTIAL if some chunks failed)
+    //  - candidates but 0 finals → PARTIAL with a clear lastError
+    //  - no candidates at all → FAILED with a clear lastError
     const partial = job.failedChunks > 0;
-    const sourceStatus = finals.length > 0 ? (partial ? "PARTIAL" : "EXTRACTED") : "FAILED";
+    let sourceStatus: "EXTRACTED" | "PARTIAL" | "FAILED";
+    let lastError: string | null = null;
+    if (finals.length > 0) {
+      sourceStatus = partial ? "PARTIAL" : "EXTRACTED";
+    } else if (candidates.length > 0) {
+      sourceStatus = "PARTIAL";
+      lastError = `Candidatas extraídas (${candidates.length}), mas nenhuma técnica final após consolidação/filtro.`;
+    } else {
+      sourceStatus = "FAILED";
+      lastError = "Nenhuma candidata foi extraída dos chunks.";
+    }
 
     await prisma.agentLibraryExtractionJob.update({
       where: { id: jobId },
-      data: { stage: sourceStatus, techniquesFound: finals.length, finishedAt: new Date() },
+      data: { stage: sourceStatus, techniquesFound: finals.length, lastError, finishedAt: new Date() },
     });
     await prisma.agentLibrarySource.update({
       where: { id: job.sourceId },

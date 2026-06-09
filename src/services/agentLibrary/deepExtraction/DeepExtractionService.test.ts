@@ -84,8 +84,8 @@ describe("DeepExtractionService.consolidateJob", () => {
   it("(8) dedupes candidates into final techniques and marks the source EXTRACTED", async () => {
     db.agentLibraryExtractionJob.findUnique.mockResolvedValue({ id: "job1", sourceId: "s1", agentSlug: "waiter", failedChunks: 0 });
     db.agentLibraryChunkTechniqueCandidate.findMany.mockResolvedValue([
-      { techniqueName: "Pergunta de intenção", category: "Atendimento", application: "a", usageRule: "1", confidence: 0.6 },
-      { techniqueName: "pergunta de INTENÇÃO", category: "Atendimento", application: "a", usageRule: "1", confidence: 0.9 }, // dup
+      { techniqueName: "Pergunta de intenção", category: "Atendimento", application: "Identifica ocasião antes de sugerir.", usageRule: "Máximo 1 pergunta.", confidence: 0.6 },
+      { techniqueName: "pergunta de INTENÇÃO", category: "Atendimento", application: "Identifica ocasião antes de sugerir.", usageRule: "Máximo 1 pergunta.", confidence: 0.9 }, // dup
       { techniqueName: "Faça perguntas" }, // generic → dropped
     ]);
 
@@ -95,6 +95,27 @@ describe("DeepExtractionService.consolidateJob", () => {
     expect(db.agentLibraryTechnique.createMany).toHaveBeenCalledTimes(1);
     expect(db.agentLibrarySource.update).toHaveBeenCalledWith(expect.objectContaining({ data: { extractionStatus: "EXTRACTED" } }));
     expect(db.agentLibraryChunkTechniqueCandidate.deleteMany).toHaveBeenCalledWith({ where: { jobId: "job1" } });
+  });
+
+  it("(5)(9) candidates that all filter out → PARTIAL + lastError (never silent EXTRACTED)", async () => {
+    db.agentLibraryExtractionJob.findUnique.mockResolvedValue({ id: "job1", sourceId: "s1", agentSlug: "waiter", failedChunks: 0 });
+    db.agentLibraryChunkTechniqueCandidate.findMany.mockResolvedValue([
+      { techniqueName: "Faça perguntas" },
+      { techniqueName: "Pergunte" },
+    ]);
+    const r = await DeepExtractionService.consolidateJob("job1");
+    expect(r.techniquesCreated).toBe(0);
+    expect(db.agentLibraryTechnique.createMany).not.toHaveBeenCalled();
+    expect(db.agentLibrarySource.update).toHaveBeenCalledWith(expect.objectContaining({ data: { extractionStatus: "PARTIAL" } }));
+    const jobUpdate = db.agentLibraryExtractionJob.update.mock.calls.find((c) => (c[0] as { data: { lastError?: string } }).data.lastError);
+    expect((jobUpdate![0] as { data: { lastError: string } }).data.lastError).toContain("nenhuma técnica final");
+  });
+
+  it("no candidates at all → FAILED with lastError", async () => {
+    db.agentLibraryExtractionJob.findUnique.mockResolvedValue({ id: "job1", sourceId: "s1", agentSlug: "waiter", failedChunks: 0 });
+    db.agentLibraryChunkTechniqueCandidate.findMany.mockResolvedValue([]);
+    await DeepExtractionService.consolidateJob("job1");
+    expect(db.agentLibrarySource.update).toHaveBeenCalledWith(expect.objectContaining({ data: { extractionStatus: "FAILED" } }));
   });
 
   it("marks PARTIAL when some chunks failed", async () => {

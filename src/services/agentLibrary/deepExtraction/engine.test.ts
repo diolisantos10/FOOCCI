@@ -71,11 +71,14 @@ describe("consolidation", () => {
     expect(normalizeTechniqueName("Redução de Fricção!")).toBe("reducao de friccao");
   });
 
-  it("isGenericTechnique rejects vague/empty techniques", () => {
+  it("isGenericTechnique rejects vague/empty but keeps techniques with substance", () => {
     expect(isGenericTechnique(cand({ techniqueName: "Faça perguntas" }))).toBe(true);
     expect(isGenericTechnique(cand({ techniqueName: "Pergunte" }))).toBe(true);
     expect(isGenericTechnique(cand({ techniqueName: "X" }))).toBe(true); // too short
-    expect(isGenericTechnique(cand({ application: null, usageRule: null }))).toBe(true);
+    // truly empty (no substantive field at all) → generic
+    expect(isGenericTechnique(cand({ application: null, usageRule: null, qualityTest: null, principle: null }))).toBe(true);
+    // keeps a technique that has only a strong principle/qualityTest (no application)
+    expect(isGenericTechnique(cand({ application: null, usageRule: null, qualityTest: "Sugeriu ≤3 opções compatíveis?" }))).toBe(false);
     expect(isGenericTechnique(cand())).toBe(false); // a good, actionable one
   });
 
