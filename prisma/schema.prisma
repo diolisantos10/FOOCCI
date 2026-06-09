@@ -2937,3 +2937,164 @@ model AgentLibraryChunkTechniqueCandidate {
   @@index([jobId])
   @@map("agent_library_chunk_technique_candidates")
 }
+
+// ═══════════════════════════════════════════
+//  AGENT TRAINING CENTER — 24/7 continuous improvement
+// ═══════════════════════════════════════════
+// Immutable principle: production brain/config/prompt NEVER changes
+// automatically. Human approval is required for every production change.
+// allowSideEffects=false is always enforced inside the training runner.
+
+// ── Training run (one execution batch) ───────────────────────────────────────
+
+model AgentTrainingRun {
+  id             String   @id @default(cuid())
+  agentType      String   // AgentType enum value
+  restaurantId   String?
+  status         String   @default("QUEUED") // QUEUED|RUNNING|COMPLETED|FAILED|CANCELLED
+  source         String   // REAL_CONVERSATION|AI_SIMULATION|MIXED|REGRESSION
+  mode           String?  // QUICK|REGRESSION|REAL_CONVERSATION_REPLAY|AI_SIMULATION_BATCH|NIGHTLY|CONTINUOUS
+  startedAt      DateTime?
+  completedAt    DateTime?
+  totalScenarios Int      @default(0)
+  passCount      Int      @default(0)
+  warnCount      Int      @default(0)
+  failCount      Int      @default(0)
+  score          Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  scenarios AgentTrainingScenario[]
+  proposals AgentImprovementProposal[]
+
+  @@index([agentType, status])
+  @@index([restaurantId])
+  @@index([createdAt])
+  @@map("agent_training_runs")
+}
+
+// ── Individual scenario (one simulated or replayed conversation) ─────────────
+
+model AgentTrainingScenario {
+  id                   String   @id @default(cuid())
+  runId                String
+  restaurantId         String?
+  source               String   // REAL_CONVERSATION|AI_SIMULATION
+  sourceConversationId String?  // FK to Conversation.id (nullable — simulator scenarios have none)
+  title                String
+  customerPersona      String?
+  goal                 String?
+  transcriptJson       Json     // array of {role, content, ts} turn objects
+  expectedOutcomeJson  Json?
+  actualOutcomeJson    Json?
+  status               String   @default("PENDING") // PENDING|PASS|WARN|FAIL
+  score                Float?
+  riskLevel            String?
+  failureSummary       String?
+  createdAt            DateTime @default(now())
+
+  run         AgentTrainingRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  evaluations AgentTrainingEvaluation[]
+
+  @@index([runId])
+  @@index([status])
+  @@index([runId, status])
+  @@map("agent_training_scenarios")
+}
+
+// ── AI evaluation of one scenario ────────────────────────────────────────────
+
+model AgentTrainingEvaluation {
+  id               String   @id @default(cuid())
+  scenarioId       String
+  evaluatorModel   String   // e.g. "gpt-4o"
+  scoreJson        Json     // {conversionScore, clarityScore, safetyScore, frictionScore, menuAccuracyScore, orderCompletionScore, handoffScore, overallScore}
+  verdict          String   // PASS|WARN|FAIL
+  strengths        String?
+  weaknesses       String?
+  safetyIssues     String?
+  conversionIssues String?
+  frictionIssues   String?
+  recommendation   String?
+  createdAt        DateTime @default(now())
+
+  scenario AgentTrainingScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId])
+  @@map("agent_training_evaluations")
+}
+
+// ── Improvement proposal (pending human approval) ─────────────────────────────
+
+model AgentImprovementProposal {
+  id                 String    @id @default(cuid())
+  agentType          String    // AgentType enum value
+  restaurantId       String?
+  sourceRunId        String
+  sourceScenarioIds  Json      // string[]
+  title              String
+  problemSummary     String
+  rootCause          String?
+  proposedChangeType String    // PROMPT_PATCH|ROUTING_RULE|STATE_MACHINE_RULE|COPY_CHANGE|MENU_MATCHING_RULE|HANDOFF_RULE|CONFIG_CHANGE
+  proposedPatchText  String?   @db.Text
+  proposedConfigJson Json?
+  riskLevel          String    @default("MEDIUM") // LOW|MEDIUM|HIGH
+  expectedImpact     String?
+  beforeScore        Float?
+  afterScoreEstimate Float?
+  status             String    @default("PENDING_APPROVAL") // PENDING_APPROVAL|APPROVED|REJECTED|NEEDS_REVISION|APPLIED_TO_SANDBOX|APPLIED_TO_PRODUCTION
+  reviewerNotes      String?
+  approvedBy         String?
+  approvedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  sourceRun     AgentTrainingRun  @relation(fields: [sourceRunId], references: [id], onDelete: Cascade)
+  brainVersions AgentBrainVersion[]
+
+  @@index([status])
+  @@index([agentType, status])
+  @@index([sourceRunId])
+  @@map("agent_improvement_proposals")
+}
+
+// ── Candidate brain/prompt version ───────────────────────────────────────────
+// ACTIVE versions must never be changed automatically.
+
+model AgentBrainVersion {
+  id               String    @id @default(cuid())
+  agentType        String    // AgentType enum value
+  restaurantId     String?
+  versionLabel     String
+  status           String    @default("DRAFT") // DRAFT|SANDBOX|ACTIVE|ARCHIVED
+  promptText       String?   @db.Text
+  configJson       Json?
+  sourceProposalId String?
+  activatedAt      DateTime?
+  createdAt        DateTime  @default(now())
+
+  sourceProposal AgentImprovementProposal? @relation(fields: [sourceProposalId], references: [id])
+
+  @@index([agentType, status])
+  @@map("agent_brain_versions")
+}
+
+// ── Per-agent training configuration ─────────────────────────────────────────
+
+model AgentTrainingConfig {
+  id                        String   @id @default(cuid())
+  agentType                 String   @unique // one config per agent type (global)
+  enableContinuousTraining  Boolean  @default(false)
+  maxScenariosPerHour       Int      @default(20)
+  useRealConversationMining Boolean  @default(true)
+  useAiGeneratedScenarios   Boolean  @default(true)
+  minimumScoreThreshold     Float    @default(0.6)
+  autoCreateProposals       Boolean  @default(true)
+  autoApplySandbox          Boolean  @default(false)
+  autoApplyProduction       Boolean  @default(false) // always false in v1
+  enabledRestaurantIds      Json     @default("[]")  // string[] — empty = all
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@map("agent_training_configs")
+}
