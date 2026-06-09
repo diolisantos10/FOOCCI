@@ -60,11 +60,13 @@ jobs:
           HTTP_STATUS=$(cat /tmp/http_status.txt 2>/dev/null || echo "000")
 
           # Print ONLY safe summary fields — never chunk text / techniques / secret.
+          # NB: boolean fields use a raw jq read (NOT `// "?"`), because jq's `//`
+          # treats `false` as empty and would turn a correct `false` into "?".
           STATUS=$(jq  -r '.status // "?"'             /tmp/response.json 2>/dev/null)
           STAGE=$(jq   -r '.stage // "-"'              /tmp/response.json 2>/dev/null)
           TECHS=$(jq   -r '.techniquesCreated // "?"'  /tmp/response.json 2>/dev/null)
-          CLEANED=$(jq -r '.sourceCleanedUp // "?"'    /tmp/response.json 2>/dev/null)
-          RUNTIME=$(jq -r '.runtimeTouched // "?"'     /tmp/response.json 2>/dev/null)
+          CLEANED=$(jq -r '.sourceCleanedUp'           /tmp/response.json 2>/dev/null)
+          RUNTIME=$(jq -r '.runtimeTouched'            /tmp/response.json 2>/dev/null)
           MESSAGE=$(jq -r '.message // ""'             /tmp/response.json 2>/dev/null)
 
           echo "← curl exit          : $CURL_EXIT"
