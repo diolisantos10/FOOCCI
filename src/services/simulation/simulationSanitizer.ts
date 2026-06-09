@@ -11,14 +11,20 @@ import type { TranscriptTurn } from "./types";
 
 interface Rule { flag: string; re: RegExp; replacement: string }
 
-// Order matters: most specific first (CNPJ before CPF before generic digit runs).
+// Order matters: most specific first. Phone runs BEFORE the CPF rule so a bare
+// 11-digit cell (DDD + 9 + 8 digits) is labelled [telefone], not [cpf]. CNPJ is
+// disambiguated from CPF by requiring the "/" group; the CPF rule requires the
+// punctuated form so it never swallows a phone number.
 const RULES: Rule[] = [
   { flag: "email", re: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, replacement: "[email]" },
   { flag: "secret", re: /\b(sk|pk|rk|whsec|Bearer)[-_ ]?[A-Za-z0-9._-]{8,}\b/g, replacement: "[secret]" },
-  { flag: "cnpj", re: /\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, replacement: "[cnpj]" },
-  { flag: "cpf", re: /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, replacement: "[cpf]" },
-  // BR phone, with or without +55, parentheses, 9th digit, separators.
-  { flag: "phone", re: /(\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}\b/g, replacement: "[telefone]" },
+  { flag: "cnpj", re: /\b\d{2}\.?\d{3}\.?\d{3}\/\d{4}-?\d{2}\b/g, replacement: "[cnpj]" },
+  // BR mobile: optional +55, optional (DD), DDD + leading 9 + 8 digits.
+  { flag: "phone", re: /(\+?55\s?)?\(?\d{2}\)?[\s-]?9\d{4}[-\s]?\d{4}\b/g, replacement: "[telefone]" },
+  // BR landline: DDD + first digit 2-5 + 7 digits.
+  { flag: "phone", re: /(\+?55\s?)?\(?\d{2}\)?[\s-]?[2-5]\d{3}[-\s]?\d{4}\b/g, replacement: "[telefone]" },
+  // CPF — only the punctuated form (so a phone is never mistaken for a CPF).
+  { flag: "cpf", re: /\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, replacement: "[cpf]" },
   // Person name after a common self-introduction cue.
   { flag: "name", re: /\b(sou (?:o|a)|meu nome (?:é|e)|me chamo|aqui (?:é|e) (?:o|a)|falo com (?:o|a)?)\s+[A-ZÀ-Ý][a-zà-ÿ]+(?:\s+[A-ZÀ-Ý][a-zà-ÿ]+)?/g, replacement: "$1 [nome]" },
   // Street address after a logradouro keyword, up to a comma/number/end.

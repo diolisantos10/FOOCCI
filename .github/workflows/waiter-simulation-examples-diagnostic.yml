@@ -1,0 +1,98 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Waiter Simulation — Real Examples Diagnostic (cron-safe, manual)
+#
+# Proves, in production with zero admin secret, the real-conversation example
+# pipeline: synthetic conversation WITH PII → sanitize → create example (PENDING)
+# → approve → approved example biases the generator → no literal copy → no PII leak
+# → cleanup. Fully dry-run, runtimeTouched=false.
+#
+# Manual only (workflow_dispatch). Uses CRON_SECRET — NOT ADMIN_SECRET.
+#
+# Required GitHub Secrets (already used by the other crons — no new secret):
+#   FOOCCI_BASE_URL   Production URL with no trailing slash.
+#   CRON_SECRET       Must match the CRON_SECRET env var set in Railway.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Waiter Simulation Examples Diagnostic
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  run-examples-diagnostic:
+    name: "Examples Diagnostic"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Build endpoint URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "url=${BASE_URL}/api/cron/agents/waiter/simulation/examples-diagnostic" >> "$GITHUB_OUTPUT"
+
+      - name: "POST /api/cron/agents/waiter/simulation/examples-diagnostic"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "────────────────────────────────────"
+          echo "→ Endpoint : $ENDPOINT_URL"
+          echo "────────────────────────────────────"
+
+          set +e
+          curl --connect-timeout 20 --max-time 180 -sS \
+            -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            -o /tmp/response.json \
+            -w "%{http_code}" > /tmp/http_status.txt
+          CURL_EXIT=$?
+          set -e
+
+          HTTP_STATUS=$(cat /tmp/http_status.txt 2>/dev/null || echo "000")
+
+          # Safe summary only — never the transcript / PII / secret.
+          # NB: boolean fields use a raw jq read (NOT `// "?"`), because jq's `//`
+          # treats `false` as empty and would turn a correct `false` into "?".
+          STATUS=$(jq      -r '.status // "?"'             /tmp/response.json 2>/dev/null)
+          STAGE=$(jq       -r '.stage // "-"'              /tmp/response.json 2>/dev/null)
+          SANIT=$(jq       -r '.sanitizationPassed'        /tmp/response.json 2>/dev/null)
+          APPROVED=$(jq    -r '.approvedForSimulation'     /tmp/response.json 2>/dev/null)
+          INSPIRED=$(jq    -r '.inspiredScenarios // "?"'  /tmp/response.json 2>/dev/null)
+          LITERAL=$(jq     -r '.literalLeak'               /tmp/response.json 2>/dev/null)
+          PIILEAK=$(jq     -r '.piiLeak'                   /tmp/response.json 2>/dev/null)
+          P0=$(jq          -r '.p0Count // "?"'            /tmp/response.json 2>/dev/null)
+          RUNTIME=$(jq     -r '.runtimeTouched'            /tmp/response.json 2>/dev/null)
+          CLEANUP=$(jq     -r '.cleanup'                   /tmp/response.json 2>/dev/null)
+          MESSAGE=$(jq     -r '.message // ""'             /tmp/response.json 2>/dev/null)
+
+          echo "← curl exit          : $CURL_EXIT"
+          echo "← HTTP Status        : $HTTP_STATUS"
+          echo "← status             : $STATUS"
+          echo "← stage              : $STAGE"
+          echo "← sanitizationPassed : $SANIT"
+          echo "← approvedForSim     : $APPROVED"
+          echo "← inspiredScenarios  : $INSPIRED"
+          echo "← literalLeak        : $LITERAL"
+          echo "← piiLeak            : $PIILEAK"
+          echo "← p0Count            : $P0"
+          echo "← runtimeTouched     : $RUNTIME"
+          echo "← cleanup            : $CLEANUP"
+          echo "← message            : $MESSAGE"
+
+          if [ "$CURL_EXIT" -ne 0 ]; then echo "::error::curl failed with exit $CURL_EXIT."; exit "$CURL_EXIT"; fi
+          if [[ "$HTTP_STATUS" -lt 200 || "$HTTP_STATUS" -ge 300 ]]; then echo "::error::non-2xx ($HTTP_STATUS)."; exit 1; fi
+          if [[ "$STATUS" != "PASS" ]]; then echo "::error::status='$STATUS' (expected PASS) at stage '$STAGE'. $MESSAGE"; exit 1; fi
+          if [[ "$SANIT" != "true" ]]; then echo "::error::sanitizationPassed='$SANIT' (expected true)."; exit 1; fi
+          if ! [[ "$INSPIRED" =~ ^[0-9]+$ ]] || [[ "$INSPIRED" -lt 1 ]]; then echo "::error::inspiredScenarios='$INSPIRED' (expected >= 1)."; exit 1; fi
+          if [[ "$LITERAL" != "false" ]]; then echo "::error::literalLeak='$LITERAL' (expected false)."; exit 1; fi
+          if [[ "$PIILEAK" != "false" ]]; then echo "::error::piiLeak='$PIILEAK' (expected false)."; exit 1; fi
+          if ! [[ "$P0" =~ ^0$ ]]; then echo "::error::p0Count='$P0' (expected 0)."; exit 1; fi
+          if [[ "$RUNTIME" != "false" ]]; then echo "::error::runtimeTouched='$RUNTIME' (expected false)."; exit 1; fi
+          if [[ "$CLEANUP" != "true" ]]; then echo "::error::cleanup='$CLEANUP' (expected true)."; exit 1; fi
+
+          echo "✅ Examples diagnostic PASS — sanitização ok, exemplo aprovado influenciou o generator, sem PII, fonte limpa."

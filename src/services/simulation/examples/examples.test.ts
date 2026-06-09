@@ -14,6 +14,12 @@ import { WAITER_SCENARIO_TEMPLATES } from "../waiter/waiterScenarioTemplates";
 // ── sanitizer (Part 3) ───────────────────────────────────────────────────────
 describe("simulationSanitizer (strong PII/secret masking)", () => {
   it("(P3.1) masks BR phone", () => expect(sanitizeText("zap 11999998888")).not.toMatch(/\d{8,}/));
+  it("(fix) 11-digit phone → [telefone] (not [cpf]); punctuated CPF → [cpf]", () => {
+    expect(sanitizeText("zap 11999998888")).toContain("[telefone]");
+    expect(sanitizeText("(11) 99999-8888")).toContain("[telefone]");
+    expect(sanitizeText("cpf 123.456.789-09")).toContain("[cpf]");
+    expect(sanitizeText("cpf 123.456.789-09")).not.toContain("[telefone]");
+  });
   it("(P3.2) masks email", () => expect(sanitizeText("joao@teste.com")).toContain("[email]"));
   it("(P3.3) masks address", () => expect(sanitizeText("moro na Rua das Flores 123")).toContain("[endereco]"));
   it("(P3.4) masks CPF and CNPJ", () => {
