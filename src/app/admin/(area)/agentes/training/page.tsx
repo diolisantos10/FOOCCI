@@ -127,11 +127,21 @@ function fmtDate(iso: string | null): string {
 
 // ── Tab components ────────────────────────────────────────────────────────────
 
-function DashboardTab({ data, onRunBatch, running, onSwitchToArena }: {
+const TRAINING_FLOW_STEPS = [
+  { icon: "⚠",  label: "Falha capturada",    desc: "Conversa real identificada como falha" },
+  { icon: "📋", label: "Cenário criado",      desc: "Transformado em caso de treinamento" },
+  { icon: "🤖", label: "Arena simula",        desc: "IA recria o atendimento em modo seguro" },
+  { icon: "🔍", label: "Diagnóstico gerado",  desc: "GPT-4o avalia o que falhou" },
+  { icon: "💡", label: "Proposta criada",     desc: "Melhoria sugerida automaticamente" },
+  { icon: "✋", label: "Você aprova",         desc: "Nada vai ao ar sem revisão humana" },
+  { icon: "🧪", label: "Sandbox aplicado",    desc: "Testado antes de qualquer produção" },
+];
+
+function VisaoGeralTab({ data, onRunBatch, running, onSwitchToCasos }: {
   data: DashboardData | null;
   onRunBatch: () => void;
   running: boolean;
-  onSwitchToArena: () => void;
+  onSwitchToCasos: () => void;
 }) {
   if (!data) return <div className="text-gray-500 text-sm p-4">Carregando…</div>;
 
@@ -139,6 +149,36 @@ function DashboardTab({ data, onRunBatch, running, onSwitchToArena }: {
 
   return (
     <div className="space-y-6 p-6">
+      {/* Safety banner */}
+      <div className="rounded-xl border border-violet-700/40 bg-violet-900/10 px-4 py-3 flex items-start gap-3">
+        <span className="text-violet-400 mt-0.5">🛡</span>
+        <div>
+          <p className="text-sm font-semibold text-violet-300">O agente treina sozinho, mas não publica sozinho.</p>
+          <p className="text-xs text-violet-500 mt-0.5">Clientes IA simulam atendimentos em modo seguro. Nenhuma mudança vai ao ar sem sua aprovação explícita.</p>
+        </div>
+      </div>
+
+      {/* 7-step flow */}
+      <div className="rounded-xl border border-gray-700 bg-gray-800/40 p-4">
+        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wide mb-3">Como funciona o ciclo de treinamento</p>
+        <div className="flex gap-0 overflow-x-auto pb-1">
+          {TRAINING_FLOW_STEPS.map((step, i) => (
+            <div key={i} className="flex items-center">
+              <div className="flex flex-col items-center min-w-[80px] px-1">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-base shrink-0">
+                  {step.icon}
+                </div>
+                <p className="text-[10px] font-semibold text-gray-300 text-center mt-1.5 leading-tight">{step.label}</p>
+                <p className="text-[9px] text-gray-600 text-center mt-0.5 leading-tight hidden lg:block">{step.desc}</p>
+              </div>
+              {i < TRAINING_FLOW_STEPS.length - 1 && (
+                <div className="w-6 h-px bg-gray-700 shrink-0 -mt-4" />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Status banner */}
       {data.activeRun && (
         <div className="flex items-center gap-3 rounded-xl border border-blue-700/50 bg-blue-900/20 px-4 py-3">
@@ -162,10 +202,10 @@ function DashboardTab({ data, onRunBatch, running, onSwitchToArena }: {
             </span>
           </div>
           <button
-            onClick={onSwitchToArena}
+            onClick={onSwitchToCasos}
             className="shrink-0 rounded-lg bg-orange-800/60 px-3 py-1 text-xs font-semibold text-orange-300 hover:bg-orange-800 transition-colors"
           >
-            Ver casos reais →
+            Ver casos →
           </button>
         </div>
       )}
@@ -247,7 +287,7 @@ function RunsTab({ runs, total, page, onPage, onSelectRun }: {
   onPage: (p: number) => void; onSelectRun: (id: string) => void;
 }) {
   return (
-    <div className="p-6 space-y-4">
+    <div className="space-y-4">
       <div className="overflow-x-auto rounded-xl border border-gray-700">
         <table className="w-full text-sm">
           <thead className="border-b border-gray-700 bg-gray-800/80">
@@ -306,7 +346,7 @@ function ScenariosTab({ runId, onSelectScenario }: { runId?: string; onSelectSce
   useEffect(() => { void load(); }, [load]);
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="space-y-4">
       <div className="flex gap-2">
         {["", "FAIL", "WARN", "PASS", "PENDING"].map((s) => (
           <button key={s} onClick={() => { setFilter(s); setPage(1); }}
@@ -359,7 +399,7 @@ interface ProblemGroup {
   latestAt: string | null;
 }
 
-function ProposalsTab() {
+function MelhoriasTab() {
   const [proposals, setProposals]     = useState<Proposal[]>([]);
   const [filter, setFilter]           = useState("PENDING_APPROVAL");
   const [updating, setUpdating]       = useState<string | null>(null);
@@ -416,6 +456,12 @@ function ProposalsTab() {
     return (
       <div className="p-6 space-y-4">
         <button onClick={() => setSelectedProposal(null)} className="text-xs text-violet-400 hover:text-violet-300">← Voltar</button>
+
+        {/* Safety notice in detail view */}
+        <div className="rounded-xl border border-blue-700/40 bg-blue-900/10 px-4 py-2.5 text-xs text-blue-400">
+          Aprovar aqui não altera produção automaticamente. A melhoria entra como sandbox/candidata e precisa de ativação manual para produção.
+        </div>
+
         <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-5 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <h3 className="text-base font-semibold text-white">{selectedProposal.title}</h3>
@@ -486,6 +532,11 @@ function ProposalsTab() {
 
   return (
     <div className="p-6 space-y-5">
+      {/* Safety notice */}
+      <div className="rounded-xl border border-blue-700/40 bg-blue-900/10 px-4 py-2.5 text-xs text-blue-400">
+        Aprovar aqui não altera produção automaticamente. A melhoria entra como sandbox/candidata e precisa de ativação manual para produção.
+      </div>
+
       {/* Principais problemas */}
       {problems.length > 0 && (
         <div className="rounded-xl border border-gray-700 bg-gray-800/40 p-4 space-y-3">
@@ -524,7 +575,15 @@ function ProposalsTab() {
         ))}
       </div>
 
-      {proposals.length === 0 && (
+      {proposals.length === 0 && filter === "PENDING_APPROVAL" && (
+        <div className="rounded-xl border border-dashed border-gray-700 py-10 text-center space-y-2">
+          <p className="text-2xl">✓</p>
+          <p className="text-sm font-semibold text-gray-300">Fila limpa</p>
+          <p className="text-xs text-gray-500">Nenhuma melhoria aguardando aprovação. O agente vai gerando novas propostas conforme identifica falhas.</p>
+        </div>
+      )}
+
+      {proposals.length === 0 && filter !== "PENDING_APPROVAL" && (
         <p className="text-sm text-gray-500 py-6 text-center">Nenhuma proposta com status &ldquo;{filter.replace(/_/g, " ")}&rdquo;.</p>
       )}
 
@@ -570,7 +629,7 @@ function ProposalsTab() {
   );
 }
 
-function BrainVersionsTab() {
+function VersoesSandboxTab() {
   const [versions, setVersions] = useState<BrainVersion[]>([]);
 
   useEffect(() => {
@@ -581,8 +640,10 @@ function BrainVersionsTab() {
 
   return (
     <div className="p-6 space-y-4">
-      <div className="rounded-xl border border-yellow-700/40 bg-yellow-900/10 px-4 py-3 text-xs text-yellow-400">
-        Versões ATIVAS nunca são alteradas automaticamente. Candidatos precisam de aprovação manual.
+      {/* Production lock notice */}
+      <div className="rounded-xl border border-red-700/40 bg-red-900/10 px-4 py-3 space-y-1">
+        <p className="text-xs font-semibold text-red-400">🔒 Produção bloqueada — nenhuma ativação automática</p>
+        <p className="text-xs text-red-500">Versões SANDBOX nunca são ativadas automaticamente. Para promover uma versão a produção, é necessária ativação manual explícita fora desta tela. Versões ATIVAS nunca são alteradas pelo ciclo de treinamento.</p>
       </div>
       <div className="overflow-x-auto rounded-xl border border-gray-700">
         <table className="w-full text-sm">
@@ -595,7 +656,7 @@ function BrainVersionsTab() {
           </thead>
           <tbody>
             {versions.length === 0 && (
-              <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-500 text-sm">Nenhuma versão criada.</td></tr>
+              <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-500 text-sm">Nenhuma versão criada ainda. Versões sandbox aparecem aqui quando propostas são aprovadas para sandbox.</td></tr>
             )}
             {versions.map((v) => (
               <tr key={v.id} className={`border-b border-gray-800 ${v.status === "ACTIVE" ? "bg-green-900/10" : ""}`}>
@@ -636,8 +697,9 @@ interface ArenaResult {
   sideEffectsPerformed: string[];
 }
 
-function RealCasesSection({ onReplayTranscript }: {
+function RealCasesSection({ onReplayTranscript, showReplayButton = true }: {
   onReplayTranscript: (items: Array<{ role: string; content: string; ts: string }>, title: string) => void;
+  showReplayButton?: boolean;
 }) {
   const [cases, setCases]     = useState<RealCaseItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -667,7 +729,7 @@ function RealCasesSection({ onReplayTranscript }: {
     setActionMsg(null);
     const res  = await fetch(`/api/admin/training/scenarios/${id}/proposal`, { method: "POST" });
     const data = await res.json() as { ok?: boolean; error?: string };
-    setActionMsg(data.ok ? "✓ Proposta criada! Veja em Sugestões." : `Erro: ${data.error ?? "falha"}`);
+    setActionMsg(data.ok ? "✓ Proposta criada! Veja em Melhorias para Aprovar." : `Erro: ${data.error ?? "falha"}`);
   };
 
   const replayInArena = async (id: string, title: string) => {
@@ -682,7 +744,7 @@ function RealCasesSection({ onReplayTranscript }: {
   };
 
   return (
-    <div className="mt-8 space-y-3">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
           Casos reais capturados
@@ -725,12 +787,14 @@ function RealCasesSection({ onReplayTranscript }: {
               <span>{fmtDate(c.createdAt)}</span>
             </div>
             <div className="flex gap-1.5 flex-wrap">
-              <button
-                onClick={() => void replayInArena(c.id, c.title)}
-                className="rounded bg-violet-800/60 px-2 py-1 text-[11px] text-violet-300 hover:bg-violet-800 transition-colors"
-              >
-                ▶ Rodar na Arena
-              </button>
+              {showReplayButton && (
+                <button
+                  onClick={() => void replayInArena(c.id, c.title)}
+                  className="rounded bg-violet-800/60 px-2 py-1 text-[11px] text-violet-300 hover:bg-violet-800 transition-colors"
+                >
+                  ▶ Rodar na Arena
+                </button>
+              )}
               <button
                 onClick={() => void diagnose(c.id)}
                 className="rounded bg-gray-700 px-2 py-1 text-[11px] text-gray-300 hover:bg-gray-600 transition-colors"
@@ -778,7 +842,6 @@ function ArenaTab() {
         setError(data.error ?? `Erro ${res.status}`);
       } else {
         setResult(data);
-        // Animate messages one-by-one
         let i = 0;
         const tick = () => {
           i++;
@@ -894,7 +957,7 @@ function ArenaTab() {
                   Run: {result.runId.slice(0, 8)}
                 </span>
               </div>
-              <p className="text-[11px] text-gray-600">Para diagnóstico GPT-4o e proposta, vá em Cenários → selecione este cenário → Gerar diagnóstico.</p>
+              <p className="text-[11px] text-gray-600">Para diagnóstico GPT-4o e proposta, vá em Casos → Cenários → selecione este cenário → Gerar diagnóstico.</p>
             </div>
           )}
         </div>
@@ -951,7 +1014,6 @@ function ArenaTab() {
                 </div>
               </div>
             ))}
-            {/* Typing indicator while still revealing messages */}
             {result && visibleCount < result.transcript.length && (
               <div className="flex justify-start">
                 <div className="bg-gray-700 rounded-xl px-3 py-2 flex gap-1">
@@ -994,6 +1056,65 @@ function ArenaTab() {
           setTimeout(tick, 300);
         }}
       />
+    </div>
+  );
+}
+
+// ── Casos Tab (unified: real cases + scenarios + runs) ────────────────────────
+
+type CasosView = "reais" | "cenarios" | "runs";
+
+function CasosTab({ onSelectScenario }: { onSelectScenario: (id: string) => void }) {
+  const [view, setView]           = useState<CasosView>("reais");
+  const [runs, setRuns]           = useState<TrainingRun[]>([]);
+  const [runsTotal, setRunsTotal] = useState(0);
+  const [runsPage, setRunsPage]   = useState(1);
+  const [selectedRun, setSelectedRun] = useState<string | null>(null);
+
+  const loadRuns = useCallback(async (page: number) => {
+    const res  = await fetch(`/api/admin/training/runs?page=${page}`);
+    const data = await res.json();
+    setRuns(data.runs ?? []);
+    setRunsTotal(data.total ?? 0);
+  }, []);
+
+  useEffect(() => {
+    if (view === "runs") void loadRuns(runsPage);
+  }, [view, runsPage, loadRuns]);
+
+  if (selectedRun) {
+    return <RunDetailView runId={selectedRun} onBack={() => setSelectedRun(null)} />;
+  }
+
+  return (
+    <div className="p-6 space-y-4">
+      {/* Sub-filter */}
+      <div className="flex gap-2 flex-wrap">
+        {([
+          ["reais",    "⚠ Casos Reais"],
+          ["cenarios", "Cenários IA"],
+          ["runs",     "Runs de treinamento"],
+        ] as [CasosView, string][]).map(([v, label]) => (
+          <button key={v} onClick={() => setView(v)}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${view === v ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "reais" && (
+        <RealCasesSection showReplayButton={false} onReplayTranscript={() => {}} />
+      )}
+      {view === "cenarios" && (
+        <ScenariosTab onSelectScenario={onSelectScenario} />
+      )}
+      {view === "runs" && (
+        <RunsTab
+          runs={runs} total={runsTotal} page={runsPage}
+          onPage={(p) => { setRunsPage(p); void loadRuns(p); }}
+          onSelectRun={(id) => setSelectedRun(id)}
+        />
+      )}
     </div>
   );
 }
@@ -1321,7 +1442,7 @@ function ValidateCycleTab() {
   );
 }
 
-function ConfigTab() {
+function ConfiguracoesTab() {
   const [config, setConfig]   = useState<TrainingConfig | null>(null);
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
@@ -1443,6 +1564,20 @@ function ConfigTab() {
         className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
         {saving ? "Salvando…" : saved ? "✓ Salvo" : "Salvar configuração"}
       </button>
+
+      {/* Debug tools */}
+      <div className="pt-4 border-t border-gray-800 space-y-2">
+        <p className="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Ferramentas de diagnóstico</p>
+        <a
+          href="/admin/diagnostics/whatsapp-text-ordering/simulator"
+          className="flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-colors"
+        >
+          <span>🔧</span>
+          <span>WA Simulador (debug manual)</span>
+          <span className="ml-auto text-gray-600">↗</span>
+        </a>
+        <p className="text-[10px] text-gray-600">Simulador manual do WhatsApp Text Ordering para diagnóstico de problemas. Não substitui a Arena automática.</p>
+      </div>
     </div>
   );
 }
@@ -1520,7 +1655,7 @@ function ScenarioDetailModal({ scenarioId, onClose }: { scenarioId: string; onCl
     const res = await fetch(`/api/admin/training/scenarios/${scenarioId}/proposal`, { method: "POST" });
     const data = await res.json() as { ok?: boolean; error?: string };
     setProposing(false);
-    if (data.ok) setActionMsg("✓ Proposta criada! Veja em Sugestões.");
+    if (data.ok) setActionMsg("✓ Proposta criada! Veja em Melhorias para Aprovar.");
     else setActionMsg(`Erro: ${data.error ?? "falha"}`);
   };
 
@@ -1727,26 +1862,21 @@ function RunDetailView({ runId, onBack }: { runId: string; onBack: () => void })
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type Tab = "dashboard" | "arena" | "runs" | "cenarios" | "falhas" | "sugestoes" | "versoes" | "config" | "validar";
+type Tab = "visao-geral" | "arena" | "casos" | "melhorias" | "versoes" | "validacao" | "configuracoes";
 
 const TABS: Array<{ id: Tab; label: string }> = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "arena",     label: "Arena" },
-  { id: "runs",      label: "Runs" },
-  { id: "cenarios",  label: "Cenários" },
-  { id: "sugestoes", label: "Sugestões" },
-  { id: "versoes",   label: "Versões" },
-  { id: "validar",   label: "Validar" },
-  { id: "config",    label: "Config" },
+  { id: "visao-geral",     label: "Visão Geral" },
+  { id: "arena",           label: "Arena" },
+  { id: "casos",           label: "Casos" },
+  { id: "melhorias",       label: "Melhorias para Aprovar" },
+  { id: "versoes",         label: "Versões" },
+  { id: "validacao",       label: "Validação" },
+  { id: "configuracoes",   label: "Configurações" },
 ];
 
 export default function AgentTrainingPage() {
-  const [tab, setTab]           = useState<Tab>("dashboard");
+  const [tab, setTab]           = useState<Tab>("visao-geral");
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [runs, setRuns]         = useState<TrainingRun[]>([]);
-  const [runsTotal, setRunsTotal] = useState(0);
-  const [runsPage, setRunsPage] = useState(1);
-  const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [runningBatch, setRunningBatch] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -1754,13 +1884,6 @@ export default function AgentTrainingPage() {
   const loadDashboard = useCallback(async () => {
     const res = await fetch("/api/admin/training/dashboard");
     if (res.ok) setDashboard(await res.json());
-  }, []);
-
-  const loadRuns = useCallback(async (page: number) => {
-    const res  = await fetch(`/api/admin/training/runs?page=${page}`);
-    const data = await res.json();
-    setRuns(data.runs ?? []);
-    setRunsTotal(data.total ?? 0);
   }, []);
 
   const loadPendingCount = useCallback(async () => {
@@ -1774,10 +1897,6 @@ export default function AgentTrainingPage() {
     void loadPendingCount();
   }, [loadDashboard, loadPendingCount]);
 
-  useEffect(() => {
-    if (tab === "runs") void loadRuns(runsPage);
-  }, [tab, runsPage, loadRuns]);
-
   const triggerBatch = async () => {
     setRunningBatch(true);
     await fetch("/api/admin/training/runs", {
@@ -1787,7 +1906,6 @@ export default function AgentTrainingPage() {
     });
     setRunningBatch(false);
     void loadDashboard();
-    if (tab === "runs") void loadRuns(1);
   };
 
   // Auto-refresh dashboard every 30s
@@ -1806,27 +1924,27 @@ export default function AgentTrainingPage() {
       <div className="border-b border-gray-800 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold text-white">🧠 Agent Training Center</h1>
+            <h1 className="text-lg font-bold text-white">🧠 Central de Treinamento IA</h1>
             <p className="text-xs text-gray-500 mt-0.5">
-              Clientes IA simulam atendimentos reais. Mudanças só publicadas com aprovação.
+              Clientes IA simulam atendimentos, o agente responde em modo seguro, falhas viram melhorias, e você aprova antes de qualquer mudança.
             </p>
           </div>
           {pendingCount > 0 && (
-            <button onClick={() => setTab("sugestoes")}
+            <button onClick={() => setTab("melhorias")}
               className="flex items-center gap-2 rounded-full bg-yellow-900/40 px-3 py-1.5 text-xs text-yellow-400 hover:bg-yellow-900/60 border border-yellow-700/40 transition-colors">
               <span className="flex h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
-              {pendingCount} aprovação{pendingCount > 1 ? "ões" : ""} pendente{pendingCount > 1 ? "s" : ""}
+              {pendingCount} melhoria{pendingCount > 1 ? "s" : ""} para aprovar
             </button>
           )}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-800 px-6">
-        <div className="flex gap-0">
+      <div className="border-b border-gray-800 px-6 overflow-x-auto">
+        <div className="flex gap-0 min-w-max">
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => { setTab(t.id); setSelectedRun(null); }}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 tab === t.id
                   ? "border-violet-500 text-violet-300"
                   : "border-transparent text-gray-500 hover:text-gray-300"
@@ -1838,24 +1956,15 @@ export default function AgentTrainingPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {tab === "dashboard" && (
-          <DashboardTab data={dashboard} onRunBatch={triggerBatch} running={runningBatch} onSwitchToArena={() => setTab("arena")} />
+        {tab === "visao-geral" && (
+          <VisaoGeralTab data={dashboard} onRunBatch={triggerBatch} running={runningBatch} onSwitchToCasos={() => setTab("casos")} />
         )}
-        {tab === "arena" && <ArenaTab />}
-        {tab === "runs" && (
-          selectedRun
-            ? <RunDetailView runId={selectedRun} onBack={() => setSelectedRun(null)} />
-            : <RunsTab runs={runs} total={runsTotal} page={runsPage}
-                onPage={(p) => { setRunsPage(p); void loadRuns(p); }}
-                onSelectRun={(id) => setSelectedRun(id)} />
-        )}
-        {tab === "cenarios" && (
-          <ScenariosTab onSelectScenario={(id) => setSelectedScenario(id)} />
-        )}
-        {tab === "sugestoes" && <ProposalsTab />}
-        {tab === "versoes"   && <BrainVersionsTab />}
-        {tab === "validar"   && <ValidateCycleTab />}
-        {tab === "config"    && <ConfigTab />}
+        {tab === "arena"         && <ArenaTab />}
+        {tab === "casos"         && <CasosTab onSelectScenario={(id) => setSelectedScenario(id)} />}
+        {tab === "melhorias"     && <MelhoriasTab />}
+        {tab === "versoes"       && <VersoesSandboxTab />}
+        {tab === "validacao"     && <ValidateCycleTab />}
+        {tab === "configuracoes" && <ConfiguracoesTab />}
       </div>
     </div>
   );
