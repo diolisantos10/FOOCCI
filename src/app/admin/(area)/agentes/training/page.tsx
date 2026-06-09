@@ -568,8 +568,8 @@ function verdictBadge(v: CycleValidationReport["verdict"]) {
   return <span className="rounded-full bg-red-900/40 px-3 py-1 text-xs font-semibold text-red-400 border border-red-700/40">FAILED_WITH_REASONS ✗</span>;
 }
 
-function priceLookupVerdictBadge(v: CycleValidationReport["priceLookup"]["verdict"]) {
-  const map = {
+function priceLookupVerdictBadge(v: CycleValidationReport["priceLookup"]["validationVerdict"]) {
+  const map: Record<CycleValidationReport["priceLookup"]["validationVerdict"], string> = {
     PASS:      "bg-green-900/40 text-green-400 border-green-700/40",
     WARN:      "bg-yellow-900/40 text-yellow-400 border-yellow-700/40",
     FAIL:      "bg-red-900/40 text-red-400 border-red-700/40",
@@ -593,8 +593,8 @@ function buildTextReport(report: CycleValidationReport): string {
     "",
     "── Price Lookup ─────────────────────────────",
     `Found:  ${report.priceLookup.found}`,
-    `Status: ${report.priceLookup.status ?? "—"}`,
-    `Verdict: ${report.priceLookup.verdict}`,
+    `Status: ${report.priceLookup.scenarioStatus ?? "—"}`,
+    `Verdict: ${report.priceLookup.validationVerdict}`,
     `Disse "Não encontrei": ${report.priceLookup.saidNotFound}`,
     `priceLookupScore: ${report.priceLookup.priceLookupScore ?? "—"}`,
     `Notas: ${report.priceLookup.notes}`,
@@ -606,7 +606,7 @@ function buildTextReport(report: CycleValidationReport): string {
     "── Diagnóstico ──────────────────────────────",
     `Gerado: ${report.diagnosis.generated}`,
     ...(report.diagnosis.generated ? [
-      `Verdict: ${report.diagnosis.verdict}`,
+      `Verdict: ${report.diagnosis.evaluatorVerdict ?? "—"}`,
       `Score:   ${report.diagnosis.overallScore ?? "—"}`,
       ...(report.diagnosis.weaknesses.length > 0 ? [`Fraquezas: ${report.diagnosis.weaknesses.join("; ")}`] : []),
     ] : []),
@@ -753,15 +753,17 @@ function ValidateCycleTab() {
           <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 space-y-2">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Price Lookup — &ldquo;quanto custa o yakisoba&rdquo;</p>
-              {priceLookupVerdictBadge(report.priceLookup.verdict)}
+              {priceLookupVerdictBadge(report.priceLookup.validationVerdict)}
             </div>
             <p className="text-xs text-gray-500">{report.priceLookup.notes}</p>
             {report.priceLookup.saidNotFound && (
               <p className="text-xs text-red-400 font-semibold">✗ Bot disse &ldquo;Não encontrei&rdquo;</p>
             )}
-            {report.priceLookup.priceLookupScore !== null && (
-              <p className="text-xs text-gray-400">priceLookupScore: <span className="font-mono text-white">{report.priceLookup.priceLookupScore}</span></p>
-            )}
+            {report.priceLookup.priceLookupScore !== null ? (
+              <p className="text-xs text-gray-400">priceLookupScore: <span className={`font-mono font-semibold ${report.priceLookup.priceLookupScore < 60 ? "text-red-400" : report.priceLookup.priceLookupScore < 90 ? "text-yellow-400" : "text-green-400"}`}>{report.priceLookup.priceLookupScore}</span></p>
+            ) : report.priceLookup.found ? (
+              <p className="text-xs text-yellow-400">⚠ priceLookupScore não populado — avaliação GPT-4o não concluída</p>
+            ) : null}
             {report.priceLookup.botReplies.length > 0 && (
               <div className="mt-2 space-y-1">
                 <p className="text-[10px] text-gray-600 uppercase">Replies do bot:</p>
@@ -773,12 +775,20 @@ function ValidateCycleTab() {
           </div>
 
           {/* Diagnosis */}
-          <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 space-y-2">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Diagnóstico GPT-4o</p>
+          <div className={`rounded-xl border p-4 space-y-2 ${report.diagnosis.generated ? "border-gray-700 bg-gray-800/60" : "border-red-700/50 bg-red-900/10"}`}>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Diagnóstico GPT-4o</p>
+              {!report.diagnosis.generated && (
+                <span className="rounded-full bg-red-900/40 border border-red-700/40 px-2 py-0.5 text-xs font-semibold text-red-400">NÃO GERADO ✗</span>
+              )}
+            </div>
             {report.diagnosis.generated ? (
               <>
+                {report.diagnosis.selectedScenarioTitle && (
+                  <p className="text-xs text-gray-500">Cenário: <span className="text-gray-300">{report.diagnosis.selectedScenarioTitle}</span></p>
+                )}
                 <div className="flex gap-3 flex-wrap">
-                  <span className="text-xs text-gray-300">Verdict: <span className="font-semibold text-white">{report.diagnosis.verdict}</span></span>
+                  <span className="text-xs text-gray-300">Verdict: <span className="font-semibold text-white">{report.diagnosis.evaluatorVerdict}</span></span>
                   {report.diagnosis.overallScore !== null && (
                     <span className="text-xs text-gray-300">Score: <span className="font-semibold text-white">{report.diagnosis.overallScore}</span></span>
                   )}
@@ -792,13 +802,23 @@ function ValidateCycleTab() {
                 )}
               </>
             ) : (
-              <p className="text-xs text-gray-500">Não gerado — sem cenário WARN/FAIL ou erro.</p>
+              <p className="text-xs text-red-300">
+                {report.issues.find((i) => i.startsWith("diagnosis") || i.startsWith("no_warn")) ?? "Diagnóstico não gerado — sem cenário WARN/FAIL ou erro na avaliação GPT-4o."}
+              </p>
             )}
           </div>
 
           {/* Proposal */}
-          <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 space-y-2">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Proposta de Melhoria</p>
+          <div className={`rounded-xl border p-4 space-y-2 ${report.proposal.generated ? (report.proposal.appearsInQueue ? "border-gray-700 bg-gray-800/60" : "border-yellow-700/50 bg-yellow-900/10") : "border-red-700/50 bg-red-900/10"}`}>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Proposta de Melhoria</p>
+              {!report.proposal.generated && (
+                <span className="rounded-full bg-red-900/40 border border-red-700/40 px-2 py-0.5 text-xs font-semibold text-red-400">NÃO GERADA ✗</span>
+              )}
+              {report.proposal.generated && !report.proposal.appearsInQueue && (
+                <span className="rounded-full bg-yellow-900/40 border border-yellow-700/40 px-2 py-0.5 text-xs font-semibold text-yellow-400">FORA DA FILA ⚠</span>
+              )}
+            </div>
             {report.proposal.generated ? (
               <div className="space-y-1">
                 <p className="text-sm text-white">{report.proposal.title}</p>
@@ -806,11 +826,16 @@ function ValidateCycleTab() {
                   <span>Status: <span className="text-yellow-400 font-semibold">{report.proposal.status}</span></span>
                   <span>Tipo: {report.proposal.changeType}</span>
                   <span>Risco: {report.proposal.riskLevel}</span>
+                  {report.proposal.appearsInQueue && (
+                    <span className="text-green-400 font-semibold">✓ Na fila PENDING_APPROVAL</span>
+                  )}
                 </div>
                 <p className="text-xs text-gray-500 font-mono">{report.proposal.proposalId?.slice(0, 16)}…</p>
               </div>
             ) : (
-              <p className="text-xs text-gray-500">Não gerada — requer diagnóstico primeiro.</p>
+              <p className="text-xs text-red-300">
+                {report.issues.find((i) => i.startsWith("proposal")) ?? "Proposta não gerada — requer diagnóstico primeiro."}
+              </p>
             )}
           </div>
 

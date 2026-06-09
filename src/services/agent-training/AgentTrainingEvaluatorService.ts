@@ -97,7 +97,7 @@ export async function evaluateScenario(opts: {
     raw = response.choices[0]?.message?.content ?? "{}";
   } catch (err) {
     console.error("[AgentTrainingEvaluator] OpenAI error:", err);
-    return;
+    throw new Error(`Evaluator OpenAI call failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   let parsed: Partial<EvaluationScores & {
@@ -113,7 +113,7 @@ export async function evaluateScenario(opts: {
     parsed = JSON.parse(raw);
   } catch {
     console.error("[AgentTrainingEvaluator] Failed to parse LLM response:", raw);
-    return;
+    throw new Error(`Evaluator failed to parse GPT-4o response: ${raw.slice(0, 120)}`);
   }
 
   const scoreJson: EvaluationScores = {

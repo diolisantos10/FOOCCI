@@ -118,7 +118,7 @@ export async function generateProposal(opts: {
     raw = response.choices[0]?.message?.content ?? "{}";
   } catch (err) {
     console.error("[AgentTrainingImprovement] OpenAI error:", err);
-    return;
+    throw new Error(`Improvement OpenAI call failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   let parsed: {
@@ -136,7 +136,7 @@ export async function generateProposal(opts: {
     parsed = JSON.parse(raw);
   } catch {
     console.error("[AgentTrainingImprovement] Failed to parse LLM response:", raw);
-    return;
+    throw new Error(`Improvement failed to parse GPT-4o response: ${raw.slice(0, 120)}`);
   }
 
   await prisma.agentImprovementProposal.create({
