@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import type { CycleValidationReport } from "@/app/api/admin/training/validate-cycle/route";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -557,6 +558,304 @@ function BrainVersionsTab() {
   );
 }
 
+// ── Validate Cycle Tab ────────────────────────────────────────────────────────
+
+function verdictBadge(v: CycleValidationReport["verdict"]) {
+  if (v === "TRAINING_LOOP_VALIDATED")
+    return <span className="rounded-full bg-green-900/40 px-3 py-1 text-xs font-semibold text-green-400 border border-green-700/40">TRAINING_LOOP_VALIDATED ✓</span>;
+  if (v === "PARTIAL_WITH_ISSUES")
+    return <span className="rounded-full bg-yellow-900/40 px-3 py-1 text-xs font-semibold text-yellow-400 border border-yellow-700/40">PARTIAL_WITH_ISSUES ⚠</span>;
+  return <span className="rounded-full bg-red-900/40 px-3 py-1 text-xs font-semibold text-red-400 border border-red-700/40">FAILED_WITH_REASONS ✗</span>;
+}
+
+function priceLookupVerdictBadge(v: CycleValidationReport["priceLookup"]["verdict"]) {
+  const map = {
+    PASS:      "bg-green-900/40 text-green-400 border-green-700/40",
+    WARN:      "bg-yellow-900/40 text-yellow-400 border-yellow-700/40",
+    FAIL:      "bg-red-900/40 text-red-400 border-red-700/40",
+    NOT_FOUND: "bg-gray-800 text-gray-500 border-gray-700",
+  };
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold border ${map[v]}`}>{v}</span>;
+}
+
+function buildTextReport(report: CycleValidationReport): string {
+  const lines: string[] = [
+    "FOOCCI — Agent Training Center Validation Report",
+    "=".repeat(50),
+    `Gerado em:   ${report.generatedAt}`,
+    `Run ID:      ${report.runId}`,
+    "",
+    "── Run Summary ──────────────────────────────",
+    `Total:  ${report.runSummary.total} cenários`,
+    `Pass:   ${report.runSummary.pass}  Warn: ${report.runSummary.warn}  Fail: ${report.runSummary.fail}`,
+    `Score:  ${report.runSummary.score?.toFixed(1) ?? "—"}`,
+    `Tempo:  ${(report.runSummary.durationMs / 1000).toFixed(1)}s`,
+    "",
+    "── Price Lookup ─────────────────────────────",
+    `Found:  ${report.priceLookup.found}`,
+    `Status: ${report.priceLookup.status ?? "—"}`,
+    `Verdict: ${report.priceLookup.verdict}`,
+    `Disse "Não encontrei": ${report.priceLookup.saidNotFound}`,
+    `priceLookupScore: ${report.priceLookup.priceLookupScore ?? "—"}`,
+    `Notas: ${report.priceLookup.notes}`,
+    ...(report.priceLookup.botReplies.length > 0 ? [
+      "Bot replies:",
+      ...report.priceLookup.botReplies.map((r) => `  › ${r.slice(0, 120)}`),
+    ] : []),
+    "",
+    "── Diagnóstico ──────────────────────────────",
+    `Gerado: ${report.diagnosis.generated}`,
+    ...(report.diagnosis.generated ? [
+      `Verdict: ${report.diagnosis.verdict}`,
+      `Score:   ${report.diagnosis.overallScore ?? "—"}`,
+      ...(report.diagnosis.weaknesses.length > 0 ? [`Fraquezas: ${report.diagnosis.weaknesses.join("; ")}`] : []),
+    ] : []),
+    "",
+    "── Proposta ─────────────────────────────────",
+    `Gerada: ${report.proposal.generated}`,
+    ...(report.proposal.generated ? [
+      `Status:    ${report.proposal.status}`,
+      `Tipo:      ${report.proposal.changeType}`,
+      `Risco:     ${report.proposal.riskLevel}`,
+      `Título:    ${report.proposal.title}`,
+    ] : []),
+    "",
+    "── Safety Checklist ─────────────────────────",
+    `allowSideEffects=false:   ✓`,
+    `Sem WhatsApp enviado:     ${report.safety.noWhatsAppSent ? "✓" : "✗"}`,
+    `Sem pedido criado:        ${report.safety.noOrderCreated ? "✓" : "✗"}`,
+    `Sem mutação de produção:  ${report.safety.noProductionMutation ? "✓" : "✗"}`,
+    `Proposta PENDING_APPROVAL: ${report.safety.proposalPendingApproval ? "✓" : "✗"}`,
+    "",
+    "── Issues ───────────────────────────────────",
+    ...(report.issues.length === 0 ? ["Nenhum"] : report.issues.map((i) => `• ${i}`)),
+    "",
+    "── Veredito ─────────────────────────────────",
+    report.verdict,
+    "",
+    `Próximo passo: ${report.nextRecommendation}`,
+  ];
+  return lines.join("\n");
+}
+
+function ValidateCycleTab() {
+  const [running,  setRunning]  = useState(false);
+  const [report,   setReport]   = useState<CycleValidationReport | null>(null);
+  const [error,    setError]    = useState<string | null>(null);
+  const [copied,   setCopied]   = useState(false);
+
+  const run = async () => {
+    setRunning(true);
+    setError(null);
+    setReport(null);
+    try {
+      const res  = await fetch("/api/admin/training/validate-cycle", { method: "POST" });
+      const data = await res.json() as { ok: boolean; report?: CycleValidationReport; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? `Erro ${res.status}`);
+      } else if (data.report) {
+        setReport(data.report);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro desconhecido");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const copy = () => {
+    if (!report) return;
+    void navigator.clipboard.writeText(buildTextReport(report));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="p-6 space-y-6 max-w-2xl">
+      {/* Info banner */}
+      <div className="rounded-xl border border-blue-700/40 bg-blue-900/10 px-4 py-3 text-xs text-blue-400 space-y-1">
+        <p className="font-semibold">Validação do ciclo completo de treinamento</p>
+        <p className="text-blue-500">Roda um batch de 10 cenários, avalia o cenário de preço, gera diagnóstico e proposta para o pior cenário WARN/FAIL.</p>
+        <p className="text-blue-500">Nenhuma mensagem WhatsApp, pedido ou mutação de produção é feita.</p>
+      </div>
+
+      {/* Action */}
+      <div className="flex gap-3 items-center">
+        <button
+          onClick={() => void run()}
+          disabled={running}
+          className="rounded-lg bg-violet-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-50 transition-colors flex items-center gap-2"
+        >
+          {running && <span className="flex h-2 w-2 rounded-full bg-violet-300 animate-pulse" />}
+          {running ? "Validando… (pode levar 30–60s)" : "Validar ciclo agora"}
+        </button>
+        {report && (
+          <button
+            onClick={copy}
+            className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 transition-colors"
+          >
+            {copied ? "✓ Copiado" : "Copiar relatório"}
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-700/40 bg-red-900/10 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
+      {report && (
+        <div className="space-y-4">
+          {/* Verdict */}
+          <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Veredito</p>
+              {verdictBadge(report.verdict)}
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-500">{new Date(report.generatedAt).toLocaleString("pt-BR")}</p>
+              <p className="text-xs text-gray-600 font-mono">{report.runId.slice(0, 8)}</p>
+            </div>
+          </div>
+
+          {/* Run summary */}
+          <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+            <p className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wide">Run Summary</p>
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { label: "Total",   value: report.runSummary.total,                            color: "text-white" },
+                { label: "Pass",    value: report.runSummary.pass,                             color: "text-green-400" },
+                { label: "Warn",    value: report.runSummary.warn,                             color: "text-yellow-400" },
+                { label: "Fail",    value: report.runSummary.fail,                             color: "text-red-400" },
+              ].map((c) => (
+                <div key={c.label} className="text-center">
+                  <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">{c.label}</p>
+                </div>
+              ))}
+            </div>
+            {report.runSummary.score !== null && (
+              <div className="mt-3 flex items-center gap-2">
+                <div className="flex-1 h-2 rounded-full bg-gray-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${report.runSummary.score >= 75 ? "bg-green-500" : report.runSummary.score >= 50 ? "bg-yellow-500" : "bg-red-500"}`}
+                    style={{ width: `${report.runSummary.score}%` }}
+                  />
+                </div>
+                <span className="text-xs text-gray-400">{report.runSummary.score.toFixed(1)}</span>
+              </div>
+            )}
+            <p className="text-xs text-gray-600 mt-2">Duração: {(report.runSummary.durationMs / 1000).toFixed(1)}s</p>
+          </div>
+
+          {/* Price lookup */}
+          <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 space-y-2">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Price Lookup — &ldquo;quanto custa o yakisoba&rdquo;</p>
+              {priceLookupVerdictBadge(report.priceLookup.verdict)}
+            </div>
+            <p className="text-xs text-gray-500">{report.priceLookup.notes}</p>
+            {report.priceLookup.saidNotFound && (
+              <p className="text-xs text-red-400 font-semibold">✗ Bot disse &ldquo;Não encontrei&rdquo;</p>
+            )}
+            {report.priceLookup.priceLookupScore !== null && (
+              <p className="text-xs text-gray-400">priceLookupScore: <span className="font-mono text-white">{report.priceLookup.priceLookupScore}</span></p>
+            )}
+            {report.priceLookup.botReplies.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <p className="text-[10px] text-gray-600 uppercase">Replies do bot:</p>
+                {report.priceLookup.botReplies.map((r, i) => (
+                  <p key={i} className="text-xs text-gray-300 bg-gray-900/60 rounded px-2 py-1 font-mono whitespace-pre-wrap">{r.slice(0, 200)}</p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Diagnosis */}
+          <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 space-y-2">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Diagnóstico GPT-4o</p>
+            {report.diagnosis.generated ? (
+              <>
+                <div className="flex gap-3 flex-wrap">
+                  <span className="text-xs text-gray-300">Verdict: <span className="font-semibold text-white">{report.diagnosis.verdict}</span></span>
+                  {report.diagnosis.overallScore !== null && (
+                    <span className="text-xs text-gray-300">Score: <span className="font-semibold text-white">{report.diagnosis.overallScore}</span></span>
+                  )}
+                </div>
+                {report.diagnosis.weaknesses.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {report.diagnosis.weaknesses.map((w, i) => (
+                      <li key={i} className="text-xs text-yellow-400">• {w}</li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-gray-500">Não gerado — sem cenário WARN/FAIL ou erro.</p>
+            )}
+          </div>
+
+          {/* Proposal */}
+          <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 space-y-2">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Proposta de Melhoria</p>
+            {report.proposal.generated ? (
+              <div className="space-y-1">
+                <p className="text-sm text-white">{report.proposal.title}</p>
+                <div className="flex gap-3 flex-wrap text-xs text-gray-400">
+                  <span>Status: <span className="text-yellow-400 font-semibold">{report.proposal.status}</span></span>
+                  <span>Tipo: {report.proposal.changeType}</span>
+                  <span>Risco: {report.proposal.riskLevel}</span>
+                </div>
+                <p className="text-xs text-gray-500 font-mono">{report.proposal.proposalId?.slice(0, 16)}…</p>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">Não gerada — requer diagnóstico primeiro.</p>
+            )}
+          </div>
+
+          {/* Safety checklist */}
+          <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Safety Checklist</p>
+            <div className="space-y-1.5">
+              {[
+                { label: "allowSideEffects=false",   ok: report.safety.allowSideEffectsFalse },
+                { label: "Sem WhatsApp enviado",      ok: report.safety.noWhatsAppSent },
+                { label: "Sem pedido criado",         ok: report.safety.noOrderCreated },
+                { label: "Sem mutação de produção",   ok: report.safety.noProductionMutation },
+                { label: "Proposta PENDING_APPROVAL", ok: report.safety.proposalPendingApproval },
+              ].map(({ label, ok }) => (
+                <div key={label} className="flex items-center gap-2 text-xs">
+                  <span className={ok ? "text-green-400" : "text-red-400"}>{ok ? "✓" : "✗"}</span>
+                  <span className={ok ? "text-gray-300" : "text-red-300"}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Issues */}
+          {report.issues.length > 0 && (
+            <div className="rounded-xl border border-yellow-700/40 bg-yellow-900/10 p-4">
+              <p className="text-xs font-semibold text-yellow-400 uppercase tracking-wide mb-2">Issues</p>
+              <ul className="space-y-1">
+                {report.issues.map((i, idx) => (
+                  <li key={idx} className="text-xs text-yellow-300">• {i}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Next recommendation */}
+          <div className="rounded-xl border border-violet-700/40 bg-violet-900/10 px-4 py-3">
+            <p className="text-xs text-violet-400 font-semibold">Próximo passo</p>
+            <p className="text-xs text-violet-300 mt-0.5">{report.nextRecommendation}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConfigTab() {
   const [config, setConfig]   = useState<TrainingConfig | null>(null);
   const [saving, setSaving]   = useState(false);
@@ -918,7 +1217,7 @@ function RunDetailView({ runId, onBack }: { runId: string; onBack: () => void })
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type Tab = "dashboard" | "runs" | "cenarios" | "falhas" | "sugestoes" | "versoes" | "config";
+type Tab = "dashboard" | "runs" | "cenarios" | "falhas" | "sugestoes" | "versoes" | "config" | "validar";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "dashboard", label: "Dashboard" },
@@ -926,6 +1225,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "cenarios",  label: "Cenários" },
   { id: "sugestoes", label: "Sugestões" },
   { id: "versoes",   label: "Versões" },
+  { id: "validar",   label: "Validar" },
   { id: "config",    label: "Config" },
 ];
 
@@ -1042,6 +1342,7 @@ export default function AgentTrainingPage() {
         )}
         {tab === "sugestoes" && <ProposalsTab />}
         {tab === "versoes"   && <BrainVersionsTab />}
+        {tab === "validar"   && <ValidateCycleTab />}
         {tab === "config"    && <ConfigTab />}
       </div>
     </div>
