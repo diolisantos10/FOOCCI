@@ -409,7 +409,7 @@ function ProposalsTab() {
       </div>
 
       {proposals.length === 0 && (
-        <p className="text-sm text-gray-500 py-6 text-center">Nenhuma proposta com status "{filter.replace(/_/g, " ")}".</p>
+        <p className="text-sm text-gray-500 py-6 text-center">Nenhuma proposta com status &ldquo;{filter.replace(/_/g, " ")}&rdquo;.</p>
       )}
 
       <div className="space-y-3">
