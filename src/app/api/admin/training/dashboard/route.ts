@@ -25,6 +25,13 @@ export async function GET(req: NextRequest) {
     liveFailuresToday,
     approvedSandboxCandidates,
     latestRealFailure,
+    trainingConfig,
+    lastSmallBatchRun,
+    lastNightlyRun,
+    lastMiningRun,
+    scenariosToday,
+    warnFailToday,
+    proposalsCreatedToday,
   ] = await Promise.all([
     prisma.agentTrainingRun.count({ where: { createdAt: { gte: since24h } } }),
     prisma.agentTrainingRun.findFirst({ where: { status: "RUNNING" }, orderBy: { startedAt: "desc" } }),
@@ -49,6 +56,27 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       select:  { id: true, title: true, status: true, riskLevel: true, createdAt: true },
     }),
+    prisma.agentTrainingConfig.findUnique({ where: { agentType: "WHATSAPP_ORDERING" } }),
+    prisma.agentTrainingRun.findFirst({
+      where:   { mode: "QUICK", status: "COMPLETED" },
+      orderBy: { completedAt: "desc" },
+      select:  { completedAt: true },
+    }),
+    prisma.agentTrainingRun.findFirst({
+      where:   { mode: "NIGHTLY", status: "COMPLETED" },
+      orderBy: { completedAt: "desc" },
+      select:  { completedAt: true },
+    }),
+    prisma.agentTrainingRun.findFirst({
+      where:   { mode: "REAL_CONVERSATION_REPLAY", status: "COMPLETED" },
+      orderBy: { completedAt: "desc" },
+      select:  { completedAt: true },
+    }),
+    prisma.agentTrainingScenario.count({ where: { createdAt: { gte: sinceSod } } }),
+    prisma.agentTrainingScenario.count({
+      where: { status: { in: ["WARN", "FAIL"] }, createdAt: { gte: sinceSod } },
+    }),
+    prisma.agentImprovementProposal.count({ where: { createdAt: { gte: sinceSod } } }),
   ]);
 
   // Top failure categories from recent runs
@@ -68,20 +96,28 @@ export async function GET(req: NextRequest) {
     .map(([category, count]) => ({ category, count }));
 
   return NextResponse.json({
-    activeRun:               activeRun ?? null,
+    activeRun:                 activeRun ?? null,
     runsToday,
     totalScenarios,
     passCount,
     warnCount,
     failCount,
-    latestScore:             latestRun?.score ?? null,
+    latestScore:               latestRun?.score ?? null,
     pendingProposals,
     topFailureCategories,
-    latestRun:               latestRun ?? null,
+    latestRun:                 latestRun ?? null,
     liveFailuresToday,
     approvedSandboxCandidates,
-    latestRealFailure:       latestRealFailure
+    latestRealFailure:         latestRealFailure
       ? { ...latestRealFailure, createdAt: latestRealFailure.createdAt.toISOString() }
       : null,
+    // Continuous training status
+    continuousEnabled:         trainingConfig?.enableContinuousTraining ?? false,
+    lastSmallBatch:            lastSmallBatchRun?.completedAt?.toISOString() ?? null,
+    lastNightlyBatch:          lastNightlyRun?.completedAt?.toISOString()    ?? null,
+    lastMiningRun:             lastMiningRun?.completedAt?.toISOString()     ?? null,
+    scenariosToday,
+    warnFailToday,
+    proposalsCreatedToday,
   });
 }

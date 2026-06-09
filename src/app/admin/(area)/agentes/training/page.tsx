@@ -40,6 +40,14 @@ interface DashboardData {
   liveFailuresToday: number;
   approvedSandboxCandidates: number;
   latestRealFailure: { id: string; title: string; status: string; riskLevel: string | null; createdAt: string } | null;
+  // Continuous training
+  continuousEnabled: boolean;
+  lastSmallBatch: string | null;
+  lastNightlyBatch: string | null;
+  lastMiningRun: string | null;
+  scenariosToday: number;
+  warnFailToday: number;
+  proposalsCreatedToday: number;
 }
 
 interface TrainingConfig {
@@ -137,15 +145,26 @@ const TRAINING_FLOW_STEPS = [
   { icon: "🧪", label: "Sandbox aplicado",    desc: "Testado antes de qualquer produção" },
 ];
 
-function VisaoGeralTab({ data, onRunBatch, running, onSwitchToCasos }: {
+function VisaoGeralTab({ data, onRunBatch, running, onRunNightly, runningNightly, onRunMining, runningMining, onPause, onResume, onSwitchToCasos }: {
   data: DashboardData | null;
   onRunBatch: () => void;
   running: boolean;
+  onRunNightly: () => void;
+  runningNightly: boolean;
+  onRunMining: () => void;
+  runningMining: boolean;
+  onPause: () => void;
+  onResume: () => void;
   onSwitchToCasos: () => void;
 }) {
   if (!data) return <div className="text-gray-500 text-sm p-4">Carregando…</div>;
 
   const total = data.passCount + data.warnCount + data.failCount || 1;
+  const continuousStatus = !data.continuousEnabled
+    ? { label: "Não configurado", color: "text-gray-400", bg: "border-gray-700 bg-gray-800/40" }
+    : data.activeRun
+    ? { label: "Rodando agora", color: "text-green-400", bg: "border-green-700/40 bg-green-900/10" }
+    : { label: "Ativo · aguardando cron", color: "text-blue-400", bg: "border-blue-700/40 bg-blue-900/10" };
 
   return (
     <div className="space-y-6 p-6">
@@ -268,16 +287,83 @@ function VisaoGeralTab({ data, onRunBatch, running, onSwitchToCasos }: {
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-3">
-        <button
-          onClick={onRunBatch}
-          disabled={running || !!data.activeRun}
-          className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-50 transition-colors"
-        >
-          {running ? "Iniciando…" : "▶ Rodar batch rápido"}
-        </button>
+      {/* Continuous training panel */}
+      <div className={`rounded-xl border p-4 space-y-3 ${continuousStatus.bg}`}>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Treinamento contínuo</p>
+          <span className={`text-xs font-semibold ${continuousStatus.color}`}>{continuousStatus.label}</span>
+        </div>
+
+        {/* Last run times */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Batch pequeno",   value: data.lastSmallBatch },
+            { label: "Batch noturno",   value: data.lastNightlyBatch },
+            { label: "Mineração",       value: data.lastMiningRun },
+          ].map(({ label, value }) => (
+            <div key={label} className="rounded-lg border border-gray-700 bg-gray-900/60 px-2 py-2">
+              <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
+              <p className="text-[11px] text-gray-300">{value ? fmtDate(value) : "—"}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Today's counters */}
+        <div className="flex gap-4 text-xs">
+          <span className="text-gray-400">Cenários hoje: <b className="text-gray-200">{data.scenariosToday}</b></span>
+          <span className="text-yellow-500">WARN/FAIL hoje: <b>{data.warnFailToday}</b></span>
+          <span className="text-violet-400">Propostas hoje: <b>{data.proposalsCreatedToday}</b></span>
+        </div>
+
+        {/* Safety status */}
+        <div className="flex gap-3 text-[11px] text-gray-500 flex-wrap">
+          <span className="text-green-600">✓ sem WhatsApp real</span>
+          <span className="text-green-600">✓ sem pedidos</span>
+          <span className="text-green-600">✓ sem Pix</span>
+          <span className="text-green-600">✓ propostas aguardam aprovação</span>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            onClick={onRunBatch}
+            disabled={running || !!data.activeRun}
+            className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-600 disabled:opacity-50 transition-colors"
+          >
+            {running ? "Iniciando…" : "▶ Batch pequeno agora"}
+          </button>
+          <button
+            onClick={onRunNightly}
+            disabled={runningNightly || !!data.activeRun}
+            className="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-600 disabled:opacity-50 transition-colors"
+          >
+            {runningNightly ? "Iniciando…" : "🌙 Batch noturno agora"}
+          </button>
+          <button
+            onClick={onRunMining}
+            disabled={runningMining || !!data.activeRun}
+            className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-600 disabled:opacity-50 transition-colors"
+          >
+            {runningMining ? "Minerando…" : "⛏ Minerar conversas agora"}
+          </button>
+          {data.continuousEnabled ? (
+            <button
+              onClick={onPause}
+              className="rounded-lg border border-yellow-700/50 px-3 py-1.5 text-xs font-semibold text-yellow-400 hover:bg-yellow-900/20 transition-colors"
+            >
+              ⏸ Pausar treinamento
+            </button>
+          ) : (
+            <button
+              onClick={onResume}
+              className="rounded-lg border border-green-700/50 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-900/20 transition-colors"
+            >
+              ▶ Ativar treinamento
+            </button>
+          )}
+        </div>
       </div>
+
     </div>
   );
 }
@@ -1565,6 +1651,39 @@ function ConfiguracoesTab() {
         {saving ? "Salvando…" : saved ? "✓ Salvo" : "Salvar configuração"}
       </button>
 
+      {/* Railway cron schedule */}
+      <div className="pt-4 border-t border-gray-800 space-y-3">
+        <p className="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Configuração Railway (cron jobs)</p>
+        <p className="text-xs text-gray-500">Configure no Railway → Service → Cron para rodar automaticamente:</p>
+        <div className="rounded-lg border border-gray-700 bg-gray-900 p-3 space-y-3 text-[11px] font-mono">
+          {[
+            {
+              schedule: "*/30 * * * *",
+              url: "POST /api/cron/agent-training/run-small-batch",
+              desc: "Batch pequeno a cada 30 min",
+            },
+            {
+              schedule: "0 7 * * *",
+              url: "POST /api/cron/agent-training/run-nightly",
+              desc: "Batch noturno todo dia às 04:00 BRT (07:00 UTC)",
+            },
+            {
+              schedule: "*/30 * * * *",
+              url: "POST /api/cron/agent-training/mine-real-conversations",
+              desc: "Mineração a cada 30 min",
+            },
+          ].map(({ schedule, url, desc }) => (
+            <div key={url} className="space-y-0.5">
+              <p className="text-gray-400">{desc}</p>
+              <p className="text-violet-400">{schedule}</p>
+              <p className="text-gray-500">{url}</p>
+              <p className="text-gray-600">Header: Authorization: Bearer $CRON_SECRET</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-gray-600">CRON_SECRET deve ser definido nas variáveis de ambiente do Railway.</p>
+      </div>
+
       {/* Debug tools */}
       <div className="pt-4 border-t border-gray-800 space-y-2">
         <p className="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Ferramentas de diagnóstico</p>
@@ -1875,11 +1994,13 @@ const TABS: Array<{ id: Tab; label: string }> = [
 ];
 
 export default function AgentTrainingPage() {
-  const [tab, setTab]           = useState<Tab>("visao-geral");
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [tab, setTab]               = useState<Tab>("visao-geral");
+  const [dashboard, setDashboard]   = useState<DashboardData | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
-  const [runningBatch, setRunningBatch] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [runningBatch, setRunningBatch]     = useState(false);
+  const [runningNightly, setRunningNightly] = useState(false);
+  const [runningMining, setRunningMining]   = useState(false);
+  const [pendingCount, setPendingCount]     = useState(0);
 
   const loadDashboard = useCallback(async () => {
     const res = await fetch("/api/admin/training/dashboard");
@@ -1905,6 +2026,38 @@ export default function AgentTrainingPage() {
       body:    JSON.stringify({ agentType: "WHATSAPP_ORDERING", mode: "QUICK", count: 10 }),
     });
     setRunningBatch(false);
+    void loadDashboard();
+  };
+
+  const triggerNightly = async () => {
+    setRunningNightly(true);
+    await fetch("/api/admin/training/trigger/nightly", { method: "POST" });
+    setRunningNightly(false);
+    void loadDashboard();
+  };
+
+  const triggerMining = async () => {
+    setRunningMining(true);
+    await fetch("/api/admin/training/trigger/mine", { method: "POST" });
+    setRunningMining(false);
+    void loadDashboard();
+  };
+
+  const pauseTraining = async () => {
+    await fetch("/api/admin/training/config", {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ enableContinuousTraining: false }),
+    });
+    void loadDashboard();
+  };
+
+  const resumeTraining = async () => {
+    await fetch("/api/admin/training/config", {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ enableContinuousTraining: true }),
+    });
     void loadDashboard();
   };
 
@@ -1957,7 +2110,18 @@ export default function AgentTrainingPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {tab === "visao-geral" && (
-          <VisaoGeralTab data={dashboard} onRunBatch={triggerBatch} running={runningBatch} onSwitchToCasos={() => setTab("casos")} />
+          <VisaoGeralTab
+            data={dashboard}
+            onRunBatch={triggerBatch}
+            running={runningBatch}
+            onRunNightly={triggerNightly}
+            runningNightly={runningNightly}
+            onRunMining={triggerMining}
+            runningMining={runningMining}
+            onPause={pauseTraining}
+            onResume={resumeTraining}
+            onSwitchToCasos={() => setTab("casos")}
+          />
         )}
         {tab === "arena"         && <ArenaTab />}
         {tab === "casos"         && <CasosTab onSelectScenario={(id) => setSelectedScenario(id)} />}
