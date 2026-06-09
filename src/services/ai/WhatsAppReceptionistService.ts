@@ -48,12 +48,12 @@ const EMOJI_NUMBERS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6
 const DAY_NAMES_PT  = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
 
 // "0" / "voltar" / "menu" / "menu principal" → re-render the WhatsApp host menu.
-const BACK_TO_MENU_RE =
+export const BACK_TO_MENU_RE =
   /^(0|voltar|menu|menu\s+principal|voltar\s+menu|in[ií]cio|inicio)$/i;
 
 // Footer appended to every non-handoff branch reply so the customer always
 // has a clear exit from any menu sub-branch.
-const BACK_TO_MENU_FOOTER = "\n\n0️⃣ Voltar ao menu principal";
+export const BACK_TO_MENU_FOOTER = "\n\n0️⃣ Voltar ao menu principal";
 
 // Shown when menuOptions is null/empty in DB — ensures the menu is always visible.
 const FALLBACK_MENU_OPTIONS: MenuOption[] = [
@@ -98,7 +98,7 @@ const PAYMENT_RE =
 const ORDER_STATUS_RE =
   /cadê (meu|o) pedido|cadê meu|status (do|de) (meu |o )?pedido|acompanhar (meu )?pedido|onde está meu|quanto tempo (falta|demora)|previsão de entrega|previsao de entrega/i;
 
-function detectIntent(text: string): Intent {
+export function detectIntent(text: string): Intent {
   const t = text.toLowerCase().trim();
   // Complaint and human request take priority — never silently ignore them.
   if (COMPLAINT_RE.test(t))    return "COMPLAINT";
@@ -118,7 +118,7 @@ function detectIntent(text: string): Intent {
  * Detects if the customer selected a numbered or named menu option.
  * Supports: "1", "2", "3" (by position) or exact label match.
  */
-function detectSelectedOption(text: string, options: MenuOption[]): MenuOption | null {
+export function detectSelectedOption(text: string, options: MenuOption[]): MenuOption | null {
   if (options.length === 0) return null;
   const t = text.trim();
   if (/^\d+$/.test(t)) {
@@ -131,7 +131,7 @@ function detectSelectedOption(text: string, options: MenuOption[]): MenuOption |
 
 // ─── context ──────────────────────────────────────────────────
 
-interface ReplyContext {
+export interface ReplyContext {
   restaurantName:   string;
   agentName:        string;        // configured WhatsApp Host name
   customerName:     string | null; // from CRM customer record
@@ -297,7 +297,7 @@ function buildIdentifiedPedidoUrl(
 }
 
 /** Formats the configured menu options as an emoji-numbered text list. */
-function buildMenuList(options: MenuOption[]): string {
+export function buildMenuList(options: MenuOption[]): string {
   if (options.length === 0) return "";
   return "\n\n" + options.map((o, i) => `${EMOJI_NUMBERS[i] ?? `${i + 1}.`} ${o.label}`).join("\n");
 }
@@ -336,7 +336,7 @@ function findCatalogMatch(
 }
 
 /** Builds the reply for a specific selected menu option (by number or label). */
-function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
+export function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
   const { orderPreMessage, pedidoUrl, handoffMessage } = ctx;
   switch (opt.flow) {
     case "order":
@@ -378,11 +378,11 @@ function buildFlowReply(opt: MenuOption, ctx: ReplyContext): string {
   }
 }
 
-function appendBackToMainMenu(text: string): string {
+export function appendBackToMainMenu(text: string): string {
   return text + BACK_TO_MENU_FOOTER;
 }
 
-function renderMainMenu(ctx: ReplyContext): string {
+export function renderMainMenu(ctx: ReplyContext): string {
   const menuList = buildMenuList(ctx.menuOptions);
   if (!menuList) return ctx.welcomeMessage;
   return "Claro 😊 Voltando ao menu principal:" + menuList + "\n\nResponda com o número da opção 😊";
