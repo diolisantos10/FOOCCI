@@ -1,0 +1,98 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CRM Cold Campaign — prepare NEW campaign (PAUSED) + preflight (cron-safe, manual)
+#
+# Creates the new "Recuperar clientes frios" campaign in a conservative config,
+# PAUSED so it NEVER sends, then runs its preflight. DEFAULTS TO DRY-RUN (no create).
+# A real creation requires explicitly dispatching dry_run=false.
+#
+# Manual only (workflow_dispatch). Uses CRON_SECRET — NOT ADMIN_SECRET.
+# Never sends WhatsApp, never activates a campaign, never deletes a campaign.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CRM Restart Cold Campaign
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run? (true = no create, false = create PAUSED + preflight)"
+        type: choice
+        default: "true"
+        options: ["true", "false"]
+      restaurant_id:
+        description: "Restaurant id (Sushi Cazza)"
+        type: string
+        default: "cmp30upkp000198i4r8wpxdl1"
+      source_campaign_id:
+        description: "Old campaign to reuse the message/segment from"
+        type: string
+        default: "cmq1r7i1b00o2s6xju850qkp5"
+      campaign_family_key:
+        description: "Concept key for the new campaign"
+        type: string
+        default: "reativacao-frios"
+      dedupe_window_days:
+        description: "Dedupe window (days)"
+        type: string
+        default: "60"
+
+jobs:
+  restart-cold:
+    name: "CRM Restart Cold Campaign"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "restart=${BASE_URL}/api/cron/crm/restart-cold-campaign" >> "$GITHUB_OUTPUT"
+
+      - name: "Prepare new cold campaign (DRY-RUN unless dry_run=false)"
+        env:
+          URL: ${{ steps.params.outputs.restart }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          RESTAURANT_ID: ${{ inputs.restaurant_id }}
+          SOURCE_CAMPAIGN_ID: ${{ inputs.source_campaign_id }}
+          FAMILY_KEY: ${{ inputs.campaign_family_key }}
+          WINDOW: ${{ inputs.dedupe_window_days }}
+        run: |
+          BODY=$(jq -nc --argjson dry "$([[ "$DRY_RUN" == "false" ]] && echo false || echo true)" \
+                       --arg rid "$RESTAURANT_ID" --arg src "$SOURCE_CAMPAIGN_ID" \
+                       --arg fk "$FAMILY_KEY" --argjson win "${WINDOW:-60}" \
+                       '{dryRun:$dry, restaurantId:$rid, campaignFamilyKey:$fk, dedupeWindowDays:$win} + (if $src=="" then {} else {sourceCampaignId:$src} end)')
+          echo "→ payload: $BODY"
+          set +e
+          curl --connect-timeout 20 --max-time 180 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d "$BODY" \
+            -o /tmp/restart.json -w "%{http_code}" > /tmp/rcode.txt
+          set -e
+          HTTP=$(cat /tmp/rcode.txt)
+          echo "← HTTP                  : $HTTP"
+          echo "← ok                    : $(jq -r '.ok' /tmp/restart.json 2>/dev/null)"
+          echo "← dryRun                : $(jq -r '.dryRun' /tmp/restart.json 2>/dev/null)"
+          echo "← created               : $(jq -r '.created' /tmp/restart.json 2>/dev/null)"
+          echo "← reused                : $(jq -r '.reused' /tmp/restart.json 2>/dev/null)"
+          echo "← campaignId            : $(jq -r '.campaignId // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← status                : $(jq -r '.status // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← campaignFamilyKey     : $(jq -r '.campaignFamilyKey // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "── preflight ──"
+          echo "← audienceTotal         : $(jq -r '.preflight.audienceTotal // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← eligibleNow           : $(jq -r '.preflight.eligibleNow // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← forecastSendToday     : $(jq -r '.preflight.forecastSendToday // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← alreadyImpactedConcept: $(jq -r '.preflight.blocked.alreadyImpactedConcept // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← alreadyImpactedCampaign: $(jq -r '.preflight.blocked.alreadyImpactedCampaign // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← duplicateMessage      : $(jq -r '.preflight.blocked.duplicateMessage // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← weeklyLimit           : $(jq -r '.preflight.blocked.weeklyLimit // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← invalidPhone          : $(jq -r '.preflight.blocked.invalidPhone // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← optOut                : $(jq -r '.preflight.blocked.optOut // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← globalCap             : $(jq -r '.preflight.blocked.globalCap // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← campaignCap           : $(jq -r '.preflight.blocked.campaignCap // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← canSendNow            : $(jq -r '.preflight.canSendNow // "?"' /tmp/restart.json 2>/dev/null)"
+          echo "← warnings              : $(jq -rc '.preflight.warnings // []' /tmp/restart.json 2>/dev/null)"
+          echo "← note                  : $(jq -r '.note // ""' /tmp/restart.json 2>/dev/null)"
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::restart non-2xx ($HTTP)."; exit 1; fi
+          echo "✅ Restart-cold ($([[ "$DRY_RUN" == "false" ]] && echo REAL-create || echo dry-run)) concluído — campanha PAUSED, nada enviado."
