@@ -173,16 +173,42 @@ export async function processRunForProposals(opts: {
   const shouldCreate = opts.autoCreate ?? config?.autoCreateProposals ?? true;
   if (!shouldCreate) return;
 
+  // Dedup: if too many proposals are already pending, skip to avoid spam.
+  const DEDUP_WINDOW_MS    = 6 * 3_600_000; // 6-hour cooldown window
+  const MAX_OPEN_PROPOSALS = 10;
+
+  const [pendingCount, recentCount] = await Promise.all([
+    prisma.agentImprovementProposal.count({
+      where: { agentType: opts.agentType, status: "PENDING_APPROVAL" },
+    }),
+    prisma.agentImprovementProposal.count({
+      where: {
+        agentType:   opts.agentType,
+        restaurantId: opts.restaurantId ?? null,
+        createdAt:   { gte: new Date(Date.now() - DEDUP_WINDOW_MS) },
+      },
+    }),
+  ]);
+
+  if (pendingCount >= MAX_OPEN_PROPOSALS) {
+    console.info("[AgentTrainingImprovement] maxOpenProposals reached, skipping", { pendingCount });
+    return;
+  }
+
   const groups = await analyzeFailures(opts.runId);
 
+  let created = 0;
   for (const group of groups) {
     if (group.count === 0) continue;
+    // Per-run cooldown: stop after creating 2 proposals per small run to avoid spam.
+    if (recentCount + created >= 2 && groups.length <= 3) break;
     await generateProposal({
-      runId:       opts.runId,
-      agentType:   opts.agentType,
+      runId:        opts.runId,
+      agentType:    opts.agentType,
       restaurantId: opts.restaurantId,
-      scenarios:   group.scenarios,
+      scenarios:    group.scenarios,
     });
+    created++;
     // Rate limiting
     await new Promise((r) => setTimeout(r, 500));
   }

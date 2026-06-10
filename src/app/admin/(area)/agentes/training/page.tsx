@@ -61,6 +61,19 @@ interface TrainingConfig {
   nightlyBatchEnabled: boolean;
 }
 
+interface SetupCheckItem {
+  key: string; label: string; status: "ok" | "warn" | "error";
+  detail: string; fix: string | null;
+}
+
+interface SetupCheckData {
+  overallStatus: "ok" | "warn" | "error";
+  items: SetupCheckItem[];
+  cronEndpoints: Record<string, string>;
+  lastRun: { completedAt: string | null; score: number | null } | null;
+  pendingProposals: number;
+}
+
 interface RealCaseItem {
   id: string; title: string; source: string; status: string;
   riskLevel: string; failureCategory: string;
@@ -1528,6 +1541,136 @@ function ValidateCycleTab() {
   );
 }
 
+function SetupCheckPanel() {
+  const [data, setData]       = useState<SetupCheckData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<Record<string, unknown> | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch("/api/admin/training/setup-check");
+    if (res.ok) setData(await res.json());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const testCron = async (key: string) => {
+    setTesting(key);
+    setTestResult(null);
+    const res = await fetch("/api/admin/training/setup-check", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ endpoint: key }),
+    });
+    setTestResult(await res.json());
+    setTesting(null);
+  };
+
+  const copyRailwayConfig = () => {
+    if (!data) return;
+    const text = [
+      "# Railway Cron — Agent Training",
+      "",
+      "# Batch pequeno (a cada 30min)",
+      `Schedule: */30 * * * *`,
+      `URL: POST https://foocci.com.br/api/cron/agent-training/run-small-batch`,
+      `Header: Authorization: Bearer $CRON_SECRET`,
+      "",
+      "# Batch noturno (diariamente 04:00 BRT = 07:00 UTC)",
+      `Schedule: 0 7 * * *`,
+      `URL: POST https://foocci.com.br/api/cron/agent-training/run-nightly`,
+      `Header: Authorization: Bearer $CRON_SECRET`,
+      "",
+      "# Mineração (a cada 30min)",
+      `Schedule: */30 * * * *`,
+      `URL: POST https://foocci.com.br/api/cron/agent-training/mine-real-conversations`,
+      `Header: Authorization: Bearer $CRON_SECRET`,
+    ].join("\n");
+    void navigator.clipboard.writeText(text);
+  };
+
+  const statusIcon = (s: string) =>
+    s === "ok" ? "✓" : s === "warn" ? "⚠" : "✗";
+  const statusColor = (s: string) =>
+    s === "ok" ? "text-green-400" : s === "warn" ? "text-yellow-400" : "text-red-400";
+  const statusBg = (s: string) =>
+    s === "ok" ? "border-green-700/30 bg-green-900/10" : s === "warn" ? "border-yellow-700/30 bg-yellow-900/10" : "border-red-700/30 bg-red-900/10";
+
+  if (loading) return <div className="text-gray-500 text-sm p-2">Verificando configuração…</div>;
+  if (!data)   return null;
+
+  return (
+    <div className="space-y-4">
+      {/* Overall status */}
+      <div className={`rounded-xl border px-4 py-3 flex items-center justify-between ${statusBg(data.overallStatus)}`}>
+        <div className="flex items-center gap-2">
+          <span className={`text-lg ${statusColor(data.overallStatus)}`}>{statusIcon(data.overallStatus)}</span>
+          <span className={`text-sm font-semibold ${statusColor(data.overallStatus)}`}>
+            {data.overallStatus === "ok"
+              ? "Sistema pronto — treinamento automático funcionando"
+              : data.overallStatus === "warn"
+              ? "Configuração parcial — alguns itens precisam de atenção"
+              : "Configuração incompleta — treinamento automático não funcionará"}
+          </span>
+        </div>
+        <button onClick={() => void load()}
+          className="text-xs text-gray-500 hover:text-gray-300 border border-gray-700 rounded px-2 py-1">
+          ↺ Verificar
+        </button>
+      </div>
+
+      {/* Checklist items */}
+      <div className="space-y-2">
+        {data.items.map((item) => (
+          <div key={item.key} className={`rounded-lg border px-3 py-2.5 flex items-start justify-between gap-3 ${statusBg(item.status)}`}>
+            <div className="flex items-start gap-2 min-w-0">
+              <span className={`text-sm mt-0.5 shrink-0 ${statusColor(item.status)}`}>{statusIcon(item.status)}</span>
+              <div>
+                <p className={`text-xs font-medium ${statusColor(item.status)}`}>{item.label}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{item.detail}</p>
+                {item.fix && (
+                  <p className="text-[11px] text-yellow-500 mt-0.5">→ {item.fix}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Cron endpoints with test buttons */}
+      <div className="rounded-xl border border-gray-700 bg-gray-900 p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Endpoints Cron</p>
+          <button onClick={copyRailwayConfig}
+            className="text-xs text-violet-400 hover:text-violet-300 border border-violet-700/40 rounded px-2 py-1">
+            📋 Copiar config Railway
+          </button>
+        </div>
+        {(Object.entries(data.cronEndpoints) as [string, string][]).map(([key, path]) => (
+          <div key={key} className="flex items-center gap-3 flex-wrap">
+            <code className="text-[11px] text-gray-400 flex-1 min-w-0 truncate">{path}</code>
+            <button
+              onClick={() => void testCron(key)}
+              disabled={testing === key}
+              className="shrink-0 text-xs border border-gray-700 text-gray-400 hover:bg-gray-800 rounded px-2 py-1 disabled:opacity-50"
+            >
+              {testing === key ? "Testando…" : "▶ Testar agora"}
+            </button>
+          </div>
+        ))}
+        {testResult && (
+          <div className={`rounded-lg border p-2 text-[11px] font-mono ${(testResult as { ok?: boolean }).ok ? "border-green-700/40 text-green-400" : "border-red-700/40 text-red-400"}`}>
+            {JSON.stringify(testResult, null, 2).slice(0, 400)}
+          </div>
+        )}
+        <p className="text-[10px] text-gray-600">Configure CRON_SECRET nas variáveis de ambiente. Setup único no Railway — não precisa ser repetido.</p>
+      </div>
+    </div>
+  );
+}
+
 function ConfiguracoesTab() {
   const [config, setConfig]   = useState<TrainingConfig | null>(null);
   const [saving, setSaving]   = useState(false);
@@ -1560,7 +1703,13 @@ function ConfiguracoesTab() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-lg">
+    <div className="p-6 space-y-6 max-w-2xl">
+      {/* Setup checklist */}
+      <div>
+        <p className="text-[11px] text-gray-500 uppercase tracking-wide font-semibold mb-3">Checklist de configuração</p>
+        <SetupCheckPanel />
+      </div>
+
       <div className="rounded-xl border border-red-700/40 bg-red-900/10 px-4 py-3 text-xs text-red-400 font-semibold">
         🔒 Aplicar em produção automaticamente — sempre DESATIVADO em v1. Nunca automático.
       </div>
@@ -1650,39 +1799,6 @@ function ConfiguracoesTab() {
         className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
         {saving ? "Salvando…" : saved ? "✓ Salvo" : "Salvar configuração"}
       </button>
-
-      {/* Railway cron schedule */}
-      <div className="pt-4 border-t border-gray-800 space-y-3">
-        <p className="text-[11px] text-gray-500 uppercase tracking-wide font-semibold">Configuração Railway (cron jobs)</p>
-        <p className="text-xs text-gray-500">Configure no Railway → Service → Cron para rodar automaticamente:</p>
-        <div className="rounded-lg border border-gray-700 bg-gray-900 p-3 space-y-3 text-[11px] font-mono">
-          {[
-            {
-              schedule: "*/30 * * * *",
-              url: "POST /api/cron/agent-training/run-small-batch",
-              desc: "Batch pequeno a cada 30 min",
-            },
-            {
-              schedule: "0 7 * * *",
-              url: "POST /api/cron/agent-training/run-nightly",
-              desc: "Batch noturno todo dia às 04:00 BRT (07:00 UTC)",
-            },
-            {
-              schedule: "*/30 * * * *",
-              url: "POST /api/cron/agent-training/mine-real-conversations",
-              desc: "Mineração a cada 30 min",
-            },
-          ].map(({ schedule, url, desc }) => (
-            <div key={url} className="space-y-0.5">
-              <p className="text-gray-400">{desc}</p>
-              <p className="text-violet-400">{schedule}</p>
-              <p className="text-gray-500">{url}</p>
-              <p className="text-gray-600">Header: Authorization: Bearer $CRON_SECRET</p>
-            </div>
-          ))}
-        </div>
-        <p className="text-[10px] text-gray-600">CRON_SECRET deve ser definido nas variáveis de ambiente do Railway.</p>
-      </div>
 
       {/* Debug tools */}
       <div className="pt-4 border-t border-gray-800 space-y-2">

@@ -15,6 +15,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateBatch } from "@/services/agent-training/AgentTrainingScenarioGenerator";
 import { createRun, runBatch, finalizeRun, failRun } from "@/services/agent-training/AgentTrainingRunnerService";
+import { evaluateRun } from "@/services/agent-training/AgentTrainingEvaluatorService";
+import { processRunForProposals } from "@/services/agent-training/AgentTrainingImprovementService";
 
 function checkCronAuth(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -67,17 +69,42 @@ export async function POST(req: NextRequest) {
     }));
 
     await runBatch({ runId: run.id, restaurantId: restaurant.id, scenarios });
+
+    // Auto-evaluate WARN/FAIL scenarios if configured
+    const prelimRun = await prisma.agentTrainingRun.findUnique({
+      where:  { id: run.id },
+      select: { warnCount: true, failCount: true },
+    });
+    const hasFailures = (prelimRun?.warnCount ?? 0) + (prelimRun?.failCount ?? 0) > 0;
+    if ((config?.autoDiagnoseOnFailure ?? true) && hasFailures) {
+      await evaluateRun(run.id);
+    }
+
     const finalRun = await finalizeRun(run.id);
 
+    // Auto-create proposals if configured and there are failures
+    if (hasFailures) {
+      await processRunForProposals({
+        runId:        run.id,
+        agentType:    "WHATSAPP_ORDERING",
+        restaurantId: restaurant.id,
+      });
+    }
+
+    const proposalCount = await prisma.agentImprovementProposal.count({
+      where: { sourceRunId: run.id },
+    });
+
     return NextResponse.json({
-      ok:        true,
-      runId:     run.id,
-      total:     finalRun.totalScenarios,
-      pass:      finalRun.passCount,
-      warn:      finalRun.warnCount,
-      fail:      finalRun.failCount,
-      score:     finalRun.score,
-      restaurant: restaurant.name,
+      ok:               true,
+      runId:            run.id,
+      total:            finalRun.totalScenarios,
+      pass:             finalRun.passCount,
+      warn:             finalRun.warnCount,
+      fail:             finalRun.failCount,
+      score:            finalRun.score,
+      proposalsCreated: proposalCount,
+      restaurant:       restaurant.name,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
