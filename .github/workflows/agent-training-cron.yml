@@ -1,0 +1,225 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Agent Training Center — fully automatic cron pipeline
+#
+# Four jobs run on schedule to keep the training loop always on without any
+# manual intervention:
+#
+#   small-batch        Every 30 min — 10 AI-generated scenarios, auto-evaluate,
+#                      auto-propose for any new failure category.
+#
+#   mine-conversations Every 30 min — capture real WhatsApp failures as training
+#                      scenarios (read-only, PII handled by the service).
+#
+#   process-backlog    Every 30 min — drain WARN/FAIL scenarios that are missing
+#                      evaluations or proposals (7-day rolling window, max 15
+#                      evaluations per call).
+#
+#   nightly-batch      Daily 07:00 UTC (04:00 BRT) — 30 AI + real scenarios,
+#                      full evaluation pass, grouped proposals.
+#
+# SAFETY (enforced in code, not here):
+#   allowSideEffects = false always
+#   No WhatsApp sent, no order created, no Pix generated
+#   All proposals created as PENDING_APPROVAL — never applied automatically
+#   autoApplyProduction hard-locked to false in the config route
+#
+# Required GitHub Secrets (already set for CRM/quality cron — no new setup):
+#   FOOCCI_BASE_URL   e.g. https://foocci.com.br
+#   CRON_SECRET       Must match CRON_SECRET env var in Railway
+#
+# Why GitHub Actions instead of Railway native cron:
+#   Railway cron sends plain requests with no custom headers.
+#   All training endpoints require  Authorization: Bearer {CRON_SECRET}.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Agent Training Cron
+
+on:
+  schedule:
+    # Small batch + mine + backlog — every 30 minutes
+    - cron: "*/30 * * * *"
+    # Nightly batch — 07:00 UTC = 04:00 BRT
+    - cron: "0 7 * * *"
+
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which job to run"
+        required: true
+        default: process-backlog
+        type: choice
+        options:
+          - small-batch
+          - mine-conversations
+          - process-backlog
+          - nightly-batch
+          - all-30min
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+env:
+  CURL_OPTS: "--connect-timeout 20 --max-time 150 -sS"
+
+# ── Job 1: Small Batch ────────────────────────────────────────────────────────
+
+jobs:
+  small-batch:
+    name: "Small Batch (10 scenarios)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event.schedule == '*/30 * * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (inputs.target == 'small-batch' || inputs.target == 'all-30min'))
+
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE="${{ secrets.FOOCCI_BASE_URL }}"
+          echo "url=${BASE%/}/api/cron/agent-training/run-small-batch" >> "$GITHUB_OUTPUT"
+
+      - name: "POST /api/cron/agent-training/run-small-batch"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "→ $ENDPOINT_URL"
+          set +e
+          curl ${{ env.CURL_OPTS }} -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" -d '{}' \
+            -o /tmp/resp.json -w "%{http_code}" > /tmp/code.txt
+          CURL_EXIT=$?
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP $HTTP"
+          jq . /tmp/resp.json 2>/dev/null || cat /tmp/resp.json
+          [[ $CURL_EXIT -ne 0 ]] && { echo "::error::curl exit $CURL_EXIT"; exit $CURL_EXIT; }
+          [[ $HTTP -lt 200 || $HTTP -ge 300 ]] && { echo "::error::non-2xx ($HTTP)"; exit 1; }
+          SKIPPED=$(jq -r '.skipped // false' /tmp/resp.json 2>/dev/null)
+          [[ "$SKIPPED" == "true" ]] && echo "ℹ️ skipped — continuous training disabled or no restaurant found" && exit 0
+          PROPOSALS=$(jq -r '.proposalsCreated // 0' /tmp/resp.json 2>/dev/null)
+          echo "✅ batch ok — proposals created: $PROPOSALS"
+
+# ── Job 2: Mine Real Conversations ────────────────────────────────────────────
+
+  mine-conversations:
+    name: "Mine Real Conversations"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event.schedule == '*/30 * * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (inputs.target == 'mine-conversations' || inputs.target == 'all-30min'))
+
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE="${{ secrets.FOOCCI_BASE_URL }}"
+          echo "url=${BASE%/}/api/cron/agent-training/mine-real-conversations" >> "$GITHUB_OUTPUT"
+
+      - name: "POST /api/cron/agent-training/mine-real-conversations"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "→ $ENDPOINT_URL"
+          set +e
+          curl ${{ env.CURL_OPTS }} -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" -d '{}' \
+            -o /tmp/resp.json -w "%{http_code}" > /tmp/code.txt
+          CURL_EXIT=$?
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP $HTTP"
+          jq . /tmp/resp.json 2>/dev/null || cat /tmp/resp.json
+          [[ $CURL_EXIT -ne 0 ]] && { echo "::error::curl exit $CURL_EXIT"; exit $CURL_EXIT; }
+          [[ $HTTP -lt 200 || $HTTP -ge 300 ]] && { echo "::error::non-2xx ($HTTP)"; exit 1; }
+          SKIPPED=$(jq -r '.skipped // false' /tmp/resp.json 2>/dev/null)
+          [[ "$SKIPPED" == "true" ]] && echo "ℹ️ skipped — real conversation mining disabled" && exit 0
+          MINED=$(jq -r '.mined // 0' /tmp/resp.json 2>/dev/null)
+          echo "✅ mining ok — scenarios mined: $MINED"
+
+# ── Job 3: Process Backlog ────────────────────────────────────────────────────
+
+  process-backlog:
+    name: "Process WARN/FAIL Backlog"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event.schedule == '*/30 * * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (inputs.target == 'process-backlog' || inputs.target == 'all-30min'))
+
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE="${{ secrets.FOOCCI_BASE_URL }}"
+          echo "url=${BASE%/}/api/cron/agent-training/process-backlog" >> "$GITHUB_OUTPUT"
+
+      - name: "POST /api/cron/agent-training/process-backlog"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "→ $ENDPOINT_URL"
+          set +e
+          curl ${{ env.CURL_OPTS }} -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" -d '{}' \
+            -o /tmp/resp.json -w "%{http_code}" > /tmp/code.txt
+          CURL_EXIT=$?
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP $HTTP"
+          jq . /tmp/resp.json 2>/dev/null || cat /tmp/resp.json
+          [[ $CURL_EXIT -ne 0 ]] && { echo "::error::curl exit $CURL_EXIT"; exit $CURL_EXIT; }
+          [[ $HTTP -lt 200 || $HTTP -ge 300 ]] && { echo "::error::non-2xx ($HTTP)"; exit 1; }
+          EVALS=$(jq -r '.evaluationsCreated // 0' /tmp/resp.json 2>/dev/null)
+          PROPS=$(jq -r '.proposalsCreated  // 0' /tmp/resp.json 2>/dev/null)
+          echo "✅ backlog ok — evals: $EVALS · proposals: $PROPS"
+
+# ── Job 4: Nightly Batch ──────────────────────────────────────────────────────
+
+  nightly-batch:
+    name: "Nightly Batch (30 scenarios)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >-
+      github.event.schedule == '0 7 * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       inputs.target == 'nightly-batch')
+
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE="${{ secrets.FOOCCI_BASE_URL }}"
+          echo "url=${BASE%/}/api/cron/agent-training/run-nightly" >> "$GITHUB_OUTPUT"
+
+      - name: "POST /api/cron/agent-training/run-nightly"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "→ $ENDPOINT_URL"
+          set +e
+          curl --connect-timeout 20 --max-time 300 -sS \
+            -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" -d '{}' \
+            -o /tmp/resp.json -w "%{http_code}" > /tmp/code.txt
+          CURL_EXIT=$?
+          set -e
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP $HTTP"
+          jq . /tmp/resp.json 2>/dev/null || cat /tmp/resp.json
+          [[ $CURL_EXIT -ne 0 ]] && { echo "::error::curl exit $CURL_EXIT"; exit $CURL_EXIT; }
+          [[ $HTTP -lt 200 || $HTTP -ge 300 ]] && { echo "::error::non-2xx ($HTTP)"; exit 1; }
+          SCORE=$(jq -r '.score // "—"' /tmp/resp.json 2>/dev/null)
+          PROPS=$(jq -r '.proposalsCreated // 0' /tmp/resp.json 2>/dev/null)
+          echo "✅ nightly ok — score: $SCORE · proposals: $PROPS"
