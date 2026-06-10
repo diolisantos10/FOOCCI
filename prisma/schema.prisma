@@ -3436,3 +3436,39 @@ model AgentTrainingConfig {
 
   @@map("agent_training_configs")
 }
+
+// ── Waiter Result Evidence — Provas de Resultado / Evidências Comerciais ────────
+// Documented, sanitized proof that the Waiter generates commercial value (sales
+// conducted, upsell, recovery, friction reduction, qualitative praise, before/
+// after). Soft references only (NO FKs): deleting an order/conversation never
+// erases an approved proof. NEVER stores PII — excerpts are sanitized BEFORE
+// persisting, and public/commercial use requires explicit human approval.
+model WaiterResultEvidence {
+  id                String    @id @default(cuid())
+  restaurantId      String
+  agentSlug         String    @default("waiter")
+  sourceType        String // ORDER | CONVERSATION | SIMULATION | MANUAL_NOTE | ANALYTICS
+  sourceId          String? // soft reference (no FK)
+  title             String
+  summary           String
+  evidenceType      String // SALE_CONVERSION | UPSELL | RECOVERY | FRICTION_REDUCTION | QUALITATIVE_PROOF | BEFORE_AFTER
+  valueBefore       Decimal?  @db.Decimal(10, 2)
+  valueAfter        Decimal?  @db.Decimal(10, 2)
+  incrementalValue  Decimal?  @db.Decimal(10, 2)
+  orderValue        Decimal?  @db.Decimal(10, 2)
+  customerSegment   String?
+  sanitizedExcerpt  String?   @db.Text // ALWAYS sanitized before persisting
+  proofScore        Int? // 0–100 subjective strength of the proof
+  status            String    @default("DRAFT") // DRAFT | APPROVED | REJECTED | BACKLOG
+  isPublicCandidate Boolean   @default(false) // only meaningful after human approval
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([restaurantId, evidenceType])
+  @@index([restaurantId, status])
+  @@index([sourceType, sourceId])
+  @@map("waiter_result_evidence")
+}

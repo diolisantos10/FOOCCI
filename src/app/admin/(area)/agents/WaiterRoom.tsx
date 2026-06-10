@@ -19,6 +19,8 @@ import type { AdminAgentProfileView } from "@/services/agents/types";
 import { AgentLibraryPanel } from "./AgentLibraryPanel";
 import { WaiterRuntimeCockpit } from "./WaiterRuntimeCockpit";
 import { WaiterSimulationLab } from "./WaiterSimulationLab";
+import { WaiterEvidencePanel } from "./WaiterEvidencePanel";
+import { WAITER_NAV_TABS, type WaiterNavKey } from "@/services/agents/waiterDepartmentNav";
 import {
   WAITER_RUNTIME_COMPONENTS,
   WAITER_RUNTIME_SERVICES,
@@ -33,7 +35,6 @@ import {
   RISK_LABELS,
   CURRENT_STATUS_LABELS,
   MERGE_STATUS_LABELS,
-  type WaiterTab as Tab,
   type WaiterRuntimeComponent,
   type RiskLevel,
   type MergeStatus,
@@ -163,31 +164,17 @@ function ComponentCard({ c }: { c: WaiterRuntimeComponent }) {
   );
 }
 
-const TABS: readonly Tab[] = [
-  "Dashboard",
-  "Perfil",
-  "Operação",
-  "Brain & Skills",
-  "Library",
-  "Runtime & Testes",
-  "Runtime Merge",
-  "Simulador",
-  "Governança",
-];
-
-// Rótulos de exibição (apresentação). As CHAVES internas (Tab) não mudam —
-// só o texto que o operador lê fica em linguagem de produto/operação.
-const TAB_LABELS: Record<string, string> = {
-  Library: "Biblioteca de Treinamento",
-  Simulador: "Centro de Treinamento",
-  "Runtime Merge": "Versão de teste",
-};
+// Navegação do Waiter Department (operador): definida no módulo puro
+// `waiterDepartmentNav` (testável). As chaves antigas do mapa de componentes
+// (WaiterTab: "Perfil"/"Operação"/"Brain & Skills") seguem existindo APENAS como
+// classificação interna dos componentes — a UI unifica tudo em "Perfil do Agente".
 
 // ── room ────────────────────────────────────────────────────────────────────────
 
 export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
   const active = agent.status === "ACTIVE";
-  const [tab, setTab] = useState<Tab>("Dashboard");
+  const [tab, setTab] = useState<WaiterNavKey>("dashboard");
+  const activeNav = WAITER_NAV_TABS.find((t) => t.key === tab);
 
   const summary = runtimeMergeSummary();
   const allRows = [...WAITER_RUNTIME_COMPONENTS, ...WAITER_RUNTIME_SERVICES];
@@ -223,22 +210,25 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
 
       {/* tab navigation */}
       <nav className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1">
-        {TABS.map((t) => (
+        {WAITER_NAV_TABS.map((t) => (
           <button
-            key={t}
+            key={t.key}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => setTab(t.key)}
             className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-              tab === t ? "bg-orange-600 text-white" : "text-gray-600 hover:bg-gray-100"
+              tab === t.key ? "bg-orange-600 text-white" : "text-gray-600 hover:bg-gray-100"
             }`}
           >
-            {TAB_LABELS[t] ?? t}
+            {t.label}
           </button>
         ))}
       </nav>
+      {activeNav && activeNav.key !== "dashboard" && (
+        <p className="px-1 text-[11px] text-gray-500">{activeNav.subtitle}</p>
+      )}
 
       {/* ── Dashboard ───────────────────────────────────────────────────────── */}
-      {tab === "Dashboard" && (
+      {tab === "dashboard" && (
         <div className="space-y-4">
           <RoomCard title="Visão executiva" hint="Quem é, onde trabalha e atalhos rápidos.">
             <p className="max-w-3xl text-sm leading-relaxed text-gray-700">
@@ -313,10 +303,11 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
         </div>
       )}
 
-      {/* ── Perfil ──────────────────────────────────────────────────────────── */}
-      {tab === "Perfil" && (
+      {/* ── Perfil do Agente — Perfil + Operação + Brain & Skills unificados ── */}
+      {tab === "perfil" && (
         <div className="space-y-4">
-          <RoomCard title="Perfil do agente" hint="Síntese visual da constituição (WaiterAgentProfile).">
+          {/* 1. Identidade */}
+          <RoomCard title="1 · Identidade do Waiter" hint="Quem ele é e qual o papel dele no restaurante.">
             <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm text-gray-800 sm:grid-cols-2 lg:grid-cols-3">
               <div><dt className="text-[11px] uppercase tracking-wide text-gray-400">Cargo</dt><dd className="font-medium">Garçom vendedor de IA</dd></div>
               <div><dt className="text-[11px] uppercase tracking-wide text-gray-400">Departamento</dt><dd className="font-medium">Produto / Runtime</dd></div>
@@ -335,33 +326,18 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
               A tela de pedido é o salão, o cardápio é o inventário, o carrinho é a comanda e o checkout é o caixa. Lê o
               cardápio como inventário de vendas e usa bebida/sobremesa como oportunidade comercial contextual.
             </p>
-            <p className="mt-2 text-[11px] text-gray-400">Síntese visual — a fonte da verdade é <span className="font-mono">WaiterAgentProfile.ts</span> (evita duplicidade).</p>
-          </RoomCard>
-
-          <RoomCard title="Escopo &amp; não confundir" hint="Onde o Waiter atua — e o que ele não é.">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-green-700">Escopo</p>
-            <Checks mark="✓" color="text-green-600" items={["Atende em /pedido/[slug]", "Cliente final do restaurante", "Cards, botões e categorias", "Condução até a revisão do pedido"]} />
             <div className="mt-3 rounded-lg bg-gray-50 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Não confundir</p>
-              <div className="flex flex-wrap gap-1.5">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Escopo · não confundir</p>
+              <Checks mark="✓" color="text-green-600" items={["Atende em /pedido/[slug]", "Cliente final do restaurante", "Cards, botões e categorias", "Condução até a revisão do pedido"]} />
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 <Pill tone="gray">Waiter ≠ WhatsApp Agent</Pill>
                 <Pill tone="gray">Waiter ≠ CRM Agent</Pill>
               </div>
             </div>
           </RoomCard>
 
-          <RoomCard title="Constituição no runtime" hint="A peça real que define a identidade.">
-            <div className="grid grid-cols-1 gap-2.5">
-              {componentsForTab("Perfil").map((c) => <ComponentCard key={c.filePath + c.title} c={c} />)}
-            </div>
-          </RoomCard>
-        </div>
-      )}
-
-      {/* ── Operação ────────────────────────────────────────────────────────── */}
-      {tab === "Operação" && (
-        <div className="space-y-4">
-          <RoomCard title="Como o Waiter trabalha hoje" hint="Do primeiro contato à conclusão do pedido.">
+          {/* 2. Como ele atende */}
+          <RoomCard title="2 · Como ele atende" hint="Do primeiro contato à conclusão do pedido.">
             <div className="flex flex-wrap gap-1.5 text-xs">
               {WAITER_RUNTIME_FLOWS.map((step, i) => (
                 <span key={step} className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-gray-700 ring-1 ring-gray-200">
@@ -369,7 +345,7 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
                 </span>
               ))}
             </div>
-            <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Responsabilidades · como conduz</p>
+            <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Como conduz a venda</p>
             <ol className="space-y-1.5 text-sm text-gray-800">
               {[
                 "Lê a intenção real do cliente (grupo, leve, orçamento, porção…).",
@@ -387,40 +363,77 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
             </ol>
           </RoomCard>
 
-          <RoomCard title="Serviços envolvidos" hint="Orquestrador, UI e APIs reais do fluxo do pedido.">
-            <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
-              {componentsForTab("Operação").map((c) => <ComponentCard key={c.filePath + c.title} c={c} />)}
-            </div>
-          </RoomCard>
-        </div>
-      )}
-
-      {/* ── Brain & Skills ──────────────────────────────────────────────────── */}
-      {tab === "Brain & Skills" && (
-        <div className="space-y-4">
-          <RoomCard title="Motor de decisão atual" hint="A inteligência real — determinística; o LLM só redige texto curto.">
-            <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
-              {componentsForTab("Brain & Skills").map((c) => <ComponentCard key={c.filePath + c.title} c={c} />)}
-            </div>
-            <p className="mt-2 text-[11px] text-gray-400">
-              Dois caminhos: <strong>WaiterBrainV2</strong> no web <span className="font-mono">/pedido</span> e
-              <strong> WaiterBrain v1</strong> no WhatsApp. Interpreta intenção, casa com o cardápio (resolveMenuIntent),
-              recomenda, conduz o pedido e faz upsell de forma determinística.
-            </p>
-          </RoomCard>
-
-          <RoomCard title="Skills · habilidades operacionais">
+          {/* 3. Habilidades */}
+          <RoomCard title="3 · Habilidades" hint="O que o Waiter sabe fazer.">
             <Checks mark="✓" color="text-green-600" items={["Leitura de intenção", "Recomendação de produto", "Upsell contextual", "Condução de pedido", "Leitura de cardápio", "Restrições alimentares", "Fechamento comercial", "Uso de cards visuais"]} />
           </RoomCard>
 
-          <RoomCard title="Regras operacionais já existentes" badge={<Pill tone="green">Boas práticas</Pill>} hint="Comportamento positivo que o Waiter já segue hoje.">
-            <Checks mark="✓" color="text-green-600" items={WAITER_RUNTIME_RULES} />
+          {/* 4. Regras de segurança */}
+          <RoomCard title="4 · Regras de segurança" badge={<Pill tone="green">Sempre ativas</Pill>} hint="O que ele nunca faz — proteção do cliente e do restaurante.">
+            <Checks
+              mark="✓"
+              color="text-green-600"
+              items={[
+                "Recomenda sempre produtos reais do cardápio (nunca inventa produto)",
+                "Usa apenas os preços oficiais do cardápio (nunca inventa preço)",
+                "Respeita alergias e restrições alimentares",
+                "Não força upsell — oferece uma vez, sem insistir",
+                "Conduz à confirmação antes de finalizar (não sai do fluxo)",
+                "Deixa pagamento e entrega com a interface",
+              ]}
+            />
+            <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Boas práticas que ele já segue</p>
+            <div className="mt-1">
+              <Checks mark="✓" color="text-green-600" items={WAITER_RUNTIME_RULES} />
+            </div>
+          </RoomCard>
+
+          {/* 5. Status técnico resumido */}
+          <RoomCard title="5 · Status técnico (resumo)" hint="O essencial — detalhes completos na aba Qualidade.">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { label: "Motor atual", value: "WaiterBrainV2", tone: "green" as Tone },
+                { label: "Modo do atendimento", value: "Padrão (sem versão de teste ativa)", tone: "green" as Tone },
+                { label: "Qualidade", value: "Sem problema crítico aberto", tone: "green" as Tone },
+                { label: "Auditoria", value: "Diária e automática", tone: "blue" as Tone },
+              ].map((k) => (
+                <div key={k.label} className="rounded-lg border border-gray-200 bg-white p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-gray-400">{k.label}</p>
+                  <p className="mt-1"><Pill tone={k.tone}>{k.value}</Pill></p>
+                </div>
+              ))}
+            </div>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-[11px] font-semibold text-gray-400">Detalhe técnico — componentes do runtime</summary>
+              <div className="mt-2 space-y-3">
+                <p className="text-[11px] text-gray-400">
+                  Dois caminhos: <strong>WaiterBrainV2</strong> no web <span className="font-mono">/pedido</span> e
+                  <strong> WaiterBrain v1</strong> no WhatsApp. A inteligência é determinística; o LLM só redige texto curto.
+                  Fonte da verdade da identidade: <span className="font-mono">WaiterAgentProfile.ts</span>.
+                </p>
+                <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+                  {componentsForTab("Perfil").map((c) => <ComponentCard key={c.filePath + c.title} c={c} />)}
+                  {componentsForTab("Operação").map((c) => <ComponentCard key={c.filePath + c.title} c={c} />)}
+                  {componentsForTab("Brain & Skills").map((c) => <ComponentCard key={c.filePath + c.title} c={c} />)}
+                </div>
+              </div>
+            </details>
+          </RoomCard>
+
+          {/* 6. Links rápidos */}
+          <RoomCard title="6 · Links rápidos">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setTab("treinamento")} className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-700">🎓 Centro de Treinamento</button>
+              <button type="button" onClick={() => setTab("versao-teste")} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50">🧬 Versão de Teste</button>
+              <button type="button" onClick={() => setTab("qualidade")} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50">✅ Qualidade</button>
+              <Link href="/admin/agentes/waiter/testes" className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-50">🧠 Test Center</Link>
+            </div>
           </RoomCard>
         </div>
       )}
 
-      {/* ── Library — live workbench + backlog ──────────────────────────────── */}
-      {tab === "Library" && (
+      {/* ── Biblioteca de Treinamento — live workbench + backlog ────────────── */}
+      {tab === "biblioteca" && (
         <div className="space-y-4">
           <AgentLibraryPanel agentSlug="waiter" />
           <RoomCard title="Backlog da Library" hint="Evolução futura — não conectada ao runtime nesta fase." badge={<Pill tone="violet">Futuro</Pill>}>
@@ -440,14 +453,17 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
         </div>
       )}
 
-      {/* ── Runtime Merge — REAL cockpit (live APIs, not documentation) ──────── */}
-      {tab === "Runtime Merge" && <WaiterRuntimeCockpit />}
+      {/* ── Versão de Teste — REAL cockpit (live APIs, not documentation) ───── */}
+      {tab === "versao-teste" && <WaiterRuntimeCockpit />}
 
-      {/* ── Simulador — Agent Simulation Lab (safe, dry-run) ────────────────── */}
-      {tab === "Simulador" && <WaiterSimulationLab />}
+      {/* ── Centro de Treinamento — Simulation Lab + casos reais (dry-run) ──── */}
+      {tab === "treinamento" && <WaiterSimulationLab />}
 
-      {/* ── Runtime & Testes ────────────────────────────────────────────────── */}
-      {tab === "Runtime & Testes" && (
+      {/* ── Provas de Resultado — evidências comerciais sanitizadas ─────────── */}
+      {tab === "provas" && <WaiterEvidencePanel />}
+
+      {/* ── Qualidade (antiga "Runtime & Testes") ───────────────────────────── */}
+      {tab === "qualidade" && (
         <div className="space-y-4">
           <RoomCard title="Componentes reais do runtime" hint="Cada peça do Waiter que roda hoje (read-only)." badge={<Pill tone="green">{allRows.length} itens</Pill>}>
             <div className="overflow-x-auto">
@@ -541,7 +557,7 @@ export function WaiterRoom({ agent }: { agent: AdminAgentProfileView }) {
       )}
 
       {/* ── Governança ──────────────────────────────────────────────────────── */}
-      {tab === "Governança" && (
+      {tab === "governanca" && (
         <div className="space-y-4">
           <RoomCard title="Mapa de risco do merge" hint="O que é seguro agora e o que exige cuidado." >
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

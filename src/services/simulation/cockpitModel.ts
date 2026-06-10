@@ -10,6 +10,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { exampleStats } from "./examples/SimulationExampleStore";
+import { getIntakeStatus } from "./examples/realConversationIntake";
 
 const AGENT = "waiter";
 
@@ -28,7 +29,7 @@ const runSelect = {
 } as const;
 
 export async function getSimulationCockpit(agentSlug = AGENT) {
-  const [latestRun, latestManualRun, latestCronRun, pendingOpportunities, statusGroups, stats] = await Promise.all([
+  const [latestRun, latestManualRun, latestCronRun, pendingOpportunities, statusGroups, stats, intake] = await Promise.all([
     prisma.agentSimulationRun.findFirst({ where: { agentSlug }, orderBy: { createdAt: "desc" }, select: runSelect }),
     prisma.agentSimulationRun.findFirst({ where: { agentSlug, mode: "MANUAL" }, orderBy: { createdAt: "desc" }, select: runSelect }),
     prisma.agentSimulationRun.findFirst({ where: { agentSlug, mode: "CRON" }, orderBy: { createdAt: "desc" }, select: runSelect }),
@@ -40,6 +41,7 @@ export async function getSimulationCockpit(agentSlug = AGENT) {
     }),
     prisma.agentSimulationOpportunity.groupBy({ by: ["status"], where: { agentSlug }, _count: { _all: true } }),
     exampleStats(agentSlug).catch(() => ({ total: 0, approved: 0, pending: 0, rejected: 0 })),
+    getIntakeStatus(agentSlug).catch(() => ({ lastIntakeAt: null, collectedToday: 0, nextIntakeEstimate: "" })),
   ]);
 
   // Latest simulated transcripts (compact) from the most recent run.
@@ -72,6 +74,12 @@ export async function getSimulationCockpit(agentSlug = AGENT) {
     opportunitiesByStatus,
     latestScenarios,
     exampleStats: stats,
+    realIntake: {
+      lastIntakeAt: intake.lastIntakeAt,
+      collectedToday: intake.collectedToday,
+      nextIntakeEstimate: intake.nextIntakeEstimate,
+      scheduleLabel: "Diário ~03:15 BRT (cron 15 6 * * *)",
+    },
     runtimeSafety: {
       runtimeTouched: false,
       dryRun: true,

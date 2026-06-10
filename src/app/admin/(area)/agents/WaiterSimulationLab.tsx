@@ -45,6 +45,7 @@ interface ScenarioRow {
 }
 interface ExampleStats { total: number; approved: number; pending: number; rejected: number }
 interface ExampleRow { id: string; intent: string; scenarioType: string; channel: string; summary: string; status: string }
+interface RealIntake { lastIntakeAt: string | null; collectedToday: number; nextIntakeEstimate: string; scheduleLabel: string }
 interface Cockpit {
   automation: { isAutomated: boolean; scheduleLabel: string; nextScheduledRunEstimate: string };
   latestRun: RunMini | null;
@@ -55,6 +56,7 @@ interface Cockpit {
   opportunitiesByStatus: Record<string, number>;
   latestScenarios: ScenarioRow[];
   exampleStats: ExampleStats;
+  realIntake?: RealIntake;
   runtimeSafety: { label: string };
 }
 
@@ -281,14 +283,18 @@ export function WaiterSimulationLab() {
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-gray-900">💬 Casos reais</h3>
           <button type="button" disabled={busy} onClick={() => void extractExamples()}
-            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Buscar conversas reais</button>
+            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Coletar casos reais agora</button>
         </div>
         <p className="mt-1 text-[11px] text-gray-600">Conversas reais com clientes, com dados sensíveis removidos. Elas ajudam o simulador a criar testes mais parecidos com a realidade.</p>
+        <p className="mt-1 text-[11px] font-medium text-emerald-700">🔒 Dados sensíveis são removidos antes de qualquer uso. A coleta também roda automaticamente todos os dias.</p>
         {ck && (
-          <div className="mt-2 grid grid-cols-4 gap-2">
-            <Stat label="Total" value={String(ck.exampleStats.total)} tone="blue" />
-            <Stat label="Usados como exemplo" value={String(ck.exampleStats.approved)} tone="green" />
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat label="Coletados hoje" value={String(ck.realIntake?.collectedToday ?? 0)} tone="blue" />
+            <Stat label="Última coleta" value={fmt(ck.realIntake?.lastIntakeAt)} tone="violet" />
+            <Stat label="Próxima coleta automática" value={fmt(ck.realIntake?.nextIntakeEstimate)} tone="blue" />
             <Stat label="Aguardando revisão" value={String(ck.exampleStats.pending)} tone="amber" />
+            <Stat label="Total" value={String(ck.exampleStats.total)} tone="gray" />
+            <Stat label="Usados como exemplo" value={String(ck.exampleStats.approved)} tone="green" />
             <Stat label="Não usar" value={String(ck.exampleStats.rejected)} tone="gray" />
           </div>
         )}

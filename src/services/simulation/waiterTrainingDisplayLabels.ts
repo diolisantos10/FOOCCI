@@ -56,6 +56,15 @@ export const SCENARIO_TYPE_LABELS: Record<string, string> = {
   GROUP_ORDER: "Pedido para grupo",
   DESSERT_UPSELL: "Sugestão de sobremesa",
   DRINK_UPSELL: "Sugestão de bebida",
+  // situações vindas da coleta de casos reais
+  COMPLAINT: "Cliente reclamou",
+  PRAISE: "Cliente elogiou",
+  ABANDONMENT: "Cliente desistiu",
+  DELIVERY_QUESTION: "Cliente perguntou sobre entrega",
+  ORDER_BY_TEXT: "Cliente tentou pedir por texto",
+  UPSELL_ACCEPTED: "Cliente aceitou sugestão extra",
+  UPSELL_REFUSED: "Cliente recusou sugestão extra",
+  CONVERSION: "Cliente fechou o pedido",
 };
 export const scenarioTypeLabel = (t: string): string => SCENARIO_TYPE_LABELS[t] ?? "Situação de atendimento";
 
@@ -65,8 +74,29 @@ export const ORIGIN_LABELS: Record<string, string> = {
   MANUAL: "Simulação manual",
   DIAGNOSTIC: "Diagnóstico interno",
   EXAMPLE: "Conversa real sanitizada",
+  REAL_CONVERSATION: "Conversa real sanitizada",
   LIBRARY: "Material da Biblioteca",
+  SALES_PROOF: "Prova de resultado",
 };
+
+// ── Provas de Resultado — tipos de evidência ────────────────────────────────
+export const EVIDENCE_TYPE_LABELS: Record<string, string> = {
+  SALE_CONVERSION: "Venda conduzida",
+  UPSELL: "Venda extra (upsell)",
+  RECOVERY: "Cliente recuperado",
+  FRICTION_REDUCTION: "Atrito resolvido",
+  QUALITATIVE_PROOF: "Elogio / prova qualitativa",
+  BEFORE_AFTER: "Antes e depois",
+};
+export const evidenceTypeLabel = (t: string): string => EVIDENCE_TYPE_LABELS[t] ?? "Evidência";
+
+export const EVIDENCE_STATUS_LABELS: Record<string, string> = {
+  DRAFT: "Aguardando sua revisão",
+  APPROVED: "Prova aprovada",
+  REJECTED: "Descartada",
+  BACKLOG: "Guardada para depois",
+};
+export const evidenceStatusLabel = (s: string): string => EVIDENCE_STATUS_LABELS[s] ?? s;
 export const originLabel = (mode?: string | null): string =>
   (mode && ORIGIN_LABELS[mode]) || "Detectado pelo Simulador";
 

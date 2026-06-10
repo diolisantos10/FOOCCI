@@ -1,0 +1,69 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Waiter Training — Coleta automática de casos reais (cron-safe)
+#
+# Reads recent REAL conversations READ-ONLY, sanitizes PII before persisting and
+# creates training cases as PENDING_REVIEW in the Waiter Training Center.
+# Idempotent by conversation id. Never sends WhatsApp, never creates an order,
+# never generates Pix, never touches the real runtime.
+#
+# Daily at 06:15 UTC (≈ 03:15 BRT, before the simulation run) + manual dispatch.
+# Uses CRON_SECRET — NOT ADMIN_SECRET.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Waiter Training Real Conversations
+
+on:
+  schedule:
+    - cron: "15 6 * * *" # 06:15 UTC ≈ 03:15 BRT — daily intake before simulation
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Max conversations scanned"
+        type: string
+        default: "50"
+      days:
+        description: "Look-back window (days)"
+        type: string
+        default: "2"
+
+jobs:
+  intake:
+    name: "Real Conversation Intake"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Build URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          if [[ -z "$BASE_URL" ]]; then BASE_URL="${{ secrets.QUALITY_AUDIT_URL }}"; fi
+          BASE_URL="${BASE_URL%/}"
+          echo "intake=${BASE_URL}/api/cron/waiter/training/intake-real-conversations" >> "$GITHUB_OUTPUT"
+
+      - name: "Intake real conversations (sanitized, PENDING_REVIEW)"
+        env:
+          URL: ${{ steps.params.outputs.intake }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          LIMIT: ${{ inputs.limit }}
+          DAYS: ${{ inputs.days }}
+        run: |
+          BODY=$(jq -nc --argjson lim "${LIMIT:-50}" --argjson d "${DAYS:-2}" '{limit:$lim, days:$d}')
+          echo "→ payload: $BODY"
+          set +e
+          curl --connect-timeout 20 --max-time 180 -sS -X POST "$URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d "$BODY" \
+            -o /tmp/intake.json -w "%{http_code}" > /tmp/icode.txt
+          set -e
+          HTTP=$(cat /tmp/icode.txt)
+          STATUS=$(jq -r '.status' /tmp/intake.json 2>/dev/null)
+          RUNTIME_TOUCHED=$(jq -r '.runtimeTouched' /tmp/intake.json 2>/dev/null)
+          echo "← HTTP           : $HTTP"
+          echo "← status         : $STATUS"
+          echo "← created        : $(jq -r '.created // 0' /tmp/intake.json 2>/dev/null)"
+          echo "← skipped (dedupe): $(jq -r '.skipped // 0' /tmp/intake.json 2>/dev/null)"
+          echo "← pendingReview  : $(jq -r '.pendingReview // 0' /tmp/intake.json 2>/dev/null)"
+          echo "← runtimeTouched : $RUNTIME_TOUCHED"
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::intake non-2xx ($HTTP)."; exit 1; fi
+          if [[ "$STATUS" != "PASS" ]]; then echo "::error::intake status=$STATUS"; exit 1; fi
+          if [[ "$RUNTIME_TOUCHED" != "false" ]]; then echo "::error::runtimeTouched must be false"; exit 1; fi
+          echo "✅ Coleta de casos reais concluída — sanitizado, PENDING_REVIEW, runtime intocado."
