@@ -62,6 +62,7 @@ jobs:
           echo "← created        : $(jq -r '.created // 0' /tmp/intake.json 2>/dev/null)"
           echo "← skipped (dedupe): $(jq -r '.skipped // 0' /tmp/intake.json 2>/dev/null)"
           echo "← pendingReview  : $(jq -r '.pendingReview // 0' /tmp/intake.json 2>/dev/null)"
+          echo "← trainingProposals: $(jq -r '.suggestionsCreated // 0' /tmp/intake.json 2>/dev/null)"
           echo "← runtimeTouched : $RUNTIME_TOUCHED"
           if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then echo "::error::intake non-2xx ($HTTP)."; exit 1; fi
           if [[ "$STATUS" != "PASS" ]]; then echo "::error::intake status=$STATUS"; exit 1; fi
