@@ -4,6 +4,7 @@ const db = vi.hoisted(() => ({
   waiterResultEvidence: {
     create: vi.fn(),
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     count: vi.fn(),
     groupBy: vi.fn(),
     aggregate: vi.fn(),
@@ -13,7 +14,7 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
-import { createEvidence, reviewEvidence, computeIncrementalValue } from "./WaiterEvidenceService";
+import { createEvidence, reviewEvidence, setPublicCandidate, computeIncrementalValue } from "./WaiterEvidenceService";
 import { collectEvidence, type FetchConversationsForEvidence } from "./WaiterEvidenceCollector";
 
 beforeEach(() => {
@@ -58,6 +59,16 @@ describe("WaiterEvidenceService — Provas de Resultado", () => {
       where: { id: "ev1" },
       data: expect.objectContaining({ status: "BACKLOG" }),
     });
+  });
+
+  it("(9) isPublicCandidate exige aprovação — recusa se não estiver APPROVED", async () => {
+    db.waiterResultEvidence.findUnique.mockResolvedValue({ status: "DRAFT" });
+    await expect(setPublicCandidate("ev1", true)).rejects.toThrow(/aprovadas/i);
+    expect(db.waiterResultEvidence.update).not.toHaveBeenCalled();
+    db.waiterResultEvidence.findUnique.mockResolvedValue({ status: "APPROVED" });
+    db.waiterResultEvidence.update.mockResolvedValue({ id: "ev1", isPublicCandidate: true });
+    await setPublicCandidate("ev1", true);
+    expect(db.waiterResultEvidence.update).toHaveBeenCalledWith({ where: { id: "ev1" }, data: { isPublicCandidate: true } });
   });
 
   it("(4) upsell calcula incrementalValue quando antes/depois existem — e nunca inventa", async () => {

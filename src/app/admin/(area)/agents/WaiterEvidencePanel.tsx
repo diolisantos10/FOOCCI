@@ -24,9 +24,13 @@ interface EvidenceRow {
   title: string; summary: string; evidenceType: string;
   valueBefore: string | null; valueAfter: string | null; incrementalValue: string | null; orderValue: string | null;
   customerSegment: string | null; sanitizedExcerpt: string | null; proofScore: number | null;
-  status: string; isPublicCandidate: boolean; createdAt: string;
+  status: string; isPublicCandidate: boolean; createdAt: string; metadata: { confidence?: string } | null;
 }
-interface Stats { total: number; approved: number; pending: number; countsByType: Record<string, number>; approvedIncrementalValue: number }
+interface Stats {
+  total: number; approved: number; pending: number; countsByType: Record<string, number>;
+  approvedIncrementalValue: number; documentedRevenue: number; documentedIncrementalValue: number;
+}
+const confidenceLabel = (c?: string) => (c === "HIGH" ? "Alta confiança" : c === "MEDIUM" ? "Confiança média" : c === "LOW" ? "Baixa confiança" : null);
 
 function Pill({ tone, children }: { tone: string; children: React.ReactNode }) {
   const map: Record<string, string> = {
@@ -74,10 +78,39 @@ export function WaiterEvidencePanel() {
     try {
       const res = await fetch(`${BASE}/collect`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
       const json = await res.json();
-      setMsg(json.ok ? `Busca concluída: ${json.created} evidência(s) nova(s) de ${json.scanned} conversa(s).` : (json.error ?? "Falha."));
+      setMsg(json.ok ? `Busca em conversas: ${json.created} evidência(s) nova(s) de ${json.scanned} conversa(s).` : (json.error ?? "Falha."));
       await load();
     } finally { setBusy(false); }
   }, [load]);
+
+  const collectOrders = useCallback(async () => {
+    setBusy(true); setMsg("");
+    try {
+      const res = await fetch(`${BASE}/collect-orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const json = await res.json();
+      setMsg(json.ok
+        ? `Provas em pedidos: ${json.created} nova(s) de ${json.scanned} pedido(s) · receita documentada R$ ${Number(json.documentedRevenue ?? 0).toFixed(2)} · upsell R$ ${Number(json.documentedIncremental ?? 0).toFixed(2)}.`
+        : (json.error ?? "Falha."));
+      await load();
+    } finally { setBusy(false); }
+  }, [load]);
+
+  const togglePublic = useCallback(async (id: string, isPublicCandidate: boolean) => {
+    const res = await fetch(`${BASE}/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isPublicCandidate }) });
+    const json = await res.json();
+    if (!json.ok) setMsg(json.error ?? "Falha.");
+    await load();
+  }, [load]);
+
+  const copyMiniCase = useCallback((e: EvidenceRow) => {
+    const lines = [e.summary];
+    if (e.sanitizedExcerpt) lines.push(`Trecho (sanitizado): “${e.sanitizedExcerpt}”`);
+    if (e.incrementalValue && Number(e.incrementalValue) > 0) lines.push(`Resultado: upsell de R$ ${Number(e.incrementalValue).toFixed(2)}.`);
+    else if (e.orderValue && Number(e.orderValue) > 0) lines.push(`Resultado: pedido de R$ ${Number(e.orderValue).toFixed(2)}.`);
+    else lines.push("Resultado: atendimento conduzido pelo Waiter.");
+    void navigator.clipboard?.writeText(lines.join("\n"));
+    setMsg("Mini case copiado para a área de transferência.");
+  }, []);
 
   const createManual = useCallback(async () => {
     setBusy(true); setMsg("");
@@ -113,8 +146,8 @@ export function WaiterEvidencePanel() {
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <StatBox label="Evidências" value={String(stats.total)} />
             <StatBox label="Provas aprovadas" value={String(stats.approved)} />
-            <StatBox label="Aguardando revisão" value={String(stats.pending)} />
-            <StatBox label="Valor incremental aprovado" value={`R$ ${stats.approvedIncrementalValue.toFixed(2)}`} />
+            <StatBox label="Receita documentada" value={`R$ ${(stats.documentedRevenue ?? 0).toFixed(2)}`} />
+            <StatBox label="Upsell documentado" value={`R$ ${(stats.documentedIncrementalValue ?? 0).toFixed(2)}`} />
           </div>
         )}
         <p className="mt-2 text-[10px] text-gray-500">
@@ -126,9 +159,13 @@ export function WaiterEvidencePanel() {
       {/* ações */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" disabled={busy} onClick={() => void collect()}
+          <button type="button" disabled={busy} onClick={() => void collectOrders()}
             className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
-            {busy ? "Buscando…" : "Buscar evidências em conversas"}
+            {busy ? "Buscando…" : "Buscar provas em pedidos e conversas"}
+          </button>
+          <button type="button" disabled={busy} onClick={() => void collect()}
+            className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+            Só conversas
           </button>
           <button type="button" onClick={() => setShowForm((v) => !v)}
             className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -180,7 +217,7 @@ export function WaiterEvidencePanel() {
       <section className="space-y-2">
         {items.length === 0 && (
           <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
-            Nenhuma evidência ainda. Use “Buscar evidências em conversas” ou crie uma manualmente.
+            Nenhuma evidência ainda. Use “Buscar provas em pedidos e conversas” ou crie uma manualmente.
           </p>
         )}
         {items.map((e) => (
@@ -189,7 +226,10 @@ export function WaiterEvidencePanel() {
               <Pill tone="blue">{evidenceTypeLabel(e.evidenceType)}</Pill>
               <span className="text-sm font-bold text-gray-900">{e.title}</span>
               <Pill tone={statusTone(e.status)}>{evidenceStatusLabel(e.status)}</Pill>
-              {e.isPublicCandidate && <Pill tone="violet">Candidata a uso público</Pill>}
+              {confidenceLabel(e.metadata?.confidence) && (
+                <Pill tone={e.metadata?.confidence === "HIGH" ? "green" : e.metadata?.confidence === "MEDIUM" ? "amber" : "gray"}>{confidenceLabel(e.metadata?.confidence)}</Pill>
+              )}
+              {e.isPublicCandidate && <Pill tone="violet">Prova comercial</Pill>}
               {e.incrementalValue != null && <Pill tone="green">+{fmtBRL(e.incrementalValue)}</Pill>}
             </div>
             <p className="mt-1 text-[12px] text-gray-700">{e.summary}</p>
@@ -201,6 +241,11 @@ export function WaiterEvidencePanel() {
               {e.valueBefore != null && <span>Antes: {fmtBRL(e.valueBefore)}</span>}
               {e.valueAfter != null && <span>Depois: {fmtBRL(e.valueAfter)}</span>}
               {e.orderValue != null && <span>Pedido: {fmtBRL(e.orderValue)}</span>}
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              <Btn onClick={() => copyMiniCase(e)}>Copiar resumo</Btn>
+              {e.status === "APPROVED" && !e.isPublicCandidate && <Btn tone="green" onClick={() => void togglePublic(e.id, true)}>Marcar como prova comercial</Btn>}
+              {e.isPublicCandidate && <Btn onClick={() => void togglePublic(e.id, false)}>Remover de prova comercial</Btn>}
             </div>
             {e.status === "DRAFT" && (
               <div className="mt-2 flex gap-1.5">

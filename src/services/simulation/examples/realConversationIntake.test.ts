@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
   agentSimulationExample: { findMany: vi.fn(), create: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
+  waiterTrainingSuggestion: { findMany: vi.fn(), create: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -23,6 +24,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.agentSimulationExample.findMany.mockResolvedValue([]); // nothing extracted yet
   db.agentSimulationExample.create.mockResolvedValue({ id: "ex1" });
+  db.waiterTrainingSuggestion.findMany.mockResolvedValue([]);
+  db.waiterTrainingSuggestion.create.mockResolvedValue({ id: "s1" });
 });
 
 describe("intakeRealConversations — coleta automática de casos reais", () => {

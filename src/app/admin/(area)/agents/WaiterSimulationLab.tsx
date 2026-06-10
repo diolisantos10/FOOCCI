@@ -26,6 +26,14 @@ import {
   TRAINING_ACTION_MICROCOPY,
 } from "@/services/simulation/waiterTrainingDisplayLabels";
 
+interface TrainingSuggestionRow {
+  id: string; title: string; situationSummary: string; whatHappened: string;
+  problemDetected: string; idealResponse: string; trainingRule: string; expectedImpact: string;
+  suggestedActionType: string; riskLevel: string; status: string;
+  sanitizedCustomerExcerpt: string | null; sanitizedWaiterExcerpt: string | null; createdAt: string;
+}
+interface SuggestionStats { total: number; pending: number; approved: number; rejected: number }
+
 const BASE = "/api/admin/agents/waiter/simulation";
 
 interface RunMini {
@@ -76,21 +84,32 @@ export function WaiterSimulationLab() {
   const [ck, setCk] = useState<Cockpit | null>(null);
   const [history, setHistory] = useState<RunMini[]>([]);
   const [examples, setExamples] = useState<ExampleRow[]>([]);
+  const [suggestions, setSuggestions] = useState<TrainingSuggestionRow[]>([]);
+  const [suggStats, setSuggStats] = useState<SuggestionStats | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [scenarioCount, setScenarioCount] = useState(12);
   const [seed, setSeed] = useState("");
 
   const load = useCallback(async () => {
-    const [c, h, e] = await Promise.all([
+    const [c, h, e, s] = await Promise.all([
       fetch(`${BASE}/cockpit`).then((r) => r.json()).catch(() => ({ ok: false })),
       fetch(`${BASE}?limit=15`).then((r) => r.json()).catch(() => ({ ok: false })),
       fetch(`${BASE}/examples?limit=20`).then((r) => r.json()).catch(() => ({ ok: false })),
+      fetch(`/api/admin/agents/waiter/training-suggestions?status=PENDING_REVIEW&limit=30`).then((r) => r.json()).catch(() => ({ ok: false })),
     ]);
     if (c.ok) setCk(c.cockpit);
     if (h.ok) setHistory(h.runs ?? []);
     if (e.ok) setExamples(e.examples ?? []);
+    if (s.ok) { setSuggestions(s.items ?? []); setSuggStats(s.stats ?? null); }
   }, []);
+
+  const reviewSuggestion = useCallback(async (id: string, status: string) => {
+    await fetch(`/api/admin/agents/waiter/training-suggestions/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
+    });
+    await load();
+  }, [load]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -278,7 +297,50 @@ export function WaiterSimulationLab() {
         </div>
       </section>
 
-      {/* ── 5. CASOS REAIS ───────────────────────────────────────────────── */}
+      {/* ── 4.5 CASOS REAIS PARA REVISAR (propostas de treinamento) ───────── */}
+      <section className="rounded-xl border-2 border-sky-200 bg-white p-4">
+        <h3 className="text-sm font-bold text-gray-900">📝 Casos reais para revisar</h3>
+        <p className="mt-0.5 text-[11px] text-gray-600">Cada conversa real vira uma proposta clara: o problema, a resposta ideal e o que o Waiter aprenderia. Você decide.</p>
+        <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[11px] text-blue-800">
+          ℹ️ Aprovar não muda o atendimento real agora. Isso apenas registra o aprendizado para uma futura versão de teste do Waiter.
+        </div>
+        {suggStats && (
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <Stat label="Para revisar" value={String(suggStats.pending)} tone="amber" />
+            <Stat label="Aprovados" value={String(suggStats.approved)} tone="green" />
+            <Stat label="Total" value={String(suggStats.total)} tone="gray" />
+          </div>
+        )}
+        <div className="mt-3 space-y-2">
+          {suggestions.length === 0 && (
+            <p className="text-[12px] text-gray-500">Nenhum caso real para revisar agora. A coleta automática traz novos casos todos os dias.</p>
+          )}
+          {suggestions.map((s) => (
+            <div key={s.id} className="rounded-lg border border-sky-100 bg-sky-50/40 p-3">
+              <p className="text-xs font-bold text-gray-900">{s.title}</p>
+              <dl className="mt-2 space-y-1 text-[11px] leading-snug">
+                <Row label="Situação real" value={s.situationSummary} />
+                <Row label="O que aconteceu" value={s.whatHappened} />
+                <Row label="Problema" value={s.problemDetected} />
+                <Row label="Resposta ideal sugerida" value={`“${s.idealResponse}”`} strong />
+                <Row label="Treinamento que o Waiter aprenderia" value={s.trainingRule} />
+                <Row label="Impacto esperado" value={s.expectedImpact} />
+              </dl>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <Btn tone="green" title={TRAINING_ACTION_MICROCOPY.APPROVED} onClick={() => void reviewSuggestion(s.id, "APPROVED")}>{trainingActionLabel("APPROVED")}</Btn>
+                <Btn tone="red" title={TRAINING_ACTION_MICROCOPY.REJECTED} onClick={() => void reviewSuggestion(s.id, "REJECTED")}>{trainingActionLabel("REJECTED")}</Btn>
+                <Btn title={TRAINING_ACTION_MICROCOPY.BACKLOGGED} onClick={() => void reviewSuggestion(s.id, "BACKLOG")}>{trainingActionLabel("BACKLOGGED")}</Btn>
+              </div>
+              <details className="mt-1.5">
+                <summary className="cursor-pointer text-[10px] text-gray-400">Detalhe técnico</summary>
+                <p className="mt-0.5 text-[10px] text-gray-400">{s.suggestedActionType} · risco {s.riskLevel} · origem {fmt(s.createdAt)}</p>
+              </details>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── 5. CASOS REAIS (coleta bruta classificada) ───────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-gray-900">💬 Casos reais</h3>

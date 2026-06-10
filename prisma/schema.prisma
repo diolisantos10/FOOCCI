@@ -3472,3 +3472,40 @@ model WaiterResultEvidence {
   @@index([sourceType, sourceId])
   @@map("waiter_result_evidence")
 }
+
+// ── Waiter Training Suggestion — caso real vira PROPOSTA de treinamento ────────
+// Each real case (or simulation/library/evidence) becomes a clear, operator-
+// reviewable training proposal: problem found, the IDEAL response/behavior, the
+// training rule the Waiter would learn, and expected impact. Sanitized excerpts
+// only (no PII, no raw transcript). Approving is a HUMAN decision that records an
+// "approved learning" — it NEVER changes the real runtime or the live prompt.
+model WaiterTrainingSuggestion {
+  id                      String    @id @default(cuid())
+  restaurantId            String?
+  agentSlug               String    @default("waiter")
+  sourceType              String // REAL_CONVERSATION | SIMULATION | LIBRARY | RESULT_EVIDENCE
+  sourceId                String? // e.g. the originating AgentSimulationExample id (dedupe)
+  status                  String    @default("PENDING_REVIEW") // PENDING_REVIEW | APPROVED | REJECTED | BACKLOG
+  title                   String
+  situationSummary        String
+  customerIntent          String
+  whatHappened            String
+  problemDetected         String
+  idealResponse           String
+  trainingRule            String
+  expectedImpact          String
+  suggestedActionType     String // RESPONSE_PATTERN | PAYMENT_RULE | MENU_GUIDANCE | UPSELL_BEHAVIOR | OBJECTION_HANDLING | RESTRICTION_HANDLING | CHECKOUT_GUIDANCE | TONE_ADJUSTMENT
+  riskLevel               String    @default("LOW") // LOW | MEDIUM | HIGH
+  sanitizedCustomerExcerpt String?
+  sanitizedWaiterExcerpt   String?
+  technicalDetails        Json?
+  reviewedAt              DateTime?
+  reviewedBy              String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@unique([agentSlug, sourceType, sourceId])
+  @@index([agentSlug, status])
+  @@index([restaurantId, status])
+  @@map("waiter_training_suggestions")
+}

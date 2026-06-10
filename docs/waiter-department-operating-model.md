@@ -71,6 +71,32 @@ disse → solução sugerida → impacto esperado → origem → decisão
 (**Aprovar treinamento / Rejeitar / Guardar para depois**). Código técnico
 (`HUNGRY_BIG · MISSED_SALE · P2`) fica colapsado em "Detalhe técnico".
 
+### Casos reais viram PROPOSTAS de treinamento
+
+Toda conversa real coletada gera automaticamente uma **proposta de treinamento**
+clara (modelo `WaiterTrainingSuggestion`), construída por `WaiterRealCaseTraining
+Builder` (determinístico, por situação — sem LLM, sem PII). Cada proposta tem:
+título, situação real, o que aconteceu, **problema detectado**, **resposta ideal
+sugerida**, **regra de treinamento** que o Waiter aprenderia, **impacto esperado**,
+tipo de ação (`PAYMENT_RULE`, `UPSELL_BEHAVIOR`, `CHECKOUT_GUIDANCE`,
+`RESTRICTION_HANDLING`…) e nível de risco. As respostas ideais nunca inventam
+produto, preço, forma de pagamento ou promoção — descrevem comportamento seguro
+("usar apenas o que o restaurante configurou", "mostrar opções reais", "pedir
+confirmação"). Exemplos: pergunta sobre pagamento → ensina resposta segura sobre
+formas configuradas; cliente com fome → recomendar opção mais completa; pedido por
+texto → interpretar, mostrar opções e confirmar antes de finalizar.
+
+A UI mostra isso na seção **"Casos reais para revisar"** (Centro de Treinamento),
+com os botões Aprovar treinamento / Rejeitar / Guardar para depois e o aviso fixo:
+*Aprovar não muda o atendimento real agora. Isso apenas registra o aprendizado
+para uma futura versão de teste do Waiter.* A geração é idempotente (uma proposta
+por caso) e roda no mesmo cron diário do intake — sem clique.
+
+**Aprovar um caso real** apenas grava `status=APPROVED` e o coloca no **pool de
+aprendizados aprovados** (`listApprovedLearnings`), reaproveitável depois para
+gerar técnica, compor uma versão Library-Assisted ou alimentar o simulador —
+**nunca injetado no runtime real automaticamente**.
+
 ## O que APROVAR significa (e o que não muda)
 
 > **Aprovar não muda o atendimento real imediatamente.** A melhoria fica
@@ -95,14 +121,36 @@ comercial; treinamento é aprendizado.
   tudo nasce **DRAFT**; uso comercial exige `isPublicCandidate` **e** aprovação
   humana (APPROVED). `incrementalValue` só é calculado quando antes/depois
   existem de verdade (nada inventado).
-- **Coleta automática inicial (`WaiterEvidenceCollector`):** detecta, read-only,
-  elogios (QUALITATIVE_PROOF) e pedido de finalização na conversa
-  (SALE_CONVERSION). **Parcial por design:** upsell com valor, recuperação e
-  antes/depois ainda exigem captura manual ("Criar evidência manual") até haver
-  vínculo confiável pedido↔conversa.
+- **Coleta a partir de RECEITA real (`WaiterResultEvidenceCollector`):** varre
+  pedidos concluídos atribuídos ao Foocci e cria evidências automáticas:
+  - **De onde vem a receita:** mesma atribuição do dashboard — pedidos com
+    `status ∈ {CONFIRMED, PREPARING, READY, OUT_FOR_DELIVERY, DELIVERED}` e
+    `Order.source ∈ {pedido, qr, whatsapp}` (canais do agente).
+  - **SALE_CONVERSION:** `orderValue = Order.total` para cada pedido atribuído.
+  - **UPSELL:** quando o pedido tem itens `isUpsell=true`,
+    `incrementalValue = SUM(itens isUpsell)`; nunca inventado.
+  - **Vínculo de conversa:** via `Order.orderDraftId → OrderDraft.conversationId`.
+    Se há conversa → **confiança HIGH** + trecho sanitizado; se não há →
+    **confiança MEDIUM** e o resumo diz *"Conversa relacionada não encontrada"*
+    — **sem inventar diálogo**.
+- **Coleta a partir de conversas (`WaiterEvidenceCollector`):** elogios
+  (QUALITATIVE_PROOF) e pedido de finalização na conversa (SALE_CONVERSION).
+- **Ainda manual por design:** recuperação e antes/depois (sem vínculo confiável)
+  → "Criar evidência manual".
+- **Confiança:** toda evidência automática carrega `confidence` HIGH/MEDIUM/LOW.
+  Receita documentada (`documentedRevenue`) e upsell documentado aparecem no
+  resumo da aba. **Receita documentada ≠ claim público** — vira prova comercial
+  só após aprovação humana.
+- **Prova social / uso comercial:** exige `status=APPROVED` **e**
+  `isPublicCandidate=true` (só pode ser marcada como pública depois de aprovada).
+  Ações: "Marcar/Remover prova comercial", "Copiar resumo" (mini case honesto,
+  cita valor só quando existe de verdade).
 - **APIs (admin):** `GET/POST /api/admin/agents/waiter/evidence`,
-  `PATCH /api/admin/agents/waiter/evidence/[id]`,
-  `POST /api/admin/agents/waiter/evidence/collect`.
+  `PATCH /api/admin/agents/waiter/evidence/[id]` (review + isPublicCandidate),
+  `POST /api/admin/agents/waiter/evidence/collect` (conversas),
+  `POST /api/admin/agents/waiter/evidence/collect-orders` (pedidos/receita).
+- **Casos reais → propostas:** `GET/POST /api/admin/agents/waiter/training-suggestions`,
+  `PATCH /api/admin/agents/waiter/training-suggestions/[id]`.
 
 ## Fluxo ideal (ponta a ponta)
 

@@ -14,6 +14,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { extractExamples, type ExtractResult, type FetchConversations } from "./SimulationExampleExtractor";
+import { generatePendingTrainingSuggestions } from "@/services/waiterTraining/WaiterTrainingSuggestionStore";
 
 const AGENT = "waiter";
 
@@ -37,6 +38,8 @@ export interface IntakeResult extends ExtractResult {
   agentSlug: string;
   intakeAt: string;
   nextIntakeEstimate: string;
+  /** Training proposals generated from the (new + pending) real cases. */
+  suggestionsCreated: number;
   runtimeTouched: false;
 }
 
@@ -48,11 +51,15 @@ export async function intakeRealConversations(
     { restaurantId: options.restaurantId, limit: options.limit ?? 50, days: options.days ?? 2 },
     deps,
   );
+  // Each real case becomes a clear training PROPOSAL (problem + ideal response +
+  // training rule + impact). Idempotent — only cases without a proposal get one.
+  const suggestions = await generatePendingTrainingSuggestions(AGENT).catch(() => ({ created: 0, scanned: 0 }));
   return {
     ...result,
     agentSlug: AGENT,
     intakeAt: new Date().toISOString(),
     nextIntakeEstimate: nextIntakeEstimate(),
+    suggestionsCreated: suggestions.created,
     runtimeTouched: false,
   };
 }

@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { guardAdmin } from "../../runtime/_guard";
-import { reviewEvidence, type EvidenceStatus } from "@/services/waiterEvidence/WaiterEvidenceService";
+import { reviewEvidence, setPublicCandidate, type EvidenceStatus } from "@/services/waiterEvidence/WaiterEvidenceService";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (guard) return guard;
   try {
     const id = params.id;
-    const body = (await req.json().catch(() => ({}))) as { status?: string; reviewedBy?: string };
+    const body = (await req.json().catch(() => ({}))) as { status?: string; reviewedBy?: string; isPublicCandidate?: boolean };
+
+    // Toggle commercial/public candidate (only allowed once APPROVED — enforced in service).
+    if (typeof body.isPublicCandidate === "boolean") {
+      const evidence = await setPublicCandidate(id, body.isPublicCandidate);
+      return NextResponse.json({ ok: true, evidence });
+    }
+
     if (!body.status || !STATUSES.includes(body.status as EvidenceStatus)) {
       return NextResponse.json({ ok: false, error: "status deve ser APPROVED, REJECTED, BACKLOG ou DRAFT." }, { status: 400 });
     }
